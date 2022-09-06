@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -ex;
+
+echo "format tape as number '$1', name '$2'"
+echo "copy '$3' to tape"
+
+stenc -f /dev/st0 -e on -k /root/tape.key -a 1 --ckod
+mkltfs -f -d /dev/st0 -s $1 -n $2
+ltfs -o noatime -o sync_type=unmount -o work_directory=/opt/ltfs -o capture_index -o min_pool_size=256 -o max_pool_size=1024 -o eject /ltfs
+ordercp $3 /ltfs/
+umount /ltfs
+
+until mt -f /dev/st0 rewoffl; do
+    echo 'waiting for unmount write index...'
+    sleep 5
+done

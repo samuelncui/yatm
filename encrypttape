@@ -1,0 +1,2 @@
+# stenc -g 256 -k /root/tape.key -kd TapeMasterKey
+stenc -f /dev/st0 -e on -k /root/tape.key -a 1 --ckod
