@@ -12,10 +12,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"runtime"
 	"syscall"
+)
+
+const (
+	prefetchMaxSize = 16 * 1024 * 1024
 )
 
 // debug is whether to print debugging messages for manual testing.
@@ -123,8 +126,10 @@ func Open(filename string) (*ReaderAt, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create mmap fail, %q, %w", filename, err)
 	}
-	if err := syscall.Madvise(mem, syscall.MADV_SEQUENTIAL|syscall.MADV_WILLNEED); err != nil {
-		return nil, fmt.Errorf("madvise fail, %q, %w", filename, err)
+	if size <= prefetchMaxSize {
+		if err := syscall.Madvise(data, syscall.MADV_SEQUENTIAL|syscall.MADV_WILLNEED); err != nil {
+			return nil, fmt.Errorf("madvise fail, %q, %w", filename, err)
+		}
 	}
 
 	r := &ReaderAt{data}
