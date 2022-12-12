@@ -1,0 +1,61 @@
+syntax = "proto3";
+package job;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+import "job_archive.proto";
+
+enum JobStatus {
+    Draft       = 0;
+    NotReady    = 1; // dependencies not satisfied
+    Pending     = 2;  // waiting in queue
+    Processing  = 3;
+    Completed   = 4;
+
+    Failed = 255;
+}
+
+message Job {
+    int64 id = 1;
+    JobStatus status = 2;
+    int64 priority = 3;
+    int64 create_time = 4;
+    int64 update_time = 5;
+
+    JobState state = 17;
+}
+
+message JobParam {
+    oneof param {
+        job_archive.JobParamArchive Archive = 1;
+    }
+}
+
+message JobState {
+    oneof state {
+        job_archive.JobStateArchive Archive = 1;
+    }
+}
+
+message JobNextParam {
+    oneof param {
+        job_archive.JobArchiveNextParam archive = 1;
+    }
+}
+
+message CreatableJob {
+    int64 priority = 3;
+    JobParam param = 17;
+}
+
+message JobFilter {
+    optional JobStatus status = 1;
+
+    optional int64 limit = 33;
+    optional int64 offset = 34;
+}
+
+message JobDisplay {
+    oneof display {
+        job_archive.JobDisplayArchive archive = 1;
+    }
+}

@@ -1,0 +1,63 @@
+#app {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  text-align: center;
+  box-sizing: border-box;
+
+  display: -webkit-flex; /* Safari */
+  display: flex;
+  flex-direction: column;
+
+  .tabs {
+    background-color: #ffffff;
+  }
+}
+
+.browser-box {
+  background-color: #efefef;
+  padding: 0.5em;
+  height: 100%;
+  box-sizing: border-box;
+
+  .browser-container {
+    margin: 0;
+    box-sizing: border-box;
+    height: 100%;
+
+    .browser {
+      box-sizing: border-box;
+      padding-right: 0.5em;
+
+      &:last-child {
+        padding-right: 0;
+      }
+
+      .job-detail {
+        .app-MuiGrid-item {
+          padding-top: 1em;
+          padding-left: 1em;
+        }
+
+        margin-bottom: 0.5em;
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+    }
+  }
+}
+
+.view-log-dialog {
+  .app-MuiDialog-paperScrollPaper {
+    height: 100%;
+  }
+
+  pre {
+    white-space: pre-wrap;       /* Since CSS 2.1 */
+    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+    white-space: -pre-wrap;      /* Opera 4-6 */
+    white-space: -o-pre-wrap;    /* Opera 7 */
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */
+  }
+}

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -e;
+
+POSITIONAL_ARGS=()
+DEVICE="/dev/nst0"
+SG_DEVICE=`sg_map | grep ${DEVICE} | awk '{print $1}'`
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -s)
+      BARCODE="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -n)
+      NAME="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1") # save positional arg
+      shift # past argument
+      ;;
+  esac
+done
+
+echo "format tape as number '$BARCODE', name '$NAME'"
+echo "copy '${POSITIONAL_ARGS[@]}' to tape"
+set -- "${POSITIONAL_ARGS[@]}"
+
+set -ex;
+
+stenc -f ${DEVICE} -e on -k /root/tape.key -a 1 --ckod
+sleep 3
+mkltfs -f -d ${SG_DEVICE} -s $BARCODE -n $NAME
+sleep 3
+ltfs -o devname=${SG_DEVICE} -o noatime -o sync_type=unmount -o work_directory=/opt/ltfs -o capture_index -o min_pool_size=256 -o max_pool_size=1024 -o eject /ltfs
+sleep 3
+acp --report /opt/ltfs/$BARCODE.json --to-linear $@ /ltfs/
+sleep 3
+umount /ltfs

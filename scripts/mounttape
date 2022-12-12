@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e;
+
+DEVICE="/dev/nst0"
+SG_DEVICE=`sg_map | grep ${DEVICE} | awk '{print $1}'`
+
+set -ex;
+
+stenc -f ${DEVICE} -e on -k /root/tape.key -a 1 --ckod
+ltfs -o devname=${SG_DEVICE} -o noatime -o sync_type=unmount -o work_directory=/opt/ltfs -o capture_index -o min_pool_size=256 -o max_pool_size=1024 -o eject /ltfs

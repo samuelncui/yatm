@@ -1,0 +1,49 @@
+syntax = "proto3";
+package job_archive;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+import "source.proto";
+
+enum JobArchiveStep {
+    Pending     = 0;
+    WaitForTape = 1;
+    Copying     = 2;
+
+    Finished = 255;
+}
+
+message JobParamArchive {
+    repeated source.Source sources = 1;
+}
+
+message JobArchiveNextParam {
+    oneof param {
+        JobArchiveWaitForTapeParam WaitForTape = 1;
+        JobArchiveCopyingParam Copying = 2;
+        JobArchiveFinishedParam Finished = 255;
+    }
+}
+
+message JobArchiveWaitForTapeParam {}
+
+message JobArchiveCopyingParam {
+    string device = 1;
+    string barcode = 2;
+    string name = 3;
+}
+
+message JobArchiveFinishedParam {}
+
+message JobStateArchive {
+    JobArchiveStep step = 1;
+    repeated source.SourceState sources = 2;
+}
+
+message JobDisplayArchive {
+    int64 copyedBytes = 1;
+    int64 copyedFiles = 2;
+    int64 totalBytes = 3;
+    int64 totalFiles = 4;
+
+    optional int64 speed = 5;
+}

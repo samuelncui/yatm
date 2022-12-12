@@ -1,0 +1,14 @@
+syntax = "proto3";
+package copy_status;
+
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+enum CopyStatus {
+    Draft     = 0;
+    Pending   = 1; // waiting in queue
+    Running   = 2;
+    Staged    = 3;
+    Submited  = 4;
+
+    Failed  = 255;
+}

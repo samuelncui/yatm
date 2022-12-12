@@ -7,7 +7,6 @@ import (
 )
 
 func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
-
 	var dialector gorm.Dialector
 	switch dialect {
 	case "mysql":

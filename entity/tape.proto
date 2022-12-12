@@ -1,0 +1,15 @@
+syntax = "proto3";
+package tape;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+message Tape {
+    int64 id = 1;
+    string barcode = 2;
+    string name = 3;
+    string encryption = 4;
+
+    int64 create_time = 17;
+    optional int64 destroy_time = 18;
+    int64 capacity_bytes = 19;
+    int64 writen_bytes = 20;
+}

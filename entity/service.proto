@@ -1,0 +1,145 @@
+syntax = "proto3";
+package service;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+import "job.proto";
+import "file.proto";
+import "position.proto";
+import "tape.proto";
+import "source.proto";
+
+service Service {
+    rpc FileGet(FileGetRequest) returns (FileGetReply) {}
+    rpc FileEdit(FileEditRequest) returns (FileEditReply) {}
+    rpc FileMkdir(FileMkdirRequest) returns (FileMkdirReply) {}
+    rpc FileDelete(FileDeleteRequest) returns (FileDeleteReply) {}
+    rpc FileListParents(FileListParentsRequest) returns (FileListParentsReply) {}
+
+    rpc TapeMGet(TapeMGetRequest) returns (TapeMGetReply) {}
+
+    rpc JobList(JobListRequest) returns (JobListReply) {}
+    rpc JobCreate(JobCreateRequest) returns (JobCreateReply) {}
+    rpc JobNext(JobNextRequest) returns (JobNextReply) {}
+    rpc JobDisplay(JobDisplayRequest) returns (JobDisplayReply) {}
+    rpc JobGetLog(JobGetLogRequest) returns (JobGetLogReply) {}
+
+    rpc SourceList(SourceListRequest) returns (SourceListReply) {}
+
+    rpc DeviceList(DeviceListRequest) returns (DeviceListReply) {}
+}
+
+message FileGetRequest {
+    int64 id = 1;
+}
+
+message FileGetReply {
+    optional file.File file = 1;
+    repeated position.Position positions = 2;
+    repeated file.File children = 17;
+}
+
+message FileEditRequest {
+    int64 id = 1;
+    file.EditedFile file = 2;
+}
+
+message FileEditReply {
+    file.File file = 1;
+}
+
+message FileMkdirRequest {
+    int64 parent_id = 1;
+    string path = 2;
+}
+
+message FileMkdirReply {
+    file.File file = 1;
+}
+
+message FileDeleteRequest {
+    repeated int64 ids = 1;
+}
+
+message FileDeleteReply {
+}
+
+message FileListParentsRequest {
+    int64 id = 1;
+}
+
+message FileListParentsReply {
+    repeated file.File parents = 1;
+}
+
+message TapeMGetRequest {
+    repeated int64 ids = 1;
+}
+
+message TapeMGetReply {
+    repeated tape.Tape tapes = 1;
+}
+
+message JobListRequest {
+    oneof param {
+        JobMGetRequest mget = 1;
+        job.JobFilter list = 2;
+    }
+}
+
+message JobMGetRequest {
+    repeated int64 ids = 1;
+}
+
+message JobListReply {
+    repeated job.Job jobs = 1;
+}
+
+message JobCreateRequest {
+    job.CreatableJob job = 1;
+}
+
+message JobCreateReply {
+    job.Job job = 1;
+}
+
+message JobNextRequest {
+    int64 id = 1;
+    job.JobNextParam param = 2;
+}
+
+message JobNextReply {
+    job.Job job = 1;
+}
+
+message JobDisplayRequest {
+    int64 id = 1;
+}
+
+message JobDisplayReply {
+    job.JobDisplay display = 1;
+}
+
+message JobGetLogRequest {
+    int64 job_id = 1;
+    optional int64 offset = 2;
+}
+
+message JobGetLogReply {
+    bytes logs = 1;
+}
+
+message SourceListRequest {
+    string path = 1;
+}
+
+message SourceListReply {
+    source.SourceFile file = 1;
+    repeated source.SourceFile chain = 2;
+    repeated source.SourceFile children = 17;
+}
+
+message DeviceListRequest {}
+
+message DeviceListReply {
+    repeated string devices = 1;
+}

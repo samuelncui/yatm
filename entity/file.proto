@@ -1,0 +1,19 @@
+syntax = "proto3";
+package file;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+message File {
+    int64 id = 1;
+    int64 parent_id = 2;
+    string name = 3;
+
+    int64 mode = 17;
+    int64 mod_time = 18;
+    int64 size = 19;
+    bytes hash = 20;
+}
+
+message EditedFile {
+    optional int64 parent_id = 2;
+    optional string name = 3;
+}

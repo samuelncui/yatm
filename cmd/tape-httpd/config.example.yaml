@@ -1,0 +1,19 @@
+domain: http://127.0.0.1:8080
+listen: 127.0.0.1:8080
+debug_listen: 127.0.0.1:8081
+work_directory: ./
+
+database:
+  dialect: sqlite
+  dsn: ./tapes.db
+
+tape_devices:
+  - /dev/nst0
+
+filesystem_root: ./
+
+scripts:
+  encrypt: ./scripts/encrypt
+  mkfs: ./scripts/mkfs
+  mount: ./scripts/mount
+  umount: ./scripts/umount

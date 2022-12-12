@@ -1,0 +1,56 @@
+syntax = "proto3";
+package job_restore;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+import "copy_status.proto";
+
+enum JobRestoreStep {
+    Pending     = 0;
+    WaitForTape = 1;
+    Copying     = 2;
+
+    Finished = 255;
+}
+
+message JobParamRestore {
+    repeated int64 file_ids = 1;
+}
+
+message JobRestoreNextParam {
+    oneof param {
+        JobRestoreWaitForTapeParam WaitForTape = 1;
+        JobRestoreCopyingParam Copying = 2;
+        JobRestoreFinishedParam Finished = 255;
+    }
+}
+
+message JobRestoreWaitForTapeParam {}
+
+message JobRestoreCopyingParam {
+    string device = 1;
+}
+
+message JobRestoreFinishedParam {}
+
+message FileRestoreState {
+    int64 file_id = 1;
+    copy_status.CopyStatus status = 2;
+
+    int64 tape_id = 17;
+    int64 position_id = 18;
+    repeated string path_in_tape = 19;
+}
+
+message JobStateRestore {
+    JobRestoreStep step = 1;
+    repeated FileRestoreState files = 2;
+}
+
+message JobDisplayRestore {
+    int64 copyedBytes = 1;
+    int64 copyedFiles = 2;
+    int64 totalBytes = 3;
+    int64 totalFiles = 4;
+
+    bytes logs = 17;
+}

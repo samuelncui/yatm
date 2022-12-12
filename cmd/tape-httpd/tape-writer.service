@@ -1,0 +1,16 @@
+[Unit]
+Description=Tape Writer Service
+Documentation=https://github.com/abc950309/tapewriter/
+After=network.target
+
+[Service]
+User=root
+Type=simple
+WorkingDirectory=/opt/tapewriter
+ExecStart=/opt/tapewriter/httpd
+Restart=always
+RestartSec=15
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
