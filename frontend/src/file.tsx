@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FullFileBrowser, FileBrowserHandle, FileArray } from "chonky";
+import { FullFileBrowser, FileBrowserProps, FileBrowserHandle, FileArray } from "chonky";
 import { ChonkyActions, ChonkyFileActionData } from "chonky";
 
 import "./app.less";
@@ -32,7 +32,7 @@ const useDualSide = () => {
   return { instances, refreshAll };
 };
 
-const useFileBrowser = (refreshAll: () => Promise<void>, openDetailModel: (detail: FileGetReply) => void) => {
+const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, openDetailModel: (detail: FileGetReply) => void) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
   const [folderChain, setFolderChan] = useState<FileArray>([Root]);
   const currentID = useMemo(() => {
@@ -48,15 +48,28 @@ const useFileBrowser = (refreshAll: () => Promise<void>, openDetailModel: (detai
     return last.id;
   }, [folderChain]);
 
-  const openFolder = useCallback((id: string) => {
-    (async () => {
-      const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id) }).response, cli.fileListParents({ id: BigInt(id) }).response]);
+  const openFolder = useCallback(async (id: string) => {
+    const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id) }).response, cli.fileListParents({ id: BigInt(id) }).response]);
 
-      setFiles(convertFiles(file.children));
-      setFolderChan([Root, ...convertFiles(folderChain.parents)]);
+    setFiles(convertFiles(file.children));
+    setFolderChan([Root, ...convertFiles(folderChain.parents)]);
+    localStorage.setItem(storageKey, id);
+  }, []);
+  useEffect(() => {
+    (async () => {
+      const storagedID = localStorage.getItem(storageKey);
+      if (storagedID) {
+        try {
+          await openFolder(storagedID);
+          return;
+        } catch (e) {
+          console.log("open storaged id fail, err= ", e);
+        }
+      }
+
+      openFolder(Root.id);
     })();
   }, []);
-  useEffect(() => openFolder(Root.id), []);
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
@@ -157,8 +170,8 @@ export const FileBrowser = () => {
   const { instances, refreshAll } = useDualSide();
   const { detail, openDetailModel, closeDetailModel } = useDetailModal();
 
-  const leftProps = useFileBrowser(refreshAll, openDetailModel);
-  const rightProps = useFileBrowser(refreshAll, openDetailModel);
+  const leftProps = useFileBrowser("file_browser:left:current_id", refreshAll, openDetailModel);
+  const rightProps = useFileBrowser("file_browser:right:current_id", refreshAll, openDetailModel);
 
   useEffect(() => {
     Object.values(instances).map((inst) => inst.current?.requestFileAction(ChonkyActions.ToggleHiddenFiles, {}));
@@ -167,6 +180,7 @@ export const FileBrowser = () => {
     }, 10000);
     return () => clearInterval(interval);
   }, []);
+  useEffect(() => {});
 
   return (
     <Box className="browser-box">

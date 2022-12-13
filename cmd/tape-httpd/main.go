@@ -96,15 +96,14 @@ func main() {
 	fs := http.FileServer(http.Dir("./frontend/assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
 
-	indexBuf, err := ioutil.ReadFile("./frontend/index.html")
-	if err != nil {
-		panic(err)
-	}
-
-	indexBuf = bytes.ReplaceAll(indexBuf, []byte("%%API_BASE%%"), []byte(fmt.Sprintf("%s/services", conf.Domain)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		indexBuf, err := ioutil.ReadFile("./frontend/index.html")
+		if err != nil {
+			panic(err)
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(indexBuf)
+		w.Write(bytes.ReplaceAll(indexBuf, []byte("%%API_BASE%%"), []byte(fmt.Sprintf("%s/services", conf.Domain))))
 	})
 
 	srv := &http.Server{

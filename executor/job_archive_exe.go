@@ -84,7 +84,7 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 		}
 
 		tools.Working()
-		go tools.Wrap(ctx, func() {
+		go tools.WrapWithLogger(ctx, a.logger, func() {
 			defer tools.Done()
 			if err := a.makeTape(tools.ShutdownContext, p.Device, p.Barcode, p.Name); err != nil {
 				a.logger.WithContext(ctx).WithError(err).Errorf("make type has error, barcode= '%s' name= '%s'", p.Barcode, p.Name)
@@ -246,7 +246,7 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 			a.logger.WithContext(ctx).WithError(err).Warnf("open report file fail, barcode= '%s'", barcode)
 		} else {
 			defer reportFile.Close()
-			tools.Wrap(ctx, func() {
+			tools.WrapWithLogger(ctx, a.logger, func() {
 				reportFile.Write([]byte(report.ToJSONString(false)))
 			})
 		}

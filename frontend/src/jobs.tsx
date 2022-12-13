@@ -348,10 +348,18 @@ const ViewLogDialog = ({ jobID }: { jobID: bigint }) => {
 
 const LogConsole = ({ jobId }: { jobId: bigint }) => {
   const [log, setLog] = useState<string>("");
+  const bottom = useRef(null);
   const refreshLog = useCallback(async () => {
     const reply = await cli.jobGetLog({ jobId, offset: BigInt(log.length) }).response;
     setLog(log + new TextDecoder().decode(reply.logs));
-  }, [log, setLog]);
+
+    if (log.length === 0 && reply.logs.length > 0 && bottom && bottom.current) {
+      await sleep(10);
+      (bottom.current as HTMLElement).scrollIntoView(true);
+      await sleep(10);
+      (bottom.current as HTMLElement).parentElement?.scrollBy(0, 100);
+    }
+  }, [log, setLog, bottom]);
   useEffect(() => {
     let closed = false;
     (async () => {
@@ -366,7 +374,12 @@ const LogConsole = ({ jobId }: { jobId: bigint }) => {
     };
   }, [refreshLog]);
 
-  return <pre>{log || "loading..."}</pre>;
+  return (
+    <Fragment>
+      <pre>{log || "loading..."}</pre>
+      <div ref={bottom} />
+    </Fragment>
+  );
 };
 
 const ArchiveViewFilesDialog = ({ sources }: { sources: SourceState[] }) => {
