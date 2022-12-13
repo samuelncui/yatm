@@ -246,7 +246,9 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 			a.logger.WithContext(ctx).WithError(err).Warnf("open report file fail, barcode= '%s'", barcode)
 		} else {
 			defer reportFile.Close()
-			reportFile.Write([]byte(report.ToJSONString(false)))
+			tools.Wrap(ctx, func() {
+				reportFile.Write([]byte(report.ToJSONString(false)))
+			})
 		}
 
 		filteredJobs := make([]*acp.Job, 0, len(report.Jobs))

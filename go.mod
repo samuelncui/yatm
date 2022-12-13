@@ -3,7 +3,7 @@ module github.com/abc950309/tapewriter
 go 1.18
 
 require (
-	github.com/abc950309/acp v0.0.0-20221213054500-913956ff10a1
+	github.com/abc950309/acp v0.0.0-20221213100222-6351045e0f95
 	github.com/aws/aws-sdk-go v1.44.118
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
