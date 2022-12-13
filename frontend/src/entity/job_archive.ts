@@ -115,6 +115,10 @@ export interface JobDisplayArchive {
      * @generated from protobuf field: optional int64 speed = 5;
      */
     speed?: bigint;
+    /**
+     * @generated from protobuf field: int64 startTime = 6;
+     */
+    startTime: bigint;
 }
 /**
  * @generated from protobuf enum job_archive.JobArchiveStep
@@ -429,11 +433,12 @@ class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
             { no: 2, name: "copyedFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 3, name: "totalBytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 4, name: "totalFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 5, name: "speed", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 5, name: "speed", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 6, name: "startTime", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<JobDisplayArchive>): JobDisplayArchive {
-        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n };
+        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, startTime: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<JobDisplayArchive>(this, message, value);
@@ -458,6 +463,9 @@ class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
                     break;
                 case /* optional int64 speed */ 5:
                     message.speed = reader.int64().toBigInt();
+                    break;
+                case /* int64 startTime */ 6:
+                    message.startTime = reader.int64().toBigInt();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -486,6 +494,9 @@ class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
         /* optional int64 speed = 5; */
         if (message.speed !== undefined)
             writer.tag(5, WireType.Varint).int64(message.speed);
+        /* int64 startTime = 6; */
+        if (message.startTime !== 0n)
+            writer.tag(6, WireType.Varint).int64(message.startTime);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

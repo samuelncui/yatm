@@ -15,7 +15,10 @@ func (e *Executor) getArchiveDisplay(ctx context.Context, job *Job) (*entity.Job
 		display.CopyedFiles = atomic.LoadInt64(&exe.progress.files)
 		display.TotalBytes = atomic.LoadInt64(&exe.progress.totalBytes)
 		display.TotalFiles = atomic.LoadInt64(&exe.progress.totalFiles)
-		display.Speed = atomic.LoadInt64(&exe.progress.speed)
+		display.StartTime = exe.progress.startTime.Unix()
+
+		speed := atomic.LoadInt64(&exe.progress.speed)
+		display.Speed = &speed
 	}
 
 	return display, nil

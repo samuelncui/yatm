@@ -17,8 +17,8 @@ func (api *API) JobGetLog(ctx context.Context, req *entity.JobGetLogRequest) (*e
 		return &entity.JobGetLogReply{Logs: []byte{}}, nil
 	}
 
-	if req.Offset > 0 {
-		if _, err := reader.Seek(req.Offset, 0); err != nil {
+	if req.Offset != nil {
+		if _, err := reader.Seek(*req.Offset, 0); err != nil {
 			return nil, fmt.Errorf("seek log file fail, offset= %d, %w", req.Offset, err)
 		}
 	}

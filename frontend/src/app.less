@@ -19,6 +19,7 @@
   padding: 0.5em;
   height: 100%;
   box-sizing: border-box;
+  overflow-y: hidden;
 
   .browser-container {
     margin: 0;
@@ -26,6 +27,7 @@
     height: 100%;
 
     .browser {
+      height: 100%;
       box-sizing: border-box;
       padding-right: 0.5em;
 
@@ -44,6 +46,19 @@
           margin-bottom: 0;
         }
       }
+    }
+
+    .job-list {
+      min-height: min-content;
+      height: 100%;
+      box-sizing: border-box;
+      overflow-y: scroll;
+      // -ms-overflow-style: none;  /* IE and Edge */
+      // scrollbar-width: none;  /* Firefox */
+
+      // &::-webkit-scrollbar {
+      //   display: none;
+      // }
     }
   }
 }

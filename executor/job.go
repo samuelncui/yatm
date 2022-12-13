@@ -109,19 +109,19 @@ func (e *Executor) GetJob(ctx context.Context, id int64) (*Job, error) {
 func (e *Executor) ListJob(ctx context.Context, filter *entity.JobFilter) ([]*Job, error) {
 	db := e.db.WithContext(ctx)
 	if filter.Status != nil {
-		db.Where("status = ?", *filter.Status)
+		db = db.Where("status = ?", *filter.Status)
 	}
 
 	if filter.Limit != nil {
-		db.Limit(int(*filter.Limit))
+		db = db.Limit(int(*filter.Limit))
 	} else {
-		db.Limit(20)
+		db = db.Limit(20)
 	}
 	if filter.Offset != nil {
-		db.Offset(int(*filter.Offset))
+		db = db.Offset(int(*filter.Offset))
 	}
 
-	db.Order("create_time DESC")
+	db = db.Order("create_time DESC")
 
 	jobs := make([]*Job, 0, 20)
 	if r := db.Find(&jobs); r.Error != nil {

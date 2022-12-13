@@ -1,6 +1,7 @@
 import { Fragment, ChangeEvent } from "react";
 import { useState, useRef, useEffect, useMemo, useCallback, FC } from "react";
 import { assert } from "@protobuf-ts/runtime";
+import format from "format-duration";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
@@ -75,9 +76,11 @@ export const JobsBrowser = () => {
           </List>
         </Grid>
         <Grid className="browser" item xs={10}>
-          {jobs.map((job) => (
-            <GetJobCard job={job} key={job.id.toString()} refresh={refresh} />
-          ))}
+          <div className="job-list">
+            {jobs.map((job) => (
+              <GetJobCard job={job} key={job.id.toString()} refresh={refresh} />
+            ))}
+          </div>
         </Grid>
       </Grid>
     </Box>
@@ -113,38 +116,6 @@ const ArchiveCard = ({
   display: JobDisplayArchive | null;
   refresh: () => Promise<void>;
 }): JSX.Element => {
-  const [lastDisplay, setLastDisplay] = useState<ArchiveLastDisplay | null>(null);
-  const [speed, setSpeed] = useState<number>(NaN);
-  const diffDisplay = useCallback(
-    (current: ArchiveLastDisplay | null) => {
-      if (!lastDisplay) {
-        setLastDisplay(current);
-        return;
-      }
-      if (!current) {
-        setLastDisplay(current);
-        setSpeed(NaN);
-        return;
-      }
-
-      const duration = current.lastUpdate - lastDisplay.lastUpdate;
-      if (duration) {
-        const speed = ((Number(current.copyedBytes) - Number(lastDisplay.copyedBytes)) / duration) * 1000;
-        setSpeed(speed);
-      }
-
-      setLastDisplay(current);
-    },
-    [lastDisplay, setLastDisplay, setSpeed]
-  );
-  useEffect(() => {
-    if (!display) {
-      diffDisplay(null);
-      return;
-    }
-    diffDisplay({ copyedBytes: display.copyedBytes, lastUpdate: Date.now() });
-  }, [display]);
-
   const [fields, progress] = useMemo(() => {
     const totalFiles = state.sources.length;
     let submitedFiles = 0,
@@ -161,11 +132,25 @@ const ArchiveCard = ({
 
     const copyedFiles = submitedFiles + Number(display?.copyedFiles || 0n);
     const copyedBytes = submitedBytes + Number(display?.copyedBytes || 0n);
+    const avgSpeed = (() => {
+      if (!display || !display.copyedBytes || !display.startTime) {
+        return NaN;
+      }
+
+      const duration = Date.now() / 1000 - Number(display.startTime);
+      if (duration <= 0) {
+        return NaN;
+      }
+
+      return Number(display.copyedBytes) / duration;
+    })();
 
     const progress = (totalBytes > 0 ? copyedBytes / totalBytes : 1) * 100;
     const fields = [
       { name: "Current Step", value: JobArchiveStep[state.step] },
-      { name: "Current Speed", value: !Number.isNaN(speed) ? `${formatFilesize(speed)}/s` : "--" },
+      { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
+      { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
+      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copyedBytes) * 1000) / avgSpeed) : "--" },
       { name: "Total Files", value: totalFiles },
       { name: "Total Bytes", value: formatFilesize(totalBytes) },
       { name: "Submited Files", value: submitedFiles },
@@ -175,7 +160,7 @@ const ArchiveCard = ({
     ];
 
     return [fields, progress];
-  }, [state, display, speed]);
+  }, [state, display]);
 
   return (
     <JobCard
@@ -379,7 +364,7 @@ const LogConsole = ({ jobId }: { jobId: bigint }) => {
     return () => {
       closed = true;
     };
-  }, []);
+  }, [refreshLog]);
 
   return <pre>{log || "loading..."}</pre>;
 };

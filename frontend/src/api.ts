@@ -7,7 +7,7 @@ import moment from "moment";
 const apiBase: string = (() => {
   const base = (window as any).apiBase as string;
   if (!base || base === "%%API_BASE%%") {
-    return "http://127.0.0.1:8080/services";
+    return "http://localhost:5173/services";
   }
   return base;
 })();

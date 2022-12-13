@@ -13,6 +13,7 @@ specifiers:
   '@protobuf-ts/plugin': ^2.8.2
   '@protobuf-ts/runtime': ^2.8.2
   '@protobuf-ts/runtime-rpc': ^2.8.2
+  '@types/node': ^18.11.14
   '@types/react': ^18.0.17
   '@types/react-dom': ^18.0.6
   '@vitejs/plugin-react': ^2.1.0
@@ -20,6 +21,7 @@ specifiers:
   chonky-icon-fontawesome: ^2.3.2
   fast-text-encoding: ^1.0.6
   filesize: ^10.0.5
+  format-duration: ^2.0.0
   less: ^4.1.3
   moment: ^2.29.4
   prettier: 2.7.1
@@ -48,6 +50,7 @@ dependencies:
   chonky-icon-fontawesome: 2.3.2_qge232svojtclvlhf4p5efbcfu
   fast-text-encoding: 1.0.6
   filesize: 10.0.5
+  format-duration: 2.0.0
   moment: 2.29.4
   react: 18.2.0
   react-dnd: 11.1.3_biqbaboplfbrettd7655fr4n2y
@@ -57,6 +60,7 @@ dependencies:
 
 devDependencies:
   '@protobuf-ts/plugin': 2.8.2
+  '@types/node': 18.11.14
   '@types/react': 18.0.21
   '@types/react-dom': 18.0.6
   '@vitejs/plugin-react': 2.1.0_vite@3.1.8
@@ -1043,6 +1047,10 @@ packages:
     resolution: {integrity: sha512-qDpXKGgwKywnQt/64fH1O0LiPA++QGIYeykEUiZ51HymKVRLnUSGcRuF60IfpPeeXiuRwiR/W4y7S5VzbrgLCA==}
     dev: false
 
+  /@types/node/18.11.14:
+    resolution: {integrity: sha512-0KXV57tENYmmJMl+FekeW9V3O/rlcqGQQJ/hNh9r8pKIj304pskWuEd8fCyNT86g/TpO0gcOTiLzsHLEURFMIQ==}
+    dev: true
+
   /@types/parse-json/4.0.0:
     resolution: {integrity: sha512-//oorEZjL6sbPcKUaCdIGlIUeH26mgzimjBB77G6XRgnDl/L5wOnpyBGRe/Mmf5CVW3PwEBE1NjiMZ/ssFh4wA==}
     dev: false
@@ -1655,6 +1663,10 @@ packages:
 
   /find-root/1.1.0:
     resolution: {integrity: sha512-NKfW6bec6GfKc0SGx1e07QZY9PE99u0Bft/0rzSD5k3sO/vwkVUpDUKVm5Gpp5Ue3YfShPFTX2070tDs5kB9Ng==}
+    dev: false
+
+  /format-duration/2.0.0:
+    resolution: {integrity: sha512-ARqJ9qXm71pw3SGAY7bibf8lRLvltOXLjWjzzR3UrUjHu1zdeYpA/Z+u+ltdhrfRa440OjEsHNzdmuZViqqQWQ==}
     dev: false
 
   /fsevents/2.3.2:

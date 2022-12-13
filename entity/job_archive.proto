@@ -46,4 +46,5 @@ message JobDisplayArchive {
     int64 totalFiles = 4;
 
     optional int64 speed = 5;
+    int64 startTime = 6;
 }

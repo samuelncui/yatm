@@ -21,6 +21,12 @@ github.com/abc950309/acp v0.0.0-20221211170531-ae151264e710 h1:WedtGWyNGXdHZDft0
 github.com/abc950309/acp v0.0.0-20221211170531-ae151264e710/go.mod h1:5RsleINAlZ326MJ8fmoCW9IJdnlpa6ZVdHqufsfcQMI=
 github.com/abc950309/acp v0.0.0-20221212144614-c5de5e555428 h1:NQDEsoxNJDxdMuZCJq0R9hqeaR64X8oyEhx0PKUCSwo=
 github.com/abc950309/acp v0.0.0-20221212144614-c5de5e555428/go.mod h1:5RsleINAlZ326MJ8fmoCW9IJdnlpa6ZVdHqufsfcQMI=
+github.com/abc950309/acp v0.0.0-20221213013859-b7a44e4c0071 h1:sKxesiKeO5dX+TY96m0iegmqvthqH+lN7q5LRG2e8ck=
+github.com/abc950309/acp v0.0.0-20221213013859-b7a44e4c0071/go.mod h1:5RsleINAlZ326MJ8fmoCW9IJdnlpa6ZVdHqufsfcQMI=
+github.com/abc950309/acp v0.0.0-20221213025816-edd8196e43e6 h1:lgO5pSBYSHqkCYP3/iiFefcsi7udjX1NaujO2cPx5JE=
+github.com/abc950309/acp v0.0.0-20221213025816-edd8196e43e6/go.mod h1:7gK/wICIhVBZ6B2AZm+0uN06wDhKLSsq4TME/fwJUJI=
+github.com/abc950309/acp v0.0.0-20221213054500-913956ff10a1 h1:UgiD4G3c3WROUHp+elpLVvKuW0+9xErtgkilnDb+XdU=
+github.com/abc950309/acp v0.0.0-20221213054500-913956ff10a1/go.mod h1:7gK/wICIhVBZ6B2AZm+0uN06wDhKLSsq4TME/fwJUJI=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

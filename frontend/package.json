@@ -25,6 +25,7 @@
     "chonky-icon-fontawesome": "^2.3.2",
     "fast-text-encoding": "^1.0.6",
     "filesize": "^10.0.5",
+    "format-duration": "^2.0.0",
     "moment": "^2.29.4",
     "react": "^18.2.0",
     "react-dnd": "^11.1.3",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@protobuf-ts/plugin": "^2.8.2",
+    "@types/node": "^18.11.14",
     "@types/react": "^18.0.17",
     "@types/react-dom": "^18.0.6",
     "@vitejs/plugin-react": "^2.1.0",

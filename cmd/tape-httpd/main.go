@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/abc950309/tapewriter/apis"
 	"github.com/abc950309/tapewriter/entity"
@@ -17,6 +18,7 @@ import (
 	"github.com/abc950309/tapewriter/resource"
 	"github.com/abc950309/tapewriter/tools"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v2"
 )
@@ -109,6 +111,15 @@ func main() {
 		Handler: mux,
 		Addr:    conf.Listen,
 	}
+
+	go func() {
+		<-tools.ShutdownContext.Done()
+		logrus.Infof("Graceful shutdown, wait for working process")
+		start := time.Now()
+		tools.Wait()
+		logrus.Infof("Graceful shutdown, wait done, duration= %s", time.Since(start))
+		srv.Shutdown(context.Background())
+	}()
 
 	log.Printf("http server listening at %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {

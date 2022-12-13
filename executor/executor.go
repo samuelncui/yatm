@@ -106,7 +106,7 @@ func (e *Executor) Submit(ctx context.Context, job *Job, param *entity.JobNextPa
 			return err
 		}
 
-		exe.submit(param.GetArchive())
+		exe.submit(ctx, param.GetArchive())
 		return nil
 	}
 

@@ -48,3 +48,21 @@ func runCmd(logger *logrus.Logger, cmd *exec.Cmd) error {
 
 	return cmd.Run()
 }
+
+func (e *Executor) reportPath(barcode string) (string, string) {
+	return path.Join(e.workDirectory, "write-reports"), fmt.Sprintf("%s.log", barcode)
+}
+
+func (e *Executor) newReportWriter(barcode string) (*os.File, error) {
+	dir, filename := e.reportPath(barcode)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("make job log dir fail, path= '%s', err= %w", dir, err)
+	}
+
+	file, err := os.OpenFile(path.Join(dir, filename), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("create file fail, path= '%s', err= %w", path.Join(dir, filename), err)
+	}
+
+	return file, nil
+}

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -ex;
 
-sleep 15
+sleep 2
 umount ${MOUNT_POINT}
-sleep 60
