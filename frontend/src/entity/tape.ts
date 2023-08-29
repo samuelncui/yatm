@@ -48,6 +48,19 @@ export interface Tape {
      */
     writenBytes: bigint;
 }
+/**
+ * @generated from protobuf message tape.TapeFilter
+ */
+export interface TapeFilter {
+    /**
+     * @generated from protobuf field: optional int64 limit = 33;
+     */
+    limit?: bigint;
+    /**
+     * @generated from protobuf field: optional int64 offset = 34;
+     */
+    offset?: bigint;
+}
 // @generated message type with reflection information, may provide speed optimized methods
 class Tape$Type extends MessageType<Tape> {
     constructor() {
@@ -144,3 +157,57 @@ class Tape$Type extends MessageType<Tape> {
  * @generated MessageType for protobuf message tape.Tape
  */
 export const Tape = new Tape$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeFilter$Type extends MessageType<TapeFilter> {
+    constructor() {
+        super("tape.TapeFilter", [
+            { no: 33, name: "limit", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 34, name: "offset", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeFilter>): TapeFilter {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeFilter>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeFilter): TapeFilter {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional int64 limit */ 33:
+                    message.limit = reader.int64().toBigInt();
+                    break;
+                case /* optional int64 offset */ 34:
+                    message.offset = reader.int64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeFilter, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional int64 limit = 33; */
+        if (message.limit !== undefined)
+            writer.tag(33, WireType.Varint).int64(message.limit);
+        /* optional int64 offset = 34; */
+        if (message.offset !== undefined)
+            writer.tag(34, WireType.Varint).int64(message.offset);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message tape.TapeFilter
+ */
+export const TapeFilter = new TapeFilter$Type();

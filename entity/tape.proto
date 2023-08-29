@@ -13,3 +13,8 @@ message Tape {
     int64 capacity_bytes = 19;
     int64 writen_bytes = 20;
 }
+
+message TapeFilter {
+    optional int64 limit = 33;
+    optional int64 offset = 34;
+}

@@ -4,6 +4,8 @@
 import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { Service } from "./service";
+import type { LibraryExportReply } from "./service";
+import type { LibraryExportRequest } from "./service";
 import type { DeviceListReply } from "./service";
 import type { DeviceListRequest } from "./service";
 import type { SourceListReply } from "./service";
@@ -14,12 +16,16 @@ import type { JobDisplayReply } from "./service";
 import type { JobDisplayRequest } from "./service";
 import type { JobNextReply } from "./service";
 import type { JobNextRequest } from "./service";
+import type { JobDeleteReply } from "./service";
+import type { JobDeleteRequest } from "./service";
 import type { JobCreateReply } from "./service";
 import type { JobCreateRequest } from "./service";
 import type { JobListReply } from "./service";
 import type { JobListRequest } from "./service";
-import type { TapeMGetReply } from "./service";
-import type { TapeMGetRequest } from "./service";
+import type { TapeDeleteReply } from "./service";
+import type { TapeDeleteRequest } from "./service";
+import type { TapeListReply } from "./service";
+import type { TapeListRequest } from "./service";
 import type { FileListParentsReply } from "./service";
 import type { FileListParentsRequest } from "./service";
 import type { FileDeleteReply } from "./service";
@@ -58,9 +64,13 @@ export interface IServiceClient {
      */
     fileListParents(input: FileListParentsRequest, options?: RpcOptions): UnaryCall<FileListParentsRequest, FileListParentsReply>;
     /**
-     * @generated from protobuf rpc: TapeMGet(service.TapeMGetRequest) returns (service.TapeMGetReply);
+     * @generated from protobuf rpc: TapeList(service.TapeListRequest) returns (service.TapeListReply);
      */
-    tapeMGet(input: TapeMGetRequest, options?: RpcOptions): UnaryCall<TapeMGetRequest, TapeMGetReply>;
+    tapeList(input: TapeListRequest, options?: RpcOptions): UnaryCall<TapeListRequest, TapeListReply>;
+    /**
+     * @generated from protobuf rpc: TapeDelete(service.TapeDeleteRequest) returns (service.TapeDeleteReply);
+     */
+    tapeDelete(input: TapeDeleteRequest, options?: RpcOptions): UnaryCall<TapeDeleteRequest, TapeDeleteReply>;
     /**
      * @generated from protobuf rpc: JobList(service.JobListRequest) returns (service.JobListReply);
      */
@@ -69,6 +79,10 @@ export interface IServiceClient {
      * @generated from protobuf rpc: JobCreate(service.JobCreateRequest) returns (service.JobCreateReply);
      */
     jobCreate(input: JobCreateRequest, options?: RpcOptions): UnaryCall<JobCreateRequest, JobCreateReply>;
+    /**
+     * @generated from protobuf rpc: JobDelete(service.JobDeleteRequest) returns (service.JobDeleteReply);
+     */
+    jobDelete(input: JobDeleteRequest, options?: RpcOptions): UnaryCall<JobDeleteRequest, JobDeleteReply>;
     /**
      * @generated from protobuf rpc: JobNext(service.JobNextRequest) returns (service.JobNextReply);
      */
@@ -89,6 +103,10 @@ export interface IServiceClient {
      * @generated from protobuf rpc: DeviceList(service.DeviceListRequest) returns (service.DeviceListReply);
      */
     deviceList(input: DeviceListRequest, options?: RpcOptions): UnaryCall<DeviceListRequest, DeviceListReply>;
+    /**
+     * @generated from protobuf rpc: LibraryExport(service.LibraryExportRequest) returns (service.LibraryExportReply);
+     */
+    libraryExport(input: LibraryExportRequest, options?: RpcOptions): UnaryCall<LibraryExportRequest, LibraryExportReply>;
 }
 /**
  * @generated from protobuf service service.Service
@@ -135,59 +153,80 @@ export class ServiceClient implements IServiceClient, ServiceInfo {
         return stackIntercept<FileListParentsRequest, FileListParentsReply>("unary", this._transport, method, opt, input);
     }
     /**
-     * @generated from protobuf rpc: TapeMGet(service.TapeMGetRequest) returns (service.TapeMGetReply);
+     * @generated from protobuf rpc: TapeList(service.TapeListRequest) returns (service.TapeListReply);
      */
-    tapeMGet(input: TapeMGetRequest, options?: RpcOptions): UnaryCall<TapeMGetRequest, TapeMGetReply> {
+    tapeList(input: TapeListRequest, options?: RpcOptions): UnaryCall<TapeListRequest, TapeListReply> {
         const method = this.methods[5], opt = this._transport.mergeOptions(options);
-        return stackIntercept<TapeMGetRequest, TapeMGetReply>("unary", this._transport, method, opt, input);
+        return stackIntercept<TapeListRequest, TapeListReply>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * @generated from protobuf rpc: TapeDelete(service.TapeDeleteRequest) returns (service.TapeDeleteReply);
+     */
+    tapeDelete(input: TapeDeleteRequest, options?: RpcOptions): UnaryCall<TapeDeleteRequest, TapeDeleteReply> {
+        const method = this.methods[6], opt = this._transport.mergeOptions(options);
+        return stackIntercept<TapeDeleteRequest, TapeDeleteReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobList(service.JobListRequest) returns (service.JobListReply);
      */
     jobList(input: JobListRequest, options?: RpcOptions): UnaryCall<JobListRequest, JobListReply> {
-        const method = this.methods[6], opt = this._transport.mergeOptions(options);
+        const method = this.methods[7], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobListRequest, JobListReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobCreate(service.JobCreateRequest) returns (service.JobCreateReply);
      */
     jobCreate(input: JobCreateRequest, options?: RpcOptions): UnaryCall<JobCreateRequest, JobCreateReply> {
-        const method = this.methods[7], opt = this._transport.mergeOptions(options);
+        const method = this.methods[8], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobCreateRequest, JobCreateReply>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * @generated from protobuf rpc: JobDelete(service.JobDeleteRequest) returns (service.JobDeleteReply);
+     */
+    jobDelete(input: JobDeleteRequest, options?: RpcOptions): UnaryCall<JobDeleteRequest, JobDeleteReply> {
+        const method = this.methods[9], opt = this._transport.mergeOptions(options);
+        return stackIntercept<JobDeleteRequest, JobDeleteReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobNext(service.JobNextRequest) returns (service.JobNextReply);
      */
     jobNext(input: JobNextRequest, options?: RpcOptions): UnaryCall<JobNextRequest, JobNextReply> {
-        const method = this.methods[8], opt = this._transport.mergeOptions(options);
+        const method = this.methods[10], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobNextRequest, JobNextReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobDisplay(service.JobDisplayRequest) returns (service.JobDisplayReply);
      */
     jobDisplay(input: JobDisplayRequest, options?: RpcOptions): UnaryCall<JobDisplayRequest, JobDisplayReply> {
-        const method = this.methods[9], opt = this._transport.mergeOptions(options);
+        const method = this.methods[11], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobDisplayRequest, JobDisplayReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobGetLog(service.JobGetLogRequest) returns (service.JobGetLogReply);
      */
     jobGetLog(input: JobGetLogRequest, options?: RpcOptions): UnaryCall<JobGetLogRequest, JobGetLogReply> {
-        const method = this.methods[10], opt = this._transport.mergeOptions(options);
+        const method = this.methods[12], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobGetLogRequest, JobGetLogReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: SourceList(service.SourceListRequest) returns (service.SourceListReply);
      */
     sourceList(input: SourceListRequest, options?: RpcOptions): UnaryCall<SourceListRequest, SourceListReply> {
-        const method = this.methods[11], opt = this._transport.mergeOptions(options);
+        const method = this.methods[13], opt = this._transport.mergeOptions(options);
         return stackIntercept<SourceListRequest, SourceListReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: DeviceList(service.DeviceListRequest) returns (service.DeviceListReply);
      */
     deviceList(input: DeviceListRequest, options?: RpcOptions): UnaryCall<DeviceListRequest, DeviceListReply> {
-        const method = this.methods[12], opt = this._transport.mergeOptions(options);
+        const method = this.methods[14], opt = this._transport.mergeOptions(options);
         return stackIntercept<DeviceListRequest, DeviceListReply>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * @generated from protobuf rpc: LibraryExport(service.LibraryExportRequest) returns (service.LibraryExportReply);
+     */
+    libraryExport(input: LibraryExportRequest, options?: RpcOptions): UnaryCall<LibraryExportRequest, LibraryExportReply> {
+        const method = this.methods[15], opt = this._transport.mergeOptions(options);
+        return stackIntercept<LibraryExportRequest, LibraryExportReply>("unary", this._transport, method, opt, input);
     }
 }

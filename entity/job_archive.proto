@@ -5,22 +5,22 @@ option go_package = "github.com/abc950309/tapewriter/entity";
 import "source.proto";
 
 enum JobArchiveStep {
-    Pending     = 0;
-    WaitForTape = 1;
-    Copying     = 2;
+    PENDING     = 0;
+    WAIT_FOR_TAPE = 1;
+    COPYING     = 2;
 
-    Finished = 255;
+    FINISHED = 255;
 }
 
-message JobParamArchive {
+message JobArchiveParam {
     repeated source.Source sources = 1;
 }
 
 message JobArchiveNextParam {
     oneof param {
-        JobArchiveWaitForTapeParam WaitForTape = 1;
-        JobArchiveCopyingParam Copying = 2;
-        JobArchiveFinishedParam Finished = 255;
+        JobArchiveWaitForTapeParam wait_for_tape = 1;
+        JobArchiveCopyingParam copying = 2;
+        JobArchiveFinishedParam finished = 255;
     }
 }
 
@@ -34,17 +34,17 @@ message JobArchiveCopyingParam {
 
 message JobArchiveFinishedParam {}
 
-message JobStateArchive {
+message JobArchiveState {
     JobArchiveStep step = 1;
     repeated source.SourceState sources = 2;
 }
 
-message JobDisplayArchive {
-    int64 copyedBytes = 1;
-    int64 copyedFiles = 2;
-    int64 totalBytes = 3;
-    int64 totalFiles = 4;
+message JobArchiveDisplay {
+    int64 copyed_bytes = 1;
+    int64 copyed_files = 2;
+    int64 total_bytes = 3;
+    int64 total_files = 4;
 
     optional int64 speed = 5;
-    int64 startTime = 6;
+    int64 start_time = 6;
 }

@@ -64,7 +64,7 @@ type jobArchiveExecutor struct {
 	job *Job
 
 	stateLock sync.Mutex
-	state     *entity.JobStateArchive
+	state     *entity.JobArchiveState
 
 	progress *progress
 	logFile  *os.File
@@ -79,7 +79,10 @@ func (a *jobArchiveExecutor) submit(ctx context.Context, param *entity.JobArchiv
 
 func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiveNextParam) error {
 	if p := param.GetCopying(); p != nil {
-		if err := a.switchStep(ctx, entity.JobArchiveStep_Copying, entity.JobStatus_Processing, mapset.NewThreadUnsafeSet(entity.JobArchiveStep_WaitForTape)); err != nil {
+		if err := a.switchStep(
+			ctx, entity.JobArchiveStep_COPYING, entity.JobStatus_PROCESSING,
+			mapset.NewThreadUnsafeSet(entity.JobArchiveStep_WAIT_FOR_TAPE),
+		); err != nil {
 			return err
 		}
 
@@ -87,7 +90,7 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 		go tools.WrapWithLogger(ctx, a.logger, func() {
 			defer tools.Done()
 			if err := a.makeTape(tools.ShutdownContext, p.Device, p.Barcode, p.Name); err != nil {
-				a.logger.WithContext(ctx).WithError(err).Errorf("make type has error, barcode= '%s' name= '%s'", p.Barcode, p.Name)
+				a.logger.WithContext(ctx).WithError(err).Errorf("make tape has error, barcode= '%s' name= '%s'", p.Barcode, p.Name)
 			}
 		})
 
@@ -95,11 +98,17 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 	}
 
 	if p := param.GetWaitForTape(); p != nil {
-		return a.switchStep(ctx, entity.JobArchiveStep_WaitForTape, entity.JobStatus_Processing, mapset.NewThreadUnsafeSet(entity.JobArchiveStep_Pending, entity.JobArchiveStep_Copying))
+		return a.switchStep(
+			ctx, entity.JobArchiveStep_WAIT_FOR_TAPE, entity.JobStatus_PROCESSING,
+			mapset.NewThreadUnsafeSet(entity.JobArchiveStep_PENDING, entity.JobArchiveStep_COPYING),
+		)
 	}
 
 	if p := param.GetFinished(); p != nil {
-		if err := a.switchStep(ctx, entity.JobArchiveStep_Finished, entity.JobStatus_Completed, mapset.NewThreadUnsafeSet(entity.JobArchiveStep_Copying)); err != nil {
+		if err := a.switchStep(
+			ctx, entity.JobArchiveStep_FINISHED, entity.JobStatus_COMPLETED,
+			mapset.NewThreadUnsafeSet(entity.JobArchiveStep_COPYING),
+		); err != nil {
 			return err
 		}
 
@@ -128,7 +137,7 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 		return fmt.Errorf("run encrypt script fail, %w", err)
 	}
 
-	mkfsCmd := exec.CommandContext(ctx, a.exe.mkfsScript)
+	mkfsCmd := exec.CommandContext(ctx, a.exe.scripts.Mkfs)
 	mkfsCmd.Env = append(mkfsCmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("TAPE_BARCODE=%s", barcode), fmt.Sprintf("TAPE_NAME=%s", name))
 	if err := runCmd(a.logger, mkfsCmd); err != nil {
 		return fmt.Errorf("run mkfs script fail, %w", err)
@@ -139,13 +148,13 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 		return fmt.Errorf("create temp mountpoint, %w", err)
 	}
 
-	mountCmd := exec.CommandContext(ctx, a.exe.mountScript)
+	mountCmd := exec.CommandContext(ctx, a.exe.scripts.Mount)
 	mountCmd.Env = append(mountCmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("MOUNT_POINT=%s", mountPoint))
 	if err := runCmd(a.logger, mountCmd); err != nil {
 		return fmt.Errorf("run mount script fail, %w", err)
 	}
 	defer func() {
-		umountCmd := exec.CommandContext(tools.WithoutTimeout(ctx), a.exe.umountScript)
+		umountCmd := exec.CommandContext(tools.WithoutTimeout(ctx), a.exe.scripts.Umount)
 		umountCmd.Env = append(umountCmd.Env, fmt.Sprintf("MOUNT_POINT=%s", mountPoint))
 		if err := runCmd(a.logger, umountCmd); err != nil {
 			a.logger.WithContext(ctx).WithError(err).Errorf("run umount script fail, %s", mountPoint)
@@ -157,15 +166,17 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 		}
 	}()
 
-	opts := make([]acp.Option, 0, 4)
+	wildcardJobOpts := make([]acp.WildcardJobOption, 0, 6)
+	wildcardJobOpts = append(wildcardJobOpts, acp.Target(mountPoint))
 	for _, source := range a.state.Sources {
-		if source.Status == entity.CopyStatus_Submited {
+		if source.Status == entity.CopyStatus_SUBMITED {
 			continue
 		}
-		opts = append(opts, acp.AccurateSource(source.Source.Base, source.Source.Path))
+		wildcardJobOpts = append(wildcardJobOpts, acp.AccurateSource(source.Source.Base, source.Source.Path))
 	}
 
-	opts = append(opts, acp.Target(mountPoint))
+	opts := make([]acp.Option, 0, 4)
+	opts = append(opts, acp.WildcardJob(wildcardJobOpts...))
 	opts = append(opts, acp.WithHash(true))
 	opts = append(opts, acp.SetToDevice(acp.LinearDevice(true)))
 	opts = append(opts, acp.WithLogger(a.logger))
@@ -196,12 +207,12 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 			var targetStatus entity.CopyStatus
 			switch job.Status {
 			case "pending":
-				targetStatus = entity.CopyStatus_Pending
+				targetStatus = entity.CopyStatus_PENDING
 			case "preparing":
-				targetStatus = entity.CopyStatus_Running
+				targetStatus = entity.CopyStatus_RUNNING
 			case "finished":
 				a.logger.WithContext(ctx).Infof("file '%s' copy finished, size= %d", src.RealPath(), job.Size)
-				targetStatus = entity.CopyStatus_Staged
+				targetStatus = entity.CopyStatus_STAGED
 
 				for dst, err := range job.FailTargets {
 					if err == nil {
@@ -346,7 +357,7 @@ func (a *jobArchiveExecutor) markSourcesAsSubmited(ctx context.Context, jobs []*
 			continue
 		}
 
-		target.Status = entity.CopyStatus_Submited
+		target.Status = entity.CopyStatus_SUBMITED
 	}
 
 	if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
@@ -361,7 +372,7 @@ func (a *jobArchiveExecutor) getTodoSources() int {
 
 	var todo int
 	for _, s := range a.state.Sources {
-		if s.Status == entity.CopyStatus_Submited {
+		if s.Status == entity.CopyStatus_SUBMITED {
 			continue
 		}
 		todo++

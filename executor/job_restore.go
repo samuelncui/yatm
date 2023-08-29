@@ -11,13 +11,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func (e *Executor) RestoreLoadTape(ctx context.Context, device string, tape *library.Tape) error {
-	if !e.occupyDevice(device) {
+func (e *jobRestoreExecutor) loadTape(ctx context.Context, device string, tape *library.Tape) error {
+	if !e.exe.occupyDevice(device) {
 		return fmt.Errorf("device is using, device= %s", device)
 	}
-	defer e.releaseDevice(device)
+	defer e.exe.releaseDevice(device)
 
-	keyPath, keyRecycle, err := e.restoreKey(tape.Encryption)
+	keyPath, keyRecycle, err := e.exe.restoreKey(tape.Encryption)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func (e *Executor) RestoreLoadTape(ctx context.Context, device string, tape *lib
 
 	logger := logrus.StandardLogger()
 
-	if err := runCmd(logger, e.makeEncryptCmd(ctx, device, keyPath, tape.Barcode, tape.Name)); err != nil {
+	if err := runCmd(logger, e.exe.makeEncryptCmd(ctx, device, keyPath, tape.Barcode, tape.Name)); err != nil {
 		return fmt.Errorf("run encrypt script fail, %w", err)
 	}
 
@@ -37,7 +37,7 @@ func (e *Executor) RestoreLoadTape(ctx context.Context, device string, tape *lib
 		return fmt.Errorf("create temp mountpoint, %w", err)
 	}
 
-	mountCmd := exec.CommandContext(ctx, e.mountScript)
+	mountCmd := exec.CommandContext(ctx, e.exe.scripts.Mount)
 	mountCmd.Env = append(mountCmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("MOUNT_POINT=%s", mountPoint))
 	if err := runCmd(logger, mountCmd); err != nil {
 		return fmt.Errorf("run mount script fail, %w", err)

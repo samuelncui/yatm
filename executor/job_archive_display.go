@@ -7,8 +7,8 @@ import (
 	"github.com/abc950309/tapewriter/entity"
 )
 
-func (e *Executor) getArchiveDisplay(ctx context.Context, job *Job) (*entity.JobDisplayArchive, error) {
-	display := new(entity.JobDisplayArchive)
+func (e *Executor) getArchiveDisplay(ctx context.Context, job *Job) (*entity.JobArchiveDisplay, error) {
+	display := new(entity.JobArchiveDisplay)
 
 	if exe := e.getArchiveExecutor(ctx, job); exe != nil && exe.progress != nil {
 		display.CopyedBytes = atomic.LoadInt64(&exe.progress.bytes)

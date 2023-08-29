@@ -223,7 +223,7 @@ func (x *SourceState) GetStatus() CopyStatus {
 	if x != nil {
 		return x.Status
 	}
-	return CopyStatus_Draft
+	return CopyStatus_DRAFT
 }
 
 func (x *SourceState) GetMessage() string {

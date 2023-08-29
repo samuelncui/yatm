@@ -12,6 +12,10 @@ const apiBase: string = (() => {
   return base;
 })();
 
+export const fileBase: string = (() => {
+  return apiBase.replace("/services", "/files");
+})();
+
 export const ModeDir = 2147483648n; // d: is a directory
 
 export const Root: FileData = {
@@ -70,7 +74,7 @@ export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
       openable: isDir,
       selectable: true,
       draggable: true,
-      droppable: isDir,
+      droppable: false,
       size: Number(file.size),
       modDate: moment.unix(Number(file.modTime)).toDate(),
     };

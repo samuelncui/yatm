@@ -9,12 +9,11 @@ import moment from "moment";
 
 import { useState, useCallback } from "react";
 
-import "./app.less";
-import { cli } from "./api";
-import { formatFilesize } from "./tools";
+import { cli } from "../api";
+import { formatFilesize } from "../tools";
 
-import "./detail.less";
-import { FileGetReply, Tape } from "./entity";
+import "./file-detail.less";
+import { FileGetReply, Tape } from "../entity";
 
 export type Detail = FileGetReply & {
   tapes: Map<bigint, Tape>;
@@ -25,8 +24,13 @@ export const useDetailModal = () => {
   const openDetailModel = useCallback(
     (detail: FileGetReply) => {
       (async () => {
-        const tapeList = await cli.tapeMGet({
-          ids: detail.positions.map((posi) => posi.tapeId),
+        const tapeList = await cli.tapeList({
+          param: {
+            oneofKind: "mget",
+            mget: {
+              ids: detail.positions.map((posi) => posi.tapeId),
+            },
+          },
         }).response;
 
         const tapes = new Map<bigint, Tape>();

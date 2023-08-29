@@ -19,6 +19,7 @@ export default defineConfig(({ command, mode }) => {
       proxy: {
         // target http://localhost:5173
         "/services": env.DEV_SERVICE_BASE,
+        "/files": env.DEV_SERVICE_BASE,
       },
     },
   };

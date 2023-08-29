@@ -6,10 +6,12 @@ import (
 	"github.com/abc950309/tapewriter/library"
 )
 
-// JobGet(context.Context, *entity.JobGetRequest) (*entity.JobGetReply, error)
+var (
+	_ = entity.ServiceServer(&API{})
+)
 
 type API struct {
-	entity.UnimplementedServiceServer
+	entity.UnsafeServiceServer
 
 	lib        *library.Library
 	exe        *executor.Executor

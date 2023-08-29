@@ -4,16 +4,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"sort"
+	"strings"
 
 	"github.com/abc950309/acp"
 	"github.com/abc950309/tapewriter/entity"
 )
 
-func (e *Executor) initArchive(ctx context.Context, job *Job, param *entity.JobParamArchive) error {
+func (e *Executor) createArchive(ctx context.Context, job *Job, param *entity.JobArchiveParam) error {
 	var err error
 	sources := make([]*entity.SourceState, 0, len(param.Sources)*8)
 	for _, src := range param.Sources {
+		src.Base = strings.TrimSpace(src.Base)
+		if src.Base[0] != '/' {
+			src.Base = path.Join(e.paths.Source, src.Base) + "/"
+		}
+
 		sources, err = walk(ctx, src, sources)
 		if err != nil {
 			return err
@@ -29,8 +36,8 @@ func (e *Executor) initArchive(ctx context.Context, job *Job, param *entity.JobP
 		}
 	}
 
-	job.State = &entity.JobState{State: &entity.JobState_Archive{Archive: &entity.JobStateArchive{
-		Step:    entity.JobArchiveStep_Pending,
+	job.State = &entity.JobState{State: &entity.JobState_Archive{Archive: &entity.JobArchiveState{
+		Step:    entity.JobArchiveStep_PENDING,
 		Sources: sources,
 	}}}
 	return nil
@@ -52,7 +59,7 @@ func walk(ctx context.Context, src *entity.Source, sources []*entity.SourceState
 		return append(sources, &entity.SourceState{
 			Source: src,
 			Size:   stat.Size(),
-			Status: entity.CopyStatus_Pending,
+			Status: entity.CopyStatus_PENDING,
 		}), nil
 	}
 	if mode&acp.UnexpectFileMode != 0 {

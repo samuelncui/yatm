@@ -11,10 +11,14 @@ import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MESSAGE_TYPE } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
-import { JobDisplayArchive } from "./job_archive";
+import { JobRestoreDisplay } from "./job_restore";
+import { JobArchiveDisplay } from "./job_archive";
+import { JobRestoreNextParam } from "./job_restore";
 import { JobArchiveNextParam } from "./job_archive";
-import { JobStateArchive } from "./job_archive";
-import { JobParamArchive } from "./job_archive";
+import { JobRestoreState } from "./job_restore";
+import { JobArchiveState } from "./job_archive";
+import { JobRestoreParam } from "./job_restore";
+import { JobArchiveParam } from "./job_archive";
 /**
  * @generated from protobuf message job.Job
  */
@@ -54,9 +58,15 @@ export interface JobParam {
     param: {
         oneofKind: "archive";
         /**
-         * @generated from protobuf field: job_archive.JobParamArchive Archive = 1 [json_name = "Archive"];
+         * @generated from protobuf field: job_archive.JobArchiveParam archive = 1;
          */
-        archive: JobParamArchive;
+        archive: JobArchiveParam;
+    } | {
+        oneofKind: "restore";
+        /**
+         * @generated from protobuf field: job_restore.JobRestoreParam restore = 2;
+         */
+        restore: JobRestoreParam;
     } | {
         oneofKind: undefined;
     };
@@ -71,9 +81,15 @@ export interface JobState {
     state: {
         oneofKind: "archive";
         /**
-         * @generated from protobuf field: job_archive.JobStateArchive Archive = 1 [json_name = "Archive"];
+         * @generated from protobuf field: job_archive.JobArchiveState archive = 1;
          */
-        archive: JobStateArchive;
+        archive: JobArchiveState;
+    } | {
+        oneofKind: "restore";
+        /**
+         * @generated from protobuf field: job_restore.JobRestoreState restore = 2;
+         */
+        restore: JobRestoreState;
     } | {
         oneofKind: undefined;
     };
@@ -91,6 +107,12 @@ export interface JobNextParam {
          * @generated from protobuf field: job_archive.JobArchiveNextParam archive = 1;
          */
         archive: JobArchiveNextParam;
+    } | {
+        oneofKind: "restore";
+        /**
+         * @generated from protobuf field: job_restore.JobRestoreNextParam restore = 2;
+         */
+        restore: JobRestoreNextParam;
     } | {
         oneofKind: undefined;
     };
@@ -135,9 +157,15 @@ export interface JobDisplay {
     display: {
         oneofKind: "archive";
         /**
-         * @generated from protobuf field: job_archive.JobDisplayArchive archive = 1;
+         * @generated from protobuf field: job_archive.JobArchiveDisplay archive = 1;
          */
-        archive: JobDisplayArchive;
+        archive: JobArchiveDisplay;
+    } | {
+        oneofKind: "restore";
+        /**
+         * @generated from protobuf field: job_restore.JobRestoreDisplay restore = 2;
+         */
+        restore: JobRestoreDisplay;
     } | {
         oneofKind: undefined;
     };
@@ -147,33 +175,33 @@ export interface JobDisplay {
  */
 export enum JobStatus {
     /**
-     * @generated from protobuf enum value: Draft = 0;
+     * @generated from protobuf enum value: DRAFT = 0;
      */
-    Draft = 0,
+    DRAFT = 0,
     /**
      * dependencies not satisfied
      *
-     * @generated from protobuf enum value: NotReady = 1;
+     * @generated from protobuf enum value: NOT_READY = 1;
      */
-    NotReady = 1,
+    NOT_READY = 1,
     /**
      * waiting in queue
      *
-     * @generated from protobuf enum value: Pending = 2;
+     * @generated from protobuf enum value: PENDING = 2;
      */
-    Pending = 2,
+    PENDING = 2,
     /**
-     * @generated from protobuf enum value: Processing = 3;
+     * @generated from protobuf enum value: PROCESSING = 3;
      */
-    Processing = 3,
+    PROCESSING = 3,
     /**
-     * @generated from protobuf enum value: Completed = 4;
+     * @generated from protobuf enum value: COMPLETED = 4;
      */
-    Completed = 4,
+    COMPLETED = 4,
     /**
-     * @generated from protobuf enum value: Failed = 255;
+     * @generated from protobuf enum value: FAILED = 255;
      */
-    Failed = 255
+    FAILED = 255
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class Job$Type extends MessageType<Job> {
@@ -261,7 +289,8 @@ export const Job = new Job$Type();
 class JobParam$Type extends MessageType<JobParam> {
     constructor() {
         super("job.JobParam", [
-            { no: 1, name: "Archive", kind: "message", jsonName: "Archive", oneof: "param", T: () => JobParamArchive }
+            { no: 1, name: "archive", kind: "message", oneof: "param", T: () => JobArchiveParam },
+            { no: 2, name: "restore", kind: "message", oneof: "param", T: () => JobRestoreParam }
         ]);
     }
     create(value?: PartialMessage<JobParam>): JobParam {
@@ -276,10 +305,16 @@ class JobParam$Type extends MessageType<JobParam> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_archive.JobParamArchive Archive = 1 [json_name = "Archive"];*/ 1:
+                case /* job_archive.JobArchiveParam archive */ 1:
                     message.param = {
                         oneofKind: "archive",
-                        archive: JobParamArchive.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).archive)
+                        archive: JobArchiveParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).archive)
+                    };
+                    break;
+                case /* job_restore.JobRestoreParam restore */ 2:
+                    message.param = {
+                        oneofKind: "restore",
+                        restore: JobRestoreParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).restore)
                     };
                     break;
                 default:
@@ -294,9 +329,12 @@ class JobParam$Type extends MessageType<JobParam> {
         return message;
     }
     internalBinaryWrite(message: JobParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_archive.JobParamArchive Archive = 1 [json_name = "Archive"]; */
+        /* job_archive.JobArchiveParam archive = 1; */
         if (message.param.oneofKind === "archive")
-            JobParamArchive.internalBinaryWrite(message.param.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+            JobArchiveParam.internalBinaryWrite(message.param.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* job_restore.JobRestoreParam restore = 2; */
+        if (message.param.oneofKind === "restore")
+            JobRestoreParam.internalBinaryWrite(message.param.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -311,7 +349,8 @@ export const JobParam = new JobParam$Type();
 class JobState$Type extends MessageType<JobState> {
     constructor() {
         super("job.JobState", [
-            { no: 1, name: "Archive", kind: "message", jsonName: "Archive", oneof: "state", T: () => JobStateArchive }
+            { no: 1, name: "archive", kind: "message", oneof: "state", T: () => JobArchiveState },
+            { no: 2, name: "restore", kind: "message", oneof: "state", T: () => JobRestoreState }
         ]);
     }
     create(value?: PartialMessage<JobState>): JobState {
@@ -326,10 +365,16 @@ class JobState$Type extends MessageType<JobState> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_archive.JobStateArchive Archive = 1 [json_name = "Archive"];*/ 1:
+                case /* job_archive.JobArchiveState archive */ 1:
                     message.state = {
                         oneofKind: "archive",
-                        archive: JobStateArchive.internalBinaryRead(reader, reader.uint32(), options, (message.state as any).archive)
+                        archive: JobArchiveState.internalBinaryRead(reader, reader.uint32(), options, (message.state as any).archive)
+                    };
+                    break;
+                case /* job_restore.JobRestoreState restore */ 2:
+                    message.state = {
+                        oneofKind: "restore",
+                        restore: JobRestoreState.internalBinaryRead(reader, reader.uint32(), options, (message.state as any).restore)
                     };
                     break;
                 default:
@@ -344,9 +389,12 @@ class JobState$Type extends MessageType<JobState> {
         return message;
     }
     internalBinaryWrite(message: JobState, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_archive.JobStateArchive Archive = 1 [json_name = "Archive"]; */
+        /* job_archive.JobArchiveState archive = 1; */
         if (message.state.oneofKind === "archive")
-            JobStateArchive.internalBinaryWrite(message.state.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+            JobArchiveState.internalBinaryWrite(message.state.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* job_restore.JobRestoreState restore = 2; */
+        if (message.state.oneofKind === "restore")
+            JobRestoreState.internalBinaryWrite(message.state.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -361,7 +409,8 @@ export const JobState = new JobState$Type();
 class JobNextParam$Type extends MessageType<JobNextParam> {
     constructor() {
         super("job.JobNextParam", [
-            { no: 1, name: "archive", kind: "message", oneof: "param", T: () => JobArchiveNextParam }
+            { no: 1, name: "archive", kind: "message", oneof: "param", T: () => JobArchiveNextParam },
+            { no: 2, name: "restore", kind: "message", oneof: "param", T: () => JobRestoreNextParam }
         ]);
     }
     create(value?: PartialMessage<JobNextParam>): JobNextParam {
@@ -382,6 +431,12 @@ class JobNextParam$Type extends MessageType<JobNextParam> {
                         archive: JobArchiveNextParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).archive)
                     };
                     break;
+                case /* job_restore.JobRestoreNextParam restore */ 2:
+                    message.param = {
+                        oneofKind: "restore",
+                        restore: JobRestoreNextParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).restore)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -397,6 +452,9 @@ class JobNextParam$Type extends MessageType<JobNextParam> {
         /* job_archive.JobArchiveNextParam archive = 1; */
         if (message.param.oneofKind === "archive")
             JobArchiveNextParam.internalBinaryWrite(message.param.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* job_restore.JobRestoreNextParam restore = 2; */
+        if (message.param.oneofKind === "restore")
+            JobRestoreNextParam.internalBinaryWrite(message.param.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -526,7 +584,8 @@ export const JobFilter = new JobFilter$Type();
 class JobDisplay$Type extends MessageType<JobDisplay> {
     constructor() {
         super("job.JobDisplay", [
-            { no: 1, name: "archive", kind: "message", oneof: "display", T: () => JobDisplayArchive }
+            { no: 1, name: "archive", kind: "message", oneof: "display", T: () => JobArchiveDisplay },
+            { no: 2, name: "restore", kind: "message", oneof: "display", T: () => JobRestoreDisplay }
         ]);
     }
     create(value?: PartialMessage<JobDisplay>): JobDisplay {
@@ -541,10 +600,16 @@ class JobDisplay$Type extends MessageType<JobDisplay> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_archive.JobDisplayArchive archive */ 1:
+                case /* job_archive.JobArchiveDisplay archive */ 1:
                     message.display = {
                         oneofKind: "archive",
-                        archive: JobDisplayArchive.internalBinaryRead(reader, reader.uint32(), options, (message.display as any).archive)
+                        archive: JobArchiveDisplay.internalBinaryRead(reader, reader.uint32(), options, (message.display as any).archive)
+                    };
+                    break;
+                case /* job_restore.JobRestoreDisplay restore */ 2:
+                    message.display = {
+                        oneofKind: "restore",
+                        restore: JobRestoreDisplay.internalBinaryRead(reader, reader.uint32(), options, (message.display as any).restore)
                     };
                     break;
                 default:
@@ -559,9 +624,12 @@ class JobDisplay$Type extends MessageType<JobDisplay> {
         return message;
     }
     internalBinaryWrite(message: JobDisplay, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_archive.JobDisplayArchive archive = 1; */
+        /* job_archive.JobArchiveDisplay archive = 1; */
         if (message.display.oneofKind === "archive")
-            JobDisplayArchive.internalBinaryWrite(message.display.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+            JobArchiveDisplay.internalBinaryWrite(message.display.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* job_restore.JobRestoreDisplay restore = 2; */
+        if (message.display.oneofKind === "restore")
+            JobRestoreDisplay.internalBinaryWrite(message.display.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/abc950309/tapewriter/entity"
 )
 
 var (
@@ -76,6 +78,35 @@ func (l *Library) GetTape(ctx context.Context, id int64) (*Tape, error) {
 	}
 
 	return tape, nil
+}
+
+func (l *Library) DeleteTapes(ctx context.Context, ids ...int64) error {
+	if r := l.db.WithContext(ctx).Where("id IN (?)", ids).Delete(ModelTape); r.Error != nil {
+		return fmt.Errorf("delete tapes fail, err= %w", r.Error)
+	}
+
+	return nil
+}
+
+func (l *Library) ListTape(ctx context.Context, filter *entity.TapeFilter) ([]*Tape, error) {
+	db := l.db.WithContext(ctx)
+	if filter.Limit != nil {
+		db = db.Limit(int(*filter.Limit))
+	} else {
+		db = db.Limit(20)
+	}
+	if filter.Offset != nil {
+		db = db.Offset(int(*filter.Offset))
+	}
+
+	db = db.Order("create_time DESC")
+
+	tapes := make([]*Tape, 0, 20)
+	if r := db.Find(&tapes); r.Error != nil {
+		return nil, fmt.Errorf("list tapes fail, err= %w", r.Error)
+	}
+
+	return tapes, nil
 }
 
 func (l *Library) MGetTape(ctx context.Context, tapeIDs ...int64) (map[int64]*Tape, error) {

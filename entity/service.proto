@@ -7,6 +7,7 @@ import "file.proto";
 import "position.proto";
 import "tape.proto";
 import "source.proto";
+import "library_entity_type.proto";
 
 service Service {
     rpc FileGet(FileGetRequest) returns (FileGetReply) {}
@@ -15,10 +16,12 @@ service Service {
     rpc FileDelete(FileDeleteRequest) returns (FileDeleteReply) {}
     rpc FileListParents(FileListParentsRequest) returns (FileListParentsReply) {}
 
-    rpc TapeMGet(TapeMGetRequest) returns (TapeMGetReply) {}
+    rpc TapeList(TapeListRequest) returns (TapeListReply) {}
+    rpc TapeDelete(TapeDeleteRequest) returns (TapeDeleteReply) {}
 
     rpc JobList(JobListRequest) returns (JobListReply) {}
     rpc JobCreate(JobCreateRequest) returns (JobCreateReply) {}
+    rpc JobDelete(JobDeleteRequest) returns (JobDeleteReply) {}
     rpc JobNext(JobNextRequest) returns (JobNextReply) {}
     rpc JobDisplay(JobDisplayRequest) returns (JobDisplayReply) {}
     rpc JobGetLog(JobGetLogRequest) returns (JobGetLogReply) {}
@@ -26,6 +29,8 @@ service Service {
     rpc SourceList(SourceListRequest) returns (SourceListReply) {}
 
     rpc DeviceList(DeviceListRequest) returns (DeviceListReply) {}
+
+    rpc LibraryExport(LibraryExportRequest) returns (LibraryExportReply) {}
 }
 
 message FileGetRequest {
@@ -71,12 +76,26 @@ message FileListParentsReply {
     repeated file.File parents = 1;
 }
 
+message TapeListRequest {
+    oneof param {
+        TapeMGetRequest mget = 1;
+        tape.TapeFilter list = 2;
+    }
+}
+
 message TapeMGetRequest {
     repeated int64 ids = 1;
 }
 
-message TapeMGetReply {
+message TapeListReply {
     repeated tape.Tape tapes = 1;
+}
+
+message TapeDeleteRequest {
+    repeated int64 ids = 1;
+}
+
+message TapeDeleteReply {
 }
 
 message JobListRequest {
@@ -100,6 +119,13 @@ message JobCreateRequest {
 
 message JobCreateReply {
     job.Job job = 1;
+}
+
+message JobDeleteRequest {
+    repeated int64 ids = 1;
+}
+
+message JobDeleteReply {
 }
 
 message JobNextRequest {
@@ -142,4 +168,12 @@ message DeviceListRequest {}
 
 message DeviceListReply {
     repeated string devices = 1;
+}
+
+message LibraryExportRequest {
+    repeated library_entity_type.LibraryEntityType types = 1;
+}
+
+message LibraryExportReply {
+    bytes json = 1;
 }

@@ -13,9 +13,9 @@ import { MESSAGE_TYPE } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 import { CopyStatus } from "./copy_status";
 /**
- * @generated from protobuf message job_restore.JobParamRestore
+ * @generated from protobuf message job_restore.JobRestoreParam
  */
-export interface JobParamRestore {
+export interface JobRestoreParam {
     /**
      * @generated from protobuf field: repeated int64 file_ids = 1;
      */
@@ -31,19 +31,19 @@ export interface JobRestoreNextParam {
     param: {
         oneofKind: "waitForTape";
         /**
-         * @generated from protobuf field: job_restore.JobRestoreWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"];
+         * @generated from protobuf field: job_restore.JobRestoreWaitForTapeParam wait_for_tape = 1;
          */
         waitForTape: JobRestoreWaitForTapeParam;
     } | {
         oneofKind: "copying";
         /**
-         * @generated from protobuf field: job_restore.JobRestoreCopyingParam Copying = 2 [json_name = "Copying"];
+         * @generated from protobuf field: job_restore.JobRestoreCopyingParam copying = 2;
          */
         copying: JobRestoreCopyingParam;
     } | {
         oneofKind: "finished";
         /**
-         * @generated from protobuf field: job_restore.JobRestoreFinishedParam Finished = 255 [json_name = "Finished"];
+         * @generated from protobuf field: job_restore.JobRestoreFinishedParam finished = 255;
          */
         finished: JobRestoreFinishedParam;
     } | {
@@ -70,63 +70,100 @@ export interface JobRestoreCopyingParam {
 export interface JobRestoreFinishedParam {
 }
 /**
- * @generated from protobuf message job_restore.FileRestoreState
+ * @generated from protobuf message job_restore.RestoreFile
  */
-export interface FileRestoreState {
+export interface RestoreFile {
     /**
      * @generated from protobuf field: int64 file_id = 1;
      */
     fileId: bigint;
     /**
-     * @generated from protobuf field: copy_status.CopyStatus status = 2;
-     */
-    status: CopyStatus;
-    /**
-     * @generated from protobuf field: int64 tape_id = 17;
+     * @generated from protobuf field: int64 tape_id = 2;
      */
     tapeId: bigint;
     /**
-     * @generated from protobuf field: int64 position_id = 18;
+     * @generated from protobuf field: int64 position_id = 3;
      */
     positionId: bigint;
     /**
-     * @generated from protobuf field: repeated string path_in_tape = 19;
+     * @generated from protobuf field: copy_status.CopyStatus status = 17;
      */
-    pathInTape: string[];
+    status: CopyStatus;
+    /**
+     * @generated from protobuf field: int64 size = 18;
+     */
+    size: bigint;
+    /**
+     * @generated from protobuf field: string tape_path = 33;
+     */
+    tapePath: string;
+    /**
+     * @generated from protobuf field: string target_path = 34;
+     */
+    targetPath: string;
 }
 /**
- * @generated from protobuf message job_restore.JobStateRestore
+ * @generated from protobuf message job_restore.RestoreTape
  */
-export interface JobStateRestore {
+export interface RestoreTape {
+    /**
+     * @generated from protobuf field: int64 tape_id = 1;
+     */
+    tapeId: bigint;
+    /**
+     * @generated from protobuf field: string barcode = 2;
+     */
+    barcode: string;
+    /**
+     * @generated from protobuf field: copy_status.CopyStatus status = 17;
+     */
+    status: CopyStatus;
+    /**
+     * @generated from protobuf field: repeated job_restore.RestoreFile files = 18;
+     */
+    files: RestoreFile[];
+}
+/**
+ * @generated from protobuf message job_restore.JobRestoreState
+ */
+export interface JobRestoreState {
     /**
      * @generated from protobuf field: job_restore.JobRestoreStep step = 1;
      */
     step: JobRestoreStep;
     /**
-     * @generated from protobuf field: repeated job_restore.FileRestoreState files = 2;
+     * @generated from protobuf field: repeated job_restore.RestoreTape tapes = 2;
      */
-    files: FileRestoreState[];
+    tapes: RestoreTape[];
 }
 /**
- * @generated from protobuf message job_restore.JobDisplayRestore
+ * @generated from protobuf message job_restore.JobRestoreDisplay
  */
-export interface JobDisplayRestore {
+export interface JobRestoreDisplay {
     /**
-     * @generated from protobuf field: int64 copyedBytes = 1;
+     * @generated from protobuf field: int64 copyed_bytes = 1;
      */
     copyedBytes: bigint;
     /**
-     * @generated from protobuf field: int64 copyedFiles = 2;
+     * @generated from protobuf field: int64 copyed_files = 2;
      */
     copyedFiles: bigint;
     /**
-     * @generated from protobuf field: int64 totalBytes = 3;
+     * @generated from protobuf field: int64 total_bytes = 3;
      */
     totalBytes: bigint;
     /**
-     * @generated from protobuf field: int64 totalFiles = 4;
+     * @generated from protobuf field: int64 total_files = 4;
      */
     totalFiles: bigint;
+    /**
+     * @generated from protobuf field: optional int64 speed = 5;
+     */
+    speed?: bigint;
+    /**
+     * @generated from protobuf field: int64 start_time = 6;
+     */
+    startTime: bigint;
     /**
      * @generated from protobuf field: bytes logs = 17;
      */
@@ -137,37 +174,37 @@ export interface JobDisplayRestore {
  */
 export enum JobRestoreStep {
     /**
-     * @generated from protobuf enum value: Pending = 0;
+     * @generated from protobuf enum value: PENDING = 0;
      */
-    Pending = 0,
+    PENDING = 0,
     /**
-     * @generated from protobuf enum value: WaitForTape = 1;
+     * @generated from protobuf enum value: WAIT_FOR_TAPE = 1;
      */
-    WaitForTape = 1,
+    WAIT_FOR_TAPE = 1,
     /**
-     * @generated from protobuf enum value: Copying = 2;
+     * @generated from protobuf enum value: COPYING = 2;
      */
-    Copying = 2,
+    COPYING = 2,
     /**
-     * @generated from protobuf enum value: Finished = 255;
+     * @generated from protobuf enum value: FINISHED = 255;
      */
-    Finished = 255
+    FINISHED = 255
 }
 // @generated message type with reflection information, may provide speed optimized methods
-class JobParamRestore$Type extends MessageType<JobParamRestore> {
+class JobRestoreParam$Type extends MessageType<JobRestoreParam> {
     constructor() {
-        super("job_restore.JobParamRestore", [
+        super("job_restore.JobRestoreParam", [
             { no: 1, name: "file_ids", kind: "scalar", repeat: 1 /*RepeatType.PACKED*/, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
-    create(value?: PartialMessage<JobParamRestore>): JobParamRestore {
+    create(value?: PartialMessage<JobRestoreParam>): JobRestoreParam {
         const message = { fileIds: [] };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobParamRestore>(this, message, value);
+            reflectionMergePartial<JobRestoreParam>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobParamRestore): JobParamRestore {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRestoreParam): JobRestoreParam {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -190,7 +227,7 @@ class JobParamRestore$Type extends MessageType<JobParamRestore> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobParamRestore, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobRestoreParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* repeated int64 file_ids = 1; */
         if (message.fileIds.length) {
             writer.tag(1, WireType.LengthDelimited).fork();
@@ -205,16 +242,16 @@ class JobParamRestore$Type extends MessageType<JobParamRestore> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_restore.JobParamRestore
+ * @generated MessageType for protobuf message job_restore.JobRestoreParam
  */
-export const JobParamRestore = new JobParamRestore$Type();
+export const JobRestoreParam = new JobRestoreParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
     constructor() {
         super("job_restore.JobRestoreNextParam", [
-            { no: 1, name: "WaitForTape", kind: "message", jsonName: "WaitForTape", oneof: "param", T: () => JobRestoreWaitForTapeParam },
-            { no: 2, name: "Copying", kind: "message", jsonName: "Copying", oneof: "param", T: () => JobRestoreCopyingParam },
-            { no: 255, name: "Finished", kind: "message", jsonName: "Finished", oneof: "param", T: () => JobRestoreFinishedParam }
+            { no: 1, name: "wait_for_tape", kind: "message", oneof: "param", T: () => JobRestoreWaitForTapeParam },
+            { no: 2, name: "copying", kind: "message", oneof: "param", T: () => JobRestoreCopyingParam },
+            { no: 255, name: "finished", kind: "message", oneof: "param", T: () => JobRestoreFinishedParam }
         ]);
     }
     create(value?: PartialMessage<JobRestoreNextParam>): JobRestoreNextParam {
@@ -229,19 +266,19 @@ class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_restore.JobRestoreWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"];*/ 1:
+                case /* job_restore.JobRestoreWaitForTapeParam wait_for_tape */ 1:
                     message.param = {
                         oneofKind: "waitForTape",
                         waitForTape: JobRestoreWaitForTapeParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).waitForTape)
                     };
                     break;
-                case /* job_restore.JobRestoreCopyingParam Copying = 2 [json_name = "Copying"];*/ 2:
+                case /* job_restore.JobRestoreCopyingParam copying */ 2:
                     message.param = {
                         oneofKind: "copying",
                         copying: JobRestoreCopyingParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).copying)
                     };
                     break;
-                case /* job_restore.JobRestoreFinishedParam Finished = 255 [json_name = "Finished"];*/ 255:
+                case /* job_restore.JobRestoreFinishedParam finished */ 255:
                     message.param = {
                         oneofKind: "finished",
                         finished: JobRestoreFinishedParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).finished)
@@ -259,13 +296,13 @@ class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
         return message;
     }
     internalBinaryWrite(message: JobRestoreNextParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_restore.JobRestoreWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"]; */
+        /* job_restore.JobRestoreWaitForTapeParam wait_for_tape = 1; */
         if (message.param.oneofKind === "waitForTape")
             JobRestoreWaitForTapeParam.internalBinaryWrite(message.param.waitForTape, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
-        /* job_restore.JobRestoreCopyingParam Copying = 2 [json_name = "Copying"]; */
+        /* job_restore.JobRestoreCopyingParam copying = 2; */
         if (message.param.oneofKind === "copying")
             JobRestoreCopyingParam.internalBinaryWrite(message.param.copying, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* job_restore.JobRestoreFinishedParam Finished = 255 [json_name = "Finished"]; */
+        /* job_restore.JobRestoreFinishedParam finished = 255; */
         if (message.param.oneofKind === "finished")
             JobRestoreFinishedParam.internalBinaryWrite(message.param.finished, writer.tag(255, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
@@ -378,24 +415,26 @@ class JobRestoreFinishedParam$Type extends MessageType<JobRestoreFinishedParam> 
  */
 export const JobRestoreFinishedParam = new JobRestoreFinishedParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class FileRestoreState$Type extends MessageType<FileRestoreState> {
+class RestoreFile$Type extends MessageType<RestoreFile> {
     constructor() {
-        super("job_restore.FileRestoreState", [
+        super("job_restore.RestoreFile", [
             { no: 1, name: "file_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "status", kind: "enum", T: () => ["copy_status.CopyStatus", CopyStatus] },
-            { no: 17, name: "tape_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 18, name: "position_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 19, name: "path_in_tape", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+            { no: 2, name: "tape_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "position_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 17, name: "status", kind: "enum", T: () => ["copy_status.CopyStatus", CopyStatus] },
+            { no: 18, name: "size", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 33, name: "tape_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 34, name: "target_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
-    create(value?: PartialMessage<FileRestoreState>): FileRestoreState {
-        const message = { fileId: 0n, status: 0, tapeId: 0n, positionId: 0n, pathInTape: [] };
+    create(value?: PartialMessage<RestoreFile>): RestoreFile {
+        const message = { fileId: 0n, tapeId: 0n, positionId: 0n, status: 0, size: 0n, tapePath: "", targetPath: "" };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<FileRestoreState>(this, message, value);
+            reflectionMergePartial<RestoreFile>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: FileRestoreState): FileRestoreState {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: RestoreFile): RestoreFile {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -403,17 +442,23 @@ class FileRestoreState$Type extends MessageType<FileRestoreState> {
                 case /* int64 file_id */ 1:
                     message.fileId = reader.int64().toBigInt();
                     break;
-                case /* copy_status.CopyStatus status */ 2:
-                    message.status = reader.int32();
-                    break;
-                case /* int64 tape_id */ 17:
+                case /* int64 tape_id */ 2:
                     message.tapeId = reader.int64().toBigInt();
                     break;
-                case /* int64 position_id */ 18:
+                case /* int64 position_id */ 3:
                     message.positionId = reader.int64().toBigInt();
                     break;
-                case /* repeated string path_in_tape */ 19:
-                    message.pathInTape.push(reader.string());
+                case /* copy_status.CopyStatus status */ 17:
+                    message.status = reader.int32();
+                    break;
+                case /* int64 size */ 18:
+                    message.size = reader.int64().toBigInt();
+                    break;
+                case /* string tape_path */ 33:
+                    message.tapePath = reader.string();
+                    break;
+                case /* string target_path */ 34:
+                    message.targetPath = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -426,22 +471,28 @@ class FileRestoreState$Type extends MessageType<FileRestoreState> {
         }
         return message;
     }
-    internalBinaryWrite(message: FileRestoreState, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: RestoreFile, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* int64 file_id = 1; */
         if (message.fileId !== 0n)
             writer.tag(1, WireType.Varint).int64(message.fileId);
-        /* copy_status.CopyStatus status = 2; */
-        if (message.status !== 0)
-            writer.tag(2, WireType.Varint).int32(message.status);
-        /* int64 tape_id = 17; */
+        /* int64 tape_id = 2; */
         if (message.tapeId !== 0n)
-            writer.tag(17, WireType.Varint).int64(message.tapeId);
-        /* int64 position_id = 18; */
+            writer.tag(2, WireType.Varint).int64(message.tapeId);
+        /* int64 position_id = 3; */
         if (message.positionId !== 0n)
-            writer.tag(18, WireType.Varint).int64(message.positionId);
-        /* repeated string path_in_tape = 19; */
-        for (let i = 0; i < message.pathInTape.length; i++)
-            writer.tag(19, WireType.LengthDelimited).string(message.pathInTape[i]);
+            writer.tag(3, WireType.Varint).int64(message.positionId);
+        /* copy_status.CopyStatus status = 17; */
+        if (message.status !== 0)
+            writer.tag(17, WireType.Varint).int32(message.status);
+        /* int64 size = 18; */
+        if (message.size !== 0n)
+            writer.tag(18, WireType.Varint).int64(message.size);
+        /* string tape_path = 33; */
+        if (message.tapePath !== "")
+            writer.tag(33, WireType.LengthDelimited).string(message.tapePath);
+        /* string target_path = 34; */
+        if (message.targetPath !== "")
+            writer.tag(34, WireType.LengthDelimited).string(message.targetPath);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -449,25 +500,93 @@ class FileRestoreState$Type extends MessageType<FileRestoreState> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_restore.FileRestoreState
+ * @generated MessageType for protobuf message job_restore.RestoreFile
  */
-export const FileRestoreState = new FileRestoreState$Type();
+export const RestoreFile = new RestoreFile$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobStateRestore$Type extends MessageType<JobStateRestore> {
+class RestoreTape$Type extends MessageType<RestoreTape> {
     constructor() {
-        super("job_restore.JobStateRestore", [
-            { no: 1, name: "step", kind: "enum", T: () => ["job_restore.JobRestoreStep", JobRestoreStep] },
-            { no: 2, name: "files", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => FileRestoreState }
+        super("job_restore.RestoreTape", [
+            { no: 1, name: "tape_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "barcode", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 17, name: "status", kind: "enum", T: () => ["copy_status.CopyStatus", CopyStatus] },
+            { no: 18, name: "files", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => RestoreFile }
         ]);
     }
-    create(value?: PartialMessage<JobStateRestore>): JobStateRestore {
-        const message = { step: 0, files: [] };
+    create(value?: PartialMessage<RestoreTape>): RestoreTape {
+        const message = { tapeId: 0n, barcode: "", status: 0, files: [] };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobStateRestore>(this, message, value);
+            reflectionMergePartial<RestoreTape>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobStateRestore): JobStateRestore {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: RestoreTape): RestoreTape {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int64 tape_id */ 1:
+                    message.tapeId = reader.int64().toBigInt();
+                    break;
+                case /* string barcode */ 2:
+                    message.barcode = reader.string();
+                    break;
+                case /* copy_status.CopyStatus status */ 17:
+                    message.status = reader.int32();
+                    break;
+                case /* repeated job_restore.RestoreFile files */ 18:
+                    message.files.push(RestoreFile.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: RestoreTape, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 tape_id = 1; */
+        if (message.tapeId !== 0n)
+            writer.tag(1, WireType.Varint).int64(message.tapeId);
+        /* string barcode = 2; */
+        if (message.barcode !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.barcode);
+        /* copy_status.CopyStatus status = 17; */
+        if (message.status !== 0)
+            writer.tag(17, WireType.Varint).int32(message.status);
+        /* repeated job_restore.RestoreFile files = 18; */
+        for (let i = 0; i < message.files.length; i++)
+            RestoreFile.internalBinaryWrite(message.files[i], writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message job_restore.RestoreTape
+ */
+export const RestoreTape = new RestoreTape$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class JobRestoreState$Type extends MessageType<JobRestoreState> {
+    constructor() {
+        super("job_restore.JobRestoreState", [
+            { no: 1, name: "step", kind: "enum", T: () => ["job_restore.JobRestoreStep", JobRestoreStep] },
+            { no: 2, name: "tapes", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => RestoreTape }
+        ]);
+    }
+    create(value?: PartialMessage<JobRestoreState>): JobRestoreState {
+        const message = { step: 0, tapes: [] };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobRestoreState>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRestoreState): JobRestoreState {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -475,8 +594,8 @@ class JobStateRestore$Type extends MessageType<JobStateRestore> {
                 case /* job_restore.JobRestoreStep step */ 1:
                     message.step = reader.int32();
                     break;
-                case /* repeated job_restore.FileRestoreState files */ 2:
-                    message.files.push(FileRestoreState.internalBinaryRead(reader, reader.uint32(), options));
+                case /* repeated job_restore.RestoreTape tapes */ 2:
+                    message.tapes.push(RestoreTape.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -489,13 +608,13 @@ class JobStateRestore$Type extends MessageType<JobStateRestore> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobStateRestore, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobRestoreState, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* job_restore.JobRestoreStep step = 1; */
         if (message.step !== 0)
             writer.tag(1, WireType.Varint).int32(message.step);
-        /* repeated job_restore.FileRestoreState files = 2; */
-        for (let i = 0; i < message.files.length; i++)
-            FileRestoreState.internalBinaryWrite(message.files[i], writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* repeated job_restore.RestoreTape tapes = 2; */
+        for (let i = 0; i < message.tapes.length; i++)
+            RestoreTape.internalBinaryWrite(message.tapes[i], writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -503,43 +622,51 @@ class JobStateRestore$Type extends MessageType<JobStateRestore> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_restore.JobStateRestore
+ * @generated MessageType for protobuf message job_restore.JobRestoreState
  */
-export const JobStateRestore = new JobStateRestore$Type();
+export const JobRestoreState = new JobRestoreState$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobDisplayRestore$Type extends MessageType<JobDisplayRestore> {
+class JobRestoreDisplay$Type extends MessageType<JobRestoreDisplay> {
     constructor() {
-        super("job_restore.JobDisplayRestore", [
-            { no: 1, name: "copyedBytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "copyedFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "totalBytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 4, name: "totalFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+        super("job_restore.JobRestoreDisplay", [
+            { no: 1, name: "copyed_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "copyed_files", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "total_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 4, name: "total_files", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 5, name: "speed", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 6, name: "start_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 17, name: "logs", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
         ]);
     }
-    create(value?: PartialMessage<JobDisplayRestore>): JobDisplayRestore {
-        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, logs: new Uint8Array(0) };
+    create(value?: PartialMessage<JobRestoreDisplay>): JobRestoreDisplay {
+        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, startTime: 0n, logs: new Uint8Array(0) };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobDisplayRestore>(this, message, value);
+            reflectionMergePartial<JobRestoreDisplay>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDisplayRestore): JobDisplayRestore {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRestoreDisplay): JobRestoreDisplay {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* int64 copyedBytes */ 1:
+                case /* int64 copyed_bytes */ 1:
                     message.copyedBytes = reader.int64().toBigInt();
                     break;
-                case /* int64 copyedFiles */ 2:
+                case /* int64 copyed_files */ 2:
                     message.copyedFiles = reader.int64().toBigInt();
                     break;
-                case /* int64 totalBytes */ 3:
+                case /* int64 total_bytes */ 3:
                     message.totalBytes = reader.int64().toBigInt();
                     break;
-                case /* int64 totalFiles */ 4:
+                case /* int64 total_files */ 4:
                     message.totalFiles = reader.int64().toBigInt();
+                    break;
+                case /* optional int64 speed */ 5:
+                    message.speed = reader.int64().toBigInt();
+                    break;
+                case /* int64 start_time */ 6:
+                    message.startTime = reader.int64().toBigInt();
                     break;
                 case /* bytes logs */ 17:
                     message.logs = reader.bytes();
@@ -555,19 +682,25 @@ class JobDisplayRestore$Type extends MessageType<JobDisplayRestore> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobDisplayRestore, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* int64 copyedBytes = 1; */
+    internalBinaryWrite(message: JobRestoreDisplay, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 copyed_bytes = 1; */
         if (message.copyedBytes !== 0n)
             writer.tag(1, WireType.Varint).int64(message.copyedBytes);
-        /* int64 copyedFiles = 2; */
+        /* int64 copyed_files = 2; */
         if (message.copyedFiles !== 0n)
             writer.tag(2, WireType.Varint).int64(message.copyedFiles);
-        /* int64 totalBytes = 3; */
+        /* int64 total_bytes = 3; */
         if (message.totalBytes !== 0n)
             writer.tag(3, WireType.Varint).int64(message.totalBytes);
-        /* int64 totalFiles = 4; */
+        /* int64 total_files = 4; */
         if (message.totalFiles !== 0n)
             writer.tag(4, WireType.Varint).int64(message.totalFiles);
+        /* optional int64 speed = 5; */
+        if (message.speed !== undefined)
+            writer.tag(5, WireType.Varint).int64(message.speed);
+        /* int64 start_time = 6; */
+        if (message.startTime !== 0n)
+            writer.tag(6, WireType.Varint).int64(message.startTime);
         /* bytes logs = 17; */
         if (message.logs.length)
             writer.tag(17, WireType.LengthDelimited).bytes(message.logs);
@@ -578,6 +711,6 @@ class JobDisplayRestore$Type extends MessageType<JobDisplayRestore> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_restore.JobDisplayRestore
+ * @generated MessageType for protobuf message job_restore.JobRestoreDisplay
  */
-export const JobDisplayRestore = new JobDisplayRestore$Type();
+export const JobRestoreDisplay = new JobRestoreDisplay$Type();

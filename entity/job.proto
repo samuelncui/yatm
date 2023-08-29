@@ -3,15 +3,16 @@ package job;
 option go_package = "github.com/abc950309/tapewriter/entity";
 
 import "job_archive.proto";
+import "job_restore.proto";
 
 enum JobStatus {
-    Draft       = 0;
-    NotReady    = 1; // dependencies not satisfied
-    Pending     = 2;  // waiting in queue
-    Processing  = 3;
-    Completed   = 4;
+    DRAFT       = 0;
+    NOT_READY    = 1; // dependencies not satisfied
+    PENDING     = 2;  // waiting in queue
+    PROCESSING  = 3;
+    COMPLETED   = 4;
 
-    Failed = 255;
+    FAILED = 255;
 }
 
 message Job {
@@ -26,19 +27,22 @@ message Job {
 
 message JobParam {
     oneof param {
-        job_archive.JobParamArchive Archive = 1;
+        job_archive.JobArchiveParam archive = 1;
+        job_restore.JobRestoreParam restore = 2;
     }
 }
 
 message JobState {
     oneof state {
-        job_archive.JobStateArchive Archive = 1;
+        job_archive.JobArchiveState archive = 1;
+        job_restore.JobRestoreState restore = 2;
     }
 }
 
 message JobNextParam {
     oneof param {
         job_archive.JobArchiveNextParam archive = 1;
+        job_restore.JobRestoreNextParam restore = 2;
     }
 }
 
@@ -56,6 +60,7 @@ message JobFilter {
 
 message JobDisplay {
     oneof display {
-        job_archive.JobDisplayArchive archive = 1;
+        job_archive.JobArchiveDisplay archive = 1;
+        job_restore.JobRestoreDisplay restore = 2;
     }
 }

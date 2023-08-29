@@ -25,8 +25,12 @@ var (
 
 func (x *JobState) Scan(src any) error {
 	return Scan(x, src)
+	// Scan(x, src)
+	// return nil
 }
 
 func (x *JobState) Value() (driver.Value, error) {
 	return Value(x)
+	// val, _ := Value(x)
+	// return val, nil
 }

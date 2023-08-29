@@ -14,3 +14,6 @@ protoc --go_out=$GO_DST_DIR --go_opt=paths=source_relative \
 
     # --js_out=import_style=es6,binary:$TS_DST_DIR \
     # --grpc-web_out=import_style=typescript,mode=grpcwebtext:$TS_DST_DIR \
+
+cd ../frontend;
+pnpm run gen-proto;

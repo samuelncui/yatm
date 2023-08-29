@@ -9,7 +9,7 @@ import (
 
 func (api *API) JobCreate(ctx context.Context, req *entity.JobCreateRequest) (*entity.JobCreateReply, error) {
 	job, err := api.exe.CreateJob(ctx, &executor.Job{
-		Status:   entity.JobStatus_Pending,
+		Status:   entity.JobStatus_PENDING,
 		Priority: req.Job.Priority,
 	}, req.Job.Param)
 	if err != nil {

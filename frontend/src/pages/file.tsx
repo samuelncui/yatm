@@ -5,13 +5,12 @@ import Box from "@mui/material/Box";
 import { FullFileBrowser, FileBrowserProps, FileBrowserHandle, FileArray } from "chonky";
 import { ChonkyActions, ChonkyFileActionData } from "chonky";
 
-import "./app.less";
-import { cli, convertFiles } from "./api";
-import { Root } from "./api";
-import { RenameFileAction, RefreshListAction } from "./actions";
+import { cli, convertFiles } from "../api";
+import { Root } from "../api";
+import { RenameFileAction, RefreshListAction } from "../actions";
 
-import { useDetailModal, DetailModal } from "./detail";
-import { FileGetReply } from "./entity";
+import { useDetailModal, DetailModal } from "./file-detail";
+import { FileGetReply } from "../entity";
 
 const useDualSide = () => {
   const left = useRef<FileBrowserHandle>(null);

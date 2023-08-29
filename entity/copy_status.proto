@@ -4,11 +4,11 @@ package copy_status;
 option go_package = "github.com/abc950309/tapewriter/entity";
 
 enum CopyStatus {
-    Draft     = 0;
-    Pending   = 1; // waiting in queue
-    Running   = 2;
-    Staged    = 3;
-    Submited  = 4;
+    DRAFT     = 0;
+    PENDING   = 1; // waiting in queue
+    RUNNING   = 2;
+    STAGED    = 3;
+    SUBMITED  = 4;
 
-    Failed  = 255;
+    FAILED  = 255;
 }

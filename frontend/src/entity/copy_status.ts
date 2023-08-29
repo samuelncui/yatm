@@ -6,29 +6,29 @@
  */
 export enum CopyStatus {
     /**
-     * @generated from protobuf enum value: Draft = 0;
+     * @generated from protobuf enum value: DRAFT = 0;
      */
-    Draft = 0,
+    DRAFT = 0,
     /**
      * waiting in queue
      *
-     * @generated from protobuf enum value: Pending = 1;
+     * @generated from protobuf enum value: PENDING = 1;
      */
-    Pending = 1,
+    PENDING = 1,
     /**
-     * @generated from protobuf enum value: Running = 2;
+     * @generated from protobuf enum value: RUNNING = 2;
      */
-    Running = 2,
+    RUNNING = 2,
     /**
-     * @generated from protobuf enum value: Staged = 3;
+     * @generated from protobuf enum value: STAGED = 3;
      */
-    Staged = 3,
+    STAGED = 3,
     /**
-     * @generated from protobuf enum value: Submited = 4;
+     * @generated from protobuf enum value: SUBMITED = 4;
      */
-    Submited = 4,
+    SUBMITED = 4,
     /**
-     * @generated from protobuf enum value: Failed = 255;
+     * @generated from protobuf enum value: FAILED = 255;
      */
-    Failed = 255
+    FAILED = 255
 }

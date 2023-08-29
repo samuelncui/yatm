@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 var (
@@ -26,20 +24,20 @@ type Position struct {
 }
 
 func (l *Library) GetPositionByFileID(ctx context.Context, fileID int64) ([]*Position, error) {
-	results, err := l.MGetPositionByFileID(ctx, l.db.WithContext(ctx), fileID)
+	results, err := l.MGetPositionByFileID(ctx, fileID)
 	if err != nil {
 		panic(err)
 	}
 	return results[fileID], nil
 }
 
-func (l *Library) MGetPositionByFileID(ctx context.Context, tx *gorm.DB, fileIDs ...int64) (map[int64][]*Position, error) {
+func (l *Library) MGetPositionByFileID(ctx context.Context, fileIDs ...int64) (map[int64][]*Position, error) {
 	if len(fileIDs) == 0 {
 		return map[int64][]*Position{}, nil
 	}
 
 	positions := make([]*Position, 0, len(fileIDs))
-	if r := tx.Where("file_id IN (?)", fileIDs).Find(&positions); r.Error != nil {
+	if r := l.db.WithContext(ctx).Where("file_id IN (?)", fileIDs).Find(&positions); r.Error != nil {
 		return nil, fmt.Errorf("find position by file id fail, %w", r.Error)
 	}
 

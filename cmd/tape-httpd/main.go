@@ -5,10 +5,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/abc950309/tapewriter/apis"
@@ -17,32 +17,30 @@ import (
 	"github.com/abc950309/tapewriter/library"
 	"github.com/abc950309/tapewriter/resource"
 	"github.com/abc950309/tapewriter/tools"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	"github.com/rifflock/lfshook"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v2"
 )
 
 type config struct {
-	Domain        string `yaml:"domain"`
-	Listen        string `yaml:"listen"`
-	DebugListen   string `yaml:"debug_listen"`
-	WorkDirectory string `yaml:"work_directory"`
+	Domain      string `yaml:"domain"`
+	Listen      string `yaml:"listen"`
+	DebugListen string `yaml:"debug_listen"`
 
 	Database struct {
 		Dialect string `yaml:"dialect"`
 		DSN     string `yaml:"dsn"`
 	} `yaml:"database"`
 
-	TapeDevices    []string `yaml:"tape_devices"`
-	FilesystemRoot string   `yaml:"filesystem_root"`
-
-	Scripts struct {
-		Encrypt string `yaml:"encrypt"`
-		Mkfs    string `yaml:"mkfs"`
-		Mount   string `yaml:"mount"`
-		Umount  string `yaml:"umount"`
-	} `yaml:"scripts"`
+	Paths       executor.Paths   `yaml:"paths"`
+	TapeDevices []string         `yaml:"tape_devices"`
+	Scripts     executor.Scripts `yaml:"scripts"`
 }
 
 var (
@@ -50,8 +48,24 @@ var (
 )
 
 func main() {
-	flag.Parse()
+	logWriter, err := rotatelogs.New(
+		"./run.log.%Y%m%d%H%M",
+		rotatelogs.WithLinkName("./run.log"),
+		rotatelogs.WithMaxAge(time.Duration(86400)*time.Second),
+		rotatelogs.WithRotationTime(time.Duration(604800)*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+	logrus.AddHook(lfshook.NewHook(
+		lfshook.WriterMap{
+			logrus.InfoLevel:  logWriter,
+			logrus.ErrorLevel: logWriter,
+		},
+		&logrus.TextFormatter{},
+	))
 
+	flag.Parse()
 	cf, err := os.Open(*configPath)
 	if err != nil {
 		panic(err)
@@ -61,6 +75,7 @@ func main() {
 	if err := yaml.NewDecoder(cf).Decode(conf); err != nil {
 		panic(err)
 	}
+	logrus.Infof("read config success, conf= '%+v'", conf)
 
 	if conf.DebugListen != "" {
 		go tools.Wrap(context.Background(), func() { tools.NewDebugServer(conf.DebugListen) })
@@ -76,28 +91,37 @@ func main() {
 		panic(err)
 	}
 
-	exe := executor.New(
-		db, lib, conf.TapeDevices, conf.WorkDirectory,
-		conf.Scripts.Encrypt, conf.Scripts.Mkfs, conf.Scripts.Mount, conf.Scripts.Umount,
-	)
+	exe := executor.New(db, lib, conf.TapeDevices, conf.Paths, conf.Scripts)
 	if err := exe.AutoMigrate(); err != nil {
 		panic(err)
 	}
 
-	s := grpc.NewServer()
-	api := apis.New(conf.FilesystemRoot, lib, exe)
+	grpcPanicRecoveryHandler := func(p any) (err error) {
+		logrus.Infof("recovered from panic, %v, stack= %s", p, debug.Stack())
+		return status.Errorf(codes.Internal, "%s", p)
+	}
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
+		),
+		grpc.ChainStreamInterceptor(
+			recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
+		),
+	)
+	api := apis.New(conf.Paths.Source, lib, exe)
 	entity.RegisterServiceServer(s, api)
 
 	mux := http.NewServeMux()
 
 	grpcWebServer := grpcweb.WrapServer(s, grpcweb.WithOriginFunc(func(origin string) bool { return true }))
 	mux.Handle("/services/", http.StripPrefix("/services/", grpcWebServer))
+	mux.Handle("/files/", http.StripPrefix("/files", api.Uploader()))
 
 	fs := http.FileServer(http.Dir("./frontend/assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		indexBuf, err := ioutil.ReadFile("./frontend/index.html")
+		indexBuf, err := os.ReadFile("./frontend/index.html")
 		if err != nil {
 			panic(err)
 		}

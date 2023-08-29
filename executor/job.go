@@ -35,7 +35,10 @@ func (j *Job) BeforeUpdate(tx *gorm.DB) error {
 
 func (e *Executor) initJob(ctx context.Context, job *Job, param *entity.JobParam) error {
 	if p := param.GetArchive(); p != nil {
-		return e.initArchive(ctx, job, p)
+		return e.createArchive(ctx, job, p)
+	}
+	if p := param.GetRestore(); p != nil {
+		return e.createRestore(ctx, job, p)
 	}
 	return fmt.Errorf("unexpected param type, %T", param.Param)
 }
@@ -50,6 +53,13 @@ func (e *Executor) CreateJob(ctx context.Context, job *Job, param *entity.JobPar
 	}
 
 	return job, nil
+}
+
+func (e *Executor) DeleteJobs(ctx context.Context, ids ...int64) error {
+	if r := e.db.WithContext(ctx).Delete(ModelJob, ids); r.Error != nil {
+		return fmt.Errorf("delete job fail, err= %w", r.Error)
+	}
+	return nil
 }
 
 func (e *Executor) SaveJob(ctx context.Context, job *Job) (*Job, error) {

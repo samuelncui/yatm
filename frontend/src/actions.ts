@@ -1,5 +1,6 @@
 import { FileData, FileArray, FileAction } from "chonky";
 import { defineFileAction } from "chonky";
+import { ChonkyActions } from "chonky";
 
 type RenameFileState = {
   contextMenuTriggerFile: FileData;
@@ -23,4 +24,25 @@ export const RenameFileAction = defineFileAction({
 
 export const RefreshListAction = defineFileAction({
   id: "refresh_list",
+} as FileAction);
+
+export const AddFileAction = defineFileAction({
+  id: "add_file",
+  __payloadType: ChonkyActions.EndDragNDrop.__payloadType,
+} as FileAction);
+
+export const CreateBackupJobAction = defineFileAction({
+  id: "create_backup_job",
+  button: {
+    name: "Create Backup Job",
+    toolbar: true,
+  },
+} as FileAction);
+
+export const CreateRestoreJobAction = defineFileAction({
+  id: "create_restore_job",
+  button: {
+    name: "Create Restore Job",
+    toolbar: true,
+  },
 } as FileAction);

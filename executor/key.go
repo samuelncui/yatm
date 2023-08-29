@@ -48,7 +48,7 @@ func (e *Executor) newKey() (string, string, func(), error) {
 }
 
 func (e *Executor) makeEncryptCmd(ctx context.Context, device, keyPath, barcode, name string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, e.encryptScript)
+	cmd := exec.CommandContext(ctx, e.scripts.Encrypt)
 	cmd.Env = append(cmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("KEY_FILE=%s", keyPath), fmt.Sprintf("TAPE_BARCODE=%s", barcode), fmt.Sprintf("TAPE_NAME=%s", name))
 	return cmd
 }

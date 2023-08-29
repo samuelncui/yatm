@@ -1,0 +1,10 @@
+syntax = "proto3";
+package library_entity_type;
+option go_package = "github.com/abc950309/tapewriter/entity";
+
+enum LibraryEntityType {
+    NONE = 0;
+    FILE = 1;
+    TAPE = 2;
+    POSITION = 3;
+}

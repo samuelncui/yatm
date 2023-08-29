@@ -4,6 +4,7 @@ export * from "./file";
 export * from "./job";
 export * from "./job_archive";
 export * from "./job_restore";
+export * from "./library_entity_type";
 export * from "./position";
 export * from "./service.client";
 export * from "./service";

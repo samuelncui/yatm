@@ -14,9 +14,9 @@ import { MessageType } from "@protobuf-ts/runtime";
 import { SourceState } from "./source";
 import { Source } from "./source";
 /**
- * @generated from protobuf message job_archive.JobParamArchive
+ * @generated from protobuf message job_archive.JobArchiveParam
  */
-export interface JobParamArchive {
+export interface JobArchiveParam {
     /**
      * @generated from protobuf field: repeated source.Source sources = 1;
      */
@@ -32,19 +32,19 @@ export interface JobArchiveNextParam {
     param: {
         oneofKind: "waitForTape";
         /**
-         * @generated from protobuf field: job_archive.JobArchiveWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"];
+         * @generated from protobuf field: job_archive.JobArchiveWaitForTapeParam wait_for_tape = 1;
          */
         waitForTape: JobArchiveWaitForTapeParam;
     } | {
         oneofKind: "copying";
         /**
-         * @generated from protobuf field: job_archive.JobArchiveCopyingParam Copying = 2 [json_name = "Copying"];
+         * @generated from protobuf field: job_archive.JobArchiveCopyingParam copying = 2;
          */
         copying: JobArchiveCopyingParam;
     } | {
         oneofKind: "finished";
         /**
-         * @generated from protobuf field: job_archive.JobArchiveFinishedParam Finished = 255 [json_name = "Finished"];
+         * @generated from protobuf field: job_archive.JobArchiveFinishedParam finished = 255;
          */
         finished: JobArchiveFinishedParam;
     } | {
@@ -79,9 +79,9 @@ export interface JobArchiveCopyingParam {
 export interface JobArchiveFinishedParam {
 }
 /**
- * @generated from protobuf message job_archive.JobStateArchive
+ * @generated from protobuf message job_archive.JobArchiveState
  */
-export interface JobStateArchive {
+export interface JobArchiveState {
     /**
      * @generated from protobuf field: job_archive.JobArchiveStep step = 1;
      */
@@ -92,23 +92,23 @@ export interface JobStateArchive {
     sources: SourceState[];
 }
 /**
- * @generated from protobuf message job_archive.JobDisplayArchive
+ * @generated from protobuf message job_archive.JobArchiveDisplay
  */
-export interface JobDisplayArchive {
+export interface JobArchiveDisplay {
     /**
-     * @generated from protobuf field: int64 copyedBytes = 1;
+     * @generated from protobuf field: int64 copyed_bytes = 1;
      */
     copyedBytes: bigint;
     /**
-     * @generated from protobuf field: int64 copyedFiles = 2;
+     * @generated from protobuf field: int64 copyed_files = 2;
      */
     copyedFiles: bigint;
     /**
-     * @generated from protobuf field: int64 totalBytes = 3;
+     * @generated from protobuf field: int64 total_bytes = 3;
      */
     totalBytes: bigint;
     /**
-     * @generated from protobuf field: int64 totalFiles = 4;
+     * @generated from protobuf field: int64 total_files = 4;
      */
     totalFiles: bigint;
     /**
@@ -116,7 +116,7 @@ export interface JobDisplayArchive {
      */
     speed?: bigint;
     /**
-     * @generated from protobuf field: int64 startTime = 6;
+     * @generated from protobuf field: int64 start_time = 6;
      */
     startTime: bigint;
 }
@@ -125,37 +125,37 @@ export interface JobDisplayArchive {
  */
 export enum JobArchiveStep {
     /**
-     * @generated from protobuf enum value: Pending = 0;
+     * @generated from protobuf enum value: PENDING = 0;
      */
-    Pending = 0,
+    PENDING = 0,
     /**
-     * @generated from protobuf enum value: WaitForTape = 1;
+     * @generated from protobuf enum value: WAIT_FOR_TAPE = 1;
      */
-    WaitForTape = 1,
+    WAIT_FOR_TAPE = 1,
     /**
-     * @generated from protobuf enum value: Copying = 2;
+     * @generated from protobuf enum value: COPYING = 2;
      */
-    Copying = 2,
+    COPYING = 2,
     /**
-     * @generated from protobuf enum value: Finished = 255;
+     * @generated from protobuf enum value: FINISHED = 255;
      */
-    Finished = 255
+    FINISHED = 255
 }
 // @generated message type with reflection information, may provide speed optimized methods
-class JobParamArchive$Type extends MessageType<JobParamArchive> {
+class JobArchiveParam$Type extends MessageType<JobArchiveParam> {
     constructor() {
-        super("job_archive.JobParamArchive", [
+        super("job_archive.JobArchiveParam", [
             { no: 1, name: "sources", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => Source }
         ]);
     }
-    create(value?: PartialMessage<JobParamArchive>): JobParamArchive {
+    create(value?: PartialMessage<JobArchiveParam>): JobArchiveParam {
         const message = { sources: [] };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobParamArchive>(this, message, value);
+            reflectionMergePartial<JobArchiveParam>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobParamArchive): JobParamArchive {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobArchiveParam): JobArchiveParam {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -174,7 +174,7 @@ class JobParamArchive$Type extends MessageType<JobParamArchive> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobParamArchive, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobArchiveParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* repeated source.Source sources = 1; */
         for (let i = 0; i < message.sources.length; i++)
             Source.internalBinaryWrite(message.sources[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
@@ -185,16 +185,16 @@ class JobParamArchive$Type extends MessageType<JobParamArchive> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_archive.JobParamArchive
+ * @generated MessageType for protobuf message job_archive.JobArchiveParam
  */
-export const JobParamArchive = new JobParamArchive$Type();
+export const JobArchiveParam = new JobArchiveParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
     constructor() {
         super("job_archive.JobArchiveNextParam", [
-            { no: 1, name: "WaitForTape", kind: "message", jsonName: "WaitForTape", oneof: "param", T: () => JobArchiveWaitForTapeParam },
-            { no: 2, name: "Copying", kind: "message", jsonName: "Copying", oneof: "param", T: () => JobArchiveCopyingParam },
-            { no: 255, name: "Finished", kind: "message", jsonName: "Finished", oneof: "param", T: () => JobArchiveFinishedParam }
+            { no: 1, name: "wait_for_tape", kind: "message", oneof: "param", T: () => JobArchiveWaitForTapeParam },
+            { no: 2, name: "copying", kind: "message", oneof: "param", T: () => JobArchiveCopyingParam },
+            { no: 255, name: "finished", kind: "message", oneof: "param", T: () => JobArchiveFinishedParam }
         ]);
     }
     create(value?: PartialMessage<JobArchiveNextParam>): JobArchiveNextParam {
@@ -209,19 +209,19 @@ class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_archive.JobArchiveWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"];*/ 1:
+                case /* job_archive.JobArchiveWaitForTapeParam wait_for_tape */ 1:
                     message.param = {
                         oneofKind: "waitForTape",
                         waitForTape: JobArchiveWaitForTapeParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).waitForTape)
                     };
                     break;
-                case /* job_archive.JobArchiveCopyingParam Copying = 2 [json_name = "Copying"];*/ 2:
+                case /* job_archive.JobArchiveCopyingParam copying */ 2:
                     message.param = {
                         oneofKind: "copying",
                         copying: JobArchiveCopyingParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).copying)
                     };
                     break;
-                case /* job_archive.JobArchiveFinishedParam Finished = 255 [json_name = "Finished"];*/ 255:
+                case /* job_archive.JobArchiveFinishedParam finished */ 255:
                     message.param = {
                         oneofKind: "finished",
                         finished: JobArchiveFinishedParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).finished)
@@ -239,13 +239,13 @@ class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
         return message;
     }
     internalBinaryWrite(message: JobArchiveNextParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_archive.JobArchiveWaitForTapeParam WaitForTape = 1 [json_name = "WaitForTape"]; */
+        /* job_archive.JobArchiveWaitForTapeParam wait_for_tape = 1; */
         if (message.param.oneofKind === "waitForTape")
             JobArchiveWaitForTapeParam.internalBinaryWrite(message.param.waitForTape, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
-        /* job_archive.JobArchiveCopyingParam Copying = 2 [json_name = "Copying"]; */
+        /* job_archive.JobArchiveCopyingParam copying = 2; */
         if (message.param.oneofKind === "copying")
             JobArchiveCopyingParam.internalBinaryWrite(message.param.copying, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* job_archive.JobArchiveFinishedParam Finished = 255 [json_name = "Finished"]; */
+        /* job_archive.JobArchiveFinishedParam finished = 255; */
         if (message.param.oneofKind === "finished")
             JobArchiveFinishedParam.internalBinaryWrite(message.param.finished, writer.tag(255, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
@@ -372,21 +372,21 @@ class JobArchiveFinishedParam$Type extends MessageType<JobArchiveFinishedParam> 
  */
 export const JobArchiveFinishedParam = new JobArchiveFinishedParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobStateArchive$Type extends MessageType<JobStateArchive> {
+class JobArchiveState$Type extends MessageType<JobArchiveState> {
     constructor() {
-        super("job_archive.JobStateArchive", [
+        super("job_archive.JobArchiveState", [
             { no: 1, name: "step", kind: "enum", T: () => ["job_archive.JobArchiveStep", JobArchiveStep] },
             { no: 2, name: "sources", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => SourceState }
         ]);
     }
-    create(value?: PartialMessage<JobStateArchive>): JobStateArchive {
+    create(value?: PartialMessage<JobArchiveState>): JobArchiveState {
         const message = { step: 0, sources: [] };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobStateArchive>(this, message, value);
+            reflectionMergePartial<JobArchiveState>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobStateArchive): JobStateArchive {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobArchiveState): JobArchiveState {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -408,7 +408,7 @@ class JobStateArchive$Type extends MessageType<JobStateArchive> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobStateArchive, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobArchiveState, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* job_archive.JobArchiveStep step = 1; */
         if (message.step !== 0)
             writer.tag(1, WireType.Varint).int32(message.step);
@@ -422,49 +422,49 @@ class JobStateArchive$Type extends MessageType<JobStateArchive> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_archive.JobStateArchive
+ * @generated MessageType for protobuf message job_archive.JobArchiveState
  */
-export const JobStateArchive = new JobStateArchive$Type();
+export const JobArchiveState = new JobArchiveState$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
+class JobArchiveDisplay$Type extends MessageType<JobArchiveDisplay> {
     constructor() {
-        super("job_archive.JobDisplayArchive", [
-            { no: 1, name: "copyedBytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "copyedFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "totalBytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 4, name: "totalFiles", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+        super("job_archive.JobArchiveDisplay", [
+            { no: 1, name: "copyed_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "copyed_files", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "total_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 4, name: "total_files", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 5, name: "speed", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 6, name: "startTime", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 6, name: "start_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
-    create(value?: PartialMessage<JobDisplayArchive>): JobDisplayArchive {
+    create(value?: PartialMessage<JobArchiveDisplay>): JobArchiveDisplay {
         const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, startTime: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobDisplayArchive>(this, message, value);
+            reflectionMergePartial<JobArchiveDisplay>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDisplayArchive): JobDisplayArchive {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobArchiveDisplay): JobArchiveDisplay {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* int64 copyedBytes */ 1:
+                case /* int64 copyed_bytes */ 1:
                     message.copyedBytes = reader.int64().toBigInt();
                     break;
-                case /* int64 copyedFiles */ 2:
+                case /* int64 copyed_files */ 2:
                     message.copyedFiles = reader.int64().toBigInt();
                     break;
-                case /* int64 totalBytes */ 3:
+                case /* int64 total_bytes */ 3:
                     message.totalBytes = reader.int64().toBigInt();
                     break;
-                case /* int64 totalFiles */ 4:
+                case /* int64 total_files */ 4:
                     message.totalFiles = reader.int64().toBigInt();
                     break;
                 case /* optional int64 speed */ 5:
                     message.speed = reader.int64().toBigInt();
                     break;
-                case /* int64 startTime */ 6:
+                case /* int64 start_time */ 6:
                     message.startTime = reader.int64().toBigInt();
                     break;
                 default:
@@ -478,23 +478,23 @@ class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobDisplayArchive, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* int64 copyedBytes = 1; */
+    internalBinaryWrite(message: JobArchiveDisplay, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 copyed_bytes = 1; */
         if (message.copyedBytes !== 0n)
             writer.tag(1, WireType.Varint).int64(message.copyedBytes);
-        /* int64 copyedFiles = 2; */
+        /* int64 copyed_files = 2; */
         if (message.copyedFiles !== 0n)
             writer.tag(2, WireType.Varint).int64(message.copyedFiles);
-        /* int64 totalBytes = 3; */
+        /* int64 total_bytes = 3; */
         if (message.totalBytes !== 0n)
             writer.tag(3, WireType.Varint).int64(message.totalBytes);
-        /* int64 totalFiles = 4; */
+        /* int64 total_files = 4; */
         if (message.totalFiles !== 0n)
             writer.tag(4, WireType.Varint).int64(message.totalFiles);
         /* optional int64 speed = 5; */
         if (message.speed !== undefined)
             writer.tag(5, WireType.Varint).int64(message.speed);
-        /* int64 startTime = 6; */
+        /* int64 start_time = 6; */
         if (message.startTime !== 0n)
             writer.tag(6, WireType.Varint).int64(message.startTime);
         let u = options.writeUnknownFields;
@@ -504,6 +504,6 @@ class JobDisplayArchive$Type extends MessageType<JobDisplayArchive> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_archive.JobDisplayArchive
+ * @generated MessageType for protobuf message job_archive.JobArchiveDisplay
  */
-export const JobDisplayArchive = new JobDisplayArchive$Type();
+export const JobArchiveDisplay = new JobArchiveDisplay$Type();

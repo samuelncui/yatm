@@ -11,7 +11,10 @@ func NewSourceFromACPJob(job *acp.Job) *Source {
 }
 
 func (x *Source) RealPath() string {
-	return x.Base + path.Join(x.Path...)
+	p := make([]string, 0, len(x.Path)+1)
+	p = append(p, x.Base)
+	p = append(p, x.Path...)
+	return path.Join(p...)
 }
 
 func (x *Source) Append(more ...string) *Source {

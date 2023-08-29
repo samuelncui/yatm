@@ -12,6 +12,7 @@ import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MESSAGE_TYPE } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
+import { LibraryEntityType } from "./library_entity_type";
 import { SourceFile } from "./source";
 import { JobDisplay } from "./job";
 import { JobNextParam } from "./job";
@@ -19,6 +20,7 @@ import { CreatableJob } from "./job";
 import { Job } from "./job";
 import { JobFilter } from "./job";
 import { Tape } from "./tape";
+import { TapeFilter } from "./tape";
 import { EditedFile } from "./file";
 import { Position } from "./position";
 import { File } from "./file";
@@ -125,6 +127,29 @@ export interface FileListParentsReply {
     parents: File[];
 }
 /**
+ * @generated from protobuf message service.TapeListRequest
+ */
+export interface TapeListRequest {
+    /**
+     * @generated from protobuf oneof: param
+     */
+    param: {
+        oneofKind: "mget";
+        /**
+         * @generated from protobuf field: service.TapeMGetRequest mget = 1;
+         */
+        mget: TapeMGetRequest;
+    } | {
+        oneofKind: "list";
+        /**
+         * @generated from protobuf field: tape.TapeFilter list = 2;
+         */
+        list: TapeFilter;
+    } | {
+        oneofKind: undefined;
+    };
+}
+/**
  * @generated from protobuf message service.TapeMGetRequest
  */
 export interface TapeMGetRequest {
@@ -134,13 +159,27 @@ export interface TapeMGetRequest {
     ids: bigint[];
 }
 /**
- * @generated from protobuf message service.TapeMGetReply
+ * @generated from protobuf message service.TapeListReply
  */
-export interface TapeMGetReply {
+export interface TapeListReply {
     /**
      * @generated from protobuf field: repeated tape.Tape tapes = 1;
      */
     tapes: Tape[];
+}
+/**
+ * @generated from protobuf message service.TapeDeleteRequest
+ */
+export interface TapeDeleteRequest {
+    /**
+     * @generated from protobuf field: repeated int64 ids = 1;
+     */
+    ids: bigint[];
+}
+/**
+ * @generated from protobuf message service.TapeDeleteReply
+ */
+export interface TapeDeleteReply {
 }
 /**
  * @generated from protobuf message service.JobListRequest
@@ -200,6 +239,20 @@ export interface JobCreateReply {
      * @generated from protobuf field: job.Job job = 1;
      */
     job?: Job;
+}
+/**
+ * @generated from protobuf message service.JobDeleteRequest
+ */
+export interface JobDeleteRequest {
+    /**
+     * @generated from protobuf field: repeated int64 ids = 1;
+     */
+    ids: bigint[];
+}
+/**
+ * @generated from protobuf message service.JobDeleteReply
+ */
+export interface JobDeleteReply {
 }
 /**
  * @generated from protobuf message service.JobNextRequest
@@ -302,6 +355,24 @@ export interface DeviceListReply {
      * @generated from protobuf field: repeated string devices = 1;
      */
     devices: string[];
+}
+/**
+ * @generated from protobuf message service.LibraryExportRequest
+ */
+export interface LibraryExportRequest {
+    /**
+     * @generated from protobuf field: repeated library_entity_type.LibraryEntityType types = 1;
+     */
+    types: LibraryEntityType[];
+}
+/**
+ * @generated from protobuf message service.LibraryExportReply
+ */
+export interface LibraryExportReply {
+    /**
+     * @generated from protobuf field: bytes json = 1;
+     */
+    json: Uint8Array;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class FileGetRequest$Type extends MessageType<FileGetRequest> {
@@ -789,6 +860,66 @@ class FileListParentsReply$Type extends MessageType<FileListParentsReply> {
  */
 export const FileListParentsReply = new FileListParentsReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class TapeListRequest$Type extends MessageType<TapeListRequest> {
+    constructor() {
+        super("service.TapeListRequest", [
+            { no: 1, name: "mget", kind: "message", oneof: "param", T: () => TapeMGetRequest },
+            { no: 2, name: "list", kind: "message", oneof: "param", T: () => TapeFilter }
+        ]);
+    }
+    create(value?: PartialMessage<TapeListRequest>): TapeListRequest {
+        const message = { param: { oneofKind: undefined } };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeListRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeListRequest): TapeListRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* service.TapeMGetRequest mget */ 1:
+                    message.param = {
+                        oneofKind: "mget",
+                        mget: TapeMGetRequest.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).mget)
+                    };
+                    break;
+                case /* tape.TapeFilter list */ 2:
+                    message.param = {
+                        oneofKind: "list",
+                        list: TapeFilter.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).list)
+                    };
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeListRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* service.TapeMGetRequest mget = 1; */
+        if (message.param.oneofKind === "mget")
+            TapeMGetRequest.internalBinaryWrite(message.param.mget, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* tape.TapeFilter list = 2; */
+        if (message.param.oneofKind === "list")
+            TapeFilter.internalBinaryWrite(message.param.list, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.TapeListRequest
+ */
+export const TapeListRequest = new TapeListRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class TapeMGetRequest$Type extends MessageType<TapeMGetRequest> {
     constructor() {
         super("service.TapeMGetRequest", [
@@ -844,20 +975,20 @@ class TapeMGetRequest$Type extends MessageType<TapeMGetRequest> {
  */
 export const TapeMGetRequest = new TapeMGetRequest$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class TapeMGetReply$Type extends MessageType<TapeMGetReply> {
+class TapeListReply$Type extends MessageType<TapeListReply> {
     constructor() {
-        super("service.TapeMGetReply", [
+        super("service.TapeListReply", [
             { no: 1, name: "tapes", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => Tape }
         ]);
     }
-    create(value?: PartialMessage<TapeMGetReply>): TapeMGetReply {
+    create(value?: PartialMessage<TapeListReply>): TapeListReply {
         const message = { tapes: [] };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<TapeMGetReply>(this, message, value);
+            reflectionMergePartial<TapeListReply>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeMGetReply): TapeMGetReply {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeListReply): TapeListReply {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -876,7 +1007,7 @@ class TapeMGetReply$Type extends MessageType<TapeMGetReply> {
         }
         return message;
     }
-    internalBinaryWrite(message: TapeMGetReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: TapeListReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* repeated tape.Tape tapes = 1; */
         for (let i = 0; i < message.tapes.length; i++)
             Tape.internalBinaryWrite(message.tapes[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
@@ -887,9 +1018,90 @@ class TapeMGetReply$Type extends MessageType<TapeMGetReply> {
     }
 }
 /**
- * @generated MessageType for protobuf message service.TapeMGetReply
+ * @generated MessageType for protobuf message service.TapeListReply
  */
-export const TapeMGetReply = new TapeMGetReply$Type();
+export const TapeListReply = new TapeListReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeDeleteRequest$Type extends MessageType<TapeDeleteRequest> {
+    constructor() {
+        super("service.TapeDeleteRequest", [
+            { no: 1, name: "ids", kind: "scalar", repeat: 1 /*RepeatType.PACKED*/, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeDeleteRequest>): TapeDeleteRequest {
+        const message = { ids: [] };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeDeleteRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeDeleteRequest): TapeDeleteRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated int64 ids */ 1:
+                    if (wireType === WireType.LengthDelimited)
+                        for (let e = reader.int32() + reader.pos; reader.pos < e;)
+                            message.ids.push(reader.int64().toBigInt());
+                    else
+                        message.ids.push(reader.int64().toBigInt());
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeDeleteRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated int64 ids = 1; */
+        if (message.ids.length) {
+            writer.tag(1, WireType.LengthDelimited).fork();
+            for (let i = 0; i < message.ids.length; i++)
+                writer.int64(message.ids[i]);
+            writer.join();
+        }
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.TapeDeleteRequest
+ */
+export const TapeDeleteRequest = new TapeDeleteRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeDeleteReply$Type extends MessageType<TapeDeleteReply> {
+    constructor() {
+        super("service.TapeDeleteReply", []);
+    }
+    create(value?: PartialMessage<TapeDeleteReply>): TapeDeleteReply {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeDeleteReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeDeleteReply): TapeDeleteReply {
+        return target ?? this.create();
+    }
+    internalBinaryWrite(message: TapeDeleteReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.TapeDeleteReply
+ */
+export const TapeDeleteReply = new TapeDeleteReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobListRequest$Type extends MessageType<JobListRequest> {
     constructor() {
@@ -1146,6 +1358,87 @@ class JobCreateReply$Type extends MessageType<JobCreateReply> {
  * @generated MessageType for protobuf message service.JobCreateReply
  */
 export const JobCreateReply = new JobCreateReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class JobDeleteRequest$Type extends MessageType<JobDeleteRequest> {
+    constructor() {
+        super("service.JobDeleteRequest", [
+            { no: 1, name: "ids", kind: "scalar", repeat: 1 /*RepeatType.PACKED*/, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<JobDeleteRequest>): JobDeleteRequest {
+        const message = { ids: [] };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobDeleteRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDeleteRequest): JobDeleteRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated int64 ids */ 1:
+                    if (wireType === WireType.LengthDelimited)
+                        for (let e = reader.int32() + reader.pos; reader.pos < e;)
+                            message.ids.push(reader.int64().toBigInt());
+                    else
+                        message.ids.push(reader.int64().toBigInt());
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: JobDeleteRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated int64 ids = 1; */
+        if (message.ids.length) {
+            writer.tag(1, WireType.LengthDelimited).fork();
+            for (let i = 0; i < message.ids.length; i++)
+                writer.int64(message.ids[i]);
+            writer.join();
+        }
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.JobDeleteRequest
+ */
+export const JobDeleteRequest = new JobDeleteRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class JobDeleteReply$Type extends MessageType<JobDeleteReply> {
+    constructor() {
+        super("service.JobDeleteReply", []);
+    }
+    create(value?: PartialMessage<JobDeleteReply>): JobDeleteReply {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobDeleteReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDeleteReply): JobDeleteReply {
+        return target ?? this.create();
+    }
+    internalBinaryWrite(message: JobDeleteReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.JobDeleteReply
+ */
+export const JobDeleteReply = new JobDeleteReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobNextRequest$Type extends MessageType<JobNextRequest> {
     constructor() {
@@ -1623,6 +1916,108 @@ class DeviceListReply$Type extends MessageType<DeviceListReply> {
  * @generated MessageType for protobuf message service.DeviceListReply
  */
 export const DeviceListReply = new DeviceListReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class LibraryExportRequest$Type extends MessageType<LibraryExportRequest> {
+    constructor() {
+        super("service.LibraryExportRequest", [
+            { no: 1, name: "types", kind: "enum", repeat: 1 /*RepeatType.PACKED*/, T: () => ["library_entity_type.LibraryEntityType", LibraryEntityType] }
+        ]);
+    }
+    create(value?: PartialMessage<LibraryExportRequest>): LibraryExportRequest {
+        const message = { types: [] };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<LibraryExportRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LibraryExportRequest): LibraryExportRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated library_entity_type.LibraryEntityType types */ 1:
+                    if (wireType === WireType.LengthDelimited)
+                        for (let e = reader.int32() + reader.pos; reader.pos < e;)
+                            message.types.push(reader.int32());
+                    else
+                        message.types.push(reader.int32());
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: LibraryExportRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated library_entity_type.LibraryEntityType types = 1; */
+        if (message.types.length) {
+            writer.tag(1, WireType.LengthDelimited).fork();
+            for (let i = 0; i < message.types.length; i++)
+                writer.int32(message.types[i]);
+            writer.join();
+        }
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.LibraryExportRequest
+ */
+export const LibraryExportRequest = new LibraryExportRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class LibraryExportReply$Type extends MessageType<LibraryExportReply> {
+    constructor() {
+        super("service.LibraryExportReply", [
+            { no: 1, name: "json", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+        ]);
+    }
+    create(value?: PartialMessage<LibraryExportReply>): LibraryExportReply {
+        const message = { json: new Uint8Array(0) };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<LibraryExportReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LibraryExportReply): LibraryExportReply {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* bytes json */ 1:
+                    message.json = reader.bytes();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: LibraryExportReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* bytes json = 1; */
+        if (message.json.length)
+            writer.tag(1, WireType.LengthDelimited).bytes(message.json);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.LibraryExportReply
+ */
+export const LibraryExportReply = new LibraryExportReply$Type();
 /**
  * @generated ServiceType for protobuf service service.Service
  */
@@ -1632,12 +2027,15 @@ export const Service = new ServiceType("service.Service", [
     { name: "FileMkdir", options: {}, I: FileMkdirRequest, O: FileMkdirReply },
     { name: "FileDelete", options: {}, I: FileDeleteRequest, O: FileDeleteReply },
     { name: "FileListParents", options: {}, I: FileListParentsRequest, O: FileListParentsReply },
-    { name: "TapeMGet", options: {}, I: TapeMGetRequest, O: TapeMGetReply },
+    { name: "TapeList", options: {}, I: TapeListRequest, O: TapeListReply },
+    { name: "TapeDelete", options: {}, I: TapeDeleteRequest, O: TapeDeleteReply },
     { name: "JobList", options: {}, I: JobListRequest, O: JobListReply },
     { name: "JobCreate", options: {}, I: JobCreateRequest, O: JobCreateReply },
+    { name: "JobDelete", options: {}, I: JobDeleteRequest, O: JobDeleteReply },
     { name: "JobNext", options: {}, I: JobNextRequest, O: JobNextReply },
     { name: "JobDisplay", options: {}, I: JobDisplayRequest, O: JobDisplayReply },
     { name: "JobGetLog", options: {}, I: JobGetLogRequest, O: JobGetLogReply },
     { name: "SourceList", options: {}, I: SourceListRequest, O: SourceListReply },
-    { name: "DeviceList", options: {}, I: DeviceListRequest, O: DeviceListReply }
+    { name: "DeviceList", options: {}, I: DeviceListRequest, O: DeviceListReply },
+    { name: "LibraryExport", options: {}, I: LibraryExportRequest, O: LibraryExportReply }
 ]);

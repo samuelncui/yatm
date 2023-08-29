@@ -5,9 +5,11 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import { createTheme, ThemeProvider, styled } from "@mui/material/styles";
 
-import { FileBrowser, FileBrowserType } from "./file";
-import { BackupBrowser, BackupType } from "./backup";
-import { JobsBrowser, JobsType } from "./jobs";
+import { FileBrowser, FileBrowserType } from "./pages/file";
+import { BackupBrowser, BackupType } from "./pages/backup";
+import { RestoreBrowser, RestoreType } from "./pages/restore";
+import { TapesBrowser, TapesType } from "./pages/tapes";
+import { JobsBrowser, JobsType } from "./pages/jobs";
 
 import "./app.less";
 import { sleep } from "./api";
@@ -52,13 +54,17 @@ const App = () => {
       <ThemeProvider theme={theme}>
         <Tabs className="tabs" value={location.pathname.slice(1)} onChange={handleTabChange} indicatorColor="secondary">
           <Tab label="File" value={FileBrowserType} />
-          <Tab label="Source" value={BackupType} />
+          <Tab label="Backup" value={BackupType} />
+          <Tab label="Restore" value={RestoreType} />
+          <Tab label="Tapes" value={TapesType} />
           <Tab label="Jobs" value={JobsType} />
         </Tabs>
         <Routes>
           <Route path="/*">
             <Route path={FileBrowserType} element={<Delay inner={<FileBrowser />} />} />
             <Route path={BackupType} element={<Delay inner={<BackupBrowser />} />} />
+            <Route path={RestoreType} element={<Delay inner={<RestoreBrowser />} />} />
+            <Route path={TapesType} element={<Delay inner={<TapesBrowser />} />} />
             <Route path={JobsType} element={<Delay inner={<JobsBrowser />} />} />
             <Route path="*" element={<Navigate to={"/" + FileBrowserType} replace />} />
           </Route>
