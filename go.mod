@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/HewlettPackard/structex v1.0.4
-	github.com/abc950309/acp v0.0.0-20230516133201-df6caee40899
+	github.com/abc950309/acp v0.0.0-20230918043059-b094d98c63cb
 	github.com/aws/aws-sdk-go v1.44.118
 	github.com/benmcclelland/mtio v0.0.0-20170506231306-f929531fb4fe
 	github.com/benmcclelland/sgio v0.0.0-20180629175614-f710aebf64c1
