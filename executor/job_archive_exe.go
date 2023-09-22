@@ -231,9 +231,9 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 			idx := sort.Search(len(a.state.Sources), func(idx int) bool {
 				return src.Compare(a.state.Sources[idx].Source) <= 0
 			})
-			if idx < 0 {
+			if idx < 0 || idx >= len(a.state.Sources) || src.Compare(a.state.Sources[idx].Source) != 0 {
 				a.logger.Warnf(
-					"cannot found target file, real_path= %s tape_file_path= %v", src.RealPath(),
+					"cannot found target file, real_path= %s found_index= %d tape_file_path= %v", src.RealPath(), idx,
 					lo.Map(a.state.Sources, func(source *entity.SourceState, _ int) string { return source.Source.RealPath() }))
 				return
 			}

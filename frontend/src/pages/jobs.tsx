@@ -339,7 +339,14 @@ const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
                 return (
                   <TreeItem label={tape.barcode} nodeId={`tape-${tape.tapeId}`}>
                     {tape.files.map((file) => (
-                      <TreeItem label={file.tapePath} nodeId={`file-${file.positionId}`} />
+                      <TreeItem
+                        label={
+                          <pre style={{ margin: 0 }}>
+                            {file.tapePath} <b>{CopyStatus[file.status]}</b>
+                          </pre>
+                        }
+                        nodeId={`file-${file.positionId}`}
+                      />
                     ))}
                   </TreeItem>
                 );

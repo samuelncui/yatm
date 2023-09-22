@@ -252,7 +252,7 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 				a.logger.WithContext(ctx).Infof("file '%s' copy finished, size= %d", src.RealPath(), job.Size)
 
 				targetStatus = entity.CopyStatus_SUBMITED
-				if len(job.SuccessTargets) > 0 {
+				if len(job.FailTargets) > 0 {
 					targetStatus = entity.CopyStatus_FAILED
 				}
 
@@ -271,20 +271,25 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 
 			realPath := src.RealPath()
 			idx := sort.Search(len(restoreTape.Files), func(idx int) bool {
-				return convertPath(realPath) < convertPath(sourcePath(restoreTape.Files[idx].TapePath))
+				return convertPath(realPath) <= convertPath(sourcePath(restoreTape.Files[idx].TapePath))
 			})
-			if idx < 0 {
+			if idx < 0 || idx >= len(restoreTape.Files) {
 				a.logger.Warnf(
-					"cannot found target file, real_path= %s tape_file_path= %v", realPath,
-					lo.Map(restoreTape.Files, func(file *entity.RestoreFile, _ int) string { return sourcePath(file.TapePath) }))
+					"cannot found target file, real_path= %s found_index= %d tape_file_path= %v", realPath, idx,
+					lo.Map(restoreTape.Files, func(file *entity.RestoreFile, _ int) string { return sourcePath(file.TapePath) }),
+				)
 				return
 			}
 
-			target := restoreTape.Files[idx]
-			if target == nil || realPath != sourcePath(target.TapePath) {
+			targetFile := restoreTape.Files[idx]
+			if targetFile == nil || realPath != sourcePath(targetFile.TapePath) {
+				a.logger.Warnf(
+					"cannot match target file, real_path= %s found_index= %d found_file_path= %s",
+					realPath, idx, sourcePath(targetFile.TapePath),
+				)
 				return
 			}
-			target.Status = targetStatus
+			targetFile.Status = targetStatus
 
 			if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
 				logrus.WithContext(ctx).Infof("save job for update file fail, name= %s", job.Base+path.Join(job.Path...))

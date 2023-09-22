@@ -1,15 +1,17 @@
 package tools
 
-func Cache[i comparable, o any](f func(in i) o) func(in i) o {
-	cache := make(map[i]o, 0)
-	return func(in i) o {
-		cached, has := cache[in]
+import "sync"
+
+func Cache[K comparable, V any](f func(in K) V) func(in K) V {
+	cache := new(sync.Map)
+	return func(in K) V {
+		cached, has := cache.Load(in)
 		if has {
-			return cached
+			return cached.(V)
 		}
 
 		out := f(in)
-		cache[in] = out
+		cache.Store(in, out)
 		return out
 	}
 }
