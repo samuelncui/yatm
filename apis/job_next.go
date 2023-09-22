@@ -3,7 +3,7 @@ package apis
 import (
 	"context"
 
-	"github.com/abc950309/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/entity"
 )
 
 func (api *API) JobNext(ctx context.Context, req *entity.JobNextRequest) (*entity.JobNextReply, error) {

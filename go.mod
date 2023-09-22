@@ -1,10 +1,9 @@
-module github.com/abc950309/tapewriter
+module github.com/samuelncui/tapewriter
 
 go 1.20
 
 require (
 	github.com/HewlettPackard/structex v1.0.4
-	github.com/abc950309/acp v0.0.0-20230918043059-b094d98c63cb
 	github.com/aws/aws-sdk-go v1.44.118
 	github.com/benmcclelland/mtio v0.0.0-20170506231306-f929531fb4fe
 	github.com/benmcclelland/sgio v0.0.0-20180629175614-f710aebf64c1
@@ -20,6 +19,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
 	github.com/samber/lo v1.38.1
+	github.com/samuelncui/acp v0.0.0-20230922055057-290748251e42
 	github.com/sirupsen/logrus v1.9.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.30.0

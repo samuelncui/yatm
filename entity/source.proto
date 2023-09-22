@@ -1,7 +1,7 @@
 syntax = "proto3";
 package source;
 
-option go_package = "github.com/abc950309/tapewriter/entity";
+option go_package = "github.com/samuelncui/tapewriter/entity";
 
 import "copy_status.proto";
 

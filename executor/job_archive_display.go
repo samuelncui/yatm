@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/abc950309/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/entity"
 )
 
 func (e *Executor) getArchiveDisplay(ctx context.Context, job *Job) (*entity.JobArchiveDisplay, error) {

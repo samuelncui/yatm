@@ -3,7 +3,7 @@ package entity
 import (
 	"path"
 
-	"github.com/abc950309/acp"
+	"github.com/samuelncui/acp"
 )
 
 func NewSourceFromACPJob(job *acp.Job) *Source {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/abc950309/tapewriter/entity"
-	"github.com/abc950309/tapewriter/library"
 	"github.com/samber/lo"
+	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/library"
 )
 
 func (api *API) TapeList(ctx context.Context, req *entity.TapeListRequest) (*entity.TapeListReply, error) {

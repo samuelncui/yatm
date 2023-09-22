@@ -1,6 +1,6 @@
 syntax = "proto3";
 package job_restore;
-option go_package = "github.com/abc950309/tapewriter/entity";
+option go_package = "github.com/samuelncui/tapewriter/entity";
 
 import "copy_status.proto";
 
@@ -65,6 +65,4 @@ message JobRestoreDisplay {
 
     optional int64 speed = 5;
     int64 start_time = 6;
-
-    bytes logs = 17;
 }

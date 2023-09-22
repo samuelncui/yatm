@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/abc950309/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/entity"
 )
 
 func (api *API) FileEdit(ctx context.Context, req *entity.FileEditRequest) (*entity.FileEditReply, error) {

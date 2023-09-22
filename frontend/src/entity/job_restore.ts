@@ -164,10 +164,6 @@ export interface JobRestoreDisplay {
      * @generated from protobuf field: int64 start_time = 6;
      */
     startTime: bigint;
-    /**
-     * @generated from protobuf field: bytes logs = 17;
-     */
-    logs: Uint8Array;
 }
 /**
  * @generated from protobuf enum job_restore.JobRestoreStep
@@ -634,12 +630,11 @@ class JobRestoreDisplay$Type extends MessageType<JobRestoreDisplay> {
             { no: 3, name: "total_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 4, name: "total_files", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 5, name: "speed", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 6, name: "start_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 17, name: "logs", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+            { no: 6, name: "start_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<JobRestoreDisplay>): JobRestoreDisplay {
-        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, startTime: 0n, logs: new Uint8Array(0) };
+        const message = { copyedBytes: 0n, copyedFiles: 0n, totalBytes: 0n, totalFiles: 0n, startTime: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<JobRestoreDisplay>(this, message, value);
@@ -667,9 +662,6 @@ class JobRestoreDisplay$Type extends MessageType<JobRestoreDisplay> {
                     break;
                 case /* int64 start_time */ 6:
                     message.startTime = reader.int64().toBigInt();
-                    break;
-                case /* bytes logs */ 17:
-                    message.logs = reader.bytes();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -701,9 +693,6 @@ class JobRestoreDisplay$Type extends MessageType<JobRestoreDisplay> {
         /* int64 start_time = 6; */
         if (message.startTime !== 0n)
             writer.tag(6, WireType.Varint).int64(message.startTime);
-        /* bytes logs = 17; */
-        if (message.logs.length)
-            writer.tag(17, WireType.LengthDelimited).bytes(message.logs);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

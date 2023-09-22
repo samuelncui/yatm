@@ -6,9 +6,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/abc950309/tapewriter/entity"
-	"github.com/abc950309/tapewriter/library"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/library"
 	"gorm.io/gorm"
 )
 

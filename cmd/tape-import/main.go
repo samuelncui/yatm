@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/abc950309/tapewriter/external"
-	"github.com/abc950309/tapewriter/library"
-	"github.com/abc950309/tapewriter/resource"
+	"github.com/samuelncui/tapewriter/external"
+	"github.com/samuelncui/tapewriter/library"
+	"github.com/samuelncui/tapewriter/resource"
 )
 
 func main() {

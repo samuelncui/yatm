@@ -1,6 +1,6 @@
 [Unit]
 Description=Tape Writer Service
-Documentation=https://github.com/abc950309/tapewriter/
+Documentation=https://github.com/samuelncui/tapewriter/
 After=network.target
 
 [Service]

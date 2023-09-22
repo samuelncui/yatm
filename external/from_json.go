@@ -8,8 +8,8 @@ import (
 	"io"
 	"path"
 
-	"github.com/abc950309/acp"
-	"github.com/abc950309/tapewriter/library"
+	"github.com/samuelncui/acp"
+	"github.com/samuelncui/tapewriter/library"
 )
 
 func (e *External) ImportACPReport(ctx context.Context, barname, name, encryption string, reader io.Reader) error {

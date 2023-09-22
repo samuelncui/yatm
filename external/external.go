@@ -1,6 +1,6 @@
 package external
 
-import "github.com/abc950309/tapewriter/library"
+import "github.com/samuelncui/tapewriter/library"
 
 type External struct {
 	lib *library.Library

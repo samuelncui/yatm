@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/abc950309/tapewriter/entity"
-	"github.com/abc950309/tapewriter/executor"
-	"github.com/abc950309/tapewriter/library"
+	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/executor"
+	"github.com/samuelncui/tapewriter/library"
 )
 
 func convertFiles(files ...*library.File) []*entity.File {

@@ -29,6 +29,11 @@ import DialogTitle from "@mui/material/DialogTitle";
 import LinearProgress from "@mui/material/LinearProgress";
 import Divider from "@mui/material/Divider";
 
+import { TreeView, TreeItem } from "@mui/x-tree-view";
+
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+
 import { cli, sleep, fileBase } from "../api";
 import { Job, JobDisplay, JobListRequest, JobNextRequest, JobStatus, CopyStatus, LibraryEntityType, JobDeleteRequest } from "../entity";
 
@@ -321,27 +326,31 @@ const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
       <Button size="small" onClick={handleClickOpen}>
         View Files
       </Button>
-      {/* {open && (
+      {open && (
         <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
           <DialogTitle>View Files</DialogTitle>
           <DialogContent dividers>
-            {tapes.map((tape) => {
-              if (!src.source) {
-                return null;
-              }
-              return (
-                <ListItemText
-                  primary={src.source.base + src.source.path.join("/")}
-                  secondary={`Size: ${formatFilesize(src.size)} Status: ${CopyStatus[src.status]}`}
-                />
-              );
-            })}
+            <TreeView defaultCollapseIcon={<ExpandMoreIcon />} defaultExpandIcon={<ChevronRightIcon />}>
+              {tapes.map((tape) => {
+                if (!tape.files) {
+                  return null;
+                }
+
+                return (
+                  <TreeItem label={tape.barcode} nodeId={`tape-${tape.tapeId}`}>
+                    {tape.files.map((file) => (
+                      <TreeItem label={file.tapePath} nodeId={`file-${file.positionId}`} />
+                    ))}
+                  </TreeItem>
+                );
+              })}
+            </TreeView>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleClose}>Close</Button>
           </DialogActions>
         </Dialog>
-      )} */}
+      )}
     </Fragment>
   );
 };

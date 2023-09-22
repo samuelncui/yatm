@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/abc950309/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/entity"
 )
 
 func (api *API) JobList(ctx context.Context, req *entity.JobListRequest) (*entity.JobListReply, error) {

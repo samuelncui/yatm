@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/abc950309/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/entity"
 )
 
 var (
@@ -81,6 +81,9 @@ func (l *Library) GetTape(ctx context.Context, id int64) (*Tape, error) {
 }
 
 func (l *Library) DeleteTapes(ctx context.Context, ids ...int64) error {
+	// if r := l.db.WithContext(ctx).Where("tape_id IN (?)", ids).Delete(ModelPosition); r.Error != nil {
+	// 	return fmt.Errorf("delete file position fail, err= %w", r.Error)
+	// }
 	if r := l.db.WithContext(ctx).Where("id IN (?)", ids).Delete(ModelTape); r.Error != nil {
 		return fmt.Errorf("delete tapes fail, err= %w", r.Error)
 	}

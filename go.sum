@@ -9,10 +9,6 @@ github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
-github.com/abc950309/acp v0.0.0-20230516133201-df6caee40899 h1:X8Lc97MotJkEWD/1iTjjGvJq4i/owL6gSPSQkFELVck=
-github.com/abc950309/acp v0.0.0-20230516133201-df6caee40899/go.mod h1:9KLpYlm8qGkr0+kJ7u2XRXlgImNVZhnymiKyCXeW7lo=
-github.com/abc950309/acp v0.0.0-20230918043059-b094d98c63cb h1:UxIelTxvpCFZShiSgMWO4h1CN8janPo2C28+579xVrM=
-github.com/abc950309/acp v0.0.0-20230918043059-b094d98c63cb/go.mod h1:9KLpYlm8qGkr0+kJ7u2XRXlgImNVZhnymiKyCXeW7lo=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
@@ -367,6 +363,8 @@ github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb
 github.com/samber/lo v1.38.1 h1:j2XEAqXKb09Am4ebOg31SpvzUTTs6EN3VfgeLUhPdXM=
 github.com/samber/lo v1.38.1/go.mod h1:+m/ZKRl6ClXCE2Lgf3MsQlWfh4bn1bz6CXEOxnEXnEA=
 github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da/go.mod h1:gi+0XIa01GRL2eRQVjQkKGqKF3SF9vZR/HnPullcV2E=
+github.com/samuelncui/acp v0.0.0-20230922055057-290748251e42 h1:FnVk2nAOBOy8la+J7le1zcZa5kI39fyWDMt30pB97lQ=
+github.com/samuelncui/acp v0.0.0-20230922055057-290748251e42/go.mod h1:cy5nMv6EZMvC4K3u1vLdLWFGHVWeRRoOUNw0kk+Wtvo=
 github.com/schollz/progressbar/v3 v3.12.2 h1:yLqqqpQNMxGxHY8uEshRihaHWwa0rf0yb7/Zrpgq2C0=
 github.com/schollz/progressbar/v3 v3.12.2/go.mod h1:HFJYIYQQJX32UJdyoigUl19xoV6aMwZt6iX/C30RWfg=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=

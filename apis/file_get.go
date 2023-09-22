@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/abc950309/tapewriter/entity"
-	"github.com/abc950309/tapewriter/library"
+	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapewriter/library"
 )
 
 func (api *API) FileGet(ctx context.Context, req *entity.FileGetRequest) (*entity.FileGetReply, error) {

@@ -18,6 +18,8 @@
     "@mui/icons-material": "^5.10.16",
     "@mui/material": "^5.10.9",
     "@mui/styled-engine": "^5.10.8",
+    "@mui/system": "^5.14.10",
+    "@mui/x-tree-view": "6.0.0-alpha.3",
     "@protobuf-ts/grpcweb-transport": "^2.8.2",
     "@protobuf-ts/runtime": "^2.8.2",
     "@protobuf-ts/runtime-rpc": "^2.8.2",
