@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -74,7 +75,7 @@ type jobRestoreExecutor struct {
 
 func (a *jobRestoreExecutor) submit(ctx context.Context, param *entity.JobRestoreNextParam) {
 	if err := a.handle(ctx, param); err != nil {
-		a.logger.WithContext(ctx).Infof("handler param fail, err= %w", err)
+		a.logger.WithContext(ctx).WithError(err).Infof("handler param fail, param= %s", param)
 	}
 }
 
@@ -289,11 +290,31 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 				)
 				return
 			}
-			targetFile.Status = targetStatus
 
+			if targetStatus == entity.CopyStatus_STAGED {
+				if targetHash := hex.EncodeToString(targetFile.Hash); targetHash != job.SHA256 {
+					targetStatus = entity.CopyStatus_FAILED
+
+					a.logger.Warnf(
+						"copy checksum do not match target file hash, real_path= %s target_hash= %s copy_hash= %s",
+						realPath, targetHash, job.SHA256,
+					)
+				}
+				if targetSize := targetFile.Size; targetSize != job.Size {
+					targetStatus = entity.CopyStatus_FAILED
+
+					a.logger.Warnf(
+						"copy size do not match target file hash, real_path= %s target_size= %d copy_size= %d",
+						realPath, targetSize, job.Size,
+					)
+				}
+			}
+
+			targetFile.Status = targetStatus
 			if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
 				a.logger.WithContext(ctx).Infof("save job for update file fail, name= %s", job.Base+path.Join(job.Path...))
 			}
+
 			return
 		}
 	}))

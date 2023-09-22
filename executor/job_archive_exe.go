@@ -74,7 +74,7 @@ type jobArchiveExecutor struct {
 
 func (a *jobArchiveExecutor) submit(ctx context.Context, param *entity.JobArchiveNextParam) {
 	if err := a.handle(ctx, param); err != nil {
-		a.logger.WithContext(ctx).Infof("handler param fail, err= %w", err)
+		a.logger.WithContext(ctx).WithError(err).Infof("handler param fail, param= %s", param)
 	}
 }
 

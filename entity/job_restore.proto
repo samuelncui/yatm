@@ -39,6 +39,7 @@ message RestoreFile {
 
     copy_status.CopyStatus status = 17;
     int64 size = 18;
+    bytes hash = 19;
 
     string tape_path = 33;
     string target_path = 34;

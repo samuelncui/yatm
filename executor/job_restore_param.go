@@ -120,6 +120,7 @@ func (e *Executor) createRestore(ctx context.Context, job *Job, param *entity.Jo
 					PositionId: p.ID,
 					Status:     entity.CopyStatus_PENDING,
 					Size:       file.Size,
+					Hash:       file.Hash,
 					TapePath:   p.Path,
 					TargetPath: file.target,
 				})

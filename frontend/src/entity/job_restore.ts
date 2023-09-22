@@ -94,6 +94,10 @@ export interface RestoreFile {
      */
     size: bigint;
     /**
+     * @generated from protobuf field: bytes hash = 19;
+     */
+    hash: Uint8Array;
+    /**
      * @generated from protobuf field: string tape_path = 33;
      */
     tapePath: string;
@@ -419,12 +423,13 @@ class RestoreFile$Type extends MessageType<RestoreFile> {
             { no: 3, name: "position_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 17, name: "status", kind: "enum", T: () => ["copy_status.CopyStatus", CopyStatus] },
             { no: 18, name: "size", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 19, name: "hash", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
             { no: 33, name: "tape_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 34, name: "target_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<RestoreFile>): RestoreFile {
-        const message = { fileId: 0n, tapeId: 0n, positionId: 0n, status: 0, size: 0n, tapePath: "", targetPath: "" };
+        const message = { fileId: 0n, tapeId: 0n, positionId: 0n, status: 0, size: 0n, hash: new Uint8Array(0), tapePath: "", targetPath: "" };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<RestoreFile>(this, message, value);
@@ -449,6 +454,9 @@ class RestoreFile$Type extends MessageType<RestoreFile> {
                     break;
                 case /* int64 size */ 18:
                     message.size = reader.int64().toBigInt();
+                    break;
+                case /* bytes hash */ 19:
+                    message.hash = reader.bytes();
                     break;
                 case /* string tape_path */ 33:
                     message.tapePath = reader.string();
@@ -483,6 +491,9 @@ class RestoreFile$Type extends MessageType<RestoreFile> {
         /* int64 size = 18; */
         if (message.size !== 0n)
             writer.tag(18, WireType.Varint).int64(message.size);
+        /* bytes hash = 19; */
+        if (message.hash.length)
+            writer.tag(19, WireType.LengthDelimited).bytes(message.hash);
         /* string tape_path = 33; */
         if (message.tapePath !== "")
             writer.tag(33, WireType.LengthDelimited).string(message.tapePath);
