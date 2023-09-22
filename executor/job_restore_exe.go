@@ -161,8 +161,8 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 		expects := lo.Map(a.state.Tapes, func(t *entity.RestoreTape, _ int) string { return t.Barcode })
 		return fmt.Errorf("unexpected tape barcode in library, has= '%s' expect= %v", barcode, expects)
 	}
-	if restoreTape.Status != entity.CopyStatus_PENDING {
-		return fmt.Errorf("unexpected restore tape state status, has= '%s' expect= '%s'", restoreTape.Status, entity.CopyStatus_PENDING)
+	if restoreTape.Status == entity.CopyStatus_SUBMITED {
+		return fmt.Errorf("unexpected restore tape state status, tape is restored, status= '%s'", restoreTape.Status)
 	}
 
 	tape, err := a.exe.lib.GetTape(ctx, restoreTape.TapeId)
@@ -251,7 +251,7 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 			case "finished":
 				a.logger.WithContext(ctx).Infof("file '%s' copy finished, size= %d", src.RealPath(), job.Size)
 
-				targetStatus = entity.CopyStatus_SUBMITED
+				targetStatus = entity.CopyStatus_STAGED
 				if len(job.FailTargets) > 0 {
 					targetStatus = entity.CopyStatus_FAILED
 				}
@@ -292,16 +292,31 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 			targetFile.Status = targetStatus
 
 			if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
-				logrus.WithContext(ctx).Infof("save job for update file fail, name= %s", job.Base+path.Join(job.Path...))
+				a.logger.WithContext(ctx).Infof("save job for update file fail, name= %s", job.Base+path.Join(job.Path...))
 			}
 			return
 		}
 	}))
 
+	restoreTape.Status = entity.CopyStatus_RUNNING
+	if _, err := a.exe.SaveJob(tools.WithoutTimeout(ctx), a.job); err != nil {
+		a.logger.WithContext(ctx).Infof("save job for submit tape fail, barcode= %s", restoreTape.Barcode)
+	}
+
 	defer func() {
 		restoreTape.Status = entity.CopyStatus_SUBMITED
+		for _, file := range restoreTape.Files {
+			if file.Status == entity.CopyStatus_STAGED {
+				file.Status = entity.CopyStatus_SUBMITED
+			}
+
+			if file.Status != entity.CopyStatus_SUBMITED {
+				restoreTape.Status = entity.CopyStatus_FAILED
+			}
+		}
+
 		if _, err := a.exe.SaveJob(tools.WithoutTimeout(ctx), a.job); err != nil {
-			logrus.WithContext(ctx).Infof("save job for submit tape fail, barcode= %s", restoreTape.Barcode)
+			a.logger.WithContext(ctx).Infof("save job for submit tape fail, barcode= %s", restoreTape.Barcode)
 		}
 	}()
 

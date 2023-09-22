@@ -271,12 +271,12 @@ const ArchiveCard = ({
       { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
       { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
       { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copyedBytes) * 1000) / avgSpeed) : "--" },
-      { name: "Total Files", value: totalFiles },
-      { name: "Total Bytes", value: formatFilesize(totalBytes) },
-      { name: "Submited Files", value: submitedFiles },
-      { name: "Submited Bytes", value: formatFilesize(submitedBytes) },
       { name: "Copyed Files", value: copyedFiles },
       { name: "Copyed Bytes", value: formatFilesize(copyedBytes) },
+      { name: "Submited Files", value: submitedFiles },
+      { name: "Submited Bytes", value: formatFilesize(submitedBytes) },
+      { name: "Total Files", value: totalFiles },
+      { name: "Total Bytes", value: formatFilesize(totalBytes) },
     ];
 
     return [fields, progress];
@@ -394,23 +394,27 @@ const RestoreCard = ({
 }): JSX.Element => {
   const [fields, progress] = useMemo(() => {
     const totalFiles = state.tapes.reduce((count, tape) => count + tape.files.length, 0);
-    let submitedFiles = 0,
-      submitedBytes = 0,
+    let successFiles = 0,
+      successBytes = 0,
+      copyedFiles = Number(display?.copyedFiles || 0n),
+      copyedBytes = Number(display?.copyedBytes || 0n),
       totalBytes = 0;
     for (const tape of state.tapes) {
       for (const file of tape.files) {
         totalBytes += Number(file.size);
-        if (file.status !== CopyStatus.SUBMITED) {
-          continue;
+
+        if (file.status === CopyStatus.SUBMITED || file.status === CopyStatus.STAGED) {
+          successFiles++;
+          successBytes += Number(file.size);
         }
 
-        submitedFiles++;
-        submitedBytes += Number(file.size);
+        if (file.status === CopyStatus.SUBMITED) {
+          copyedFiles++;
+          copyedBytes += Number(file.size);
+        }
       }
     }
 
-    const copyedFiles = submitedFiles + Number(display?.copyedFiles || 0n);
-    const copyedBytes = submitedBytes + Number(display?.copyedBytes || 0n);
     const avgSpeed = (() => {
       if (!display || !display.copyedBytes || !display.startTime) {
         return NaN;
@@ -430,12 +434,12 @@ const RestoreCard = ({
       { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
       { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
       { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copyedBytes) * 1000) / avgSpeed) : "--" },
-      { name: "Total Files", value: totalFiles },
-      { name: "Total Bytes", value: formatFilesize(totalBytes) },
-      { name: "Submited Files", value: submitedFiles },
-      { name: "Submited Bytes", value: formatFilesize(submitedBytes) },
       { name: "Copyed Files", value: copyedFiles },
       { name: "Copyed Bytes", value: formatFilesize(copyedBytes) },
+      { name: "Success Files", value: successFiles },
+      { name: "Success Bytes", value: formatFilesize(successBytes) },
+      { name: "Total Files", value: totalFiles },
+      { name: "Total Bytes", value: formatFilesize(totalBytes) },
     ];
 
     return [fields, progress];
