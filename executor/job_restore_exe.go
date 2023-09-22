@@ -90,6 +90,7 @@ func (a *jobRestoreExecutor) handle(ctx context.Context, param *entity.JobRestor
 		tools.Working()
 		go tools.WrapWithLogger(ctx, a.logger, func() {
 			defer tools.Done()
+
 			if err := a.restoreTape(tools.ShutdownContext, p.Device); err != nil {
 				a.logger.WithContext(ctx).WithError(err).Errorf("restore tape has error, device= '%s'", p.Device)
 			}
@@ -207,7 +208,7 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 		}
 	}()
 
-	opts := make([]acp.Option, 0, 4)
+	opts := make([]acp.Option, 0, 16)
 	for _, f := range restoreTape.Files {
 		if f.Status == entity.CopyStatus_SUBMITED {
 			continue
@@ -272,6 +273,12 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 			idx := sort.Search(len(restoreTape.Files), func(idx int) bool {
 				return convertPath(realPath) < convertPath(sourcePath(restoreTape.Files[idx].TapePath))
 			})
+			if idx < 0 {
+				a.logger.Warnf(
+					"cannot found target file, real_path= %s tape_file_path= %v", realPath,
+					lo.Map(restoreTape.Files, func(file *entity.RestoreFile, _ int) string { return sourcePath(file.TapePath) }))
+				return
+			}
 
 			target := restoreTape.Files[idx]
 			if target == nil || realPath != sourcePath(target.TapePath) {

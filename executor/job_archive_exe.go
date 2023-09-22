@@ -14,6 +14,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samber/lo"
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/tapewriter/entity"
 	"github.com/samuelncui/tapewriter/library"
@@ -230,6 +231,12 @@ func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name
 			idx := sort.Search(len(a.state.Sources), func(idx int) bool {
 				return src.Compare(a.state.Sources[idx].Source) <= 0
 			})
+			if idx < 0 {
+				a.logger.Warnf(
+					"cannot found target file, real_path= %s tape_file_path= %v", src.RealPath(),
+					lo.Map(a.state.Sources, func(source *entity.SourceState, _ int) string { return source.Source.RealPath() }))
+				return
+			}
 
 			target := a.state.Sources[idx]
 			if target == nil || !src.Equal(target.Source) {
