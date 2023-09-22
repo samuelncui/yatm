@@ -325,6 +325,9 @@ func (a *jobRestoreExecutor) restoreTape(ctx context.Context, device string) (re
 	}
 
 	defer func() {
+		a.stateLock.Lock()
+		defer a.stateLock.Unlock()
+
 		restoreTape.Status = entity.CopyStatus_SUBMITED
 		for _, file := range restoreTape.Files {
 			if file.Status == entity.CopyStatus_STAGED {
