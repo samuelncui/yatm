@@ -1,5 +1,5 @@
 [Unit]
-Description=Tape Writer Service
+Description=YATM Service
 Documentation=https://github.com/samuelncui/yatm/
 After=network.target
 
@@ -7,7 +7,7 @@ After=network.target
 User=root
 Type=simple
 WorkingDirectory=/opt/yatm
-ExecStart=/opt/yatm/httpd
+ExecStart=/opt/yatm/yatm-httpd
 Restart=always
 RestartSec=15
 StartLimitInterval=0

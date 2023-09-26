@@ -2,6 +2,6 @@
 set -ex;
 
 # SG_DEVICE=`sg_map | grep ${DEVICE} | awk '{print $1}'`
-BARCODE=`./lto-info -f /dev/nst0 | grep 'Barcode' | awk '{print $3}'`
+BARCODE=`./yatm-lto-info -f /dev/nst0 | grep 'Barcode' | awk '{print $3}'`
 echo "{\"barcode\": \"$BARCODE\"}" > $OUT
 sleep 3
