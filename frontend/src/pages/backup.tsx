@@ -124,6 +124,7 @@ const useBackupTargetBrowser = () => {
 
             const req = makeArchiveParam(1n, { sources });
             console.log(req, await cli.jobCreate(req).response);
+            alert("Create Backup Job Success!");
           })();
           return;
       }

@@ -108,6 +108,7 @@ const useRestoreTargetBrowser = () => {
           (async () => {
             const fileIds = files.filter((file): file is FileData => !!file && file.id !== "0").map((file) => BigInt(file.id));
             console.log(await cli.jobCreate(makeParam(1n, { fileIds })).response);
+            alert("Create Restore Job Success!");
           })();
           return;
       }

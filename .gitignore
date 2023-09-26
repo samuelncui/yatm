@@ -17,5 +17,6 @@ output/
 frontend/node_modules/
 client/node_modules/
 
+tests/
 tapes.db
 upload_test.sh
