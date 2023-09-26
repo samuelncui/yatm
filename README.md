@@ -10,6 +10,7 @@ YATM is a first-of-its-kind open-source tape manager for LTO tape via LTFS tape 
   - The job manager allows you to select which tape drive to use and tells you which tape is needed while executing a restore job.
 - Fast copy with file pointer preload, uses [ACP](https://github.com/samuelncui/acp). Optimized for linear devices like LTO tapes.
 - Sorted copy order depends on file position on tapes to avoid tape shoe-shining.
+- Hardware envelope encryption for every tape (not properly implemented now, will improve as next step).
 
 ## Dependency
 
