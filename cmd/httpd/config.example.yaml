@@ -1,22 +1,38 @@
+# domain used by user interface
 domain: http://127.0.0.1:8080
+# http service binding
 listen: 127.0.0.1:8080
+# debug port binding
 debug_listen: 127.0.0.1:8081
 
+# database settings, you can use sqlite or mysql (untested)
 database:
   dialect: sqlite
   dsn: ./tapes.db
 
+# usable tape drivers, must have sg device mapping.
+# use `sg_map` command (in sg3_utils package) to get corresponding device with sg device mapping.
 tape_devices:
   - /dev/nst0
 
+# working path settings
 paths:
+  # to save logs and write reports
   work: ./
+  # source in backup job creator
   source: ./
+  # restore job target path
   target: ./
 
+# those scripts interact with external software, you may need to change them for your use cases.
 scripts:
+  # enable hardware encryption on tape driver
   encrypt: ./scripts/encrypt
+  # format ltfs on lto tape, may need to be changed for different ltfs software.
   mkfs: ./scripts/mkfs
+  # mount ltfs to specified path, may need to be changed for different ltfs software.
   mount: ./scripts/mount
+  # umount ltfs path
   umount: ./scripts/umount
+  # read tape barcode for restore jobs
   read_info: ./scripts/readinfo
