@@ -41,7 +41,8 @@ mkdir -p /opt/yatm
 tar -xvzf yatm-linux-amd64-${RELEASE_VERSION}.tar.gz -C /opt/yatm
 
 cp /opt/yatm/config.example.yaml /opt/yatm/config.yaml
-vim /opt/yatm/config.yaml # change config file depends on your demand.
+# change config file depends on your demand.
+vim /opt/yatm/config.yaml
 
 systemctl enable /opt/yatm/yatm-httpd.service
 systemctl start yatm-httpd.service
@@ -53,12 +54,12 @@ YATM is based on GRPC, which needs HTTP2 to be functional. You can reference the
 
 ```nginx config
 server {
-    // needs http2 to proxy grpc
+    # needs http2 to proxy grpc
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
 
     server_name example.com;
-    // if you use basic auth, ssl is critical for protect your password
+    # if you use basic auth, ssl is critical for protect your password
     include includes/ssl.conf;
 
     proxy_connect_timeout 60;
@@ -74,7 +75,7 @@ server {
     http2_max_requests 10000000;
 
     location / {
-        // you can use basic auth to protect your site
+        # you can use basic auth to protect your site
         auth_basic              "restricted";
         auth_basic_user_file    includes/passwd;
 
