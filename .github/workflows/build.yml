@@ -26,4 +26,4 @@ jobs:
         node-version: '20'
 
     - name: Build
-      run: .../build.sh
+      run: ./build.sh
