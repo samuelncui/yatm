@@ -48,6 +48,10 @@ systemctl enable /opt/yatm/yatm-httpd.service
 systemctl start yatm-httpd.service
 ```
 
+### Warning!
+
+When a backup job is done (or at least this tape is full), the tape will be ejected after umount by default. I highly suggest you enable the write-protect switch immediately. There is a possibility that the tape driver writes to the index partition when mounting tape, which can cause index loss. If you know the reason for this weird behavior, please tell me via email or issue.
+
 ## Nginx Reverse Proxy
 
 YATM is based on GRPC, which needs HTTP2 to be functional. You can reference the following nginx config to reverse proxy YATM.
