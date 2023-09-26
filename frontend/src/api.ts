@@ -1,4 +1,4 @@
-import { FileData } from "chonky";
+import { FileData } from "@aperturerobotics/chonky";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import { ServiceClient, File, SourceFile } from "./entity";
 

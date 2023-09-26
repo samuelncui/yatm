@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "chonky";
-import { ChonkyActions, ChonkyFileActionData, FileData } from "chonky";
+import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@aperturerobotics/chonky";
+import { ChonkyActions, ChonkyFileActionData, FileData } from "@aperturerobotics/chonky";
 
 import { cli, convertSourceFiles } from "../api";
 import { Root } from "../api";
@@ -53,7 +53,7 @@ const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
           return;
       }
     },
-    [openFolder, source]
+    [openFolder, source],
   );
 
   const fileActions = useMemo(() => [ChonkyActions.StartDragNDrop, RefreshListAction], []);
@@ -129,7 +129,7 @@ const useBackupTargetBrowser = () => {
           return;
       }
     },
-    [files, setFiles]
+    [files, setFiles],
   );
 
   const fileActions = useMemo(() => [ChonkyActions.DeleteFiles, AddFileAction, CreateBackupJobAction], []);

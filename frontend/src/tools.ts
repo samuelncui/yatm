@@ -9,7 +9,7 @@ export const hexEncode = (buf: string) => {
 };
 
 export const formatFilesize = (size: number | bigint): string =>
-  filesize(size, {
+  filesize(size as any as number, {
     base: 2,
     standard: "jedec",
   }) as string;

@@ -1,5 +1,5 @@
-import { setChonkyDefaults } from "chonky";
-import { ChonkyIconFA } from "chonky-icon-fontawesome";
+import { setChonkyDefaults } from "@aperturerobotics/chonky";
+import { ChonkyIconFA } from "@aperturerobotics/chonky-icon-fontawesome";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPencilAlt } from "@fortawesome/free-solid-svg-icons/faPencilAlt";
@@ -27,5 +27,5 @@ import { unstable_ClassNameGenerator as ClassNameGenerator } from "@mui/material
 
 ClassNameGenerator.configure(
   // Do something with the componentName
-  (componentName: string) => `app-${componentName}`
+  (componentName: string) => `app-${componentName}`,
 );

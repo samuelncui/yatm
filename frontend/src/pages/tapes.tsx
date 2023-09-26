@@ -3,8 +3,8 @@ import moment from "moment";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "chonky";
-import { ChonkyActions, ChonkyFileActionData, FileData } from "chonky";
+import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@aperturerobotics/chonky";
+import { ChonkyActions, ChonkyFileActionData, FileData } from "@aperturerobotics/chonky";
 
 import { cli, Root } from "../api";
 import { TapeListRequest, Source, Tape } from "../entity";
@@ -72,7 +72,7 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
           return;
       }
     },
-    [openFolder, source, folderChain]
+    [openFolder, source, folderChain],
   );
 
   const fileActions = useMemo(() => [ChonkyActions.DeleteFiles], []);

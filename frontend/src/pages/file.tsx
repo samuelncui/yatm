@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FullFileBrowser, FileBrowserProps, FileBrowserHandle, FileArray } from "chonky";
-import { ChonkyActions, ChonkyFileActionData } from "chonky";
+import { FullFileBrowser, FileBrowserProps, FileBrowserHandle, FileArray } from "@aperturerobotics/chonky";
+import { ChonkyActions, ChonkyFileActionData } from "@aperturerobotics/chonky";
 
 import { cli, convertFiles } from "../api";
 import { Root } from "../api";
@@ -24,7 +24,7 @@ const useDualSide = () => {
           return;
         }
         return ref.current.requestFileAction(RefreshListAction, {});
-      })
+      }),
     );
   }, [instances]);
 
@@ -148,7 +148,7 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
           return;
       }
     },
-    [openFolder, openDetailModel, refreshAll, currentID]
+    [openFolder, openDetailModel, refreshAll, currentID],
   );
 
   const fileActions = useMemo(() => [ChonkyActions.CreateFolder, ChonkyActions.DeleteFiles, ChonkyActions.MoveFiles, RenameFileAction, RefreshListAction], []);

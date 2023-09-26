@@ -1,6 +1,6 @@
-import { FileData, FileArray, FileAction } from "chonky";
-import { defineFileAction } from "chonky";
-import { ChonkyActions } from "chonky";
+import { FileData, FileArray, FileAction } from "@aperturerobotics/chonky";
+import { defineFileAction } from "@aperturerobotics/chonky";
+import { ChonkyActions } from "@aperturerobotics/chonky";
 
 type RenameFileState = {
   contextMenuTriggerFile: FileData;
