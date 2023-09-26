@@ -25,7 +25,7 @@ YATM will use several software, depending on your hardware. It would be best if 
 
 - LTFS, to format and mount LTO tape via LTFS. You can use [OpenLTFS](https://github.com/LinearTapeFileSystem/ltfs), [HPE LTFS](https://github.com/nix-community/hpe-ltfs) or [IBM LTFS](https://www.ibm.com/docs/en/spectrum-archive-le?topic=tools-downloading-ltfs), depending on you tape drive hardware. You may need to change codes to run on your platform.
   - The current script is tested on HPE LTFS. If you use other LTFS software, you may need to modify `/scripts/mkfs` and `/scripts/mount`. If you find those scripts are not appropriate for other LTFS software, please create a pull request.
-- (Stenc)[https://github.com/scsitape/stenc], to manage hardware encryption on LTO tape drives.
+- [Stenc](https://github.com/scsitape/stenc), to manage hardware encryption on LTO tape drives.
 
 ## Install
 
