@@ -89,4 +89,4 @@ server {
 
 ## Thanks
 
-- lto-info is ported from [https://github.com/speed47/lto-info], added ability to read barcode from cartridge memory. Thanks, @speed47!
+- lto-info is ported from [https://github.com/speed47/lto-info](https://github.com/speed47/lto-info), added ability to read barcode from cartridge memory. Thanks, @speed47!
