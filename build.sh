@@ -10,8 +10,8 @@ rm -rf output;
 mkdir -p output;
 
 cp -r scripts ./output/;
-cp ./cmd/tape-httpd/tape-writer.service ./output/
-cp ./cmd/tape-httpd/config.example.yaml ./output/
+cp ./cmd/httpd/yatm-httpd.service ./output/
+cp ./cmd/httpd/config.example.yaml ./output/
 cp ./LICENSE ./output/
 cp ./README.md ./output/
 
