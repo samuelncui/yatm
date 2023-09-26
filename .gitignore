@@ -15,7 +15,7 @@
 vendor/
 output/
 frontend/node_modules/
-client/node_modules/
+frontend/pnpm-lock.yaml
 
 tests/
 tapes.db
