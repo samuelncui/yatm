@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-set -e;
+set -ex;
 
 CURDIR=$(cd $(dirname $0); pwd);
 cd ${CURDIR};
+
+export TARGET_FILE="tapemanager-linux-amd64-${RELEASE_VERSION}.tar.gz"
 
 rm -rf output;
 mkdir -p output;
@@ -18,4 +20,4 @@ cp ./README.md ./output/
 ./build_backend.sh
 ./build_frontend.sh
 
-tar -czvf tapemanager-linux-amd64-${RELEASE_VERSION}.tar.gz ./output/*
+tar -czvf "${TARGET_FILE}" -C ./output .

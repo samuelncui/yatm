@@ -1,6 +1,6 @@
 syntax = "proto3";
 package service;
-option go_package = "github.com/samuelncui/tapewriter/entity";
+option go_package = "github.com/samuelncui/tapemanager/entity";
 
 import "job.proto";
 import "file.proto";

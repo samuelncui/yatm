@@ -4,7 +4,7 @@ import (
 	"context"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 )
 
 func (api *API) FileDelete(ctx context.Context, req *entity.FileDeleteRequest) (*entity.FileDeleteReply, error) {

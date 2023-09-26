@@ -1,4 +1,4 @@
-module github.com/samuelncui/tapewriter
+module github.com/samuelncui/tapemanager
 
 go 1.20
 

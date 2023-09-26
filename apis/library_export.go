@@ -3,7 +3,7 @@ package apis
 import (
 	"context"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 )
 
 func (api *API) LibraryExport(ctx context.Context, req *entity.LibraryExportRequest) (*entity.LibraryExportReply, error) {

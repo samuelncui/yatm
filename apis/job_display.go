@@ -3,7 +3,7 @@ package apis
 import (
 	"context"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 	"github.com/sirupsen/logrus"
 )
 

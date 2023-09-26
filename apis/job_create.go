@@ -3,8 +3,8 @@ package apis
 import (
 	"context"
 
-	"github.com/samuelncui/tapewriter/entity"
-	"github.com/samuelncui/tapewriter/executor"
+	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/tapemanager/executor"
 )
 
 func (api *API) JobCreate(ctx context.Context, req *entity.JobCreateRequest) (*entity.JobCreateReply, error) {

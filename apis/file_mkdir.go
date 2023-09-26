@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 )
 
 func (api *API) FileMkdir(ctx context.Context, req *entity.FileMkdirRequest) (*entity.FileMkdirReply, error) {

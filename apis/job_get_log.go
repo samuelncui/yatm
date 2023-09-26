@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 )
 
 func (api *API) JobGetLog(ctx context.Context, req *entity.JobGetLogRequest) (*entity.JobGetLogReply, error) {

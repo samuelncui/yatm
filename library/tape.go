@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 )
 
 var (

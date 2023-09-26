@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/samuelncui/tapewriter/library"
+	"github.com/samuelncui/tapemanager/library"
 	"github.com/sirupsen/logrus"
 )
 

@@ -3,7 +3,7 @@ package tapechanger
 import (
 	"context"
 
-	"github.com/samuelncui/tapewriter/library"
+	"github.com/samuelncui/tapemanager/library"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/samuelncui/tapewriter/entity"
+	"github.com/samuelncui/tapemanager/entity"
 	"gorm.io/gorm"
 )
 

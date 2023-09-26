@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samuelncui/tapewriter/entity"
-	"github.com/samuelncui/tapewriter/library"
+	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/tapemanager/library"
 	"gorm.io/gorm"
 )
 

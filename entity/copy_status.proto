@@ -1,7 +1,7 @@
 syntax = "proto3";
 package copy_status;
 
-option go_package = "github.com/samuelncui/tapewriter/entity";
+option go_package = "github.com/samuelncui/tapemanager/entity";
 
 enum CopyStatus {
     DRAFT     = 0;

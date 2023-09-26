@@ -1,9 +1,9 @@
 package apis
 
 import (
-	"github.com/samuelncui/tapewriter/entity"
-	"github.com/samuelncui/tapewriter/executor"
-	"github.com/samuelncui/tapewriter/library"
+	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/tapemanager/executor"
+	"github.com/samuelncui/tapemanager/library"
 )
 
 var (

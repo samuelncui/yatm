@@ -1,13 +1,13 @@
 [Unit]
 Description=Tape Writer Service
-Documentation=https://github.com/samuelncui/tapewriter/
+Documentation=https://github.com/samuelncui/tapemanager/
 After=network.target
 
 [Service]
 User=root
 Type=simple
-WorkingDirectory=/opt/tapewriter
-ExecStart=/opt/tapewriter/httpd
+WorkingDirectory=/opt/tapemanager
+ExecStart=/opt/tapemanager/httpd
 Restart=always
 RestartSec=15
 StartLimitInterval=0

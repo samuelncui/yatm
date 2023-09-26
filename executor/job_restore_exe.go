@@ -18,8 +18,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/samber/lo"
 	"github.com/samuelncui/acp"
-	"github.com/samuelncui/tapewriter/entity"
-	"github.com/samuelncui/tapewriter/tools"
+	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/tapemanager/tools"
 	"github.com/sirupsen/logrus"
 )
 

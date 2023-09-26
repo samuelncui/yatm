@@ -1,6 +1,6 @@
 syntax = "proto3";
 package file;
-option go_package = "github.com/samuelncui/tapewriter/entity";
+option go_package = "github.com/samuelncui/tapemanager/entity";
 
 message File {
     int64 id = 1;
