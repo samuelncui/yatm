@@ -16,9 +16,9 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
 	"github.com/samuelncui/acp"
-	"github.com/samuelncui/tapemanager/entity"
-	"github.com/samuelncui/tapemanager/library"
-	"github.com/samuelncui/tapemanager/tools"
+	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/tools"
 	"github.com/sirupsen/logrus"
 )
 

@@ -1,13 +1,13 @@
 [Unit]
 Description=Tape Writer Service
-Documentation=https://github.com/samuelncui/tapemanager/
+Documentation=https://github.com/samuelncui/yatm/
 After=network.target
 
 [Service]
 User=root
 Type=simple
-WorkingDirectory=/opt/tapemanager
-ExecStart=/opt/tapemanager/httpd
+WorkingDirectory=/opt/yatm
+ExecStart=/opt/yatm/httpd
 Restart=always
 RestartSec=15
 StartLimitInterval=0

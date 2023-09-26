@@ -7,7 +7,7 @@ import (
 
 	"github.com/modern-go/reflect2"
 	"github.com/samber/lo"
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
 )
 

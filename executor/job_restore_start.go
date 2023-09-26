@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (e *Executor) startRestore(ctx context.Context, job *Job) error {

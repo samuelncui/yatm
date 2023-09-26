@@ -3,7 +3,7 @@ package tapechanger
 import (
 	"context"
 
-	"github.com/samuelncui/tapemanager/library"
+	"github.com/samuelncui/yatm/library"
 )
 
 var (

@@ -1,6 +1,6 @@
 syntax = "proto3";
 package library_entity_type;
-option go_package = "github.com/samuelncui/tapemanager/entity";
+option go_package = "github.com/samuelncui/yatm/entity";
 
 enum LibraryEntityType {
     NONE = 0;

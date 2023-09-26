@@ -47,4 +47,4 @@ jobs:
         files: |
           LICENSE
           README.md
-          tapemanager-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
+          yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz

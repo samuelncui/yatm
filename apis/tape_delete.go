@@ -3,7 +3,7 @@ package apis
 import (
 	"context"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (api *API) TapeDelete(ctx context.Context, req *entity.TapeDeleteRequest) (*entity.TapeDeleteReply, error) {

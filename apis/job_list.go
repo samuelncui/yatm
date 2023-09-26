@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (api *API) JobList(ctx context.Context, req *entity.JobListRequest) (*entity.JobListReply, error) {

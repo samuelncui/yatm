@@ -1,6 +1,6 @@
 package external
 
-import "github.com/samuelncui/tapemanager/library"
+import "github.com/samuelncui/yatm/library"
 
 type External struct {
 	lib *library.Library

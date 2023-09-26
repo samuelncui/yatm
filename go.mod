@@ -1,4 +1,4 @@
-module github.com/samuelncui/tapemanager
+module github.com/samuelncui/yatm
 
 go 1.20
 

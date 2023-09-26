@@ -1,9 +1,9 @@
 package apis
 
 import (
-	"github.com/samuelncui/tapemanager/entity"
-	"github.com/samuelncui/tapemanager/executor"
-	"github.com/samuelncui/tapemanager/library"
+	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/executor"
+	"github.com/samuelncui/yatm/library"
 )
 
 var (

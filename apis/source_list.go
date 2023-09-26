@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (api *API) SourceList(ctx context.Context, req *entity.SourceListRequest) (*entity.SourceListReply, error) {

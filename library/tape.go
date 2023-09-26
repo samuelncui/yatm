@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 var (

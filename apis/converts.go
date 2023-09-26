@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/samuelncui/tapemanager/entity"
-	"github.com/samuelncui/tapemanager/executor"
-	"github.com/samuelncui/tapemanager/library"
+	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/executor"
+	"github.com/samuelncui/yatm/library"
 )
 
 func convertFiles(files ...*library.File) []*entity.File {

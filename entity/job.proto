@@ -1,6 +1,6 @@
 syntax = "proto3";
 package job;
-option go_package = "github.com/samuelncui/tapemanager/entity";
+option go_package = "github.com/samuelncui/yatm/entity";
 
 import "job_archive.proto";
 import "job_restore.proto";

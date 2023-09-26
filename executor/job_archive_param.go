@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/acp"
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (e *Executor) createArchive(ctx context.Context, job *Job, param *entity.JobArchiveParam) error {

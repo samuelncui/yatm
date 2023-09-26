@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/samuelncui/tapemanager/entity"
+	"github.com/samuelncui/yatm/entity"
 )
 
 func (e *Executor) getRestoreDisplay(ctx context.Context, job *Job) (*entity.JobRestoreDisplay, error) {

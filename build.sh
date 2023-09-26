@@ -4,7 +4,7 @@ set -ex;
 CURDIR=$(cd $(dirname $0); pwd);
 cd ${CURDIR};
 
-export TARGET_FILE="tapemanager-linux-amd64-${RELEASE_VERSION}.tar.gz"
+export TARGET_FILE="yatm-linux-amd64-${RELEASE_VERSION}.tar.gz"
 
 rm -rf output;
 mkdir -p output;
