@@ -48,17 +48,17 @@ func (e *Executor) createRestore(ctx context.Context, job *Job, param *entity.Jo
 		}
 	}
 
-	tapeMap, err := e.lib.MGetTape(ctx, lo.Keys(tapeMapping)...)
+	tapes, err := e.lib.MGetTape(ctx, lo.Keys(tapeMapping)...)
 	if err != nil {
 		return err
 	}
 	for tapeID := range tapeMapping {
-		if tape, has := tapeMap[tapeID]; has && tape != nil {
+		if tape, has := tapes[tapeID]; has && tape != nil {
 			continue
 		}
 
 		logrus.WithContext(ctx).Infof("tape not found, tape_id= %d", tapeID)
-		delete(tapeMap, tapeID)
+		delete(tapeMapping, tapeID)
 	}
 
 	restoreTapes := make([]*entity.RestoreTape, 0, len(tapeMapping))
@@ -135,7 +135,7 @@ func (e *Executor) createRestore(ctx context.Context, job *Job, param *entity.Jo
 
 		restoreTapes = append(restoreTapes, &entity.RestoreTape{
 			TapeId:  maxTapeID,
-			Barcode: tapeMap[maxTapeID].Barcode,
+			Barcode: tapes[maxTapeID].Barcode,
 			Status:  entity.CopyStatus_PENDING,
 			Files:   targets,
 		})
