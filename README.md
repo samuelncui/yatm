@@ -2,7 +2,9 @@
 
 YATM is a first-of-its-kind open-source tape manager for LTO tape via LTFS tape format. It performs the following features:
 
-![screenshot-jobs](https://github.com/samuelncui/yatm/assets/7183284/815ccfe7-0f0b-4271-be12-fc13e5442a99)
+![20230928-023325](https://github.com/samuelncui/yatm/assets/7183284/1f48dfaa-1fb5-40fd-9179-1d7dc9647f84)
+
+![20230928-023638@](https://github.com/samuelncui/yatm/assets/7183284/913e1b38-bb7e-470f-b1cf-7f08499eded1)
 
 - Depends on LTFS, an open format for LTO tapes. You don't need to be bundled into a private tape format anymore!
 - A frontend manager, based on GRPC, React, and [Chonky file browser](https://github.com/TimboKZ/Chonky). It contains a file manager, a backup job creator, a restore job creator, a tape manager, and a job manager.
@@ -31,7 +33,13 @@ YATM will use several software, depending on your hardware. It would be best if 
 
 ## Install
 
-Download binary from releases, and run the following shell commands.
+You can run this automatic release install script to install/update to the latest release:
+
+```shell
+bash <(curl -L https://raw.githubusercontent.com/samuelncui/yatm/main/install-release.sh)
+```
+
+Or you can download binary from `releases`, and run the following shell commands.
 
 ```shell
 # If you put this to other path, you need to change scripts and systemd service file.
@@ -50,7 +58,7 @@ systemctl start yatm-httpd.service
 
 ### Warning!
 
-When a backup job is done (or at least this tape is full), the tape will be ejected after umount by default. I highly suggest you enable the write-protect switch immediately. There is a possibility that the tape driver writes to the index partition when mounting tape, which can cause index loss. If you know the reason for this weird behavior, please tell me via email or issue.
+When a backup job is done (or at least this tape is full), the tape will be ejected after umount by default. I suggest you enable the write-protect switch immediately. There is a possibility that the tape driver writes to the index partition when mounting tape, which can cause index loss. If you know the reason for this weird behavior, please tell me via email or issue.
 
 ## Nginx Reverse Proxy
 
