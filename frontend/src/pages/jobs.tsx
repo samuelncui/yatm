@@ -250,10 +250,10 @@ const ArchiveCard = ({
       submitedBytes += Number(file.size);
     }
 
-    const copyedFiles = submitedFiles + Number(display?.copyedFiles || 0n);
-    const copyedBytes = submitedBytes + Number(display?.copyedBytes || 0n);
+    const copiedFiles = submitedFiles + Number(display?.copiedFiles || 0n);
+    const copiedBytes = submitedBytes + Number(display?.copiedBytes || 0n);
     const avgSpeed = (() => {
-      if (!display || !display.copyedBytes || !display.startTime) {
+      if (!display || !display.copiedBytes || !display.startTime) {
         return NaN;
       }
 
@@ -262,17 +262,17 @@ const ArchiveCard = ({
         return NaN;
       }
 
-      return Number(display.copyedBytes) / duration;
+      return Number(display.copiedBytes) / duration;
     })();
 
-    const progress = (totalBytes > 0 ? copyedBytes / totalBytes : 1) * 100;
+    const progress = (totalBytes > 0 ? copiedBytes / totalBytes : 1) * 100;
     const fields = [
       { name: "Current Step", value: JobArchiveStep[state.step] },
       { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
       { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
-      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copyedBytes) * 1000) / avgSpeed) : "--" },
-      { name: "Copyed Files", value: copyedFiles },
-      { name: "Copyed Bytes", value: formatFilesize(copyedBytes) },
+      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copiedBytes) * 1000) / avgSpeed) : "--" },
+      { name: "Copied Files", value: copiedFiles },
+      { name: "Copied Bytes", value: formatFilesize(copiedBytes) },
       { name: "Submited Files", value: submitedFiles },
       { name: "Submited Bytes", value: formatFilesize(submitedBytes) },
       { name: "Total Files", value: totalFiles },
@@ -396,8 +396,8 @@ const RestoreCard = ({
     const totalFiles = state.tapes.reduce((count, tape) => count + tape.files.length, 0);
     let successFiles = 0,
       successBytes = 0,
-      copyedFiles = Number(display?.copyedFiles || 0n),
-      copyedBytes = Number(display?.copyedBytes || 0n),
+      copiedFiles = Number(display?.copiedFiles || 0n),
+      copiedBytes = Number(display?.copiedBytes || 0n),
       totalBytes = 0;
     for (const tape of state.tapes) {
       for (const file of tape.files) {
@@ -409,14 +409,14 @@ const RestoreCard = ({
         }
 
         if (file.status === CopyStatus.SUBMITED) {
-          copyedFiles++;
-          copyedBytes += Number(file.size);
+          copiedFiles++;
+          copiedBytes += Number(file.size);
         }
       }
     }
 
     const avgSpeed = (() => {
-      if (!display || !display.copyedBytes || !display.startTime) {
+      if (!display || !display.copiedBytes || !display.startTime) {
         return NaN;
       }
 
@@ -425,17 +425,17 @@ const RestoreCard = ({
         return NaN;
       }
 
-      return Number(display.copyedBytes) / duration;
+      return Number(display.copiedBytes) / duration;
     })();
 
-    const progress = (totalBytes > 0 ? copyedBytes / totalBytes : 1) * 100;
+    const progress = (totalBytes > 0 ? copiedBytes / totalBytes : 1) * 100;
     const fields = [
       { name: "Current Step", value: JobArchiveStep[state.step] },
       { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
       { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
-      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copyedBytes) * 1000) / avgSpeed) : "--" },
-      { name: "Copyed Files", value: copyedFiles },
-      { name: "Copyed Bytes", value: formatFilesize(copyedBytes) },
+      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copiedBytes) * 1000) / avgSpeed) : "--" },
+      { name: "Copied Files", value: copiedFiles },
+      { name: "Copied Bytes", value: formatFilesize(copiedBytes) },
       { name: "Success Files", value: successFiles },
       { name: "Success Bytes", value: formatFilesize(successBytes) },
       { name: "Total Files", value: totalFiles },

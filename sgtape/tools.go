@@ -22,10 +22,10 @@ func parseLogPage(buf []byte) (map[uint16][]byte, error) {
 		}
 
 		value := buf[i+LOG_PAGE_PARAM_OFFSET : end]
-		copyed := make([]byte, len(value))
-		copy(copyed, value)
+		copied := make([]byte, len(value))
+		copy(copied, value)
 
-		result[key] = copyed
+		result[key] = copied
 
 		i += valueLen + LOG_PAGE_PARAM_OFFSET
 	}

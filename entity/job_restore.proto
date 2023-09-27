@@ -59,8 +59,8 @@ message JobRestoreState {
 }
 
 message JobRestoreDisplay {
-    int64 copyed_bytes = 1;
-    int64 copyed_files = 2;
+    int64 copied_bytes = 1;
+    int64 copied_files = 2;
     int64 total_bytes = 3;
     int64 total_files = 4;
 
