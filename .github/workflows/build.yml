@@ -3,27 +3,23 @@
 name: Build
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-  # push:
-  #   branches: [ "main" ]
-  # pull_request:
-  #   branches: [ "main" ]
+  release:
+    types: [created]
 
 permissions:
   contents: write
   pull-requests: read
 
 jobs:
-
   build:
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v3
-
     - name: Set env
-      run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      run: echo "RELEASE_VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+
+    - uses: actions/checkout@v4
+      with:
+        ref: "${{ env.RELEASE_VERSION }}"
 
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -38,13 +34,23 @@ jobs:
     - name: Build
       run: ./build.sh
 
-    - uses: "marvinpinto/action-automatic-releases@latest"
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "${{ env.RELEASE_VERSION }}"
-        prerelease: false
-        title: "Automatic Build"
-        files: |
-          LICENSE
-          README.md
-          yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
+        upload_url: ${{ github.event.release.upload_url }} 
+        asset_path: ./yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
+        asset_name: yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
+        asset_content_type: application/x-tgz
+
+    # - uses: "marvinpinto/action-automatic-releases@latest"
+    #   with:
+    #     repo_token: "${{ secrets.GITHUB_TOKEN }}"
+    #     automatic_release_tag: "${{ env.RELEASE_VERSION }}"
+    #     prerelease: false
+    #     title: "Automatic Build"
+    #     files: |
+    #       LICENSE
+    #       README.md
+    #       yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
