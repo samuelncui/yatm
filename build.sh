@@ -14,6 +14,7 @@ cp ./cmd/httpd/yatm-httpd.service ./output/
 cp ./cmd/httpd/config.example.yaml ./output/
 cp ./LICENSE ./output/
 cp ./README.md ./output/
+echo "${RELEASE_VERSION}" > ./output/VERSION
 
 # docker run --rm -v $(pwd):/app golang:1.21 sh -c "cd /app && bash "
 # docker run --rm -v $(pwd):/app node:20-slim sh -c "cd /app && bash build_frontend.sh"
