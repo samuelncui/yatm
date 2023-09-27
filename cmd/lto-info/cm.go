@@ -133,7 +133,7 @@ func cmDensityFriendly(d int) (string, SpecsType) {
 		specs = SpecsType{true, 12000, 30000, 360, 900, 60*9 + 16, "2.5:1", true, true, 4, 4, 52, 32}
 	case 0x60: /* guessed, to check FIXME */
 		friendlyName = "LTO-9"
-		specs = SpecsType{true, 18000, 45000, 400, 1000, 60*12 + 30, "2.5:1", true, true, 4, 0, 0, 0} /* FIXME */
+		specs = SpecsType{true, 18000, 45000, 400, 1000, 60*12 + 30, "2.5:1", true, true, 4, 0, 0, 32} /* FIXME */
 	}
 	return friendlyName, specs
 }
