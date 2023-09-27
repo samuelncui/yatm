@@ -142,9 +142,15 @@ main() {
   mkdir -p /opt/yatm
   tar -xvzf ${GZIP_FILE} -C /opt/yatm
 
+  if [[ ! -f '/opt/yatm/config.yaml' ]]; then
+    cp /opt/yatm/config.example.yaml /opt/yatm/config.yaml
+    echo "Copy example config to /opt/yatm/config.yaml, you may edit it later"
+  fi
+
   systemctl daemon-reload
   systemctl enable /opt/yatm/yatm-httpd.service
-  systemctl restart yatm-httpd.service
+  systemctl stop yatm-httpd.service
+  systemctl start yatm-httpd.service
   systemctl status yatm-httpd.service
 }
 
