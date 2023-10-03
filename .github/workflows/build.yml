@@ -11,78 +11,40 @@ permissions:
   pull-requests: read
 
 jobs:
-  build-linux-amd64:
+  build:
     strategy:
       matrix:
-        # Include amd64 on all platforms. remove windows for mount mechanism
-        goos: [freebsd, openbsd, linux, darwin]
-        goarch: [amd64, 386]
-
-        exclude:
-          # Exclude i386 on darwin.
-          - goarch: 386
-            goos: darwin
         include:
-          # BEGIN Linux ARM 5 6 7
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+
+          - goos: freebsd
+            goarch: amd64
+
           - goos: linux
-            goarch: arm
-            goarm: 7
+            goarch: amd64
+            tested: '1'
           - goos: linux
-            goarch: arm
-            goarm: 6
+            goarch: 386
+          - goos: linux
+            goarch: arm64
           - goos: linux
             goarch: arm
             goarm: 5
-          # END Linux ARM 5 6 7
-          # BEGIN Windows ARM 7
-          # - goos: windows
-          #   goarch: arm
-          #   goarm: 7
-          # END Windows ARM 7
-          # BEGIN FreeBSD ARM 6 7
-          - goos: freebsd
+          - goos: linux
             goarch: arm
             goarm: 6
-          - goos: freebsd
+          - goos: linux
             goarch: arm
             goarm: 7
-          # END FreeBSD ARM 6 7
-          # BEGIN OpenBSD ARM 6 7
-          - goos: openbsd
-            goarch: arm
-            goarm: 6
-          - goos: openbsd
-            goarch: arm
-            goarm: 7
-          # END OpenBSD ARM 6 7
-          # BEGIN Other architectures
-          - goos: darwin
-            goarch: arm64
           - goos: linux
-            goarch: arm64
-          - goos: linux
-            goarch: riscv64
-          - goos: linux
-            goarch: loong64
+            goarch: s390x
+
+          # remove windows for mount mechanism
           # - goos: windows
-          #   goarch: arm64
-          - goos: android
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: arm64
-          # BEGIN MIPS
-          - goos: linux
-            goarch: mips64
-          - goos: linux
-            goarch: mips64le
-          - goos: linux
-            goarch: mipsle
-          - goos: linux
-            goarch: mips
-          # END MIPS
-          # END Other architectures
+          #   goarch: amd64
       fail-fast: false
 
     runs-on: ubuntu-latest
@@ -91,12 +53,17 @@ jobs:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
-      EXPERIMENTAL: ${{ matrix.goos == 'linux' && matrix.goarch == 'amd64' && '' || '-experimental' }}
+      OSARCH_TESTED: ${{ matrix.tested }}
       CGO_ENABLED: 0
 
     steps:
     - name: Set env
-      run: echo "TARGET_NAME='${{ env.GOOS }}-${{ env.GOARCH }}${{ env.GOARM }}${{ env.EXPERIMENTAL }}'" >> $GITHUB_ENV
+      run: |
+        if [[ $OSARCH_TESTED == '1' ]]; then
+          echo "TARGET_NAME=${{ env.GOOS }}-${{ env.GOARCH }}${{ env.GOARM }}" >> $GITHUB_ENV
+        else
+          echo "TARGET_NAME=${{ env.GOOS }}-${{ env.GOARCH }}${{ env.GOARM }}-experimental" >> $GITHUB_ENV
+        fi
 
     - uses: actions/checkout@v4
       with:
