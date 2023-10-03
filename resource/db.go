@@ -1,8 +1,9 @@
 package resource
 
 import (
+	"fmt"
+
 	"gorm.io/driver/mysql"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -12,10 +13,26 @@ func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
 	case "mysql":
 		dialector = mysql.Open(dsn)
 	case "sqlite":
-		dialector = sqlite.Open(dsn)
+		dialector = openSQLite(dsn)
 	}
 
-	return gorm.Open(dialector)
+	db, err := gorm.Open(dialector)
+	if err != nil {
+		return nil, fmt.Errorf("new db conn fail, dialect= '%s' dsn= '%s', %w", dialect, dsn, err)
+	}
+
+	switch dialect {
+	case "sqlite":
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("sqlite set config fail, dialect= '%s' dsn= '%s', %w", dialect, dsn, err)
+		}
+
+		// Prevent "database locked" errors
+		sqlDB.SetMaxOpenConns(1)
+	}
+
+	return db, nil
 }
 
 func SQLEscape(sql string) string {
@@ -29,22 +46,16 @@ func SQLEscape(sql string) string {
 		switch c {
 		case 0: /* Must be escaped for 'mysql' */
 			escape = '0'
-			break
 		case '\n': /* Must be escaped for logs */
 			escape = 'n'
-			break
 		case '\r':
 			escape = 'r'
-			break
 		case '\\':
 			escape = '\\'
-			break
 		case '\'':
 			escape = '\''
-			break
 		case '"': /* Better safe than sorry */
 			escape = '"'
-			break
 		case '\032': //十进制26,八进制32,十六进制1a, /* This gives problems on Win32 */
 			escape = 'Z'
 		}

@@ -11,11 +11,92 @@ permissions:
   pull-requests: read
 
 jobs:
-  build:
-    runs-on: ubuntu-20.04
+  build-linux-amd64:
+    strategy:
+      matrix:
+        # Include amd64 on all platforms. remove windows for mount mechanism
+        goos: [freebsd, openbsd, linux, darwin]
+        goarch: [amd64, 386]
+
+        exclude:
+          # Exclude i386 on darwin.
+          - goarch: 386
+            goos: darwin
+        include:
+          # BEGIN Linux ARM 5 6 7
+          - goos: linux
+            goarch: arm
+            goarm: 7
+          - goos: linux
+            goarch: arm
+            goarm: 6
+          - goos: linux
+            goarch: arm
+            goarm: 5
+          # END Linux ARM 5 6 7
+          # BEGIN Windows ARM 7
+          # - goos: windows
+          #   goarch: arm
+          #   goarm: 7
+          # END Windows ARM 7
+          # BEGIN FreeBSD ARM 6 7
+          - goos: freebsd
+            goarch: arm
+            goarm: 6
+          - goos: freebsd
+            goarch: arm
+            goarm: 7
+          # END FreeBSD ARM 6 7
+          # BEGIN OpenBSD ARM 6 7
+          - goos: openbsd
+            goarch: arm
+            goarm: 6
+          - goos: openbsd
+            goarch: arm
+            goarm: 7
+          # END OpenBSD ARM 6 7
+          # BEGIN Other architectures
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: riscv64
+          - goos: linux
+            goarch: loong64
+          # - goos: windows
+          #   goarch: arm64
+          - goos: android
+            goarch: arm64
+          - goos: freebsd
+            goarch: arm64
+          - goos: openbsd
+            goarch: arm64
+          # BEGIN MIPS
+          - goos: linux
+            goarch: mips64
+          - goos: linux
+            goarch: mips64le
+          - goos: linux
+            goarch: mipsle
+          - goos: linux
+            goarch: mips
+          # END MIPS
+          # END Other architectures
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.release.tag_name }}
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
+      EXPERIMENTAL: ${{ matrix.goos == 'linux' && matrix.goarch == 'amd64' && '' || '-experimental' }}
+      CGO_ENABLED: 0
+
     steps:
     - name: Set env
-      run: echo "RELEASE_VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+      run: echo "TARGET_NAME='${{ env.GOOS }}-${{ env.GOARCH }}${{ env.GOARM }}${{ env.EXPERIMENTAL }}'" >> $GITHUB_ENV
 
     - uses: actions/checkout@v4
       with:
@@ -24,7 +105,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version: '1.21'
 
     - name: Setup Node.js environment
       uses: actions/setup-node@v3.8.1
@@ -40,17 +121,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }} 
-        asset_path: ./yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
-        asset_name: yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
+        asset_path: ./yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
+        asset_name: yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
         asset_content_type: application/x-tgz
-
-    # - uses: "marvinpinto/action-automatic-releases@latest"
-    #   with:
-    #     repo_token: "${{ secrets.GITHUB_TOKEN }}"
-    #     automatic_release_tag: "${{ env.RELEASE_VERSION }}"
-    #     prerelease: false
-    #     title: "Automatic Build"
-    #     files: |
-    #       LICENSE
-    #       README.md
-    #       yatm-linux-amd64-${{ env.RELEASE_VERSION }}.tar.gz
