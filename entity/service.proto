@@ -18,6 +18,7 @@ service Service {
 
     rpc TapeList(TapeListRequest) returns (TapeListReply) {}
     rpc TapeDelete(TapeDeleteRequest) returns (TapeDeleteReply) {}
+    rpc TapeGetPositions(TapeGetPositionsRequest) returns (TapeGetPositionsReply) {}
 
     rpc JobList(JobListRequest) returns (JobListReply) {}
     rpc JobCreate(JobCreateRequest) returns (JobCreateReply) {}
@@ -31,6 +32,7 @@ service Service {
     rpc DeviceList(DeviceListRequest) returns (DeviceListReply) {}
 
     rpc LibraryExport(LibraryExportRequest) returns (LibraryExportReply) {}
+    rpc LibraryTrim(LibraryTrimRequest) returns (LibraryTrimReply) {}
 }
 
 message FileGetRequest {
@@ -96,6 +98,15 @@ message TapeDeleteRequest {
 }
 
 message TapeDeleteReply {
+}
+
+message TapeGetPositionsRequest {
+    int64 id = 1;
+    string directory = 2;
+}
+
+message TapeGetPositionsReply {
+    repeated position.Position positions = 1;
 }
 
 message JobListRequest {
@@ -176,4 +187,12 @@ message LibraryExportRequest {
 
 message LibraryExportReply {
     bytes json = 1;
+}
+
+message LibraryTrimRequest {
+    bool trim_position = 1;
+    bool trim_file = 2;
+}
+
+message LibraryTrimReply {
 }

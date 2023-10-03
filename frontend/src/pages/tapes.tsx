@@ -6,48 +6,78 @@ import Box from "@mui/material/Box";
 import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@aperturerobotics/chonky";
 import { ChonkyActions, ChonkyFileActionData, FileData } from "@aperturerobotics/chonky";
 
-import { cli, Root } from "../api";
-import { TapeListRequest, Source, Tape } from "../entity";
+import { cli, Root, convertTapes, convertPositions } from "../api";
+import { TapeListRequest, Source, Tape, Position } from "../entity";
 
 export const TapesType = "tapes";
-
-const convertTapes = (tapes: Array<Tape>): FileData[] => {
-  return tapes.map((tape) => {
-    // const isDir = (file.mode & ModeDir) > 0;
-
-    return {
-      id: `${tape.id}`,
-      name: tape.barcode,
-      ext: "",
-      isDir: true,
-      isHidden: false,
-      openable: false,
-      selectable: true,
-      draggable: true,
-      droppable: false,
-      size: 0,
-      modDate: moment.unix(Number(tape.createTime)).toDate(),
-    };
-  });
-};
 
 const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
   const [folderChain, setFolderChan] = useState<FileArray>([Root]);
+  const current = useMemo(() => {
+    if (folderChain.length === 0) {
+      return Root;
+    }
 
-  const openFolder = useCallback(async (id: string) => {
-    const reply = await cli.tapeList({ param: { oneofKind: "list", list: { offset: 0n, limit: 1000n } } }).response;
+    const last = folderChain.slice(-1)[0];
+    if (!last) {
+      return Root;
+    }
 
-    setFiles(convertTapes(reply.tapes));
-    setFolderChan([Root]);
-  }, []);
+    return last;
+  }, [folderChain]);
+
+  const openFolder = useCallback(
+    async (target: FileData) => {
+      if (target.id === Root.id) {
+        const reply = await cli.tapeList({ param: { oneofKind: "list", list: { offset: 0n, limit: 1000n } } }).response;
+
+        setFiles(convertTapes(reply.tapes));
+        setFolderChan([Root]);
+        return;
+      }
+
+      const id = target.id;
+      var tapeIDStr = id;
+      var dir = "";
+
+      const splitIdx = tapeIDStr.indexOf(":");
+      if (splitIdx >= 0) {
+        dir = tapeIDStr.slice(splitIdx + 1);
+        tapeIDStr = tapeIDStr.slice(0, splitIdx);
+      }
+
+      const reply = await cli.tapeGetPositions({ id: BigInt(tapeIDStr), directory: dir }).response;
+      const files = convertPositions(reply.positions);
+      console.log("refresh jobs list, target= ", target, "tape_id= ", tapeIDStr, "dir= ", dir, "reply= ", reply, "files= ", files);
+      setFiles(files);
+
+      const targetFolderChain = [];
+      for (const folder of folderChain) {
+        if (!folder) {
+          continue;
+        }
+        if (folder.id === target.id) {
+          targetFolderChain.push(folder);
+          setFolderChan(targetFolderChain);
+          return;
+        }
+
+        targetFolderChain.push(folder);
+      }
+
+      targetFolderChain.push(target);
+      setFolderChan(targetFolderChain);
+      return;
+    },
+    [folderChain],
+  );
   useEffect(() => {
-    openFolder(Root.id);
+    openFolder(Root);
   }, []);
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
-      console.log("source", data);
       switch (data.id) {
         case ChonkyActions.OpenFiles.id:
           (async () => {
@@ -59,7 +89,7 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
             }
 
             if (fileToOpen.isDir) {
-              await openFolder(fileToOpen.id);
+              await openFolder(fileToOpen);
               return;
             }
           })();
@@ -67,7 +97,12 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
           return;
         case ChonkyActions.DeleteFiles.id:
           (async () => {
-            await cli.tapeDelete({ ids: data.state.selectedFiles.map((file) => BigInt(file.id)) });
+            const targetTapes = data.state.selectedFiles;
+            if (!confirm(`Following tapes will be deleted, may cause data loss. Are you sure?\n${targetTapes.map((tape) => tape.name).join(", ")}`)) {
+              return;
+            }
+            await cli.tapeDelete({ ids: targetTapes.filter((file) => file.isTape).map((file) => BigInt(file.id)) });
+            await openFolder(current);
           })();
           return;
       }

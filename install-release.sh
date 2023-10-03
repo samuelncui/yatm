@@ -138,13 +138,13 @@ main() {
     exit 1
   fi
 
-  mkdir -p /opt/ltfs
   mkdir -p /opt/yatm
   tar -xvzf ${GZIP_FILE} -C /opt/yatm
 
   if [[ ! -f '/opt/yatm/config.yaml' ]]; then
-    cp /opt/yatm/config.example.yaml /opt/yatm/config.yaml
-    echo "Copy example config to /opt/yatm/config.yaml, you may edit it later"
+    cp /opt/yatm/config.example.yaml /opt/yatm/config.yaml;
+    vim /opt/yatm/config.yaml;
+    echo "Copy example config to /opt/yatm/config.yaml, you may edit it later";
   fi
 
   systemctl daemon-reload

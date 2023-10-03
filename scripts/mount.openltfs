@@ -4,7 +4,7 @@ set -ex;
 CURDIR=$(cd $(dirname $0); pwd);
 SG_DEVICE=`${CURDIR}/get_device`
 
-ltfs -o devname=${SG_DEVICE} -o noatime -o sync_type=unmount -o work_directory=/opt/yatm/captured_indices -o capture_index -o min_pool_size=256 -o max_pool_size=1024 -o eject -s ${MOUNT_POINT}
+ltfs -o devname=${SG_DEVICE} -o noatime -o sync_type=unmount -o work_directory=/opt/yatm/captured_indices -o capture_index=/opt/yatm/captured_indices -o min_pool_size=256 -o max_pool_size=1024 -o eject -s ${MOUNT_POINT}
 sleep 3
 
 MOUNT_POINT_TARGET=`df ${MOUNT_POINT} --output=target | sed -n '1!p'`

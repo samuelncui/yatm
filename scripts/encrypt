@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -ex;
 
+mt -f ${DEVICE} load
 sleep 5
 
 for i in {1..60}; do

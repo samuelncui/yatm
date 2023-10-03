@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -ex;
 
-SG_DEVICE=`sg_map | grep ${DEVICE} | awk '{print $1}'`
+CURDIR=$(cd $(dirname $0); pwd);
+SG_DEVICE=`${CURDIR}/get_device`
+
 mkltfs -f -d ${SG_DEVICE} -s ${TAPE_BARCODE} -n ${TAPE_NAME}
 sleep 3

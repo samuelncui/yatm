@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e;
+
+DEVICE=`readlink -f ${DEVICE}`
+REGEXP='/dev/n?st([0-9]+)[alm]?'
+
+if [[ ! $DEVICE =~ $REGEXP ]]; then
+    echo "'$DEVICE' doesn't match" >&2
+    exit 1
+fi
+
+NUM="${BASH_REMATCH[1]}"
+TRIES=("/dev/nst${NUM}" "/dev/st${NUM}")
+for TRY in ${TRIES[@]}; do
+    SG_DEVICE=`sg_map | grep ${TRY} || echo ''`;
+
+    if [[ $SG_DEVICE != "" ]]; then
+        echo $SG_DEVICE | awk '{print $1}'
+        exit 0;
+    fi
+done
+
+echo "'$DEVICE' not found" >&2
+exit 1

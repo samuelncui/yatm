@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/modern-go/reflect2"
 	"github.com/samber/lo"
 	"github.com/samuelncui/yatm/entity"
@@ -92,6 +93,90 @@ func (l *Library) Import(ctx context.Context, buf []byte) error {
 		}
 		if r := l.db.WithContext(ctx).CreateInBatches(*results.Positions, 100); r.Error != nil {
 			return fmt.Errorf("insert position fail, %w", r.Error)
+		}
+	}
+
+	return nil
+}
+
+func (l *Library) Trim(ctx context.Context, position, file bool) error {
+	if !position {
+		return nil
+	}
+
+	var current int64
+	for {
+		positions := make([]*Position, 0, batchSize)
+		if r := l.db.WithContext(ctx).Where("id > ?", current).Order("id ASC").Limit(batchSize).Find(&positions); r.Error != nil {
+			return fmt.Errorf("scan position fail, err= %w", r.Error)
+		}
+		if len(positions) == 0 {
+			break
+		}
+		current = positions[len(positions)-1].ID
+
+		tapeIDs := mapset.NewThreadUnsafeSetWithSize[int64](1)
+		for _, posi := range positions {
+			tapeIDs.Add(posi.TapeID)
+		}
+
+		tapes, err := l.MGetTape(ctx, tapeIDs.ToSlice()...)
+		if err != nil {
+			return fmt.Errorf("mget tape fail, %w", err)
+		}
+
+		needDelete := make([]int64, 0)
+		for _, posi := range positions {
+			if tape, has := tapes[posi.TapeID]; has && tape != nil {
+				continue
+			}
+
+			needDelete = append(needDelete, posi.ID)
+		}
+		if len(needDelete) == 0 {
+			continue
+		}
+
+		if err := l.DeletePositions(ctx, needDelete...); err != nil {
+			return fmt.Errorf("delete position fail, %w", err)
+		}
+	}
+
+	if !file {
+		return nil
+	}
+
+	current = 0
+	for {
+		files := make([]*File, 0, batchSize)
+		if r := l.db.WithContext(ctx).Where("id > ?", current).Order("id ASC").Limit(batchSize).Find(&files); r.Error != nil {
+			return fmt.Errorf("scan file fail, err= %w", r.Error)
+		}
+		if len(files) == 0 {
+			break
+		}
+		current = files[len(files)-1].ID
+
+		fileIDs := lo.Map(files, func(f *File, _ int) int64 { return f.ID })
+		positions, err := l.MGetPositionByFileID(ctx, fileIDs...)
+		if err != nil {
+			return fmt.Errorf("mget position by file id fail, %w", err)
+		}
+
+		needDelete := make([]int64, 0)
+		for _, file := range files {
+			if posis, has := positions[file.ID]; has && len(posis) > 0 {
+				continue
+			}
+
+			needDelete = append(needDelete, file.ID)
+		}
+		if len(needDelete) == 0 {
+			continue
+		}
+
+		if r := l.db.WithContext(ctx).Where("id IN (?)", needDelete).Delete(ModelFile); r.Error != nil {
+			return fmt.Errorf("delete files fail, err= %w", r.Error)
 		}
 	}
 

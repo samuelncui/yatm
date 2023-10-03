@@ -34,7 +34,8 @@ import { TreeView, TreeItem } from "@mui/x-tree-view";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
-import { cli, sleep, fileBase } from "../api";
+import { cli, fileBase } from "../api";
+import { sleep } from "../tools";
 import { Job, JobDisplay, JobListRequest, JobNextRequest, JobStatus, CopyStatus, LibraryEntityType, JobDeleteRequest } from "../entity";
 
 import { JobArchiveCopyingParam, JobArchiveStep, JobArchiveDisplay, JobArchiveState } from "../entity";
@@ -54,8 +55,20 @@ export const JobsBrowser = () => {
   const [jobs, setJobs] = useState<DisplayableJob[] | null>(null);
   const refresh = useCallback(async () => {
     const jobReplys = await cli.jobList(JobListRequest.create({ param: { oneofKind: "list", list: {} } })).response;
-    const displayReplys = await Promise.all(jobReplys.jobs.map((job) => cli.jobDisplay({ id: job.id }).response));
-    const targets = jobReplys.jobs.map((job, idx) => ({ ...job, ...displayReplys[idx].display }));
+    const displays = new Map<BigInt, JobDisplay>();
+    for (const reply of await Promise.all(
+      jobReplys.jobs
+        .filter((job) => job.status === JobStatus.PROCESSING)
+        .map((job) => cli.jobDisplay({ id: job.id }).response.then((reply) => ({ ...reply, jobID: job.id }))),
+    )) {
+      if (!reply.display) {
+        continue;
+      }
+
+      displays.set(reply.jobID, reply.display);
+    }
+
+    const targets = jobReplys.jobs.map((job) => ({ ...job, ...displays.get(job.id) }));
     console.log("refresh jobs list, ", targets);
     setJobs(targets);
   }, [setJobs]);

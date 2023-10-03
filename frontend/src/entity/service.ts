@@ -182,6 +182,28 @@ export interface TapeDeleteRequest {
 export interface TapeDeleteReply {
 }
 /**
+ * @generated from protobuf message service.TapeGetPositionsRequest
+ */
+export interface TapeGetPositionsRequest {
+    /**
+     * @generated from protobuf field: int64 id = 1;
+     */
+    id: bigint;
+    /**
+     * @generated from protobuf field: string directory = 2;
+     */
+    directory: string;
+}
+/**
+ * @generated from protobuf message service.TapeGetPositionsReply
+ */
+export interface TapeGetPositionsReply {
+    /**
+     * @generated from protobuf field: repeated position.Position positions = 1;
+     */
+    positions: Position[];
+}
+/**
  * @generated from protobuf message service.JobListRequest
  */
 export interface JobListRequest {
@@ -373,6 +395,24 @@ export interface LibraryExportReply {
      * @generated from protobuf field: bytes json = 1;
      */
     json: Uint8Array;
+}
+/**
+ * @generated from protobuf message service.LibraryTrimRequest
+ */
+export interface LibraryTrimRequest {
+    /**
+     * @generated from protobuf field: bool trim_position = 1;
+     */
+    trimPosition: boolean;
+    /**
+     * @generated from protobuf field: bool trim_file = 2;
+     */
+    trimFile: boolean;
+}
+/**
+ * @generated from protobuf message service.LibraryTrimReply
+ */
+export interface LibraryTrimReply {
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class FileGetRequest$Type extends MessageType<FileGetRequest> {
@@ -1102,6 +1142,107 @@ class TapeDeleteReply$Type extends MessageType<TapeDeleteReply> {
  * @generated MessageType for protobuf message service.TapeDeleteReply
  */
 export const TapeDeleteReply = new TapeDeleteReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeGetPositionsRequest$Type extends MessageType<TapeGetPositionsRequest> {
+    constructor() {
+        super("service.TapeGetPositionsRequest", [
+            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "directory", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeGetPositionsRequest>): TapeGetPositionsRequest {
+        const message = { id: 0n, directory: "" };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeGetPositionsRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeGetPositionsRequest): TapeGetPositionsRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int64 id */ 1:
+                    message.id = reader.int64().toBigInt();
+                    break;
+                case /* string directory */ 2:
+                    message.directory = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeGetPositionsRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 id = 1; */
+        if (message.id !== 0n)
+            writer.tag(1, WireType.Varint).int64(message.id);
+        /* string directory = 2; */
+        if (message.directory !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.directory);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.TapeGetPositionsRequest
+ */
+export const TapeGetPositionsRequest = new TapeGetPositionsRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeGetPositionsReply$Type extends MessageType<TapeGetPositionsReply> {
+    constructor() {
+        super("service.TapeGetPositionsReply", [
+            { no: 1, name: "positions", kind: "message", repeat: 1 /*RepeatType.PACKED*/, T: () => Position }
+        ]);
+    }
+    create(value?: PartialMessage<TapeGetPositionsReply>): TapeGetPositionsReply {
+        const message = { positions: [] };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<TapeGetPositionsReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeGetPositionsReply): TapeGetPositionsReply {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated position.Position positions */ 1:
+                    message.positions.push(Position.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeGetPositionsReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated position.Position positions = 1; */
+        for (let i = 0; i < message.positions.length; i++)
+            Position.internalBinaryWrite(message.positions[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.TapeGetPositionsReply
+ */
+export const TapeGetPositionsReply = new TapeGetPositionsReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobListRequest$Type extends MessageType<JobListRequest> {
     constructor() {
@@ -2018,6 +2159,86 @@ class LibraryExportReply$Type extends MessageType<LibraryExportReply> {
  * @generated MessageType for protobuf message service.LibraryExportReply
  */
 export const LibraryExportReply = new LibraryExportReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class LibraryTrimRequest$Type extends MessageType<LibraryTrimRequest> {
+    constructor() {
+        super("service.LibraryTrimRequest", [
+            { no: 1, name: "trim_position", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 2, name: "trim_file", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+        ]);
+    }
+    create(value?: PartialMessage<LibraryTrimRequest>): LibraryTrimRequest {
+        const message = { trimPosition: false, trimFile: false };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<LibraryTrimRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LibraryTrimRequest): LibraryTrimRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* bool trim_position */ 1:
+                    message.trimPosition = reader.bool();
+                    break;
+                case /* bool trim_file */ 2:
+                    message.trimFile = reader.bool();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: LibraryTrimRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* bool trim_position = 1; */
+        if (message.trimPosition !== false)
+            writer.tag(1, WireType.Varint).bool(message.trimPosition);
+        /* bool trim_file = 2; */
+        if (message.trimFile !== false)
+            writer.tag(2, WireType.Varint).bool(message.trimFile);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.LibraryTrimRequest
+ */
+export const LibraryTrimRequest = new LibraryTrimRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class LibraryTrimReply$Type extends MessageType<LibraryTrimReply> {
+    constructor() {
+        super("service.LibraryTrimReply", []);
+    }
+    create(value?: PartialMessage<LibraryTrimReply>): LibraryTrimReply {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<LibraryTrimReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LibraryTrimReply): LibraryTrimReply {
+        return target ?? this.create();
+    }
+    internalBinaryWrite(message: LibraryTrimReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.LibraryTrimReply
+ */
+export const LibraryTrimReply = new LibraryTrimReply$Type();
 /**
  * @generated ServiceType for protobuf service service.Service
  */
@@ -2029,6 +2250,7 @@ export const Service = new ServiceType("service.Service", [
     { name: "FileListParents", options: {}, I: FileListParentsRequest, O: FileListParentsReply },
     { name: "TapeList", options: {}, I: TapeListRequest, O: TapeListReply },
     { name: "TapeDelete", options: {}, I: TapeDeleteRequest, O: TapeDeleteReply },
+    { name: "TapeGetPositions", options: {}, I: TapeGetPositionsRequest, O: TapeGetPositionsReply },
     { name: "JobList", options: {}, I: JobListRequest, O: JobListReply },
     { name: "JobCreate", options: {}, I: JobCreateRequest, O: JobCreateReply },
     { name: "JobDelete", options: {}, I: JobDeleteRequest, O: JobDeleteReply },
@@ -2037,5 +2259,6 @@ export const Service = new ServiceType("service.Service", [
     { name: "JobGetLog", options: {}, I: JobGetLogRequest, O: JobGetLogReply },
     { name: "SourceList", options: {}, I: SourceListRequest, O: SourceListReply },
     { name: "DeviceList", options: {}, I: DeviceListRequest, O: DeviceListReply },
-    { name: "LibraryExport", options: {}, I: LibraryExportRequest, O: LibraryExportReply }
+    { name: "LibraryExport", options: {}, I: LibraryExportRequest, O: LibraryExportReply },
+    { name: "LibraryTrim", options: {}, I: LibraryTrimRequest, O: LibraryTrimReply }
 ]);

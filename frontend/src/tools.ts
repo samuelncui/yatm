@@ -22,3 +22,8 @@ export const download = (buf: Uint8Array, filename: string, contentType: string)
   link.download = filename;
   link.click();
 };
+
+export const sleep = (ms: number): Promise<null> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });

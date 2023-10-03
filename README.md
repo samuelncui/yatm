@@ -43,9 +43,7 @@ Or you can download binary from `releases`, and run the following shell commands
 
 ```shell
 # If you put this to other path, you need to change scripts and systemd service file.
-mkdir -p /opt/ltfs
 mkdir -p /opt/yatm
-
 tar -xvzf yatm-linux-amd64-${RELEASE_VERSION}.tar.gz -C /opt/yatm
 
 cp /opt/yatm/config.example.yaml /opt/yatm/config.yaml

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex;
 
-# SG_DEVICE=`sg_map | grep ${DEVICE} | awk '{print $1}'`
-BARCODE=`./yatm-lto-info -f /dev/nst0 | grep 'Barcode' | awk '{print $3}'`
+mt -f ${DEVICE} load
+BARCODE=`./yatm-lto-info -f ${DEVICE} | grep 'Barcode' | awk '{print $3}'`
 echo "{\"barcode\": \"$BARCODE\"}" > $OUT
 sleep 3

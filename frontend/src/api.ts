@@ -1,6 +1,6 @@
 import { FileData } from "@aperturerobotics/chonky";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
-import { ServiceClient, File, SourceFile } from "./entity";
+import { ServiceClient, File, SourceFile, Tape, Position } from "./entity";
 
 import moment from "moment";
 
@@ -27,11 +27,6 @@ export const Root: FileData = {
   draggable: true,
   droppable: true,
 };
-
-export const sleep = (ms: number): Promise<null> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 const transport = new GrpcWebFetchTransport({
   baseUrl: apiBase,
@@ -79,6 +74,56 @@ export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
       modDate: moment.unix(Number(file.modTime)).toDate(),
     };
   });
+}
+
+export function convertTapes(tapes: Array<Tape>): FileData[] {
+  return tapes.map((tape) => {
+    // const isDir = (file.mode & ModeDir) > 0;
+
+    return {
+      id: `${tape.id}`,
+      name: tape.barcode,
+      ext: "",
+      isDir: true,
+      isHidden: false,
+      openable: true,
+      selectable: true,
+      draggable: false,
+      droppable: false,
+      size: 0,
+      modDate: moment.unix(Number(tape.createTime)).toDate(),
+      isTape: true,
+    };
+  });
+}
+
+export function convertPositions(positions: Array<Position>): FileData[] {
+  return positions.map((posi) => {
+    const isDir = (posi.mode & ModeDir) > 0;
+    const name = isDir ? splitPath(posi.path.slice(0, -1)) : splitPath(posi.path);
+
+    return {
+      id: `${posi.tapeId}:${posi.path}`,
+      name: name,
+      ext: extname(name),
+      isDir: isDir,
+      isHidden: false,
+      openable: isDir,
+      selectable: false,
+      draggable: false,
+      droppable: false,
+      size: Number(posi.size),
+      modDate: moment.unix(Number(posi.writeTime)).toDate(),
+    };
+  });
+}
+
+function splitPath(filename: string): string {
+  const idx = filename.lastIndexOf("/");
+  if (idx < 0) {
+    return filename;
+  }
+  return filename.slice(idx + 1);
 }
 
 function extname(filename: string): string {

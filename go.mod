@@ -18,7 +18,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
 	github.com/samber/lo v1.38.1
-	github.com/samuelncui/acp v0.0.0-20230927193628-457f88d5268d
+	github.com/samuelncui/acp v0.0.0-20230929123032-b9f8584ad50c
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.30.0

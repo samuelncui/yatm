@@ -12,7 +12,7 @@ import { TapesBrowser, TapesType } from "./pages/tapes";
 import { JobsBrowser, JobsType } from "./pages/jobs";
 
 import "./app.less";
-import { sleep } from "./api";
+import { sleep } from "./tools";
 import { Nullable } from "tsdef";
 import { Job } from "./entity";
 import { useEffect } from "react";
@@ -46,7 +46,7 @@ const App = () => {
     (_: ChangeEvent<{}>, newValue: string) => {
       navigate("/" + newValue);
     },
-    [navigate]
+    [navigate],
   );
 
   return (

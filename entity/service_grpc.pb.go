@@ -29,6 +29,7 @@ type ServiceClient interface {
 	FileListParents(ctx context.Context, in *FileListParentsRequest, opts ...grpc.CallOption) (*FileListParentsReply, error)
 	TapeList(ctx context.Context, in *TapeListRequest, opts ...grpc.CallOption) (*TapeListReply, error)
 	TapeDelete(ctx context.Context, in *TapeDeleteRequest, opts ...grpc.CallOption) (*TapeDeleteReply, error)
+	TapeGetPositions(ctx context.Context, in *TapeGetPositionsRequest, opts ...grpc.CallOption) (*TapeGetPositionsReply, error)
 	JobList(ctx context.Context, in *JobListRequest, opts ...grpc.CallOption) (*JobListReply, error)
 	JobCreate(ctx context.Context, in *JobCreateRequest, opts ...grpc.CallOption) (*JobCreateReply, error)
 	JobDelete(ctx context.Context, in *JobDeleteRequest, opts ...grpc.CallOption) (*JobDeleteReply, error)
@@ -38,6 +39,7 @@ type ServiceClient interface {
 	SourceList(ctx context.Context, in *SourceListRequest, opts ...grpc.CallOption) (*SourceListReply, error)
 	DeviceList(ctx context.Context, in *DeviceListRequest, opts ...grpc.CallOption) (*DeviceListReply, error)
 	LibraryExport(ctx context.Context, in *LibraryExportRequest, opts ...grpc.CallOption) (*LibraryExportReply, error)
+	LibraryTrim(ctx context.Context, in *LibraryTrimRequest, opts ...grpc.CallOption) (*LibraryTrimReply, error)
 }
 
 type serviceClient struct {
@@ -105,6 +107,15 @@ func (c *serviceClient) TapeList(ctx context.Context, in *TapeListRequest, opts 
 func (c *serviceClient) TapeDelete(ctx context.Context, in *TapeDeleteRequest, opts ...grpc.CallOption) (*TapeDeleteReply, error) {
 	out := new(TapeDeleteReply)
 	err := c.cc.Invoke(ctx, "/service.Service/TapeDelete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceClient) TapeGetPositions(ctx context.Context, in *TapeGetPositionsRequest, opts ...grpc.CallOption) (*TapeGetPositionsReply, error) {
+	out := new(TapeGetPositionsReply)
+	err := c.cc.Invoke(ctx, "/service.Service/TapeGetPositions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +203,15 @@ func (c *serviceClient) LibraryExport(ctx context.Context, in *LibraryExportRequ
 	return out, nil
 }
 
+func (c *serviceClient) LibraryTrim(ctx context.Context, in *LibraryTrimRequest, opts ...grpc.CallOption) (*LibraryTrimReply, error) {
+	out := new(LibraryTrimReply)
+	err := c.cc.Invoke(ctx, "/service.Service/LibraryTrim", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ServiceServer is the server API for Service service.
 // All implementations must embed UnimplementedServiceServer
 // for forward compatibility
@@ -203,6 +223,7 @@ type ServiceServer interface {
 	FileListParents(context.Context, *FileListParentsRequest) (*FileListParentsReply, error)
 	TapeList(context.Context, *TapeListRequest) (*TapeListReply, error)
 	TapeDelete(context.Context, *TapeDeleteRequest) (*TapeDeleteReply, error)
+	TapeGetPositions(context.Context, *TapeGetPositionsRequest) (*TapeGetPositionsReply, error)
 	JobList(context.Context, *JobListRequest) (*JobListReply, error)
 	JobCreate(context.Context, *JobCreateRequest) (*JobCreateReply, error)
 	JobDelete(context.Context, *JobDeleteRequest) (*JobDeleteReply, error)
@@ -212,6 +233,7 @@ type ServiceServer interface {
 	SourceList(context.Context, *SourceListRequest) (*SourceListReply, error)
 	DeviceList(context.Context, *DeviceListRequest) (*DeviceListReply, error)
 	LibraryExport(context.Context, *LibraryExportRequest) (*LibraryExportReply, error)
+	LibraryTrim(context.Context, *LibraryTrimRequest) (*LibraryTrimReply, error)
 	mustEmbedUnimplementedServiceServer()
 }
 
@@ -240,6 +262,9 @@ func (UnimplementedServiceServer) TapeList(context.Context, *TapeListRequest) (*
 func (UnimplementedServiceServer) TapeDelete(context.Context, *TapeDeleteRequest) (*TapeDeleteReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TapeDelete not implemented")
 }
+func (UnimplementedServiceServer) TapeGetPositions(context.Context, *TapeGetPositionsRequest) (*TapeGetPositionsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TapeGetPositions not implemented")
+}
 func (UnimplementedServiceServer) JobList(context.Context, *JobListRequest) (*JobListReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobList not implemented")
 }
@@ -266,6 +291,9 @@ func (UnimplementedServiceServer) DeviceList(context.Context, *DeviceListRequest
 }
 func (UnimplementedServiceServer) LibraryExport(context.Context, *LibraryExportRequest) (*LibraryExportReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LibraryExport not implemented")
+}
+func (UnimplementedServiceServer) LibraryTrim(context.Context, *LibraryTrimRequest) (*LibraryTrimReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LibraryTrim not implemented")
 }
 func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
 
@@ -402,6 +430,24 @@ func _Service_TapeDelete_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ServiceServer).TapeDelete(ctx, req.(*TapeDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Service_TapeGetPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TapeGetPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).TapeGetPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/service.Service/TapeGetPositions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).TapeGetPositions(ctx, req.(*TapeGetPositionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -568,6 +614,24 @@ func _Service_LibraryExport_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_LibraryTrim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LibraryTrimRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).LibraryTrim(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/service.Service/LibraryTrim",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).LibraryTrim(ctx, req.(*LibraryTrimRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Service_ServiceDesc is the grpc.ServiceDesc for Service service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -604,6 +668,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_TapeDelete_Handler,
 		},
 		{
+			MethodName: "TapeGetPositions",
+			Handler:    _Service_TapeGetPositions_Handler,
+		},
+		{
 			MethodName: "JobList",
 			Handler:    _Service_JobList_Handler,
 		},
@@ -638,6 +706,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LibraryExport",
 			Handler:    _Service_LibraryExport_Handler,
+		},
+		{
+			MethodName: "LibraryTrim",
+			Handler:    _Service_LibraryTrim_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
