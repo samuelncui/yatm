@@ -13,7 +13,7 @@ database:
 # usable tape drivers, must have sg device mapping.
 # use `sg_map` command (in sg3_utils package) to get corresponding device with sg device mapping.
 tape_devices:
-  - /dev/nst0
+  - /dev/tape/by-id/scsi-HUJ0000000
 
 # working path settings
 paths:
