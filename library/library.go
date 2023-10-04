@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"sort"
+	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/modern-go/reflect2"
@@ -157,26 +160,56 @@ func (l *Library) Trim(ctx context.Context, position, file bool) error {
 		}
 		current = files[len(files)-1].ID
 
-		fileIDs := lo.Map(files, func(f *File, _ int) int64 { return f.ID })
+		fileIDs := lo.Map(
+			lo.Filter(files, func(f *File, _ int) bool { return fs.FileMode(f.Mode).IsRegular() }),
+			func(f *File, _ int) int64 { return f.ID },
+		)
 		positions, err := l.MGetPositionByFileID(ctx, fileIDs...)
 		if err != nil {
 			return fmt.Errorf("mget position by file id fail, %w", err)
 		}
 
-		needDelete := make([]int64, 0)
-		for _, file := range files {
-			if posis, has := positions[file.ID]; has && len(posis) > 0 {
+		needDeleteFileIDs := make([]int64, 0)
+		needDeletePositionIDs := make([]int64, 0)
+		for _, fileID := range fileIDs {
+			posis, has := positions[fileID]
+			if !has || len(posis) == 0 {
+				needDeleteFileIDs = append(needDeleteFileIDs, fileID)
 				continue
 			}
 
-			needDelete = append(needDelete, file.ID)
-		}
-		if len(needDelete) == 0 {
-			continue
-		}
+			if len(posis) == 1 {
+				continue
+			}
 
-		if r := l.db.WithContext(ctx).Where("id IN (?)", needDelete).Delete(ModelFile); r.Error != nil {
-			return fmt.Errorf("delete files fail, err= %w", r.Error)
+			sort.Slice(posis, func(i int, j int) bool {
+				ii, jj := posis[i], posis[j]
+				if ii.TapeID != jj.TapeID {
+					return ii.TapeID < jj.TapeID
+				}
+				if ii.Path != jj.Path {
+					return strings.ReplaceAll(ii.Path, "/", "\x00") < strings.ReplaceAll(jj.Path, "/", "\x00")
+				}
+				return ii.WriteTime.After(jj.WriteTime)
+			})
+			for idx, posi := range posis {
+				if idx == 0 {
+					continue
+				}
+				if posis[idx-1].TapeID == posi.TapeID && posis[idx-1].Path == posi.Path {
+					needDeletePositionIDs = append(needDeletePositionIDs, posi.ID)
+				}
+			}
+		}
+		if len(needDeleteFileIDs) > 0 {
+			if r := l.db.WithContext(ctx).Where("id IN (?)", needDeleteFileIDs).Delete(ModelFile); r.Error != nil {
+				return fmt.Errorf("delete files fail, err= %w", r.Error)
+			}
+		}
+		if len(needDeletePositionIDs) > 0 {
+			if r := l.db.WithContext(ctx).Where("id IN (?)", needDeletePositionIDs).Delete(ModelPosition); r.Error != nil {
+				return fmt.Errorf("delete positions fail, err= %w", r.Error)
+			}
 		}
 	}
 

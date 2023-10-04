@@ -10,8 +10,8 @@
     "gen-proto": "protoc --ts_out ./src/entity --proto_path ../entity/ `ls ../entity/*.proto` && ./src/entity/gen_index.sh"
   },
   "dependencies": {
-    "@aperturerobotics/chonky": "^0.2.6",
-    "@aperturerobotics/chonky-icon-fontawesome": "^0.2.2",
+    "@samuelncui/chonky": "^0.2.7",
+    "@samuelncui/chonky-icon-fontawesome": "^0.2.7",
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
     "@fortawesome/fontawesome-svg-core": "^1.2.32",

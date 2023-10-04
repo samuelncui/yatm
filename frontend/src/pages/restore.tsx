@@ -2,22 +2,24 @@ import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@aperturerobotics/chonky";
-import { ChonkyActions, ChonkyFileActionData, FileData } from "@aperturerobotics/chonky";
+import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@samuelncui/chonky";
+import { ChonkyActions, ChonkyFileActionData, FileData } from "@samuelncui/chonky";
+
+import { ToobarInfo } from "../components/toolbarInfo";
 
 import { cli, convertFiles } from "../api";
 import { Root } from "../api";
 import { AddFileAction, RefreshListAction, CreateRestoreJobAction } from "../actions";
 import { JobCreateRequest, JobRestoreParam, Source } from "../entity";
 
-const useRestoreSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
+const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
   const [folderChain, setFolderChan] = useState<FileArray>([Root]);
 
   const openFolder = useCallback(async (id: string) => {
     const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id) }).response, cli.fileListParents({ id: BigInt(id) }).response]);
 
-    setFiles(convertFiles(file.children));
+    setFiles(convertFiles(file.children).map((file) => ({ ...file, droppable: false })));
     setFolderChan([Root, ...convertFiles(folderChain.parents)]);
   }, []);
   useEffect(() => {
@@ -26,7 +28,6 @@ const useRestoreSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
-      console.log("source", data);
       switch (data.id) {
         case ChonkyActions.OpenFiles.id:
           (async () => {
@@ -45,8 +46,8 @@ const useRestoreSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
 
           return;
         case ChonkyActions.EndDragNDrop.id:
-          (() => {
-            if (!source.current) {
+          (async () => {
+            if (!target.current) {
               return;
             }
 
@@ -54,15 +55,22 @@ const useRestoreSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
               .filter((file): file is FileData => !!file && file.id !== "0")
               .map((file) => file.name)
               .join("/");
-            source.current.requestFileAction(AddFileAction, {
-              ...data.payload,
-              selectedFiles: data.payload.selectedFiles.map((file) => ({ ...file, name: base + "/" + file.name })),
-            });
+
+            const selectedFiles = data.payload.selectedFiles.map((file) => ({
+              ...file,
+              name: base ? base + "/" + file.name : file.name,
+              openable: false,
+              draggable: false,
+            }));
+            await target.current.requestFileAction(AddFileAction, { ...data.payload, selectedFiles });
           })();
+
           return;
       }
+
+      console.log("source done", data);
     },
-    [openFolder, source, folderChain],
+    [openFolder, target, folderChain],
   );
 
   const fileActions = useMemo(() => [ChonkyActions.StartDragNDrop, RefreshListAction], []);
@@ -81,7 +89,7 @@ const useRestoreTargetBrowser = () => {
   const [files, setFiles] = useState<FileArray>(Array(0));
   const [folderChain, setFolderChan] = useState<FileArray>([
     {
-      id: "0",
+      id: "restore_waitlist",
       name: "Restore Waitlist",
       isDir: true,
       openable: true,
@@ -93,7 +101,6 @@ const useRestoreTargetBrowser = () => {
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
-      console.log("target", data);
       switch (data.id) {
         case ChonkyActions.DeleteFiles.id:
           (() => {
@@ -141,7 +148,9 @@ export const RestoreBrowser = () => {
         <Grid className="browser" item xs={6}>
           <FileBrowser {...sourceProps}>
             <FileNavbar />
-            <FileToolbar />
+            <FileToolbar>
+              <ToobarInfo {...sourceProps} />
+            </FileToolbar>
             <FileList />
             <FileContextMenu />
           </FileBrowser>
@@ -149,7 +158,9 @@ export const RestoreBrowser = () => {
         <Grid className="browser" item xs={6}>
           <FileBrowser {...targetProps} ref={target}>
             <FileNavbar />
-            <FileToolbar />
+            <FileToolbar>
+              <ToobarInfo {...targetProps} />
+            </FileToolbar>
             <FileList />
             <FileContextMenu />
           </FileBrowser>

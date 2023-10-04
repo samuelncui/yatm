@@ -1,4 +1,4 @@
-import { FileData } from "@aperturerobotics/chonky";
+import { FileData } from "@samuelncui/chonky";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import { ServiceClient, File, SourceFile, Tape, Position } from "./entity";
 
@@ -90,7 +90,7 @@ export function convertTapes(tapes: Array<Tape>): FileData[] {
       selectable: true,
       draggable: false,
       droppable: false,
-      size: 0,
+      size: Number(tape.writenBytes),
       modDate: moment.unix(Number(tape.createTime)).toDate(),
       isTape: true,
     };

@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FullFileBrowser, FileBrowserProps, FileBrowserHandle, FileArray } from "@aperturerobotics/chonky";
-import { ChonkyActions, ChonkyFileActionData } from "@aperturerobotics/chonky";
+import { FileBrowser as ChonckFileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@samuelncui/chonky";
+import { ChonkyActions, ChonkyFileActionData } from "@samuelncui/chonky";
 
 import { cli, convertFiles } from "../api";
 import { Root } from "../api";
 import { RenameFileAction, RefreshListAction } from "../actions";
+import { ToobarInfo } from "../components/toolbarInfo";
 
 import { useDetailModal, DetailModal } from "./file-detail";
 import { FileGetReply } from "../entity";
@@ -152,6 +153,9 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
   );
 
   const fileActions = useMemo(() => [ChonkyActions.CreateFolder, ChonkyActions.DeleteFiles, ChonkyActions.MoveFiles, RenameFileAction, RefreshListAction], []);
+  const totalSize = useMemo(() => {
+    return files.reduce((total, file) => total + (file?.size ? file.size : 0), 0);
+  }, [files]);
 
   return {
     files,
@@ -160,6 +164,7 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    totalSize,
   };
 };
 
@@ -185,10 +190,24 @@ export const FileBrowser = () => {
     <Box className="browser-box">
       <Grid className="browser-container" container>
         <Grid className="browser" item xs={6}>
-          <FullFileBrowser instanceId="left" ref={instances.left} {...leftProps} />
+          <ChonckFileBrowser instanceId="left" ref={instances.left} {...leftProps}>
+            <FileNavbar />
+            <FileToolbar>
+              <ToobarInfo {...leftProps} />
+            </FileToolbar>
+            <FileList />
+            <FileContextMenu />
+          </ChonckFileBrowser>
         </Grid>
         <Grid className="browser" item xs={6}>
-          <FullFileBrowser instanceId="right" ref={instances.right} {...rightProps} />
+          <ChonckFileBrowser instanceId="right" ref={instances.right} {...rightProps}>
+            <FileNavbar />
+            <FileToolbar>
+              <ToobarInfo {...rightProps} />
+            </FileToolbar>
+            <FileList />
+            <FileContextMenu />
+          </ChonckFileBrowser>
         </Grid>
       </Grid>
       <DetailModal detail={detail} onClose={closeDetailModel} />

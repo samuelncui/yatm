@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -340,11 +342,67 @@ func (l *Library) List(ctx context.Context, parentID int64) ([]*File, error) {
 	return l.list(ctx, l.db.WithContext(ctx), parentID)
 }
 
+func (l *Library) ListWithSize(ctx context.Context, parentID int64) ([]*File, error) {
+	all, err := l.listAll(ctx, l.db.WithContext(ctx), parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	mapping := lo.GroupBy(all, func(file *File) int64 { return file.ParentID })
+	var fetchSize func(file *File)
+	fetchSize = func(file *File) {
+		for _, child := range mapping[file.ID] {
+			fetchSize(child)
+			file.Size += child.Size
+		}
+	}
+
+	files := mapping[parentID]
+	for _, f := range files {
+		fetchSize(f)
+	}
+
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+	return files, nil
+}
+
 func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*File, error) {
 	files := make([]*File, 0, 4)
 	if r := tx.Where("parent_id = ?", parentID).Order("name").Find(&files); r.Error != nil {
 		return nil, fmt.Errorf("find files fail, %w", r.Error)
 	}
+	return files, nil
+}
+
+func (l *Library) listAll(ctx context.Context, tx *gorm.DB, parentIDs ...int64) ([]*File, error) {
+	files := make([]*File, 0, 4)
+
+	current := parentIDs
+	for {
+		batch := make([]*File, 0, 4)
+		if r := tx.Where("parent_id IN (?)", current).Find(&batch); r.Error != nil {
+			return nil, fmt.Errorf("find files fail, %w", r.Error)
+		}
+
+		if len(batch) == 0 {
+			break
+		}
+
+		files = append(files, batch...)
+		next := make([]int64, 0, 4)
+		for _, f := range batch {
+			if !fs.FileMode(f.Mode).IsDir() {
+				continue
+			}
+			next = append(next, f.ID)
+		}
+
+		if len(next) == 0 {
+			break
+		}
+		current = next
+	}
+
 	return files, nil
 }
 

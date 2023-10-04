@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from "react";
-import moment from "moment";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@aperturerobotics/chonky";
-import { ChonkyActions, ChonkyFileActionData, FileData } from "@aperturerobotics/chonky";
+import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@samuelncui/chonky";
+import { ChonkyActions, ChonkyFileActionData, FileData } from "@samuelncui/chonky";
 
 import { cli, Root, convertTapes, convertPositions } from "../api";
-import { TapeListRequest, Source, Tape, Position } from "../entity";
+import { TrimLibraryAction } from "../actions";
 
 export const TapesType = "tapes";
 
@@ -49,7 +48,6 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
 
       const reply = await cli.tapeGetPositions({ id: BigInt(tapeIDStr), directory: dir }).response;
       const files = convertPositions(reply.positions);
-      console.log("refresh jobs list, target= ", target, "tape_id= ", tapeIDStr, "dir= ", dir, "reply= ", reply, "files= ", files);
       setFiles(files);
 
       const targetFolderChain = [];
@@ -105,12 +103,22 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
             await openFolder(current);
           })();
           return;
+        case TrimLibraryAction.id:
+          (async () => {
+            if (!confirm(`Empty pointer in library will be trimed, may cause data loss. Are you sure?`)) {
+              return;
+            }
+
+            console.log(await cli.libraryTrim({ trimFile: true, trimPosition: true }).response);
+            alert("Trim Library Success!");
+          })();
+          return;
       }
     },
     [openFolder, source, folderChain],
   );
 
-  const fileActions = useMemo(() => [ChonkyActions.DeleteFiles], []);
+  const fileActions = useMemo(() => [ChonkyActions.DeleteFiles, TrimLibraryAction], []);
 
   return {
     files,

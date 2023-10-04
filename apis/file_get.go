@@ -24,7 +24,7 @@ func (api *API) FileGet(ctx context.Context, req *entity.FileGetRequest) (*entit
 		return nil, err
 	}
 
-	children, err := api.lib.List(ctx, req.Id)
+	children, err := api.lib.ListWithSize(ctx, req.Id)
 	if err != nil {
 		return nil, err
 	}

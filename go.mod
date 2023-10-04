@@ -19,7 +19,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
 	github.com/samber/lo v1.38.1
-	github.com/samuelncui/acp v0.0.0-20230929123032-b9f8584ad50c
+	github.com/samuelncui/acp v0.0.0-20231004032618-b13b740940ae
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.30.0
@@ -27,6 +27,12 @@ require (
 	gorm.io/driver/mysql v1.3.6
 	gorm.io/driver/sqlite v1.3.6
 	gorm.io/gorm v1.25.2
+)
+
+replace (
+	github.com/glebarez/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004150052-7f8c4fd3e561
+	gorm.io/driver/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004151052-c8fdb51ac7b9
+	gorm.io/gorm => github.com/samuelncui/gorm v0.0.0-20231004143348-3fe5335dfd1e
 )
 
 require (
@@ -53,7 +59,7 @@ require (
 	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/mattn/go-sqlite3 v1.14.16 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
@@ -63,7 +69,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rs/cors v1.7.0 // indirect
-	github.com/samuelncui/godf v0.0.0-20230927093204-37ea5acb9fc1 // indirect
+	github.com/samuelncui/godf v0.0.0-20231004032257-e436410ad5a0 // indirect
 	github.com/schollz/progressbar/v3 v3.13.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.9 // indirect

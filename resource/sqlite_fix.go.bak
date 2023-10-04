@@ -1,0 +1,156 @@
+package resource
+
+import (
+	"fmt"
+	"strings"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/migrator"
+	"gorm.io/gorm/schema"
+)
+
+// fix primary key autoincrement problem
+type sqliteDialector struct {
+	gorm.Dialector
+}
+
+func (dialector *sqliteDialector) DataTypeOf(field *schema.Field) string {
+	switch field.DataType {
+	case schema.Int, schema.Uint:
+		if field.AutoIncrement {
+			// https://www.sqlite.org/autoinc.html
+			return "integer PRIMARY KEY AUTOINCREMENT"
+		}
+	}
+
+	return dialector.Dialector.DataTypeOf(field)
+}
+
+func (dialector *sqliteDialector) Migrator(db *gorm.DB) gorm.Migrator {
+	return sqliteMigrator{innerSQLiteMigrator{Migrator: migrator.Migrator{Config: migrator.Config{
+		DB:                          db,
+		Dialector:                   dialector,
+		CreateIndexAfterCreateTable: true,
+	}}}}
+}
+
+type sqliteMigrator struct {
+	innerSQLiteMigrator
+}
+
+// CreateTable create table in database for values
+func (m sqliteMigrator) CreateTable(values ...interface{}) error {
+	for _, value := range m.ReorderModels(values, false) {
+		tx := m.DB.Session(&gorm.Session{})
+		if err := m.RunWithValue(value, func(stmt *gorm.Statement) (err error) {
+			var (
+				createTableSQL          = "CREATE TABLE ? ("
+				values                  = []interface{}{m.CurrentTable(stmt)}
+				hasPrimaryKeyInDataType bool
+			)
+
+			for _, dbName := range stmt.Schema.DBNames {
+				field := stmt.Schema.FieldsByDBName[dbName]
+				if !field.IgnoreMigration {
+					createTableSQL += "? ?"
+					hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(m.DataTypeOf(field)), "PRIMARY KEY")
+					values = append(values, clause.Column{Name: dbName}, m.DB.Migrator().FullDataTypeOf(field))
+					createTableSQL += ","
+				}
+			}
+
+			if !hasPrimaryKeyInDataType && len(stmt.Schema.PrimaryFields) > 0 {
+				createTableSQL += "PRIMARY KEY ?,"
+				primaryKeys := make([]interface{}, 0, len(stmt.Schema.PrimaryFields))
+				for _, field := range stmt.Schema.PrimaryFields {
+					primaryKeys = append(primaryKeys, clause.Column{Name: field.DBName})
+				}
+
+				values = append(values, primaryKeys)
+			}
+
+			for _, idx := range stmt.Schema.ParseIndexes() {
+				if m.CreateIndexAfterCreateTable {
+					defer func(value interface{}, name string) {
+						if err == nil {
+							err = tx.Migrator().CreateIndex(value, name)
+						}
+					}(value, idx.Name)
+				} else {
+					if idx.Class != "" {
+						createTableSQL += idx.Class + " "
+					}
+					createTableSQL += "INDEX ? ?"
+
+					if idx.Comment != "" {
+						createTableSQL += fmt.Sprintf(" COMMENT '%s'", idx.Comment)
+					}
+
+					if idx.Option != "" {
+						createTableSQL += " " + idx.Option
+					}
+
+					createTableSQL += ","
+					values = append(values, clause.Column{Name: idx.Name}, tx.Migrator().(migrator.BuildIndexOptionsInterface).BuildIndexOptions(idx.Fields, stmt))
+				}
+			}
+
+			if !m.DB.DisableForeignKeyConstraintWhenMigrating && !m.DB.IgnoreRelationshipsWhenMigrating {
+				for _, rel := range stmt.Schema.Relationships.Relations {
+					if rel.Field.IgnoreMigration {
+						continue
+					}
+					if constraint := rel.ParseConstraint(); constraint != nil {
+						if constraint.Schema == stmt.Schema {
+							sql, vars := buildConstraint(constraint)
+							createTableSQL += sql + ","
+							values = append(values, vars...)
+						}
+					}
+				}
+			}
+
+			for _, chk := range stmt.Schema.ParseCheckConstraints() {
+				createTableSQL += "CONSTRAINT ? CHECK (?),"
+				values = append(values, clause.Column{Name: chk.Name}, clause.Expr{SQL: chk.Constraint})
+			}
+
+			createTableSQL = strings.TrimSuffix(createTableSQL, ",")
+
+			createTableSQL += ")"
+
+			if tableOption, ok := m.DB.Get("gorm:table_options"); ok {
+				createTableSQL += fmt.Sprint(tableOption)
+			}
+
+			err = tx.Exec(createTableSQL, values...).Error
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func buildConstraint(constraint *schema.Constraint) (sql string, results []interface{}) {
+	sql = "CONSTRAINT ? FOREIGN KEY ? REFERENCES ??"
+	if constraint.OnDelete != "" {
+		sql += " ON DELETE " + constraint.OnDelete
+	}
+
+	if constraint.OnUpdate != "" {
+		sql += " ON UPDATE " + constraint.OnUpdate
+	}
+
+	var foreignKeys, references []interface{}
+	for _, field := range constraint.ForeignKeys {
+		foreignKeys = append(foreignKeys, clause.Column{Name: field.DBName})
+	}
+
+	for _, field := range constraint.References {
+		references = append(references, clause.Column{Name: field.DBName})
+	}
+	results = append(results, clause.Table{Name: constraint.Name}, foreignKeys, clause.Table{Name: constraint.ReferenceSchema.Table}, references)
+	return
+}

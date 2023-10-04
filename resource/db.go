@@ -35,15 +35,16 @@ func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-func SQLEscape(sql string) string {
-	dest := make([]byte, 0, 2*len(sql))
-	var escape byte
-	for i := 0; i < len(sql); i++ {
-		c := sql[i]
+func SQLEscape(str string) string {
+	runes := []rune(str)
+	result := make([]rune, 0, len(runes))
+
+	var escape rune
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
 
 		escape = 0
-
-		switch c {
+		switch r {
 		case 0: /* Must be escaped for 'mysql' */
 			escape = '0'
 		case '\n': /* Must be escaped for logs */
@@ -56,16 +57,16 @@ func SQLEscape(sql string) string {
 			escape = '\''
 		case '"': /* Better safe than sorry */
 			escape = '"'
-		case '\032': //十进制26,八进制32,十六进制1a, /* This gives problems on Win32 */
+		case '\032': // This gives problems on Win32
 			escape = 'Z'
 		}
 
 		if escape != 0 {
-			dest = append(dest, '\\', escape)
+			result = append(result, '\\', escape)
 		} else {
-			dest = append(dest, c)
+			result = append(result, r)
 		}
 	}
 
-	return string(dest)
+	return string(result)
 }

@@ -1,5 +1,5 @@
-import { setChonkyDefaults } from "@aperturerobotics/chonky";
-import { ChonkyIconFA } from "@aperturerobotics/chonky-icon-fontawesome";
+import { setChonkyDefaults } from "@samuelncui/chonky";
+import { ChonkyIconFA } from "@samuelncui/chonky-icon-fontawesome";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPencilAlt } from "@fortawesome/free-solid-svg-icons/faPencilAlt";

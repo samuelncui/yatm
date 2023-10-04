@@ -1,6 +1,6 @@
-import { FileData, FileArray, FileAction } from "@aperturerobotics/chonky";
-import { defineFileAction } from "@aperturerobotics/chonky";
-import { ChonkyActions } from "@aperturerobotics/chonky";
+import { FileData, FileArray, FileAction } from "@samuelncui/chonky";
+import { defineFileAction } from "@samuelncui/chonky";
+import { ChonkyActions } from "@samuelncui/chonky";
 
 type RenameFileState = {
   contextMenuTriggerFile: FileData;
@@ -43,6 +43,14 @@ export const CreateRestoreJobAction = defineFileAction({
   id: "create_restore_job",
   button: {
     name: "Create Restore Job",
+    toolbar: true,
+  },
+} as FileAction);
+
+export const TrimLibraryAction = defineFileAction({
+  id: "trim_library",
+  button: {
+    name: "Trim Library",
     toolbar: true,
   },
 } as FileAction);
