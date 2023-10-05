@@ -12,15 +12,17 @@ enum JobStatus {
     PROCESSING  = 3;
     COMPLETED   = 4;
 
-    FAILED = 255;
+    FAILED = 127;
+
+    DELETED = 255;
 }
 
 message Job {
     int64 id = 1;
     JobStatus status = 2;
     int64 priority = 3;
-    int64 create_time = 4;
-    int64 update_time = 5;
+    int64 create_time_ns = 4;
+    int64 update_time_ns = 5;
 
     JobState state = 17;
 }
@@ -56,6 +58,12 @@ message JobFilter {
 
     optional int64 limit = 33;
     optional int64 offset = 34;
+}
+
+message JobRecentlyUpdateFilter {
+    optional int64 update_since_ns = 1;
+
+    optional int64 limit = 33;
 }
 
 message JobDisplay {

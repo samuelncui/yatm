@@ -69,12 +69,12 @@ func convertJobs(jobs ...*executor.Job) []*entity.Job {
 	converted := make([]*entity.Job, 0, len(jobs))
 	for _, job := range jobs {
 		converted = append(converted, &entity.Job{
-			Id:         job.ID,
-			Status:     job.Status,
-			Priority:   job.Priority,
-			CreateTime: job.CreateTime.Unix(),
-			UpdateTime: job.UpdateTime.Unix(),
-			State:      job.State,
+			Id:           job.ID,
+			Status:       job.Status,
+			Priority:     job.Priority,
+			CreateTimeNs: job.CreateTime.UnixNano(),
+			UpdateTimeNs: job.UpdateTime.UnixNano(),
+			State:        job.State,
 		})
 	}
 	return converted

@@ -36,13 +36,13 @@ export interface Job {
      */
     priority: bigint;
     /**
-     * @generated from protobuf field: int64 create_time = 4;
+     * @generated from protobuf field: int64 create_time_ns = 4;
      */
-    createTime: bigint;
+    createTimeNs: bigint;
     /**
-     * @generated from protobuf field: int64 update_time = 5;
+     * @generated from protobuf field: int64 update_time_ns = 5;
      */
-    updateTime: bigint;
+    updateTimeNs: bigint;
     /**
      * @generated from protobuf field: job.JobState state = 17;
      */
@@ -148,6 +148,19 @@ export interface JobFilter {
     offset?: bigint;
 }
 /**
+ * @generated from protobuf message job.JobRecentlyUpdateFilter
+ */
+export interface JobRecentlyUpdateFilter {
+    /**
+     * @generated from protobuf field: optional int64 update_since_ns = 1;
+     */
+    updateSinceNs?: bigint;
+    /**
+     * @generated from protobuf field: optional int64 limit = 33;
+     */
+    limit?: bigint;
+}
+/**
  * @generated from protobuf message job.JobDisplay
  */
 export interface JobDisplay {
@@ -199,9 +212,13 @@ export enum JobStatus {
      */
     COMPLETED = 4,
     /**
-     * @generated from protobuf enum value: FAILED = 255;
+     * @generated from protobuf enum value: FAILED = 127;
      */
-    FAILED = 255
+    FAILED = 127,
+    /**
+     * @generated from protobuf enum value: DELETED = 255;
+     */
+    DELETED = 255
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class Job$Type extends MessageType<Job> {
@@ -210,13 +227,13 @@ class Job$Type extends MessageType<Job> {
             { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 2, name: "status", kind: "enum", T: () => ["job.JobStatus", JobStatus] },
             { no: 3, name: "priority", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 4, name: "create_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 5, name: "update_time", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 4, name: "create_time_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 5, name: "update_time_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 17, name: "state", kind: "message", T: () => JobState }
         ]);
     }
     create(value?: PartialMessage<Job>): Job {
-        const message = { id: 0n, status: 0, priority: 0n, createTime: 0n, updateTime: 0n };
+        const message = { id: 0n, status: 0, priority: 0n, createTimeNs: 0n, updateTimeNs: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<Job>(this, message, value);
@@ -236,11 +253,11 @@ class Job$Type extends MessageType<Job> {
                 case /* int64 priority */ 3:
                     message.priority = reader.int64().toBigInt();
                     break;
-                case /* int64 create_time */ 4:
-                    message.createTime = reader.int64().toBigInt();
+                case /* int64 create_time_ns */ 4:
+                    message.createTimeNs = reader.int64().toBigInt();
                     break;
-                case /* int64 update_time */ 5:
-                    message.updateTime = reader.int64().toBigInt();
+                case /* int64 update_time_ns */ 5:
+                    message.updateTimeNs = reader.int64().toBigInt();
                     break;
                 case /* job.JobState state */ 17:
                     message.state = JobState.internalBinaryRead(reader, reader.uint32(), options, message.state);
@@ -266,12 +283,12 @@ class Job$Type extends MessageType<Job> {
         /* int64 priority = 3; */
         if (message.priority !== 0n)
             writer.tag(3, WireType.Varint).int64(message.priority);
-        /* int64 create_time = 4; */
-        if (message.createTime !== 0n)
-            writer.tag(4, WireType.Varint).int64(message.createTime);
-        /* int64 update_time = 5; */
-        if (message.updateTime !== 0n)
-            writer.tag(5, WireType.Varint).int64(message.updateTime);
+        /* int64 create_time_ns = 4; */
+        if (message.createTimeNs !== 0n)
+            writer.tag(4, WireType.Varint).int64(message.createTimeNs);
+        /* int64 update_time_ns = 5; */
+        if (message.updateTimeNs !== 0n)
+            writer.tag(5, WireType.Varint).int64(message.updateTimeNs);
         /* job.JobState state = 17; */
         if (message.state)
             JobState.internalBinaryWrite(message.state, writer.tag(17, WireType.LengthDelimited).fork(), options).join();
@@ -580,6 +597,60 @@ class JobFilter$Type extends MessageType<JobFilter> {
  * @generated MessageType for protobuf message job.JobFilter
  */
 export const JobFilter = new JobFilter$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class JobRecentlyUpdateFilter$Type extends MessageType<JobRecentlyUpdateFilter> {
+    constructor() {
+        super("job.JobRecentlyUpdateFilter", [
+            { no: 1, name: "update_since_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 33, name: "limit", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<JobRecentlyUpdateFilter>): JobRecentlyUpdateFilter {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobRecentlyUpdateFilter>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRecentlyUpdateFilter): JobRecentlyUpdateFilter {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional int64 update_since_ns */ 1:
+                    message.updateSinceNs = reader.int64().toBigInt();
+                    break;
+                case /* optional int64 limit */ 33:
+                    message.limit = reader.int64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: JobRecentlyUpdateFilter, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional int64 update_since_ns = 1; */
+        if (message.updateSinceNs !== undefined)
+            writer.tag(1, WireType.Varint).int64(message.updateSinceNs);
+        /* optional int64 limit = 33; */
+        if (message.limit !== undefined)
+            writer.tag(33, WireType.Varint).int64(message.limit);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message job.JobRecentlyUpdateFilter
+ */
+export const JobRecentlyUpdateFilter = new JobRecentlyUpdateFilter$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobDisplay$Type extends MessageType<JobDisplay> {
     constructor() {

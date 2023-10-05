@@ -113,6 +113,7 @@ message JobListRequest {
     oneof param {
         JobMGetRequest mget = 1;
         job.JobFilter list = 2;
+        job.JobRecentlyUpdateFilter recently_update = 3;
     }
 }
 
@@ -163,6 +164,7 @@ message JobGetLogRequest {
 
 message JobGetLogReply {
     bytes logs = 1;
+    int64 offset = 2;
 }
 
 message SourceListRequest {

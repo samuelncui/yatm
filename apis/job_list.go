@@ -21,6 +21,12 @@ func (api *API) JobList(ctx context.Context, req *entity.JobListRequest) (*entit
 			return nil, err
 		}
 		return &entity.JobListReply{Jobs: convertJobs(jobs...)}, nil
+	case *entity.JobListRequest_RecentlyUpdate:
+		jobs, err := api.exe.ListRecentlyUpdateJob(ctx, param.RecentlyUpdate)
+		if err != nil {
+			return nil, err
+		}
+		return &entity.JobListReply{Jobs: convertJobs(jobs...)}, nil
 	default:
 		return nil, fmt.Errorf("unexpected param, %T", req.Param)
 	}

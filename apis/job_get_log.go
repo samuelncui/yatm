@@ -28,5 +28,5 @@ func (api *API) JobGetLog(ctx context.Context, req *entity.JobGetLogRequest) (*e
 		return nil, fmt.Errorf("read log fail, %w", err)
 	}
 
-	return &entity.JobGetLogReply{Logs: buf}, nil
+	return &entity.JobGetLogReply{Logs: buf, Offset: req.GetOffset() + int64(len(buf))}, nil
 }

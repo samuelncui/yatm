@@ -22,7 +22,7 @@ type Job struct {
 	State    *entity.JobState
 
 	CreateTime time.Time
-	UpdateTime time.Time
+	UpdateTime time.Time `gorm:"index:idx_update_time"`
 }
 
 func (j *Job) BeforeUpdate(tx *gorm.DB) error {
@@ -56,9 +56,18 @@ func (e *Executor) CreateJob(ctx context.Context, job *Job, param *entity.JobPar
 }
 
 func (e *Executor) DeleteJobs(ctx context.Context, ids ...int64) error {
-	if r := e.db.WithContext(ctx).Delete(ModelJob, ids); r.Error != nil {
-		return fmt.Errorf("delete job fail, err= %w", r.Error)
+	jobs, err := e.MGetJob(ctx, ids...)
+	if err != nil {
+		return fmt.Errorf("mget jobs fail")
 	}
+
+	for _, job := range jobs {
+		job.Status = entity.JobStatus_DELETED
+		if r := e.db.WithContext(ctx).Save(job); r.Error != nil {
+			return fmt.Errorf("delete job write db fail, id= %d err= %w", job.ID, r.Error)
+		}
+	}
+
 	return nil
 }
 
@@ -120,6 +129,8 @@ func (e *Executor) ListJob(ctx context.Context, filter *entity.JobFilter) ([]*Jo
 	db := e.db.WithContext(ctx)
 	if filter.Status != nil {
 		db = db.Where("status = ?", *filter.Status)
+	} else {
+		db = db.Where("status < ?", entity.JobStatusVisible)
 	}
 
 	if filter.Limit != nil {
@@ -132,6 +143,28 @@ func (e *Executor) ListJob(ctx context.Context, filter *entity.JobFilter) ([]*Jo
 	}
 
 	db = db.Order("create_time DESC")
+
+	jobs := make([]*Job, 0, 20)
+	if r := db.Find(&jobs); r.Error != nil {
+		return nil, fmt.Errorf("list jobs fail, err= %w", r.Error)
+	}
+
+	return jobs, nil
+}
+
+func (e *Executor) ListRecentlyUpdateJob(ctx context.Context, filter *entity.JobRecentlyUpdateFilter) ([]*Job, error) {
+	db := e.db.WithContext(ctx)
+	if filter.UpdateSinceNs != nil {
+		db = db.Where("update_time > ?", time.Unix(0, *filter.UpdateSinceNs))
+	}
+
+	if filter.Limit != nil {
+		db = db.Limit(int(*filter.Limit))
+	} else {
+		db = db.Limit(20)
+	}
+
+	db = db.Order("update_time ASC")
 
 	jobs := make([]*Job, 0, 20)
 	if r := db.Find(&jobs); r.Error != nil {

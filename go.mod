@@ -15,6 +15,7 @@ require (
 	github.com/improbable-eng/grpc-web v0.15.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
+	github.com/klauspost/compress v1.17.0
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
@@ -30,6 +31,7 @@ require (
 )
 
 replace (
+	// for sqlite migrate bug
 	github.com/glebarez/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004150052-7f8c4fd3e561
 	gorm.io/driver/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004151052-c8fdb51ac7b9
 	gorm.io/gorm => github.com/samuelncui/gorm v0.0.0-20231004143348-3fe5335dfd1e
@@ -53,7 +55,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.11.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/lestrrat-go/strftime v1.0.6 // indirect

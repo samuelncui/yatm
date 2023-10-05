@@ -18,6 +18,7 @@ import { JobDisplay } from "./job";
 import { JobNextParam } from "./job";
 import { CreatableJob } from "./job";
 import { Job } from "./job";
+import { JobRecentlyUpdateFilter } from "./job";
 import { JobFilter } from "./job";
 import { Tape } from "./tape";
 import { TapeFilter } from "./tape";
@@ -223,6 +224,12 @@ export interface JobListRequest {
          */
         list: JobFilter;
     } | {
+        oneofKind: "recentlyUpdate";
+        /**
+         * @generated from protobuf field: job.JobRecentlyUpdateFilter recently_update = 3;
+         */
+        recentlyUpdate: JobRecentlyUpdateFilter;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -337,6 +344,10 @@ export interface JobGetLogReply {
      * @generated from protobuf field: bytes logs = 1;
      */
     logs: Uint8Array;
+    /**
+     * @generated from protobuf field: int64 offset = 2;
+     */
+    offset: bigint;
 }
 /**
  * @generated from protobuf message service.SourceListRequest
@@ -1248,7 +1259,8 @@ class JobListRequest$Type extends MessageType<JobListRequest> {
     constructor() {
         super("service.JobListRequest", [
             { no: 1, name: "mget", kind: "message", oneof: "param", T: () => JobMGetRequest },
-            { no: 2, name: "list", kind: "message", oneof: "param", T: () => JobFilter }
+            { no: 2, name: "list", kind: "message", oneof: "param", T: () => JobFilter },
+            { no: 3, name: "recently_update", kind: "message", oneof: "param", T: () => JobRecentlyUpdateFilter }
         ]);
     }
     create(value?: PartialMessage<JobListRequest>): JobListRequest {
@@ -1275,6 +1287,12 @@ class JobListRequest$Type extends MessageType<JobListRequest> {
                         list: JobFilter.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).list)
                     };
                     break;
+                case /* job.JobRecentlyUpdateFilter recently_update */ 3:
+                    message.param = {
+                        oneofKind: "recentlyUpdate",
+                        recentlyUpdate: JobRecentlyUpdateFilter.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).recentlyUpdate)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1293,6 +1311,9 @@ class JobListRequest$Type extends MessageType<JobListRequest> {
         /* job.JobFilter list = 2; */
         if (message.param.oneofKind === "list")
             JobFilter.internalBinaryWrite(message.param.list, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* job.JobRecentlyUpdateFilter recently_update = 3; */
+        if (message.param.oneofKind === "recentlyUpdate")
+            JobRecentlyUpdateFilter.internalBinaryWrite(message.param.recentlyUpdate, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1833,11 +1854,12 @@ export const JobGetLogRequest = new JobGetLogRequest$Type();
 class JobGetLogReply$Type extends MessageType<JobGetLogReply> {
     constructor() {
         super("service.JobGetLogReply", [
-            { no: 1, name: "logs", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+            { no: 1, name: "logs", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
+            { no: 2, name: "offset", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<JobGetLogReply>): JobGetLogReply {
-        const message = { logs: new Uint8Array(0) };
+        const message = { logs: new Uint8Array(0), offset: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
             reflectionMergePartial<JobGetLogReply>(this, message, value);
@@ -1850,6 +1872,9 @@ class JobGetLogReply$Type extends MessageType<JobGetLogReply> {
             switch (fieldNo) {
                 case /* bytes logs */ 1:
                     message.logs = reader.bytes();
+                    break;
+                case /* int64 offset */ 2:
+                    message.offset = reader.int64().toBigInt();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1866,6 +1891,9 @@ class JobGetLogReply$Type extends MessageType<JobGetLogReply> {
         /* bytes logs = 1; */
         if (message.logs.length)
             writer.tag(1, WireType.LengthDelimited).bytes(message.logs);
+        /* int64 offset = 2; */
+        if (message.offset !== 0n)
+            writer.tag(2, WireType.Varint).int64(message.offset);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

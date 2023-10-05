@@ -5,6 +5,10 @@ import (
 	"database/sql/driver"
 )
 
+const (
+	JobStatusVisible = 128
+)
+
 var (
 	_ = sql.Scanner(&JobParam{})
 	_ = driver.Valuer(&JobParam{})

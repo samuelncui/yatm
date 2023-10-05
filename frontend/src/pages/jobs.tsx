@@ -34,7 +34,7 @@ import { TreeView, TreeItem } from "@mui/x-tree-view";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
-import { cli, fileBase } from "../api";
+import { cli, fileBase, JOB_STATUS_VISIBLE } from "../api";
 import { sleep } from "../tools";
 import { Job, JobDisplay, JobListRequest, JobNextRequest, JobStatus, CopyStatus, LibraryEntityType, JobDeleteRequest } from "../entity";
 
@@ -45,6 +45,7 @@ import { JobRestoreCopyingParam, JobRestoreStep, JobRestoreDisplay, JobRestoreSt
 import { RestoreTape } from "../entity";
 
 import { formatFilesize, download } from "../tools";
+import { Nullable } from "tsdef";
 
 export const JobsType = "jobs";
 type DisplayableJob = Job & Partial<JobDisplay>;
@@ -53,29 +54,79 @@ const RefreshContext = createContext<() => Promise<void>>(async () => {});
 
 export const JobsBrowser = () => {
   const [jobs, setJobs] = useState<DisplayableJob[] | null>(null);
-  const refresh = useCallback(async () => {
-    const jobReplys = await cli.jobList(JobListRequest.create({ param: { oneofKind: "list", list: {} } })).response;
-    const displays = new Map<BigInt, JobDisplay>();
-    for (const reply of await Promise.all(
-      jobReplys.jobs
-        .filter((job) => job.status === JobStatus.PROCESSING)
-        .map((job) => cli.jobDisplay({ id: job.id }).response.then((reply) => ({ ...reply, jobID: job.id }))),
-    )) {
-      if (!reply.display) {
-        continue;
+  const [latestUpdateTimeNs, setLatestUpdateTimeNs] = useState<bigint>(0n);
+
+  const refresh = useCallback(
+    async (refresh?: boolean) => {
+      var results = Array.from(jobs || []);
+      const req: JobListRequest = refresh
+        ? { param: { oneofKind: "list", list: {} } }
+        : { param: { oneofKind: "recentlyUpdate", recentlyUpdate: { updateSinceNs: latestUpdateTimeNs } } };
+
+      const reply = await cli.jobList(req).response;
+      if (reply.jobs.length === 0) {
+        if (refresh) {
+          setJobs([]);
+        }
+        return;
       }
 
-      displays.set(reply.jobID, reply.display);
-    }
+      for (const job of reply.jobs) {
+        const foundIdx = results.findIndex((target) => target.id === job.id);
+        if (foundIdx >= 0) {
+          results[foundIdx] = job;
+          continue;
+        }
 
-    const targets = jobReplys.jobs.map((job) => ({ ...job, ...displays.get(job.id) }));
-    console.log("refresh jobs list, ", targets);
-    setJobs(targets);
-  }, [setJobs]);
+        results.push(job);
+      }
+      results = results.filter((job) => job && job.status < JOB_STATUS_VISIBLE).sort((a, b) => Number(b.createTimeNs - a.createTimeNs));
+
+      const displays = new Map<BigInt, JobDisplay>();
+      for (const reply of await Promise.all(
+        results
+          .filter((job) => job.status === JobStatus.PROCESSING)
+          .map((job) => cli.jobDisplay({ id: job.id }).response.then((reply) => ({ ...reply, jobID: job.id }))),
+      )) {
+        if (!reply.display) {
+          continue;
+        }
+
+        displays.set(reply.jobID, reply.display);
+      }
+
+      const targets = results.map((job) => ({ ...job, ...displays.get(job.id) }));
+      const latest = reply.jobs.reduce((latest, job) => {
+        if (!job || !job.updateTimeNs) {
+          return latest;
+        }
+        if (job.updateTimeNs > latest) {
+          return job.updateTimeNs;
+        }
+        return latest;
+      }, 0n);
+      console.log("refresh jobs list, targets=", targets, "latest=", latest);
+
+      setLatestUpdateTimeNs(latest);
+      setJobs(targets);
+    },
+    [jobs, setJobs, latestUpdateTimeNs, setLatestUpdateTimeNs],
+  );
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
   useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, 2000);
+    var timer: NodeJS.Timeout;
+    (async () => {
+      await refreshRef.current(true);
+      timer = setInterval(() => refreshRef.current(), 2000);
+    })();
+
     return () => {
+      if (!timer) {
+        return;
+      }
+
       clearInterval(timer);
     };
   }, []);
@@ -650,31 +701,40 @@ const ViewLogDialog = ({ jobID }: { jobID: bigint }) => {
 
 const LogConsole = ({ jobId }: { jobId: bigint }) => {
   const [log, setLog] = useState<string>("");
+  const [offset, setOffset] = useState(0n);
   const bottom = useRef(null);
-  const refreshLog = useCallback(async () => {
-    const reply = await cli.jobGetLog({ jobId, offset: BigInt(log.length) }).response;
-    setLog(log + new TextDecoder().decode(reply.logs));
 
-    if (log.length === 0 && reply.logs.length > 0 && bottom && bottom.current) {
-      await sleep(10);
-      (bottom.current as HTMLElement).scrollIntoView(true);
-      await sleep(10);
-      (bottom.current as HTMLElement).parentElement?.scrollBy(0, 100);
-    }
-  }, [log, setLog, bottom]);
+  const refresh = useCallback(async () => {
+    const reply = await cli.jobGetLog({ jobId, offset: offset }).response;
+    setLog(log + new TextDecoder().decode(reply.logs));
+    setOffset(reply.offset);
+  }, [log, setLog, offset, setOffset, bottom]);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
   useEffect(() => {
-    let closed = false;
+    var timer: NodeJS.Timeout;
     (async () => {
-      while (!closed) {
-        await refreshLog();
-        await sleep(2000);
+      await refreshRef.current();
+      if (bottom.current) {
+        const bottomElem = bottom.current as HTMLElement;
+        await sleep(10);
+        bottomElem.scrollIntoView(true);
+        await sleep(10);
+        bottomElem.parentElement?.scrollBy(0, 100);
       }
+
+      timer = setInterval(() => refreshRef.current(), 2000);
     })();
 
     return () => {
-      closed = true;
+      if (!timer) {
+        return;
+      }
+
+      clearInterval(timer);
     };
-  }, [refreshLog]);
+  }, [refresh]);
 
   return (
     <Fragment>

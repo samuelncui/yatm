@@ -4,6 +4,9 @@ import { ServiceClient, File, SourceFile, Tape, Position } from "./entity";
 
 import moment from "moment";
 
+export const MODE_DIR = 2147483648n; // d: is a directory
+export const JOB_STATUS_VISIBLE = 128;
+
 const apiBase: string = (() => {
   const base = (window as any).apiBase as string;
   if (!base || base === "%%API_BASE%%") {
@@ -15,8 +18,6 @@ const apiBase: string = (() => {
 export const fileBase: string = (() => {
   return apiBase.replace("/services", "/files");
 })();
-
-export const ModeDir = 2147483648n; // d: is a directory
 
 export const Root: FileData = {
   id: "0",
@@ -38,7 +39,7 @@ export const cli = new ServiceClient(transport);
 
 export function convertFiles(files: Array<File>): FileData[] {
   return files.map((file) => {
-    const isDir = (file.mode & ModeDir) > 0;
+    const isDir = (file.mode & MODE_DIR) > 0;
 
     return {
       id: getID(file),
@@ -58,7 +59,7 @@ export function convertFiles(files: Array<File>): FileData[] {
 
 export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
   return files.map((file) => {
-    const isDir = (file.mode & ModeDir) > 0;
+    const isDir = (file.mode & MODE_DIR) > 0;
 
     return {
       id: getID(file),
@@ -99,7 +100,7 @@ export function convertTapes(tapes: Array<Tape>): FileData[] {
 
 export function convertPositions(positions: Array<Position>): FileData[] {
   return positions.map((posi) => {
-    const isDir = (posi.mode & ModeDir) > 0;
+    const isDir = (posi.mode & MODE_DIR) > 0;
     const name = isDir ? splitPath(posi.path.slice(0, -1)) : splitPath(posi.path);
 
     return {
