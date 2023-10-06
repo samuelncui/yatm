@@ -16,6 +16,7 @@ import (
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
 	"github.com/samuelncui/yatm/apis"
+	"github.com/samuelncui/yatm/config"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/executor"
 	"github.com/samuelncui/yatm/library"
@@ -25,26 +26,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v2"
 )
 
-type config struct {
-	Domain      string `yaml:"domain"`
-	Listen      string `yaml:"listen"`
-	DebugListen string `yaml:"debug_listen"`
-
-	Database struct {
-		Dialect string `yaml:"dialect"`
-		DSN     string `yaml:"dsn"`
-	} `yaml:"database"`
-
-	Paths       executor.Paths   `yaml:"paths"`
-	TapeDevices []string         `yaml:"tape_devices"`
-	Scripts     executor.Scripts `yaml:"scripts"`
-}
-
 var (
-	configPath = flag.String("config", "./config.yaml", "config file path")
+	configOpt = flag.String("config", "./config.yaml", "config file path")
 )
 
 func main() {
@@ -66,16 +51,7 @@ func main() {
 	))
 
 	flag.Parse()
-	cf, err := os.Open(*configPath)
-	if err != nil {
-		panic(err)
-	}
-
-	conf := new(config)
-	if err := yaml.NewDecoder(cf).Decode(conf); err != nil {
-		panic(err)
-	}
-	logrus.Infof("read config success, conf= '%+v'", conf)
+	conf := config.GetConfig(*configOpt)
 
 	if conf.DebugListen != "" {
 		go tools.Wrap(context.Background(), func() { tools.NewDebugServer(conf.DebugListen) })

@@ -104,3 +104,13 @@ func Value(src proto.Message) (driver.Value, error) {
 
 	return buf, nil
 }
+
+func ToEnum[T ~int32](pbmap map[string]int32, default_ T) func(str string) T {
+	return func(str string) T {
+		v, ok := pbmap[string(str)]
+		if !ok {
+			return default_
+		}
+		return T(v)
+	}
+}

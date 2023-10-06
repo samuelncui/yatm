@@ -12,7 +12,7 @@ mkdir -p output/captured_indices;
 
 cp -r scripts ./output/;
 cp ./cmd/httpd/yatm-httpd.service ./output/
-cp ./cmd/httpd/config.example.yaml ./output/
+cp ./config.example.yaml ./output/
 cp ./LICENSE ./output/
 cp ./README.md ./output/
 echo "${RELEASE_VERSION}" > ./output/VERSION
