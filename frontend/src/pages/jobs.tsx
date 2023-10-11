@@ -58,29 +58,43 @@ export const JobsBrowser = () => {
 
   const refresh = useCallback(
     async (refresh?: boolean) => {
-      var results = Array.from(jobs || []);
-      const req: JobListRequest = refresh
-        ? { param: { oneofKind: "list", list: {} } }
-        : { param: { oneofKind: "recentlyUpdate", recentlyUpdate: { updateSinceNs: latestUpdateTimeNs } } };
+      const results = await (async () => {
+        const req: JobListRequest = refresh
+          ? { param: { oneofKind: "list", list: {} } }
+          : { param: { oneofKind: "recentlyUpdate", recentlyUpdate: { updateSinceNs: latestUpdateTimeNs } } };
 
-      const reply = await cli.jobList(req).response;
-      if (reply.jobs.length === 0) {
-        if (refresh) {
-          setJobs([]);
-        }
-        return;
-      }
-
-      for (const job of reply.jobs) {
-        const foundIdx = results.findIndex((target) => target.id === job.id);
-        if (foundIdx >= 0) {
-          results[foundIdx] = job;
-          continue;
+        const reply = await cli.jobList(req).response;
+        if (reply.jobs.length === 0) {
+          if (refresh) {
+            return [];
+          }
+          return Array.from(jobs || []);
         }
 
-        results.push(job);
-      }
-      results = results.filter((job) => job && job.status < JOB_STATUS_VISIBLE).sort((a, b) => Number(b.createTimeNs - a.createTimeNs));
+        const latest = reply.jobs.reduce((latest, job) => {
+          if (!job || !job.updateTimeNs) {
+            return latest;
+          }
+          if (job.updateTimeNs > latest) {
+            return job.updateTimeNs;
+          }
+          return latest;
+        }, 0n);
+        console.log("refresh jobs list, set latest update, latest=", latest);
+        setLatestUpdateTimeNs(latest);
+
+        const results = Array.from(jobs || []);
+        for (const job of reply.jobs) {
+          const foundIdx = results.findIndex((target) => target.id === job.id);
+          if (foundIdx >= 0) {
+            results[foundIdx] = job;
+            continue;
+          }
+
+          results.push(job);
+        }
+        return results.filter((job) => job && job.status < JOB_STATUS_VISIBLE).sort((a, b) => Number(b.createTimeNs - a.createTimeNs));
+      })();
 
       const displays = new Map<BigInt, JobDisplay>();
       for (const reply of await Promise.all(
@@ -96,18 +110,7 @@ export const JobsBrowser = () => {
       }
 
       const targets = results.map((job) => ({ ...job, ...displays.get(job.id) }));
-      const latest = reply.jobs.reduce((latest, job) => {
-        if (!job || !job.updateTimeNs) {
-          return latest;
-        }
-        if (job.updateTimeNs > latest) {
-          return job.updateTimeNs;
-        }
-        return latest;
-      }, 0n);
-      console.log("refresh jobs list, targets=", targets, "latest=", latest);
-
-      setLatestUpdateTimeNs(latest);
+      console.log("refresh jobs list, set jobs, jobs=", targets);
       setJobs(targets);
     },
     [jobs, setJobs, latestUpdateTimeNs, setLatestUpdateTimeNs],
