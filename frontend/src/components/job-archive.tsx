@@ -1,8 +1,8 @@
-import { Fragment, ChangeEvent, memo, useState, useMemo, useCallback, useContext } from "react";
+import { Fragment, ChangeEvent, useRef, useState, useMemo, useCallback, useContext, useEffect, memo } from "react";
 import { assert } from "@protobuf-ts/runtime";
 import format from "format-duration";
 
-import { Virtuoso } from "react-virtuoso";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
@@ -24,7 +24,7 @@ import { cli } from "../api";
 import { Job, JobDispatchRequest, CopyStatus, SourceState, JobStatus } from "../entity";
 import { JobArchiveCopyingParam, JobArchiveStep, JobArchiveDisplay, JobArchiveState } from "../entity";
 
-import { formatFilesize } from "../tools";
+import { formatFilesize, sleep } from "../tools";
 
 import { JobCard } from "./job-card";
 import { RefreshContext } from "../pages/jobs";
@@ -191,39 +191,62 @@ const ArchiveViewFilesDialog = ({ sources }: { sources: SourceState[] }) => {
       <Button size="small" onClick={handleClickOpen}>
         View Files
       </Button>
-      {open && (
-        <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
-          <DialogTitle>View Files</DialogTitle>
-          <DialogContent dividers style={{ padding: 0 }}>
-            <Virtuoso
-              style={{ width: "100%", height: "100%" }}
-              totalCount={sources.length}
-              itemContent={(idx) => {
-                const src = sources[idx];
-                if (!src || !src.source) {
-                  return null;
-                }
-
-                return (
-                  <ListItem key={idx} component="div" disablePadding>
-                    <ListItemText
-                      primary={src.source.base + src.source.path.join("/")}
-                      secondary={`Size: ${formatFilesize(src.size)} Status: ${CopyStatus[src.status]}`}
-                      style={{ padding: 0, margin: 5 }}
-                    />
-                  </ListItem>
-                );
-              }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Close</Button>
-          </DialogActions>
-        </Dialog>
-      )}
+      {open && <FileList handleClose={handleClose} sources={sources} />}
     </Fragment>
   );
 };
+
+const FileList = memo(({ handleClose, sources }: { handleClose: () => void; sources: SourceState[] }) => {
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  useEffect(() => {
+    (async () => {
+      const idx = sources.findIndex((src) => src.status !== CopyStatus.SUBMITED && src.status !== CopyStatus.STAGED);
+      if (idx < 0) {
+        return;
+      }
+
+      await sleep(100);
+      console.log(idx, virtuosoRef);
+
+      if (!virtuosoRef.current) {
+        return;
+      }
+      virtuosoRef.current.scrollToIndex({ index: idx - 5, align: "center", behavior: "smooth" });
+    })();
+  }, [sources]);
+
+  return (
+    <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
+      <DialogTitle>View Files</DialogTitle>
+      <DialogContent dividers style={{ padding: 0 }}>
+        <Virtuoso
+          style={{ width: "100%", height: "100%" }}
+          totalCount={sources.length}
+          ref={virtuosoRef}
+          itemContent={(idx) => {
+            const src = sources[idx];
+            if (!src || !src.source) {
+              return null;
+            }
+
+            return (
+              <ListItem key={idx} component="div" disablePadding>
+                <ListItemText
+                  primary={src.source.base + src.source.path.join("/")}
+                  secondary={`Size: ${formatFilesize(src.size)} Status: ${CopyStatus[src.status]}`}
+                  style={{ padding: 0, margin: 5 }}
+                />
+              </ListItem>
+            );
+          }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
 
 const RollbackDialog = ({ jobID, state }: { jobID: bigint; state: JobArchiveState }) => {
   const refresh = useContext(RefreshContext);
