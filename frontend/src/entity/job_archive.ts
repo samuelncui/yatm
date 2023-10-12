@@ -23,9 +23,9 @@ export interface JobArchiveParam {
     sources: Source[];
 }
 /**
- * @generated from protobuf message job_archive.JobArchiveNextParam
+ * @generated from protobuf message job_archive.JobArchiveDispatchParam
  */
-export interface JobArchiveNextParam {
+export interface JobArchiveDispatchParam {
     /**
      * @generated from protobuf oneof: param
      */
@@ -189,22 +189,22 @@ class JobArchiveParam$Type extends MessageType<JobArchiveParam> {
  */
 export const JobArchiveParam = new JobArchiveParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
+class JobArchiveDispatchParam$Type extends MessageType<JobArchiveDispatchParam> {
     constructor() {
-        super("job_archive.JobArchiveNextParam", [
+        super("job_archive.JobArchiveDispatchParam", [
             { no: 1, name: "wait_for_tape", kind: "message", oneof: "param", T: () => JobArchiveWaitForTapeParam },
             { no: 2, name: "copying", kind: "message", oneof: "param", T: () => JobArchiveCopyingParam },
             { no: 255, name: "finished", kind: "message", oneof: "param", T: () => JobArchiveFinishedParam }
         ]);
     }
-    create(value?: PartialMessage<JobArchiveNextParam>): JobArchiveNextParam {
+    create(value?: PartialMessage<JobArchiveDispatchParam>): JobArchiveDispatchParam {
         const message = { param: { oneofKind: undefined } };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobArchiveNextParam>(this, message, value);
+            reflectionMergePartial<JobArchiveDispatchParam>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobArchiveNextParam): JobArchiveNextParam {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobArchiveDispatchParam): JobArchiveDispatchParam {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -238,7 +238,7 @@ class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobArchiveNextParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobArchiveDispatchParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* job_archive.JobArchiveWaitForTapeParam wait_for_tape = 1; */
         if (message.param.oneofKind === "waitForTape")
             JobArchiveWaitForTapeParam.internalBinaryWrite(message.param.waitForTape, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
@@ -255,9 +255,9 @@ class JobArchiveNextParam$Type extends MessageType<JobArchiveNextParam> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_archive.JobArchiveNextParam
+ * @generated MessageType for protobuf message job_archive.JobArchiveDispatchParam
  */
-export const JobArchiveNextParam = new JobArchiveNextParam$Type();
+export const JobArchiveDispatchParam = new JobArchiveDispatchParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobArchiveWaitForTapeParam$Type extends MessageType<JobArchiveWaitForTapeParam> {
     constructor() {

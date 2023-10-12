@@ -3,12 +3,13 @@ package executor
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/modern-go/reflect2"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/tools"
 	"gorm.io/gorm"
 )
 
@@ -16,13 +17,14 @@ type Executor struct {
 	db  *gorm.DB
 	lib *library.Library
 
-	devices []string
-
 	devicesLock      sync.Mutex
+	devices          []string
 	availableDevices mapset.Set[string]
 
 	paths   Paths
 	scripts Scripts
+
+	jobExecutors *tools.CacheOnce[int64, JobExecutor]
 }
 
 type Paths struct {
@@ -43,7 +45,7 @@ func New(
 	db *gorm.DB, lib *library.Library,
 	devices []string, paths Paths, scripts Scripts,
 ) *Executor {
-	return &Executor{
+	e := &Executor{
 		db:               db,
 		lib:              lib,
 		devices:          devices,
@@ -51,89 +53,76 @@ func New(
 		paths:            paths,
 		scripts:          scripts,
 	}
+	e.jobExecutors = tools.NewCacheOnce(e.newJobExecutor)
+
+	return e
 }
 
 func (e *Executor) AutoMigrate() error {
 	return e.db.AutoMigrate(ModelJob)
 }
 
-func (e *Executor) ListAvailableDevices() []string {
-	e.devicesLock.Lock()
-	defer e.devicesLock.Unlock()
+func (e *Executor) CreateJob(ctx context.Context, job *Job, param *entity.JobParam) (*Job, error) {
+	job, err := e.SaveJob(ctx, job)
+	if err != nil {
+		return nil, fmt.Errorf("save job fail, err= %w", err)
+	}
 
-	devices := e.availableDevices.ToSlice()
-	sort.Slice(devices, func(i, j int) bool {
-		return devices[i] < devices[j]
-	})
+	typ, found := jobTypes[jobParamToTypes[reflect2.RTypeOf(param.GetParam())]]
+	if !found || typ == nil {
+		return nil, fmt.Errorf("job type unexpected, state_type= %T", param.GetParam())
+	}
 
-	return devices
+	executor, err := typ.GetExecutor(ctx, e, job)
+	if err != nil {
+		return nil, fmt.Errorf("get job executor fail, job_id= %d, %w", job.ID, err)
+	}
+	if err := executor.Initialize(ctx, param); err != nil {
+		executor.Logger().WithContext(ctx).WithError(err).Errorf("initialize failed, param= %s", param)
+		return nil, fmt.Errorf("executor initialize fail, job_id= %d param= %s, %w", job.ID, param, err)
+	}
+	if err := executor.Close(ctx); err != nil {
+		executor.Logger().WithContext(ctx).WithError(err).Errorf("close executor failed, param= %s", param)
+		return nil, fmt.Errorf("close executor failed, job_id= %d param= %s, %w", job.ID, param, err)
+	}
+
+	return job, nil
 }
 
-func (e *Executor) occupyDevice(dev string) bool {
-	e.devicesLock.Lock()
-	defer e.devicesLock.Unlock()
-
-	if !e.availableDevices.Contains(dev) {
-		return false
-	}
-
-	e.availableDevices.Remove(dev)
-	return true
+func (e *Executor) GetJobExecutor(ctx context.Context, id int64) (JobExecutor, error) {
+	return e.jobExecutors.Get(ctx, id)
 }
 
-func (e *Executor) releaseDevice(dev string) {
-	e.devicesLock.Lock()
-	defer e.devicesLock.Unlock()
-	e.availableDevices.Add(dev)
+func (e *Executor) RemoveJobExecutor(ctx context.Context, id int64) {
+	e.jobExecutors.Remove(id)
 }
 
-func (e *Executor) Start(ctx context.Context, job *Job) error {
-	job.Status = entity.JobStatus_PROCESSING
-	if _, err := e.SaveJob(ctx, job); err != nil {
-		return err
+func (e *Executor) newJobExecutor(ctx context.Context, id int64) (JobExecutor, error) {
+	job, err := e.GetJob(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get job fail, id= %d, %w", id, err)
 	}
 
-	if state := job.State.GetArchive(); state != nil {
-		if err := e.startArchive(ctx, job); err != nil {
-			return err
-		}
-		return nil
-	}
-	if state := job.State.GetRestore(); state != nil {
-		if err := e.startRestore(ctx, job); err != nil {
-			return err
-		}
-		return nil
+	factory, has := jobTypes[reflect2.RTypeOf(job.State.GetState())]
+	if !has {
+		return nil, fmt.Errorf("job type unexpected, state_type= %T", job.State.GetState())
 	}
 
-	return fmt.Errorf("unexpected state type, %T", job.State.State)
+	return factory.GetExecutor(ctx, e, job)
 }
 
-func (e *Executor) Submit(ctx context.Context, job *Job, param *entity.JobNextParam) error {
-	if job.Status != entity.JobStatus_PROCESSING {
-		return fmt.Errorf("target job is not on processing, status= %s", job.Status)
+func (e *Executor) Dispatch(ctx context.Context, jobID int64, param *entity.JobDispatchParam) error {
+	executor, err := e.GetJobExecutor(ctx, jobID)
+	if err != nil {
+		return fmt.Errorf("get job executor fail, job_id= %d, %w", jobID, err)
 	}
 
-	if state := job.State.GetArchive(); state != nil {
-		exe, err := e.newArchiveExecutor(ctx, job)
-		if err != nil {
-			return err
-		}
-
-		exe.submit(ctx, param.GetArchive())
-		return nil
-	}
-	if state := job.State.GetRestore(); state != nil {
-		exe, err := e.newRestoreExecutor(ctx, job)
-		if err != nil {
-			return err
-		}
-
-		exe.submit(ctx, param.GetRestore())
-		return nil
+	if err := executor.Dispatch(ctx, param); err != nil {
+		executor.Logger().WithContext(ctx).WithError(err).Errorf("dispatch request fail, req= %s", param)
+		return fmt.Errorf("dispatch request fail, job_id= %d, req= %s, %w", jobID, param, err)
 	}
 
-	return fmt.Errorf("unexpected state type, %T", job.State.State)
+	return nil
 }
 
 func (e *Executor) Display(ctx context.Context, job *Job) (*entity.JobDisplay, error) {
@@ -141,22 +130,16 @@ func (e *Executor) Display(ctx context.Context, job *Job) (*entity.JobDisplay, e
 		return nil, fmt.Errorf("target job is not on processing, status= %s", job.Status)
 	}
 
-	if state := job.State.GetArchive(); state != nil {
-		display, err := e.getArchiveDisplay(ctx, job)
-		if err != nil {
-			return nil, err
-		}
-
-		return &entity.JobDisplay{Display: &entity.JobDisplay_Archive{Archive: display}}, nil
-	}
-	if state := job.State.GetRestore(); state != nil {
-		display, err := e.getRestoreDisplay(ctx, job)
-		if err != nil {
-			return nil, err
-		}
-
-		return &entity.JobDisplay{Display: &entity.JobDisplay_Restore{Restore: display}}, nil
+	executor, err := e.GetJobExecutor(ctx, job.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get job executor fail, job_id= %d, %w", job.ID, err)
 	}
 
-	return nil, fmt.Errorf("unexpected state type, %T", job.State.State)
+	result, err := executor.Display(ctx)
+	if err != nil {
+		executor.Logger().WithContext(ctx).WithError(err).Errorf("get display failed")
+		return nil, err
+	}
+
+	return result, nil
 }

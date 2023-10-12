@@ -2,44 +2,30 @@ package executor
 
 import (
 	"context"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"path"
-	"sort"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samber/lo"
-	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/library"
 	"github.com/samuelncui/yatm/tools"
 	"github.com/sirupsen/logrus"
 )
 
-var (
-	runningArchives sync.Map
-)
+type jobArchiveExecutor struct {
+	lock sync.Mutex
+	exe  *Executor
+	job  *Job
 
-func (e *Executor) getArchiveExecutor(ctx context.Context, job *Job) *jobArchiveExecutor {
-	if running, has := runningArchives.Load(job.ID); has {
-		return running.(*jobArchiveExecutor)
-	}
-	return nil
+	progress *progress
+	logFile  *os.File
+	logger   *logrus.Logger
 }
 
-func (e *Executor) newArchiveExecutor(ctx context.Context, job *Job) (*jobArchiveExecutor, error) {
-	if exe := e.getArchiveExecutor(ctx, job); exe != nil {
-		return exe, nil
-	}
-
-	logFile, err := e.newLogWriter(job.ID)
+func (*jobTypeArchive) GetExecutor(ctx context.Context, exe *Executor, job *Job) (JobExecutor, error) {
+	logFile, err := exe.newLogWriter(job.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get log writer fail, %w", err)
 	}
@@ -47,39 +33,27 @@ func (e *Executor) newArchiveExecutor(ctx context.Context, job *Job) (*jobArchiv
 	logger := logrus.New()
 	logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
 
-	exe := &jobArchiveExecutor{
-		exe: e,
+	e := &jobArchiveExecutor{
+		exe: exe,
 		job: job,
-
-		state: job.State.GetArchive(),
 
 		logFile: logFile,
 		logger:  logger,
 	}
 
-	runningArchives.Store(job.ID, exe)
-	return exe, nil
+	return e, nil
 }
 
-type jobArchiveExecutor struct {
-	exe *Executor
-	job *Job
-
-	stateLock sync.Mutex
-	state     *entity.JobArchiveState
-
-	progress *progress
-	logFile  *os.File
-	logger   *logrus.Logger
-}
-
-func (a *jobArchiveExecutor) submit(ctx context.Context, param *entity.JobArchiveNextParam) {
-	if err := a.handle(ctx, param); err != nil {
-		a.logger.WithContext(ctx).WithError(err).Infof("handler param fail, param= %s", param)
+func (a *jobArchiveExecutor) Dispatch(ctx context.Context, next *entity.JobDispatchParam) error {
+	param := next.GetArchive()
+	if param == nil {
+		return fmt.Errorf("unexpected next param type, unexpected= JobArchiveDispatchParam, has= %s", next)
 	}
+
+	return a.dispatch(ctx, param)
 }
 
-func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiveNextParam) error {
+func (a *jobArchiveExecutor) dispatch(ctx context.Context, param *entity.JobArchiveDispatchParam) error {
 	if p := param.GetCopying(); p != nil {
 		if err := a.switchStep(
 			ctx, entity.JobArchiveStep_COPYING, entity.JobStatus_PROCESSING,
@@ -91,6 +65,7 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 		tools.Working()
 		go tools.WrapWithLogger(ctx, a.logger, func() {
 			defer tools.Done()
+
 			if err := a.makeTape(tools.ShutdownContext, p.Device, p.Barcode, p.Name); err != nil {
 				a.logger.WithContext(ctx).WithError(err).Errorf("make tape has error, barcode= '%s' name= '%s'", p.Barcode, p.Name)
 			}
@@ -101,7 +76,7 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 
 	if p := param.GetWaitForTape(); p != nil {
 		return a.switchStep(
-			ctx, entity.JobArchiveStep_WAIT_FOR_TAPE, entity.JobStatus_PROCESSING,
+			ctx, entity.JobArchiveStep_WAIT_FOR_TAPE, entity.JobStatus_PENDING,
 			mapset.NewThreadUnsafeSet(entity.JobArchiveStep_PENDING, entity.JobArchiveStep_COPYING),
 		)
 	}
@@ -114,322 +89,80 @@ func (a *jobArchiveExecutor) handle(ctx context.Context, param *entity.JobArchiv
 			return err
 		}
 
-		a.logFile.Close()
-		runningArchives.Delete(a.job.ID)
-		return nil
+		return a.Close(ctx)
 	}
 
 	return nil
 }
 
-func (a *jobArchiveExecutor) makeTape(ctx context.Context, device, barcode, name string) (rerr error) {
-	if !a.exe.occupyDevice(device) {
-		return fmt.Errorf("device is using, device= %s", device)
-	}
-	defer a.exe.releaseDevice(device)
-	defer a.makeTapeFinished(tools.WithoutTimeout(ctx))
-
-	encryption, keyPath, keyRecycle, err := a.exe.newKey()
-	if err != nil {
-		return err
-	}
-	defer keyRecycle()
-
-	if err := runCmd(a.logger, a.exe.makeEncryptCmd(ctx, device, keyPath, barcode, name)); err != nil {
-		return fmt.Errorf("run encrypt script fail, %w", err)
+func (a *jobArchiveExecutor) Display(ctx context.Context) (*entity.JobDisplay, error) {
+	p := a.progress
+	if p == nil {
+		return nil, nil
 	}
 
-	mkfsCmd := exec.CommandContext(ctx, a.exe.scripts.Mkfs)
-	mkfsCmd.Env = append(mkfsCmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("TAPE_BARCODE=%s", barcode), fmt.Sprintf("TAPE_NAME=%s", name))
-	if err := runCmd(a.logger, mkfsCmd); err != nil {
-		return fmt.Errorf("run mkfs script fail, %w", err)
+	display := new(entity.JobArchiveDisplay)
+	display.CopiedBytes = atomic.LoadInt64(&p.bytes)
+	display.CopiedFiles = atomic.LoadInt64(&p.files)
+	display.TotalBytes = atomic.LoadInt64(&p.totalBytes)
+	display.TotalFiles = atomic.LoadInt64(&p.totalFiles)
+	display.StartTime = p.startTime.Unix()
+
+	speed := atomic.LoadInt64(&p.speed)
+	display.Speed = &speed
+
+	return &entity.JobDisplay{Display: &entity.JobDisplay_Archive{Archive: display}}, nil
+}
+
+func (a *jobArchiveExecutor) Close(ctx context.Context) error {
+	a.logFile.Close()
+	a.exe.RemoveJobExecutor(ctx, a.job.ID)
+	return nil
+}
+
+func (a *jobArchiveExecutor) Logger() *logrus.Logger {
+	return a.logger
+}
+
+func (a *jobArchiveExecutor) getState() *entity.JobArchiveState {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if a.job.State == nil || a.job.State.GetArchive() == nil {
+		a.job.State = &entity.JobState{State: &entity.JobState_Archive{Archive: &entity.JobArchiveState{}}}
 	}
 
-	mountPoint, err := os.MkdirTemp("", "*.ltfs")
-	if err != nil {
-		return fmt.Errorf("create temp mountpoint, %w", err)
+	return a.job.State.GetArchive()
+}
+
+func (a *jobArchiveExecutor) updateJob(ctx context.Context, change func(*Job, *entity.JobArchiveState) error) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if a.job.State == nil || a.job.State.GetArchive() == nil {
+		a.job.State = &entity.JobState{State: &entity.JobState_Archive{Archive: &entity.JobArchiveState{}}}
 	}
 
-	mountCmd := exec.CommandContext(ctx, a.exe.scripts.Mount)
-	mountCmd.Env = append(mountCmd.Env, fmt.Sprintf("DEVICE=%s", device), fmt.Sprintf("MOUNT_POINT=%s", mountPoint))
-	if err := runCmd(a.logger, mountCmd); err != nil {
-		return fmt.Errorf("run mount script fail, %w", err)
+	if err := change(a.job, a.job.State.GetArchive()); err != nil {
+		a.logger.WithContext(ctx).WithError(err).Warnf("update state failed while exec change callback")
+		return fmt.Errorf("update state failed while exec change callback, %w", err)
 	}
-	defer func() {
-		umountCmd := exec.CommandContext(tools.WithoutTimeout(ctx), a.exe.scripts.Umount)
-		umountCmd.Env = append(umountCmd.Env, fmt.Sprintf("MOUNT_POINT=%s", mountPoint))
-		if err := runCmd(a.logger, umountCmd); err != nil {
-			a.logger.WithContext(ctx).WithError(err).Errorf("run umount script fail, %s", mountPoint)
-			return
-		}
-		if err := os.Remove(mountPoint); err != nil {
-			a.logger.WithContext(ctx).WithError(err).Errorf("remove mount point fail, %s", mountPoint)
-			return
-		}
-	}()
-
-	wildcardJobOpts := make([]acp.WildcardJobOption, 0, 6)
-	wildcardJobOpts = append(wildcardJobOpts, acp.Target(mountPoint))
-	for _, source := range a.state.Sources {
-		if source.Status == entity.CopyStatus_SUBMITED {
-			continue
-		}
-		wildcardJobOpts = append(wildcardJobOpts, acp.AccurateSource(source.Source.Base, source.Source.Path))
+	if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
+		a.logger.WithContext(ctx).WithError(err).Warnf("update state failed while save job")
+		return fmt.Errorf("update state failed while save job, %w", err)
 	}
 
-	opts := make([]acp.Option, 0, 4)
-	opts = append(opts, acp.WildcardJob(wildcardJobOpts...))
-	opts = append(opts, acp.WithHash(true))
-	opts = append(opts, acp.SetToDevice(acp.LinearDevice(true)))
-	opts = append(opts, acp.WithLogger(a.logger))
-
-	reportHander, reportGetter := acp.NewReportGetter()
-	opts = append(opts, acp.WithEventHandler(reportHander))
-
-	a.progress = newProgress()
-	defer func() { a.progress = nil }()
-
-	var dropToReadonly bool
-	opts = append(opts, acp.WithEventHandler(func(ev acp.Event) {
-		switch e := ev.(type) {
-		case *acp.EventUpdateCount:
-			atomic.StoreInt64(&a.progress.totalBytes, e.Bytes)
-			atomic.StoreInt64(&a.progress.totalFiles, e.Files)
-			return
-		case *acp.EventUpdateProgress:
-			a.progress.setBytes(e.Bytes)
-			atomic.StoreInt64(&a.progress.files, e.Files)
-			return
-		case *acp.EventReportError:
-			a.logger.WithContext(ctx).Errorf("acp report error, src= '%s' dst= '%s' err= '%s'", e.Error.Src, e.Error.Dst, e.Error.Err)
-			return
-		case *acp.EventUpdateJob:
-			job := e.Job
-			src := entity.NewSourceFromACPJob(job)
-
-			var targetStatus entity.CopyStatus
-			switch job.Status {
-			case acp.JobStatusPending, acp.JobStatusPreparing:
-				targetStatus = entity.CopyStatus_PENDING
-			case acp.JobStatusCopying:
-				targetStatus = entity.CopyStatus_RUNNING
-			case acp.JobStatusFinished:
-				targetStatus = entity.CopyStatus_FAILED
-				if len(job.SuccessTargets) > 0 {
-					a.logger.WithContext(ctx).Infof("file '%s' copy success, size= %d", src.RealPath(), job.Size)
-					targetStatus = entity.CopyStatus_STAGED
-					break // break from switch
-				}
-
-				for dst, err := range job.FailTargets {
-					if err == nil {
-						continue
-					}
-					if errors.Is(err, acp.ErrTargetNoSpace) {
-						continue
-					}
-
-					a.logger.WithContext(ctx).WithError(err).Errorf("file '%s' copy fail, dst= '%s'", src.RealPath(), dst)
-					if errors.Is(err, acp.ErrTargetDropToReadonly) {
-						dropToReadonly = true
-					}
-				}
-			default:
-				return
-			}
-
-			a.stateLock.Lock()
-			defer a.stateLock.Unlock()
-
-			idx := sort.Search(len(a.state.Sources), func(idx int) bool {
-				return src.Compare(a.state.Sources[idx].Source) <= 0
-			})
-			if idx < 0 || idx >= len(a.state.Sources) || src.Compare(a.state.Sources[idx].Source) != 0 {
-				a.logger.Warnf(
-					"cannot found target file, real_path= %s found_index= %d tape_file_path= %v", src.RealPath(), idx,
-					lo.Map(a.state.Sources, func(source *entity.SourceState, _ int) string { return source.Source.RealPath() }))
-				return
-			}
-
-			target := a.state.Sources[idx]
-			if target == nil || !src.Equal(target.Source) {
-				return
-			}
-			target.Status = targetStatus
-
-			if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
-				logrus.WithContext(ctx).Infof("save job for update file fail, name= %s", job.Base+path.Join(job.Path...))
-			}
-			return
-		}
-	}))
-
-	defer func() {
-		ctx := tools.WithoutTimeout(ctx)
-
-		// if tape drop to readonly, ltfs cannot write index to partition a.
-		// rollback sources for next try.
-		if dropToReadonly {
-			a.logger.WithContext(ctx).Errorf("tape filesystem had droped to readonly, rollback, barcode= '%s'", barcode)
-			a.rollbackSources(ctx)
-			return
-		}
-
-		report := reportGetter()
-		sort.Slice(report.Jobs, func(i, j int) bool {
-			return entity.NewSourceFromACPJob(report.Jobs[i]).Compare(entity.NewSourceFromACPJob(report.Jobs[j])) < 0
-		})
-
-		reportFile, err := a.exe.newReportWriter(barcode)
-		if err != nil {
-			a.logger.WithContext(ctx).WithError(err).Warnf("open report file fail, barcode= '%s'", barcode)
-		} else {
-			defer reportFile.Close()
-			tools.WrapWithLogger(ctx, a.logger, func() {
-				reportFile.Write([]byte(report.ToJSONString(false)))
-			})
-		}
-
-		filteredJobs := make([]*acp.Job, 0, len(report.Jobs))
-		files := make([]*library.TapeFile, 0, len(report.Jobs))
-		for _, job := range report.Jobs {
-			if len(job.SuccessTargets) == 0 {
-				continue
-			}
-			if !job.Mode.IsRegular() {
-				continue
-			}
-
-			hash, err := hex.DecodeString(job.SHA256)
-			if err != nil {
-				a.logger.WithContext(ctx).WithError(err).Warnf("decode sha256 fail, path= '%s'", entity.NewSourceFromACPJob(job).RealPath())
-				continue
-			}
-
-			files = append(files, &library.TapeFile{
-				Path:      path.Join(job.Path...),
-				Size:      job.Size,
-				Mode:      job.Mode,
-				ModTime:   job.ModTime,
-				WriteTime: job.WriteTime,
-				Hash:      hash,
-			})
-			filteredJobs = append(filteredJobs, job)
-		}
-
-		tape, err := a.exe.lib.CreateTape(ctx, &library.Tape{
-			Barcode:    barcode,
-			Name:       name,
-			Encryption: encryption,
-			CreateTime: time.Now(),
-		}, files)
-		if err != nil {
-			rerr = tools.AppendError(rerr, fmt.Errorf("create tape fail, barcode= '%s' name= '%s', %w", barcode, name, err))
-			return
-		}
-		a.logger.Infof("create tape success, tape_id= %d", tape.ID)
-
-		if err := a.exe.lib.TrimFiles(ctx); err != nil {
-			a.logger.WithError(err).Warnf("trim library files fail")
-		}
-
-		if err := a.markSourcesAsSubmited(ctx, filteredJobs); err != nil {
-			rerr = tools.AppendError(rerr, fmt.Errorf("mark source as submited fail, %w", err))
-			return
-		}
-	}()
-
-	copyer, err := acp.New(ctx, opts...)
-	if err != nil {
-		rerr = fmt.Errorf("start copy fail, %w", err)
-		return
-	}
-
-	copyer.Wait()
-	return
+	return nil
 }
 
 func (a *jobArchiveExecutor) switchStep(ctx context.Context, target entity.JobArchiveStep, status entity.JobStatus, expect mapset.Set[entity.JobArchiveStep]) error {
-	a.stateLock.Lock()
-	defer a.stateLock.Unlock()
-
-	if !expect.Contains(a.state.Step) {
-		return fmt.Errorf("unexpected current step, target= '%s' expect= '%s' has= '%s'", target, expect, a.state.Step)
-	}
-
-	a.state.Step = target
-	a.job.Status = status
-	if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
-		return fmt.Errorf("switch to step copying, save job fail, %w", err)
-	}
-
-	return nil
-}
-
-func (a *jobArchiveExecutor) markSourcesAsSubmited(ctx context.Context, jobs []*acp.Job) error {
-	a.stateLock.Lock()
-	defer a.stateLock.Unlock()
-
-	searchableSource := a.state.Sources[:]
-	for _, job := range jobs {
-		src := entity.NewSourceFromACPJob(job)
-		for idx, testSrc := range searchableSource {
-			if src.Compare(testSrc.Source) <= 0 {
-				searchableSource = searchableSource[idx:]
-				break
-			}
+	return a.updateJob(ctx, func(job *Job, state *entity.JobArchiveState) error {
+		if !expect.Contains(state.Step) {
+			return fmt.Errorf("unexpected current step, target= '%s' expect= '%s' has= '%s'", target, expect, state.Step)
 		}
 
-		target := searchableSource[0]
-		if target == nil || !src.Equal(target.Source) {
-			continue
-		}
-
-		target.Status = entity.CopyStatus_SUBMITED
-	}
-
-	if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
-		return fmt.Errorf("mark sources as submited, save job, %w", err)
-	}
-	return nil
-}
-
-func (a *jobArchiveExecutor) rollbackSources(ctx context.Context) error {
-	a.stateLock.Lock()
-	defer a.stateLock.Unlock()
-
-	for _, source := range a.state.Sources {
-		if source.Status == entity.CopyStatus_SUBMITED {
-			continue
-		}
-		source.Status = entity.CopyStatus_PENDING
-	}
-
-	if _, err := a.exe.SaveJob(ctx, a.job); err != nil {
-		return fmt.Errorf("mark sources as submited, save job, %w", err)
-	}
-	return nil
-}
-
-func (a *jobArchiveExecutor) getTodoSources() int {
-	a.stateLock.Lock()
-	defer a.stateLock.Unlock()
-
-	var todo int
-	for _, s := range a.state.Sources {
-		if s.Status == entity.CopyStatus_SUBMITED {
-			continue
-		}
-		todo++
-	}
-
-	return todo
-}
-
-func (a *jobArchiveExecutor) makeTapeFinished(ctx context.Context) {
-	if a.getTodoSources() > 0 {
-		a.submit(ctx, &entity.JobArchiveNextParam{Param: &entity.JobArchiveNextParam_WaitForTape{WaitForTape: &entity.JobArchiveWaitForTapeParam{}}})
-	} else {
-		a.submit(ctx, &entity.JobArchiveNextParam{Param: &entity.JobArchiveNextParam_Finished{Finished: &entity.JobArchiveFinishedParam{}}})
-	}
+		state.Step = target
+		job.Status = status
+		return nil
+	})
 }

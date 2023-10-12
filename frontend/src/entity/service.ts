@@ -15,7 +15,9 @@ import { MessageType } from "@protobuf-ts/runtime";
 import { LibraryEntityType } from "./library_entity_type";
 import { SourceFile } from "./source";
 import { JobDisplay } from "./job";
-import { JobNextParam } from "./job";
+import { JobDispatchParam } from "./job";
+import { JobState } from "./job";
+import { JobStatus } from "./job";
 import { CreatableJob } from "./job";
 import { Job } from "./job";
 import { JobRecentlyUpdateFilter } from "./job";
@@ -270,6 +272,28 @@ export interface JobCreateReply {
     job?: Job;
 }
 /**
+ * @generated from protobuf message service.JobEditStateRequest
+ */
+export interface JobEditStateRequest {
+    /**
+     * @generated from protobuf field: int64 id = 1;
+     */
+    id: bigint;
+    /**
+     * @generated from protobuf field: optional job.JobStatus status = 2;
+     */
+    status?: JobStatus;
+    /**
+     * @generated from protobuf field: optional job.JobState state = 3;
+     */
+    state?: JobState;
+}
+/**
+ * @generated from protobuf message service.JobEditStateReply
+ */
+export interface JobEditStateReply {
+}
+/**
  * @generated from protobuf message service.JobDeleteRequest
  */
 export interface JobDeleteRequest {
@@ -284,26 +308,22 @@ export interface JobDeleteRequest {
 export interface JobDeleteReply {
 }
 /**
- * @generated from protobuf message service.JobNextRequest
+ * @generated from protobuf message service.JobDispatchRequest
  */
-export interface JobNextRequest {
+export interface JobDispatchRequest {
     /**
      * @generated from protobuf field: int64 id = 1;
      */
     id: bigint;
     /**
-     * @generated from protobuf field: job.JobNextParam param = 2;
+     * @generated from protobuf field: job.JobDispatchParam param = 2;
      */
-    param?: JobNextParam;
+    param?: JobDispatchParam;
 }
 /**
- * @generated from protobuf message service.JobNextReply
+ * @generated from protobuf message service.JobDispatchReply
  */
-export interface JobNextReply {
-    /**
-     * @generated from protobuf field: job.Job job = 1;
-     */
-    job?: Job;
+export interface JobDispatchReply {
 }
 /**
  * @generated from protobuf message service.JobDisplayRequest
@@ -1521,6 +1541,93 @@ class JobCreateReply$Type extends MessageType<JobCreateReply> {
  */
 export const JobCreateReply = new JobCreateReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class JobEditStateRequest$Type extends MessageType<JobEditStateRequest> {
+    constructor() {
+        super("service.JobEditStateRequest", [
+            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "status", kind: "enum", opt: true, T: () => ["job.JobStatus", JobStatus] },
+            { no: 3, name: "state", kind: "message", T: () => JobState }
+        ]);
+    }
+    create(value?: PartialMessage<JobEditStateRequest>): JobEditStateRequest {
+        const message = { id: 0n };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobEditStateRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobEditStateRequest): JobEditStateRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int64 id */ 1:
+                    message.id = reader.int64().toBigInt();
+                    break;
+                case /* optional job.JobStatus status */ 2:
+                    message.status = reader.int32();
+                    break;
+                case /* optional job.JobState state */ 3:
+                    message.state = JobState.internalBinaryRead(reader, reader.uint32(), options, message.state);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: JobEditStateRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 id = 1; */
+        if (message.id !== 0n)
+            writer.tag(1, WireType.Varint).int64(message.id);
+        /* optional job.JobStatus status = 2; */
+        if (message.status !== undefined)
+            writer.tag(2, WireType.Varint).int32(message.status);
+        /* optional job.JobState state = 3; */
+        if (message.state)
+            JobState.internalBinaryWrite(message.state, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.JobEditStateRequest
+ */
+export const JobEditStateRequest = new JobEditStateRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class JobEditStateReply$Type extends MessageType<JobEditStateReply> {
+    constructor() {
+        super("service.JobEditStateReply", []);
+    }
+    create(value?: PartialMessage<JobEditStateReply>): JobEditStateReply {
+        const message = {};
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<JobEditStateReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobEditStateReply): JobEditStateReply {
+        return target ?? this.create();
+    }
+    internalBinaryWrite(message: JobEditStateReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.JobEditStateReply
+ */
+export const JobEditStateReply = new JobEditStateReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class JobDeleteRequest$Type extends MessageType<JobDeleteRequest> {
     constructor() {
         super("service.JobDeleteRequest", [
@@ -1602,21 +1709,21 @@ class JobDeleteReply$Type extends MessageType<JobDeleteReply> {
  */
 export const JobDeleteReply = new JobDeleteReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobNextRequest$Type extends MessageType<JobNextRequest> {
+class JobDispatchRequest$Type extends MessageType<JobDispatchRequest> {
     constructor() {
-        super("service.JobNextRequest", [
+        super("service.JobDispatchRequest", [
             { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "param", kind: "message", T: () => JobNextParam }
+            { no: 2, name: "param", kind: "message", T: () => JobDispatchParam }
         ]);
     }
-    create(value?: PartialMessage<JobNextRequest>): JobNextRequest {
+    create(value?: PartialMessage<JobDispatchRequest>): JobDispatchRequest {
         const message = { id: 0n };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobNextRequest>(this, message, value);
+            reflectionMergePartial<JobDispatchRequest>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobNextRequest): JobNextRequest {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDispatchRequest): JobDispatchRequest {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -1624,8 +1731,8 @@ class JobNextRequest$Type extends MessageType<JobNextRequest> {
                 case /* int64 id */ 1:
                     message.id = reader.int64().toBigInt();
                     break;
-                case /* job.JobNextParam param */ 2:
-                    message.param = JobNextParam.internalBinaryRead(reader, reader.uint32(), options, message.param);
+                case /* job.JobDispatchParam param */ 2:
+                    message.param = JobDispatchParam.internalBinaryRead(reader, reader.uint32(), options, message.param);
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1638,13 +1745,13 @@ class JobNextRequest$Type extends MessageType<JobNextRequest> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobNextRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobDispatchRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* int64 id = 1; */
         if (message.id !== 0n)
             writer.tag(1, WireType.Varint).int64(message.id);
-        /* job.JobNextParam param = 2; */
+        /* job.JobDispatchParam param = 2; */
         if (message.param)
-            JobNextParam.internalBinaryWrite(message.param, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+            JobDispatchParam.internalBinaryWrite(message.param, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1652,46 +1759,25 @@ class JobNextRequest$Type extends MessageType<JobNextRequest> {
     }
 }
 /**
- * @generated MessageType for protobuf message service.JobNextRequest
+ * @generated MessageType for protobuf message service.JobDispatchRequest
  */
-export const JobNextRequest = new JobNextRequest$Type();
+export const JobDispatchRequest = new JobDispatchRequest$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobNextReply$Type extends MessageType<JobNextReply> {
+class JobDispatchReply$Type extends MessageType<JobDispatchReply> {
     constructor() {
-        super("service.JobNextReply", [
-            { no: 1, name: "job", kind: "message", T: () => Job }
-        ]);
+        super("service.JobDispatchReply", []);
     }
-    create(value?: PartialMessage<JobNextReply>): JobNextReply {
+    create(value?: PartialMessage<JobDispatchReply>): JobDispatchReply {
         const message = {};
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobNextReply>(this, message, value);
+            reflectionMergePartial<JobDispatchReply>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobNextReply): JobNextReply {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* job.Job job */ 1:
-                    message.job = Job.internalBinaryRead(reader, reader.uint32(), options, message.job);
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDispatchReply): JobDispatchReply {
+        return target ?? this.create();
     }
-    internalBinaryWrite(message: JobNextReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job.Job job = 1; */
-        if (message.job)
-            Job.internalBinaryWrite(message.job, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+    internalBinaryWrite(message: JobDispatchReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1699,9 +1785,9 @@ class JobNextReply$Type extends MessageType<JobNextReply> {
     }
 }
 /**
- * @generated MessageType for protobuf message service.JobNextReply
+ * @generated MessageType for protobuf message service.JobDispatchReply
  */
-export const JobNextReply = new JobNextReply$Type();
+export const JobDispatchReply = new JobDispatchReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobDisplayRequest$Type extends MessageType<JobDisplayRequest> {
     constructor() {
@@ -2281,8 +2367,9 @@ export const Service = new ServiceType("service.Service", [
     { name: "TapeGetPositions", options: {}, I: TapeGetPositionsRequest, O: TapeGetPositionsReply },
     { name: "JobList", options: {}, I: JobListRequest, O: JobListReply },
     { name: "JobCreate", options: {}, I: JobCreateRequest, O: JobCreateReply },
+    { name: "JobEditState", options: {}, I: JobEditStateRequest, O: JobEditStateReply },
     { name: "JobDelete", options: {}, I: JobDeleteRequest, O: JobDeleteReply },
-    { name: "JobNext", options: {}, I: JobNextRequest, O: JobNextReply },
+    { name: "JobDispatch", options: {}, I: JobDispatchRequest, O: JobDispatchReply },
     { name: "JobDisplay", options: {}, I: JobDisplayRequest, O: JobDisplayReply },
     { name: "JobGetLog", options: {}, I: JobGetLogRequest, O: JobGetLogReply },
     { name: "SourceList", options: {}, I: SourceListRequest, O: SourceListReply },

@@ -22,9 +22,9 @@ export interface JobRestoreParam {
     fileIds: bigint[];
 }
 /**
- * @generated from protobuf message job_restore.JobRestoreNextParam
+ * @generated from protobuf message job_restore.JobRestoreDispatchParam
  */
-export interface JobRestoreNextParam {
+export interface JobRestoreDispatchParam {
     /**
      * @generated from protobuf oneof: param
      */
@@ -246,22 +246,22 @@ class JobRestoreParam$Type extends MessageType<JobRestoreParam> {
  */
 export const JobRestoreParam = new JobRestoreParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
+class JobRestoreDispatchParam$Type extends MessageType<JobRestoreDispatchParam> {
     constructor() {
-        super("job_restore.JobRestoreNextParam", [
+        super("job_restore.JobRestoreDispatchParam", [
             { no: 1, name: "wait_for_tape", kind: "message", oneof: "param", T: () => JobRestoreWaitForTapeParam },
             { no: 2, name: "copying", kind: "message", oneof: "param", T: () => JobRestoreCopyingParam },
             { no: 255, name: "finished", kind: "message", oneof: "param", T: () => JobRestoreFinishedParam }
         ]);
     }
-    create(value?: PartialMessage<JobRestoreNextParam>): JobRestoreNextParam {
+    create(value?: PartialMessage<JobRestoreDispatchParam>): JobRestoreDispatchParam {
         const message = { param: { oneofKind: undefined } };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobRestoreNextParam>(this, message, value);
+            reflectionMergePartial<JobRestoreDispatchParam>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRestoreNextParam): JobRestoreNextParam {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobRestoreDispatchParam): JobRestoreDispatchParam {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
@@ -295,7 +295,7 @@ class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobRestoreNextParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+    internalBinaryWrite(message: JobRestoreDispatchParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* job_restore.JobRestoreWaitForTapeParam wait_for_tape = 1; */
         if (message.param.oneofKind === "waitForTape")
             JobRestoreWaitForTapeParam.internalBinaryWrite(message.param.waitForTape, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
@@ -312,9 +312,9 @@ class JobRestoreNextParam$Type extends MessageType<JobRestoreNextParam> {
     }
 }
 /**
- * @generated MessageType for protobuf message job_restore.JobRestoreNextParam
+ * @generated MessageType for protobuf message job_restore.JobRestoreDispatchParam
  */
-export const JobRestoreNextParam = new JobRestoreNextParam$Type();
+export const JobRestoreDispatchParam = new JobRestoreDispatchParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobRestoreWaitForTapeParam$Type extends MessageType<JobRestoreWaitForTapeParam> {
     constructor() {

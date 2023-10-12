@@ -16,9 +16,5 @@ func (api *API) JobCreate(ctx context.Context, req *entity.JobCreateRequest) (*e
 		return nil, err
 	}
 
-	if err := api.exe.Start(ctx, job); err != nil {
-		return nil, err
-	}
-
 	return &entity.JobCreateReply{Job: convertJobs(job)[0]}, nil
 }

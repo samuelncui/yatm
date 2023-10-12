@@ -16,7 +16,7 @@ message JobArchiveParam {
     repeated source.Source sources = 1;
 }
 
-message JobArchiveNextParam {
+message JobArchiveDispatchParam {
     oneof param {
         JobArchiveWaitForTapeParam wait_for_tape = 1;
         JobArchiveCopyingParam copying = 2;

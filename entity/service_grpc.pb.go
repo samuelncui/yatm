@@ -32,8 +32,9 @@ type ServiceClient interface {
 	TapeGetPositions(ctx context.Context, in *TapeGetPositionsRequest, opts ...grpc.CallOption) (*TapeGetPositionsReply, error)
 	JobList(ctx context.Context, in *JobListRequest, opts ...grpc.CallOption) (*JobListReply, error)
 	JobCreate(ctx context.Context, in *JobCreateRequest, opts ...grpc.CallOption) (*JobCreateReply, error)
+	JobEditState(ctx context.Context, in *JobEditStateRequest, opts ...grpc.CallOption) (*JobEditStateReply, error)
 	JobDelete(ctx context.Context, in *JobDeleteRequest, opts ...grpc.CallOption) (*JobDeleteReply, error)
-	JobNext(ctx context.Context, in *JobNextRequest, opts ...grpc.CallOption) (*JobNextReply, error)
+	JobDispatch(ctx context.Context, in *JobDispatchRequest, opts ...grpc.CallOption) (*JobDispatchReply, error)
 	JobDisplay(ctx context.Context, in *JobDisplayRequest, opts ...grpc.CallOption) (*JobDisplayReply, error)
 	JobGetLog(ctx context.Context, in *JobGetLogRequest, opts ...grpc.CallOption) (*JobGetLogReply, error)
 	SourceList(ctx context.Context, in *SourceListRequest, opts ...grpc.CallOption) (*SourceListReply, error)
@@ -140,6 +141,15 @@ func (c *serviceClient) JobCreate(ctx context.Context, in *JobCreateRequest, opt
 	return out, nil
 }
 
+func (c *serviceClient) JobEditState(ctx context.Context, in *JobEditStateRequest, opts ...grpc.CallOption) (*JobEditStateReply, error) {
+	out := new(JobEditStateReply)
+	err := c.cc.Invoke(ctx, "/service.Service/JobEditState", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *serviceClient) JobDelete(ctx context.Context, in *JobDeleteRequest, opts ...grpc.CallOption) (*JobDeleteReply, error) {
 	out := new(JobDeleteReply)
 	err := c.cc.Invoke(ctx, "/service.Service/JobDelete", in, out, opts...)
@@ -149,9 +159,9 @@ func (c *serviceClient) JobDelete(ctx context.Context, in *JobDeleteRequest, opt
 	return out, nil
 }
 
-func (c *serviceClient) JobNext(ctx context.Context, in *JobNextRequest, opts ...grpc.CallOption) (*JobNextReply, error) {
-	out := new(JobNextReply)
-	err := c.cc.Invoke(ctx, "/service.Service/JobNext", in, out, opts...)
+func (c *serviceClient) JobDispatch(ctx context.Context, in *JobDispatchRequest, opts ...grpc.CallOption) (*JobDispatchReply, error) {
+	out := new(JobDispatchReply)
+	err := c.cc.Invoke(ctx, "/service.Service/JobDispatch", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +236,9 @@ type ServiceServer interface {
 	TapeGetPositions(context.Context, *TapeGetPositionsRequest) (*TapeGetPositionsReply, error)
 	JobList(context.Context, *JobListRequest) (*JobListReply, error)
 	JobCreate(context.Context, *JobCreateRequest) (*JobCreateReply, error)
+	JobEditState(context.Context, *JobEditStateRequest) (*JobEditStateReply, error)
 	JobDelete(context.Context, *JobDeleteRequest) (*JobDeleteReply, error)
-	JobNext(context.Context, *JobNextRequest) (*JobNextReply, error)
+	JobDispatch(context.Context, *JobDispatchRequest) (*JobDispatchReply, error)
 	JobDisplay(context.Context, *JobDisplayRequest) (*JobDisplayReply, error)
 	JobGetLog(context.Context, *JobGetLogRequest) (*JobGetLogReply, error)
 	SourceList(context.Context, *SourceListRequest) (*SourceListReply, error)
@@ -271,11 +282,14 @@ func (UnimplementedServiceServer) JobList(context.Context, *JobListRequest) (*Jo
 func (UnimplementedServiceServer) JobCreate(context.Context, *JobCreateRequest) (*JobCreateReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobCreate not implemented")
 }
+func (UnimplementedServiceServer) JobEditState(context.Context, *JobEditStateRequest) (*JobEditStateReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JobEditState not implemented")
+}
 func (UnimplementedServiceServer) JobDelete(context.Context, *JobDeleteRequest) (*JobDeleteReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobDelete not implemented")
 }
-func (UnimplementedServiceServer) JobNext(context.Context, *JobNextRequest) (*JobNextReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method JobNext not implemented")
+func (UnimplementedServiceServer) JobDispatch(context.Context, *JobDispatchRequest) (*JobDispatchReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JobDispatch not implemented")
 }
 func (UnimplementedServiceServer) JobDisplay(context.Context, *JobDisplayRequest) (*JobDisplayReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JobDisplay not implemented")
@@ -488,6 +502,24 @@ func _Service_JobCreate_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_JobEditState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobEditStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).JobEditState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/service.Service/JobEditState",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).JobEditState(ctx, req.(*JobEditStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Service_JobDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(JobDeleteRequest)
 	if err := dec(in); err != nil {
@@ -506,20 +538,20 @@ func _Service_JobDelete_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_JobNext_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(JobNextRequest)
+func _Service_JobDispatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JobDispatchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).JobNext(ctx, in)
+		return srv.(ServiceServer).JobDispatch(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/service.Service/JobNext",
+		FullMethod: "/service.Service/JobDispatch",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).JobNext(ctx, req.(*JobNextRequest))
+		return srv.(ServiceServer).JobDispatch(ctx, req.(*JobDispatchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -680,12 +712,16 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_JobCreate_Handler,
 		},
 		{
+			MethodName: "JobEditState",
+			Handler:    _Service_JobEditState_Handler,
+		},
+		{
 			MethodName: "JobDelete",
 			Handler:    _Service_JobDelete_Handler,
 		},
 		{
-			MethodName: "JobNext",
-			Handler:    _Service_JobNext_Handler,
+			MethodName: "JobDispatch",
+			Handler:    _Service_JobDispatch_Handler,
 		},
 		{
 			MethodName: "JobDisplay",

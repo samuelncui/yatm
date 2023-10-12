@@ -6,15 +6,10 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-func (api *API) JobNext(ctx context.Context, req *entity.JobNextRequest) (*entity.JobNextReply, error) {
-	job, err := api.exe.GetJob(ctx, req.Id)
-	if err != nil {
+func (api *API) JobDispatch(ctx context.Context, req *entity.JobDispatchRequest) (*entity.JobDispatchReply, error) {
+	if err := api.exe.Dispatch(ctx, req.Id, req.Param); err != nil {
 		return nil, err
 	}
 
-	if err := api.exe.Submit(ctx, job, req.Param); err != nil {
-		return nil, err
-	}
-
-	return &entity.JobNextReply{Job: convertJobs(job)[0]}, nil
+	return &entity.JobDispatchReply{}, nil
 }

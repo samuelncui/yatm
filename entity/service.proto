@@ -22,8 +22,9 @@ service Service {
 
     rpc JobList(JobListRequest) returns (JobListReply) {}
     rpc JobCreate(JobCreateRequest) returns (JobCreateReply) {}
+    rpc JobEditState(JobEditStateRequest) returns (JobEditStateReply) {}
     rpc JobDelete(JobDeleteRequest) returns (JobDeleteReply) {}
-    rpc JobNext(JobNextRequest) returns (JobNextReply) {}
+    rpc JobDispatch(JobDispatchRequest) returns (JobDispatchReply) {}
     rpc JobDisplay(JobDisplayRequest) returns (JobDisplayReply) {}
     rpc JobGetLog(JobGetLogRequest) returns (JobGetLogReply) {}
 
@@ -133,6 +134,15 @@ message JobCreateReply {
     job.Job job = 1;
 }
 
+message JobEditStateRequest {
+    int64 id = 1;
+    optional job.JobStatus status = 2;
+    optional job.JobState state = 3;
+}
+
+message JobEditStateReply {
+}
+
 message JobDeleteRequest {
     repeated int64 ids = 1;
 }
@@ -140,13 +150,12 @@ message JobDeleteRequest {
 message JobDeleteReply {
 }
 
-message JobNextRequest {
+message JobDispatchRequest {
     int64 id = 1;
-    job.JobNextParam param = 2;
+    job.JobDispatchParam param = 2;
 }
 
-message JobNextReply {
-    job.Job job = 1;
+message JobDispatchReply {
 }
 
 message JobDisplayRequest {

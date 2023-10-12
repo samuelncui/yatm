@@ -16,7 +16,7 @@ message JobRestoreParam {
     repeated int64 file_ids = 1;
 }
 
-message JobRestoreNextParam {
+message JobRestoreDispatchParam {
     oneof param {
         JobRestoreWaitForTapeParam wait_for_tape = 1;
         JobRestoreCopyingParam copying = 2;

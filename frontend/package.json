@@ -10,8 +10,6 @@
     "gen-proto": "protoc --ts_out ./src/entity --proto_path ../entity/ `ls ../entity/*.proto` && ./src/entity/gen_index.sh"
   },
   "dependencies": {
-    "@samuelncui/chonky": "^0.2.7",
-    "@samuelncui/chonky-icon-fontawesome": "^0.2.7",
     "@emotion/react": "^11.10.4",
     "@emotion/styled": "^11.10.4",
     "@fortawesome/fontawesome-svg-core": "^1.2.32",
@@ -25,6 +23,8 @@
     "@protobuf-ts/grpcweb-transport": "^2.8.2",
     "@protobuf-ts/runtime": "^2.8.2",
     "@protobuf-ts/runtime-rpc": "^2.8.2",
+    "@samuelncui/chonky": "^0.2.7",
+    "@samuelncui/chonky-icon-fontawesome": "^0.2.7",
     "fast-text-encoding": "^1.0.6",
     "filesize": "^10.0.5",
     "format-duration": "^2.0.0",
@@ -37,6 +37,7 @@
     "react-dom": "^18.2.0",
     "react-is": "^18.2.0",
     "react-router-dom": "^6.4.5",
+    "react-virtuoso": "^4.6.1",
     "sort-by": "^1.2.0"
   },
   "devDependencies": {

@@ -41,10 +41,10 @@ message JobState {
     }
 }
 
-message JobNextParam {
+message JobDispatchParam {
     oneof param {
-        job_archive.JobArchiveNextParam archive = 1;
-        job_restore.JobRestoreNextParam restore = 2;
+        job_archive.JobArchiveDispatchParam archive = 1;
+        job_restore.JobRestoreDispatchParam restore = 2;
     }
 }
 

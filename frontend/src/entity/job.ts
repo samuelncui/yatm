@@ -13,8 +13,8 @@ import { MESSAGE_TYPE } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 import { JobRestoreDisplay } from "./job_restore";
 import { JobArchiveDisplay } from "./job_archive";
-import { JobRestoreNextParam } from "./job_restore";
-import { JobArchiveNextParam } from "./job_archive";
+import { JobRestoreDispatchParam } from "./job_restore";
+import { JobArchiveDispatchParam } from "./job_archive";
 import { JobRestoreState } from "./job_restore";
 import { JobArchiveState } from "./job_archive";
 import { JobRestoreParam } from "./job_restore";
@@ -95,24 +95,24 @@ export interface JobState {
     };
 }
 /**
- * @generated from protobuf message job.JobNextParam
+ * @generated from protobuf message job.JobDispatchParam
  */
-export interface JobNextParam {
+export interface JobDispatchParam {
     /**
      * @generated from protobuf oneof: param
      */
     param: {
         oneofKind: "archive";
         /**
-         * @generated from protobuf field: job_archive.JobArchiveNextParam archive = 1;
+         * @generated from protobuf field: job_archive.JobArchiveDispatchParam archive = 1;
          */
-        archive: JobArchiveNextParam;
+        archive: JobArchiveDispatchParam;
     } | {
         oneofKind: "restore";
         /**
-         * @generated from protobuf field: job_restore.JobRestoreNextParam restore = 2;
+         * @generated from protobuf field: job_restore.JobRestoreDispatchParam restore = 2;
          */
-        restore: JobRestoreNextParam;
+        restore: JobRestoreDispatchParam;
     } | {
         oneofKind: undefined;
     };
@@ -423,35 +423,35 @@ class JobState$Type extends MessageType<JobState> {
  */
 export const JobState = new JobState$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class JobNextParam$Type extends MessageType<JobNextParam> {
+class JobDispatchParam$Type extends MessageType<JobDispatchParam> {
     constructor() {
-        super("job.JobNextParam", [
-            { no: 1, name: "archive", kind: "message", oneof: "param", T: () => JobArchiveNextParam },
-            { no: 2, name: "restore", kind: "message", oneof: "param", T: () => JobRestoreNextParam }
+        super("job.JobDispatchParam", [
+            { no: 1, name: "archive", kind: "message", oneof: "param", T: () => JobArchiveDispatchParam },
+            { no: 2, name: "restore", kind: "message", oneof: "param", T: () => JobRestoreDispatchParam }
         ]);
     }
-    create(value?: PartialMessage<JobNextParam>): JobNextParam {
+    create(value?: PartialMessage<JobDispatchParam>): JobDispatchParam {
         const message = { param: { oneofKind: undefined } };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<JobNextParam>(this, message, value);
+            reflectionMergePartial<JobDispatchParam>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobNextParam): JobNextParam {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: JobDispatchParam): JobDispatchParam {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* job_archive.JobArchiveNextParam archive */ 1:
+                case /* job_archive.JobArchiveDispatchParam archive */ 1:
                     message.param = {
                         oneofKind: "archive",
-                        archive: JobArchiveNextParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).archive)
+                        archive: JobArchiveDispatchParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).archive)
                     };
                     break;
-                case /* job_restore.JobRestoreNextParam restore */ 2:
+                case /* job_restore.JobRestoreDispatchParam restore */ 2:
                     message.param = {
                         oneofKind: "restore",
-                        restore: JobRestoreNextParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).restore)
+                        restore: JobRestoreDispatchParam.internalBinaryRead(reader, reader.uint32(), options, (message.param as any).restore)
                     };
                     break;
                 default:
@@ -465,13 +465,13 @@ class JobNextParam$Type extends MessageType<JobNextParam> {
         }
         return message;
     }
-    internalBinaryWrite(message: JobNextParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* job_archive.JobArchiveNextParam archive = 1; */
+    internalBinaryWrite(message: JobDispatchParam, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* job_archive.JobArchiveDispatchParam archive = 1; */
         if (message.param.oneofKind === "archive")
-            JobArchiveNextParam.internalBinaryWrite(message.param.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
-        /* job_restore.JobRestoreNextParam restore = 2; */
+            JobArchiveDispatchParam.internalBinaryWrite(message.param.archive, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* job_restore.JobRestoreDispatchParam restore = 2; */
         if (message.param.oneofKind === "restore")
-            JobRestoreNextParam.internalBinaryWrite(message.param.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+            JobRestoreDispatchParam.internalBinaryWrite(message.param.restore, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -479,9 +479,9 @@ class JobNextParam$Type extends MessageType<JobNextParam> {
     }
 }
 /**
- * @generated MessageType for protobuf message job.JobNextParam
+ * @generated MessageType for protobuf message job.JobDispatchParam
  */
-export const JobNextParam = new JobNextParam$Type();
+export const JobDispatchParam = new JobDispatchParam$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class CreatableJob$Type extends MessageType<CreatableJob> {
     constructor() {

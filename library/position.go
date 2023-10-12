@@ -65,7 +65,7 @@ func (l *Library) ListPositions(ctx context.Context, tapeID int64, prefix string
 		return nil, fmt.Errorf("find position by file id fail, %w", r.Error)
 	}
 
-	convertPath := tools.Cache(func(p string) string { return strings.ReplaceAll(p, "/", "\x00") })
+	convertPath := tools.ThreadUnsafeCache(func(p string) string { return strings.ReplaceAll(p, "/", "\x00") })
 	sort.Slice(positions, func(i int, j int) bool {
 		return convertPath(positions[i].Path) < convertPath(positions[j].Path)
 	})

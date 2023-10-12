@@ -16,10 +16,12 @@ import type { JobGetLogReply } from "./service";
 import type { JobGetLogRequest } from "./service";
 import type { JobDisplayReply } from "./service";
 import type { JobDisplayRequest } from "./service";
-import type { JobNextReply } from "./service";
-import type { JobNextRequest } from "./service";
+import type { JobDispatchReply } from "./service";
+import type { JobDispatchRequest } from "./service";
 import type { JobDeleteReply } from "./service";
 import type { JobDeleteRequest } from "./service";
+import type { JobEditStateReply } from "./service";
+import type { JobEditStateRequest } from "./service";
 import type { JobCreateReply } from "./service";
 import type { JobCreateRequest } from "./service";
 import type { JobListReply } from "./service";
@@ -88,13 +90,17 @@ export interface IServiceClient {
      */
     jobCreate(input: JobCreateRequest, options?: RpcOptions): UnaryCall<JobCreateRequest, JobCreateReply>;
     /**
+     * @generated from protobuf rpc: JobEditState(service.JobEditStateRequest) returns (service.JobEditStateReply);
+     */
+    jobEditState(input: JobEditStateRequest, options?: RpcOptions): UnaryCall<JobEditStateRequest, JobEditStateReply>;
+    /**
      * @generated from protobuf rpc: JobDelete(service.JobDeleteRequest) returns (service.JobDeleteReply);
      */
     jobDelete(input: JobDeleteRequest, options?: RpcOptions): UnaryCall<JobDeleteRequest, JobDeleteReply>;
     /**
-     * @generated from protobuf rpc: JobNext(service.JobNextRequest) returns (service.JobNextReply);
+     * @generated from protobuf rpc: JobDispatch(service.JobDispatchRequest) returns (service.JobDispatchReply);
      */
-    jobNext(input: JobNextRequest, options?: RpcOptions): UnaryCall<JobNextRequest, JobNextReply>;
+    jobDispatch(input: JobDispatchRequest, options?: RpcOptions): UnaryCall<JobDispatchRequest, JobDispatchReply>;
     /**
      * @generated from protobuf rpc: JobDisplay(service.JobDisplayRequest) returns (service.JobDisplayReply);
      */
@@ -200,59 +206,66 @@ export class ServiceClient implements IServiceClient, ServiceInfo {
         return stackIntercept<JobCreateRequest, JobCreateReply>("unary", this._transport, method, opt, input);
     }
     /**
+     * @generated from protobuf rpc: JobEditState(service.JobEditStateRequest) returns (service.JobEditStateReply);
+     */
+    jobEditState(input: JobEditStateRequest, options?: RpcOptions): UnaryCall<JobEditStateRequest, JobEditStateReply> {
+        const method = this.methods[10], opt = this._transport.mergeOptions(options);
+        return stackIntercept<JobEditStateRequest, JobEditStateReply>("unary", this._transport, method, opt, input);
+    }
+    /**
      * @generated from protobuf rpc: JobDelete(service.JobDeleteRequest) returns (service.JobDeleteReply);
      */
     jobDelete(input: JobDeleteRequest, options?: RpcOptions): UnaryCall<JobDeleteRequest, JobDeleteReply> {
-        const method = this.methods[10], opt = this._transport.mergeOptions(options);
+        const method = this.methods[11], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobDeleteRequest, JobDeleteReply>("unary", this._transport, method, opt, input);
     }
     /**
-     * @generated from protobuf rpc: JobNext(service.JobNextRequest) returns (service.JobNextReply);
+     * @generated from protobuf rpc: JobDispatch(service.JobDispatchRequest) returns (service.JobDispatchReply);
      */
-    jobNext(input: JobNextRequest, options?: RpcOptions): UnaryCall<JobNextRequest, JobNextReply> {
-        const method = this.methods[11], opt = this._transport.mergeOptions(options);
-        return stackIntercept<JobNextRequest, JobNextReply>("unary", this._transport, method, opt, input);
+    jobDispatch(input: JobDispatchRequest, options?: RpcOptions): UnaryCall<JobDispatchRequest, JobDispatchReply> {
+        const method = this.methods[12], opt = this._transport.mergeOptions(options);
+        return stackIntercept<JobDispatchRequest, JobDispatchReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobDisplay(service.JobDisplayRequest) returns (service.JobDisplayReply);
      */
     jobDisplay(input: JobDisplayRequest, options?: RpcOptions): UnaryCall<JobDisplayRequest, JobDisplayReply> {
-        const method = this.methods[12], opt = this._transport.mergeOptions(options);
+        const method = this.methods[13], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobDisplayRequest, JobDisplayReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: JobGetLog(service.JobGetLogRequest) returns (service.JobGetLogReply);
      */
     jobGetLog(input: JobGetLogRequest, options?: RpcOptions): UnaryCall<JobGetLogRequest, JobGetLogReply> {
-        const method = this.methods[13], opt = this._transport.mergeOptions(options);
+        const method = this.methods[14], opt = this._transport.mergeOptions(options);
         return stackIntercept<JobGetLogRequest, JobGetLogReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: SourceList(service.SourceListRequest) returns (service.SourceListReply);
      */
     sourceList(input: SourceListRequest, options?: RpcOptions): UnaryCall<SourceListRequest, SourceListReply> {
-        const method = this.methods[14], opt = this._transport.mergeOptions(options);
+        const method = this.methods[15], opt = this._transport.mergeOptions(options);
         return stackIntercept<SourceListRequest, SourceListReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: DeviceList(service.DeviceListRequest) returns (service.DeviceListReply);
      */
     deviceList(input: DeviceListRequest, options?: RpcOptions): UnaryCall<DeviceListRequest, DeviceListReply> {
-        const method = this.methods[15], opt = this._transport.mergeOptions(options);
+        const method = this.methods[16], opt = this._transport.mergeOptions(options);
         return stackIntercept<DeviceListRequest, DeviceListReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: LibraryExport(service.LibraryExportRequest) returns (service.LibraryExportReply);
      */
     libraryExport(input: LibraryExportRequest, options?: RpcOptions): UnaryCall<LibraryExportRequest, LibraryExportReply> {
-        const method = this.methods[16], opt = this._transport.mergeOptions(options);
+        const method = this.methods[17], opt = this._transport.mergeOptions(options);
         return stackIntercept<LibraryExportRequest, LibraryExportReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: LibraryTrim(service.LibraryTrimRequest) returns (service.LibraryTrimReply);
      */
     libraryTrim(input: LibraryTrimRequest, options?: RpcOptions): UnaryCall<LibraryTrimRequest, LibraryTrimReply> {
-        const method = this.methods[17], opt = this._transport.mergeOptions(options);
+        const method = this.methods[18], opt = this._transport.mergeOptions(options);
         return stackIntercept<LibraryTrimRequest, LibraryTrimReply>("unary", this._transport, method, opt, input);
     }
 }
