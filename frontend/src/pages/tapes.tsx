@@ -7,6 +7,7 @@ import { ChonkyActions, ChonkyFileActionData, FileData } from "@samuelncui/chonk
 
 import { cli, Root, convertTapes, convertPositions } from "../api";
 import { TrimLibraryAction } from "../actions";
+import { chonkyI18n } from "../tools";
 
 export const TapesType = "tapes";
 
@@ -127,6 +128,7 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    i18n: chonkyI18n,
   };
 };
 
