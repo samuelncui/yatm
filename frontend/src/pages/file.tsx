@@ -12,6 +12,7 @@ import { ToobarInfo } from "../components/toolbarInfo";
 
 import { useDetailModal, DetailModal } from "./file-detail";
 import { FileGetReply } from "../entity";
+import { chonkyI18n } from "../tools";
 
 const useDualSide = () => {
   const left = useRef<FileBrowserHandle>(null);
@@ -165,6 +166,7 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
     totalSize,
+    i18n: chonkyI18n,
   };
 };
 

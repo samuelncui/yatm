@@ -9,6 +9,7 @@ import { cli, convertSourceFiles } from "../api";
 import { Root } from "../api";
 import { AddFileAction, RefreshListAction, CreateBackupJobAction } from "../actions";
 import { JobArchiveParam, JobCreateRequest, Source } from "../entity";
+import { chonkyI18n } from "../tools";
 
 const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
@@ -64,6 +65,7 @@ const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    i18n: chonkyI18n,
   };
 };
 
@@ -139,6 +141,7 @@ const useBackupTargetBrowser = () => {
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    i18n: chonkyI18n,
   };
 };
 

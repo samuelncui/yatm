@@ -2,15 +2,15 @@ import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle } from "@samuelncui/chonky";
+import { FileBrowser, FileNavbar, FileToolbar, FileList, FileContextMenu, FileArray, FileBrowserHandle, defaultFormatters } from "@samuelncui/chonky";
 import { ChonkyActions, ChonkyFileActionData, FileData } from "@samuelncui/chonky";
 
 import { ToobarInfo } from "../components/toolbarInfo";
 
-import { cli, convertFiles } from "../api";
-import { Root } from "../api";
+import { Root, cli, convertFiles } from "../api";
 import { AddFileAction, RefreshListAction, CreateRestoreJobAction } from "../actions";
 import { JobCreateRequest, JobRestoreParam, Source } from "../entity";
+import { chonkyI18n } from "../tools";
 
 const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
@@ -82,6 +82,7 @@ const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    i18n: chonkyI18n,
   };
 };
 
@@ -132,6 +133,7 @@ const useRestoreTargetBrowser = () => {
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
     doubleClickDelay: 300,
+    i18n: chonkyI18n,
   };
 };
 
