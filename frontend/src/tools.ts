@@ -12,7 +12,11 @@ export const hexEncode = (buf: string) => {
   return str;
 };
 
-export const formatFilesize = (size: number | bigint): string => filesize(size as any as number, { standard: "iec" }) as string;
+export const formatFilesize = (size: number | bigint): string =>
+  filesize(size as any as number, {
+    base: 2,
+    standard: "jedec",
+  }) as string;
 
 export const download = (buf: Uint8Array, filename: string, contentType: string) => {
   const blob = new Blob([buf], { type: contentType });
@@ -33,7 +37,10 @@ export const chonkyI18n: I18nConfig = {
     ...defaultFormatters,
     formatFileSize: (_intl: IntlShape, file: Nullable<FileData>): Nullable<string> => {
       if (!file || typeof file.size !== "number") return null;
-      return filesize(file.size, { standard: "iec" }) as string;
+      return filesize(file.size, {
+        base: 2,
+        standard: "jedec",
+      }) as string;
     },
   },
 };
