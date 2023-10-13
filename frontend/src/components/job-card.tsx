@@ -17,6 +17,10 @@ import { RefreshContext } from "../pages/jobs";
 const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
   const refresh = useContext(RefreshContext);
   const deleteJob = useCallback(async () => {
+    if (!confirm(`Delete job ${jobID}, this may cause data loss.`)) {
+      return;
+    }
+
     await cli.jobDelete(JobDeleteRequest.create({ ids: [jobID] }));
     await refresh();
   }, [jobID]);
