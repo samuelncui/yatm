@@ -118,7 +118,7 @@ export const JobsBrowser = () => {
     <RefreshContext.Provider value={refresh}>
       <Box className="browser-box">
         <Grid className="browser-container" container>
-          <Grid className="browser" item xs={2}>
+          <Grid className="browser" item xs={12} md={2} sx={{ display: { xs: "none", md: "block" } }}>
             <List
               sx={{
                 width: "100%",
@@ -144,7 +144,7 @@ export const JobsBrowser = () => {
               <ImportDatabaseDialog />
             </List>
           </Grid>
-          <Grid className="browser" item xs={10}>
+          <Grid className="browser" item xs={12} md={10}>
             <div className="job-list">{jobs ? jobs.map((job) => <GetJobCard job={job} key={job.id.toString()} />) : <LinearProgress />}</div>
           </Grid>
         </Grid>

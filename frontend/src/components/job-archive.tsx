@@ -4,6 +4,7 @@ import format from "format-duration";
 
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 
+import { styled } from "@mui/material/styles";
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
 import ListItem from "@mui/material/ListItem";
@@ -28,6 +29,7 @@ import { formatFilesize, sleep } from "../tools";
 
 import { JobCard } from "./job-card";
 import { RefreshContext } from "../pages/jobs";
+import { FileListItem } from "./job-file-list-item";
 
 export const ArchiveCard = ({ job, state, display }: { job: Job; state: JobArchiveState; display: JobArchiveDisplay | null }): JSX.Element => {
   const [fields, progress] = useMemo(() => {
@@ -191,66 +193,12 @@ const ArchiveViewFilesDialog = ({ sources }: { sources: SourceState[] }) => {
       <Button size="small" onClick={handleClickOpen}>
         View Files
       </Button>
-      {open && <FileList handleClose={handleClose} sources={sources} />}
+      {open && <FileList title="View Files" onClose={handleClose} sources={sources} />}
     </Fragment>
   );
 };
 
-const FileList = memo(({ handleClose, sources }: { handleClose: () => void; sources: SourceState[] }) => {
-  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
-  useEffect(() => {
-    (async () => {
-      const idx = sources.findIndex((src) => src.status !== CopyStatus.SUBMITED && src.status !== CopyStatus.STAGED);
-      if (idx < 0) {
-        return;
-      }
-
-      await sleep(100);
-      console.log(idx, virtuosoRef);
-
-      if (!virtuosoRef.current) {
-        return;
-      }
-      virtuosoRef.current.scrollToIndex({ index: idx - 5, align: "center", behavior: "smooth" });
-    })();
-  }, [sources]);
-
-  return (
-    <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
-      <DialogTitle>View Files</DialogTitle>
-      <DialogContent dividers style={{ padding: 0 }}>
-        <Virtuoso
-          style={{ width: "100%", height: "100%" }}
-          totalCount={sources.length}
-          ref={virtuosoRef}
-          itemContent={(idx) => {
-            const src = sources[idx];
-            if (!src || !src.source) {
-              return null;
-            }
-
-            return (
-              <ListItem key={idx} component="div" disablePadding>
-                <ListItemText
-                  primary={src.source.base + src.source.path.join("/")}
-                  secondary={`Size: ${formatFilesize(src.size)} Status: ${CopyStatus[src.status]}`}
-                  style={{ padding: 0, margin: 5 }}
-                />
-              </ListItem>
-            );
-          }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-});
-
 const RollbackDialog = ({ jobID, state }: { jobID: bigint; state: JobArchiveState }) => {
-  const refresh = useContext(RefreshContext);
-
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
     setOpen(true);
@@ -259,6 +207,18 @@ const RollbackDialog = ({ jobID, state }: { jobID: bigint; state: JobArchiveStat
     setOpen(false);
   };
 
+  return (
+    <Fragment>
+      <Button size="small" onClick={handleClickOpen}>
+        Rollback
+      </Button>
+      {open && <RollbackFileList onClose={handleClose} jobID={jobID} state={state} />}
+    </Fragment>
+  );
+};
+
+const RollbackFileList = ({ onClose, jobID, state }: { onClose: () => void; jobID: bigint; state: JobArchiveState }) => {
+  const refresh = useContext(RefreshContext);
   const handleClickItem = useCallback(
     async (idx: number) => {
       const found = state.sources[idx];
@@ -277,52 +237,66 @@ const RollbackDialog = ({ jobID, state }: { jobID: bigint; state: JobArchiveStat
       }
 
       await cli.jobEditState({ id: jobID, state: { state: { oneofKind: "archive", archive: { ...state, sources } } } });
-      alert(`Rollback to file '${path}' success!`);
       await refresh();
+
+      alert(`Rollback to file '${path}' success!`);
     },
     [state, refresh],
   );
 
-  return (
-    <Fragment>
-      <Button size="small" onClick={handleClickOpen}>
-        Rollback
-      </Button>
-      {open && (
-        <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
-          <DialogTitle>Click File to Rollback</DialogTitle>
-          <DialogContent dividers style={{ padding: 0 }}>
-            <Virtuoso
-              style={{ width: "100%", height: "100%" }}
-              totalCount={state.sources.length}
-              itemContent={(idx) => {
-                const src = state.sources[idx];
-                if (!src || !src.source) {
-                  return null;
-                }
-
-                return (
-                  <ListItem key={idx} component="div" disablePadding>
-                    <ListItemButton style={{ padding: 0 }} onClick={() => handleClickItem(idx)}>
-                      <ListItemText
-                        primary={src.source.base + src.source.path.join("/")}
-                        secondary={`Size: ${formatFilesize(src.size)} Status: ${CopyStatus[src.status]}`}
-                        style={{ padding: 0, margin: 5 }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                );
-              }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Close</Button>
-          </DialogActions>
-        </Dialog>
-      )}
-    </Fragment>
-  );
+  return <FileList title="Click Rollback Target File" onClose={onClose} onClickItem={handleClickItem} sources={state.sources} />;
 };
+
+const FileList = memo(
+  ({ onClose, onClickItem, title, sources }: { onClose: () => void; onClickItem?: (idx: number) => void; title: string; sources: SourceState[] }) => {
+    const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+
+    useEffect(() => {
+      (async () => {
+        const idx = sources.findIndex((src) => src.status !== CopyStatus.SUBMITED && src.status !== CopyStatus.STAGED);
+        if (idx < 0) {
+          return;
+        }
+
+        await sleep(100);
+        if (!virtuosoRef.current) {
+          return;
+        }
+
+        virtuosoRef.current.scrollToIndex({ index: idx, align: "center", behavior: "smooth" });
+      })();
+    }, [sources]);
+
+    return (
+      <Dialog open={true} onClose={onClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
+        <DialogTitle>{title}</DialogTitle>
+        <DialogContent dividers style={{ padding: 0 }}>
+          <Virtuoso
+            style={{ width: "100%", height: "100%" }}
+            totalCount={sources.length}
+            ref={virtuosoRef}
+            itemContent={(idx) => {
+              const src = sources[idx];
+              if (!src || !src.source) {
+                return null;
+              }
+
+              return (
+                <FileListItem
+                  src={{ path: src.source.base + src.source.path.join("/"), size: src.size, status: src.status }}
+                  onClick={onClickItem ? () => onClickItem(idx) : undefined}
+                />
+              );
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  },
+);
 
 function makeArchiveCopyingParam(jobID: bigint, param: JobArchiveCopyingParam): JobDispatchRequest {
   return {

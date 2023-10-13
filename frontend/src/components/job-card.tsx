@@ -1,5 +1,6 @@
 import { useCallback, useContext } from "react";
 
+import { styled } from "@mui/material/styles";
 import Typography from "@mui/material/Typography";
 import Card from "@mui/material/Card";
 import CardActions from "@mui/material/CardActions";
@@ -27,6 +28,8 @@ const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
   );
 };
 
+const RightButtonsContainer = styled("div")({ marginLeft: "auto !important", marginRight: 0 });
+
 export const JobCard = ({ job, detail, buttons }: { job: Job; detail?: JSX.Element; buttons?: JSX.Element }) => {
   return (
     <Card sx={{ textAlign: "left" }} className="job-detail">
@@ -40,10 +43,10 @@ export const JobCard = ({ job, detail, buttons }: { job: Job; detail?: JSX.Eleme
       <Divider />
       <CardActions>
         <div>{buttons}</div>
-        <div style={{ marginLeft: "auto", marginRight: 0 }}>
+        <RightButtonsContainer>
           <ViewLogDialog key="VIEW_LOG" jobID={job.id} />
           <DeleteJobButton key="DELETE_JOB" jobID={job.id} />
-        </div>
+        </RightButtonsContainer>
       </CardActions>
     </Card>
   );

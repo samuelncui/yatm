@@ -1,9 +1,13 @@
-import { Fragment, ChangeEvent, useState, useMemo, useContext } from "react";
+import { Fragment, ChangeEvent, useState, useMemo, useContext, useCallback } from "react";
 import format from "format-duration";
 
+import { Virtuoso } from "react-virtuoso";
+
+import { styled } from "@mui/material/styles";
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import ListItemButton from "@mui/material/ListItemButton";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
@@ -17,7 +21,6 @@ import DialogTitle from "@mui/material/DialogTitle";
 import LinearProgress from "@mui/material/LinearProgress";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-
 import { TreeView, TreeItem } from "@mui/x-tree-view";
 
 import { cli } from "../api";
@@ -29,6 +32,7 @@ import { formatFilesize } from "../tools";
 
 import { JobCard } from "./job-card";
 import { RefreshContext } from "../pages/jobs";
+import { FileListItem } from "./job-file-list-item";
 
 const tapeStatusToColor = (status: CopyStatus): ChipProps["color"] => {
   switch (status) {
@@ -121,7 +125,7 @@ export const RestoreCard = ({ job, state, display }: { job: Job; state: JobResto
             </Grid>
           ))}
           <Grid item xs={12} md={12}>
-            <Stack direction="row" spacing={1} style={{ flexWrap: "wrap" }}>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
               {state.tapes.map((tape) => (
                 <Chip label={`${tape.barcode}: ${CopyStatus[tape.status]}`} color={tapeStatusToColor(tape.status)} variant="outlined" key={`${tape.tapeId}`} />
               ))}
@@ -202,6 +206,19 @@ const LoadTapeDialog = ({ job }: { job: Job }) => {
   );
 };
 
+const TapeRow = styled(ListItemButton)({
+  padding: "0.2rem",
+  width: "100%",
+  cursor: "pointer",
+});
+const FileRow = styled(FileListItem)({ paddingLeft: "1rem" });
+
+interface RowData {
+  type: "tape" | "file";
+  label: React.ReactNode;
+  opened?: boolean;
+}
+
 const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
   const [open, setOpen] = useState(false);
   const handleClickOpen = () => {
@@ -210,7 +227,50 @@ const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
   const handleClose = () => {
     setOpen(false);
   };
-  const counts = useMemo(() => tapes.map((tape) => tape.files.length), [tapes]);
+
+  const [openedTapeIDs, setOpenedTapeIDs] = useState<bigint[]>([]);
+  const clickTapeRow = useCallback(
+    (id: bigint, opened: boolean) => {
+      if (opened) {
+        setOpenedTapeIDs(openedTapeIDs.filter((tapeID) => tapeID !== id));
+        return;
+      }
+
+      setOpenedTapeIDs([...openedTapeIDs, id]);
+      return;
+    },
+    [openedTapeIDs, setOpenedTapeIDs],
+  );
+
+  const rows = useMemo(() => {
+    const rows: RowData[] = [];
+    for (const tape of tapes) {
+      const opened = openedTapeIDs.includes(tape.tapeId);
+      rows.push({
+        type: "tape",
+        label: (
+          <TapeRow onClick={() => clickTapeRow(tape.tapeId, opened)}>
+            {opened ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+            {tape.barcode}
+          </TapeRow>
+        ),
+        opened,
+      });
+
+      if (!opened) {
+        continue;
+      }
+
+      for (const file of tape.files) {
+        rows.push({
+          type: "file",
+          label: <FileRow src={{ path: file.tapePath, size: file.size, status: file.status }} />,
+        });
+      }
+    }
+
+    return rows;
+  }, [tapes, openedTapeIDs]);
 
   return (
     <Fragment>
@@ -220,29 +280,19 @@ const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
       {open && (
         <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
           <DialogTitle>View Files</DialogTitle>
-          <DialogContent dividers>
-            <TreeView defaultCollapseIcon={<ExpandMoreIcon />} defaultExpandIcon={<ChevronRightIcon />}>
-              {tapes.map((tape) => {
-                if (!tape.files) {
+          <DialogContent dividers style={{ padding: 0 }}>
+            <Virtuoso
+              style={{ width: "100%", height: "100%" }}
+              totalCount={rows.length}
+              itemContent={(idx) => {
+                const row = rows[idx];
+                if (!row) {
                   return null;
                 }
 
-                return (
-                  <TreeItem label={tape.barcode} nodeId={`tape-${tape.tapeId}`}>
-                    {tape.files.map((file) => (
-                      <TreeItem
-                        label={
-                          <pre style={{ margin: 0 }}>
-                            {file.tapePath} <b>{CopyStatus[file.status]}</b>
-                          </pre>
-                        }
-                        nodeId={`file-${file.positionId}`}
-                      />
-                    ))}
-                  </TreeItem>
-                );
-              })}
-            </TreeView>
+                return row.label;
+              }}
+            />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleClose}>Close</Button>

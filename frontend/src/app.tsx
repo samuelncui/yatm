@@ -13,8 +13,6 @@ import { JobsBrowser, JobsType } from "./pages/jobs";
 
 import "./app.less";
 import { sleep } from "./tools";
-import { Nullable } from "tsdef";
-import { Job } from "./entity";
 import { useEffect } from "react";
 import { useState } from "react";
 
@@ -52,7 +50,15 @@ const App = () => {
   return (
     <div id="app">
       <ThemeProvider theme={theme}>
-        <Tabs className="tabs" value={location.pathname.slice(1)} onChange={handleTabChange} indicatorColor="secondary">
+        <Tabs
+          className="tabs"
+          value={location.pathname.slice(1)}
+          onChange={handleTabChange}
+          indicatorColor="secondary"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+        >
           <Tab label="File" value={FileBrowserType} />
           <Tab label="Backup" value={BackupType} />
           <Tab label="Restore" value={RestoreType} />
