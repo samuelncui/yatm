@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/samuelncui/yatm/main/frontend/favicon.svg" alt="YATM Logo" style="height: 100px; width:100px;"/>
+
 # YATM aka Yet Another Tape Manager
 
 YATM is a first-of-its-kind open-source tape manager for LTO tape via LTFS tape format. It performs the following features:
