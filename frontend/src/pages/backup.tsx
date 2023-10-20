@@ -160,18 +160,22 @@ const useBackupTargetBrowser = () => {
             const sources = files
               .map((file) => {
                 if (!file) {
-                  return undefined;
+                  console.log('create backup job, cannot get file')
+                  return;
                 }
 
                 let path = file.id.trim();
                 if (path.length === 0) {
+                  console.log('create backup job, file id is too short', file)
                   return;
                 }
                 while (path.endsWith("/")) {
                   path = path.slice(0, -1);
                 }
-                const splitIdx = path.lastIndexOf("/");
+
+                let splitIdx = path.lastIndexOf("/");
                 if (splitIdx < 0) {
+                  splitIdx = -1
                   return;
                 }
 

@@ -35,15 +35,18 @@ func (a *jobArchiveExecutor) applyParam(ctx context.Context, param *entity.JobAr
 			if src.Base[0] != '/' {
 				src.Base = path.Join(a.exe.paths.Source, src.Base) + "/"
 			}
+			a.logger.Infof("walk source start, source_path= '%s'", src.RealPath())
 
 			sources, err = a.walk(ctx, src, sources)
 			if err != nil {
 				return err
 			}
+			a.logger.Infof("walk source finished, source_path= '%s' current_source_len= %d", src.RealPath(), len(sources))
 		}
 		sort.Slice(sources, func(i, j int) bool {
 			return sources[i].Source.Compare(sources[j].Source) < 0
 		})
+		a.logger.Infof("walk source all finished, get %d sources", len(sources))
 
 		for idx, src := range sources {
 			if idx > 0 && sources[idx-1].Source.Equal(src.Source) {
@@ -68,6 +71,7 @@ func (a *jobArchiveExecutor) walk(ctx context.Context, src *entity.Source, sourc
 	mode := stat.Mode()
 	if mode.IsRegular() {
 		if stat.Name() == ".DS_Store" {
+			a.logger.Infof("walk ignore file, reason= 'ignore .DS_Store' path= %s", path)
 			return sources, nil
 		}
 		return append(sources, &entity.SourceState{
@@ -77,6 +81,7 @@ func (a *jobArchiveExecutor) walk(ctx context.Context, src *entity.Source, sourc
 		}), nil
 	}
 	if mode&acp.UnexpectFileMode != 0 {
+		a.logger.Infof("walk ignore file, reason= 'ignore unexpected file mode' path= %s mode= %O mask= %O", path, mode, acp.UnexpectFileMode)
 		return sources, nil
 	}
 
