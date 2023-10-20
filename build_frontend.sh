@@ -9,4 +9,5 @@ export PATH="$PNPM_HOME:$PATH";
 corepack enable;
 pnpm install;
 pnpm run build;
+
 cp -r ./dist ../output/frontend;

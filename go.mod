@@ -9,7 +9,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/gin-gonic/gin v1.9.0
-	github.com/glebarez/sqlite v1.9.0
+	github.com/glebarez/sqlite v1.9.1-0.20231014180518-851a2178d85e
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/improbable-eng/grpc-web v0.15.0
@@ -26,15 +26,8 @@ require (
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/mysql v1.3.6
-	gorm.io/driver/sqlite v1.3.6
-	gorm.io/gorm v1.25.2
-)
-
-replace (
-	// for sqlite migrate bug
-	github.com/glebarez/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004150052-7f8c4fd3e561
-	gorm.io/driver/sqlite => github.com/samuelncui/gorm-sqlite v0.0.0-20231004151052-c8fdb51ac7b9
-	gorm.io/gorm => github.com/samuelncui/gorm v0.0.0-20231004143348-3fe5335dfd1e
+	gorm.io/driver/sqlite v1.5.4
+	gorm.io/gorm v1.25.5
 )
 
 require (
