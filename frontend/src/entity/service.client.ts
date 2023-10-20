@@ -10,6 +10,8 @@ import type { LibraryExportReply } from "./service";
 import type { LibraryExportRequest } from "./service";
 import type { DeviceListReply } from "./service";
 import type { DeviceListRequest } from "./service";
+import type { SourceGetSizeReply } from "./service";
+import type { SourceGetSizeRequest } from "./service";
 import type { SourceListReply } from "./service";
 import type { SourceListRequest } from "./service";
 import type { JobGetLogReply } from "./service";
@@ -113,6 +115,10 @@ export interface IServiceClient {
      * @generated from protobuf rpc: SourceList(service.SourceListRequest) returns (service.SourceListReply);
      */
     sourceList(input: SourceListRequest, options?: RpcOptions): UnaryCall<SourceListRequest, SourceListReply>;
+    /**
+     * @generated from protobuf rpc: SourceGetSize(service.SourceGetSizeRequest) returns (service.SourceGetSizeReply);
+     */
+    sourceGetSize(input: SourceGetSizeRequest, options?: RpcOptions): UnaryCall<SourceGetSizeRequest, SourceGetSizeReply>;
     /**
      * @generated from protobuf rpc: DeviceList(service.DeviceListRequest) returns (service.DeviceListReply);
      */
@@ -248,24 +254,31 @@ export class ServiceClient implements IServiceClient, ServiceInfo {
         return stackIntercept<SourceListRequest, SourceListReply>("unary", this._transport, method, opt, input);
     }
     /**
+     * @generated from protobuf rpc: SourceGetSize(service.SourceGetSizeRequest) returns (service.SourceGetSizeReply);
+     */
+    sourceGetSize(input: SourceGetSizeRequest, options?: RpcOptions): UnaryCall<SourceGetSizeRequest, SourceGetSizeReply> {
+        const method = this.methods[16], opt = this._transport.mergeOptions(options);
+        return stackIntercept<SourceGetSizeRequest, SourceGetSizeReply>("unary", this._transport, method, opt, input);
+    }
+    /**
      * @generated from protobuf rpc: DeviceList(service.DeviceListRequest) returns (service.DeviceListReply);
      */
     deviceList(input: DeviceListRequest, options?: RpcOptions): UnaryCall<DeviceListRequest, DeviceListReply> {
-        const method = this.methods[16], opt = this._transport.mergeOptions(options);
+        const method = this.methods[17], opt = this._transport.mergeOptions(options);
         return stackIntercept<DeviceListRequest, DeviceListReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: LibraryExport(service.LibraryExportRequest) returns (service.LibraryExportReply);
      */
     libraryExport(input: LibraryExportRequest, options?: RpcOptions): UnaryCall<LibraryExportRequest, LibraryExportReply> {
-        const method = this.methods[17], opt = this._transport.mergeOptions(options);
+        const method = this.methods[18], opt = this._transport.mergeOptions(options);
         return stackIntercept<LibraryExportRequest, LibraryExportReply>("unary", this._transport, method, opt, input);
     }
     /**
      * @generated from protobuf rpc: LibraryTrim(service.LibraryTrimRequest) returns (service.LibraryTrimReply);
      */
     libraryTrim(input: LibraryTrimRequest, options?: RpcOptions): UnaryCall<LibraryTrimRequest, LibraryTrimReply> {
-        const method = this.methods[18], opt = this._transport.mergeOptions(options);
+        const method = this.methods[19], opt = this._transport.mergeOptions(options);
         return stackIntercept<LibraryTrimRequest, LibraryTrimReply>("unary", this._transport, method, opt, input);
     }
 }

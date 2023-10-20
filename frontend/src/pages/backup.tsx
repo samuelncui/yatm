@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from "react";
+import { toast } from "react-toastify";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
@@ -10,19 +11,23 @@ import { Root } from "../api";
 import { AddFileAction, RefreshListAction, CreateBackupJobAction } from "../actions";
 import { JobArchiveParam, JobCreateRequest, Source } from "../entity";
 import { chonkyI18n } from "../tools";
+import { ToobarInfo } from "../components/toolbarInfo";
 
-const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
+const useBackupSourceBrowser = (targetFiles: FileArray, source: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
-  const [folderChain, setFolderChan] = useState<FileArray>([Root]);
+  const [folderChain, setFolderChain] = useState<FileArray>([Root]);
 
-  const openFolder = useCallback((path: string) => {
-    (async () => {
-      const result = await cli.sourceList({ path }).response;
+  const openFolder = useCallback(
+    (path: string) => {
+      (async () => {
+        const result = await cli.sourceList({ path }).response;
 
-      setFiles(convertSourceFiles(result.children));
-      setFolderChan(convertSourceFiles(result.chain));
-    })();
-  }, []);
+        setFiles(convertSourceFiles(result.children));
+        setFolderChain(convertSourceFiles(result.chain));
+      })();
+    },
+    [targetFiles, setFiles, setFolderChain],
+  );
   useEffect(() => openFolder(""), []);
 
   const onFileAction = useCallback(
@@ -49,7 +54,14 @@ const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
             return;
           }
 
-          source.current.requestFileAction(AddFileAction, data.payload);
+          const selectedFiles = data.payload.selectedFiles.map((file) => ({
+            ...file,
+            name: file.id,
+            openable: false,
+            draggable: false,
+          }));
+
+          source.current.requestFileAction(AddFileAction, { ...data.payload, selectedFiles });
           return;
       }
     },
@@ -59,7 +71,21 @@ const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
   const fileActions = useMemo(() => [ChonkyActions.StartDragNDrop, RefreshListAction], []);
 
   return {
-    files,
+    files: useMemo(() => {
+      const targetFileIDs = new Set((targetFiles.filter((f) => !!f) as FileData[]).map((f) => f.id));
+      const getDragable = !!folderChain.find((file) => file && targetFileIDs.has(file.id))
+        ? (_: FileData) => false
+        : (file: FileData) => !targetFileIDs.has(file.id);
+
+      return files.map((file) => {
+        if (!file) {
+          return file;
+        }
+
+        const draggable = getDragable(file);
+        return { ...file, droppable: false, draggable, selectable: draggable };
+      });
+    }, [files, folderChain, targetFiles]),
     folderChain,
     onFileAction,
     fileActions,
@@ -69,19 +95,37 @@ const useBackupSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
   };
 };
 
+const targetFolderChain = [
+  {
+    id: "backup_waitlist",
+    name: "Backup Waitlist",
+    isDir: true,
+    openable: true,
+    selectable: true,
+    draggable: true,
+    droppable: true,
+  },
+] as FileArray;
+
 const useBackupTargetBrowser = () => {
   const [files, setFiles] = useState<FileArray>(Array(0));
-  const [folderChain, setFolderChan] = useState<FileArray>([
-    {
-      id: "backup_waitlist",
-      name: "Backup Waitlist",
-      isDir: true,
-      openable: true,
-      selectable: true,
-      draggable: true,
-      droppable: true,
+
+  const onFileSizeUpdated = useCallback(
+    (id: string, size: number) => {
+      setFiles(
+        (files.filter((file) => !!file) as FileData[]).map((file: FileData) => {
+          if (file.id === id) {
+            return { ...file, size };
+          }
+
+          return file;
+        }),
+      );
     },
-  ]);
+    [files, setFiles],
+  );
+  const onFileSizeUpdatedRef = useRef(onFileSizeUpdated);
+  onFileSizeUpdatedRef.current = onFileSizeUpdated;
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
@@ -93,10 +137,23 @@ const useBackupTargetBrowser = () => {
           })();
           return;
         case AddFileAction.id:
-          setFiles([
-            ...files,
-            ...((data.payload as any)?.selectedFiles as FileData[]).map((file) => ({ ...file, name: file.id, openable: false, draggable: false })),
-          ]);
+          const addedFiles = (data.payload as any)?.selectedFiles as FileData[];
+          setFiles([...files, ...addedFiles]);
+
+          (async () => {
+            for (const file of addedFiles) {
+              if (!file) {
+                continue;
+              }
+              if (file.size !== undefined) {
+                continue;
+              }
+
+              const reply = await cli.sourceGetSize({ path: file.id }).response;
+              onFileSizeUpdatedRef.current(file.id, Number(reply.size));
+            }
+          })();
+
           return;
         case CreateBackupJobAction.id:
           (async () => {
@@ -124,7 +181,7 @@ const useBackupTargetBrowser = () => {
 
             const req = makeArchiveParam(1n, { sources });
             console.log(req, await cli.jobCreate(req).response);
-            alert("Create Backup Job Success!");
+            toast.success("Create Backup Job Success!");
           })();
           return;
       }
@@ -136,7 +193,7 @@ const useBackupTargetBrowser = () => {
 
   return {
     files,
-    folderChain,
+    folderChain: targetFolderChain,
     onFileAction,
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
@@ -149,8 +206,8 @@ export const BackupType = "backup";
 
 export const BackupBrowser = () => {
   const target = useRef<FileBrowserHandle>(null);
-  const sourceProps = useBackupSourceBrowser(target);
   const targetProps = useBackupTargetBrowser();
+  const sourceProps = useBackupSourceBrowser(targetProps.files, target);
 
   return (
     <Box className="browser-box">
@@ -166,7 +223,9 @@ export const BackupBrowser = () => {
         <Grid className="browser" item xs={6}>
           <FileBrowser {...targetProps} ref={target}>
             <FileNavbar />
-            <FileToolbar />
+            <FileToolbar>
+              <ToobarInfo files={targetProps.files} />
+            </FileToolbar>
             <FileList />
             <FileContextMenu />
           </FileBrowser>

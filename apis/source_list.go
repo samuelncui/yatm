@@ -26,9 +26,6 @@ func (api *API) SourceList(ctx context.Context, req *entity.SourceListRequest) (
 		filteredParts = append(filteredParts, part)
 	}
 
-	// buf, _ := json.Marshal(filteredParts)
-	// logrus.WithContext(ctx).Infof("parts= %s", buf)
-
 	current := ""
 	chain := make([]*entity.SourceFile, 0, len(filteredParts))
 	for _, part := range filteredParts {

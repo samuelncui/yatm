@@ -29,6 +29,7 @@ service Service {
     rpc JobGetLog(JobGetLogRequest) returns (JobGetLogReply) {}
 
     rpc SourceList(SourceListRequest) returns (SourceListReply) {}
+    rpc SourceGetSize(SourceGetSizeRequest) returns (SourceGetSizeReply) {}
 
     rpc DeviceList(DeviceListRequest) returns (DeviceListReply) {}
 
@@ -38,6 +39,8 @@ service Service {
 
 message FileGetRequest {
     int64 id = 1;
+
+    optional bool needSize = 17;
 }
 
 message FileGetReply {
@@ -184,6 +187,14 @@ message SourceListReply {
     source.SourceFile file = 1;
     repeated source.SourceFile chain = 2;
     repeated source.SourceFile children = 17;
+}
+
+message SourceGetSizeRequest {
+    string path = 1;
+}
+
+message SourceGetSizeReply {
+    int64 size = 1;
 }
 
 message DeviceListRequest {}

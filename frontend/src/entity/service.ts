@@ -35,6 +35,10 @@ export interface FileGetRequest {
      * @generated from protobuf field: int64 id = 1;
      */
     id: bigint;
+    /**
+     * @generated from protobuf field: optional bool needSize = 17;
+     */
+    needSize?: boolean;
 }
 /**
  * @generated from protobuf message service.FileGetReply
@@ -396,6 +400,24 @@ export interface SourceListReply {
     children: SourceFile[];
 }
 /**
+ * @generated from protobuf message service.SourceGetSizeRequest
+ */
+export interface SourceGetSizeRequest {
+    /**
+     * @generated from protobuf field: string path = 1;
+     */
+    path: string;
+}
+/**
+ * @generated from protobuf message service.SourceGetSizeReply
+ */
+export interface SourceGetSizeReply {
+    /**
+     * @generated from protobuf field: int64 size = 1;
+     */
+    size: bigint;
+}
+/**
  * @generated from protobuf message service.DeviceListRequest
  */
 export interface DeviceListRequest {
@@ -449,7 +471,8 @@ export interface LibraryTrimReply {
 class FileGetRequest$Type extends MessageType<FileGetRequest> {
     constructor() {
         super("service.FileGetRequest", [
-            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 17, name: "needSize", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<FileGetRequest>): FileGetRequest {
@@ -467,6 +490,9 @@ class FileGetRequest$Type extends MessageType<FileGetRequest> {
                 case /* int64 id */ 1:
                     message.id = reader.int64().toBigInt();
                     break;
+                case /* optional bool needSize */ 17:
+                    message.needSize = reader.bool();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -482,6 +508,9 @@ class FileGetRequest$Type extends MessageType<FileGetRequest> {
         /* int64 id = 1; */
         if (message.id !== 0n)
             writer.tag(1, WireType.Varint).int64(message.id);
+        /* optional bool needSize = 17; */
+        if (message.needSize !== undefined)
+            writer.tag(17, WireType.Varint).bool(message.needSize);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2099,6 +2128,100 @@ class SourceListReply$Type extends MessageType<SourceListReply> {
  */
 export const SourceListReply = new SourceListReply$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class SourceGetSizeRequest$Type extends MessageType<SourceGetSizeRequest> {
+    constructor() {
+        super("service.SourceGetSizeRequest", [
+            { no: 1, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<SourceGetSizeRequest>): SourceGetSizeRequest {
+        const message = { path: "" };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<SourceGetSizeRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: SourceGetSizeRequest): SourceGetSizeRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string path */ 1:
+                    message.path = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: SourceGetSizeRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string path = 1; */
+        if (message.path !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.path);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.SourceGetSizeRequest
+ */
+export const SourceGetSizeRequest = new SourceGetSizeRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class SourceGetSizeReply$Type extends MessageType<SourceGetSizeReply> {
+    constructor() {
+        super("service.SourceGetSizeReply", [
+            { no: 1, name: "size", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<SourceGetSizeReply>): SourceGetSizeReply {
+        const message = { size: 0n };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<SourceGetSizeReply>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: SourceGetSizeReply): SourceGetSizeReply {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int64 size */ 1:
+                    message.size = reader.int64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: SourceGetSizeReply, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 size = 1; */
+        if (message.size !== 0n)
+            writer.tag(1, WireType.Varint).int64(message.size);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message service.SourceGetSizeReply
+ */
+export const SourceGetSizeReply = new SourceGetSizeReply$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class DeviceListRequest$Type extends MessageType<DeviceListRequest> {
     constructor() {
         super("service.DeviceListRequest", []);
@@ -2373,6 +2496,7 @@ export const Service = new ServiceType("service.Service", [
     { name: "JobDisplay", options: {}, I: JobDisplayRequest, O: JobDisplayReply },
     { name: "JobGetLog", options: {}, I: JobGetLogRequest, O: JobGetLogReply },
     { name: "SourceList", options: {}, I: SourceListRequest, O: SourceListReply },
+    { name: "SourceGetSize", options: {}, I: SourceGetSizeRequest, O: SourceGetSizeReply },
     { name: "DeviceList", options: {}, I: DeviceListRequest, O: DeviceListReply },
     { name: "LibraryExport", options: {}, I: LibraryExportRequest, O: LibraryExportReply },
     { name: "LibraryTrim", options: {}, I: LibraryTrimRequest, O: LibraryTrimReply }

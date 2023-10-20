@@ -98,11 +98,8 @@ export const JobsBrowser = () => {
   refreshRef.current = refresh;
 
   useEffect(() => {
-    var timer: NodeJS.Timeout;
-    (async () => {
-      await refreshRef.current(true);
-      timer = setInterval(() => refreshRef.current(), 2000);
-    })();
+    refreshRef.current(true);
+    const timer = setInterval(() => refreshRef.current(), 2000);
 
     return () => {
       if (!timer) {

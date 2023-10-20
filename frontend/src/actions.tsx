@@ -1,6 +1,5 @@
 import { FileData, FileArray, FileAction } from "@samuelncui/chonky";
-import { defineFileAction } from "@samuelncui/chonky";
-import { ChonkyActions } from "@samuelncui/chonky";
+import { ChonkyActions, defineFileAction } from "@samuelncui/chonky";
 
 type RenameFileState = {
   contextMenuTriggerFile: FileData;
@@ -8,6 +7,14 @@ type RenameFileState = {
   selectedFiles: FileArray;
   selectedFilesForAction: FileArray;
 };
+
+export const CreateFolder = defineFileAction({
+  ...ChonkyActions.CreateFolder,
+  button: {
+    ...ChonkyActions.CreateFolder.button,
+    // iconOnly: true,
+  },
+} as FileAction);
 
 export const RenameFileAction = defineFileAction({
   id: "rename_file",
@@ -17,7 +24,18 @@ export const RenameFileAction = defineFileAction({
     toolbar: true,
     contextMenu: true,
     group: "Actions",
-    icon: "edit",
+    icon: "mui-rename",
+  },
+  __extraStateType: {} as RenameFileState,
+} as FileAction);
+
+export const GetDataUsageAction = defineFileAction({
+  id: "get_data_usage",
+  button: {
+    name: "Data Usage",
+    toolbar: true,
+    icon: "mui-data-usage",
+    // iconOnly: true,
   },
   __extraStateType: {} as RenameFileState,
 } as FileAction);
@@ -36,6 +54,7 @@ export const CreateBackupJobAction = defineFileAction({
   button: {
     name: "Create Backup Job",
     toolbar: true,
+    icon: "mui-fiber-new",
   },
 } as FileAction);
 
@@ -44,6 +63,7 @@ export const CreateRestoreJobAction = defineFileAction({
   button: {
     name: "Create Restore Job",
     toolbar: true,
+    icon: "mui-fiber-new",
   },
 } as FileAction);
 
@@ -52,5 +72,6 @@ export const TrimLibraryAction = defineFileAction({
   button: {
     name: "Trim Library",
     toolbar: true,
+    icon: "mui-cleaning",
   },
 } as FileAction);

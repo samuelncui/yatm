@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from "react";
+import { toast } from "react-toastify";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
@@ -111,7 +112,7 @@ const useTapesSourceBrowser = (source: RefObject<FileBrowserHandle>) => {
             }
 
             console.log(await cli.libraryTrim({ trimFile: true, trimPosition: true }).response);
-            alert("Trim Library Success!");
+            toast.success("Trim Library Success!");
           })();
           return;
       }

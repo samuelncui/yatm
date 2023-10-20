@@ -7,7 +7,7 @@ import { ChonkyActions, ChonkyFileActionData } from "@samuelncui/chonky";
 
 import { cli, convertFiles } from "../api";
 import { Root } from "../api";
-import { RenameFileAction, RefreshListAction } from "../actions";
+import { RenameFileAction, RefreshListAction, GetDataUsageAction, CreateFolder } from "../actions";
 import { ToobarInfo } from "../components/toolbarInfo";
 
 import { useDetailModal, DetailModal } from "./file-detail";
@@ -49,13 +49,16 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
     return last.id;
   }, [folderChain]);
 
-  const openFolder = useCallback(async (id: string) => {
-    const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id) }).response, cli.fileListParents({ id: BigInt(id) }).response]);
+  const openFolder = useCallback(
+    async (id: string, needSize: boolean = false) => {
+      const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id), needSize }).response, cli.fileListParents({ id: BigInt(id) }).response]);
 
-    setFiles(convertFiles(file.children));
-    setFolderChan([Root, ...convertFiles(folderChain.parents)]);
-    localStorage.setItem(storageKey, id);
-  }, []);
+      setFiles(convertFiles(file.children, needSize));
+      setFolderChan([Root, ...convertFiles(folderChain.parents, needSize)]);
+      localStorage.setItem(storageKey, id);
+    },
+    [setFiles, setFolderChan],
+  );
   useEffect(() => {
     (async () => {
       const storagedID = localStorage.getItem(storageKey);
@@ -74,7 +77,6 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
-      // console.log(data);
       switch (data.id) {
         case ChonkyActions.OpenFiles.id:
           (async () => {
@@ -125,7 +127,7 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
             await refreshAll();
           })();
           return;
-        case ChonkyActions.CreateFolder.id:
+        case CreateFolder.id:
           (async () => {
             const name = prompt("Provide the name for your new folder:");
             if (!name) {
@@ -145,6 +147,9 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
           })();
 
           return;
+        case GetDataUsageAction.id:
+          openFolder(currentID, true);
+          return;
         case RefreshListAction.id:
           openFolder(currentID);
           return;
@@ -153,7 +158,10 @@ const useFileBrowser = (storageKey: string, refreshAll: () => Promise<void>, ope
     [openFolder, openDetailModel, refreshAll, currentID],
   );
 
-  const fileActions = useMemo(() => [ChonkyActions.CreateFolder, ChonkyActions.DeleteFiles, ChonkyActions.MoveFiles, RenameFileAction, RefreshListAction], []);
+  const fileActions = useMemo(
+    () => [CreateFolder, GetDataUsageAction, ChonkyActions.DeleteFiles, ChonkyActions.MoveFiles, RenameFileAction, RefreshListAction],
+    [],
+  );
   const totalSize = useMemo(() => {
     return files.reduce((total, file) => total + (file?.size ? file.size : 0), 0);
   }, [files]);
@@ -186,7 +194,6 @@ export const FileBrowser = () => {
     }, 10000);
     return () => clearInterval(interval);
   }, []);
-  useEffect(() => {});
 
   return (
     <Box className="browser-box">
@@ -195,7 +202,7 @@ export const FileBrowser = () => {
           <ChonckFileBrowser instanceId="left" ref={instances.left} {...leftProps}>
             <FileNavbar />
             <FileToolbar>
-              <ToobarInfo {...leftProps} />
+              <ToobarInfo files={leftProps.files} />
             </FileToolbar>
             <FileList />
             <FileContextMenu />
@@ -205,7 +212,7 @@ export const FileBrowser = () => {
           <ChonckFileBrowser instanceId="right" ref={instances.right} {...rightProps}>
             <FileNavbar />
             <FileToolbar>
-              <ToobarInfo {...rightProps} />
+              <ToobarInfo files={rightProps.files} />
             </FileToolbar>
             <FileList />
             <FileContextMenu />

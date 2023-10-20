@@ -19,6 +19,16 @@ export const fileBase: string = (() => {
   return apiBase.replace("/services", "/files");
 })();
 
+export const cli = (() => {
+  return new ServiceClient(
+    new GrpcWebFetchTransport({
+      baseUrl: apiBase,
+      format: "binary",
+    }),
+  );
+})();
+(window as any).cli = cli;
+
 export const Root: FileData = {
   id: "0",
   name: "Root",
@@ -29,20 +39,12 @@ export const Root: FileData = {
   droppable: true,
 };
 
-const transport = new GrpcWebFetchTransport({
-  baseUrl: apiBase,
-  format: "binary",
-});
-
-export const cli = new ServiceClient(transport);
-(window as any).cli = cli;
-
-export function convertFiles(files: Array<File>): FileData[] {
+export function convertFiles(files: Array<File>, dirWithSize: boolean = false): FileData[] {
   return files.map((file) => {
     const isDir = (file.mode & MODE_DIR) > 0;
 
     return {
-      id: getID(file),
+      id: `${file.id}`,
       name: file.name,
       ext: extname(file.name),
       isDir,
@@ -51,7 +53,7 @@ export function convertFiles(files: Array<File>): FileData[] {
       selectable: true,
       draggable: true,
       droppable: isDir,
-      size: Number(file.size),
+      size: !isDir || dirWithSize ? Number(file.size) : undefined,
       modDate: moment.unix(Number(file.modTime)).toDate(),
     };
   });
@@ -62,7 +64,7 @@ export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
     const isDir = (file.mode & MODE_DIR) > 0;
 
     return {
-      id: getID(file),
+      id: file.path,
       name: file.name,
       ext: extname(file.name),
       isDir,
@@ -71,7 +73,7 @@ export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
       selectable: true,
       draggable: true,
       droppable: false,
-      size: Number(file.size),
+      size: isDir ? undefined : Number(file.size),
       modDate: moment.unix(Number(file.modTime)).toDate(),
     };
   });
@@ -134,93 +136,3 @@ function extname(filename: string): string {
   }
   return filename.slice(idx);
 }
-
-function getID(file: File | SourceFile): string {
-  if ("id" in file) {
-    return `${file.id}`;
-  }
-  return file.path;
-}
-
-// export interface GetFileResponse {
-//   file: File;
-//   positions: Position[];
-//   children: FileArray<File>;
-// }
-// export const getFile = async (id: string) => {
-//   const result = await fetch(`${Domain}/api/v1/file/${id}`);
-//   const body: GetFileResponse = await result.json();
-//   return body;
-// };
-
-// export interface ListFileParentsResponse {
-//   parents: FileArray<File>;
-// }
-// export const listFileParents = async (id: string) => {
-//   const result = await fetch(`${Domain}/api/v1/file/${id}/_parent`);
-//   const body: ListFileParentsResponse = await result.json();
-//   return [Root, ...body.parents];
-// };
-
-// export interface SetFileResponse {
-//   file?: File;
-//   result?: string;
-// }
-// export const editFile = async (id: string, payload: Partial<File>) => {
-//   const result = await fetch(`${Domain}/api/v1/file/${id}`, {
-//     method: "POST",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify(payload),
-//   });
-//   const body: SetFileResponse = await result.json();
-//   return body;
-// };
-
-// export const createFolder = async (
-//   parentID: string,
-//   payload: Partial<File>
-// ) => {
-//   const result = await fetch(`${Domain}/api/v1/file/${parentID}/`, {
-//     method: "PUT",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify(payload),
-//   });
-//   const body: SetFileResponse = await result.json();
-//   return body.file;
-// };
-
-// export const deleteFolder = async (ids: string[]) => {
-//   const result = await fetch(`${Domain}/api/v1/file/`, {
-//     method: "DELETE",
-//     headers: {
-//       "Content-Type": "application/json",
-//     },
-//     body: JSON.stringify({ fileids: ids }),
-//   });
-//   const body: SetFileResponse = await result.json();
-//   return body;
-// };
-
-// interface GetTapeResponse {
-//   tape: Tape;
-// }
-// export const getTape = async (id: number) => {
-//   const result = await fetch(`${Domain}/api/v1/tape/${id}`);
-//   const body: GetTapeResponse = await result.json();
-//   return body;
-// };
-
-// interface GetSourceResponse {
-//   file: File;
-//   chain: File[];
-//   children: FileArray<File>;
-// }
-// export const getSource = async (path: string) => {
-//   const result = await fetch(`${Domain}/api/v1/source/${path}`);
-//   const body: GetSourceResponse = await result.json();
-//   return body;
-// };

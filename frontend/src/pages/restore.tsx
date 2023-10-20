@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, FC, useRef, RefObject } from "react";
+import { toast } from "react-toastify";
 
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
@@ -8,20 +9,35 @@ import { ChonkyActions, ChonkyFileActionData, FileData } from "@samuelncui/chonk
 import { ToobarInfo } from "../components/toolbarInfo";
 
 import { Root, cli, convertFiles } from "../api";
-import { AddFileAction, RefreshListAction, CreateRestoreJobAction } from "../actions";
+import { AddFileAction, RefreshListAction, CreateRestoreJobAction, GetDataUsageAction } from "../actions";
 import { JobCreateRequest, JobRestoreParam, Source } from "../entity";
 import { chonkyI18n } from "../tools";
 
-const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
+const useRestoreSourceBrowser = (targetFiles: FileArray, target: RefObject<FileBrowserHandle>) => {
   const [files, setFiles] = useState<FileArray>(Array(1).fill(null));
   const [folderChain, setFolderChan] = useState<FileArray>([Root]);
+  const currentID = useMemo(() => {
+    if (folderChain.length === 0) {
+      return "0";
+    }
 
-  const openFolder = useCallback(async (id: string) => {
-    const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id) }).response, cli.fileListParents({ id: BigInt(id) }).response]);
+    const last = folderChain.slice(-1)[0];
+    if (!last) {
+      return "0";
+    }
 
-    setFiles(convertFiles(file.children).map((file) => ({ ...file, droppable: false })));
-    setFolderChan([Root, ...convertFiles(folderChain.parents)]);
-  }, []);
+    return last.id;
+  }, [folderChain]);
+
+  const openFolder = useCallback(
+    async (id: string, needSize: boolean = false) => {
+      const [file, folderChain] = await Promise.all([cli.fileGet({ id: BigInt(id), needSize }).response, cli.fileListParents({ id: BigInt(id) }).response]);
+
+      setFiles(convertFiles(file.children, needSize).map((file) => ({ ...file, droppable: false })));
+      setFolderChan([Root, ...convertFiles(folderChain.parents, needSize)]);
+    },
+    [setFiles, setFolderChan],
+  );
   useEffect(() => {
     openFolder(Root.id);
   }, []);
@@ -45,38 +61,51 @@ const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
           })();
 
           return;
+        case GetDataUsageAction.id:
+          openFolder(currentID, true);
+          return;
         case ChonkyActions.EndDragNDrop.id:
-          (async () => {
-            if (!target.current) {
-              return;
-            }
+          if (!target.current) {
+            return;
+          }
 
-            const base = folderChain
-              .filter((file): file is FileData => !!file && file.id !== "0")
-              .map((file) => file.name)
-              .join("/");
+          const base = folderChain
+            .filter((file): file is FileData => !!file && file.id !== "0")
+            .map((file) => file.name)
+            .join("/");
 
-            const selectedFiles = data.payload.selectedFiles.map((file) => ({
-              ...file,
-              name: base ? base + "/" + file.name : file.name,
-              openable: false,
-              draggable: false,
-            }));
-            await target.current.requestFileAction(AddFileAction, { ...data.payload, selectedFiles });
-          })();
+          const selectedFiles = data.payload.selectedFiles.map((file) => ({
+            ...file,
+            name: base ? base + "/" + file.name : file.name,
+            openable: false,
+            draggable: false,
+          }));
 
+          target.current.requestFileAction(AddFileAction, { ...data.payload, selectedFiles });
           return;
       }
-
-      console.log("source done", data);
     },
-    [openFolder, target, folderChain],
+    [openFolder, target, folderChain, currentID],
   );
 
-  const fileActions = useMemo(() => [ChonkyActions.StartDragNDrop, RefreshListAction], []);
+  const fileActions = useMemo(() => [GetDataUsageAction, ChonkyActions.StartDragNDrop, RefreshListAction], []);
 
   return {
-    files,
+    files: useMemo(() => {
+      const targetFileIDs = new Set((targetFiles.filter((f) => !!f) as FileData[]).map((f) => f.id));
+      const getDragable = !!folderChain.find((file) => file && targetFileIDs.has(file.id))
+        ? (_: FileData) => false
+        : (file: FileData) => !targetFileIDs.has(file.id);
+
+      return files.map((file) => {
+        if (!file) {
+          return file;
+        }
+
+        const draggable = getDragable(file);
+        return { ...file, droppable: false, draggable, selectable: draggable };
+      });
+    }, [files, folderChain, targetFiles]),
     folderChain,
     onFileAction,
     fileActions,
@@ -86,19 +115,37 @@ const useRestoreSourceBrowser = (target: RefObject<FileBrowserHandle>) => {
   };
 };
 
+const targetFolderChain = [
+  {
+    id: "restore_waitlist",
+    name: "Restore Waitlist",
+    isDir: true,
+    openable: true,
+    selectable: true,
+    draggable: true,
+    droppable: true,
+  },
+] as FileArray;
+
 const useRestoreTargetBrowser = () => {
   const [files, setFiles] = useState<FileArray>(Array(0));
-  const [folderChain, setFolderChan] = useState<FileArray>([
-    {
-      id: "restore_waitlist",
-      name: "Restore Waitlist",
-      isDir: true,
-      openable: true,
-      selectable: true,
-      draggable: true,
-      droppable: true,
+
+  const onFileSizeUpdated = useCallback(
+    (id: string, size: number) => {
+      setFiles(
+        (files.filter((file) => !!file) as FileData[]).map((file: FileData) => {
+          if (file.id === id) {
+            return { ...file, size };
+          }
+
+          return file;
+        }),
+      );
     },
-  ]);
+    [files, setFiles],
+  );
+  const onFileSizeUpdatedRef = useRef(onFileSizeUpdated);
+  onFileSizeUpdatedRef.current = onFileSizeUpdated;
 
   const onFileAction = useCallback(
     (data: ChonkyFileActionData) => {
@@ -110,13 +157,30 @@ const useRestoreTargetBrowser = () => {
           })();
           return;
         case AddFileAction.id:
-          setFiles([...files, ...((data.payload as any)?.selectedFiles as FileData[])]);
+          const addedFiles = (data.payload as any)?.selectedFiles as FileData[];
+          setFiles([...files, ...addedFiles]);
+
+          (async () => {
+            for (const file of addedFiles) {
+              if (!file) {
+                continue;
+              }
+              if (file.size !== undefined) {
+                continue;
+              }
+
+              const reply = await cli.fileGet({ id: BigInt(file.id), needSize: true }).response;
+              onFileSizeUpdatedRef.current(file.id, Number(reply.file?.size));
+            }
+          })();
+
           return;
         case CreateRestoreJobAction.id:
           (async () => {
             const fileIds = files.filter((file): file is FileData => !!file && file.id !== "0").map((file) => BigInt(file.id));
             console.log(await cli.jobCreate(makeParam(1n, { fileIds })).response);
-            alert("Create Restore Job Success!");
+
+            toast.success("Create Restore Job Success!");
           })();
           return;
       }
@@ -128,7 +192,7 @@ const useRestoreTargetBrowser = () => {
 
   return {
     files,
-    folderChain,
+    folderChain: targetFolderChain,
     onFileAction,
     fileActions,
     defaultFileViewActionId: ChonkyActions.EnableListView.id,
@@ -141,8 +205,8 @@ export const RestoreType = "restore";
 
 export const RestoreBrowser = () => {
   const target = useRef<FileBrowserHandle>(null);
-  const sourceProps = useRestoreSourceBrowser(target);
   const targetProps = useRestoreTargetBrowser();
+  const sourceProps = useRestoreSourceBrowser(targetProps.files, target);
 
   return (
     <Box className="browser-box">

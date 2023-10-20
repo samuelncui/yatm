@@ -3,13 +3,10 @@ import { assert } from "@protobuf-ts/runtime";
 import format from "format-duration";
 
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
+import { toast } from "react-toastify";
 
-import { styled } from "@mui/material/styles";
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
@@ -239,7 +236,7 @@ const RollbackFileList = ({ onClose, jobID, state }: { onClose: () => void; jobI
       await cli.jobEditState({ id: jobID, state: { state: { oneofKind: "archive", archive: { ...state, sources } } } });
       await refresh();
 
-      alert(`Rollback to file '${path}' success!`);
+      toast.success(`Rollback to file '${path}' success!`);
     },
     [state, refresh],
   );

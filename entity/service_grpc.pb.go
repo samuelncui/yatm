@@ -38,6 +38,7 @@ type ServiceClient interface {
 	JobDisplay(ctx context.Context, in *JobDisplayRequest, opts ...grpc.CallOption) (*JobDisplayReply, error)
 	JobGetLog(ctx context.Context, in *JobGetLogRequest, opts ...grpc.CallOption) (*JobGetLogReply, error)
 	SourceList(ctx context.Context, in *SourceListRequest, opts ...grpc.CallOption) (*SourceListReply, error)
+	SourceGetSize(ctx context.Context, in *SourceGetSizeRequest, opts ...grpc.CallOption) (*SourceGetSizeReply, error)
 	DeviceList(ctx context.Context, in *DeviceListRequest, opts ...grpc.CallOption) (*DeviceListReply, error)
 	LibraryExport(ctx context.Context, in *LibraryExportRequest, opts ...grpc.CallOption) (*LibraryExportReply, error)
 	LibraryTrim(ctx context.Context, in *LibraryTrimRequest, opts ...grpc.CallOption) (*LibraryTrimReply, error)
@@ -195,6 +196,15 @@ func (c *serviceClient) SourceList(ctx context.Context, in *SourceListRequest, o
 	return out, nil
 }
 
+func (c *serviceClient) SourceGetSize(ctx context.Context, in *SourceGetSizeRequest, opts ...grpc.CallOption) (*SourceGetSizeReply, error) {
+	out := new(SourceGetSizeReply)
+	err := c.cc.Invoke(ctx, "/service.Service/SourceGetSize", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *serviceClient) DeviceList(ctx context.Context, in *DeviceListRequest, opts ...grpc.CallOption) (*DeviceListReply, error) {
 	out := new(DeviceListReply)
 	err := c.cc.Invoke(ctx, "/service.Service/DeviceList", in, out, opts...)
@@ -242,6 +252,7 @@ type ServiceServer interface {
 	JobDisplay(context.Context, *JobDisplayRequest) (*JobDisplayReply, error)
 	JobGetLog(context.Context, *JobGetLogRequest) (*JobGetLogReply, error)
 	SourceList(context.Context, *SourceListRequest) (*SourceListReply, error)
+	SourceGetSize(context.Context, *SourceGetSizeRequest) (*SourceGetSizeReply, error)
 	DeviceList(context.Context, *DeviceListRequest) (*DeviceListReply, error)
 	LibraryExport(context.Context, *LibraryExportRequest) (*LibraryExportReply, error)
 	LibraryTrim(context.Context, *LibraryTrimRequest) (*LibraryTrimReply, error)
@@ -299,6 +310,9 @@ func (UnimplementedServiceServer) JobGetLog(context.Context, *JobGetLogRequest) 
 }
 func (UnimplementedServiceServer) SourceList(context.Context, *SourceListRequest) (*SourceListReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SourceList not implemented")
+}
+func (UnimplementedServiceServer) SourceGetSize(context.Context, *SourceGetSizeRequest) (*SourceGetSizeReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SourceGetSize not implemented")
 }
 func (UnimplementedServiceServer) DeviceList(context.Context, *DeviceListRequest) (*DeviceListReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeviceList not implemented")
@@ -610,6 +624,24 @@ func _Service_SourceList_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_SourceGetSize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SourceGetSizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceServer).SourceGetSize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/service.Service/SourceGetSize",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceServer).SourceGetSize(ctx, req.(*SourceGetSizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Service_DeviceList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeviceListRequest)
 	if err := dec(in); err != nil {
@@ -734,6 +766,10 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SourceList",
 			Handler:    _Service_SourceList_Handler,
+		},
+		{
+			MethodName: "SourceGetSize",
+			Handler:    _Service_SourceGetSize_Handler,
 		},
 		{
 			MethodName: "DeviceList",

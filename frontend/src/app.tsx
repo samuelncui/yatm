@@ -1,9 +1,11 @@
-import { Fragment, useCallback, ChangeEvent } from "react";
-import { Routes, Route, Link, useNavigate, Navigate, useLocation } from "react-router-dom";
+import { useCallback, ChangeEvent } from "react";
+import { Routes, Route, useNavigate, Navigate, useLocation } from "react-router-dom";
 
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
-import { createTheme, ThemeProvider, styled } from "@mui/material/styles";
+import { createTheme, styled, ThemeProvider } from "@mui/material/styles";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import { FileBrowser, FileBrowserType } from "./pages/file";
 import { BackupBrowser, BackupType } from "./pages/backup";
@@ -37,6 +39,11 @@ const Delay = ({ inner }: { inner: JSX.Element }) => {
   return ok ? inner : null;
 };
 
+const ErrorMessage = styled("p")({
+  margin: 0,
+  textAlign: "left",
+});
+
 const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,6 +53,35 @@ const App = () => {
     },
     [navigate],
   );
+
+  useEffect(() => {
+    const origin = window.onunhandledrejection;
+    window.onunhandledrejection = (error) => {
+      if (error.reason.name !== "RpcError") {
+        return;
+      }
+
+      console.log("rpc request have error:", error);
+      toast.error(
+        <div>
+          <ErrorMessage>
+            <b>RPC Request Error</b>
+          </ErrorMessage>
+          <ErrorMessage>
+            <b>Method: </b>
+            {error.reason.methodName}
+          </ErrorMessage>
+          <ErrorMessage>
+            <b>Message: </b>
+            {error.reason.message}
+          </ErrorMessage>
+        </div>,
+      );
+    };
+    return () => {
+      window.onunhandledrejection = origin;
+    };
+  }, []);
 
   return (
     <div id="app">
@@ -76,6 +112,7 @@ const App = () => {
           </Route>
         </Routes>
       </ThemeProvider>
+      <ToastContainer autoClose={10000} />
     </div>
   );
 };
