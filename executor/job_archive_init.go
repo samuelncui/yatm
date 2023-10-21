@@ -32,7 +32,7 @@ func (a *jobArchiveExecutor) applyParam(ctx context.Context, param *entity.JobAr
 		sources := make([]*entity.SourceState, 0, len(param.Sources)*8)
 		for _, src := range param.Sources {
 			src.Base = strings.TrimSpace(src.Base)
-			if src.Base[0] != '/' {
+			if src.Base == "" || src.Base[0] != '/' {
 				src.Base = path.Join(a.exe.paths.Source, src.Base) + "/"
 			}
 			a.logger.Infof("walk source start, source_path= '%s'", src.RealPath())

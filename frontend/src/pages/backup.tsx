@@ -176,7 +176,6 @@ const useBackupTargetBrowser = () => {
                 let splitIdx = path.lastIndexOf("/");
                 if (splitIdx < 0) {
                   splitIdx = -1
-                  return;
                 }
 
                 return { base: path.slice(0, splitIdx + 1), path: [path.slice(splitIdx + 1)] } as Source;
