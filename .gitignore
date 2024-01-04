@@ -20,3 +20,6 @@ frontend/pnpm-lock.yaml
 tests/
 tapes.db
 upload_test.sh
+
+# Additional exclusions when building from source
+yatm--.tar.gz
