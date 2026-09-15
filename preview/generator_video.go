@@ -147,8 +147,9 @@ func (g *videoGenerator) Generate(ctx context.Context, sourcePath, outputDir str
 	rows := (frameCount + columns - 1) / columns
 	timelineName := "timeline." + g.format.extension
 	timelinePath := filepath.Join(outputDir, timelineName)
+	// RGB padding preserves odd tile dimensions regardless of source chroma subsampling.
 	timelineFilter := fmt.Sprintf(
-		"select='eq(n\\,0)+gte(t-prev_selected_t\\,%f)',scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,tile=%dx%d",
+		"select='eq(n\\,0)+gte(t-prev_selected_t\\,%f)',scale=%d:%d:force_original_aspect_ratio=decrease,format=rgb24,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,tile=%dx%d",
 		interval,
 		g.options.TimelineWidth,
 		g.options.TimelineHeight,

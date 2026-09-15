@@ -10,7 +10,7 @@ Archive can create a companion SCAN configured for Preview after successful inde
 
 The Scan manifest retains expected facts and Preview outcomes. Each attempt holds Library maintenance admission. The shared content stage supplies SHA-256, size and mtime to the [Preview manager](../../preview/preview.go), which checks source metadata before and after generation without starting another hash stream. Source enumeration, cancellation and checkpoint behavior belong to Scan.
 
-Generators are registered by kind and configured extensions. Selection and generation use the actual original filename, not its independently organized Library name. Image dimensions, video sampling interval/frame count, output format, and other generator settings belong to [configuration](../../preview/config.go), not user Job input. ffmpeg dimensions, sampling, assets, manifest, and output bytes are bounded.
+Generators are registered by kind and configured extensions. Selection and generation use the actual original filename, not its independently organized Library name. Image dimensions, video sampling interval/frame count, output format, and other generator settings belong to [configuration](../../preview/config.go), not user Job input. ffmpeg dimensions, sampling, assets, manifest, and output bytes are bounded. Video timeline tiles retain their configured dimensions, including odd sizes, so encoded sprites and WebVTT coordinates agree regardless of the source pixel format.
 
 ## Addressing and Update Policy
 
