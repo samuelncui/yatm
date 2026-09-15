@@ -1,12 +1,12 @@
 # Library
 
-Status: v1 Alpha 1 Library model. See the [release notes](../releases/v1.0.0-alpha.1.md) for acceptance and limitations.
+Status: Current development Library model. See the [candidate notes](../releases/v1.0.0-alpha.1.md) for acceptance status.
 
 ## Organization and Content
 
 [File](../../library/file.go) stores logical parent/name, kind, note and millisecond creation/update times. Parent/name is unique. Tags live in FileTag with primary (file_id, tag) and lookup (tag, file_id). File mode, mtime, hash and size in browsing responses are display projections from its original or, when no original exists, its latest saved version; they are not persisted File identity. An unsigned original does not fall back to historical content.
 
-Logical construction, merging and traversal use `File.Kind` explicitly. Saving display projections cannot change it. legacy adapters translate the legacy mode into a kind at their boundary; ordinary GORM saves do not carry that compatibility behavior.
+Logical construction, merging and traversal use `File.Kind` explicitly. Saving display projections cannot change it. Legacy adapters translate the legacy mode into a kind at their boundary; ordinary GORM saves do not carry that compatibility behavior.
 
 Logical moves validate an existing directory ancestry, rejecting self/descendant moves, missing parents and cycles. Nested destination creation and the final move share a metadata transaction, so a rejected edit leaves no intermediate directories. `MkdirAll` treats `.` as the existing directory rather than creating a dot node. Ancestor queries return the complete bounded path or an error for cycles/excessive depth, never a silently truncated breadcrumb. Root ID zero is virtual; reserved Trash ID -1 is an ordinary persisted directory when present.
 
@@ -18,7 +18,7 @@ Logical moves validate an existing directory ancestry, rejecting self/descendant
 
 Restore's **at or before** policy selects the newest recorded save not later than the inclusive cutoff, with version ID breaking equal-time ties. Existing first/last dates remain valid evidence, but do not reconstruct missing intermediate saves; unknown dates cannot qualify. This is a selection of recorded content, not proof of the complete file or directory state at that time. History lost before observation recording cannot be recovered from content hashes, file modification times or import time.
 
-Signature remains opaque bytes in VARBINARY(256), with empty values normalized to NULL. There is no global signature uniqueness or automatic File merge. The v1 producer and consuming integrity checks retain their specific SHA-256/size requirements; they are not general storage encoding validation. See the [identity decision](../decisions/0002-file-organization-and-content.md).
+Signature remains opaque bytes in VARBINARY(256), with empty values normalized to NULL. There is no global signature uniqueness or automatic File merge. The current producer and consuming integrity checks retain their specific SHA-256/size requirements; they are not general storage encoding validation. See the [identity decision](../decisions/0002-file-organization-and-content.md).
 
 ## Archive Inventory
 
@@ -153,12 +153,12 @@ The final `completed` summary means execution settled, not universal success. Pa
 
 Retained copy-provenance records store produced native identity and nullable admitted File ID. [Receipt-aware admission](../../library/copy_admission.go) prevents a recorded copy from inheriting another File's organization; later observations follow only its admitted owner, subject to path priority and eligibility. Deletion releases the receipt owner. [Manual original relocation](../../library/relocate_original.go) replaces the selected File's receipt claims with a checked target without stealing an occupied path. Imported receipts retain history but cannot authorize local matching. These ownership records do not expose a user copy workflow.
 
-## Backup and legacy Compatibility
+## Backup and Legacy Compatibility
 
-[v1 Library metadata backups](../../library/jsonl.go) use the [published JSONL format](persistence.md#published-data-formats) and export one consistent metadata view containing Files/versions, Media/Positions, Locations/originals, tracking evidence, preferences and successful operation results. Online data requires its complete File/Location/FileLocation group; Restore provenance additionally requires source versions. File operation receipts retain historical Location IDs even after unregister, with executable tokens cleared on import. Imports validate live relationships and roll back the whole replacement on invalid input, including cross-batch conflicts. Media-only replacements preserve the immutable identity, type and profile of retained Position owners; reused numeric IDs cannot redirect archived copies. This also applies to legacy Tape-only imports.
+[Library metadata backups](../../library/jsonl.go) use the [published JSONL format](persistence.md#published-data-formats) and export one consistent metadata view containing Files/versions, Media/Positions, Locations/originals, tracking evidence, preferences and successful operation results. Online data requires its complete File/Location/FileLocation group; Restore provenance additionally requires source versions. File operation receipts retain historical Location IDs even after unregister, with executable tokens cleared on import. Imports validate live relationships and roll back the whole replacement on invalid input, including cross-batch conflicts. Media-only replacements preserve the immutable identity, type and profile of retained Position owners; reused numeric IDs cannot redirect archived copies. This also applies to legacy Tape-only imports.
 
 Imported roots become Unconfirmed with rotated binding tokens, cleared original-observation tokens, installation-local Job links cleared and tracking evidence inactive. Confirmation plus new per-file observation is required before access. Imported Restore results retain history but have no executable binding token and cannot authorize retries. Position health/check times remain historical observations tied to their imported content facts; check-Job links are cleared, and known bad copies remain excluded by default. File replacement without originals clears stale online/tracking/Restore-result references and marks retained roots Unconfirmed, preventing numeric-ID reuse from creating false associations.
 
-[legacy whole-object import](../../library/json_v1.go) uses bounded temporary staging. [Offline legacy migration](../operations/migration.md) preserves IDs/organization and copies signatures without rehashing, deriving versions only from confirmed archive evidence. Isolated File content facts do not create invented history.
+[Legacy whole-object import](../../library/json_legacy.go) uses bounded temporary staging. [Offline legacy migration](../operations/migration.md) preserves IDs/organization and copies signatures without rehashing, deriving versions only from confirmed archive evidence. Isolated File content facts do not create invented history.
 
-legacy import and the published v1 format have explicit readers. Old Draft headers and unsupported schemas are rejected before replacement; data is retained for inspection. The [persistence contract](persistence.md#published-data-formats) owns artifact identities and revision handling.
+Legacy import and the current metadata format have explicit readers. Old Draft headers and unsupported schemas are rejected before replacement; data is retained for inspection. The [persistence contract](persistence.md#published-data-formats) owns artifact identities and revision handling.

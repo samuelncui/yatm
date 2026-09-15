@@ -1,14 +1,14 @@
 # Documentation
 
-These documents describe v1 Alpha 1. Start with [installation](operations/install.md), [legacy upgrade](operations/migration.md), or the [Alpha release notes](releases/v1.0.0-alpha.1.md). Daily use is covered by [Library/Media](operations/library.md), [live Locations](operations/online-sources.md), and the bundled [CLI Skill](../.agents/skills/yatm/SKILL.md).
+These documents describe development toward `v1.0.0-alpha.1`. Start with [installation](operations/install.md), [v0.1.x upgrade](operations/migration.md), or the [candidate release notes](releases/v1.0.0-alpha.1.md). Daily use is covered by [Library/Media](operations/library.md), [live Locations](operations/online-sources.md), and the bundled [CLI Skill](../.agents/skills/yatm/SKILL.md).
 
-## Temporary v1 Draft Compatibility Policy
+## Temporary Draft Compatibility Policy
 
-Alpha 1 establishes the first published v1 data baseline. Preserve legacy migration/import and a forward upgrade/import path for published v1 data. The [persistence contract](architecture/persistence.md#published-data-formats) owns artifact identities and revisions. Alpha APIs may change with release notes; published data must retain a supported path forward.
+The supported release sequence is `v0.1.x → v1.0.0-alpha.1 → v1.0.0`. Preserve legacy migration/import and a forward upgrade/import path for published v1 data. The [persistence contract](architecture/persistence.md#published-data-formats) owns artifact identities and revisions independently of software versions. Alpha APIs may change with release notes; supported published data retains a path forward.
 
-The temporary exception applies only to unpublished v1 Draft revisions: their schemas, APIs, Job bundles and backup formats do not require compatibility adapters. Reject unsupported Draft data without deleting installations or physical data; regenerate disposable fixtures explicitly.
+The temporary exception applies to unpublished Draft revisions: their schemas, APIs, Job bundles and backup formats do not require compatibility adapters. Reject unsupported development data without deleting installations or physical data; regenerate disposable fixtures explicitly. Withdrawn experimental installations require separately preserved data and an explicit reinstall; the public installer has no release-number downgrade exception.
 
-Before the first stable v1 release, remove this temporary exception and its contributor reference, publish the stable API/upgrade policy, and audit stale Draft claims. The exception never applies to Alpha 1 or later published data.
+Before the first stable v1 release, remove this temporary exception and its contributor reference, publish the stable API/upgrade policy, and audit stale Draft claims. The exception does not apply to `v1.0.0-alpha.1` or later once published.
 
 ## Current Architecture
 
@@ -25,7 +25,8 @@ Before the first stable v1 release, remove this temporary exception and its cont
 
 - **Requirements baseline:** [Online file management](designs/online-files-requirements.md)
 - **Draft:** [Files interaction and metadata restore](designs/files-interaction-consistency.md)
-- **Release:** [v1 Alpha 1 changes, acceptance and limitations](releases/v1.0.0-alpha.1.md)
+- **Draft:** [v1 Alpha release and upgrade delivery](designs/v1-alpha-release.md)
+- **Candidate:** [v1 Alpha 1 changes and acceptance status](releases/v1.0.0-alpha.1.md)
 - **Accepted:** [File organization is independent of content](decisions/0002-file-organization-and-content.md)
 - **Superseded:** [Content identity owns Library organization](decisions/0001-content-identity.md)
 
@@ -34,7 +35,7 @@ Before the first stable v1 release, remove this temporary exception and its cont
 - [Installation and service configuration](operations/install.md)
 - [Library and mounted Volume workflows](operations/library.md)
 - [Online-source workflows](operations/online-sources.md)
-- [legacy to v1 migration](operations/migration.md)
+- [v0.1.x to v1 migration](operations/migration.md)
 - [Local Demo](operations/demo.md)
 - [Development checks and test environments](operations/testing.md)
 - [Automated E2E](operations/e2e-test.md)
@@ -51,8 +52,8 @@ Before the first stable v1 release, remove this temporary exception and its cont
 - **Implemented:** [Locations and File content interface](history/online-source-interface.md)
 - **Implemented:** [Content-grouped duplicates in Locations](history/duplicate-content-groups.md)
 - **Implemented:** [Online data-source design and acceptance](history/online-sources.md)
-- [v1 design snapshot](history/platform-design.md)
-- [v1 development change summary](history/platform-changes.md)
+- [Platform design snapshot](history/platform-design.md)
+- [Platform development change summary](history/platform-changes.md)
 
 Historical documents are frozen context, not the maintenance target for current behavior. Old document URLs remain as navigation stubs.
 

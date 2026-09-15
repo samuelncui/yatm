@@ -10,10 +10,9 @@ database:
   dialect: sqlite
   dsn: ./tapes.db
 
-# usable tape drivers, must have sg device mapping.
-# use `sg_map` command (in sg3_utils package) to get corresponding device with sg device mapping.
-tape_devices:
-  - /dev/tape/by-id/scsi-HUJ0000000
+# Volume-only installations leave this empty. For Tape, add the actual device
+# with an sg mapping (see sg_map) and adapt the scripts below to the environment.
+tape_devices: []
 
 # working path settings
 paths:

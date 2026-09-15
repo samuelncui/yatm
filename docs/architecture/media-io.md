@@ -16,6 +16,8 @@ Concurrent random access uses configured ACP concurrency, random access uses a s
 
 ## Tape
 
+Configured scripts are the anti-corruption boundary for environment-specific executable paths, device mapping, vendor options and helper logic. The service supplies operation inputs and validates identity, content and final Index output; it does not absorb those local decisions into configuration switches. The [migration guide](../operations/migration.md#tape-script-adaptation) owns input/output contracts and upgrade examples. Installer preflight never invokes these scripts.
+
 [Tape Sessions](../../executor/media_tape.go) identify the cartridge, configure encryption, format when requested, mount LTFS, and unmount/finalize. Every FORMAT, APPEND, and Restore Session requires a non-empty valid device barcode before encryption, formatting, or mounting; FORMAT and APPEND also require an exact match with the requested barcode. Device inspection may use its documented read-only manual identity fallback when automatic MAM lookup is unavailable, but a read/write Session never trusts that fallback. FORMAT rejects a barcode already in the Library; explicit metadata deletion is required before creating a new Media identity. APPEND requires compatible `ltfs_v1`, preserves Media ID/key/Positions, and chooses a short base36 timestamp prefix only to avoid path collisions.
 
 The final captured LTFS Index is the physical fact source. [LTFS processing](../../media) retains backend extents in the typed storage-metadata envelope and stores opaque binary order from partition/block/offset. `ltfs_v0` is path-order compatibility; `ltfs_v1` has validated LTFS order/extents and supports append. Versioning belongs to the storage format, not a second independent version field.

@@ -77,7 +77,7 @@ Archive selection from either pane uses Library logical paths and the File's one
 
 ## Acceptance
 
-Use actual React/MUI/Chonky rendering, not generated concept artwork. Keep independent local prototype sources until a later authorized commit, then remove disposable drafts. Do not promise compatibility with earlier v1 prototype routes.
+Use actual React/MUI/Chonky rendering, not generated concept artwork. Keep independent local prototype sources until a later authorized commit, then remove disposable drafts. Do not promise compatibility with earlier prototype routes.
 
 Acceptance covers registration without confirmation, imported confirmation, Ignore text preservation, cached unavailable browsing, background Scan creation/retry, Settings tab navigation, row status tooltips and selection, cross-Location duplicate search, complete Library toolbar, original/version/copy distinctions and explicit version Restore. Reset Demo and real Volume CLI workflows complement each other. [The content-model design](online-file-versions.md#implementation-and-acceptance) defines its separate backend scope.
 

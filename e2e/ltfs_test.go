@@ -32,9 +32,9 @@ import (
 )
 
 type legacyLibraryBackup struct {
-	Files     []legacyFile        `json:"files"`
-	Tapes     []*library.Tape `json:"tapes"`
-	Positions []legacyPosition    `json:"positions"`
+	Files     []legacyFile     `json:"files"`
+	Tapes     []*library.Tape  `json:"tapes"`
+	Positions []legacyPosition `json:"positions"`
 }
 
 type legacyFile struct {

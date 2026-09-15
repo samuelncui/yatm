@@ -46,7 +46,7 @@ One Create returns an initialized background Job and immediately navigates to it
 - Retry starts a fresh observation from current committed inventory. Library publication remains authoritative if the later Job checkpoint fails. Do not add a cross-database transaction or crash-only recovery log.
 - Use the indexing/completed lifecycle with retryable phases. Scanning, validating and publishing are internal phases; the UI presents progress, results and retry without a manual commit step.
 
-IDL, generated clients, CLI, UI, Demo and operational instructions must change together. Under the [v1 Draft policy](../README.md#temporary-v1-draft-compatibility-policy), no internal Draft Apply compatibility adapter is required. Do not silently execute an old waiting Job or reset existing installations; incompatible bundles need explicit handling.
+IDL, generated clients, CLI, UI, Demo and operational instructions must change together. Under the [Draft policy](../README.md#temporary-draft-compatibility-policy), no internal Draft Apply compatibility adapter is required. Do not silently execute an old waiting Job or reset existing installations; incompatible bundles need explicit handling.
 
 ## Library Visibility and Physical Browsing
 

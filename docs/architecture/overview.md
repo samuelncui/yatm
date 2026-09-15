@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Status: v1 Alpha 1 architecture.
+Status: Current development architecture; v1 Alpha release acceptance is pending.
 
 The [glossary](../../CONTEXT.md) owns domain definitions. YATM organizes ongoing Files with at most one online original, saved FileVersions, and signature-linked independent Tape/Volume copies. The [Alpha release notes](../releases/v1.0.0-alpha.1.md) summarize acceptance and platform limitations; Draft designs describe proposed work separately.
 

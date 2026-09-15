@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+device=$("${script_dir}/get_device")
+mkdir -p -- "${TAPE_DIR}"
+ltfs -o tape_backend=file -o "devname=${device}" -o sync_type=unmount \
+    -o "work_directory=${TAPE_DIR}" -o capture_index \
+    -s "${MOUNT_POINT}" 2>&1 | tee -a "${TAPE_DIR}/ltfs.log"
+mountpoint -q "${MOUNT_POINT}"

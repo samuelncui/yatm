@@ -51,7 +51,7 @@ rewriting in the frontend.
 
 ## Library Metadata Restore
 
-The existing [backup contract](../architecture/library.md#backup-and-v1-compatibility)
+The existing [backup contract](../architecture/library.md#backup-and-legacy-compatibility)
 replaces declared metadata groups transactionally; it is not incremental merging
 by integer ID. The UI should name this **Library metadata backup**, with
 **Export backup** and **Restore backup** actions.

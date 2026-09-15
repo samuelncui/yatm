@@ -27,7 +27,7 @@ type:file AND size:>=1048576
 mtime:>="2026-01-01T00:00:00Z" AND NOT tag:obsolete
 ```
 
-Export creates a Library metadata backup, not a copy of physical content. Import replaces declared entity types transactionally and preserves prior data on invalid references or unique-key conflicts; review the [backup contract](../architecture/library.md#backup-and-v1-compatibility) before replacement.
+Export creates a Library metadata backup, not a copy of physical content. Import replaces declared entity types transactionally and preserves prior data on invalid references or unique-key conflicts; review the [backup contract](../architecture/library.md#backup-and-legacy-compatibility) before replacement.
 
 Select **More filters → Duplicates in Locations** for grouped current-content results; the [Demo guide](demo.md#fixtures) covers group expansion and cross-Location filters. The CLI exposes the same separately paged queries:
 

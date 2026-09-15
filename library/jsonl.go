@@ -21,7 +21,7 @@ const (
 	maxJSONLRecordSize            = 1 << 20
 	recordTypeHeader              = "header"
 	recordTypeMedia               = "media"
-	recordTypeLegacyTape              = "tape"
+	recordTypeLegacyTape          = "tape"
 	recordTypeFile                = "file"
 	recordTypePosition            = "position"
 	recordTypeEnd                 = "end"

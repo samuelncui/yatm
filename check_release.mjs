@@ -25,7 +25,7 @@ for (let offset = 0; offset + 512 <= tar.length;) {
   offset += 512 + Math.ceil(size / 512) * 512;
 }
 const entries = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).trim().split("\n").map((name) => name.replace(/^\.\//, ""));
-const roots = new Set(["yatm-httpd", "yatm-cli", "yatm-export-library", "yatm-lto-info", "yatm-migrate", "VERSION", "COMMIT", "LICENSE", "README.md", "CONTEXT.md"]);
+const roots = new Set(["yatm-httpd", "yatm-cli", "yatm-export-library", "yatm-lto-info", "yatm-migrate", "install-release.sh", "VERSION", "COMMIT", "LICENSE", "README.md", "CONTEXT.md"]);
 const directories = new Set(["frontend", "docs", "templates", "licenses", "skills"]);
 for (const entry of entries) {
   if (!entry || entry === ".") continue;
@@ -33,10 +33,11 @@ for (const entry of entries) {
   assert(roots.has(entry) || directories.has(entry.split("/")[0]), `Unexpected archive entry: ${entry}`);
   assert(!/(^|\/)(\.git|node_modules|config\.yaml|scripts\/demo)(\/|$)/.test(entry), `Development/private file in archive: ${entry}`);
 }
-for (const entry of [...roots, "frontend/index.html", "templates/config.example.yaml", "templates/yatm-httpd.service", "skills/yatm/SKILL.md", "licenses/dependencies.json", "licenses/THIRD_PARTY_NOTICES"]) {
+for (const entry of [...roots, "frontend/index.html", "docs/operations/migration.md", "templates/config.example.yaml", "templates/yatm-httpd.service", "skills/yatm/SKILL.md", "licenses/dependencies.json", "licenses/THIRD_PARTY_NOTICES"]) {
   assert(entries.includes(entry), `Required package file missing: ${entry}`);
 }
 for (const script of ["encrypt", "get_device", "mkfs", "mount", "mount.openltfs", "readinfo", "umount"]) assert(entries.includes(`templates/scripts/${script}`));
+for (const entry of ["encrypt", "get_device", "mkfs", "mount", "readinfo", "umount", "README.md"]) assert(entries.includes(`templates/testing/ltfs-file-backend/${entry}`), `Required testing adapter missing: ${entry}`);
 const read = (entry) => execFileSync("tar", ["-xOzf", archive, `./${entry}`], { encoding: "utf8" }).trim();
 const version = read("VERSION");
 const commit = read("COMMIT");

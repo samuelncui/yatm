@@ -49,7 +49,7 @@ An already-mounted archive filesystem registered with an immutable YATM marker. 
 _Avoid_: any visible directory, original Location
 
 **Source**:
-A legacy frozen legacy Job selection containing a filesystem base and selected paths; new workflows use registered Library/Location selections.
+A frozen legacy Job selection containing a filesystem base and selected paths; new workflows use registered Library/Location selections.
 _Avoid_: registered Location, Media
 
 **Analyze**:

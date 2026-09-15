@@ -20,8 +20,10 @@ mkdir -p "$OUTPUT_DIRECTORY/templates/scripts" "$OUTPUT_DIRECTORY/skills/yatm"
 for script in encrypt get_device mkfs mount mount.openltfs readinfo umount; do
   cp "scripts/$script" "$OUTPUT_DIRECTORY/templates/scripts/"
 done
+mkdir -p "$OUTPUT_DIRECTORY/templates/testing"
+cp -R scripts/ltfs-file-backend "$OUTPUT_DIRECTORY/templates/testing/"
 cp cmd/httpd/yatm-httpd.service config.example.yaml "$OUTPUT_DIRECTORY/templates/"
-cp LICENSE README.md CONTEXT.md "$OUTPUT_DIRECTORY/"
+cp LICENSE README.md CONTEXT.md install-release.sh "$OUTPUT_DIRECTORY/"
 cp -R docs "$OUTPUT_DIRECTORY/"
 cp .agents/skills/yatm/SKILL.md "$OUTPUT_DIRECTORY/skills/yatm/"
 node build_documents.mjs "$OUTPUT_DIRECTORY" "$RELEASE_VERSION"

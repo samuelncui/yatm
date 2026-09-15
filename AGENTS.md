@@ -17,7 +17,7 @@
 - Update affected architecture, operational guides, and tests together with code. After implementation and verification, absorb the behavior into current architecture and archive its design as Implemented.
 - Keep each fact in one owning document and link to it. Use sparse ADRs only for hard-to-reverse, non-obvious tradeoffs.
 - Preserve the distinction between the development implementation and a published release. Maintain useful old document entry points as short navigation stubs.
-- Follow the [compatibility policy](docs/README.md#temporary-v1-draft-compatibility-policy): preserve legacy and published v1 data, beginning with Alpha 1. Unpublished Draft revisions do not require compatibility layers. Remove this temporary exception before the first stable v1 release and publish the stable API/upgrade policy.
+- Follow the [compatibility policy](docs/README.md#temporary-draft-compatibility-policy): preserve `v0.1.x` migration/import and supported published v1 data. Software versions and data-format revisions are independent. Unpublished Draft revisions do not require compatibility layers. Remove this temporary exception before the first stable v1 release and publish the stable API/upgrade policy.
 - Check document links, status labels, code anchors, and `git diff --check` before delivery; do not add a documentation toolchain without a concrete requirement.
 
 ## Persistence and Extension Rules
@@ -65,6 +65,7 @@ Follow the exact [Archive/Restore/Scan checkpoints](docs/architecture/jobs.md), 
 - New primary business capabilities require matching CLI commands and real CLI-subprocess E2E acceptance recorded in the E2E coverage matrix. Migrate existing CLI-expressible business steps instead of invoking private services or writing database rows; retain internal fault injection as semantic/integration coverage.
 - For frontend-visible changes, update `internal/demo` and the [Demo guide](docs/operations/demo.md), run its semantic tests, and smoke-test an explicit reset fixture. Include actionable and unavailable states; the Demo does not replace unit/E2E coverage.
 - Follow [test environment safety](docs/operations/testing.md): use an isolated Linux host with the official LTFS file backend; physical Tape tests require explicitly assigned scratch media.
+- On remote `dev` acceptance, use only YATM binaries from the corresponding verified release package. Keep orchestration local through SSH; transfer no repository source, separately compiled test harness or helper source. Local/CI source-based tests remain separate evidence.
 - Test migration only on timestamped `cp -a` copies of explicitly approved backups. Keep private fixture locations outside the repository. Never modify source backups or production installations during validation.
 - Follow the [offline migration guide](docs/operations/migration.md). Verify every migrated historical Job item-by-item, including non-empty Jobs, rather than comparing only catalog counts. Keep commit and backup cleanup separately confirmed.
 - Clean only validated temporary test resources after verification. Record review-comment decisions one at a time, implement the confirmed batch, then run expensive E2E once for the batch.

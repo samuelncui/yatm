@@ -105,7 +105,7 @@ func main() {
 	}
 	// Exclude actual process-owned resources without treating the whole work directory as disposable.
 	exe := executor.New(db, lib, conf.TapeDevices, conf.Paths, conf.Scripts, previews)
-	runtimePaths := []string{"./run.log", *configOpt}
+	runtimePaths := []string{"./run.log", "./.yatm-upgrades", *configOpt}
 	if conf.Database.Dialect == "sqlite" {
 		filename, _, _ := strings.Cut(strings.TrimPrefix(conf.Database.DSN, "file:"), "?")
 		if filename != "" && filename != ":memory:" {

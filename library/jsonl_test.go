@@ -308,7 +308,7 @@ func TestLibraryAutoMigrateRejectsLegacyPositionSchema(t *testing.T) {
 	require.NoError(t, db.Exec("CREATE TABLE positions (id INTEGER PRIMARY KEY, tape_id INTEGER, path TEXT)").Error)
 
 	err := New(db).AutoMigrate()
-	require.ErrorContains(t, err, "offline current migration")
+	require.ErrorContains(t, err, "yatm-migrate")
 }
 
 func TestLibraryJSONLImportRejectsInvalidSnapshots(t *testing.T) {

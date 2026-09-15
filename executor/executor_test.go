@@ -337,7 +337,7 @@ func TestExecutorRefusesLegacySchema(t *testing.T) {
 	require.NoError(t, db.Exec("CREATE TABLE jobs (id INTEGER PRIMARY KEY, status INTEGER, priority INTEGER, state BLOB, create_time DATETIME, update_time DATETIME)").Error)
 
 	exe := New(db, &library.Library{}, nil, Paths{Work: t.TempDir()}, Scripts{}, nil)
-	require.ErrorContains(t, exe.AutoMigrate(), "offline current migration")
+	require.ErrorContains(t, exe.AutoMigrate(), "yatm-migrate")
 }
 
 func TestReconcileStorageHandlesIncompleteAndOrphanBundles(t *testing.T) {

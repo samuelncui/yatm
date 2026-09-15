@@ -4,7 +4,7 @@
 
 YATM is an open-source archive manager for LTFS tapes and already-mounted disk Volumes. It separates logical Library organization from physical archive copies, keeping ordinary files recoverable without a YATM-specific storage format.
 
-**v1 Alpha 1** is a prerelease for evaluation with a complete installation backup. It introduces live Location file management, persistent saved versions and a unified Scan workflow. Read the [Alpha release notes](docs/releases/v1.0.0-alpha.1.md) for breaking changes, tested platforms and limitations. [legacy remains the stable release](https://github.com/samuelncui/yatm/releases/latest).
+**v1.0.0-alpha.1 is an unreleased candidate.** It introduces live Location file management, persistent saved versions and a unified Scan workflow. Read the [candidate release notes](docs/releases/v1.0.0-alpha.1.md) for changes and acceptance status. [v0.1.x remains the stable release](https://github.com/samuelncui/yatm/releases/latest).
 
 ## Features
 
@@ -20,7 +20,16 @@ Tape workflows require compatible LTFS hardware/software; Volume-only workflows 
 
 ## Get Started
 
-Install the explicit [Alpha release](https://github.com/samuelncui/yatm/releases/tag/v1.0.0-alpha.1) using [Installation and Configuration](docs/operations/install.md). Existing legacy installations use the [upgrade procedure](docs/operations/migration.md), with a complete backup and report approval before activation.
+The default installer selects the stable release. Once the Alpha candidate is published, install or upgrade using its exact-version installer; no local compilation is required:
+
+```shell
+curl --fail --location --output install-release.sh \
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.1/install-release.sh
+bash install-release.sh --version v1.0.0-alpha.1 --check
+bash install-release.sh --version v1.0.0-alpha.1
+```
+
+Run with permission to manage the installation and systemd service. See [Installation and Configuration](docs/operations/install.md) for prerequisites and fresh-install configuration. Existing `v0.1.x` installations follow the [upgrade guide](docs/operations/migration.md); review it before proceeding. The installer displays that guide from the verified release package and asks for approval before stopping the service.
 
 For an isolated local review environment from a source checkout, run:
 

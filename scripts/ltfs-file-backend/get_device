@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# These optional adapters accept virtual cartridges, never device nodes.
+: "${DEVICE:?DEVICE must be an existing virtual-cartridge directory}"
+if [[ ! -d "${DEVICE}" || -L "${DEVICE}" ]]; then
+    echo "Expected a real virtual-cartridge directory: ${DEVICE}" >&2
+    exit 1
+fi
+device=$(realpath -- "${DEVICE}")
+if [[ ! ${device##*/} =~ ^[A-Z0-9]{6}$ ]]; then
+    echo "The virtual-cartridge directory name must be a six-character barcode" >&2
+    exit 1
+fi
+printf '%s\n' "${device}"

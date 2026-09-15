@@ -79,6 +79,8 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 
 	// Prepare a complete current catalog and one independent state database per Job.
 	restoreRoot := filepath.Join(t.TempDir(), "configured-restore-output")
+	backup := preserveTestBackup(t, db, root)
+	backup.RestoreRoot = restoreRoot
 	report, err := PrepareWithLTFSIndex(ctx, db, root, indexRoot, restoreRoot)
 	require.NoError(t, err)
 	require.True(t, report.Success)
@@ -162,7 +164,8 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	require.NoError(t, db.Delete(created).Error)
 
 	// Cleanup removes only the user-confirmed legacy table backup.
-	require.NoError(t, Cleanup(db, root))
+	require.NoError(t, Cleanup(ctx, db, root, backup))
+	require.NoError(t, Cleanup(ctx, db, root, backup))
 	require.False(t, db.Migrator().HasTable("jobs_legacy"))
 	require.False(t, db.Migrator().HasTable("files_legacy"))
 	require.False(t, db.Migrator().HasTable("tapes_legacy"))
@@ -680,13 +683,15 @@ func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
 		State: &legacypb.JobState{State: &legacypb.JobState_Restore{Restore: &legacypb.JobRestoreState{}}},
 	}).Error)
 	frozenRoot := filepath.Join(t.TempDir(), "frozen-output")
+	backup := preserveTestBackup(t, db, root)
+	backup.RestoreRoot = filepath.Join(t.TempDir(), "new-config-output")
 	report, err := PrepareWithLTFSIndex(ctx, db, root, "", frozenRoot)
 	require.NoError(t, err)
 	require.Zero(t, report.RestoreItems)
 	require.NoError(t, Commit(ctx, db, root))
 
 	// Restore the preserved transitional manifest and repair only the affected Bundle.
-	transitionalPath := filepath.Join(root, legacyJobsDirectory, "1", "state.db")
+	transitionalPath := filepath.Join(backup.WorkRoot, "jobs", "1", "state.db")
 	require.NoError(t, os.MkdirAll(filepath.Dir(transitionalPath), 0o755))
 	transitionalDB, err := resource.OpenSQLite(transitionalPath)
 	require.NoError(t, err)
@@ -697,8 +702,9 @@ func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
 	}).Error)
 	closeDB(transitionalDB)
 
-	require.NoError(t, RepairJob(ctx, db, root, 1, filepath.Join(t.TempDir(), "new-config-output")))
-	require.DirExists(t, filepath.Join(root, "jobs-before-repair", "1"))
+	require.NoError(t, db.Migrator().DropTable("jobs_legacy"))
+	require.NoError(t, RepairJob(ctx, db, root, 1, backup))
+	require.DirExists(t, filepath.Join(filepath.Dir(backup.Root), "jobs-before-repair", "1"))
 	repairedDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
 	require.NoError(t, err)
 	var copies []*restore.Copy
@@ -714,10 +720,10 @@ func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
 	require.Equal(t, canonicalRoot, config.LegacyRoot)
 	require.NoDirExists(t, frozenRoot)
 	closeDB(repairedDB)
-	require.ErrorContains(t, RepairJob(ctx, db, root, 1), "repair backup already exists")
+	require.ErrorContains(t, RepairJob(ctx, db, root, 1, backup), "repair backup already exists")
 }
 
-func TestAbortRemovesOnlyPreparedV2Data(t *testing.T) {
+func TestAbortRemovesOnlyPreparedCurrentData(t *testing.T) {
 	// Build one legacy Job without any legacy Job directory.
 	ctx := context.Background()
 	db := newLegacyTestDB(t)
@@ -760,7 +766,7 @@ func TestEmptyLegacyInstanceCreatesFinalJobDirectory(t *testing.T) {
 	ctx := context.Background()
 	db := newLegacyTestDB(t)
 	root := t.TempDir()
-	require.ErrorIs(t, Cleanup(db, root), dataformat.ErrUnsupportedCatalog)
+	require.ErrorIs(t, Cleanup(ctx, db, root, Backup{}), dataformat.ErrUnsupportedCatalog)
 
 	// Prepare creates the final empty directory while leaving the legacy table active.
 	report, err := Prepare(ctx, db, root)

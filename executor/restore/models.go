@@ -10,7 +10,7 @@ type Config struct {
 	ID   int64                  `gorm:"primaryKey;autoIncrement:false;check:id = 1"`
 	Spec *entity.RestoreJobSpec `gorm:"type:blob;not null"`
 	// Only the offline legacy migrator sets this frozen output root; new Jobs use Destination.
-	LegacyRoot   string
+	LegacyRoot     string
 	OperationID    string `gorm:"type:varchar(36)"`
 	ManifestFrozen bool
 }

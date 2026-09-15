@@ -11,6 +11,7 @@ import (
 )
 
 func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) error {
+	// Build saved versions only from reconciled physical copy evidence.
 	var after int64
 	for {
 		var copies []*stagedLibraryPosition
@@ -58,6 +59,8 @@ func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) e
 		}
 		after = copies[len(copies)-1].ID
 	}
+
+	// Isolated content facts remain recoverable from the complete legacy catalog backup.
 	var uncertain int64
 	versions := db.Model(&stagedLibraryVersion{}).Select("1").Where("file_versions_staging.file_id = files_staging.id")
 	if err := db.WithContext(ctx).Model(&stagedLibraryFile{}).Where("kind = ? AND signature IS NOT NULL", entity.FileKind_FILE_KIND_REGULAR).
@@ -65,7 +68,7 @@ func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) e
 		return err
 	}
 	if uncertain != 0 {
-		report.Warnings = append(report.Warnings, fmt.Sprintf("%d Files have no confirmed archived content; original facts remain in the preserved legacy files table, not fabricated FileVersions", uncertain))
+		report.Warnings = append(report.Warnings, fmt.Sprintf("%d Files have no confirmed archived content; original facts remain in the complete legacy catalog backup, not fabricated FileVersions", uncertain))
 	}
 	return nil
 }

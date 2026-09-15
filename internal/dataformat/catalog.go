@@ -14,7 +14,7 @@ const (
 	CatalogTable    = "catalog_metadata"
 )
 
-var ErrUnsupportedCatalog = errors.New("unsupported Catalog format; use the offline current migration for legacy data")
+var ErrUnsupportedCatalog = errors.New("unsupported Catalog format; use yatm-migrate for legacy data")
 
 type catalogMetadata struct {
 	ID       int    `gorm:"primaryKey;autoIncrement:false"`

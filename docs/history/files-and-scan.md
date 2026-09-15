@@ -18,4 +18,4 @@ Passed: shared adapter contracts, indicator matrix, guarded content access, cach
 
 An explicit-reset Demo was checked in the browser for shared query filtering, status/Inspector facts, aligned rows and compact navigation, preferred-target selection and directory creation, and a completed verified Volume Restore. Official LTFS file-backend Archive/Restore and full-media spanning tests passed on Linux; no physical Tape was used. The [coverage matrix](../operations/e2e-test.md) owns repeatable commands and assertions.
 
-legacy compatibility remains required; incompatible v1 Draft fixtures are not silently reset. S3 integration, physical-media release acceptance and production migration activation are not established by these development checks.
+Legacy compatibility remains required; incompatible v1 Draft fixtures are not silently reset. S3 integration, physical-media release acceptance and production migration activation are not established by these development checks.

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+device=$("${script_dir}/get_device")
+printf '{"barcode":"%s"}\n' "${device##*/}" > "${OUT}"

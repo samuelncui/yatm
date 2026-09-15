@@ -59,12 +59,12 @@ func TestRequiredExclusionsStayLiteralAndCannotBeReincluded(t *testing.T) {
 		filepath.Join(root, ".state#!"), filepath.Join(root, "snap[1]*"))
 	paths, err := exe.RequiredOnlineExclusions(root)
 	require.NoError(t, err)
-	require.Equal(t, []string{".state#!", ".work/jobs", "snap[1]*"}, paths)
+	require.Equal(t, []string{".state#!", ".work/.yatm-upgrades", ".work/jobs", "snap[1]*"}, paths)
 
 	// User exceptions cannot reopen protected resources, or exclude similarly named ordinary files.
 	location := &library.Location{RequiredExclusions: paths,
 		Exclusions: &entity.OnlineExclusions{Format: "gitignore", Text: "!*\n!**/*"}}
-	for _, path := range []string{".state#!", ".work/jobs/1/state.db", "snap[1]*/child/data"} {
+	for _, path := range []string{".state#!", ".work/.yatm-upgrades/attempt/backup/config.yaml", ".work/jobs/1/state.db", "snap[1]*/child/data"} {
 		require.True(t, location.Excluded(path, false), path)
 	}
 	for _, path := range []string{".state", ".work/ordinary", "snap1", "snap[1]*-other/child"} {

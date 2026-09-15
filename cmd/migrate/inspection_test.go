@@ -69,3 +69,67 @@ func TestBackupScopeRejectsExternalSymlink(t *testing.T) {
 	_, err := inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true)
 	require.ErrorContains(t, err, "external or unresolved link")
 }
+
+func TestBackupScopePrunesOnlyOwnedUpgradeArtifacts(t *testing.T) {
+	// An arbitrary user directory occupying the reserved name blocks installation changes.
+	root := t.TempDir()
+	conf := &config.Config{Listen: ":8080"}
+	conf.Database.Dialect = "sqlite"
+	conf.Database.DSN = filepath.Join(root, "catalog.db")
+	conf.Paths.Work = root
+	upgrades := filepath.Join(root, ".yatm-upgrades")
+	require.NoError(t, os.Mkdir(upgrades, 0o700))
+	_, err := inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true)
+	require.ErrorContains(t, err, "ownership marker")
+
+	// Preserved older backups do not enter active-resource link checks or recursive backups.
+	require.NoError(t, os.WriteFile(filepath.Join(upgrades, "OWNER"), []byte("yatm-installer-upgrades\n"), 0o600))
+	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(upgrades, "old-link")))
+	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true)
+	require.NoError(t, err)
+
+	// Original content mixed into the active installation needs explicit operator classification.
+	conf.Paths.Source = filepath.Join(root, "originals")
+	require.NoError(t, os.Mkdir(conf.Paths.Source, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(conf.Paths.Source, "important.txt"), []byte("keep"), 0o600))
+	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true)
+	require.ErrorContains(t, err, "business files are mixed")
+}
+
+func TestFreshInspectionChecksUpgradeDirectoryOwnershipWithoutWrites(t *testing.T) {
+	// A check must reject every ownership conflict that would block the real installation.
+	for _, owner := range []string{"missing", "wrong", "symlink", "owned"} {
+		t.Run(owner, func(t *testing.T) {
+			root := t.TempDir()
+			upgrades := filepath.Join(root, ".yatm-upgrades")
+			if owner == "symlink" {
+				require.NoError(t, os.Symlink(t.TempDir(), upgrades))
+			} else {
+				require.NoError(t, os.Mkdir(upgrades, 0o700))
+			}
+			if owner == "wrong" || owner == "owned" {
+				marker := "someone-else\n"
+				if owner == "owned" {
+					marker = "yatm-installer-upgrades\n"
+				}
+				require.NoError(t, os.WriteFile(filepath.Join(upgrades, "OWNER"), []byte(marker), 0o600))
+			}
+			conf := &config.Config{Listen: ":9092"}
+			conf.Database.Dialect = "sqlite"
+			conf.Database.DSN = filepath.Join(root, "tapes.db")
+			conf.Paths.Work = root
+
+			// Read-only inspection neither creates a catalog nor repairs ownership metadata.
+			_, err := inspectFreshInstallation(conf, root)
+			if owner == "owned" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, "reserved upgrade directory")
+			}
+			require.NoFileExists(t, conf.Database.DSN)
+			entries, err := os.ReadDir(root)
+			require.NoError(t, err)
+			require.Len(t, entries, 1)
+		})
+	}
+}

@@ -37,9 +37,9 @@ Restore normally permits healthy or unchecked candidates, validating actual byte
 - Existing/stale originals, multiple versions, stable logical/physical names, path ownership and post-Library checkpoint retry.
 - Healthy/mismatched/missing/unreadable/unverifiable copies, cancellation, changed Media and stale inventory publication.
 - Real CLI business E2E, fresh reset Demo, Go/vet/race and both SQLite drivers, generated-client coverage and frontend checks.
-- Isolated Volume/Preview and isolated Linux LTFS file-backend only; no physical Tape tests. legacy validation uses copies of the approved source backups, never production or source backups.
+- Isolated Volume/Preview and isolated Linux LTFS file-backend only; no physical Tape tests. Legacy validation uses copies of the approved source backups, never production or source backups.
 
-Only legacy compatibility is required during the temporary v1 Draft period. No commits, pushes or releases are automatic. Runtime behavior, state tables and operational commands move to their owning architecture and operations documents after verification.
+The [compatibility policy](../README.md#temporary-draft-compatibility-policy) distinguishes supported release data from unpublished prototypes. Runtime behavior, state tables and operational commands move to their owning architecture and operations documents after verification.
 
 ### Verification Status
 

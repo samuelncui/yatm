@@ -1,6 +1,6 @@
 # Installation and Service Configuration
 
-This guide describes v1 Alpha 1. See the [release notes](../releases/v1.0.0-alpha.1.md) for platform acceptance and the [migration guide](migration.md) for legacy installations.
+This guide describes the unreleased v1 Alpha candidate. See the [candidate notes](../releases/v1.0.0-alpha.1.md) for acceptance status and the [migration guide](migration.md) for `v0.1.x` installations. Tag-based commands below become available after publication.
 
 ## Requirements
 
@@ -11,17 +11,13 @@ This guide describes v1 Alpha 1. See the [release notes](../releases/v1.0.0-alph
 
 ## Install or Update
 
-The [release installer](../../install-release.sh) supports Linux amd64 with systemd. It requires Bash, curl, jq, tar and sha256sum. Run it with an account authorized to manage the installation and service. The default selects the latest stable release; Alpha requires an explicit version:
-
-```shell
-bash install-release.sh --version v1.0.0-alpha.1
-```
-
-Obtain the installer from the selected [release's source tag](https://github.com/samuelncui/yatm/tree/v1.0.0-alpha.1), or download that exact revision:
+The [release installer](../../install-release.sh) supports Linux amd64 with systemd. It requires Bash, curl, jq, tar and sha256sum. Run it with an account authorized to manage the installation and service. The default selects the latest stable release; Alpha requires an explicit version. Obtain that revision's installer, check, then install:
 
 ```shell
 curl --fail --location --output install-release.sh \
   https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.1/install-release.sh
+bash install-release.sh --version v1.0.0-alpha.1 --check
+bash install-release.sh --version v1.0.0-alpha.1
 ```
 
 For an extracted local candidate, supply its archive and companion checksum; it follows the same installation path:
@@ -32,13 +28,15 @@ bash install-release.sh --version v1.0.0-alpha.1 \
   --checksum ./yatm-linux-amd64-v1.0.0-alpha.1.tar.gz.sha256 --check
 ```
 
-`--check` validates the candidate and performs read-only installation checks. Remove it to proceed to the confirmation prompts. `--install-dir` and `--service` select a dedicated installation and unit; `--config` supplies a reviewed configuration for a fresh installation. Otherwise fresh installation opens the configuration template in `$EDITOR` (default `vi`).
+`--check` validates the candidate and performs read-only installation checks. Remove it to proceed to the confirmation prompts. `--install-dir` and `--service` select a dedicated installation and unit; `--config` supplies a reviewed configuration for a fresh installation. Otherwise fresh installation opens the configuration template in `$EDITOR` (default `vi`). Review the listener, database, access roots and Preview tools. Volume-only users leave `tape_devices: []`; no fictitious Tape device or script execution is needed to install.
 
-v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official legacy releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Lower-version installation is rejected; rollback restores a matching complete backup.
+A noninteractive fresh installation requires `--config /path/to/reviewed-config.yaml`. Existing-installation updates preserve their configuration and reject `--config`.
 
-Before changing an existing installation, the installer checks formats, active operations, backup coverage/space and Tape script compatibility. Active operations must finish; waiting-for-Media Jobs are eligible. Confirmation precedes service interruption. The complete backup is created beside the installation with a timestamped name. legacy migration then requires a second approval of its preparation report. Existing configuration, scripts, unit and unknown local files are preserved; script/unit template replacement is an explicit choice.
+v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official `v0.1.x` releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Lower-version installation is rejected; rollback restores a matching complete backup.
 
-Startup acceptance checks the API, Library, Jobs and served frontend assets. A same-version rerun verifies the installed identity and offers the optional Skill without replacing programs. Failure after managed-file replacement starts leaves the service stopped and identifies the complete backup for recovery. Ordinary replacement is not atomic; see [upgrade phases and recovery](migration.md).
+For existing installations, the [upgrade guide](migration.md) owns preflight, consent, migration, complete in-root backup and recovery. The installer displays the verified package's guide before crossing a major version. It preserves active configuration, scripts, helpers, permissions, service unit and unknown user files; upgrades do not adopt default script/unit templates. Script checks report manual requirements, not physical Tape compatibility.
+
+Startup acceptance checks the API, Library, Jobs and served frontend assets. A same-version rerun verifies the installed identity and offers the optional Skill without replacing programs. Installation does not execute Tape scripts. Ordinary replacement is non-atomic; [recovery](migration.md#failure-and-complete-backup-recovery) restores a complete matching backup.
 
 For a fresh manual installation from a verified archive:
 
@@ -53,13 +51,13 @@ systemctl enable /opt/yatm/yatm-httpd.service
 systemctl start yatm-httpd.service
 ```
 
-Review paths, database settings, listener/domain, Tape devices/scripts, and Preview settings before starting. Do not overwrite an existing installation's configuration with the example. If installing elsewhere, update the service and scripts for that location. The configuration supports SQLite and an untested MySQL option; per-Job state uses SQLite bundles.
+Review paths, database settings, listener/domain, optional Tape devices/scripts, and Preview settings before starting. Manual commands above are for a new installation only. If installing elsewhere, update the service and scripts for that location. The configuration supports SQLite and an untested MySQL option; per-Job state uses SQLite bundles.
 
 Automatic upgrade covers standard SQLite layouts contained in the installation backup. External databases, Job storage, scripts or captured indexes require the manual procedure with coordinated backup of those resources. Other platform archives use manual installation and carry explicit runtime-validation or experimental labels.
 
 `paths.access` defines administrator-approved directory roots and optional ordered gitignore exclusions. Daily original/Restore directory choices live in **Settings → Locations**, not YAML. `paths.work` owns execution artifacts, and `paths.volumes` contains already-mounted archive Volume discovery roots. Restore destinations are not archive Media. See [Location configuration and migration](#location-configuration-and-migration).
 
-The default Tape unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Treat unexpected LTFS/index behavior as an integrity issue and retain logs/indexes for diagnosis.
+Scripts isolate environment-specific LTFS and device behavior from the service. Review the [script contract and adaptation sequence](migration.md#tape-script-adaptation) before Tape use. The default unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Retain unexpected LTFS/index diagnostics for investigation.
 
 ## Location Configuration and Migration
 
@@ -69,13 +67,13 @@ On first startup, legacy `paths.source` and `paths.target` migrate to Locations;
 
 If `paths.access` is omitted, legacy source/target paths supply authorization boundaries. Configure explicit access roots before removing those legacy YAML entries; an explicit empty list permits no directories. YAML never overrides later Location edits. Paths outside allowed roots, symlink descendants, runtime files and overlapping archive storage remain denied. Ignore rules cannot reopen paths outside an allowed root, and an ignored parent requires reopening before a child exception can apply. Revoking access invalidates a frozen Job rather than redirecting it.
 
-Imported paths require local confirmation. Original access additionally needs a current per-file observation; Restore validates the selected path and its existing parent components, and writes can still fail if permissions or space change. Root/Ignore edits rotate the binding token, invalidating old observations and frozen Restore targets. [legacy migration](migration.md) retains frozen legacy Job inputs and configured Restore roots. Unpublished Draft data is distinct from the [published format families](../architecture/persistence.md#published-data-formats).
+Imported paths require local confirmation. Original access additionally needs a current per-file observation; Restore validates the selected path and its existing parent components, and writes can still fail if permissions or space change. Root/Ignore edits rotate the binding token, invalidating old observations and frozen Restore targets. [Legacy migration](migration.md) retains frozen legacy Job inputs and configured Restore roots. Unpublished Draft data is distinct from the [published format families](../architecture/persistence.md#published-data-formats).
 
 ## Optional Agent Skill
 
 Fresh installation, successful upgrade and same-version reruns offer the bundled YATM Skill after the service installation succeeds. The existing Skills CLI provides the interactive agent selection and replacement confirmation. It installs a user-level copy, so removing the downloaded package does not remove the Skill.
 
-The installer uses the ordinary invoking user (`SUDO_USER` when applicable). Missing Node/npm, cancellation or Skill installation failure leaves the successful YATM installation intact. It does not install Node/npm. An unresolved user or noninteractive session receives a manual command:
+The installer uses the ordinary invoking user (`SUDO_USER` when applicable). Missing Node/npm, cancellation or Skill installation failure leaves the successful YATM installation intact. It does not install Node/npm. A root-only, unresolved-user or noninteractive session receives a manual command to run after logging in as the ordinary agent user:
 
 ```shell
 DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 \

@@ -149,7 +149,7 @@ func withinOnlinePath(relative string) bool {
 // RequiredOnlineExclusions separates working originals from known YATM storage resources.
 func (e *Executor) RequiredOnlineExclusions(root string) ([]string, error) {
 	// Resolve actual Job/Preview roots and explicit process resources, not the whole work directory.
-	resources := append([]string{filepath.Join(e.paths.Work, "jobs")}, e.onlineRuntimePaths...)
+	resources := append([]string{filepath.Join(e.paths.Work, "jobs"), filepath.Join(e.paths.Work, ".yatm-upgrades")}, e.onlineRuntimePaths...)
 	if e.onlineRuntimePathProvider != nil {
 		resources = append(resources, e.onlineRuntimePathProvider()...)
 	}

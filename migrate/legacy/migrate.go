@@ -197,6 +197,7 @@ func PrepareWithLTFSIndex(
 			restorePositionsRequired,
 			jobsRoot,
 			legacyJobsRoot,
+			workRoot,
 			job,
 			restoreRoot...,
 		)
@@ -254,6 +255,7 @@ func prepareJob(
 	positionPolicy restorePositionPolicy,
 	jobsRoot string,
 	legacyJobsRoot string,
+	legacyWorkRoot string,
 	job *legacyJob,
 	restoreRoot ...string,
 ) (itemCounts, []string, error) {
@@ -276,7 +278,7 @@ func prepareJob(
 	if err := os.WriteFile(filepath.Join(dir, "job.json"), metadata, 0o644); err != nil {
 		return itemCounts{}, nil, fmt.Errorf("write current bundle metadata failed, %w", err)
 	}
-	legacyMediaIDs, err := migrateLegacyJobLog(filepath.Dir(jobsRoot), dir, job.ID)
+	legacyMediaIDs, err := migrateLegacyJobLog(legacyWorkRoot, dir, job.ID)
 	if err != nil {
 		return itemCounts{}, nil, err
 	}
@@ -293,12 +295,13 @@ func prepareJob(
 		var transitionalDB *gorm.DB
 		var table string
 		if state.Archive != nil && len(state.Archive.Sources) == 0 {
-			transitionalDB, table, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files")
+			var cleanup func()
+			transitionalDB, table, cleanup, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files")
 			if err != nil {
 				return itemCounts{}, nil, err
 			}
 			if transitionalDB != nil {
-				defer closeDB(transitionalDB)
+				defer cleanup()
 			}
 		}
 		count, err := migrateArchive(ctx, jobDB, transitionalDB, table, job, state.Archive)
@@ -325,12 +328,13 @@ func prepareJob(
 		var transitionalDB *gorm.DB
 		var table string
 		if state.Restore != nil && len(state.Restore.Tapes) == 0 {
-			transitionalDB, table, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files", "restore_files")
+			var cleanup func()
+			transitionalDB, table, cleanup, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files", "restore_files")
 			if err != nil {
 				return itemCounts{}, nil, err
 			}
 			if transitionalDB != nil {
-				defer closeDB(transitionalDB)
+				defer cleanup()
 			}
 		}
 		count, err := migrateRestore(
@@ -364,22 +368,22 @@ func prepareJob(
 	}
 }
 
-func openTransitionalJobDB(root string, jobID int64, tables ...string) (*gorm.DB, string, error) {
+func openTransitionalJobDB(root string, jobID int64, tables ...string) (*gorm.DB, string, func(), error) {
 	filename := filepath.Join(root, fmt.Sprint(jobID), "state.db")
 	if !exists(filename) {
-		return nil, "", nil
+		return nil, "", nil, nil
 	}
-	db, err := resource.OpenSQLite(filename)
+	db, cleanup, err := openSnapshotCatalog(filename)
 	if err != nil {
-		return nil, "", fmt.Errorf("open transitional Job DB failed, %w", err)
+		return nil, "", nil, fmt.Errorf("open transitional Job DB failed, %w", err)
 	}
 	for _, table := range tables {
 		if db.Migrator().HasTable(table) {
-			return db, table, nil
+			return db, table, cleanup, nil
 		}
 	}
-	closeDB(db)
-	return nil, "", nil
+	cleanup()
+	return nil, "", nil, nil
 }
 
 func migrateLegacyJobLog(workRoot, jobDir string, jobID int64) ([]int64, error) {
@@ -1290,7 +1294,7 @@ func Commit(ctx context.Context, db *gorm.DB, workRoot string) error {
 	return err
 }
 
-func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, restoreRoot ...string) error {
+func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, backup Backup) error {
 	// Repair operates only on a recognized published installation.
 	if _, err := dataformat.CheckCatalog(db); err != nil {
 		return err
@@ -1303,13 +1307,18 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, r
 	if jobID <= 0 {
 		return fmt.Errorf("invalid Job ID %d", jobID)
 	}
-	if !db.Migrator().HasTable("jobs_legacy") {
-		return fmt.Errorf("legacy Job table backup is missing")
+	if backup.Root == "" {
+		return fmt.Errorf("repair requires a complete backup root")
 	}
 
-	// Load the frozen legacy catalog row retained by the committed migration.
+	// Read the complete legacy backup without relying on active migration tables.
+	source, cleanup, err := backup.open()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	var job legacyJob
-	result := db.WithContext(ctx).Table("jobs_legacy").First(&job, jobID)
+	result := source.WithContext(ctx).First(&job, jobID)
 	if result.Error != nil {
 		return fmt.Errorf("read legacy Job backup failed, id=%d, %w", jobID, result.Error)
 	}
@@ -1319,11 +1328,11 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, r
 
 	// Rebuild the Bundle beside the active directory and retain the replaced Bundle for inspection.
 	jobsRoot := filepath.Join(workRoot, "jobs")
-	legacyJobsRoot := filepath.Join(workRoot, legacyJobsDirectory)
-	repairRoot := filepath.Join(workRoot, ".migration-repair")
+	legacyJobsRoot := filepath.Join(backup.WorkRoot, "jobs")
+	repairRoot := filepath.Join(filepath.Dir(backup.Root), "repair-staging")
 	preparedDir := filepath.Join(repairRoot, fmt.Sprint(jobID))
 	activeDir := filepath.Join(jobsRoot, fmt.Sprint(jobID))
-	backupDir := filepath.Join(workRoot, "jobs-before-repair", fmt.Sprint(jobID))
+	backupDir := filepath.Join(filepath.Dir(backup.Root), "jobs-before-repair", fmt.Sprint(jobID))
 	if !exists(activeDir) {
 		return fmt.Errorf("active current Job Bundle is missing, id=%d", jobID)
 	}
@@ -1332,6 +1341,7 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, r
 	}
 
 	// A repaired Restore keeps its original destination even after the startup configuration changes.
+	restoreRoot := backup.RestoreRoot
 	if job.State.GetRestore() != nil {
 		activeDB, err := resource.OpenSQLite(filepath.Join(activeDir, "state.db"))
 		if err != nil {
@@ -1344,23 +1354,27 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, r
 			return fmt.Errorf("read frozen Restore destination failed, id=%d, %w", jobID, err)
 		}
 		if config.LegacyRoot != "" {
-			restoreRoot = []string{config.LegacyRoot}
+			restoreRoot = config.LegacyRoot
 		}
 	}
 
 	// Build the replacement without altering the active Bundle or its physical output.
+	if err := prepareLibrary(ctx, source, backup.IndexRoot, &Report{}); err != nil {
+		return fmt.Errorf("rebuild backup inventory failed, %w", err)
+	}
 	if err := os.RemoveAll(preparedDir); err != nil {
 		return fmt.Errorf("discard prior repair output failed, id=%d, %w", jobID, err)
 	}
 	counts, _, err := prepareJob(
 		ctx,
-		db,
-		"positions",
+		source,
+		"positions_staging",
 		restorePositionsOptional,
 		repairRoot,
 		legacyJobsRoot,
+		backup.WorkRoot,
 		&job,
-		restoreRoot...,
+		restoreRoot,
 	)
 	if err != nil {
 		return fmt.Errorf("rebuild current Job Bundle failed, id=%d, %w", jobID, err)
@@ -1383,10 +1397,32 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, r
 	if err := os.Remove(repairRoot); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove empty Job repair directory failed, %w", err)
 	}
+
+	// Publish the repaired runner state through the same revision allocator used by offline activation.
+	stateDB, cleanupState, err := openSnapshotCatalog(filepath.Join(activeDir, "state.db"))
+	if err != nil {
+		return err
+	}
+	defer cleanupState()
+	var record executor.JobRecord
+	if err := stateDB.First(&record, 1).Error; err != nil {
+		return err
+	}
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		var revision int64
+		if err := tx.Table("jobs").Select("COALESCE(MAX(revision), 0)").Scan(&revision).Error; err != nil {
+			return err
+		}
+		return tx.Table("jobs").Where("id = ?", jobID).Updates(map[string]any{
+			"catalog_kind": record.Kind, "catalog_status": record.Status, "revision": revision + 1,
+		}).Error
+	}); err != nil {
+		return fmt.Errorf("publish repaired Job status failed, %w", err)
+	}
 	return nil
 }
 
-func Cleanup(db *gorm.DB, workRoot string) error {
+func Cleanup(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) error {
 	// Never remove retained legacy data from an unsupported installation.
 	if _, err := dataformat.CheckCatalog(db); err != nil {
 		return err
@@ -1395,27 +1431,42 @@ func Cleanup(db *gorm.DB, workRoot string) error {
 		return err
 	}
 
-	// Refuse cleanup while any current data is still staged.
-	if hasStaging(db) {
-		return fmt.Errorf("current staging tables still exist; commit migration first")
-	}
-	for _, table := range stagingTableSwaps {
-		if !db.Migrator().HasTable(table.backup) {
-			return fmt.Errorf("legacy backup table is missing; commit migration first, table=%q", table.backup)
-		}
+	// Rebuild expected facts from the full backup before deleting any migration evidence.
+	if _, err := Validate(ctx, db, workRoot, backup); err != nil {
+		return fmt.Errorf("validate migration before cleanup failed, %w", err)
 	}
 
-	// Remove legacy backups only after Commit has activated all current tables.
-	for index := len(stagingTableSwaps) - 1; index >= 0; index-- {
-		backup := stagingTableSwaps[index].backup
-		if db.Migrator().HasTable(backup) {
-			if err := db.Migrator().DropTable(backup); err != nil {
-				return fmt.Errorf("drop legacy backup table failed, table=%q, %w", backup, err)
+	// SQLite cleanup commits its complete known table set together; retries tolerate absence.
+	if db.Dialector.Name() != "sqlite" {
+		return fmt.Errorf("automatic cleanup requires SQLite")
+	}
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		for index := len(stagingTableSwaps) - 1; index >= 0; index-- {
+			for _, name := range []string{stagingTableSwaps[index].backup, stagingTableSwaps[index].staged} {
+				if tx.Migrator().HasTable(name) {
+					if err := tx.Migrator().DropTable(name); err != nil {
+						return fmt.Errorf("drop migration table %q failed, %w", name, err)
+					}
+				}
 			}
 		}
+		if tx.Migrator().HasTable("file_versions_staging") {
+			return tx.Migrator().DropTable("file_versions_staging")
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
-	if err := os.RemoveAll(filepath.Join(workRoot, legacyJobsDirectory)); err != nil {
-		return fmt.Errorf("remove legacy Job directory backup failed, %w", err)
+
+	// Remove only directories accounted for by the immutable backup; preserve unknown files.
+	for _, name := range []string{legacyJobsDirectory, legacyJobLogsDirectory} {
+		sourceName := name
+		if name == legacyJobsDirectory {
+			sourceName = "jobs"
+		}
+		if err := removePreservedTree(filepath.Join(workRoot, name), filepath.Join(backup.WorkRoot, sourceName)); err != nil {
+			return err
+		}
 	}
 
 	// Remove the report after all migration-only database state is gone.
@@ -1497,11 +1548,14 @@ func migratedCopyStatus(status legacypb.CopyStatus) entity.CopyStatus {
 }
 
 func writeReport(workRoot string, report *Report) error {
+	// Encode before replacing the active Prepare/Commit marker.
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode migration report failed, %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(workRoot, reportFilename), data, 0o644); err != nil {
+
+	// Reports contain installation metadata and are private even outside installer retention.
+	if err := os.WriteFile(filepath.Join(workRoot, reportFilename), data, 0o600); err != nil {
 		return fmt.Errorf("write migration report failed, %w", err)
 	}
 	return nil

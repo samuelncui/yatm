@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+device=$("${script_dir}/get_device")
+if [[ ${device##*/} != "${TAPE_BARCODE}" ]]; then
+    echo "The requested barcode does not match the virtual cartridge" >&2
+    exit 1
+fi
+if [[ -n $(find "${device}" -mindepth 1 -maxdepth 1 ! -name filedebug_tc_conf.xml -print -quit) ]]; then
+    echo "Use an empty virtual cartridge; this adapter does not erase existing files" >&2
+    exit 1
+fi
+mkdir -p -- "${TAPE_DIR}"
+mkltfs -f -e file -d "${device}" -s "${TAPE_BARCODE}" -n "${TAPE_NAME}" \
+    2>&1 | tee -a "${TAPE_DIR}/ltfs.log"

@@ -1,10 +1,10 @@
 # E2E Testing
 
-Status: Maintained validation for v1 Alpha and subsequent development. See [test environment safety](testing.md) before selecting a host or fixture and [Alpha acceptance](../releases/v1.0.0-alpha.1.md) for the recorded release scope.
+Status: Maintained validation for v1 Alpha development. See [test environment safety](testing.md) before selecting a host or fixture and [candidate acceptance](../releases/v1.0.0-alpha.1.md) for actual run status.
 
 Primary business acceptance uses actual `yatm-cli` subprocesses and production HTTP/gRPC-Web transport. The [complete installation workflows](../../e2e/workflows_test.go) and [indexing recovery workflows](../../e2e/indexing_cli_test.go) also start the actual `yatm-httpd` binary. Development runs build both binaries from the checkout; release acceptance sets `YATM_E2E_BIN_DIR` to the extracted candidate directory and uses those programs unchanged. Each test owns isolated configuration, databases, source files, output directories and loopback listeners. No production installation or Tape device is used by local tests.
 
-Mounted Volume, Preview-policy and LTFS fixtures use the same CLI process adapter, with an in-process server only where generator configuration, finalization faults or detailed checkpoint assertions require it. The adapter has explicit command mappings and **no direct-RPC fallback**. Direct filesystem writes represent external changes, not hidden catalog setup. Public registration, scanning, selection expansion, archive, restore, annotation, import/export and Job mutations go through CLI commands.
+Local/CI Mounted Volume, Preview-policy and LTFS fixtures use the same CLI process adapter, with an in-process server only where generator configuration, finalization faults or detailed checkpoint assertions require it. The adapter has explicit command mappings and **no direct-RPC fallback**. Direct filesystem writes represent external changes, not hidden catalog setup. Public registration, scanning, selection expansion, archive, restore, annotation, import/export and Job mutations go through CLI commands. Remote `dev` acceptance instead uses only packaged application binaries and [local SSH orchestration](#remote-packaged-binary-acceptance).
 
 New primary capabilities require a CLI command, a repeatable CLI E2E scenario and an entry in the matrix below. Move existing CLI-expressible business steps to subprocesses instead of keeping a parallel private-service workflow. Command availability and RPC coverage tests do not prove end-to-end acceptance. Retain unit/integration tests for concurrency, bounded traversal, failed Library/Job commits and crash/retry boundaries; CLI smoke tests cannot replace those checks.
 
@@ -63,7 +63,7 @@ The [integrity CLI tests](../../e2e/integrity_cli_test.go) supplement semantic t
 
 ## Release Candidates and Upgrades
 
-Builds use Go 1.26.8, Node 24 and the committed pnpm lockfile. The [candidate workflow](../../.github/workflows/build.yml) requires all ten targets, validates the combined archive set, runs offline identity checks and the entire E2E package against the extracted Linux programs, and uploads only accepted bytes to the matching Release. Hosted CI skips opt-in LTFS and physical Tape tests; release acceptance additionally runs the full suite on an isolated Linux host with the official LTFS file backend enabled.
+Builds use Go 1.26.8, Node 24 and the committed pnpm lockfile. The [candidate workflow](../../.github/workflows/build.yml) requires all ten targets, validates the combined archive set, runs offline identity checks and the entire E2E package against the extracted Linux programs, and uploads only accepted bytes to the matching Release. Hosted CI skips opt-in LTFS and physical Tape tests. Remote release acceptance replays the public CLI workflows with the official LTFS file backend, using only shipped application binaries.
 
 ```bash
 node --test build_documents.test.mjs check_release.test.mjs
@@ -71,15 +71,39 @@ go test ./cmd/migrate ./internal/dataformat ./migrate/legacy
 bash -n install-release.sh build.sh build_backend.sh build_frontend.sh
 ```
 
-Set `YATM_E2E_BIN_DIR` to an extracted candidate to run the full suite above without rebuilding its programs. Run it without a `-run` filter on each supported acceptance host, with `YATM_E2E_LTFS=1` on the LTFS host and physical Tape opt-ins unset unless scratch hardware is assigned. Record every pass, failure and skipped test with its reason. Use a temporary filesystem supporting user xattrs; the full-capacity LTFS fixture needs at least 12 GiB of free space for its source, virtual Media and restored bytes.
+For local/CI harness runs, set `YATM_E2E_BIN_DIR` to an extracted candidate and run the full suite without a `-run` filter. Set `YATM_E2E_LTFS=1` only in a Linux harness environment with the official file backend; keep physical Tape opt-ins unset unless scratch hardware is assigned. Do not move this harness or source tree to `dev`. Record every pass, failure and skipped test with its reason. Use a temporary filesystem supporting user xattrs; the full-capacity LTFS fixture needs at least 12 GiB of free space for its source, virtual Media and restored bytes.
 
 A missing or non-executable candidate fails explicitly. Package checks reject altered checksums, missing programs, mixed identities, active configuration, development dependencies and hidden filesystem metadata. Packaged guides retain local links; source references resolve at the matching public tag.
 
-Installer semantic tests cover read-only checks, version ordering, cancellation, file ownership and failure boundaries. Actual systemd acceptance uses unique `--install-dir` and `--service` values on an isolated Linux host with candidate `--archive` and `--checksum` inputs. Exercise fresh install, same-version rerun, compatible update, public legacy migration, declined upgrade/report, readiness failure and complete-backup recovery. Compare config/script/unit hashes, catalog contents and original service state at each boundary; remove only the test's own unit registration afterward.
+### Remote Packaged-Binary Acceptance
+
+Keep the test controller on the local machine. On `dev`, verify and extract the approved release archive into an isolated attempt directory; invoke only its shipped YATM programs through SSH. Read their offline `--version` output and compare the commit/version and archive checksum before starting. The package's installer/templates/scripts and approved fixture data are the transfer boundary. Repository source, separately built harnesses and additional test-helper source are not deployed.
+
+Select an already-mounted, xattr-capable filesystem with sufficient free space, then create one owned test root for the extracted package, fixtures, isolated installation and results. Use the archive's `install-release.sh` for remote installation acceptance; the README's exact-tag download remains the normal user bootstrap. Check free space for the complete fixture, including backup and Restore outputs, rather than relying on the system temporary directory's capacity.
+
+Use the same public CLI steps and observable assertions as the coverage matrix: registration, live Files operations, Scan policies, archive/restore, versions, copy verification, import/export and Job lifecycle. Compare exit codes, JSON, Job terminal results and actual output bytes from the local controller. Exercise real systemd installation/update and the official LTFS file backend. Retain invocation transcripts and artifact hashes privately.
+
+Low-level fault injection requiring a custom server remains local/CI coverage. Record any remote scenario that cannot be expressed using the shipped tools as unrun, with its exact reason; previous source-based or separately compiled harness runs do not satisfy this gate. Physical Tape remains a distinct explicitly authorized test.
+
+Installer semantic tests cover read-only checks, version ordering, cancellation, file ownership and failure boundaries. Actual systemd acceptance uses unique `--install-dir` and `--service` values on an isolated Linux host with candidate `--archive` and `--checksum` inputs. The cases below are required acceptance, not claims that the candidate has passed them:
+
+| Workflow | Public command/entry point | Required assertions |
+| --- | --- | --- |
+| Fresh installation | Exact-version `install-release.sh`, `--config` | Shipped binaries, real systemd/API/frontend readiness, Volume-only configuration, template ownership and optional Skill. |
+| Read-only review | Installer `--check`; `yatm-migrate -phase preflight` | No persistent attempt, database write, quiesce or service interruption; pass/manual/blocker distinctions; Tape scripts never run. |
+| Pre-stop rejection | Installer confirmation/package/version checks | Cancel, EOF, unknown version, missing packaged migration guide, wrong checksum and Busy preserve service PID/state and active file hashes. |
+| Legacy activation | Installer; `yatm-migrate` Prepare/Commit/validate/cleanup | Guide text comes from the verified archive; two explicit approvals; retained report on Prepare failure/cancel; item-by-item Library/Job/log validation before cleanup. |
+| Repeated upgrade | Two successive installer updates, same-version rerun | In-root attempt artifacts only; backups exclude the owned area and do not nest; old backup checksums unchanged; rerun offers Skill without another backup. |
+| Customization | Installer update | Configuration, scripts/helpers, unit, permissions, working directory and meaningful paths unchanged; complete replacement of owned resource trees removes obsolete release files. |
+| Failure and rollback | Installer faults plus documented in-root recovery | Backup/Prepare/Commit/cleanup/resource replacement/readiness failure retains reports; uncertain activation stays stopped; failed contents saved before full same-root restore; upgrade area retained. |
+| Historical repair | `yatm-migrate -phase repair-job -backup-root ...` | Operates after active legacy tables are removed; every repaired item/log matches backup evidence; already frozen Restore destination survives config changes. |
+| Old installation entry | `main` branch's legacy `install-release.sh` | Full parameter validation and cross-major rejection; `v0.1.x`-to-`v0.1.x` update remains available. |
+
+Compare configuration/script/helper/unit hashes, Catalog contents and original service state at each boundary. Inject faults only in the isolated test's candidate/environment; remove only its own service registration afterward. Persist exact candidate commit/archive hashes, stdout/stderr and each pass/fail/skip reason outside the public repository.
 
 Skill acceptance uses an isolated ordinary-user home and the pinned public Skills CLI from [installation](install.md#optional-agent-skill). Test the real interactive picker and existing-target cancel/replace, repeat through sudo from a root working directory, and exercise missing dependencies, non-TTY input and source-read failure. Compare installed copy hashes and ownership; cancellation must preserve existing content and optional failure must leave YATM installed.
 
-Real legacy archive acceptance uses an approved timestamped copy, input checksums, independent Library/Job expectations and full CLI import/export roundtrip. Preserve the phase reports and every historical-item comparison privately. Record absent fixture categories explicitly instead of inferring coverage from aggregate counts.
+Real legacy archive acceptance uses an approved timestamped copy, input checksums, independent Library/Job expectations and a full CLI import/export roundtrip. Run Prepare → Abort → Prepare → Commit → validate → cleanup, repeat idempotent phases, and repair a historical Job from the unchanged backup. Compare every historical item, frozen Restore path and archived log, rather than only Catalog counts. Preserve reports privately and record absent fixture categories explicitly. Production updating follows the public guide only after candidate acceptance; it is not a migration test fixture.
 
 ## Mounted Volume
 
@@ -139,7 +163,7 @@ A second test sets the official file backend `capacity_mb` cartridge property to
 5. Retry the same Job and barcode on a fresh virtual device, corrupt the post-unmount Index, and verify that every item again returns to `PENDING` without a Library checkpoint while the successfully unmounted device remains usable.
 6. Retry once more, verify that the stale Index is cleared, then verify index- and data-partition placement, the 17-byte partition/block/offset storage order persisted on each Position, the Preview-enabled SCAN, content-addressed ZIP, HTTP-served asset, Archive manifest, `tapes/<barcode>/`, canonical signature xattrs after remount, and Library Media.
 7. Inspect the inserted Tape through the Media API, then create a second Archive Job and append it to the same cartridge while retaining the Media ID.
-8. Export and re-import the Library using the [published v1 JSONL format](../architecture/persistence.md#published-data-formats), including FileVersion content, tags and notes; legacy whole-object backups remain readable through their explicit adapter.
+8. Export and re-import the Library using the [Library JSONL format](../architecture/persistence.md#published-data-formats), including FileVersion content, tags and notes; legacy whole-object backups remain readable through their explicit adapter.
 9. Import the same Library into an isolated compatibility database in the legacy whole-object JSON format and verify the rebuilt Position directory index.
 10. Create a Restore Job through CLI with a registered restore target and restore both Archive Jobs from the same virtual tape.
 11. Verify every restored file and SHA-256, run Check integrity against the same virtual Tape through CLI, inspect all healthy findings and their catalog health observations, then explicitly delete the old Media metadata and format the barcode for a third Archive Job. Logical Files remain.
@@ -156,13 +180,13 @@ command -v mkltfs ltfs fusermount
 ls -l /dev/fuse
 ```
 
-Run it with:
+Run this source-based test locally or in an authorized Linux CI harness environment:
 
 ```bash
 YATM_E2E_LTFS=1 go test -tags=e2e -v ./e2e -run 'TestLTFS(ArchiveRestore|FullTapeSpansMediaAndRestores)'
 ```
 
-For an isolated source snapshot without `.git`, set `GOFLAGS=-buildvcs=false` for this command and its child binary builds. This only disables VCS stamping; it does not alter the tested source or runtime behavior.
+The command above is not the remote `dev` procedure. On that host, replay its public CLI scenarios using [packaged binaries and local orchestration](#remote-packaged-binary-acceptance); retain internal checkpoint/fault assertions in the local/CI tests.
 
 Regular `go test ./...` runs do not include the tagged E2E suite. Physical-media behavior remains covered by the separate physical Tape E2E suite before release.
 

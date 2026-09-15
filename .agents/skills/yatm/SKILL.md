@@ -5,7 +5,7 @@ description: "Use yatm-cli to operate YATM: Library, live Location files, backup
 
 # YATM
 
-Use the `yatm-cli` executable through a shell. This Skill accompanies the v1 Alpha release; use matching installed CLI help and JSON output as the operational source of truth. Alpha 1 establishes the published v1 data baseline. Do not open unpublished Draft databases with released programs or upgrade legacy without the offline migration workflow.
+Use the `yatm-cli` executable through a shell. This Skill accompanies YATM v1 Alpha; use matching installed CLI help and JSON output as the operational source of truth. Catalog, Job bundle and Library backup formats have independent identities and revisions. Upgrade v0.1.x installations through the documented offline migration workflow before opening their data with v1.
 
 ## Connect
 

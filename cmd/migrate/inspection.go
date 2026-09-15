@@ -19,11 +19,11 @@ import (
 
 type installationReport struct {
 	Schema          legacy.Schema `json:"schema"`
-	ServerURL       string    `json:"server_url"`
-	BackupPaths     []string  `json:"backup_paths"`
-	TapeScripts     []string  `json:"tape_scripts"`
-	StandardScripts bool      `json:"standard_scripts"`
-	Warnings        []string  `json:"warnings"`
+	ServerURL       string        `json:"server_url"`
+	BackupPaths     []string      `json:"backup_paths"`
+	TapeScripts     []string      `json:"tape_scripts"`
+	Warnings        []string      `json:"warnings"`
+	MigrationReport string        `json:"migration_report"`
 }
 
 func installedSchema(db *gorm.DB) (legacy.Schema, error) {
@@ -33,7 +33,60 @@ func installedSchema(db *gorm.DB) (legacy.Schema, error) {
 	return legacy.DetectSchema(db)
 }
 
+func inspectFreshInstallation(conf *config.Config, root string) (*installationReport, error) {
+	// Resolve the future installation paths without opening or creating service resources.
+	report := &installationReport{Schema: legacy.SchemaEmpty, BackupPaths: []string{}, TapeScripts: []string{}, Warnings: []string{}}
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return report, err
+	}
+	if err := inspectUpgradeDirectory(filepath.Join(root, ".yatm-upgrades")); err != nil {
+		return report, err
+	}
+	if conf.Database.Dialect != "sqlite" {
+		return report, fmt.Errorf("automatic installation requires SQLite")
+	}
+	dbPath, _, err := sqliteFileAt(conf.Database.DSN, root)
+	if err != nil {
+		return report, err
+	}
+	if _, err := os.Lstat(dbPath); !errors.Is(err, fs.ErrNotExist) {
+		return report, fmt.Errorf("new installation database must not already exist: %s", dbPath)
+	}
+	work := conf.Paths.Work
+	if !filepath.IsAbs(work) {
+		work = filepath.Join(root, work)
+	}
+	previewRoot := conf.Preview.Root
+	if previewRoot == "" {
+		previewRoot = "previews"
+	}
+	if !filepath.IsAbs(previewRoot) {
+		previewRoot = filepath.Join(work, previewRoot)
+	}
+	for _, path := range []string{dbPath, work, previewRoot} {
+		if !withinRoot(root, path) {
+			return report, fmt.Errorf("new installation resource must fit inside the installation root: %s", path)
+		}
+	}
+
+	// Report the endpoint and manual device configuration separately from service readiness.
+	report.ServerURL, err = localServerURL(conf.Listen)
+	if err != nil {
+		return report, err
+	}
+	report.MigrationReport = filepath.Join(work, "migration-report.json")
+	if len(conf.TapeDevices) > 0 {
+		report.Warnings = append(report.Warnings, "Review configured Tape devices and scripts before first use. Installation does not execute Tape scripts or validate physical Tape readiness.")
+	}
+	return report, nil
+}
+
 func sqliteFile(dsn string) (string, url.Values, error) {
+	return sqliteFileAt(dsn, ".")
+}
+
+func sqliteFileAt(dsn, root string) (string, url.Values, error) {
 	// Inspection supports persistent SQLite files, never transient or remote stores.
 	if dsn == "" || dsn == ":memory:" {
 		return "", nil, errors.New("migration requires a persistent SQLite file")
@@ -53,6 +106,9 @@ func sqliteFile(dsn string) (string, url.Values, error) {
 	values, err := url.ParseQuery(query)
 	if err != nil || path == "" || values.Get("mode") == "memory" {
 		return "", nil, errors.New("migration requires a persistent SQLite file")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
 	}
 	abs, err := filepath.Abs(path)
 	return abs, values, err
@@ -92,6 +148,7 @@ func openMigrationDB(conf *config.Config, readOnly bool) (*gorm.DB, error) {
 func inspectInstallation(ctx context.Context, db *gorm.DB, conf *config.Config, configPath, root string, stopped bool) (*installationReport, error) {
 	// Report version and access information without changing service admission.
 	report := &installationReport{BackupPaths: []string{}, TapeScripts: []string{}, Warnings: []string{}}
+	report.MigrationReport, _ = filepath.Abs(filepath.Join(conf.Paths.Work, "migration-report.json"))
 	var err error
 	report.Schema, err = installedSchema(db)
 	if err != nil {
@@ -114,6 +171,28 @@ func inspectInstallation(ctx context.Context, db *gorm.DB, conf *config.Config, 
 	if root != "" {
 		if err := inspectBackupScope(conf, configPath, root, report); err != nil {
 			return report, err
+		}
+		if db != nil && db.Migrator().HasTable("locations") {
+			var after int64
+			for {
+				var rows []struct {
+					ID       int64
+					RootPath string
+				}
+				if err := db.WithContext(ctx).Table("locations").Select("id", "root_path").
+					Where("id > ?", after).Order("id").Limit(256).Find(&rows).Error; err != nil {
+					return report, err
+				}
+				if len(rows) == 0 {
+					break
+				}
+				for _, row := range rows {
+					if err := inspectBusinessPath(root, row.RootPath); err != nil {
+						return report, err
+					}
+					after = row.ID
+				}
+			}
 		}
 	}
 	if len(conf.TapeDevices) > 0 {
@@ -140,13 +219,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		previewRoot = filepath.Join(conf.Paths.Work, previewRoot)
 	}
 	paths := []string{configPath, dbPath, conf.Paths.Work, previewRoot, legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, conf.Paths.Work)}
-	report.StandardScripts = true
-	for index, script := range []string{conf.Scripts.Encrypt, conf.Scripts.Mkfs, conf.Scripts.Mount, conf.Scripts.Umount, conf.Scripts.ReadInfo} {
-		name := []string{"encrypt", "mkfs", "mount", "umount", "readinfo"}[index]
-		absScript, err := filepath.Abs(script)
-		if err != nil || absScript != filepath.Join(root, "scripts", name) {
-			report.StandardScripts = false
-		}
+	for _, script := range []string{conf.Scripts.Encrypt, conf.Scripts.Mkfs, conf.Scripts.Mount, conf.Scripts.Umount, conf.Scripts.ReadInfo} {
 		if script == "" {
 			continue
 		}
@@ -165,6 +238,11 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	if err != nil {
 		return err
 	}
+	for _, business := range append([]string{conf.Paths.Source, conf.Paths.Target}, conf.Paths.Volumes...) {
+		if err := inspectBusinessPath(canonicalRoot, business); err != nil {
+			return err
+		}
+	}
 	for _, path := range paths {
 		canonical, err := canonicalExisting(path)
 		if err != nil {
@@ -181,6 +259,12 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		if walkErr != nil {
 			return walkErr
 		}
+		if path == filepath.Join(canonicalRoot, ".yatm-upgrades") {
+			if err := inspectUpgradeDirectory(path); err != nil {
+				return err
+			}
+			return filepath.SkipDir
+		}
 		if entry.Type()&os.ModeSymlink == 0 {
 			return nil
 		}
@@ -190,6 +274,53 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		}
 		return nil
 	})
+}
+
+func inspectUpgradeDirectory(path string) error {
+	// Fresh and existing installations reserve the same installer-owned backup directory.
+	info, err := os.Lstat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("reserved upgrade directory is not an owned directory: %s", path)
+	}
+	marker := filepath.Join(path, "OWNER")
+	info, err = os.Lstat(marker)
+	if err != nil || !info.Mode().IsRegular() {
+		return fmt.Errorf("reserved upgrade directory has no valid ownership marker: %s", path)
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil || strings.TrimSpace(string(data)) != "yatm-installer-upgrades" {
+		return fmt.Errorf("reserved upgrade directory belongs to another owner: %s", path)
+	}
+	return nil
+}
+
+func inspectBusinessPath(root, path string) error {
+	// Registered originals, restore output and Volume roots remain outside software replacement.
+	if path == "" {
+		return nil
+	}
+	canonicalRoot, err := canonicalExisting(root)
+	if err != nil {
+		return err
+	}
+	canonical, err := canonicalExisting(path)
+	if err != nil {
+		return err
+	}
+	if !withinRoot(canonicalRoot, canonical) {
+		return nil
+	}
+	entries, err := os.ReadDir(canonical)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil || len(entries) > 0 {
+		return fmt.Errorf("business files are mixed into the installation at %s; use a reviewed manual backup and upgrade", path)
+	}
+	return nil
 }
 
 func withinRoot(root, path string) bool {

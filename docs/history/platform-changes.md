@@ -1,6 +1,6 @@
-# YATM v1 Change Summary
+# YATM Platform Change Summary
 
-Status: Historical development summary, archived 2026-09-06; not a release announcement. This summarizes development changes from `origin/main@89685cc` (`v0.1.21`). See the [current architecture](../architecture/overview.md) for maintained behavior and the [v1 snapshot](v1-design.md) for historical context.
+Status: Historical development summary, archived 2026-09-06; not a release announcement. This summarizes development changes from `origin/main@89685cc` (`v0.1.21`). See the [current architecture](../architecture/overview.md) for maintained behavior and the [v1 snapshot](platform-design.md) for historical context.
 
 ## Media
 
@@ -69,7 +69,7 @@ Status: Historical development summary, archived 2026-09-06; not a release annou
 ## Migration
 
 - The frozen legacy wire schema remains under `migrate/legacy/pb/`.
-- Offline prepare converts legacy Tape data into typed Media profiles and streams Jobs, Files, Media, and Positions into temporary v1 tables.
+- Offline prepare converts legacy Tape data into typed Media profiles and streams Jobs, Files, Media, and Positions into staging tables.
 - Captured LTFS indexes provide order and storage metadata for migrated Tape Positions.
-- legacy Job logs are copied into the corresponding v1 Job Bundle. Submitted Archive items retain their status only when path and size identify one physical Position among the Media IDs recovered from that log.
-- Commit and cleanup remain explicit confirmed operations. Library export uses V3 JSON Lines with embedded File annotations; import also accepts v1 JSON Lines, legacy `tape`/`tape_id` JSON Lines, and legacy whole-object backups.
+- Legacy Job logs are copied into the corresponding Job bundle. Submitted Archive items retain their status only when path and size identify one physical Position among the Media IDs recovered from that log.
+- Commit and cleanup remain explicit confirmed operations. Library export uses JSON Lines with embedded File annotations; the [persistence contract](../architecture/persistence.md#published-data-formats) owns supported format identities and legacy import.

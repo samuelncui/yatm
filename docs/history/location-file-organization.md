@@ -56,7 +56,7 @@ Chonky owns clipboard, drag/drop and availability through formal extensions. Loc
 
 Backup admits live selections without Analyze, freezes identity/content/logical target during indexing and retains ACP/Media publication guarantees. Restore retains version selection and association rules with live destination checks. Open/Download permits unknown signatures and unadmitted entries with safe HEAD/Range responses. Preview freezes live selections independently. CLI covers settings, browsing, Analyze, operations and results; permanent deletion requires explicit authorization.
 
-Only legacy compatibility is required. Change protobuf first and regenerate clients; do not preserve obsolete v1 Draft Sync/readiness adapters or automatically clear data. Export/import retains management facts, not raw content; imported bindings remain unconfirmed.
+Preserve supported legacy/released data according to the [compatibility policy](../README.md#temporary-draft-compatibility-policy). Change protobuf first and regenerate clients; obsolete prototype Sync/readiness interfaces do not require adapters. Export/import retains management facts, not raw content; imported bindings remain unconfirmed.
 
 ## Delivery and Acceptance
 

@@ -186,7 +186,7 @@ Expected results:
 
 ### PT-08: Cleanup and Evidence
 
-1. Export the Library using the published v1 metadata-backup format and retain it with the test evidence.
+1. Export the Library using the Library metadata-backup format and retain it with the test evidence.
 2. Before deleting anything, copy each Job's catalog and bundle metadata, complete Job log, LTFS log, Archive report, and captured Index into the evidence directory.
 3. Generate a path-sorted SHA-256 manifest for the preserved Job evidence. Any capture or checksum failure stops cleanup and leaves every Job intact.
 4. Delete the completed and pending test Jobs through the API.
@@ -229,7 +229,7 @@ The release gate passes only when PT-01 through PT-08 complete without manual da
 - every Job log and report;
 - every Job's catalog and bundle metadata plus the sorted evidence SHA-256 manifest;
 - captured LTFS Index files from FORMAT and APPEND;
-- the v1 JSONL Library metadata backup;
+- the Library JSONL metadata backup;
 - a concise result for each case, including elapsed Archive, full-Media boundary, and Restore time.
 
 Record a failure at the first unmet expected result. Preserve the cartridge and local evidence for diagnosis instead of reformatting and retrying immediately.

@@ -7,15 +7,17 @@ SKILLS_VERSION=1.5.0
 STAGE=preflight
 BACKUP_DIRECTORY=
 REPORT_FILE=
+ATTEMPT_DIRECTORY=
+REPORT_DIRECTORY=
 SERVICE_ACTIVE=0
 RELEASE_VERSION=
 LOCAL_ARCHIVE=
 CHECKSUM_FILE=
 FRESH_CONFIG=
 CHECK_ONLY=0
-ADOPT_SCRIPTS=0
-ADOPT_UNIT=0
+SHOW_HELP=0
 LEGACY=0
+MANAGED_ITEMS=(yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate install-release.sh frontend README.md CONTEXT.md docs VERSION COMMIT LICENSE licenses skills templates)
 
 fail() { echo "error: $*" >&2; return 1; }
 confirm_action() {
@@ -37,6 +39,10 @@ usage() {
 parse_options() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --version|--archive|--checksum|--install-dir|--service|--config)
+        [[ $# -ge 2 && "$2" != --* && -n "$2" ]] || { fail "Missing value for $1."; return 1; } ;;
+    esac
+    case "$1" in
       --version) RELEASE_VERSION="v${2#v}"; shift 2 ;;
       --archive) LOCAL_ARCHIVE="${2:?Missing archive}"; shift 2 ;;
       --checksum) CHECKSUM_FILE="${2:?Missing checksum}"; shift 2 ;;
@@ -44,7 +50,7 @@ parse_options() {
       --service) SERVICE_NAME="${2:?Missing service name}"; shift 2 ;;
       --config) FRESH_CONFIG="${2:?Missing configuration}"; shift 2 ;;
       --check) CHECK_ONLY=1; shift ;;
-      -h|--help) usage; exit 0 ;;
+      -h|--help) SHOW_HELP=1; shift ;;
       *) fail "Unknown option: $1"; return 1 ;;
     esac
   done
@@ -69,7 +75,7 @@ identify_platform() {
     fail 'Automatic installation supports Linux amd64/systemd. Use the manual guide on other platforms.'; return 1;
   }
   local dependency
-  for dependency in curl jq tar sha256sum systemctl cp du df readlink mktemp; do
+  for dependency in curl jq tar sha256sum systemctl cp du df readlink mktemp find flock tee; do
     command -v "$dependency" >/dev/null || { fail "Install the required tool '$dependency' first."; return 1; }
   done
   [[ "$INSTALL_DIRECTORY" =~ ^/[a-zA-Z0-9_./-]+$ && "$INSTALL_DIRECTORY" != */../* && "$INSTALL_DIRECTORY" != */.. ]] || {
@@ -78,6 +84,35 @@ identify_platform() {
   INSTALL_DIRECTORY="$(readlink -m "$INSTALL_DIRECTORY")"
   case "$INSTALL_DIRECTORY" in /|/opt|/usr|/usr/local|/var|/tmp|/home|/root) fail 'Choose a dedicated YATM installation directory.'; return 1 ;; esac
   [[ "$SERVICE_NAME" =~ ^[a-zA-Z0-9_-]+\.service$ ]] || { fail 'Invalid systemd service name.'; return 1; }
+}
+
+begin_attempt() {
+  [[ "$CHECK_ONLY" == 0 ]] || return 0
+  local upgrades="$INSTALL_DIRECTORY/.yatm-upgrades"
+  umask 077
+  mkdir -p -m 755 "$INSTALL_DIRECTORY"
+  if [[ -e "$upgrades" || -L "$upgrades" ]]; then
+    [[ -d "$upgrades" && ! -L "$upgrades" && -f "$upgrades/OWNER" && ! -L "$upgrades/OWNER" ]] || {
+      fail 'Reserved .yatm-upgrades path is not an installer-owned directory.'; return 1;
+    }
+    [[ "$(< "$upgrades/OWNER")" == yatm-installer-upgrades ]] || {
+      fail 'Reserved .yatm-upgrades directory has an unknown owner.'; return 1;
+    }
+  else
+    mkdir -m 700 "$upgrades"
+    printf '%s\n' yatm-installer-upgrades > "$upgrades/OWNER"
+  fi
+  chmod 700 "$upgrades"
+  chmod 600 "$upgrades/OWNER"
+  exec 9> "$upgrades/lock"
+  flock -n 9 || { fail 'Another installer is using this installation.'; return 1; }
+  ATTEMPT_DIRECTORY="$(mktemp -d "$upgrades/$(date +%Y%m%d%H%M%S).XXXXXX")"
+  REPORT_DIRECTORY="$ATTEMPT_DIRECTORY/reports"
+  mkdir -m 700 "$REPORT_DIRECTORY"
+  RELEASE_DIRECTORY="$ATTEMPT_DIRECTORY/release"
+  REPORT_FILE="$REPORT_DIRECTORY/upgrade.log"
+  exec > >(tee -a "$REPORT_FILE") 2>&1
+  echo "Installation report: $REPORT_FILE"
 }
 
 resolve_version() {
@@ -117,7 +152,7 @@ download_release() {
   elif [[ "$LEGACY" == 0 ]]; then
     fetch "$url.sha256" -o "$TMP_DIRECTORY/checksum"
   else
-    echo "warning: Recognized legacy legacy release $RELEASE_VERSION has no publisher checksum. Source: $url"
+    echo "Manual check: legacy release $RELEASE_VERSION has no publisher checksum. Source: $url"
   fi
   if [[ -f "$TMP_DIRECTORY/checksum" ]]; then
     local expected actual extra
@@ -128,6 +163,7 @@ download_release() {
     [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || { fail 'Expected one SHA-256 checksum.'; return 1; }
     actual="$(sha256sum "$ARCHIVE")"; actual="${actual%% *}"
     [[ "${expected,,}" == "$actual" ]] || { fail 'Release checksum mismatch.'; return 1; }
+    [[ -z "$REPORT_DIRECTORY" ]] || cp "$TMP_DIRECTORY/checksum" "$REPORT_DIRECTORY/release.sha256"
   fi
 
   # Inspect names and entry types before extracting or executing candidate programs.
@@ -143,7 +179,7 @@ download_release() {
     fail 'Release archives may only contain ordinary files and directories.'; return 1
   fi
   mkdir "$RELEASE_DIRECTORY"
-  tar -xzf "$ARCHIVE" --no-same-owner -C "$RELEASE_DIRECTORY"
+  tar -xzf "$ARCHIVE" --no-same-owner --preserve-permissions -C "$RELEASE_DIRECTORY"
   local archive_version
   [[ -f "$RELEASE_DIRECTORY/VERSION" ]] || { fail 'Archive VERSION is missing.'; return 1; }
   archive_version="$(< "$RELEASE_DIRECTORY/VERSION")"
@@ -154,6 +190,10 @@ download_release() {
   done
   [[ -f "$RELEASE_DIRECTORY/frontend/index.html" ]] || { fail 'Missing frontend.'; return 1; }
   if [[ "$LEGACY" == 1 ]]; then return; fi
+  local item
+  for item in "${MANAGED_ITEMS[@]}"; do
+    [[ -e "$RELEASE_DIRECTORY/$item" ]] || { fail "Candidate is missing managed resource $item."; return 1; }
+  done
   for program in yatm-httpd yatm-cli yatm-migrate yatm-export-library yatm-lto-info; do
     [[ -x "$RELEASE_DIRECTORY/$program" ]] || { fail "Missing executable $program."; return 1; }
     "$RELEASE_DIRECTORY/$program" --version | jq -e --arg program "$program" --arg version "$RELEASE_VERSION" \
@@ -175,7 +215,10 @@ prepare_fresh_config() {
   [[ "$LEGACY" == 0 ]] || templates="$RELEASE_DIRECTORY"
   cp -a "$templates/scripts" "$INSPECTION_DIRECTORY/scripts"
   cp "${FRESH_CONFIG:-$templates/config.example.yaml}" "$INSPECTION_DIRECTORY/config.yaml"
-  if [[ -z "$FRESH_CONFIG" && "$CHECK_ONLY" == 0 ]]; then "${EDITOR:-vi}" "$INSPECTION_DIRECTORY/config.yaml"; fi
+  if [[ -z "$FRESH_CONFIG" && "$CHECK_ONLY" == 0 ]]; then
+    [[ -t 0 ]] || { fail 'A noninteractive fresh installation requires --config.'; return 1; }
+    "${EDITOR:-vi}" "$INSPECTION_DIRECTORY/config.yaml"
+  fi
 }
 
 inspect_installation() {
@@ -203,37 +246,64 @@ inspect_installation() {
   fi
   local stopped=()
   [[ "$SERVICE_ACTIVE" == 1 ]] || stopped=(-service-stopped)
-  run_migrator -phase preflight -json -install-root "$INSPECTION_DIRECTORY" "${stopped[@]}" > "$TMP_DIRECTORY/preflight.json"
+  local inspection_root="$INSPECTION_DIRECTORY"
+  if [[ "$CURRENT_VERSION" == none ]]; then
+    stopped+=(-fresh-install)
+    inspection_root="$INSTALL_DIRECTORY"
+  fi
+  local preflight_file="${REPORT_DIRECTORY:-$TMP_DIRECTORY}/preflight.json"
+  run_migrator -phase preflight -json -install-root "$inspection_root" "${stopped[@]}" > "$preflight_file"
+  [[ "$preflight_file" == "$TMP_DIRECTORY/preflight.json" ]] || cp "$preflight_file" "$TMP_DIRECTORY/preflight.json"
   jq . "$TMP_DIRECTORY/preflight.json"
   SCHEMA="$(jq -er .schema "$TMP_DIRECTORY/preflight.json")"
   SERVER_URL="$(jq -er .server_url "$TMP_DIRECTORY/preflight.json")"
-  if [[ "$CURRENT_VERSION" != none ]]; then
-    local needed available
-    needed="$(du -sk "$INSTALL_DIRECTORY" | awk '{print $1}')"
-    available="$(df -Pk "$(dirname "$INSTALL_DIRECTORY")" | awk 'END {print $4}')"
-    (( available > needed + 10240 )) || { fail 'Insufficient free space for a complete installation backup plus safety margin.'; return 1; }
+  if [[ "$CURRENT_VERSION" != none && "$SCHEMA" != legacy && "$SCHEMA" != current ]]; then
+    fail 'Existing installation has no recognized catalog. Inspect its configured database before upgrading.'; return 1
   fi
+  if [[ "$CURRENT_VERSION" != none ]]; then
+    local needed available candidate
+    (cd "$INSTALL_DIRECTORY" && find . -mindepth 1 -maxdepth 1 ! -name .yatm-upgrades -print0) > "$TMP_DIRECTORY/backup.entries"
+    needed="$(cd "$INSTALL_DIRECTORY" && du -skc --files0-from="$TMP_DIRECTORY/backup.entries" | awk 'END {print $1}')"
+    candidate="$(du -sk "$RELEASE_DIRECTORY" | awk '{print $1}')"
+    available="$(df -Pk "$INSTALL_DIRECTORY" | awk 'END {print $4}')"
+    (( available > needed * 2 + candidate + 10240 )) || {
+      fail 'Insufficient installation-filesystem space for the complete backup, migration and candidate.'; return 1;
+    }
+  fi
+  echo 'Passed: configuration, backup scope and current service activity checks.'
+  jq -r '.warnings[]? | "Manual check: " + .' "$TMP_DIRECTORY/preflight.json"
+  echo 'Tape scripts were not executed; installation checks do not establish Tape readiness.'
 }
 
-choose_templates() {
-  [[ "$CURRENT_VERSION" != none && "$LEGACY" == 0 ]] || return 0
-  if [[ "$SCHEMA" == v1 && "$(jq '.warnings | length' "$TMP_DIRECTORY/preflight.json")" != 0 ]]; then
-    if [[ "$(jq .standard_scripts "$TMP_DIRECTORY/preflight.json")" == true ]] && confirm_action 'Adopt the bundled current Tape script templates after migration? Existing scripts remain in the complete backup.'; then
-      ADOPT_SCRIPTS=1
-    else
-      confirm_action 'I have adapted the retained custom Tape scripts to the current TAPE_DIR/index and unmount-completion contract. Continue?' || return 1
-    fi
-  fi
-  if confirm_action 'Replace the service unit with the bundled template? Default is to preserve the existing unit.'; then ADOPT_UNIT=1; fi
-  return 0
+show_migration_guide() {
+  echo "Requested installation: $CURRENT_VERSION → $RELEASE_VERSION"
+  [[ "$CURRENT_VERSION" != none ]] || return 0
+  local current_major="${CURRENT_VERSION#v}" target_major="${RELEASE_VERSION#v}"
+  [[ "${current_major%%.*}" != "${target_major%%.*}" ]] || return 0
+  [[ "$CURRENT_VERSION" =~ ^v0\.1\.[0-9]+$ && "$RELEASE_VERSION" == v1.* ]] || {
+    fail 'This installer has no supported migration procedure for the requested major-version change.'; return 1;
+  }
+  local guide="$RELEASE_DIRECTORY/docs/operations/migration.md"
+  [[ -s "$guide" && ! -L "$guide" ]] || { fail 'The verified release is missing its migration guide.'; return 1; }
+  echo "Migration guide from the verified release: $guide"
+  command cat "$guide"
 }
 
 backup_installation() {
   STAGE=backup
-  BACKUP_DIRECTORY="$(mktemp -d "${INSTALL_DIRECTORY}.bak.$(date +%Y%m%d%H%M%S).XXXXXX")"
+  BACKUP_DIRECTORY="$ATTEMPT_DIRECTORY/$CURRENT_VERSION.backup"
+  mkdir -m 700 "$BACKUP_DIRECTORY"
   echo "Complete installation backup: $BACKUP_DIRECTORY"
-  cp -a "$INSTALL_DIRECTORY/." "$BACKUP_DIRECTORY/"
-  echo 'Backup complete.'
+  # Freeze the complete active top level, excluding only the installer's own retained attempts.
+  (cd "$INSTALL_DIRECTORY" && find . -mindepth 1 -maxdepth 1 ! -name .yatm-upgrades -print0) > "$REPORT_DIRECTORY/backup.entries"
+  local entry
+  local -a entries=()
+  while IFS= read -r -d '' entry; do
+    entries+=("$INSTALL_DIRECTORY/$entry")
+  done < "$REPORT_DIRECTORY/backup.entries"
+  [[ "${#entries[@]}" == 0 ]] || cp -a -- "${entries[@]}" "$BACKUP_DIRECTORY/"
+  tar -C "$INSTALL_DIRECTORY" --null -T "$REPORT_DIRECTORY/backup.entries" -cf - | tar -C "$BACKUP_DIRECTORY" -df -
+  echo 'Passed: complete backup content and metadata comparison.'
 }
 
 reverse_prepare() {
@@ -255,19 +325,22 @@ upgrade_existing() {
   STAGE=stopping
   systemctl stop "$SERVICE_NAME"
   backup_installation
-  if [[ "$SCHEMA" == v1 ]]; then
+  if [[ "$SCHEMA" == legacy ]]; then
     STAGE=prepare
-    if ! run_migrator -phase prepare; then
+    if ! run_migrator -phase prepare -report-file "$REPORT_DIRECTORY/migration.json"; then
       reverse_prepare
       return 1
     fi
-    if ! confirm_action 'Approve this complete migration report and commit current?'; then
+    if ! confirm_action 'Approve this migration report and commit the migration?'; then
       reverse_prepare
       exit 0
     fi
     STAGE=commit
     run_migrator -phase commit --confirm
-    echo 'legacy backup tables are retained. Cleanup remains a separate, explicitly confirmed operation.'
+    STAGE=validate
+    run_migrator -phase validate -backup-root "$BACKUP_DIRECTORY" -install-root "$INSTALL_DIRECTORY"
+    STAGE=cleanup
+    run_migrator -phase cleanup -backup-root "$BACKUP_DIRECTORY" -install-root "$INSTALL_DIRECTORY" --confirm
   fi
 }
 
@@ -276,18 +349,20 @@ install_managed_files() {
   STAGE=replace-programs
   mkdir -p "$INSTALL_DIRECTORY"
   local item
-  for item in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate frontend README.md CONTEXT.md docs VERSION COMMIT LICENSE licenses skills templates; do
-    [[ ! -e "$RELEASE_DIRECTORY/$item" ]] || cp -a "$RELEASE_DIRECTORY/$item" "$INSTALL_DIRECTORY/"
+  for item in "${MANAGED_ITEMS[@]}"; do
+    if [[ ! -e "$RELEASE_DIRECTORY/$item" ]]; then
+      [[ "$LEGACY" == 1 ]] || { fail "Candidate is missing managed resource $item."; return 1; }
+      continue
+    fi
+    # Replace owned trees in full so obsolete release files cannot survive an overlay.
+    rm -rf -- "$INSTALL_DIRECTORY/$item"
+    cp -a "$RELEASE_DIRECTORY/$item" "$INSTALL_DIRECTORY/"
   done
   local templates="$RELEASE_DIRECTORY/templates"
   [[ "$LEGACY" == 0 ]] || templates="$RELEASE_DIRECTORY"
   if [[ "$CURRENT_VERSION" == none ]]; then
     cp "$INSPECTION_DIRECTORY/config.yaml" "$INSTALL_DIRECTORY/config.yaml"
-    ADOPT_SCRIPTS=1
-    ADOPT_UNIT=1
-  fi
-  if [[ "$ADOPT_SCRIPTS" == 1 ]]; then cp -a "$templates/scripts" "$INSTALL_DIRECTORY/"; fi
-  if [[ "$ADOPT_UNIT" == 1 ]]; then
+    cp -a "$templates/scripts" "$INSTALL_DIRECTORY/"
     sed "s|/opt/yatm|$INSTALL_DIRECTORY|g" "$templates/yatm-httpd.service" > "$INSTALL_DIRECTORY/$SERVICE_NAME"
   fi
   [[ -f "$INSTALL_DIRECTORY/$SERVICE_NAME" ]] || { fail 'Missing preserved systemd unit.'; return 1; }
@@ -297,7 +372,7 @@ check_readiness() {
   local attempt
   if [[ "$LEGACY" == 1 ]]; then
     systemctl is-active --quiet "$SERVICE_NAME"
-    echo 'Legacy legacy started; validate its UI before use. This release has no current CLI readiness probe.'
+    echo 'Legacy release started; validate its UI before use. This release has no CLI readiness probe.'
     return
   fi
   for attempt in {1..15}; do
@@ -339,7 +414,7 @@ offer_skill() {
 on_failure() {
   local status="$1"
   trap - ERR
-  case "$STAGE" in commit|replace-programs|readiness) systemctl stop "$SERVICE_NAME" || true ;; esac
+  case "$STAGE" in commit|validate|cleanup|replace-programs|readiness) systemctl stop "$SERVICE_NAME" || true ;; esac
   echo "Installation did not complete. Stage: $STAGE" >&2
   [[ -z "$BACKUP_DIRECTORY" ]] || echo "Backup: $BACKUP_DIRECTORY. Recover the complete installation, not only its executables." >&2
   [[ -z "$REPORT_FILE" ]] || echo "Report: $REPORT_FILE" >&2
@@ -348,16 +423,19 @@ on_failure() {
 
 main() {
   parse_options "$@"
+  if [[ "$SHOW_HELP" == 1 ]]; then usage; return; fi
   identify_platform
   TMP_DIRECTORY="$(mktemp -d -t yatm-install.XXXXXX)"
   RELEASE_DIRECTORY="$TMP_DIRECTORY/release"
   trap '[[ -z "${TMP_DIRECTORY:-}" ]] || rm -rf -- "$TMP_DIRECTORY"' EXIT
   trap 'on_failure "$?"' ERR
   trap 'on_failure 130' INT TERM
+  begin_attempt
   resolve_version
   download_release
   inspect_installation
-  if [[ "$CHECK_ONLY" == 1 ]]; then echo 'Read-only installation checks passed. No service or installation changes were made.'; return; fi
+  show_migration_guide
+  if [[ "$CHECK_ONLY" == 1 ]]; then echo 'Read-only installation checks passed; review any manual checks above. No service or installation changes were made.'; return; fi
   if [[ "$CURRENT_VERSION" == "$RELEASE_VERSION" ]]; then
     if [[ "$LEGACY" == 0 ]]; then
       local program
@@ -373,12 +451,9 @@ main() {
   fi
   echo "Install $RELEASE_VERSION (currently $CURRENT_VERSION). Existing configuration and local files are retained."
   if [[ "$CURRENT_VERSION" != none ]]; then
-    echo "The service will stop. A complete backup will be created beside $INSTALL_DIRECTORY. legacy migration changes the database and requires current afterward."
+    echo "The service will stop after confirmation. Its complete backup will remain inside $ATTEMPT_DIRECTORY."
   fi
   confirm_action 'Continue with installation?' || { echo 'Installation cancelled; existing service and data are unchanged.'; return; }
-  choose_templates || { echo 'Installation cancelled; existing service and data are unchanged.'; return; }
-  REPORT_FILE="$(mktemp "${INSTALL_DIRECTORY}.upgrade.$(date +%Y%m%d%H%M%S).XXXXXX.log")"
-  exec > >(tee -a "$REPORT_FILE") 2>&1
   if [[ "$CURRENT_VERSION" != none ]]; then upgrade_existing; fi
   install_managed_files
   STAGE=readiness

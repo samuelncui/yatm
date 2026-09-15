@@ -1,4 +1,4 @@
-# YATM v1
+# YATM Platform Design
 
 Status: Implemented — historical development snapshot, archived 2026-09-06. This is not a release announcement or the current architecture contract. Follow the [current architecture](../architecture/overview.md) and [documentation convention](../README.md) for ongoing changes.
 
@@ -13,11 +13,11 @@ Status: Implemented — historical development snapshot, archived 2026-09-06. Th
 - YATM manages copied files, not physical directories. Media deletion never deletes files from Tape or Volume.
 - Preview remains independent of Media, capabilities, and device leases.
 
-legacy is `origin/main@89685cc` (`v0.1.21`). It upgrades through the explicit offline migration.
+The legacy baseline is `origin/main@89685cc` (`v0.1.21`). It upgrades through explicit offline migration.
 
 ## Storage
 
-v1 has three durable stores:
+The platform has three durable stores:
 
 | Store | Data |
 | --- | --- |
@@ -252,6 +252,6 @@ Apply never modifies the Volume filesystem. Files left by an interrupted Archive
 
 ## Migration and Failure Boundary
 
-The offline migration converts legacy Tape rows to Media profiles, `tape_id` to `media_id`, and Archive/Restore paths to their generic fields. It streams data through temporary v1 tables and swaps them only after validation and explicit confirmation. legacy Job logs are copied into their v1 Job Bundles. A submitted legacy Archive item remains submitted only when `(path, size)` has one exact physical Position among the Media IDs recovered from its Job log; absent or ambiguous items return to pending. Library backup export uses V3 JSON Lines with embedded File annotations; import also accepts v1 JSON Lines, legacy v1 `tape`/`tape_id` JSON Lines, and legacy whole-object JSON.
+The offline migration converts legacy Tape rows to Media profiles, `tape_id` to `media_id`, and Archive/Restore paths to their generic fields. It streams data through staging tables and swaps them after validation and explicit confirmation. Legacy Job logs are copied into Job bundles. A submitted legacy Archive item remains submitted only when `(path, size)` identifies one physical Position among the Media IDs recovered from its Job log; absent or ambiguous items return to pending. Library exports use JSON Lines with embedded annotations. The [persistence contract](../architecture/persistence.md#published-data-formats) owns the supported format identity and legacy whole-object reader; prototype export numbering is not a release sequence.
 
 One Archive, Restore, Scan Diff, or Scan Apply attempt is the normal recovery boundary. Normal shutdown lets it finish or run cleanup. An interrupted process returns to the previous durable checkpoint on restart; this version does not add an attempt journal or automatic repair for a crash between separate Library and Job database commits. Scan is the explicit mechanism for examining unexpected Volume files.

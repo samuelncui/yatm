@@ -53,8 +53,8 @@ func TestOfflineOperationsRejectFutureCatalogWithoutWrites(t *testing.T) {
 	require.ErrorIs(t, err, dataformat.ErrUnsupportedCatalog)
 	require.ErrorIs(t, Commit(ctx, db, root), dataformat.ErrUnsupportedCatalog)
 	require.ErrorIs(t, Abort(db, root), dataformat.ErrUnsupportedCatalog)
-	require.ErrorIs(t, Cleanup(db, root), dataformat.ErrUnsupportedCatalog)
-	require.ErrorIs(t, RepairJob(ctx, db, root, 1), dataformat.ErrUnsupportedCatalog)
+	require.ErrorIs(t, Cleanup(ctx, db, root, Backup{}), dataformat.ErrUnsupportedCatalog)
+	require.ErrorIs(t, RepairJob(ctx, db, root, 1, Backup{}), dataformat.ErrUnsupportedCatalog)
 
 	// Neither cleanup nor the prepare error-report path may replace preexisting evidence.
 	actual, err := os.ReadFile(reportPath)

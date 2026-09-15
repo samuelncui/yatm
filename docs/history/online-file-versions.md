@@ -153,21 +153,21 @@ Explicit Library cleanup rechecks online bindings and signature-matched archived
 
 ## Interfaces and Compatibility
 
-Rename the registered-root API to LocationService. Add paginated original, FileVersion, coverage and duplicate-content queries. Keep common Job lifecycle in JobService. Extend typed Archive manifests and Restore selection; modify protobuf first and regenerate Go/TypeScript/CLI. Remove superseded v1 fields and services rather than retaining compatibility adapters. Restore explicitly selects a FileVersion.
+Rename the registered-root API to LocationService. Add paginated original, FileVersion, coverage and duplicate-content queries. Keep common Job lifecycle in JobService. Extend typed Archive manifests and Restore selection; modify protobuf first and regenerate Go/TypeScript/CLI. Remove superseded prototype fields and services rather than retaining compatibility adapters. Restore explicitly selects a FileVersion.
 
-The [temporary v1 Draft policy](../README.md#temporary-v1-draft-compatibility-policy) requires legacy compatibility only. Older v1 schemas, API clients, Job bundles and export revisions are not compatibility targets. Incompatible Draft installations must be rejected rather than silently reset. legacy migration retains its source-preserving offline validation boundary.
+The [compatibility policy](../README.md#temporary-draft-compatibility-policy) distinguishes supported releases from unpublished prototypes. Incompatible Draft installations are rejected rather than silently reset. Legacy migration retains its source-preserving offline validation boundary.
 
 ### Schema Upgrade and Backup
 
-legacy migration preserves File IDs, logical organization and annotations, creates versions from confirmed archive facts and assigns copy signatures without changing physical content. Do not invent archive history for undecidable orphan records. Validate on copied databases; never modify the original legacy installation during validation. v1-to-v1 migration and splitting old Draft online associations are not required.
+Legacy migration preserves File IDs, logical organization and annotations, creates versions from confirmed archive facts and assigns copy signatures without changing physical content. Undecidable orphan records do not establish archive history. Validate on copied databases and preserve the source. Unpublished prototype associations are governed by the compatibility policy.
 
-Library JSONL V5 contains the new coherent entity groups and reads legacy backups; v1-produced v1-V4 formats need no compatibility adapter. Export uses a consistent metadata view; imports validate complete references and roll back all batches on error. Imported roots require local confirmation and sync; installation-local native evidence is not directly trusted. legacy File replacement clears stale original/tracking references to prevent numeric-ID reuse. Import excludes relevant active operations and never imports original bytes.
+Library JSONL contains coherent entity groups and has an independent [format identity and revision](../architecture/persistence.md#published-data-formats); legacy whole-object backups retain a separate reader. Export uses a consistent metadata view; imports validate references and roll back all batches on error. Imported roots require local confirmation and fresh observations; installation-local native evidence is not directly trusted. Legacy File replacement clears stale original/tracking references to prevent numeric-ID reuse. Import excludes relevant active operations and never imports original bytes.
 
 ## Implementation and Acceptance
 
 Implementation order:
 
-1. Accepted Draft and terminology, persistence models, legacy migration/import, V5 backup and cleanup protection.
+1. Accepted Draft and terminology, persistence models, legacy migration/import, metadata backup and cleanup protection.
 2. Location configuration/Ignore, tracking evidence, bounded matching and atomic Sync.
 3. Content access, both Archive inputs, version-aware Restore and Preview.
 4. Generated public clients, UI, CLI and explicit-reset Demo.
@@ -184,7 +184,7 @@ Required semantic acceptance:
 - Bounded multipage/deep traversal, stable cursors, concurrent configuration conflicts, publication failure and post-commit Job retry.
 - Stale content URLs, HEAD/Range, safe response types, Archive changes before/during transfer and immutable opaque identity.
 - Multiple-version Restore, version-owned metadata, missing copies, Preview current/history separation and independent failures.
-- V5 round trips, legacy migration/import, explicit rejection of incompatible Draft formats, cross-batch rollback, arbitrary opaque bytes and ID reuse.
+- Metadata round trips, legacy migration/import, explicit rejection of incompatible Draft formats, cross-batch rollback, arbitrary opaque bytes and ID reuse.
 - Demo includes unsigned, online-only, archived, changed-unarchived, unavailable, imported-unconfirmed and retryable states.
 
 Run affected Go unit/vet/race checks, both SQLite drivers, generation/CLI coverage, frontend checks, explicit-reset Demo, isolated Volume/Preview E2E and isolated Linux LTFS file-backend regression. Physical Tape is excluded. Preserve unrelated work, remove disposable React drafts before a later authorized commit, check documentation links and git diff --check, and do not automatically commit, push or release.

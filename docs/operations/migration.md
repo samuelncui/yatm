@@ -1,81 +1,130 @@
-# legacy to v1 Migration
+# Upgrade from v0.1.x to v1
 
-Status: v1 Alpha 1 upgrade procedure. Alpha is a prerelease; retain a complete installation backup throughout evaluation.
+Status: Candidate procedure for `v1.0.0-alpha.1`; release acceptance is tracked in the [candidate notes](../releases/v1.0.0-alpha.1.md).
 
-legacy is frozen at `origin/main@89685cc` (`v0.1.21`). Migration requires a planned outage and a complete, tested installation backup: databases, configuration, scripts, captured indexes, and historical Job files. [Test-environment restrictions](testing.md#media-and-migration-safety) apply to validation copies.
+This upgrade changes Catalog and Job storage and the Tape script contract. Schedule an outage and retain a complete installation backup throughout Alpha evaluation. The installer displays this exact document from the checksum-verified candidate package before asking to stop the service. Software versions and [data-format revisions](../architecture/persistence.md#published-data-formats) are independent.
 
-## Recommended Upgrade
+## Run the Upgrade
 
-The Linux amd64/systemd [installer](install.md#install-or-update) performs the upgrade after explicit confirmation:
+After the candidate is published, obtain its installer rather than reusing a script from the old installation:
 
 ```shell
+curl --fail --location --output install-release.sh \
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.1/install-release.sh
 bash install-release.sh --version v1.0.0-alpha.1 --check
 bash install-release.sh --version v1.0.0-alpha.1
 ```
 
-Use the installer from the selected release. Review its current/target versions, backup scope, script findings and interruption notice. A legacy upgrade also asks you to approve the Prepare report before Commit. Cancellation or EOF before activation retains the current installation. Same-version reruns check the installation and offer its bundled Skill.
+The default channel remains stable; Alpha requires `--version`. See [installation](install.md#install-or-update) for prerequisites, custom installation/unit paths, and local candidate archives. `--check` downloads and verifies the candidate and reads installation metadata without stopping the service, quiescing Jobs, creating databases, or leaving an upgrade attempt in the installation.
 
-Automatic upgrade supports SQLite installations whose database, Job storage, configuration, scripts, service unit and captured indexes fit inside the installation backup. External resources and other database engines require coordinated manual backup and upgrade. The installer reports these layouts before service interruption. [Configuration ownership](install.md#install-or-update) covers preserved files and optional template adoption.
+Automatic upgrade supports Linux amd64/systemd with SQLite and configuration, Job storage, scripts, helpers and captured indexes contained in the installation. External databases or storage require coordinated manual backup. The preflight reports passed checks, manual checks and blockers. Script existence is not evidence of Tape compatibility. Busy operations, unknown versions, missing migration instructions, invalid packages and unsupported layouts stop before service interruption. Originals, Restore output and archive Media are not software migration data; mixed layouts that cannot be classified must be resolved first.
 
-## Phases and Guarantees
+The actual upgrade shows its retained report directory before the first confirmation. Review the current/target versions, findings, backup scope and this guide. Cancel or EOF at that prompt leaves the service unchanged. A second confirmation approves the prepared migration report after the service has stopped and its complete backup exists.
 
-- **Preflight:** inspect configuration, formats, bundles, active operations, backup coverage and script contracts without creating databases or modifying service admission. Jobs performing an operation such as copying block upgrade; waiting-for-Media and stable paused states are eligible. After consent, recheck and quiesce v1 admission, stop the service normally, and take the complete backup. The existing operation rollback semantics remain the recovery basis.
-- **Prepare:** [migration code](../../migrate/legacy/migrate.go) creates v1 staging tables and complete `work/jobs/<job_id>/state.db` bundles without changing active legacy database rows. An existing legacy Job directory is preserved by the migration's directory handling. Copied legacy protobuf definitions remain in the migration-only package.
-- **Library reconciliation:** [File/Media conversion](../../migrate/legacy/library.go) preserves File IDs and logical organization. Confirmed archive facts populate independent Position signatures and FileVersions; non-empty bytes are preserved verbatim and unset signatures use NULL. Different Files may share content without merging. Isolated File signatures do not fabricate archive history: uncertain facts are reported and retained in the source backups. Unknown archive times remain unknown.
-- **Tape facts:** use the legacy mount configuration's captured-index directory. Exact path/size matches receive validated LTFS order/extents; missing or mismatched Positions are omitted. A reconciled Tape becomes `ltfs_v1`; missing/empty captured indexes retain `ltfs_v0` compatibility ordering. Rebuild derived directory rows from retained physical files.
-- **Jobs:** preserve manifest content and recover empty/dirty records into retryable states. Retain a submitted Archive item only when its path/size identify one physical Position among Media recovered from its old Job log. Fail prepare when a pending Restore item loses every valid candidate. Prepare freezes the legacy configured Restore target after resolving its original working-directory-relative meaning; repair preserves an already frozen root over later configuration changes. Neither creates that directory during migration. Missing authorized output descendants can be created by execution. A missing configured target is reported instead of guessing where to write.
-- **Commit:** require a successful report and explicit confirmation. Swap staged tables into service while retaining `jobs_legacy`, `files_legacy`, `tapes_legacy`, and `positions_legacy`. Per-Job bundles are already at their final paths.
-- **Abort/Cleanup:** Abort removes migration-owned prepared output and preserves legacy data; repeat prepare remains supported. Cleanup removes retained legacy backups only after separate confirmation and successful validation. A failed signature check is not permission to edit or merge the original Files.
+## What Changes
 
-The [runtime persistence model](../architecture/persistence.md#published-data-formats) defines the Alpha Catalog, Job bundle and Library backup families. legacy migration/import remains supported. Alpha 1 establishes the published v1 baseline; unpublished Draft data is rejected with its original contents retained. A downgrade restores the matching complete backup.
+- Library File IDs, logical paths, tags and Note are retained. Confirmed archive evidence creates independent Position signatures and saved FileVersions; uncertain history is reported instead of invented. Opaque signatures retain their bytes, and unknown save times remain unknown.
+- Each historical Job becomes a bundle containing its manifest, execution metadata and archived log. A submitted Archive item requires an unambiguous recorded physical copy; pending Restore selections require valid candidates. Legacy Restore output roots retain their original working-directory-relative meaning and are frozen for later execution.
+- Captured legacy LTFS indexes supply validated order/extents for exact path/size matches. Missing or mismatched inventory is reported. Physical storage profiles retain their own `ltfs_v0`/`ltfs_v1` identities.
+- Legacy `paths.source` and `paths.target` register Locations idempotently on startup; the old target becomes a preferred Restore destination. This registration does not scan their contents or move Library organization. [Location configuration](install.md#location-configuration-and-migration) owns authorization and subsequent editing.
+- Active configuration, scripts, helpers, permissions, service working directory and unknown user files remain in place. Release-owned programs, frontend, documentation, licenses, Skill and templates are replaced completely. Default script templates are deployed only for a fresh installation.
 
-## Script Review
+## Tape Script Adaptation
 
-legacy Tape script contracts must be reviewed before stopping the service. The current scripts capture the final LTFS Index and complete mount/unmount cleanup before returning. The preflight report identifies the configured scripts and expected changes. Choose the supplied templates explicitly or adapt retained custom scripts before proceeding.
+Scripts are the environment adaptation boundary: they own LTFS executable paths, device mapping, vendor options and local helper logic. Preserve that customization. Installation checks never run Tape scripts, mount a cartridge, format Media or establish physical Tape readiness.
 
-Prepare reads the original legacy configuration and mount-script captured-index location before template replacement. Preserve its working-directory-relative path meaning. Legacy `paths.source` and `paths.target` become Locations idempotently on startup; the old target becomes a preferred Restore destination. This conversion does not scan directories or rearrange the Library.
+Complete data migration **before changing the legacy mount script's captured-index output directory**. Prepare reads the old script/configuration to locate existing index evidence. Keep that directory and its contents if any retained script still uses it. After migration, adapt scripts manually and validate them before the first Tape Job.
 
-## Manual Upgrade
+| Input | Meaning |
+| --- | --- |
+| `DEVICE` | Configured Tape device; helpers may resolve its SCSI generic mapping. |
+| `KEY_FILE` | Encryption key file supplied to the encryption script. |
+| `MOUNT_POINT` | Mount destination for the current operation. |
+| `TAPE_BARCODE`, `TAPE_NAME` | Cartridge identity/name passed to formatting and encryption scripts. |
+| `TAPE_DIR` | Per-Job, per-cartridge artifact directory once identity is known; write captured indexes and LTFS diagnostics here. |
+| `OUT` | Output filename for the device-information script's JSON result. |
 
-Use a checksum-verified release archive. The example below assumes the standard installation layout; include every external database, script, bundle and captured-index directory in the coordinated backup for a custom layout. Run the candidate migrator from the original service working directory:
+The mount script must make the current cartridge's captured Index available as `TAPE_DIR/<barcode>.schema`, where `<barcode>` is the mounted cartridge identity. Mount/unmount receive `TAPE_DIR`, not the formatting script's barcode/name inputs. The final Index must describe the completed write before YATM publishes it. Retain vendor-specific commands while updating their output destination; for an LTFS implementation supporting the bundled options, the relevant change is:
+
+```diff
+- -o work_directory=/opt/yatm/captured_indices -o capture_index
++ -o work_directory="${TAPE_DIR}" -o capture_index
+```
+
+Create `TAPE_DIR` before using it. The [bundled mount template](../../scripts/mount) illustrates this contract; its flags are not universal across LTFS distributions.
+
+Unmount must return only after final Index output is complete, the mount has ended, and the Tape device has been released. A successful `umount` invocation alone may precede background LTFS cleanup. An ejecting setup must also wait for its configured eject completion condition. The [bundled unmount template](../../scripts/umount) shows one bounded wait implementation; retain the equivalent behavior appropriate to the local environment. Nonzero exit or timeout leaves the Job retryable rather than claiming successful publication.
+
+Service startup acceptance and Tape acceptance are separate outcomes. A successful installer does not certify customized scripts or physical hardware. Use the [physical Tape procedure](physical-tape-e2e.md) only with explicitly assigned scratch Media.
+
+## Backup Layout and Upgrade Phases
+
+All retained installer artifacts stay below the existing installation root:
+
+```text
+/opt/yatm/
+  config.yaml
+  scripts/
+  yatm-httpd
+  tapes.db
+  jobs/
+  .yatm-upgrades/
+    OWNER
+    <timestamp>.XXXXXX/
+      v0.1.8.backup/
+      release/
+      reports/
+```
+
+The owned upgrade directory and its reports use restrictive permissions. An unrelated directory at the reserved path is a conflict. Each backup uses a frozen top-level entry list and excludes only the installer-owned `.yatm-upgrades`; later upgrades do not recursively copy previous backups. The backup is verified before migration and is not modified by cleanup or historical Job repair. Free-space checks apply to the installation filesystem, including backup, candidate and migration needs. Upgrade artifacts are excluded from live Location access.
+
+| Phase | Result and failure boundary |
+| --- | --- |
+| Verify and preflight | Verified candidate, version/layout checks, findings and retained attempt log; no service interruption before consent. |
+| Stop and backup | Recheck active work, quiesce supported service admission, stop normally, and create/verify the complete backup before changing data. |
+| Prepare | Create staging tables and complete Job bundles; retain the JSON report on success, failure or cancellation. Existing legacy database rows remain available until Commit. |
+| Report approval | Review reconciliation and every historical Job/item. Declining or failing Prepare removes only prepared output through Abort before the old service can restart. |
+| Commit and validate | Activate current tables, then compare migrated Library, every historical Job/item and logs against the explicit complete backup. An uncertain Commit or failed validation keeps the service stopped. |
+| Cleanup and replace | Remove confirmed obsolete active tables, old Job storage and transferred logs; preserve backup and user resources. Replace release-owned files/trees completely. |
+| Start and accept | Check API, Library, Jobs, served assets and version identity. Report service readiness separately from manual Tape adaptation. |
+
+`reports/upgrade.log` records the attempt; `preflight.json`, `backup.entries` and `migration.json` retain its findings, backup list and migration result. Cancellation does not erase the attempt report. Same-version reruns check the installed identity/readiness and offer the [optional Skill](install.md#optional-agent-skill) without making another installation backup.
+
+## Offline Migration and Repair
+
+The offline sequence below supports a contained SQLite installation, with the same backup-root mapping as the installer. Stop the service and take a verified complete backup first. External databases/work roots need separately reviewed expert coordination; the backup-root commands reject those layouts instead of guessing a mapping. Run the verified candidate's `yatm-migrate` from the original service working directory, with its original configuration and captured indexes intact. Replace the placeholders below with the retained candidate and complete-backup directories:
 
 ```shell
-yatm_release_dir="$(mktemp -d /tmp/yatm-v1-release.XXXXXX)"
-tar -xzf "yatm-linux-amd64-${RELEASE_VERSION}.tar.gz" -C "$yatm_release_dir"
 cd /opt/yatm
-
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase preflight
-systemctl stop yatm-httpd.service
-cp -a /opt/yatm "/opt/yatm.bak.$(date +%Y%m%d%H%M%S)"
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase prepare
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase preflight -service-stopped
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase prepare \
+  -report-file "$yatm_reports_dir/migration.json"
+# Review the report and historical manifests before continuing.
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase commit --confirm
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase validate \
+  -install-root /opt/yatm -backup-root "$yatm_backup_dir"
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase cleanup \
+  -install-root /opt/yatm -backup-root "$yatm_backup_dir" --confirm
 ```
 
-Inspect the report, including omitted inventory and uncertain history, and verify prepared Library and Job manifests item-by-item before committing. On a failed or declined Prepare, run `-phase abort --confirm`; restart legacy only after Abort succeeds. Keep the old configuration and scripts in place through Commit.
+On a failed or declined Prepare, use `-phase abort --confirm`; restart the legacy service only after Abort succeeds. Keep the external report. Validate and clean up before resuming business activity: later Library edits or Job progress can legitimately differ from the migration baseline. Cleanup is repeatable and removes only verified obsolete active artifacts, not the complete backup. [Migration implementation](../../migrate/legacy/migrate.go) owns conversion and validation details.
+
+Historical Job repair reads evidence from the explicitly selected backup, not legacy tables retained indefinitely in the active Catalog:
 
 ```shell
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase commit --confirm
+./yatm-migrate -config ./config.yaml -phase repair-job -job-id 123 \
+  -install-root /opt/yatm -backup-root "$yatm_backup_dir" --confirm
 ```
 
-Replace only the managed programs (`yatm-httpd`, `yatm-cli`, `yatm-export-library`, `yatm-lto-info`, `yatm-migrate`), frontend, version files, documentation, licenses, bundled Skill and templates. Preserve active `config.yaml`, scripts, unit, unknown files and backups. Adopt reviewed templates separately. Do not overlay the entire archive onto a customized installation.
-
-Start the service, then verify `yatm-cli --version`, `yatm-cli info`, Library listing, all historical Jobs and frontend resources. The offline `-phase frontend-check` checks rendered assets using the selected configuration. Review pending legacy Jobs before resuming them; migration validation itself does not mount Media or execute content Jobs.
+Stop the service and inspect the selected Job before repair. A previously frozen Restore root takes precedence over later configuration edits. A replaced Job bundle is retained beside the selected backup under `jobs-before-repair/<id>`. Retain repair evidence and verify all repaired items before resuming the Job.
 
 ## Failure and Complete-Backup Recovery
 
-Installation uses ordinary file replacement, not an atomic program-tree switch. An interruption can leave a mixed tree. Once Commit is uncertain or replacement has begun, the installer leaves the service stopped and reports its phase and backup location. Do not start either version against an uncertain mixture.
+Program/resource replacement is not atomic. Interruption can leave a mixed tree; once Commit is uncertain or replacement has begun, keep the service stopped. Replacing only a binary or only a database is not a rollback.
 
-1. Stop the service and retain the failed installation and migration report for diagnosis.
-2. Restore the complete timestamped installation backup, including matching executables, database, Job bundles, configuration, scripts and captured indexes. Restore any coordinated external resources as well.
-3. Start the backed-up version and compare Library entries and historical Job manifests with the pre-upgrade inventory.
+1. Select and verify the complete backup recorded in the attempt report. Stop the service.
+2. Freeze a list of the current installation's top-level entries, excluding only the owned `.yatm-upgrades`. Move those entries into a new `failed-installation` directory inside the attempt, retaining failed data and diagnostics.
+3. Copy the selected complete backup's contents back into the **same installation root**, preserving attributes. Keep `.yatm-upgrades` in place; never remove or move the installation root that contains it. Restore coordinated external resources and the matching service registration if applicable.
+4. Start the backed-up version and compare its Library, historical manifests and configuration with the pre-upgrade inventory.
 
-Rollback means restoring that complete set; replacing only the executable or only the database is insufficient. Source originals and archive Media are not copied by the metadata upgrade and must retain their existing protection.
-
-## Backup Retention
-
-After checking the running v1 service and migrated items, separately authorize retained-backup cleanup:
-
-```shell
-./yatm-migrate -config ./config.yaml -phase cleanup --confirm
-```
-
-Keep the complete installation backup independently of migration table cleanup. Backup deletion is a separate operator decision after successful validation.
+Do not overlay the backup on a partly upgraded active tree, as that leaves new-only files behind. Rollback restores software and metadata; it does not undo file moves, deletions, Restore outputs or Media writes performed after the new version started. Complete-backup deletion is a separate, explicit operator decision after acceptance and the desired retention period.

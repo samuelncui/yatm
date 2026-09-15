@@ -17,7 +17,10 @@ function fixture(t, change = () => {}) {
   const files = new Map([
     ...["yatm-httpd", "yatm-cli", "yatm-export-library", "yatm-lto-info", "yatm-migrate", "LICENSE", "README.md", "CONTEXT.md", "templates/config.example.yaml", "templates/yatm-httpd.service", "skills/yatm/SKILL.md", "licenses/dependencies.json", "licenses/THIRD_PARTY_NOTICES"].map((name) => [name, "fixture"]),
     ...["encrypt", "get_device", "mkfs", "mount", "mount.openltfs", "readinfo", "umount"].map((name) => [`templates/scripts/${name}`, "fixture"]),
+    ...["encrypt", "get_device", "mkfs", "mount", "readinfo", "umount", "README.md"].map((name) => [`templates/testing/ltfs-file-backend/${name}`, "fixture"]),
     ["VERSION", version], ["COMMIT", commit],
+    ["docs/operations/migration.md", "# Upgrade from v0.1.x to v1\n"],
+    ["install-release.sh", "#!/usr/bin/env bash\nexit 0\n"],
     ["frontend/index.html", `<meta name="yatm-version" content="${version}"><meta name="yatm-commit" content="${commit}">`],
   ]);
   change(files);
@@ -69,6 +72,8 @@ test("rejects filesystem metadata hidden in PAX records", (t) => {
 
 for (const [name, change, message] of [
   ["missing executable", (files) => files.delete("yatm-cli"), "Required package file missing"],
+  ["missing migration guide", (files) => files.delete("docs/operations/migration.md"), "Required package file missing"],
+  ["missing testing adapter", (files) => files.delete("templates/testing/ltfs-file-backend/mount"), "Required testing adapter missing"],
   ["active config", (files) => files.set("config.yaml", "private"), "Unexpected archive entry"],
   ["development dependency", (files) => files.set("frontend/node_modules/test.js", "private"), "Development/private file"],
   ["mixed frontend version", (files) => files.set("frontend/index.html", "development"), "Frontend version does not match"],

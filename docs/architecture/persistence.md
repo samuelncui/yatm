@@ -16,7 +16,7 @@ Request-bound file operations use a temporary SQLite `items` manifest for bounde
 
 ## Published Data Formats
 
-The Alpha 1 candidate uses the initial published formats below. Software release
+The v1 Alpha candidate uses the initial format revisions below. Software release
 numbers and artifact format revisions have separate meanings. Each format family
 starts at revision 1; future revisions advance within that family.
 
@@ -24,7 +24,7 @@ starts at revision 1; future revisions advance within that family.
 | --- | --- | --- |
 | Shared Library/Executor Catalog | `catalog_metadata` singleton, `format = yatm-catalog` | `revision = 1` |
 | Job bundle | `job.json`, `format = yatm-job-bundle` | `format_version = 1` |
-| v1 Library metadata backup | JSONL header, `format = yatm-library-backup` | `version = 1` |
+| Library metadata backup | JSONL header, `format = yatm-library-backup` | `version = 1` |
 
 [Format checks](../../internal/dataformat/catalog.go) validate identity and revision
 before schema changes. Fresh initialization requires an empty database; the lack
@@ -32,15 +32,17 @@ of a `jobs` table alone does not make a database empty. The supported offline le
 migration establishes the same Catalog and bundle identities as fresh creation.
 Job bundles share one format definition across runners and the migrator.
 
-Unmarked nonempty catalogs, Draft JSONL (`yatm-library`, revisions 2–5), unmarked
-Draft bundles, and unknown format revisions are rejected with their data retained.
-Released-family revision 2 will therefore remain distinguishable from Draft
-revision 2. Disposable development fixtures require an explicit reset.
+Unmarked nonempty catalogs, prototype JSONL headers, unmarked Draft bundles and
+unknown format revisions are rejected with their data retained. Prototype
+identifiers do not reserve revisions in the supported families. Disposable
+development fixtures require an explicit reset.
 
-legacy whole-object JSON remains a separate supported import. Its compressed protobuf
+Legacy whole-object JSON remains a separate supported import. Its compressed protobuf
 header, encryption-key prefix and opaque signature bytes retain their original
 encoding. LTFS profiles and Volume markers identify physical storage contracts,
-not Catalog or backup revisions.
+not Catalog or backup revisions. Existing wire names such as the compressed
+protobuf header, key/signature headers and `ltfs_v1` identify actual encodings;
+they are independent of the `v0.1.x` and v1 software release names.
 
 ## Job Bundle
 
