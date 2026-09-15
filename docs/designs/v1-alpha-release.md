@@ -51,7 +51,7 @@ The [E2E matrix](../operations/e2e-test.md#release-candidates-and-upgrades) defi
 - [x] Optional Skill picker, cancellation, repeat installation and ordinary/sudo user in an isolated home; dependency absence covered by a local shell test.
 - [x] Explicit-reset Demo and browser acceptance.
 - [x] Candidate, hashes and evidence review and publication approval. Public-asset README installation is verified after the Release is available.
-- [ ] Apply the public procedure to the authorized real installation after candidate acceptance; report service readiness and any remaining manual Tape script adaptation separately.
+- [x] Apply the public procedure to the authorized real installation after candidate acceptance; report service readiness and any remaining manual Tape script adaptation separately.
 
 ## Work Ownership
 
