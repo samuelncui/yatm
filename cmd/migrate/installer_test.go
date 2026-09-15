@@ -229,6 +229,86 @@ on_failure 1
 	}
 }
 
+func TestInstallerReadinessRequiresTargetProcess(t *testing.T) {
+	for _, test := range []struct {
+		name, pid, response string
+		changePID, inactive bool
+		wantSuccess         bool
+	}{
+		{name: "matching process", pid: "101", response: `{"process_id":101}`, wantSuccess: true},
+		{name: "foreign ready endpoint", pid: "101", response: `{"process_id":202}`},
+		{name: "missing process identity", pid: "101", response: `{}`},
+		{name: "no running process", pid: "0", response: `{"process_id":0}`},
+		{name: "inactive service", pid: "101", response: `{"process_id":101}`, inactive: true},
+		{name: "restart during checks", pid: "101", response: `{"process_id":101}`, changePID: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Keep the endpoint ready while independently controlling the target service identity.
+			root := t.TempDir()
+			for name, body := range map[string]string{
+				"pid":          test.pid,
+				"status.json":  test.response,
+				"curl":         "#!/bin/sh\ncat \"$TEST_STATUS\"\n",
+				"yatm-cli":     "#!/bin/sh\nprintf 'checked-cli:%s\\n' \"$*\"\n",
+				"yatm-migrate": "#!/bin/sh\nif [ \"$CHANGE_PID\" = true ]; then printf '202' > \"$TEST_PID\"; fi\nprintf 'checked-frontend\\n'\n",
+			} {
+				require.NoError(t, os.WriteFile(filepath.Join(root, name), []byte(body), 0700))
+			}
+			changePID, inactive := "false", "false"
+			if test.changePID {
+				changePID = "true"
+			}
+			if test.inactive {
+				inactive = "true"
+			}
+			output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+TMP_DIRECTORY="$1"
+SERVER_URL=http://127.0.0.1:18671
+SERVICE_NAME=target.service
+STAGE=readiness
+export PATH="$1:$PATH" TEST_PID="$1/pid" TEST_STATUS="$1/status.json" CHANGE_PID="$2"
+INACTIVE="$3"
+systemctl() {
+  case "$1" in
+    show) cat "$TEST_PID" ;;
+    is-active) [[ "$INACTIVE" == false ]] ;;
+    stop) echo "stopped:$2" ;;
+    *) return 1 ;;
+  esac
+}
+sleep() { :; }
+trap 'on_failure "$?"' ERR
+check_readiness
+echo accepted
+`, "", root, changePID, inactive)
+
+			// A foreign endpoint or restart cannot make an unrelated service pass activation.
+			if test.wantSuccess {
+				require.NoError(t, err, output)
+				require.Contains(t, output, "accepted")
+				for file, operation := range map[string]string{"library.json": "files list", "jobs.json": "job list"} {
+					data, err := os.ReadFile(filepath.Join(root, file))
+					require.NoError(t, err)
+					require.Contains(t, string(data), operation)
+				}
+				require.NotContains(t, output, "stopped:")
+				return
+			}
+			require.Error(t, err, output)
+			require.NotContains(t, output, "accepted")
+			require.Contains(t, output, "stopped:target.service")
+			if test.changePID {
+				require.Contains(t, output, "checked-frontend")
+				require.Contains(t, output, "changed or stopped")
+				return
+			}
+			require.NotContains(t, output, "checked-cli")
+			require.Contains(t, output, "does not belong")
+		})
+	}
+}
+
 func TestInstallerMissingGuidePreventsStop(t *testing.T) {
 	// Reject incomplete major-upgrade candidates after inspection but before consent or service mutation.
 	output, err := installerShell(t, `
@@ -273,6 +353,29 @@ main
 	require.Contains(t, output, "already installed")
 	require.Contains(t, output, "offer-skill")
 	require.NotContains(t, output, "unexpected-")
+}
+
+func TestInstallerSkillWithoutNodeIsOptional(t *testing.T) {
+	// Restrict the test user's dependency lookup without modifying the host tool installation.
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "skills/yatm"), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "skills/yatm/SKILL.md"), []byte("fixture"), 0600))
+	require.NoError(t, os.Mkdir(filepath.Join(root, "bin"), 0700))
+	require.NoError(t, os.Symlink("/bin/sh", filepath.Join(root, "bin/sh")))
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+SUDO_USER=skill-fixture
+id() { if [[ "$1" == -un ]]; then echo skill-fixture; fi; }
+export PATH="$1/bin"
+offer_skill
+echo installation-unaffected
+`, "", root)
+
+	// Missing optional dependencies are reported without installing tools or failing YATM.
+	require.NoError(t, err, output)
+	require.Contains(t, output, "Node/npm are not available")
+	require.Contains(t, output, "They were not installed")
+	require.Contains(t, output, "installation-unaffected")
 }
 
 func TestInstallerRejectsUnknownInstalledVersion(t *testing.T) {

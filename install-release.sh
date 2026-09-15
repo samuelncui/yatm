@@ -368,22 +368,35 @@ install_managed_files() {
   [[ -f "$INSTALL_DIRECTORY/$SERVICE_NAME" ]] || { fail 'Missing preserved systemd unit.'; return 1; }
 }
 
+ready_process_id() {
+  local expected="${1:-}" actual
+  actual="$(systemctl show "$SERVICE_NAME" --property MainPID --value)" || return 1
+  [[ "$actual" =~ ^[1-9][0-9]*$ && ( -z "$expected" || "$actual" == "$expected" ) ]] || return 1
+  systemctl is-active --quiet "$SERVICE_NAME" || return 1
+  command curl -q --noproxy '*' --fail --silent --show-error --connect-timeout 2 --max-time 2 \
+    "$SERVER_URL/files/_upgrade/status" | jq -e --argjson pid "$actual" '.process_id == $pid' >/dev/null || return 1
+  [[ "$(systemctl show "$SERVICE_NAME" --property MainPID --value)" == "$actual" ]] || return 1
+  systemctl is-active --quiet "$SERVICE_NAME" || return 1
+  printf '%s\n' "$actual"
+}
+
 check_readiness() {
-  local attempt
+  local attempt process_id=
   if [[ "$LEGACY" == 1 ]]; then
     systemctl is-active --quiet "$SERVICE_NAME"
     echo 'Legacy release started; validate its UI before use. This release has no CLI readiness probe.'
     return
   fi
   for attempt in {1..15}; do
-    if "$INSTALL_DIRECTORY/yatm-cli" --server "$SERVER_URL" --timeout 2s status > "$TMP_DIRECTORY/status.json" 2>/dev/null; then break; fi
+    if process_id="$(ready_process_id 2>/dev/null)"; then break; fi
     sleep 1
   done
+  [[ -n "$process_id" ]] || { fail 'Readiness endpoint does not belong to the running systemd service.'; return 1; }
   "$INSTALL_DIRECTORY/yatm-cli" --server "$SERVER_URL" --timeout 3s status
   "$INSTALL_DIRECTORY/yatm-cli" --server "$SERVER_URL" --timeout 3s files list --file-id 0 --limit 1 > "$TMP_DIRECTORY/library.json"
   "$INSTALL_DIRECTORY/yatm-cli" --server "$SERVER_URL" --timeout 3s job list --limit 1 > "$TMP_DIRECTORY/jobs.json"
   (cd "$INSTALL_DIRECTORY" && ./yatm-migrate -config ./config.yaml -phase frontend-check)
-  systemctl is-active --quiet "$SERVICE_NAME"
+  ready_process_id "$process_id" >/dev/null || { fail 'The systemd service changed or stopped during readiness checks.'; return 1; }
 }
 
 offer_skill() {

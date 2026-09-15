@@ -36,7 +36,7 @@ v1 packages require a matching SHA-256 checksum before any included program exec
 
 For existing installations, the [upgrade guide](migration.md) owns preflight, consent, migration, complete in-root backup and recovery. The installer displays the verified package's guide before crossing a major version. It preserves active configuration, scripts, helpers, permissions, service unit and unknown user files; upgrades do not adopt default script/unit templates. Script checks report manual requirements, not physical Tape compatibility.
 
-Startup acceptance checks the API, Library, Jobs and served frontend assets. A same-version rerun verifies the installed identity and offers the optional Skill without replacing programs. Installation does not execute Tape scripts. Ordinary replacement is non-atomic; [recovery](migration.md#failure-and-complete-backup-recovery) restores a complete matching backup.
+Startup acceptance matches the direct-loopback API process identity to the systemd unit's running process before and after checking Library, Jobs and served frontend assets. Another instance occupying the configured port cannot satisfy this check. A same-version rerun verifies the installed identity and offers the optional Skill without replacing programs. Installation does not execute Tape scripts. Ordinary replacement is non-atomic; [recovery](migration.md#failure-and-complete-backup-recovery) restores a complete matching backup.
 
 For a fresh manual installation from a verified archive:
 

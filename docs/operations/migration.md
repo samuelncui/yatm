@@ -86,7 +86,7 @@ The owned upgrade directory and its reports use restrictive permissions. An unre
 | Report approval | Review reconciliation and every historical Job/item. Declining or failing Prepare removes only prepared output through Abort before the old service can restart. |
 | Commit and validate | Activate current tables, then compare migrated Library, every historical Job/item and logs against the explicit complete backup. An uncertain Commit or failed validation keeps the service stopped. |
 | Cleanup and replace | Remove confirmed obsolete active tables, old Job storage and transferred logs; preserve backup and user resources. Replace release-owned files/trees completely. |
-| Start and accept | Check API, Library, Jobs, served assets and version identity. Report service readiness separately from manual Tape adaptation. |
+| Start and accept | Check [service-bound readiness](install.md#install-or-update), Library, Jobs, served assets and version identity. Report installation readiness separately from manual Tape adaptation. |
 
 `reports/upgrade.log` records the attempt; `preflight.json`, `backup.entries` and `migration.json` retain its findings, backup list and migration result. Cancellation does not erase the attempt report. Same-version reruns check the installed identity/readiness and offer the [optional Skill](install.md#optional-agent-skill) without making another installation backup.
 

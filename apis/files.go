@@ -75,7 +75,7 @@ func (api *API) Uploader() *gin.Engine {
 		ctx.Next()
 	})
 	upgrade.GET("/status", func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, gin.H{"running_job_ids": api.exe.RunningJobIDs()})
+		ctx.JSON(http.StatusOK, gin.H{"process_id": os.Getpid(), "running_job_ids": api.exe.RunningJobIDs()})
 	})
 	upgrade.POST("/quiesce", func(ctx *gin.Context) {
 		ids, ready := api.exe.TryQuiesce()

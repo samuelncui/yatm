@@ -1,8 +1,10 @@
 package apis_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/samuelncui/yatm/apis"
@@ -21,6 +23,13 @@ func TestUpgradeEndpointsRequireDirectLoopbackAccess(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	require.Equal(t, http.StatusOK, response.Code)
+	var status struct {
+		ProcessID     int     `json:"process_id"`
+		RunningJobIDs []int64 `json:"running_job_ids"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &status))
+	require.Equal(t, os.Getpid(), status.ProcessID)
+	require.Empty(t, status.RunningJobIDs)
 
 	// Forwarded requests are not treated as trusted loopback callers.
 	request = httptest.NewRequest(http.MethodGet, "/_upgrade/status", nil)
