@@ -30,25 +30,43 @@ identify_the_operating_system_and_architecture() {
   fi
 }
 
-## Demo function for processing parameters
 judgment_parameters() {
   while [[ "$#" -gt '0' ]]; do
     case "$1" in
       '--version')
-        VERSION="${2:?error: Please specify the correct version.}"
-        break
+        if [[ "$#" -lt 2 || "$2" == --* || -z "$2" ]]; then
+          echo 'error: --version requires a version.' >&2
+          return 1
+        fi
+        VERSION="$2"
+        shift 2
+        ;;
+      '--version='*)
+        echo 'error: Use --version followed by a version.' >&2
+        return 1
         ;;
       '-h' | '--help')
         HELP='1'
-        break
+        shift
         ;;
       *)
-        echo "$0: unknown option -- -"
-        exit 1
+        echo "error: Unknown option: $1" >&2
+        return 1
         ;;
     esac
-    shift
   done
+}
+
+validate_legacy_upgrade() {
+  if [[ ! "$RELEASE_VERSION" =~ ^v0\.1\.[0-9]+$ ]]; then
+    echo 'error: This installer supports v0.1.x only. Use the installer supplied with the target release.' >&2
+    echo 'Upgrade guide: https://github.com/samuelncui/yatm/blob/v1/docs/operations/migration.md' >&2
+    return 1
+  fi
+  if [[ -n "$CURRENT_VERSION" && ! "$CURRENT_VERSION" =~ ^v0\.1\.[0-9]+$ ]]; then
+    echo "error: Cannot update installed version '$CURRENT_VERSION' with the v0.1.x installer." >&2
+    return 1
+  fi
 }
 
 get_current_version() {
@@ -112,17 +130,22 @@ show_help() {
 }
 
 main() {
-  identify_the_operating_system_and_architecture
-  judgment_parameters "$@"
+  judgment_parameters "$@" || return 1
 
   # Parameter information
   [[ "$HELP" -eq '1' ]] && show_help
+  identify_the_operating_system_and_architecture
+  [[ ! -f '/opt/yatm/VERSION' ]] || get_current_version
 
   # Two very important variables
   TMP_DIRECTORY="$(mktemp -d)"
 
   get_version
   NUMBER="$?"
+  if ! validate_legacy_upgrade; then
+    rmdir "$TMP_DIRECTORY"
+    return 1
+  fi
   if [[ "$NUMBER" -eq '1' ]]; then
     echo "info: No new version. The current version of YATM is $CURRENT_VERSION."
     exit 0
@@ -154,4 +177,6 @@ main() {
   systemctl status yatm-httpd.service
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
