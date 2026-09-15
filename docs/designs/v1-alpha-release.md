@@ -1,6 +1,6 @@
 # v1 Alpha Release and Upgrade Delivery
 
-Status: Draft — implementation complete; final candidate acceptance and publication approval remain open.
+Status: Draft — implementation and candidate acceptance complete; publication approval and public installation verification remain open.
 
 ## Delivery Goals
 
@@ -42,12 +42,12 @@ Withdrawal covers publisher-controlled entries. Previously downloaded copies, th
 
 The [E2E matrix](../operations/e2e-test.md#release-candidates-and-upgrades) defines executable checks. Results belong in candidate notes only after running this candidate's actual binaries.
 
-- [ ] Real systemd fresh install, same-version rerun and `v0.1.x` upgrade; verified-package guide output and unchanged service on preflight failure, cancellation, EOF, bad checksum, unknown version or Busy.
-- [ ] Two upgrades without nested backups, unchanged backup hashes, preserved user scripts/helpers/configuration and no artifacts in the installation root's parent.
-- [ ] Backup/Prepare/Commit/cleanup/replacement/startup failures and full in-root rollback.
+- [x] Real systemd fresh install, same-version rerun and `v0.1.x` upgrade; verified-package guide output and unchanged service on preflight failure, cancellation, EOF, bad checksum, unknown version or Busy.
+- [x] Two upgrades without nested backups, unchanged backup hashes, preserved user scripts/helpers/configuration and no artifacts in the installation root's parent.
+- [x] Backup/Prepare/Commit/cleanup/replacement failure semantics locally; actual systemd startup rejection and full in-root rollback. The candidate notes distinguish injected failures from remote execution.
 - [x] Approved timestamped legacy backup copies, item-by-item historical manifests, frozen Restore paths, archived logs and repair after active legacy-table cleanup. The private historical fixture contains Archive Jobs; Restore-path coverage uses synthetic semantic fixtures.
-- [x] Unit, vet, race, both SQLite drivers, generation/CLI/frontend, document links and initial package checks; final archives receive their own validation.
-- [ ] Full local/CI candidate CLI E2E, plus remote Volume/Preview and official Linux LTFS file-backend regression using only the corresponding release package's YATM binaries. Keep orchestration local via SSH; transfer no repository source, separately built harness or helper source. Physical Tape hardware is a separately reported gate.
+- [x] Unit, vet, race, both SQLite drivers, generation/CLI/frontend, document links and all ten platform package checks.
+- [x] Full local/CI candidate CLI E2E, plus remote Volume/Preview and official Linux LTFS file-backend regression using only the corresponding release package's YATM binaries. Keep orchestration local via SSH; transfer no repository source, separately built harness or helper source. Physical Tape hardware is a separately reported gate.
 - [x] Optional Skill picker, cancellation, repeat installation and ordinary/sudo user in an isolated home; dependency absence covered by a local shell test.
 - [x] Explicit-reset Demo and browser acceptance.
 - [ ] Candidate, hashes and evidence review; publication approval; public-asset README installation check.
