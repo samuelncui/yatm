@@ -1,6 +1,6 @@
 # Library
 
-Status: Current development Library model. See the [candidate notes](../releases/v1.0.0-alpha.1.md) for acceptance status.
+Status: Current v1 Alpha Library model. See the [release notes](../releases/v1.0.0-alpha.1.md) for acceptance evidence and limits.
 
 ## Organization and Content
 

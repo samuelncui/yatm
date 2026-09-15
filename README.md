@@ -4,7 +4,7 @@
 
 YATM is an open-source archive manager for LTFS tapes and already-mounted disk Volumes. It separates logical Library organization from physical archive copies, keeping ordinary files recoverable without a YATM-specific storage format.
 
-**v1.0.0-alpha.1 is an unreleased candidate.** It introduces live Location file management, persistent saved versions and a unified Scan workflow. Read the [candidate release notes](docs/releases/v1.0.0-alpha.1.md) for changes and acceptance status. [v0.1.x remains the stable release](https://github.com/samuelncui/yatm/releases/latest).
+**v1.0.0-alpha.1 is available for evaluation.** It introduces live Location file management, persistent saved versions and a unified Scan workflow. Read the [Alpha release notes](docs/releases/v1.0.0-alpha.1.md) for changes, acceptance evidence and limits. [v0.1.x remains the stable release](https://github.com/samuelncui/yatm/releases/latest).
 
 ## Features
 
@@ -20,7 +20,7 @@ Tape workflows require compatible LTFS hardware/software; Volume-only workflows 
 
 ## Get Started
 
-The default installer selects the stable release. Once the Alpha candidate is published, install or upgrade using its exact-version installer; no local compilation is required:
+The default installer selects the stable release. Install or upgrade the Alpha using its exact-version installer; no local compilation is required:
 
 ```shell
 curl --fail --location --output install-release.sh \

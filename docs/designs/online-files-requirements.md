@@ -1,6 +1,6 @@
 # Online File Management Requirements
 
-Status: Approved product requirements for v1 Draft development, not a released-support claim. This document owns user outcomes; detailed behavior belongs in the linked design and current architecture.
+Status: Approved product requirements for v1 Alpha 1. This document owns user outcomes; detailed behavior belongs in the linked design and current architecture.
 
 ## Core Outcomes
 

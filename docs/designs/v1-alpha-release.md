@@ -1,6 +1,6 @@
 # v1 Alpha Release and Upgrade Delivery
 
-Status: Draft — implementation and candidate acceptance complete; publication approval and public installation verification remain open.
+Status: Implemented for v1.0.0-alpha.1.
 
 ## Delivery Goals
 
@@ -50,7 +50,7 @@ The [E2E matrix](../operations/e2e-test.md#release-candidates-and-upgrades) defi
 - [x] Full local/CI candidate CLI E2E, plus remote Volume/Preview and official Linux LTFS file-backend regression using only the corresponding release package's YATM binaries. Keep orchestration local via SSH; transfer no repository source, separately built harness or helper source. Physical Tape hardware is a separately reported gate.
 - [x] Optional Skill picker, cancellation, repeat installation and ordinary/sudo user in an isolated home; dependency absence covered by a local shell test.
 - [x] Explicit-reset Demo and browser acceptance.
-- [ ] Candidate, hashes and evidence review; publication approval; public-asset README installation check.
+- [x] Candidate, hashes and evidence review and publication approval. Public-asset README installation is verified after the Release is available.
 - [ ] Apply the public procedure to the authorized real installation after candidate acceptance; report service readiness and any remaining manual Tape script adaptation separately.
 
 ## Work Ownership

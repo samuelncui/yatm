@@ -1,6 +1,6 @@
 # Documentation
 
-These documents describe development toward `v1.0.0-alpha.1`. Start with [installation](operations/install.md), [v0.1.x upgrade](operations/migration.md), or the [candidate release notes](releases/v1.0.0-alpha.1.md). Daily use is covered by [Library/Media](operations/library.md), [live Locations](operations/online-sources.md), and the bundled [CLI Skill](../.agents/skills/yatm/SKILL.md).
+These documents describe `v1.0.0-alpha.1`. Start with [installation](operations/install.md), [v0.1.x upgrade](operations/migration.md), or the [Alpha release notes](releases/v1.0.0-alpha.1.md). Daily use is covered by [Library/Media](operations/library.md), [live Locations](operations/online-sources.md), and the bundled [CLI Skill](../.agents/skills/yatm/SKILL.md).
 
 ## Temporary Draft Compatibility Policy
 
@@ -25,8 +25,8 @@ Before the first stable v1 release, remove this temporary exception and its cont
 
 - **Requirements baseline:** [Online file management](designs/online-files-requirements.md)
 - **Draft:** [Files interaction and metadata restore](designs/files-interaction-consistency.md)
-- **Draft:** [v1 Alpha release and upgrade delivery](designs/v1-alpha-release.md)
-- **Candidate:** [v1 Alpha 1 changes and acceptance status](releases/v1.0.0-alpha.1.md)
+- **Implemented:** [v1 Alpha release and upgrade delivery](designs/v1-alpha-release.md)
+- **Released:** [v1 Alpha 1 changes and acceptance status](releases/v1.0.0-alpha.1.md)
 - **Accepted:** [File organization is independent of content](decisions/0002-file-organization-and-content.md)
 - **Superseded:** [Content identity owns Library organization](decisions/0001-content-identity.md)
 

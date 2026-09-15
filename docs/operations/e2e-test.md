@@ -1,6 +1,6 @@
 # E2E Testing
 
-Status: Maintained validation for v1 Alpha development. See [test environment safety](testing.md) before selecting a host or fixture and [candidate acceptance](../releases/v1.0.0-alpha.1.md) for actual run status.
+Status: Maintained validation for v1 Alpha. See [test environment safety](testing.md) before selecting a host or fixture and [release acceptance](../releases/v1.0.0-alpha.1.md) for actual run status.
 
 Primary business acceptance uses actual `yatm-cli` subprocesses and production HTTP/gRPC-Web transport. The [complete installation workflows](../../e2e/workflows_test.go) and [indexing recovery workflows](../../e2e/indexing_cli_test.go) also start the actual `yatm-httpd` binary. Development runs build both binaries from the checkout; release acceptance sets `YATM_E2E_BIN_DIR` to the extracted candidate directory and uses those programs unchanged. Each test owns isolated configuration, databases, source files, output directories and loopback listeners. No production installation or Tape device is used by local tests.
 

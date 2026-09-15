@@ -1,6 +1,6 @@
 # Installation and Service Configuration
 
-This guide describes the unreleased v1 Alpha candidate. See the [candidate notes](../releases/v1.0.0-alpha.1.md) for acceptance status and the [migration guide](migration.md) for `v0.1.x` installations. Tag-based commands below become available after publication.
+This guide describes v1 Alpha 1. See the [release notes](../releases/v1.0.0-alpha.1.md) for acceptance evidence and limits, and the [migration guide](migration.md) for `v0.1.x` installations.
 
 ## Requirements
 

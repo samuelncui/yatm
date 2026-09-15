@@ -1,12 +1,12 @@
 # Upgrade from v0.1.x to v1
 
-Status: Candidate procedure for `v1.0.0-alpha.1`; release acceptance is tracked in the [candidate notes](../releases/v1.0.0-alpha.1.md).
+Status: Supported `v0.1.x` to `v1.0.0-alpha.1` procedure; acceptance evidence and limits are recorded in the [release notes](../releases/v1.0.0-alpha.1.md).
 
 This upgrade changes Catalog and Job storage and the Tape script contract. Schedule an outage and retain a complete installation backup throughout Alpha evaluation. The installer displays this exact document from the checksum-verified candidate package before asking to stop the service. Software versions and [data-format revisions](../architecture/persistence.md#published-data-formats) are independent.
 
 ## Run the Upgrade
 
-After the candidate is published, obtain its installer rather than reusing a script from the old installation:
+Obtain the versioned installer rather than reusing a script from the old installation:
 
 ```shell
 curl --fail --location --output install-release.sh \
