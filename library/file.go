@@ -2,56 +2,114 @@ package library
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/fs"
 	"path"
-	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/samuelncui/yatm/internal/treeops"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samber/lo"
-	"github.com/sirupsen/logrus"
+	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
 )
 
 var (
 	ModelFile         = new(File)
+	ModelFileTag      = new(FileTag)
 	SignatureV1Header = []byte{0x01}
 
 	ErrFileNotFound          = fmt.Errorf("get file: file not found")
 	ErrMkdirNonDirFileExists = fmt.Errorf("mkdir: non dir exists")
 	ErrMkdirDirExists        = fmt.Errorf("mkdir: dir exists")
-	ErrNewFileFileExists     = fmt.Errorf("new file: file exists")
 
-	Root = &File{ID: 0}
+	Root = &File{ID: 0, Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 )
 
 type File struct {
 	ID       int64 `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
-	ParentID int64 `gorm:"index:idx_parent_name,unique" json:"parent_id,omitempty"`
+	ParentID int64 `gorm:"index:idx_files_parent_name,unique" json:"parent_id,omitempty"`
 
-	Name    string    `gorm:"type:varchar(256);index:idx_parent_name,unique" json:"name,omitempty"`
-	Mode    uint32    `json:"mode,omitempty"`
-	ModTime time.Time `json:"mod_time,omitempty"`
-	Hash    []byte    `gorm:"type:varbinary(32)" json:"hash,omitempty"` // sha256
-	Size    int64     `json:"size,omitempty"`
+	Name      string          `gorm:"type:varchar(256);index:idx_files_parent_name,unique;index:idx_files_search_name" json:"name,omitempty"`
+	Kind      entity.FileKind `gorm:"not null" json:"kind"`
+	CreatedAt int64           `gorm:"autoCreateTime:milli" json:"created_at_ms"`
+	UpdatedAt int64           `gorm:"autoUpdateTime:milli" json:"updated_at_ms"`
+	// Presentation facts are derived from the original or a saved version, never persisted on File.
+	Mode    uint32    `gorm:"-" json:"-"`
+	ModTime time.Time `gorm:"-" json:"-"`
+	Hash    []byte    `gorm:"-" json:"-"`
+	Size    int64     `gorm:"-" json:"-"`
+	Note    string    `gorm:"type:varchar(4096);not null;default:''" json:"note,omitempty"`
+	Tags    []string  `gorm:"-" json:"tags,omitempty"`
 
-	Signature []byte `gorm:"type:varbinary(256);index:idx_signature" json:"signature,omitempty"` // sha256 + size
+	Signature      []byte                     `gorm:"-" json:"-"`
+	ContentSummary *entity.FileContentSummary `gorm:"-" json:"-"`
+}
+
+func (file *File) AfterFind(tx *gorm.DB) error {
+	return hydrateFileFacts(tx.Session(&gorm.Session{NewDB: true}), file)
+}
+
+type FileTag struct {
+	FileID int64  `gorm:"primaryKey;autoIncrement:false;index:idx_file_tags_tag_file,priority:2"`
+	Tag    string `gorm:"type:varchar(128);primaryKey;index:idx_file_tags_tag_file,priority:1"`
+}
+
+// NewFileSignature builds the stable content identity shared by Library files and derived artifacts.
+func NewFileSignature(hash []byte, size int64) ([]byte, error) {
+	if len(hash) != sha256.Size {
+		return nil, fmt.Errorf("invalid file SHA-256 length, length=%d", len(hash))
+	}
+	if size < 0 {
+		return nil, fmt.Errorf("invalid file size, size=%d", size)
+	}
+
+	signature := make([]byte, 1+sha256.Size+8)
+	signature[0] = SignatureV1Header[0]
+	copy(signature[1:], hash)
+	binary.BigEndian.PutUint64(signature[1+sha256.Size:], uint64(size))
+	return signature, nil
+}
+
+// ValidateFileSignature verifies the current content identity encoding.
+func ValidateFileSignature(signature []byte) error {
+	if len(signature) != 1+sha256.Size+8 {
+		return fmt.Errorf("invalid file signature length, length=%d", len(signature))
+	}
+	if signature[0] != SignatureV1Header[0] {
+		return fmt.Errorf("invalid file signature version, version=%d", signature[0])
+	}
+	return nil
 }
 
 func (l *Library) MkdirAll(ctx context.Context, parentID int64, name string, perm fs.FileMode) (*File, error) {
-	return l.mkdirAll(ctx, l.db.WithContext(ctx), parentID, name, perm)
+	// Allocate the complete requested path atomically, including validation of its starting parent.
+	var result *File
+	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		result, err = l.mkdirAll(ctx, tx, parentID, strings.TrimSpace(name), perm)
+		return err
+	})
+	return result, err
 }
 
 func (l *Library) mkdirAll(ctx context.Context, tx *gorm.DB, parentID int64, name string, perm fs.FileMode) (*File, error) {
-	name = path.Clean(strings.TrimSpace(name))
-	if strings.ContainsAny(name, "\\") || name == "" {
-		return nil, fmt.Errorf("unexpected mkdir path, '%s'", name)
+	// Validate the entire relative path before creating any logical directories.
+	name = strings.TrimSuffix(name, "/")
+	if name != "." {
+		if err := entity.ValidateRelativePath(name); err != nil {
+			return nil, fmt.Errorf("invalid Library directory path, %w", err)
+		}
+	}
+	if err := validateFileParent(tx, parentID, 0); err != nil {
+		return nil, err
 	}
 
+	// A current-directory request returns the existing identity without creating a literal dot node.
 	current := Root
 	if parentID != 0 {
 		f, err := l.getFile(ctx, tx, parentID)
@@ -60,14 +118,12 @@ func (l *Library) mkdirAll(ctx context.Context, tx *gorm.DB, parentID int64, nam
 		}
 		current = f
 	}
+	if name == "." {
+		return current, nil
+	}
 
-	parts := strings.Split(name, "/")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
+	// Reuse existing directories and create only missing components within the caller's transaction.
+	for _, part := range strings.Split(name, "/") {
 		next, err := l.mkdir(ctx, tx, current.ID, part, perm)
 		if err != nil && !errors.Is(err, ErrMkdirDirExists) {
 			return nil, fmt.Errorf("mkdir fail, %w", err)
@@ -80,29 +136,29 @@ func (l *Library) mkdirAll(ctx context.Context, tx *gorm.DB, parentID int64, nam
 }
 
 func (l *Library) mkdir(ctx context.Context, tx *gorm.DB, parentID int64, name string, perm fs.FileMode) (*File, error) {
-	perm = fs.ModePerm & perm
-
+	// Existing entries are classified by logical identity, not hydrated physical facts.
 	origin := new(File)
 	if r := tx.Where("parent_id = ? AND name = ?", parentID, name).Find(origin); r.Error != nil {
 		return nil, fmt.Errorf("mkdir: find origin fail, err= %w", r.Error)
 	}
 	if origin.ID != 0 {
-		if fs.FileMode(origin.Mode).IsDir() {
+		if origin.Kind == entity.FileKind_FILE_KIND_DIRECTORY {
 			return origin, ErrMkdirDirExists
 		}
 		return nil, ErrMkdirNonDirFileExists
 	}
 
+	// New logical directories always persist their kind explicitly.
 	dir := &File{
 		ParentID: parentID,
 		Name:     name,
-		Mode:     uint32(fs.ModeDir | perm),
+		Kind:     entity.FileKind_FILE_KIND_DIRECTORY,
+		Mode:     uint32(fs.ModeDir | (fs.ModePerm & perm)),
 		ModTime:  time.Now(),
 	}
 	if r := tx.Create(dir); r.Error != nil {
 		return nil, fmt.Errorf("create fail, err= %w", r.Error)
 	}
-
 	return dir, nil
 }
 
@@ -129,121 +185,69 @@ func (l *Library) SaveFile(ctx context.Context, file *File) error {
 }
 
 func (l *Library) MoveFile(ctx context.Context, file *File) error {
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return l.moveFile(ctx, tx, file)
-	})
+	if file == nil {
+		return fmt.Errorf("move requires a stored File")
+	}
+	return l.moveTree(ctx, file, file.Name)
 }
 
-func (l *Library) moveFile(ctx context.Context, tx *gorm.DB, file *File) error {
-	origin, err := l.getByName(ctx, tx, file.ParentID, file.Name)
-	if err != nil {
-		return err
-	}
-	if origin == nil {
-		return tx.Save(file).Error
-	}
+// MoveFileToPath resolves a shared relative shortcut without pre-creating directories.
+func (l *Library) MoveFileToPath(ctx context.Context, file *File, targetPath string) error {
+	return l.moveTree(ctx, file, targetPath)
+}
 
-	if !fs.FileMode(origin.Mode).IsDir() {
-		return fmt.Errorf("same name file exists, name= '%s'", file.Name)
-	}
-	if !fs.FileMode(file.Mode).IsDir() {
-		return fmt.Errorf("same name file is a dir, name= '%s", file.Name)
-	}
-
-	children, err := l.list(ctx, tx, file.ID)
-	if err != nil {
-		return err
-	}
-	for _, child := range children {
-		child.ParentID = origin.ID
-		if err := l.moveFile(ctx, tx, child); err != nil {
-			return err
+func validateFileParent(tx *gorm.DB, parentID, movingID int64) error {
+	// Follow only the bounded destination ancestry; no whole-tree query or filesystem access is needed.
+	seen := make(map[int64]struct{})
+	for parentID != 0 {
+		if parentID == movingID {
+			return fmt.Errorf("cannot move a File beneath itself or its descendants")
 		}
-	}
-
-	if file.ModTime.After(origin.ModTime) {
-		origin.ModTime = file.ModTime
-		if err := tx.Save(origin).Error; err != nil {
-			return err
+		if _, exists := seen[parentID]; exists {
+			return fmt.Errorf("File destination ancestry contains a cycle")
 		}
-	}
-	if err := tx.Delete(file).Error; err != nil {
-		return err
-	}
+		if len(seen) >= maxFilePathDepth {
+			return fmt.Errorf("File destination ancestry exceeds %d levels", maxFilePathDepth)
+		}
+		seen[parentID] = struct{}{}
 
+		// Logical directory identity is authoritative; content projections are irrelevant to ancestry.
+		var parent File
+		if err := tx.Session(&gorm.Session{SkipHooks: true}).Select("id", "parent_id", "kind").First(&parent, parentID).Error; err != nil {
+			return fmt.Errorf("read File destination parent %d failed, %w", parentID, err)
+		}
+		if parent.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
+			return fmt.Errorf("File destination parent %d is not a directory", parentID)
+		}
+		parentID = parent.ParentID
+	}
 	return nil
 }
 
 func (l *Library) Delete(ctx context.Context, ids []int64) error {
-	files, err := l.MGetFile(ctx, ids...)
-	if err != nil {
-		panic(err)
+	// Retain missing identities and the reserved Trash root; common planning owns subtree retention.
+	if len(ids) > 1000 {
+		return fmt.Errorf("select at most 1000 operation roots")
 	}
-
-	moveToTrash := make([]*File, 0, len(files))
-outter:
-	for _, file := range files {
-		if file.ID == TrashFileID {
+	refs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
 			continue
 		}
-		parents, err := l.ListParents(ctx, file.ID)
+		_, err := l.GetFile(ctx, id)
+		if errors.Is(err, ErrFileNotFound) {
+			continue
+		}
 		if err != nil {
-			panic(err)
-		}
-		if len(parents) == 0 {
-			moveToTrash = append(moveToTrash, file)
-			continue
-		}
-		if parents[0].ID != TrashFileID {
-			moveToTrash = append(moveToTrash, file)
-			continue
-		}
-		if !fs.FileMode(file.Mode).IsDir() {
-			continue
-		}
-
-		needDelete := make([]*File, 0, 8)
-		current := []*File{file}
-		for len(current) > 0 {
-			next := make([]*File, 0, 8)
-			for _, file := range current {
-				children, err := l.List(ctx, file.ID)
-				if err != nil {
-					return err
-				}
-				for _, child := range children {
-					if !fs.FileMode(child.Mode).IsDir() {
-						continue outter
-					}
-				}
-				next = append(next, children...)
-			}
-
-			needDelete = append(needDelete, current...)
-			current = next
-		}
-
-		if err := l.db.WithContext(ctx).Delete(needDelete).Error; err != nil {
 			return err
 		}
+		refs = append(refs, strconv.FormatInt(id, 10))
 	}
-	if len(moveToTrash) == 0 {
+	if len(refs) == 0 {
 		return nil
 	}
-
-	trash, err := l.newTrash(ctx, l.db.WithContext(ctx))
-	if err != nil {
-		return err
-	}
-
-	for _, file := range moveToTrash {
-		file.ParentID = trash.ID
-		if err := l.MoveFile(ctx, file); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	_, err := l.organizeTree(ctx, treeops.Request{Kind: treeops.Delete, Sources: refs})
+	return err
 }
 
 const (
@@ -251,18 +255,31 @@ const (
 )
 
 func (l *Library) newTrash(ctx context.Context, tx *gorm.DB) (*File, error) {
+	// Load the stable Trash identity so user-owned metadata survives checkpoint creation.
 	now := time.Now()
-	trash := &File{
-		ID:      TrashFileID,
-		Name:    ".Trash",
-		Mode:    uint32(fs.ModePerm | fs.ModeDir),
-		ModTime: now,
+	trash := new(File)
+	result := tx.WithContext(ctx).Where("id = ?", TrashFileID).First(trash)
+	missing := errors.Is(result.Error, gorm.ErrRecordNotFound)
+	if result.Error != nil && !missing {
+		return nil, fmt.Errorf("read Trash directory failed, %w", result.Error)
 	}
-	if err := tx.Save(trash).Error; err != nil {
-		return nil, err
+	if missing {
+		trash = &File{ID: TrashFileID}
 	}
 
-	return l.mkdir(ctx, tx, trash.ID, now.Format(time.RFC3339), fs.ModePerm)
+	// Refresh system-owned fields before allocating the timestamped checkpoint directory.
+	trash.Name = ".Trash"
+	trash.Kind = entity.FileKind_FILE_KIND_DIRECTORY
+	trash.Mode = uint32(fs.ModePerm | fs.ModeDir)
+	trash.ModTime = now
+	if err := tx.Save(trash).Error; err != nil {
+		return nil, fmt.Errorf("save Trash directory failed, %w", err)
+	}
+	checkpoint, err := l.mkdir(ctx, tx, trash.ID, now.Format(time.RFC3339), fs.ModePerm)
+	if err != nil && !errors.Is(err, ErrMkdirDirExists) {
+		return nil, fmt.Errorf("create Trash checkpoint directory failed, %w", err)
+	}
+	return checkpoint, nil
 }
 
 func (l *Library) MGetFile(ctx context.Context, ids ...int64) (map[int64]*File, error) {
@@ -342,27 +359,74 @@ func (l *Library) List(ctx context.Context, parentID int64) ([]*File, error) {
 	return l.list(ctx, l.db.WithContext(ctx), parentID)
 }
 
+func (l *Library) ListPage(ctx context.Context, parentID int64, after string, limit int) ([]*File, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("list files page limit must be positive, limit=%d", limit)
+	}
+	files := make([]*File, 0, limit)
+	result := l.db.WithContext(ctx).
+		Where("parent_id = ? AND name > ?", parentID, after).
+		Order("name").Limit(limit).Find(&files)
+	if result.Error != nil {
+		return nil, fmt.Errorf("list files page failed, parent_id=%d, %w", parentID, result.Error)
+	}
+	return files, nil
+}
+
 func (l *Library) ListWithSize(ctx context.Context, parentID int64) ([]*File, error) {
-	all, err := l.listAll(ctx, l.db.WithContext(ctx), parentID)
+	// Load the direct children that form the public result.
+	files, err := l.list(ctx, l.db.WithContext(ctx), parentID)
 	if err != nil {
 		return nil, err
 	}
 
-	mapping := lo.GroupBy(all, func(file *File) int64 { return file.ParentID })
-	var fetchSize func(file *File)
-	fetchSize = func(file *File) {
-		for _, child := range mapping[file.ID] {
-			fetchSize(child)
-			file.Size += child.Size
+	// Traverse each result directory depth-first while keeping every query page-bounded.
+	type frame struct {
+		directoryID int64
+		after       string
+	}
+	for _, file := range files {
+		if file.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
+			continue
+		}
+
+		stack := []frame{{directoryID: file.ID}}
+		for len(stack) > 0 {
+			last := len(stack) - 1
+			current := stack[last]
+			stack = stack[:last]
+
+			page, err := l.ListPage(ctx, current.directoryID, current.after, batchSize)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"list descendant files failed, directory_id=%d after=%q, %w",
+					current.directoryID,
+					current.after,
+					err,
+				)
+			}
+			if len(page) == 0 {
+				continue
+			}
+
+			// Sum this page and retain only its child directory identities for the DFS stack.
+			directories := make([]int64, 0, len(page))
+			for _, child := range page {
+				file.Size += child.Size
+				if child.Kind == entity.FileKind_FILE_KIND_DIRECTORY {
+					directories = append(directories, child.ID)
+				}
+			}
+
+			// Resume the parent page after its child directories have been visited.
+			if len(page) == batchSize {
+				stack = append(stack, frame{directoryID: current.directoryID, after: page[len(page)-1].Name})
+			}
+			for index := len(directories) - 1; index >= 0; index-- {
+				stack = append(stack, frame{directoryID: directories[index]})
+			}
 		}
 	}
-
-	files := mapping[parentID]
-	for _, f := range files {
-		fetchSize(f)
-	}
-
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files, nil
 }
 
@@ -374,47 +438,23 @@ func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*Fil
 	return files, nil
 }
 
-func (l *Library) listAll(ctx context.Context, tx *gorm.DB, parentIDs ...int64) ([]*File, error) {
-	files := make([]*File, 0, 4)
-
-	current := parentIDs
-	for {
-		batch := make([]*File, 0, 4)
-		if r := tx.Where("parent_id IN (?)", current).Find(&batch); r.Error != nil {
-			return nil, fmt.Errorf("find files fail, %w", r.Error)
-		}
-
-		if len(batch) == 0 {
-			break
-		}
-
-		files = append(files, batch...)
-		next := make([]int64, 0, 4)
-		for _, f := range batch {
-			if !fs.FileMode(f.Mode).IsDir() {
-				continue
-			}
-			next = append(next, f.ID)
-		}
-
-		if len(next) == 0 {
-			break
-		}
-		current = next
-	}
-
-	return files, nil
-}
-
 func (l *Library) ListParents(ctx context.Context, id int64) ([]*File, error) {
 	return l.listParnets(ctx, l.db.WithContext(ctx), id)
 }
 
 func (l *Library) listParnets(ctx context.Context, tx *gorm.DB, id int64) ([]*File, error) {
+	// Return a complete bounded ancestry or an error, never a truncated apparent root.
 	result := make([]*File, 0, 3)
-
+	seen := make(map[int64]struct{})
 	currentID := id
-	for i := 0; i < 32 && currentID != 0; i++ {
+	for currentID != 0 {
+		if _, exists := seen[currentID]; exists {
+			return nil, fmt.Errorf("File ancestry contains a cycle, file_id=%d", currentID)
+		}
+		if len(result) >= maxFilePathDepth {
+			return nil, fmt.Errorf("File ancestry exceeds %d levels", maxFilePathDepth)
+		}
+		seen[currentID] = struct{}{}
 		file, err := l.getFile(ctx, tx, currentID)
 		if err != nil {
 			return nil, err
@@ -424,6 +464,7 @@ func (l *Library) listParnets(ctx context.Context, tx *gorm.DB, id int64) ([]*Fi
 		currentID = file.ParentID
 	}
 
+	// Present the complete chain from the Library root toward the requested File.
 	num := len(result)
 	if num <= 1 {
 		return result, nil
@@ -437,97 +478,8 @@ func (l *Library) listParnets(ctx context.Context, tx *gorm.DB, id int64) ([]*Fi
 
 func (l *Library) Search(ctx context.Context, name string) ([]*File, error) {
 	files := make([]*File, 0, 4)
-	if r := l.db.WithContext(ctx).Where("name LIKE ?", fmt.Sprintf("%"+name+"%")).Order("name").Limit(100).Find(&files); r.Error != nil {
+	if r := l.db.WithContext(ctx).Where("name LIKE ?", "%"+name+"%").Order("name").Limit(100).Find(&files); r.Error != nil {
 		return nil, fmt.Errorf("find files fail, %w", r.Error)
 	}
 	return files, nil
-}
-
-func (l *Library) TrimFiles(ctx context.Context) error {
-	for {
-		positions := make([]*Position, 0, batchSize)
-		if r := l.db.WithContext(ctx).Where("file_id = ?", 0).Limit(batchSize).Find(&positions); r.Error != nil {
-			return fmt.Errorf("list non file position fail, err= %w", r.Error)
-		}
-		if len(positions) == 0 {
-			return nil
-		}
-
-		signatures := make([][]byte, 0, len(positions))
-		sign2positions := make(map[string]*Position, len(positions))
-		for _, posi := range positions {
-			size := make([]byte, 8)
-			binary.BigEndian.PutUint64(size, uint64(posi.Size))
-
-			sign := make([]byte, 0, 64)
-			sign = append(sign, SignatureV1Header...)
-			sign = append(sign, posi.Hash...)
-			sign = append(sign, size...)
-
-			signatures = append(signatures, sign)
-			sign2positions[string(sign)] = posi
-		}
-
-		matched := make([]*File, 0, 4)
-		if r := l.db.WithContext(ctx).Where("signature IN (?)", signatures).Find(&matched); r.Error != nil {
-			return fmt.Errorf("get matched file fail, err= %w", r.Error)
-		}
-
-		for _, file := range matched {
-			posi, has := sign2positions[string(file.Signature)]
-			if !has {
-				continue
-			}
-
-			posi.FileID = file.ID
-			l.db.WithContext(ctx).Save(posi)
-
-			delete(sign2positions, string(file.Signature))
-		}
-
-		tapeIDs := mapset.NewThreadUnsafeSet[int64]()
-		for _, posi := range sign2positions {
-			tapeIDs.Add(posi.TapeID)
-		}
-
-		tapes, err := l.MGetTape(ctx, tapeIDs.ToSlice()...)
-		if err != nil {
-			return fmt.Errorf("mget tape, ids= %v, %w", tapeIDs.ToSlice(), err)
-		}
-
-		for sign, posi := range sign2positions {
-			tape := tapes[posi.TapeID]
-			if tape == nil {
-				logrus.WithContext(ctx).Warnf("trim file, tape not found, tape_id= %d", posi.TapeID)
-				continue
-			}
-
-			dirname, filename := path.Split(fmt.Sprintf("Unforged/%s/%s", tape.Barcode, posi.Path))
-			dir, err := l.MkdirAll(ctx, Root.ID, dirname, 0x777)
-			if err != nil {
-				return fmt.Errorf("mkdir, %w", err)
-			}
-
-			origin := new(File)
-			if r := l.db.WithContext(ctx).Where("parent_id = ? AND name = ?", dir.ID, filename).Find(origin); r.Error != nil {
-				return fmt.Errorf("new file: find origin fail, err= %w", r.Error)
-			}
-			if origin.ID != 0 {
-				return ErrNewFileFileExists
-			}
-
-			file := &File{
-				ParentID:  dir.ID,
-				Name:      filename,
-				Mode:      posi.Mode,
-				ModTime:   time.Now(),
-				Hash:      posi.Hash,
-				Size:      posi.Size,
-				Signature: []byte(sign),
-			}
-			if r := l.db.WithContext(ctx).Create(file); r.Error != nil {
-				return fmt.Errorf("new file: create fail, err= %w", r.Error)
-			}
-		}
-	}
 }

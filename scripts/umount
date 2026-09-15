@@ -1,5 +1,37 @@
 #!/usr/bin/env bash
-set -ex;
+set -euo pipefail
 
-sleep 2
-umount ${MOUNT_POINT}
+mkdir -p "${TAPE_DIR}"
+
+main() {
+    command -v fuser >/dev/null
+    command -v mt >/dev/null
+    CURDIR=$(cd "$(dirname "$0")"; pwd)
+    SG_DEVICE=$("${CURDIR}/get_device")
+
+    sleep 2
+    umount -- "${MOUNT_POINT}"
+
+    deadline=$(($(date +%s) + 600))
+    while fuser -s -- "${SG_DEVICE}"; do
+        if (($(date +%s) >= deadline)); then
+            echo "Tape device is still in use after unmount: ${SG_DEVICE}" >&2
+            exit 1
+        fi
+        sleep 2
+    done
+
+    while true; do
+        status=$(mt -f "${DEVICE}" status 2>&1 || true)
+        if grep -qw 'DR_OPEN' <<< "${status}"; then
+            return
+        fi
+        if (($(date +%s) >= deadline)); then
+            echo "Tape device did not eject after unmount: ${DEVICE}; status: ${status}" >&2
+            exit 1
+        fi
+        sleep 2
+    done
+}
+
+main 2>&1 | tee -a "${TAPE_DIR}/ltfs.log"

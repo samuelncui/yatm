@@ -1,0 +1,879 @@
+diff --git a/src/components/external/FileBrowser.tsx b/src/components/external/FileBrowser.tsx
+index 72db11c..14e9776 100644
+--- a/src/components/external/FileBrowser.tsx
++++ b/src/components/external/FileBrowser.tsx
+@@ -70,7 +70,7 @@ export const FileBrowser = React.forwardRef<FileBrowserHandle, FileBrowserProps
+     const chonkyComps = (
+       <>
+         <ChonkyBusinessLogic ref={ref} {...props} />
+-        <ChonkyPresentationLayer>{children}</ChonkyPresentationLayer>
++        <ChonkyPresentationLayer footer={props.footer}>{children}</ChonkyPresentationLayer>
+       </>
+     );
+ 
+diff --git a/src/components/external/FileNavbar.tsx b/src/components/external/FileNavbar.tsx
+index 7d5cf42..9504f55 100644
+--- a/src/components/external/FileNavbar.tsx
++++ b/src/components/external/FileNavbar.tsx
+@@ -6,44 +6,111 @@
+ 
+ import Box from '@mui/material/Box';
+ import Breadcrumbs from '@mui/material/Breadcrumbs';
+-import React, { ReactElement, useMemo } from 'react';
++import Menu from '@mui/material/Menu';
++import MenuItem from '@mui/material/MenuItem';
++import React, { ReactElement, useLayoutEffect, useRef, useState } from 'react';
++import { ChonkyIconName } from '../../types/icons.types';
+ 
+ import { ChonkyActions } from '../../action-definitions/index';
+ import { important, makeGlobalChonkyStyles } from '../../util/styles';
+ import { useFolderChainItems } from './FileNavbar-hooks';
+ import { FolderChainButton } from './FolderChainButton';
+-import { SmartToolbarButton } from './ToolbarButton';
++import { SmartToolbarButton, ToolbarButton } from './ToolbarButton';
+ 
+-export interface FileNavbarProps {}
++const separatorWidth = 6;
+ 
+-export const FileNavbar: React.FC<FileNavbarProps> = React.memo(() => {
++export interface FileNavbarProps {
++  /** Replace the root breadcrumb with an application-owned scope selector. */
++  rootContent?: React.ReactNode;
++  /** Source-qualified display path copied by the trailing Copy path action. */
++  path?: string;
++}
++
++export const FileNavbar: React.FC<FileNavbarProps> = React.memo(({ rootContent, path }) => {
+   const classes = useStyles();
+   const folderChainItems = useFolderChainItems();
++  const [ancestorAnchor, setAncestorAnchor] = useState<HTMLButtonElement | null>(null);
++  const chainKey = folderChainItems.map(item => `${item.file?.id}:${item.file?.name}`).join('/');
++  const container = useRef<HTMLDivElement>(null);
++  const items = useRef(new Map<number, HTMLSpanElement>());
++  const widths = useRef(new Map<number, number>());
++  const [fold, setFold] = useState({ key: '', count: 0 });
++  const [copyLabel, setCopyLabel] = useState('Copy path');
++  const hiddenCount = fold.key === chainKey ? fold.count : 0;
++  const collapsedAncestors = folderChainItems.slice(1, hiddenCount + 1);
++
++  useLayoutEffect(() => {
++    widths.current.clear();
++    const measure = () => {
++      const available = container.current?.clientWidth ?? 0;
++      if (!available) return;
++      for (const [index, node] of items.current) {
++        if (node.getBoundingClientRect().width > 0) widths.current.set(index, node.scrollWidth);
++      }
++      if (widths.current.size !== folderChainItems.length) return;
++      let total = Array.from(widths.current.values()).reduce((sum, width) => sum + width, 0) + Math.max(0, folderChainItems.length - 1) * separatorWidth;
++      let count = 0;
++      while (total > available && count < folderChainItems.length - 2) {
++        count++;
++        total -= (widths.current.get(count) ?? 0) + separatorWidth;
++        if (count === 1) total += 32;
++      }
++      setFold(current => current.key === chainKey && current.count === count ? current : { key: chainKey, count });
++    };
++    measure();
++    const observer = new ResizeObserver(measure);
++    if (container.current) observer.observe(container.current);
++    return () => observer.disconnect();
++  }, [chainKey]);
++
++  const copyPath = async () => {
++    try {
++      await navigator.clipboard.writeText(path ?? folderChainItems.map(item => item.file?.name ?? '').join('/'));
++      setCopyLabel('Path copied');
++    } catch {
++      setCopyLabel('Could not copy path');
++    }
++  };
+ 
+-  const folderChainComponents = useMemo(() => {
++  const folderChainComponents = (() => {
+     const components: ReactElement[] = [];
+     for (let i = 0; i < folderChainItems.length; ++i) {
+       const key = `folder-chain-${i}`;
++      if (collapsedAncestors.length && i > 0 && i <= hiddenCount) {
++        if (i === 1) components.push(
++          <ToolbarButton key="ancestors" text="…" tooltip="Show parent folders" onClick={(event) => setAncestorAnchor(event.currentTarget)} />
++        );
++        continue;
++      }
+       const component = (
+-        <FolderChainButton
++        <span key={key} ref={node => { if (node) items.current.set(i, node); else items.current.delete(i); }} style={{ display: 'inline-flex', minWidth: 0 }}>
++        {i === 0 && rootContent !== undefined ? rootContent : <FolderChainButton
+           key={key}
+           first={i === 0}
+           current={i === folderChainItems.length - 1}
+           item={folderChainItems[i]}
+-        />
++        />}
++        </span>
+       );
+       components.push(component);
+     }
+     return components;
+-  }, [folderChainItems]);
++  })();
+ 
+   return (
+     <Box className={classes.navbarWrapper}>
+       <Box className={classes.navbarContainer}>
+         <SmartToolbarButton fileActionId={ChonkyActions.OpenParentFolder.id} />
+-        <Breadcrumbs className={classes.navbarBreadcrumbs} classes={{ separator: classes.separator }}>
++        <Breadcrumbs ref={container} maxItems={Number.MAX_SAFE_INTEGER} className={classes.navbarBreadcrumbs} classes={{ ol: classes.breadcrumbList, li: classes.breadcrumbItem, separator: classes.separator }}>
+           {folderChainComponents}
+         </Breadcrumbs>
++        <ToolbarButton text="Copy path" icon={ChonkyIconName.copy} iconOnly tooltip={copyLabel} onClick={() => void copyPath()} />
++        <Menu anchorEl={ancestorAnchor} open={!!ancestorAnchor} onClose={() => setAncestorAnchor(null)}>
++          {collapsedAncestors.map((item, index) => <MenuItem key={item.file?.id ?? index} disabled={item.disabled || !item.onClick} onClick={() => {
++            setAncestorAnchor(null);
++            item.onClick?.();
++          }}>{item.file?.name ?? 'Loading…'}</MenuItem>)}
++        </Menu>
+       </Box>
+     </Box>
+   );
+@@ -51,23 +118,38 @@ export const FileNavbar: React.FC<FileNavbarProps> = React.memo(() => {
+ 
+ const useStyles = makeGlobalChonkyStyles((theme) => ({
+   navbarWrapper: {
+-    paddingBottom: theme.margins.rootLayoutMargin,
++    paddingBottom: 2,
+   },
+   navbarContainer: {
+     display: 'flex',
++    alignItems: 'center',
++    minWidth: 0,
+   },
+   upDirectoryButton: {
+-    fontSize: important(theme.toolbar.fontSize),
++    fontSize: important(13),
+     height: theme.toolbar.size,
+     width: theme.toolbar.size,
+     padding: '0px !important',
+   },
+   navbarBreadcrumbs: {
+-    fontSize: important(theme.toolbar.fontSize),
++    fontSize: important(13),
+     flexGrow: 100,
++    minWidth: 0,
++  },
++  breadcrumbList: {
++    flexWrap: 'nowrap',
++    minWidth: 0,
++  },
++  breadcrumbItem: {
++    minWidth: 0,
++    '&:first-child': { maxWidth: '55%', flexShrink: 0 },
++    '&:last-child': { flexShrink: 1, overflow: 'hidden' },
+   },
+   separator: {
+-    marginRight: important(4),
+-    marginLeft: important(4),
++    width: separatorWidth,
++    flex: `0 0 ${separatorWidth}px`,
++    justifyContent: 'center',
++    marginRight: important(0),
++    marginLeft: important(0),
+   },
+ }));
+diff --git a/src/components/external/FolderChainButton.tsx b/src/components/external/FolderChainButton.tsx
+index d341e25..1600cd9 100644
+--- a/src/components/external/FolderChainButton.tsx
++++ b/src/components/external/FolderChainButton.tsx
+@@ -63,8 +63,18 @@ export const FolderChainButton: React.FC<FolderChainButtonProps> = React.memo(({
+ const useStyles = makeLocalChonkyStyles((theme) => ({
+   buttonContainer: {
+     position: 'relative',
++    minWidth: 0,
+   },
+   baseBreadcrumb: {
++    fontSize: '13px !important',
++    minHeight: '28px !important',
++    padding: '2px !important',
++    maxWidth: '100%',
++    '& [data-chonky-toolbar-label]': {
++      overflow: 'hidden',
++      textOverflow: 'ellipsis',
++      whiteSpace: 'nowrap',
++    },
+     color: (dndState: DndEntryState) => {
+       let color = theme.palette.text.primary;
+       if (dndState.dndIsOver) {
+diff --git a/src/components/external/ToolbarSearch.tsx b/src/components/external/ToolbarSearch.tsx
+index e52e843..1aa83ba 100644
+--- a/src/components/external/ToolbarSearch.tsx
++++ b/src/components/external/ToolbarSearch.tsx
+@@ -96,7 +96,7 @@ export const ToolbarSearch: React.FC<ToolbarSearchProps> = React.memo(() => {
+ 
+   if (!expanded) {
+     return (
+-      <ToolbarButton text="" tooltip={searchPlaceholderString} icon={ChonkyIconName.search} iconOnly onClick={expand} />
++      <ToolbarButton text="" tooltip={searchPlaceholderString} icon={ChonkyIconName.filter} iconOnly onClick={expand} />
+     );
+   }
+ 
+@@ -118,7 +118,7 @@ export const ToolbarSearch: React.FC<ToolbarSearchProps> = React.memo(() => {
+           startAdornment: (
+             <InputAdornment className={classes.searchIcon} position="start">
+               <ChonkyIcon
+-                icon={showLoadingIndicator ? ChonkyIconName.loading : ChonkyIconName.search}
++                icon={showLoadingIndicator ? ChonkyIconName.loading : ChonkyIconName.filter}
+                 spin={showLoadingIndicator}
+               />
+             </InputAdornment>
+diff --git a/src/components/file-list/DnDFileEntry.tsx b/src/components/file-list/DnDFileEntry.tsx
+index 83d6d13..7d01ee3 100644
+--- a/src/components/file-list/DnDFileEntry.tsx
++++ b/src/components/file-list/DnDFileEntry.tsx
+@@ -1,4 +1,4 @@
+-import React from 'react';
++import React, { useCallback } from 'react';
+ import { Nullable } from 'tsdef';
+ 
+ import { DndEntryState } from '../../types/file-list.types';
+@@ -14,12 +14,24 @@ export interface DnDFileEntryProps {
+ 
+ export const DnDFileEntry = React.memo(({ file, children }: DnDFileEntryProps) => {
+   const { drop, drag, dndState } = useFileEntryDnD(file);
++  const dropRef = useCallback(
++    (element: HTMLDivElement | null) => {
++      drop(element);
++    },
++    [drop],
++  );
++  const dragRef = useCallback(
++    (element: HTMLDivElement | null) => {
++      drag(element);
++    },
++    [drag],
++  );
+ 
+   useDndHoverOpen(file, dndState);
+   const classes = useStyles();
+   return (
+-    <div ref={(element) => void drop(element)} className={classes.fillParent}>
+-      <div ref={FileHelper.isDraggable(file) ? (element) => void drag(element) : null} className={classes.fillParent}>
++    <div ref={dropRef} className={classes.fillParent}>
++      <div ref={FileHelper.isDraggable(file) ? dragRef : null} className={classes.fillParent}>
+         {children(dndState)}
+       </div>
+     </div>
+diff --git a/src/components/file-list/DnDFileListDragLayer.tsx b/src/components/file-list/DnDFileListDragLayer.tsx
+index 246098b..6d13da4 100644
+--- a/src/components/file-list/DnDFileListDragLayer.tsx
++++ b/src/components/file-list/DnDFileListDragLayer.tsx
+@@ -8,6 +8,8 @@ import React from 'react';
+ import { useDragLayer } from 'react-dnd';
+ import { Nullable } from 'tsdef';
+ 
++import { selectInstanceId } from '../../redux/selectors';
++import { useChonkySelector } from '../../redux/store';
+ import { ChonkyDndFileEntryItem, ChonkyDndFileEntryType } from '../../types/dnd.types';
+ import { makeGlobalChonkyStyles } from '../../util/styles';
+ 
+@@ -43,6 +45,7 @@ const getItemStyles = (
+ 
+ export const DnDFileListDragLayer: React.FC<DnDFileListDragLayerProps> = () => {
+   const classes = useStyles();
++  const instanceId = useChonkySelector(selectInstanceId);
+ 
+   const { itemType, item, initialCursorOffset, initialFileOffset, currentFileOffset, isDragging } = useDragLayer(
+     (monitor) => ({
+@@ -54,7 +57,7 @@ export const DnDFileListDragLayer: React.FC<DnDFileListDragLayerProps> = () => {
+       isDragging: monitor.isDragging(),
+     }),
+   );
+-  if (!isDragging || itemType !== ChonkyDndFileEntryType || !item.payload) {
++  if (!isDragging || itemType !== ChonkyDndFileEntryType || item?.payload?.sourceInstanceId !== instanceId) {
+     return null;
+   }
+ 
+diff --git a/src/components/file-list/FileEntryStatus.tsx b/src/components/file-list/FileEntryStatus.tsx
+new file mode 100644
+index 0000000..fe22fc0
+--- /dev/null
++++ b/src/components/file-list/FileEntryStatus.tsx
+@@ -0,0 +1,21 @@
++import React from 'react';
++import Tooltip from '@mui/material/Tooltip';
++import { FileData } from '../../types/file.types';
++
++export const FileEntryStatus = ({ status, reserve = false }: { status?: FileData['status']; reserve?: boolean }) => {
++  if (!status) return reserve ? <span aria-hidden="true" data-chonky-status-slot style={{ flex: '0 0 28px', width: 28 }} /> : null;
++  return (
++    <Tooltip title={status.label} placement="left" arrow>
++      <span
++        role="img"
++        aria-label={status.label}
++        tabIndex={0}
++        data-chonky-status-slot
++        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 28px', width: 28, height: 24, position: 'relative', zIndex: 20 }}
++      >
++        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: status.color }} />
++        {status.marker && <span aria-hidden="true" style={{ color: status.marker.color, fontSize: 11, fontWeight: 700, lineHeight: 1, marginLeft: 2 }}>{status.marker.kind === 'unknown' ? '?' : status.marker.kind === 'changed' ? 'Δ' : '!'}</span>}
++      </span>
++    </Tooltip>
++  );
++};
+diff --git a/src/components/file-list/FileList.tsx b/src/components/file-list/FileList.tsx
+index 0b12186..1378b73 100644
+--- a/src/components/file-list/FileList.tsx
++++ b/src/components/file-list/FileList.tsx
+@@ -1,4 +1,4 @@
+-import React, { UIEvent, useContext, useMemo } from 'react';
++import React, { UIEvent, useCallback, useContext, useMemo } from 'react';
+ import { useChonkySelector } from '../../redux/store';
+ 
+ import { ChonkyActions } from '../../action-definitions/index';
+@@ -14,6 +14,8 @@ import { ListContainer } from './ListContainer';
+ 
+ export interface FileListProps {
+   onScroll?: (e: UIEvent<HTMLDivElement>) => void;
++  /** Optional content for an empty list, such as a loading or directory-read error state. */
++  emptyPlaceholder?: React.ReactNode;
+ }
+ 
+ interface StyleState {
+@@ -27,25 +29,27 @@ export const FileList: React.FC<FileListProps> = React.memo((props: FileListProp
+ 
+   const currentFolder = useChonkySelector(selectCurrentFolder);
+   const { drop, dndCanDrop, dndIsOverCurrent } = useFileDrop({ file: currentFolder });
++  const dropRef = useCallback(
++    (element: HTMLDivElement | null) => {
++      drop(element);
++    },
++    [drop],
++  );
+   const styleState = useMemo<StyleState>(() => ({ dndCanDrop, dndIsOverCurrent }), [dndCanDrop, dndIsOverCurrent]);
+ 
+   const localClasses = useLocalStyles(styleState);
+   const classes = useStyles(viewConfig);
+-  const { onScroll } = props;
++  const { onScroll, emptyPlaceholder } = props;
+ 
+   const list = useMemo(() => {
+-    if (displayFileIds.length === 0) return <FileListEmpty height={viewConfig.entryHeight} />;
++    if (displayFileIds.length === 0) return emptyPlaceholder ?? <FileListEmpty height={viewConfig.entryHeight} />;
+     if (viewConfig.mode === FileViewMode.List) return <ListContainer onScroll={onScroll} />;
+     return <GridContainer onScroll={onScroll} />;
+-  }, [displayFileIds.length, onScroll, viewConfig.entryHeight, viewConfig.mode]);
++  }, [displayFileIds.length, emptyPlaceholder, onScroll, viewConfig.entryHeight, viewConfig.mode]);
+ 
+   const ChonkyIcon = useContext(ChonkyIconContext);
+   return (
+-    <div
+-      ref={(element) => void drop(element)}
+-      className={c([classes.fileListWrapper, localClasses.fileListWrapper])}
+-      role="list"
+-    >
++    <div ref={dropRef} className={c([classes.fileListWrapper, localClasses.fileListWrapper])} role="list">
+       <div className={localClasses.dndDropZone}>
+         <div className={localClasses.dndDropZoneIcon}>
+           <ChonkyIcon icon={dndCanDrop ? ChonkyIconName.dndCanDrop : ChonkyIconName.dndCannotDrop} />
+@@ -91,7 +95,8 @@ const useLocalStyles = makeLocalChonkyStyles((theme) => ({
+     zIndex: 2,
+   },
+   dndDropZoneIcon: {
+-    backgroundColor: (state: StyleState) => (state.dndCanDrop ? theme.dnd.canDropMask : theme.dnd.cannotDropMask),
++    backgroundColor: (state: StyleState) =>
++      state.dndCanDrop ? theme.dnd.canDropMask : theme.dnd.cannotDropMask,
+     color: (state: StyleState) => (state.dndCanDrop ? theme.dnd.canDropColor : theme.dnd.cannotDropColor),
+     borderRadius: theme.gridFileEntry.borderRadius,
+     transform: 'translateX(-50%) translateY(-50%)',
+diff --git a/src/components/file-list/GridEntry.tsx b/src/components/file-list/GridEntry.tsx
+index 6744b97..9a32c98 100644
+--- a/src/components/file-list/GridEntry.tsx
++++ b/src/components/file-list/GridEntry.tsx
+@@ -1,4 +1,5 @@
+ import React from 'react';
++import { FileEntryStatus } from './FileEntryStatus';
+ 
+ import { FileEntryProps } from '../../types/file-list.types';
+ import { FileHelper } from '../../util/file-helper';
+@@ -25,6 +26,7 @@ export const GridEntry: React.FC<FileEntryProps> = React.memo(({ file, selected,
+       )}
+       <div className={classes.gridFileEntryNameContainer}>
+         <FileEntryName className={classes.gridFileEntryName} file={file} />
++        <FileEntryStatus status={file?.status} />
+       </div>
+     </div>
+   );
+diff --git a/src/components/file-list/GroupedFileList.tsx b/src/components/file-list/GroupedFileList.tsx
+new file mode 100644
+index 0000000..8765df4
+--- /dev/null
++++ b/src/components/file-list/GroupedFileList.tsx
+@@ -0,0 +1,129 @@
++import React, { ReactNode, useEffect, useId } from 'react';
++import { reduxActions } from '../../redux/reducers';
++import { selectFileViewConfig, selectors } from '../../redux/selectors';
++import { useChonkyDispatch, useChonkySelector } from '../../redux/store';
++import { makeLocalChonkyStyles } from '../../util/styles';
++import { FileList } from './FileList';
++
++export interface FileGroup {
++  id: string;
++  name: string;
++  description?: string;
++  badge?: string;
++}
++
++export interface GroupedFileListProps {
++  groups: FileGroup[];
++  /** One group is expanded at a time. The surrounding FileBrowser owns its loaded members. */
++  activeGroupId?: string;
++  onGroupChange: (id: string | undefined) => void;
++  disabled?: boolean;
++  /** Query/loading controls belong to the caller, not the generic browser. */
++  beforeFiles?: ReactNode;
++  afterFiles?: ReactNode;
++}
++
++/** Controlled grouping around the ordinary file list; group headers are never selectable Files. */
++export const GroupedFileList = ({
++  groups,
++  activeGroupId,
++  onGroupChange,
++  disabled,
++  beforeFiles,
++  afterFiles,
++}: GroupedFileListProps) => {
++  const classes = useStyles();
++  const id = useId();
++  const dispatch = useChonkyDispatch();
++  const view = useChonkySelector(selectFileViewConfig);
++  const count = useChonkySelector(selectors.getDisplayFileIds).length;
++  useEffect(() => {
++    dispatch(reduxActions.clearSelection());
++  }, [activeGroupId, dispatch]);
++  return (
++    <div className={classes.groups}>
++      {groups.map((group, index) => {
++        const expanded = activeGroupId === group.id;
++        const panel = `${id}-${index}`;
++        return (
++          <section key={group.id} className={classes.group}>
++            <button
++              type="button"
++              className={classes.heading}
++              aria-expanded={expanded}
++              aria-controls={panel}
++              disabled={disabled}
++              onClick={() => onGroupChange(expanded ? undefined : group.id)}
++            >
++              <span aria-hidden="true" className={classes.chevron}>
++                {expanded ? '⌄' : '›'}
++              </span>
++              <span className={classes.label}>
++                <strong title={group.name}>{group.name}</strong>
++                {group.description && <span>{group.description}</span>}
++              </span>
++              {group.badge && <span className={classes.badge}>{group.badge}</span>}
++            </button>
++            {expanded && (
++              <div id={panel}>
++                {beforeFiles}
++                {!!count && (
++                  <div
++                    style={{
++                      height: Math.max(160, Math.min(count, 6) * view.entryHeight),
++                      display: 'flex',
++                      flexDirection: 'column',
++                      minHeight: 0,
++                    }}
++                  >
++                    <FileList />
++                  </div>
++                )}
++                {afterFiles}
++              </div>
++            )}
++          </section>
++        );
++      })}
++    </div>
++  );
++};
++
++const useStyles = makeLocalChonkyStyles((theme) => ({
++  groups: { minWidth: 0 },
++  group: { border: `1px solid ${theme.palette.divider}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden' },
++  heading: {
++    display: 'flex',
++    alignItems: 'center',
++    width: '100%',
++    gap: 6,
++    padding: '12px 8px',
++    border: 0,
++    background: 'transparent',
++    color: 'inherit',
++    textAlign: 'left',
++    font: 'inherit',
++    cursor: 'pointer',
++    '&:hover': { background: theme.palette.action.hover },
++    '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
++    '&:disabled': { opacity: 0.6, cursor: 'default' },
++  },
++  chevron: { flexShrink: 0, width: 18, fontSize: 20, textAlign: 'center' },
++  label: {
++    minWidth: 0,
++    flex: 1,
++    display: 'flex',
++    flexDirection: 'column',
++    gap: 4,
++    '& strong': { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 14 },
++    '& > span': { fontSize: 12, color: theme.palette.text.secondary, lineHeight: 1.5 },
++  },
++  badge: {
++    flexShrink: 0,
++    borderRadius: 6,
++    background: theme.palette.action.selected,
++    fontSize: 12,
++    fontWeight: 600,
++    padding: '5px 7px',
++  },
++}));
+diff --git a/src/components/file-list/ListContainer.tsx b/src/components/file-list/ListContainer.tsx
+index 6ac5ce0..914170a 100644
+--- a/src/components/file-list/ListContainer.tsx
++++ b/src/components/file-list/ListContainer.tsx
+@@ -4,12 +4,12 @@
+  * @license MIT
+  */
+ 
+-import React, { CSSProperties, UIEvent, useCallback, useEffect, useRef } from 'react';
++import React, { CSSProperties, UIEvent, useCallback, useEffect, useMemo, useRef } from 'react';
+ import { useChonkyDispatch, useChonkySelector } from '../../redux/store';
+ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+ 
+ import { reduxActions } from '../../redux/reducers';
+-import { selectFileViewConfig, selectRevealFileRequest, selectors } from '../../redux/selectors';
++import { selectFileMap, selectFileViewConfig, selectRevealFileRequest, selectors } from '../../redux/selectors';
+ import { FileViewMode } from '../../types/file-view.types';
+ import { makeGlobalChonkyStyles } from '../../util/styles';
+ import { SmartFileEntry } from './FileEntry';
+@@ -23,6 +23,11 @@ export const ListContainer: React.FC<FileListListProps> = React.memo(({ onScroll
+   const dispatch = useChonkyDispatch();
+   const viewConfig = useChonkySelector(selectFileViewConfig);
+   const displayFileIds = useChonkySelector(selectors.getDisplayFileIds);
++  const fileMap = useChonkySelector(selectFileMap);
++  const hasDetails = useMemo(
++    () => displayFileIds.some((id) => id && fileMap[id]?.details?.length),
++    [displayFileIds, fileMap],
++  );
+   const revealFileRequest = useChonkySelector(selectRevealFileRequest);
+   const virtuosoRef = useRef<VirtuosoHandle>(null);
+ 
+@@ -37,11 +42,11 @@ export const ListContainer: React.FC<FileListListProps> = React.memo(({ onScroll
+   const getItemKey = useCallback((index: number) => getFileId(index) ?? `loading-file-${index}`, [getFileId]);
+   const renderItem = useCallback(
+     (index: number) => (
+-      <div style={{ height: viewConfig.entryHeight }}>
++      <div style={hasDetails ? { minHeight: viewConfig.entryHeight } : { height: viewConfig.entryHeight }}>
+         <SmartFileEntry fileId={getFileId(index)} displayIndex={index} fileViewMode={FileViewMode.List} />
+       </div>
+     ),
+-    [getFileId, viewConfig.entryHeight],
++    [getFileId, hasDetails, viewConfig.entryHeight],
+   );
+ 
+   return (
+@@ -50,7 +55,8 @@ export const ListContainer: React.FC<FileListListProps> = React.memo(({ onScroll
+       className={classes.listContainer}
+       style={containerStyle}
+       totalCount={displayFileIds.length}
+-      fixedItemHeight={viewConfig.entryHeight}
++      fixedItemHeight={hasDetails ? undefined : viewConfig.entryHeight}
++      defaultItemHeight={viewConfig.entryHeight}
+       computeItemKey={getItemKey}
+       itemContent={renderItem}
+       onScroll={onScroll}
+diff --git a/src/components/file-list/ListEntry.tsx b/src/components/file-list/ListEntry.tsx
+index f0cd9c0..f260ff3 100644
+--- a/src/components/file-list/ListEntry.tsx
++++ b/src/components/file-list/ListEntry.tsx
+@@ -1,4 +1,7 @@
+ import React, { useContext, useMemo } from 'react';
++import { FileEntryStatus } from './FileEntryStatus';
++import { selectFileViewConfig } from '../../redux/selectors';
++import { useChonkySelector } from '../../redux/store';
+ 
+ import { DndEntryState, FileEntryProps } from '../../types/file-list.types';
+ import { useLocalizedFileEntryStrings } from '../../util/i18n';
+@@ -12,19 +15,25 @@ import { FileEntryState, useCommonEntryStyles } from './GridEntryPreview';
+ interface StyleState {
+   entryState: FileEntryState;
+   dndState: DndEntryState;
++  entryHeight: number;
++  hasDetails: boolean;
+ }
+ 
+ export const ListEntry: React.FC<FileEntryProps> = React.memo(({ file, selected, focused, dndState }) => {
+   const entryState: FileEntryState = useFileEntryState(file, selected, focused);
+   const dndIconName = useDndIcon(dndState);
++  const entryHeight = useChonkySelector(selectFileViewConfig).entryHeight;
++  const hasDetails = !!file?.details?.length;
+ 
+   const { fileModDateString, fileSizeString } = useLocalizedFileEntryStrings(file);
+   const styleState = useMemo<StyleState>(
+     () => ({
+       entryState,
+       dndState,
++      entryHeight,
++      hasDetails,
+     }),
+-    [dndState, entryState],
++    [dndState, entryState, entryHeight, hasDetails],
+   );
+   const classes = useStyles(styleState);
+   const commonClasses = useCommonEntryStyles(entryState);
+@@ -43,13 +52,23 @@ export const ListEntry: React.FC<FileEntryProps> = React.memo(({ file, selected,
+       </div>
+       <div className={classes.listFileEntryName} title={file ? file.name : undefined}>
+         <FileEntryName file={file} />
++        {file?.details?.map((detail, index) => (
++          <div key={index} className={classes.listFileEntryDetail} title={detail}>
++            {detail}
++          </div>
++        ))}
+       </div>
+-      <div className={classes.listFileEntryProperty}>
+-        {file ? (fileModDateString ?? <span>—</span>) : <TextPlaceholder minLength={5} maxLength={15} />}
+-      </div>
+-      <div className={classes.listFileEntryProperty}>
+-        {file ? (fileSizeString ?? <span>—</span>) : <TextPlaceholder minLength={10} maxLength={20} />}
+-      </div>
++      {!file?.details?.length && (
++        <div className={classes.listFileEntryProperty}>
++          {file ? (fileModDateString ?? <span>—</span>) : <TextPlaceholder minLength={5} maxLength={15} />}
++        </div>
++      )}
++      {!file?.details?.length && (
++        <div className={classes.listFileEntryProperty}>
++          {file ? (fileSizeString ?? <span>—</span>) : <TextPlaceholder minLength={10} maxLength={20} />}
++        </div>
++      )}
++      <FileEntryStatus status={file?.status} reserve />
+     </div>
+   );
+ });
+@@ -59,6 +78,9 @@ const useStyles = makeLocalChonkyStyles((theme) => ({
+     boxShadow: `inset ${theme.palette.divider} 0 -1px 0`,
+     paddingRight: theme.margins.rootLayoutMargin,
+     paddingLeft: theme.margins.rootLayoutMargin,
++    paddingTop: ({ hasDetails }: StyleState) => hasDetails ? 4 : 0,
++    paddingBottom: ({ hasDetails }: StyleState) => hasDetails ? 4 : 0,
++    minHeight: ({ entryHeight }: StyleState) => entryHeight,
+     boxSizing: 'border-box',
+     fontSize: theme.listFileEntry.fontSize,
+     color: ({ dndState }: StyleState) =>
+@@ -72,6 +94,9 @@ const useStyles = makeLocalChonkyStyles((theme) => ({
+     opacity: 0.6,
+   },
+   listFileEntryIcon: {
++    flex: '0 0 28px',
++    width: 28,
++    textAlign: 'center',
+     color: ({ entryState, dndState }: StyleState) =>
+       dndState.dndIsOver
+         ? dndState.dndCanDrop
+@@ -101,4 +126,12 @@ const useStyles = makeLocalChonkyStyles((theme) => ({
+     padding: [2, 8],
+     zIndex: 20,
+   },
++  listFileEntryDetail: {
++    color: theme.palette.text.secondary,
++    fontSize: theme.listFileEntry.propertyFontSize,
++    textOverflow: 'ellipsis',
++    whiteSpace: 'nowrap',
++    overflow: 'hidden',
++    lineHeight: '18px',
++  },
+ }));
+diff --git a/src/components/internal/ChonkyPresentationLayer.tsx b/src/components/internal/ChonkyPresentationLayer.tsx
+index d9b4130..4920afe 100644
+--- a/src/components/internal/ChonkyPresentationLayer.tsx
++++ b/src/components/internal/ChonkyPresentationLayer.tsx
+@@ -6,7 +6,7 @@
+ 
+ import Box from '@mui/material/Box';
+ import ClickAwayListener from '@mui/material/ClickAwayListener';
+-import React, { useCallback, useMemo } from 'react';
++import React, { useCallback, useMemo, useRef } from 'react';
+ import { useChonkyDispatch, useChonkySelector } from '../../redux/store';
+ 
+ import { reduxActions } from '../../redux/reducers';
+@@ -21,9 +21,11 @@ import { HotkeyListener } from './HotkeyListener';
+ 
+ export interface ChonkyPresentationLayerProps {
+   children?: React.ReactNode;
++  footer?: React.ReactNode;
+ }
+ 
+-export const ChonkyPresentationLayer: React.FC<ChonkyPresentationLayerProps> = ({ children }) => {
++export const ChonkyPresentationLayer: React.FC<ChonkyPresentationLayerProps> = ({ children, footer }) => {
++  const browserRef = useRef<HTMLDivElement>(null);
+   const dispatch: ChonkyDispatch = useChonkyDispatch();
+   const fileActionIds = useChonkySelector(selectFileActionIds);
+   const dndDisabled = useChonkySelector(selectIsDnDDisabled);
+@@ -48,7 +50,7 @@ export const ChonkyPresentationLayer: React.FC<ChonkyPresentationLayerProps> = (
+   const hotkeyListenerComponents = useMemo(
+     () =>
+       fileActionIds.map((actionId) => (
+-        <HotkeyListener key={`file-action-listener-${actionId}`} fileActionId={actionId} />
++        <HotkeyListener key={`file-action-listener-${actionId}`} fileActionId={actionId} browserRef={browserRef} />
+       )),
+     [fileActionIds],
+   );
+@@ -57,18 +59,53 @@ export const ChonkyPresentationLayer: React.FC<ChonkyPresentationLayerProps> = (
+   const showContextMenu = useContextMenuTrigger();
+ 
+   const classes = useStyles();
++  const hasFooter = footer != null && footer !== false;
+   return (
+     <ClickAwayListener onClickAway={handleClickAway}>
+-      <Box className={classes.chonkyRoot} onContextMenu={showContextMenu}>
++      <Box
++        ref={browserRef}
++        tabIndex={0}
++        className={classes.chonkyRoot}
++        onPointerDownCapture={(event) => {
++          const target = event.target as HTMLElement;
++          if (target.closest('input,textarea,select,button,a,[contenteditable="true"]')) return;
++          browserRef.current?.focus({ preventScroll: true });
++        }}
++        onContextMenu={hasFooter ? undefined : showContextMenu}
++      >
+         {!dndDisabled && dndContextAvailable && <DnDFileListDragLayer />}
+         {hotkeyListenerComponents}
+-        {children ? children : null}
++        {hasFooter ? (
++          <>
++            <Box className={classes.browserBody} onContextMenu={showContextMenu}>
++              {children}
++            </Box>
++            <Box className={classes.browserFooter}>{footer}</Box>
++          </>
++        ) : children}
+       </Box>
+     </ClickAwayListener>
+   );
+ };
+ 
+ const useStyles = makeGlobalChonkyStyles((theme) => ({
++  browserBody: {
++    display: 'flex',
++    flexDirection: 'column',
++    flex: '1 1 0',
++    minHeight: 0,
++    minWidth: 0,
++  },
++  browserFooter: {
++    display: 'flex',
++    flexDirection: 'column',
++    flex: '0 1 auto',
++    minHeight: 0,
++    maxHeight: '50%',
++    overflow: 'auto',
++    borderTop: `1px solid ${theme.palette.divider}`,
++    userSelect: 'text',
++  },
+   chonkyRoot: {
+     backgroundColor: theme.palette.background.paper,
+     border: theme.root.borderStyle ? `${theme.root.borderStyle} ${theme.palette.divider}` : undefined,
+diff --git a/src/components/internal/HotkeyListener.tsx b/src/components/internal/HotkeyListener.tsx
+index eba8c2d..38059f7 100644
+--- a/src/components/internal/HotkeyListener.tsx
++++ b/src/components/internal/HotkeyListener.tsx
+@@ -15,10 +15,11 @@ import { ChonkyDispatch } from '../../types/redux.types';
+ 
+ export interface HotkeyListenerProps {
+   fileActionId: string;
++  browserRef: React.RefObject<HTMLDivElement | null>;
+ }
+ 
+ export const HotkeyListener: React.FC<HotkeyListenerProps> = React.memo((props) => {
+-  const { fileActionId } = props;
++  const { fileActionId, browserRef } = props;
+ 
+   const dispatch: ChonkyDispatch = useChonkyDispatch();
+   const fileAction = useParamSelector(selectFileActionData, fileActionId);
+@@ -30,12 +31,13 @@ export const HotkeyListener: React.FC<HotkeyListenerProps> = React.memo((props)
+ 
+     const hotkeysStr = fileAction.hotkeys.join(',');
+     const hotkeyCallback = (event: KeyboardEvent) => {
++      if (!browserRef.current?.contains(document.activeElement)) return;
+       event.preventDefault();
+       dispatch(thunkRequestFileAction(fileAction, undefined));
+     };
+     hotkeys(hotkeysStr, hotkeyCallback);
+     return () => hotkeys.unbind(hotkeysStr, hotkeyCallback);
+-  }, [dispatch, fileAction]);
++  }, [dispatch, fileAction, browserRef]);
+ 
+   return null;
+ });
+diff --git a/src/index.ts b/src/index.ts
+index 816ddc9..947dc4d 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -5,6 +5,8 @@ export { FileBrowser } from './components/external/FileBrowser';
+ export { FileNavbar } from './components/external/FileNavbar';
+ export { FileToolbar } from './components/external/FileToolbar';
+ export { FileList } from './components/file-list/FileList';
++export { GroupedFileList } from './components/file-list/GroupedFileList';
++export type { FileGroup, GroupedFileListProps } from './components/file-list/GroupedFileList';
+ export { FileContextMenu } from './components/external/FileContextMenu';
+ export { FullFileBrowser } from './components/external/FullFileBrowser';
+ 
+diff --git a/src/types/file-browser.types.ts b/src/types/file-browser.types.ts
+index 3279256..97f9120 100644
+--- a/src/types/file-browser.types.ts
++++ b/src/types/file-browser.types.ts
+@@ -1,4 +1,4 @@
+-import { ElementType, UIEvent } from 'react';
++import { ElementType, ReactNode, UIEvent } from 'react';
+ import { Nullable } from 'tsdef';
+ import { ThemeOptions as MuiThemeOptions } from '@mui/material/styles';
+ import { DeepPartial } from 'tsdef';
+@@ -54,6 +54,9 @@ export type ChonkyActionUnion = (typeof ChonkyActions)[keyof typeof ChonkyAction
+  * Props for the `FileBrowser` component that is exposed to library users.
+  */
+ export interface FileBrowserProps {
++  /** Optional bottom content inside the browser frame, outside the file-list scroll area. */
++  footer?: ReactNode;
++
+   /**
+    * An ID used to identify this particular Chonky instance. Useful when there are
+    * multiple Chonky instances on the same page, and they need to interact with
+diff --git a/src/types/file.types.ts b/src/types/file.types.ts
+index 30f6c39..e4541aa 100644
+--- a/src/types/file.types.ts
++++ b/src/types/file.types.ts
+@@ -3,6 +3,10 @@ import { Nullable, Undefinable } from 'tsdef';
+ import { ChonkyIconName } from './icons.types';
+ 
+ export interface FileData {
++  /** Optional accessible status, rendered after properties without changing file interactions. */
++  status?: { label: string; color: string; marker?: { label: string; color: string; kind: 'warning' | 'changed' | 'unknown' } };
++  /** Optional secondary metadata lines in list view; use a sufficiently tall list entry. */
++  details?: string[];
+   id: string; // (Required) String that uniquely identifies the file
+   name: string; // (Required) Full name, e.g. `MyImage.jpg`
+   ext?: string; // File extension, e.g. `.jpg`
+diff --git a/src/types/icons.types.ts b/src/types/icons.types.ts
+index f8d15e4..e686923 100644
+--- a/src/types/icons.types.ts
++++ b/src/types/icons.types.ts
+@@ -18,6 +18,7 @@ export enum ChonkyIconName {
+   paste = 'paste',
+   share = 'share',
+   search = 'search',
++  filter = 'filter',
+   selectAllFiles = 'selectAllFiles',
+   clearSelection = 'clearSelection',
+ 

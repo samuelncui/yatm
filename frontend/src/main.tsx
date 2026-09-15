@@ -1,13 +1,4 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import App from "./app";
-import "./index.css";
+import "./mui-classnames";
 
-import "./init";
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <BrowserRouter>
-    <App />
-  </BrowserRouter>
-);
+// Keep component evaluation behind initialization, including production shared chunks.
+void import("./bootstrap");

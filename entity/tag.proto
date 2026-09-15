@@ -1,0 +1,8 @@
+syntax = "proto3";
+package tag;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+message Tag {
+    string name = 1;
+    int64 file_count = 2;
+}

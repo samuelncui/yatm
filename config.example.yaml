@@ -19,12 +19,45 @@ tape_devices:
 paths:
   # to save logs and write reports
   work: ./
-  # source in backup job creator
-  source: ./
-  # restore job target path
-  target: ./
+  # Administrator boundaries; register original/restore directories in Settings -> Locations.
+  # An explicit empty list denies access. Ignore uses ordered gitignore rules.
+  access:
+    - root: /srv/files
+      ignore: |
+        /private/
+    - root: /srv/restored
+  # roots that contain already mounted offline Volumes
+  volumes:
+    - /mnt
 
-# those scripts interact with external software, you may need to change them for your use cases.
+# Preview bundles are addressed by content signature.
+preview:
+  root: ./previews
+  generators:
+    - kind: image
+      extensions: [jpg, jpeg, png, webp, heic]
+      options:
+        command: ffmpeg
+        max_width: 512
+        max_height: 512
+        format: webp # webp, jpeg, or png
+        quality: 80
+    - kind: video
+      extensions: [mp4, mov, mkv, avi]
+      options:
+        ffmpeg: ffmpeg
+        ffprobe: ffprobe
+        poster_width: 512
+        poster_height: 512
+        timeline_width: 160
+        timeline_height: 90
+        timeline_interval_seconds: 10
+        timeline_max_frames: 100
+        format: webp # webp, jpeg, or png
+        quality: 75
+
+# Scripts receive TAPE_DIR after the barcode is known. Store LTFS logs and exported indexes there.
+# These scripts interact with external software and may need platform-specific changes.
 scripts:
   # enable hardware encryption on tape driver
   encrypt: ./scripts/encrypt

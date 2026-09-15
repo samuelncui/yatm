@@ -1,23 +1,228 @@
-.detail-content {
-  .position {
-    .app-MuiDialogContent-dividers {
-        border-bottom: none;
-    }
+.file-inspector {
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dce4ee;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 28px rgba(15, 23, 42, 0.05);
+}
 
-    .app-MuiGrid-item {
-        width: 100%;
-        padding: 0.5em;
-    
-        p, pre {
-          margin: 0.2em 0;
-    
-          white-space: pre-wrap;       /* Since CSS 2.1 */
-          white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
-          white-space: -pre-wrap;      /* Opera 4-6 */
-          white-space: -o-pre-wrap;    /* Opera 7 */
-          word-wrap: break-word;       /* Internet Explorer 5.5+ */
-        }
-    }
+.file-inspector-header {
+  height: 64px;
+  min-height: 64px;
+  flex: 0 0 64px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 20px 18px;
+  row-gap: 2px;
+  align-content: center;
+  border-bottom: 1px solid #e1e7ef;
+  text-align: left;
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #172033;
+    font-size: 15px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    color: #7a8797;
+    font-size: 12px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
+.file-inspector-body {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.file-inspector-empty {
+  padding: 40px 24px;
+  color: #98a2b3;
+  font-size: 14px;
+  text-align: center;
+}
+
+.file-detail-content {
+  padding: 20px;
+  color: #344054;
+  text-align: left;
+}
+
+.file-detail-preview {
+  min-height: 160px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  color: #5f7da0;
+  background: #f3f6fa;
+
+  svg {
+    font-size: 48px;
+  }
+
+  > img {
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: auto;
+    max-height: 320px;
+    aspect-ratio: 16 / 9;
+    display: block;
+    border-radius: inherit;
+    object-fit: contain;
+  }
+}
+
+.file-detail-video-preview {
+  width: 100%;
+  display: grid;
+  grid-template-rows: auto 42px;
+}
+
+.file-detail-video-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+
+  img,
+  span {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  img {
+    object-fit: contain;
+  }
+
+  span {
+    background-repeat: no-repeat;
+  }
+}
+
+.file-detail-video-controls {
+  min-width: 0;
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  color: #f8fafc;
+  background: #172033;
+
+  input {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    accent-color: #61a8ea;
+  }
+
+  output {
+    min-width: 72px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}
+
+.file-detail-summary,
+.file-detail-position dl {
+  margin: 20px 0 0;
+  display: grid;
+  grid-template-columns: minmax(100px, 0.35fr) minmax(0, 1fr);
+  gap: 10px 16px;
+
+  dt {
+    color: #7a8797;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #344054;
+    font-size: 13px;
+  }
+}
+
+.file-detail-hash,
+.file-detail-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.file-detail-note {
+  white-space: pre-wrap;
+}
+
+.file-detail-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.file-detail-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e7ecf2;
+
+  h3 {
+    margin: 0 0 12px;
+    color: #172033;
+    font-size: 14px;
+  }
+}
+
+.file-detail-position {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #e1e7ef;
+  border-radius: 9px;
+  background: #fafbfd;
+
+  > strong {
+    color: #1d4ed8;
+    font-size: 13px;
+  }
+
+  dl {
+    margin-top: 12px;
+  }
+}
+
+.file-detail-empty {
+  margin: 0;
+  color: #98a2b3;
+  font-size: 13px;
+}
+
+.detail-dialog {
+  .app-MuiDialogContent-root {
+    padding: 0;
+  }
+}

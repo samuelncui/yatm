@@ -15,11 +15,15 @@
 vendor/
 output/
 frontend/node_modules/
-frontend/pnpm-lock.yaml
 
 tests/
 tapes.db
 upload_test.sh
 
 # Additional exclusions when building from source
-yatm--.tar.gz
+yatm-*.tar.gz
+yatm-*.tar.gz.sha256
+/SHA256SUMS
+/config.yaml
+/run.log
+/run.log.*

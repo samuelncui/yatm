@@ -7,17 +7,18 @@ import (
 )
 
 var (
-	_ = entity.ServiceServer(&API{})
+	_ entity.ServiceServer    = (*API)(nil)
+	_ entity.JobServiceServer = (*API)(nil)
 )
 
 type API struct {
 	entity.UnsafeServiceServer
+	entity.UnimplementedJobServiceServer
 
-	lib        *library.Library
-	exe        *executor.Executor
-	sourceBase string
+	lib *library.Library
+	exe *executor.Executor
 }
 
-func New(base string, lib *library.Library, exe *executor.Executor) *API {
-	return &API{lib: lib, exe: exe, sourceBase: base}
+func New(lib *library.Library, exe *executor.Executor) *API {
+	return &API{lib: lib, exe: exe}
 }

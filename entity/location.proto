@@ -1,0 +1,228 @@
+syntax = "proto3";
+package location;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+import "online.proto";
+import "file.proto";
+import "position.proto";
+import "preview.proto";
+import "job_storage.proto";
+
+service LocationService {
+  rpc Create(CreateLocationRequest) returns (LocationReply) {}
+  rpc List(ListLocationsRequest) returns (ListLocationsReply) {}
+  rpc Get(LocationRef) returns (LocationReply) {}
+  rpc Update(UpdateLocationRequest) returns (LocationReply) {}
+  rpc Confirm(LocationRef) returns (LocationReply) {}
+  rpc Delete(LocationRef) returns (DeleteLocationReply) {}
+  rpc ListEntries(ListLocationEntriesRequest) returns (ListLocationEntriesReply) {}
+  rpc Admit(file.LocationEntryRef) returns (LocationEntry) {}
+  rpc GetEntry(GetLocationEntryRequest) returns (LocationEntry) {}
+}
+
+service FileCatalogService {
+  rpc GetState(GetFileStateRequest) returns (FileStateReply) {}
+  rpc GetVersion(GetFileVersionRequest) returns (FileVersionReply) {}
+  rpc ListVersions(ListFileVersionsRequest) returns (ListFileVersionsReply) {}
+  rpc ListCopies(ListContentCopiesRequest) returns (ListContentCopiesReply) {}
+  rpc ListDuplicates(ListContentDuplicatesRequest) returns (ListContentDuplicatesReply) {}
+  rpc ListDuplicateGroups(ListDuplicateGroupsRequest) returns (ListDuplicateGroupsReply) {}
+  rpc ListDuplicateMembers(ListDuplicateMembersRequest) returns (ListDuplicateMembersReply) {}
+  rpc ImportPositions(ImportArchivePositionsRequest) returns (ImportArchivePositionsReply) {}
+  rpc InspectSelection(InspectSelectionRequest) returns (InspectSelectionReply) {}
+  rpc RelocateOriginal(RelocateOriginalRequest) returns (FileStateReply) {}
+}
+message RelocateOriginalRequest {
+  int64 file_id = 1;
+  file.LocationEntryRef reference = 2;
+  FileLocation expected_original = 3;
+}
+
+message IgnoreRules {
+  string format = 1;
+  string text = 2;
+}
+
+message Location {
+  int64 id = 1;
+  string name = 2;
+  string executor_id = 3;
+  string root_path = 4;
+  IgnoreRules ignore = 5;
+  bool write_tracking_uuid = 6;
+  online.OnlineBinding binding = 7;
+  int64 revision = 8;
+  int64 created_at_ms = 9;
+  int64 updated_at_ms = 10;
+  int64 last_sync_at_ms = 11;
+  int64 last_sync_job_id = 12;
+  int64 last_job_id = 13;
+  bool restore_target = 15;
+  string binding_token = 16;
+}
+
+message FileLocation {
+  int64 file_id = 1;
+  int64 location_id = 2;
+  string path = 3;
+  string parent_path = 4;
+  int64 size = 5;
+  uint32 mode = 6;
+  int64 mtime_ns = 7;
+  bytes signature = 8;
+  bytes sha256 = 9;
+  string observed_binding_token = 10;
+}
+
+message LocationRef { int64 id = 1; int64 revision = 2; }
+message GetLocationEntryRequest { int64 location_id = 1; string path = 2; }
+message CreateLocationRequest { Location location = 1; }
+message UpdateLocationRequest { Location location = 1; }
+message DeleteLocationReply {}
+message LocationReply {
+  Location location = 1;
+  online.OnlineAccessibility accessibility = 2;
+  repeated string required_exclusions = 3;
+  repeated string warnings = 4;
+}
+message ListLocationsRequest {
+  int64 after_id = 1;
+  int32 limit = 2;
+  optional bool restore_target = 3;
+  // Literal, case-insensitive substring of the Location name or root path.
+  string query = 4;
+}
+message ListLocationsReply { repeated Location locations = 1; bool has_more = 2; }
+message ListLocationEntriesRequest {
+  int64 location_id = 1;
+  string parent_path = 2;
+  int32 limit = 4;
+  string cursor = 6;
+  string name_filter = 7;
+}
+message LocationEntry {
+  string path = 1;
+  bool is_dir = 2;
+  FileLocation original = 3;
+  file.File file = 4;
+  file.LocationEntryRef reference = 5;
+}
+message ListLocationEntriesReply {
+  repeated LocationEntry entries = 1;
+  bool has_more = 2;
+  int64 revision = 3;
+  string next_cursor = 4;
+  string collection_error = 5;
+}
+
+enum ContentCoverage {
+  CONTENT_UNKNOWN = 0;
+  NO_ARCHIVED_COPY = 1;
+  ARCHIVED_CONTENT = 2;
+}
+message GetFileStateRequest { int64 file_id = 1; }
+message FileStateReply {
+  FileLocation original = 1;
+  Location location = 2;
+  file.FileVersion latest_version = 3;
+  ContentCoverage coverage = 4;
+  int64 archived_copies = 5;
+  int64 healthy_copies = 6;
+  int64 unchecked_copies = 7;
+  int64 unhealthy_copies = 8;
+  file.FileContentSummary summary = 9;
+}
+message ListFileVersionsRequest { int64 file_id = 1; int64 after_id = 2; int32 limit = 3; }
+message GetFileVersionRequest { int64 id = 1; }
+message FileVersionReply {
+  file.FileVersion version = 1;
+  file.File file = 2;
+  preview.PreviewManifest preview = 3;
+}
+message ListFileVersionsReply { repeated file.FileVersion versions = 1; bool has_more = 2; }
+message ListContentCopiesRequest { bytes signature = 1; int64 after_id = 2; int32 limit = 3; }
+message ListContentCopiesReply { repeated position.Position positions = 1; bool has_more = 2; }
+message ListContentDuplicatesRequest { bytes signature = 1; int64 after_file_id = 2; int32 limit = 3; }
+message ListContentDuplicatesReply { repeated file.File files = 1; bool has_more = 2; }
+// Groups compare published originals globally; query filters select groups, not their membership.
+message DuplicateGroup {
+  bytes signature = 1;
+  string name = 2;
+  int64 original_count = 3;
+  int64 location_count = 4;
+  int64 archived_copies = 5;
+  int64 matching_count = 6;
+  optional int64 size = 7;
+}
+message ListDuplicateGroupsRequest { string query = 1; string cursor = 2; int32 limit = 3; }
+message ListDuplicateGroupsReply {
+  repeated DuplicateGroup groups = 1;
+  string next_cursor = 2;
+  string index_revision = 3;
+}
+message ListDuplicateMembersRequest {
+  bytes signature = 1;
+  string query = 2;
+  string cursor = 3;
+  int32 limit = 4;
+}
+message DuplicateMember {
+  file.File file = 1;
+  string library_path = 2;
+  FileLocation original = 3;
+  string location_name = 4;
+  bool matches_filter = 5;
+  ContentObservation observation = 6;
+}
+enum ContentObservation {
+  UNCHECKED = 0;
+  CONFIRMED = 1;
+  CHANGED = 2;
+  UNAVAILABLE = 3;
+}
+message ListDuplicateMembersReply {
+  DuplicateGroup group = 1;
+  repeated DuplicateMember members = 2;
+  string next_cursor = 3;
+  string index_revision = 4;
+}
+message ImportArchivePositionsRequest { repeated int64 position_ids = 1; }
+message ImportArchivePositionsReply { repeated int64 file_ids = 1; }
+
+// Metadata-only preview; Job indexing remains the authoritative frozen manifest.
+message InspectSelectionRequest {
+  repeated file.FileSelection selections = 1;
+  repeated int64 file_version_ids = 2;
+  bool restore = 3;
+  yatm.job_storage.RestoreDestination destination = 4;
+  bool allow_damaged_copies = 5;
+  yatm.job_storage.RestoreVersionPolicy version_policy = 6;
+  bool skip_unmatched_versions = 7;
+}
+message InspectSelectionReply {
+  int64 files = 1;
+  int64 bytes = 2;
+  int64 missing_originals = 4;
+  int64 missing_copies = 5;
+  repeated file.FileSelection selections = 7;
+  int64 unknown_size_files = 8;
+  int64 ignored_outputs = 9;
+  int64 unmatched_versions = 10;
+  int64 skipped_versions = 11;
+  // Bounded to explicitly selected regular Files/versions, never expanded directory descendants.
+  repeated RestoreVersionResolution resolved_versions = 12;
+}
+
+enum RestoreVersionMatch {
+  RESTORE_VERSION_MATCHED = 0;
+  RESTORE_VERSION_NO_SAVED_VERSION = 1;
+  RESTORE_VERSION_AFTER_CUTOFF = 2;
+  RESTORE_VERSION_DATE_UNKNOWN = 3;
+}
+
+message RestoreVersionResolution {
+  int64 file_id = 1;
+  file.FileVersion version = 2;
+  optional int64 archived_at_ms = 3;
+  RestoreVersionMatch match = 4;
+}

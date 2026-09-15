@@ -1,0 +1,36 @@
+syntax = "proto3";
+package online;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+enum OnlineBinding {
+  ONLINE_BINDING_UNSPECIFIED = 0;
+  UNCONFIRMED = 1;
+  CONFIRMED = 2;
+}
+
+message OnlineExclusions {
+  // Configured gitignore text, preserved verbatim.
+  string format = 2;
+  string text = 3;
+}
+
+message OnlineAccessibility {
+  bool accessible = 1;
+  int64 checked_at_ms = 2;
+  string error = 3;
+}
+
+message OnlinePosition {
+  int64 id = 1;
+  int64 source_id = 2;
+  string path = 3;
+  string parent_path = 4;
+  bool is_dir = 5;
+  int64 file_id = 6;
+  int64 size = 7;
+  uint32 mode = 8;
+  int64 mtime_ns = 9;
+  bytes sha256 = 10;
+  bytes signature = 11;
+  string observed_binding_token = 12;
+}

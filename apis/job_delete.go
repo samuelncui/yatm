@@ -6,10 +6,10 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-func (api *API) JobDelete(ctx context.Context, req *entity.JobDeleteRequest) (*entity.JobDeleteReply, error) {
+func (api *API) Delete(ctx context.Context, req *entity.DeleteJobsRequest) (*entity.DeleteJobsReply, error) {
 	if err := api.exe.DeleteJobs(ctx, req.Ids...); err != nil {
 		return nil, err
 	}
 
-	return &entity.JobDeleteReply{}, nil
+	return &entity.DeleteJobsReply{}, nil
 }

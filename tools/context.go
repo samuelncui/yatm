@@ -18,7 +18,7 @@ func (c noTimeout) Done() <-chan struct{}             { return nil }
 func (c noTimeout) Err() error                        { return nil }
 func (c noTimeout) Value(key interface{}) interface{} { return c.ctx.Value(key) }
 
-// WithoutCancel returns a context that is never canceled.
+// WithoutTimeout preserves values while removing cancellation and deadlines.
 func WithoutTimeout(ctx context.Context) context.Context {
 	return noTimeout{ctx: ctx}
 }

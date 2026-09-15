@@ -2,26 +2,41 @@ package library
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
 )
 
-var (
-	ModelTape = new(Tape)
+var ErrTapeConflict = errors.New("tape content conflicts with existing barcode")
+
+const (
+	TapeFormatLTFSV0 = "ltfs_v0"
+	TapeFormatLTFSV1 = "ltfs_v1"
 )
 
+// Tape is the compatibility view of a Tape Media.
 type Tape struct {
-	ID            int64      `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
-	Barcode       string     `gorm:"type:varchar(15);index:idx_barcode,unique" json:"barcode,omitempty"`
-	Name          string     `gorm:"type:varchar(256)" json:"name,omitempty"`
-	Encryption    string     `gorm:"type:varchar(2048)" json:"encryption,omitempty"`
+	ID            int64      `json:"id,omitempty"`
+	Barcode       string     `json:"barcode,omitempty"`
+	Name          string     `json:"name,omitempty"`
+	SerialNumber  string     `json:"serial_number,omitempty"`
+	Encryption    string     `json:"encryption,omitempty"`
+	Format        string     `json:"format,omitempty"`
 	CreateTime    time.Time  `json:"create_time,omitempty"`
 	DestroyTime   *time.Time `json:"destroy_time,omitempty"`
 	CapacityBytes int64      `json:"capacity_bytes,omitempty"`
 	WritenBytes   int64      `json:"writen_bytes,omitempty"`
+}
+
+type TapeStats = MediaStats
+
+type TapeFilter struct {
+	Limit  *int64
+	Offset *int64
 }
 
 type TapeFile struct {
@@ -30,120 +45,166 @@ type TapeFile struct {
 	Mode      os.FileMode `json:"mode"`
 	ModTime   time.Time   `json:"mod_time"`
 	WriteTime time.Time   `json:"write_time"`
-	Hash      []byte      `json:"hash"` // sha256
+	Hash      []byte      `json:"hash"`
+
+	StorageOrder    []byte
+	StorageMetadata *entity.StorageMetadata
 }
 
+// TapeFileSource yields Tape files in strict path order.
+type TapeFileSource func(context.Context, func(*TapeFile) error) error
+
 func (l *Library) CreateTape(ctx context.Context, tape *Tape, files []*TapeFile) (*Tape, error) {
-	tape.WritenBytes = 0
-	for _, file := range files {
-		tape.WritenBytes += file.Size
+	ordered := append([]*TapeFile(nil), files...)
+	for index, file := range ordered {
+		if file == nil {
+			return nil, fmt.Errorf("create Tape failed, file is nil, index=%d", index)
+		}
 	}
-	if tape.CapacityBytes == 0 {
-		tape.CapacityBytes = tape.WritenBytes
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Path < ordered[j].Path })
+	return l.CreateTapeFromSource(ctx, tape, func(_ context.Context, yield func(*TapeFile) error) error {
+		for _, file := range ordered {
+			if err := yield(file); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (l *Library) CreateTapeFromSource(ctx context.Context, tape *Tape, source TapeFileSource) (*Tape, error) {
+	if tape == nil {
+		return nil, fmt.Errorf("create Tape failed, Tape is nil")
+	}
+	if source == nil {
+		return nil, fmt.Errorf("create Tape failed, file source is nil")
+	}
+	if tape.Format == "" {
+		tape.Format = TapeFormatLTFSV0
 	}
 
-	if r := l.db.WithContext(ctx).Save(tape); r.Error != nil {
-		return nil, fmt.Errorf("save tape fail, err= %w", r.Error)
+	media := tapeToMedia(tape)
+	stored, err := l.CommitMedia(ctx, media, tapeFileSource(source))
+	if err != nil {
+		return nil, fmt.Errorf("create Tape failed, barcode=%q, %w", tape.Barcode, err)
 	}
+	return mediaToTape(stored), nil
+}
 
-	positions := make([]*Position, 0, len(files))
-	for _, file := range files {
-		positions = append(positions, &Position{
-			TapeID:    tape.ID,
-			Path:      file.Path,
-			Mode:      uint32(file.Mode),
-			ModTime:   file.ModTime,
-			WriteTime: file.WriteTime,
-			Size:      file.Size,
-			Hash:      file.Hash,
-		})
+func (l *Library) AppendTapeFromSource(ctx context.Context, tapeID int64, source TapeFileSource) (*Tape, error) {
+	stored, err := l.GetMedia(ctx, tapeID)
+	if err != nil {
+		return nil, fmt.Errorf("read append Tape failed, tape_id=%d, %w", tapeID, err)
 	}
-
-	if r := l.db.WithContext(ctx).CreateInBatches(positions, batchSize); r.Error != nil {
-		return nil, fmt.Errorf("save tape position fail, %w", r.Error)
+	profile := stored.Profile.GetTape()
+	if profile == nil || profile.Format != TapeFormatLTFSV1 {
+		return nil, fmt.Errorf("append Tape format is unsupported, tape_id=%d", tapeID)
 	}
-
-	return tape, nil
+	stored, err = l.CommitMedia(ctx, stored, tapeFileSource(source))
+	if err != nil {
+		return nil, fmt.Errorf("append Tape failed, tape_id=%d, %w", tapeID, err)
+	}
+	return mediaToTape(stored), nil
 }
 
 func (l *Library) GetTape(ctx context.Context, id int64) (*Tape, error) {
-	tapes, err := l.MGetTape(ctx, id)
+	stored, err := l.GetMedia(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	tape, ok := tapes[id]
-	if !ok || tape == nil {
+	if stored.Kind != entity.MediaKind_MEDIA_KIND_TAPE {
 		return nil, ErrFileNotFound
 	}
-
-	return tape, nil
+	return mediaToTape(stored), nil
 }
 
 func (l *Library) DeleteTapes(ctx context.Context, ids ...int64) error {
-	// if r := l.db.WithContext(ctx).Where("tape_id IN (?)", ids).Delete(ModelPosition); r.Error != nil {
-	// 	return fmt.Errorf("delete file position fail, err= %w", r.Error)
-	// }
-	if r := l.db.WithContext(ctx).Where("id IN (?)", ids).Delete(ModelTape); r.Error != nil {
-		return fmt.Errorf("delete tapes fail, err= %w", r.Error)
-	}
-
-	return nil
+	return l.DeleteMedia(ctx, ids...)
 }
 
-func (l *Library) ListTape(ctx context.Context, filter *entity.TapeFilter) ([]*Tape, error) {
-	db := l.db.WithContext(ctx)
-	if filter.Limit != nil {
-		db = db.Limit(int(*filter.Limit))
-	} else {
-		db = db.Limit(20)
-	}
-	if filter.Offset != nil {
-		db = db.Offset(int(*filter.Offset))
-	}
-
-	db = db.Order("create_time DESC")
-
-	tapes := make([]*Tape, 0, 20)
-	if r := db.Find(&tapes); r.Error != nil {
-		return nil, fmt.Errorf("list tapes fail, err= %w", r.Error)
-	}
-
-	return tapes, nil
+func (l *Library) GetTapeStats(ctx context.Context, tapeID int64) (*TapeStats, error) {
+	return l.GetMediaStats(ctx, tapeID)
 }
 
-func (l *Library) MGetTape(ctx context.Context, tapeIDs ...int64) (map[int64]*Tape, error) {
-	if len(tapeIDs) == 0 {
-		return map[int64]*Tape{}, nil
+func (l *Library) ListTape(ctx context.Context, filter *TapeFilter) ([]*Tape, error) {
+	mediaFilter := &entity.MediaFilter{Kinds: []entity.MediaKind{entity.MediaKind_MEDIA_KIND_TAPE}}
+	if filter != nil {
+		mediaFilter.Limit = filter.Limit
+		mediaFilter.Offset = filter.Offset
 	}
-
-	tapes := make([]*Tape, 0, len(tapeIDs))
-	if r := l.db.WithContext(ctx).Where("id IN (?)", tapeIDs).Find(&tapes); r.Error != nil {
-		return nil, fmt.Errorf("mget tapes fail, err= %w", r.Error)
+	rows, err := l.ListMedia(ctx, mediaFilter)
+	if err != nil {
+		return nil, err
 	}
-
-	result := make(map[int64]*Tape, len(tapes))
-	for _, tape := range tapes {
-		result[tape.ID] = tape
+	result := make([]*Tape, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, mediaToTape(row))
 	}
+	return result, nil
+}
 
+func (l *Library) MGetTape(ctx context.Context, ids ...int64) (map[int64]*Tape, error) {
+	rows, err := l.MGetMedia(ctx, ids...)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64]*Tape, len(rows))
+	for id, row := range rows {
+		if row.Kind == entity.MediaKind_MEDIA_KIND_TAPE {
+			result[id] = mediaToTape(row)
+		}
+	}
 	return result, nil
 }
 
 func (l *Library) MGetTapeByBarcode(ctx context.Context, barcodes ...string) (map[string]*Tape, error) {
-	if len(barcodes) == 0 {
-		return map[string]*Tape{}, nil
+	result := make(map[string]*Tape, len(barcodes))
+	for _, barcode := range barcodes {
+		row, err := l.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, barcode)
+		if err != nil {
+			return nil, err
+		}
+		if row != nil {
+			result[row.Identity] = mediaToTape(row)
+		}
 	}
-
-	tapes := make([]*Tape, 0, len(barcodes))
-	if r := l.db.WithContext(ctx).Where("barcode IN (?)", barcodes).Find(&tapes); r.Error != nil {
-		return nil, fmt.Errorf("mget tapes by barcode fail, err= %w", r.Error)
-	}
-
-	result := make(map[string]*Tape, len(tapes))
-	for _, tape := range tapes {
-		result[tape.Barcode] = tape
-	}
-
 	return result, nil
+}
+
+func tapeFileSource(source TapeFileSource) MediaFileSource {
+	return func(ctx context.Context, yield func(*MediaFile) error) error {
+		return source(ctx, func(file *TapeFile) error {
+			if file == nil {
+				return yield(nil)
+			}
+			return yield(&MediaFile{
+				Path: file.Path, Size: file.Size, Mode: file.Mode, ModTime: file.ModTime,
+				WriteTime: file.WriteTime, Hash: file.Hash, StorageOrder: file.StorageOrder,
+				StorageMetadata: file.StorageMetadata,
+			})
+		})
+	}
+}
+
+func tapeToMedia(tape *Tape) *Media {
+	return &Media{
+		ID: tape.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: tape.Barcode, Name: tape.Name,
+		Profile: (&entity.TapeMediaProfile{
+			SerialNumber: tape.SerialNumber, Encryption: tape.Encryption, Format: tape.Format,
+		}).Pack(),
+		CreateTime: tape.CreateTime, DestroyTime: tape.DestroyTime,
+		CapacityBytes: tape.CapacityBytes, WrittenBytes: tape.WritenBytes,
+	}
+}
+
+func mediaToTape(media *Media) *Tape {
+	profile := media.Profile.GetTape()
+	if profile == nil {
+		profile = new(entity.TapeMediaProfile)
+	}
+	return &Tape{
+		ID: media.ID, Barcode: media.Identity, Name: media.Name, SerialNumber: profile.SerialNumber,
+		Encryption: profile.Encryption, Format: profile.Format, CreateTime: media.CreateTime,
+		DestroyTime: media.DestroyTime, CapacityBytes: media.CapacityBytes, WritenBytes: media.WrittenBytes,
+	}
 }

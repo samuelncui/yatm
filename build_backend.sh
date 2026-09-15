@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-set -ex;
+set -euo pipefail
 
-CURDIR=$(cd $(dirname $0); pwd);
-cd ${CURDIR};
+cd "$(dirname "$0")"
+OUTPUT_DIRECTORY="${OUTPUT_DIRECTORY:-$PWD/output}"
+mkdir -p "$OUTPUT_DIRECTORY"
+RELEASE_VERSION="${RELEASE_VERSION:-development}"
+RELEASE_COMMIT="${RELEASE_COMMIT:-$(git rev-parse HEAD)}"
+LDFLAGS="-X github.com/samuelncui/yatm/internal/buildinfo.Version=$RELEASE_VERSION -X github.com/samuelncui/yatm/internal/buildinfo.Commit=$RELEASE_COMMIT"
 
-go build -o ./output/yatm-httpd ./cmd/httpd;
-go build -o ./output/yatm-export-library ./cmd/export-library;
-go build -o ./output/yatm-lto-info ./cmd/lto-info;
+for command in httpd yatm-cli export-library lto-info migrate; do
+  program="yatm-$command"
+  [[ "$command" != yatm-cli ]] || program=yatm-cli
+  go build -trimpath -ldflags "$LDFLAGS" -o "$OUTPUT_DIRECTORY/$program" "./cmd/$command"
+done

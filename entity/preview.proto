@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package preview;
+
+option go_package = "github.com/samuelncui/yatm/entity";
+
+message PreviewManifest {
+    bytes file_signature = 1;
+    string generator = 2;
+    bytes settings_json = 3;
+    repeated PreviewAsset assets = 4;
+}
+
+message PreviewAsset {
+    string name = 1;
+    string role = 2;
+    string media_type = 3;
+    uint32 width = 4;
+    uint32 height = 5;
+}

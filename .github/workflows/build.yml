@@ -1,14 +1,23 @@
 # This workflow will build this project
 
-name: Build
+name: Release candidate
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate version (for example v1.0.0-alpha.1)
+        required: true
+        type: string
+      publish:
+        description: Upload accepted artifacts to an existing matching Release
+        default: false
+        type: boolean
   release:
     types: [created]
 
 permissions:
-  contents: write
-  pull-requests: read
+  contents: read
 
 jobs:
   build:
@@ -49,7 +58,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      RELEASE_VERSION: ${{ github.event.release.tag_name }}
+      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
@@ -65,29 +74,111 @@ jobs:
           echo "TARGET_NAME=${{ env.GOOS }}-${{ env.GOARCH }}${{ env.GOARM }}-experimental" >> $GITHUB_ENV
         fi
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
-        ref: "${{ env.RELEASE_VERSION }}"
+        ref: ${{ github.event.release.tag_name || github.sha }}
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v7
       with:
-        go-version: '1.21'
+        go-version: '1.26.8'
 
     - name: Setup Node.js environment
-      uses: actions/setup-node@v3.8.1
+      uses: actions/setup-node@v7
       with:
-        node-version: '20'
+        node-version: '24'
+
+    - uses: pnpm/action-setup@v4
+      with:
+        package_json_file: frontend/package.json
 
     - name: Build
       run: ./build.sh
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/upload-artifact@v4
       with:
-        upload_url: ${{ github.event.release.upload_url }} 
-        asset_path: ./yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
-        asset_name: yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
-        asset_content_type: application/x-tgz
+        name: candidate-${{ env.TARGET_NAME }}
+        path: |
+          yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
+          yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz.sha256
+        if-no-files-found: error
+
+  validate:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.8'
+      - name: Test package and document validation
+        run: node --test build_documents.test.mjs check_release.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: candidate-*
+          path: candidates
+          merge-multiple: true
+      - name: Validate the complete candidate set
+        run: |
+          set -euo pipefail
+          for target in linux-amd64 linux-386-experimental linux-arm64-experimental linux-arm5-experimental linux-arm6-experimental linux-arm7-experimental linux-s390x-experimental darwin-amd64-experimental darwin-arm64-experimental freebsd-amd64-experimental; do
+            node check_release.mjs "candidates/yatm-$target-$RELEASE_VERSION.tar.gz"
+          done
+          cd candidates
+          cat ./*.sha256 | sort > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Verify offline release identity on Linux
+        run: |
+          set -euo pipefail
+          target=$(mktemp -d)
+          tar -xzf "candidates/yatm-linux-amd64-$RELEASE_VERSION.tar.gz" -C "$target"
+          for program in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate; do
+            output=$(cd "$target" && "./$program" --version)
+            jq -e --arg version "$RELEASE_VERSION" --arg commit "$(git rev-parse HEAD)" --arg program "$program" '.version == $version and .commit == $commit and .program == $program' <<< "$output"
+          done
+          test ! -e "$target/config.yaml"
+          test ! -e "$target/run.log"
+          echo "YATM_E2E_BIN_DIR=$target" >> "$GITHUB_ENV"
+      - name: Run the full E2E suite against the extracted Linux candidate
+        run: |
+          go test -tags=e2e -count=1 -v ./e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: accepted-candidates
+          path: candidates/*
+          if-no-files-found: error
+
+  upload:
+    needs: validate
+    if: github.event_name == 'release' || inputs.publish
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: accepted-candidates
+          path: candidates
+      - name: Upload only to the explicitly created matching Release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$RELEASE_VERSION^{commit}")" = "$(git rev-parse HEAD)"
+          gh release view "$RELEASE_VERSION" --json isPrerelease > release.json
+          if [[ "$RELEASE_VERSION" == *-* ]]; then jq -e '.isPrerelease' release.json; fi
+          cd candidates
+          sha256sum --check SHA256SUMS
+          gh release upload "$RELEASE_VERSION" ./*.tar.gz ./*.sha256 SHA256SUMS

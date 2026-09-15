@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import Typography from "@mui/material/Typography";
 import { FileArray } from "@samuelncui/chonky";
 
-import { formatFilesize } from "../tools";
+import { formatFilesize } from "@/tools";
 
 export interface ToobarInfoProps {
   files?: FileArray;
@@ -29,11 +29,9 @@ export const ToobarInfo: React.FC<ToobarInfoProps> = memo(({ files }) => {
   }, [files]);
 
   return (
-    <div className="chonky-infoContainer">
-      <Typography variant="body1" className="chonky-infoText">
-        {notFinished && "? "}
-        {formatFilesize(size)}
-      </Typography>
-    </div>
+    <Typography variant="body1" className="chonky-infoText">
+      {notFinished && "? "}
+      {formatFilesize(size)}
+    </Typography>
   );
 });

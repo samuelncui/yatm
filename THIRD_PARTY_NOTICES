@@ -1,0 +1,14 @@
+YATM third-party notices
+
+cmd/lto-info includes source adapted from speed47/lto-info:
+https://github.com/speed47/lto-info
+Its MIT license is reproduced in licenses/lto-info.LICENSE.
+
+The @react-dnd/* packages inherit the react-dnd monorepo's MIT license:
+https://github.com/react-dnd/react-dnd/blob/main/LICENSE
+Some published subpackages omit that file. A copy is maintained in
+licenses/react-dnd.LICENSE and included with their distribution notices.
+
+Release archives also contain licenses/dependencies.json and per-dependency
+license/notice files collected from the actual Go and production frontend
+dependencies. YATM's own license does not replace those upstream terms.

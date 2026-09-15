@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -ex;
 
+mkdir -p "${TAPE_DIR}"
+exec > >(tee -a "${TAPE_DIR}/ltfs.log") 2>&1
+
 mt -f ${DEVICE} load
 sleep 5
 

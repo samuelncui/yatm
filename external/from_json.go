@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path"
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/library"
@@ -33,7 +32,7 @@ func (e *External) ImportACPReport(ctx context.Context, barname, name, encryptio
 		}
 
 		files = append(files, &library.TapeFile{
-			Path:      path.Join(f.Path...),
+			Path:      f.Path,
 			Size:      f.Size,
 			Mode:      f.Mode,
 			ModTime:   f.ModTime,
@@ -55,7 +54,7 @@ func (e *External) ImportACPReport(ctx context.Context, barname, name, encryptio
 		return fmt.Errorf("save tape, err= %w", err)
 	}
 
-	if err := e.lib.TrimFiles(ctx); err != nil {
+	if err := e.lib.ImportArchivedInventory(ctx); err != nil {
 		return err
 	}
 

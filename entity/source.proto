@@ -3,8 +3,6 @@ package source;
 
 option go_package = "github.com/samuelncui/yatm/entity";
 
-import "copy_status.proto";
-
 message SourceFile {
     string path = 1;
     string parent_path = 2;
@@ -18,11 +16,4 @@ message SourceFile {
 message Source {
     string base = 1;
     repeated string path = 2;
-}
-
-message SourceState {
-    Source source = 1;
-    int64 size = 2;
-    copy_status.CopyStatus status = 3;
-    optional string message = 4;
 }

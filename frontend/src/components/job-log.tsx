@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef, useEffect, useCallback } from "react";
+import { Fragment, useState, useRef, useEffect, useCallback, useEffectEvent } from "react";
 
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -6,8 +6,10 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 
-import { cli } from "../api";
-import { sleep } from "../tools";
+import { jobCli } from "@/api";
+import { sleep } from "@/tools";
+
+const maxVisibleLogLength = 4 * 1024 * 1024;
 
 export const ViewLogDialog = ({ jobID }: { jobID: bigint }) => {
   const [open, setOpen] = useState(false);
@@ -24,7 +26,7 @@ export const ViewLogDialog = ({ jobID }: { jobID: bigint }) => {
         View Log
       </Button>
       {open && (
-        <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
+        <Dialog open onClose={handleClose} maxWidth="lg" fullWidth scroll="paper" className="job-view-dialog">
           <DialogTitle>View Log</DialogTitle>
           <DialogContent dividers>
             <LogConsole jobId={jobID} />
@@ -44,36 +46,45 @@ const LogConsole = ({ jobId }: { jobId: bigint }) => {
   const bottom = useRef(null);
 
   const refresh = useCallback(async () => {
-    const reply = await cli.jobGetLog({ jobId, offset: offset }).response;
-    setLog(log + new TextDecoder().decode(reply.logs));
+    const reply = await jobCli.getLog({ id: jobId, offset }).response;
+    if (reply.logs && reply.logs.length > 0) {
+      setLog((log + new TextDecoder().decode(reply.logs)).slice(-maxVisibleLogLength));
+    }
     setOffset(reply.offset);
-  }, [log, setLog, offset, setOffset, bottom]);
-  const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+  }, [jobId, log, offset]);
+  const refreshEvent = useEffectEvent(refresh);
 
   useEffect(() => {
-    var timer: NodeJS.Timeout;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      await refreshEvent();
+      if (cancelled) return;
+      timer = setTimeout(() => void poll(), 2000);
+    };
+
     (async () => {
-      await refreshRef.current();
+      await refreshEvent();
+      if (cancelled) return;
       if (bottom.current) {
         const bottomElem = bottom.current as HTMLElement;
         await sleep(10);
+        if (cancelled) return;
         bottomElem.scrollIntoView(true);
         await sleep(10);
+        if (cancelled) return;
         bottomElem.parentElement?.scrollBy(0, 100);
       }
 
-      timer = setInterval(() => refreshRef.current(), 2000);
+      timer = setTimeout(() => void poll(), 2000);
     })();
 
     return () => {
-      if (!timer) {
-        return;
-      }
-
-      clearInterval(timer);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [jobId]);
 
   return (
     <Fragment>

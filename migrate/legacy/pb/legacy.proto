@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package migrate_legacy;
+option go_package = "github.com/samuelncui/yatm/migrate/legacy/pb";
+
+enum CopyStatus {
+  DRAFT = 0;
+  PENDING = 1;
+  RUNNING = 2;
+  STAGED = 3;
+  SUBMITED = 4;
+  FAILED = 255;
+}
+
+enum JobStatus {
+  JOB_DRAFT = 0;
+  NOT_READY = 1;
+  JOB_PENDING = 2;
+  PROCESSING = 3;
+  COMPLETED = 4;
+  JOB_FAILED = 127;
+  DELETED = 255;
+}
+
+message Source {
+  string base = 1;
+  repeated string path = 2;
+}
+
+message SourceState {
+  Source source = 1;
+  int64 size = 2;
+  CopyStatus status = 3;
+  optional string message = 4;
+}
+
+message JobArchiveState {
+  int32 step = 1;
+  repeated SourceState sources = 2;
+}
+
+message RestoreFile {
+  int64 file_id = 1;
+  int64 tape_id = 2;
+  int64 position_id = 3;
+  CopyStatus status = 17;
+  int64 size = 18;
+  bytes hash = 19;
+  string tape_path = 33;
+  string target_path = 34;
+}
+
+message RestoreTape {
+  int64 tape_id = 1;
+  string barcode = 2;
+  CopyStatus status = 17;
+  repeated RestoreFile files = 18;
+}
+
+message JobRestoreState {
+  int32 step = 1;
+  repeated RestoreTape tapes = 2;
+}
+
+message JobState {
+  oneof state {
+    JobArchiveState archive = 1;
+    JobRestoreState restore = 2;
+  }
+}

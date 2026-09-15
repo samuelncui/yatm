@@ -1,0 +1,231 @@
+.file-metadata-dialog {
+  .app-MuiDialog-paper {
+    width: min(680px, calc(100% - 32px));
+    max-width: 680px;
+    max-height: calc(100% - 40px);
+    overflow: hidden;
+  }
+}
+
+.file-metadata-dialog-title {
+  min-height: 76px;
+  padding: 18px 22px !important;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+
+  > span,
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    font-size: 18px;
+    line-height: 24px;
+    color: #182338;
+  }
+
+  > span > span {
+    margin-top: 2px;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+    color: #718096;
+  }
+}
+
+.file-metadata-dialog-content {
+  padding: 18px 22px !important;
+  display: grid;
+  gap: 14px;
+  background: #f6f8fb;
+}
+
+.file-metadata-context {
+  min-width: 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #d9e3ef;
+  border-radius: 10px;
+  background: #fff;
+
+  > span:last-child {
+    min-width: 0;
+  }
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    overflow: hidden;
+    color: #1e2a3e;
+    font-size: 14px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  > span:last-child > span {
+    margin-top: 1px;
+    color: #718096;
+    font-size: 12px;
+    line-height: 17px;
+  }
+}
+
+.file-metadata-context-icon,
+.file-metadata-section-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid !important;
+  place-items: center;
+  border-radius: 9px;
+  color: #2f6599;
+  background: #eaf3fb;
+
+  svg {
+    font-size: 19px;
+  }
+}
+
+.file-metadata-section {
+  overflow: hidden;
+  border: 1px solid #d9e3ef;
+  border-radius: 12px;
+  background: #fff;
+  transition:
+    border-color 120ms ease,
+    opacity 120ms ease;
+
+  &.is-active {
+    border-color: #bfd3e6;
+  }
+
+  &.is-disabled {
+    opacity: 0.68;
+  }
+}
+
+.file-metadata-section-header {
+  min-height: 66px;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.file-metadata-section-heading {
+  min-width: 0;
+  flex: 1;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: #1e2a3e;
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  span {
+    margin-top: 1px;
+    color: #718096;
+    font-size: 12px;
+    line-height: 17px;
+  }
+}
+
+.file-metadata-section-toggle {
+  margin: 0 !important;
+
+  .app-MuiFormControlLabel-label {
+    color: #526176;
+    font-size: 13px;
+  }
+}
+
+.file-metadata-section-body {
+  padding: 16px;
+
+  .app-MuiAutocomplete-tag {
+    height: 26px;
+    color: #245e97;
+    background: #e8f2fb;
+  }
+
+  .app-MuiInputBase-root {
+    background: #fff;
+  }
+}
+
+.file-metadata-field-footer {
+  min-height: 18px;
+  margin: 5px 2px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #7b8799;
+  font-size: 11px;
+  line-height: 16px;
+
+  > span:first-child {
+    min-width: 0;
+    flex: 1;
+  }
+
+  > span:last-child {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .is-error {
+    color: #c5392f;
+  }
+}
+
+.file-metadata-dialog-actions {
+  min-height: 64px;
+  padding: 12px 22px !important;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between !important;
+  border-top: 1px solid #e2e8f0;
+
+  > span {
+    color: #718096;
+    font-size: 12px;
+  }
+
+  > div {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .file-metadata-dialog-content {
+    padding: 14px !important;
+  }
+
+  .file-metadata-section-heading > span,
+  .file-metadata-dialog-actions > span {
+    display: none;
+  }
+
+  .file-metadata-field-footer {
+    gap: 8px;
+  }
+}

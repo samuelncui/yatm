@@ -1,0 +1,44 @@
+syntax = "proto3";
+package settings;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+import "source.proto";
+
+service SettingsService {
+  rpc GetLibrary(GetLibrarySettingsRequest) returns (LibrarySettings) {}
+  rpc UpdateLibrary(UpdateLibrarySettingsRequest) returns (UpdateLibrarySettingsReply) {}
+  rpc GetAccess(GetAccessRequest) returns (GetAccessReply) {}
+  rpc BrowsePaths(BrowsePathsRequest) returns (BrowsePathsReply) {}
+}
+
+message LibrarySettings {
+  bool include_unbacked_files = 1;
+  int64 revision = 2;
+  bool auto_collect_files = 3;
+  bool confirm_permanent_delete = 4;
+}
+message GetLibrarySettingsRequest {}
+message UpdateLibrarySettingsRequest { LibrarySettings settings = 1; }
+message UpdateLibrarySettingsReply {
+  LibrarySettings settings = 1;
+  repeated int64 collection_job_ids = 2;
+  repeated string collection_errors = 3;
+}
+message AccessRange { string root_path = 1; string ignore = 2; }
+message GetAccessRequest {}
+message GetAccessReply {
+  repeated AccessRange ranges = 1;
+  repeated string migration_messages = 2;
+}
+// An empty path lists authorized roots. A Location ID constrains restore-directory browsing.
+message BrowsePathsRequest {
+  string path = 1;
+  string cursor = 2;
+  int32 limit = 3;
+  int64 location_id = 4;
+}
+message BrowsePathsReply {
+  string path = 1;
+  repeated source.SourceFile directories = 2;
+  string next_cursor = 3;
+}

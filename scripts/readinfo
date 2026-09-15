@@ -1,7 +1,39 @@
 #!/usr/bin/env bash
-set -ex;
+set -euo pipefail
 
-mt -f ${DEVICE} load
-BARCODE=`./yatm-lto-info -f ${DEVICE} | grep 'Barcode' | awk '{print $3}'`
-echo "{\"barcode\": \"$BARCODE\"}" > $OUT
-sleep 3
+mt -f "${DEVICE}" load
+deadline=$(($(date +%s) + 60))
+barcode=''
+while true; do
+    now=$(date +%s)
+    if ((now >= deadline)); then
+        break
+    fi
+    remaining=$((deadline - now))
+    info=$(timeout "${remaining}s" ./yatm-lto-info -f "${DEVICE}" || true)
+    barcode=$(awk '$1 == "Barcode" && $2 == ":" {
+        value = $3
+        if (length(value) == 8) {
+            value = substr(value, 1, 6)
+        }
+        print value
+        exit
+    }' <<< "${info}")
+    if [[ -n ${barcode} ]]; then
+        break
+    fi
+    now=$(date +%s)
+    if ((now >= deadline)); then
+        break
+    fi
+    delay=$((deadline - now))
+    if ((delay > 2)); then
+        delay=2
+    fi
+    sleep "${delay}"
+done
+if [[ -z ${barcode} ]]; then
+    echo "Tape barcode is unavailable: ${DEVICE}" >&2
+    exit 1
+fi
+printf '{"barcode":"%s"}\n' "${barcode}" > "${OUT}"

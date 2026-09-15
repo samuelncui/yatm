@@ -9,6 +9,7 @@ import (
 	"time"
 
 	flags "github.com/jessevdk/go-flags"
+	"github.com/samuelncui/yatm/internal/buildinfo"
 )
 
 type OptionsStruct struct {
@@ -21,6 +22,16 @@ type OptionsStruct struct {
 }
 
 func main() {
+	// Reading the binary identity must never initialize or inspect a Tape drive.
+	if buildinfo.IsVersion(os.Args[1:]) {
+		if err := buildinfo.Write(os.Stdout, "yatm-lto-info"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Parse device options before starting the bounded device-open attempt.
 	var err error
 
 	options := &OptionsStruct{}

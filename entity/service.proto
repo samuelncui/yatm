@@ -2,76 +2,50 @@ syntax = "proto3";
 package service;
 option go_package = "github.com/samuelncui/yatm/entity";
 
-import "job.proto";
 import "file.proto";
 import "position.proto";
-import "tape.proto";
-import "source.proto";
-import "library_entity_type.proto";
+import "media.proto";
+import "preview.proto";
+import "tag.proto";
 
 service Service {
     rpc FileGet(FileGetRequest) returns (FileGetReply) {}
-    rpc FileEdit(FileEditRequest) returns (FileEditReply) {}
-    rpc FileMkdir(FileMkdirRequest) returns (FileMkdirReply) {}
-    rpc FileDelete(FileDeleteRequest) returns (FileDeleteReply) {}
     rpc FileListParents(FileListParentsRequest) returns (FileListParentsReply) {}
+    rpc FileMetadataEdit(FileMetadataEditRequest) returns (FileMetadataEditReply) {}
+    rpc FileSearch(FileSearchRequest) returns (FileSearchReply) {}
+    rpc TagList(TagListRequest) returns (TagListReply) {}
 
-    rpc TapeList(TapeListRequest) returns (TapeListReply) {}
-    rpc TapeDelete(TapeDeleteRequest) returns (TapeDeleteReply) {}
-    rpc TapeGetPositions(TapeGetPositionsRequest) returns (TapeGetPositionsReply) {}
-
-    rpc JobList(JobListRequest) returns (JobListReply) {}
-    rpc JobCreate(JobCreateRequest) returns (JobCreateReply) {}
-    rpc JobEditState(JobEditStateRequest) returns (JobEditStateReply) {}
-    rpc JobDelete(JobDeleteRequest) returns (JobDeleteReply) {}
-    rpc JobDispatch(JobDispatchRequest) returns (JobDispatchReply) {}
-    rpc JobDisplay(JobDisplayRequest) returns (JobDisplayReply) {}
-    rpc JobGetLog(JobGetLogRequest) returns (JobGetLogReply) {}
-
-    rpc SourceList(SourceListRequest) returns (SourceListReply) {}
-    rpc SourceGetSize(SourceGetSizeRequest) returns (SourceGetSizeReply) {}
+    rpc MediaList(MediaListRequest) returns (MediaListReply) {}
+    rpc MediaInspect(MediaInspectRequest) returns (MediaInspectReply) {}
+    rpc MediaDelete(MediaDeleteRequest) returns (MediaDeleteReply) {}
+    rpc MediaGetPositions(MediaGetPositionsRequest) returns (MediaGetPositionsReply) {}
+    rpc VolumeInitialize(VolumeInitializeRequest) returns (VolumeInitializeReply) {}
+    rpc VolumeRegister(VolumeRegisterRequest) returns (VolumeRegisterReply) {}
 
     rpc DeviceList(DeviceListRequest) returns (DeviceListReply) {}
 
-    rpc LibraryExport(LibraryExportRequest) returns (LibraryExportReply) {}
     rpc LibraryTrim(LibraryTrimRequest) returns (LibraryTrimReply) {}
 }
 
 message FileGetRequest {
     int64 id = 1;
 
-    optional bool needSize = 17;
+    file.FileScope scope = 2;
+    string cursor = 3;
+    int32 limit = 4;
+
+    optional bool need_size = 17;
 }
 
 message FileGetReply {
+    reserved 2;
+    reserved "positions";
+
     optional file.File file = 1;
-    repeated position.Position positions = 2;
     repeated file.File children = 17;
-}
-
-message FileEditRequest {
-    int64 id = 1;
-    file.EditedFile file = 2;
-}
-
-message FileEditReply {
-    file.File file = 1;
-}
-
-message FileMkdirRequest {
-    int64 parent_id = 1;
-    string path = 2;
-}
-
-message FileMkdirReply {
-    file.File file = 1;
-}
-
-message FileDeleteRequest {
-    repeated int64 ids = 1;
-}
-
-message FileDeleteReply {
+    optional preview.PreviewManifest preview = 19;
+    string next_cursor = 20;
+    file.FileScope scope = 21;
 }
 
 message FileListParentsRequest {
@@ -82,133 +56,128 @@ message FileListParentsReply {
     repeated file.File parents = 1;
 }
 
-message TapeListRequest {
+message FileMetadataEditRequest {
+    repeated int64 ids = 1;
+    repeated string add_tags = 2;
+    repeated string remove_tags = 3;
+    optional string note = 4;
+}
+
+message FileMetadataEditReply {
+}
+
+message FileSearchRequest {
+    string query = 1;
+    optional int64 limit = 2;
+    optional string cursor = 3;
+    file.FileScope scope = 4;
+    int64 location_id = 5;
+    int64 location_revision = 6;
+}
+
+message FileSearchResult {
+    file.File file = 1;
+    string path = 2;
+}
+
+message FileSearchReply {
+    repeated FileSearchResult results = 1;
+    string next_cursor = 2;
+}
+
+message TagListRequest {
+    optional string prefix = 1;
+    optional int64 limit = 2;
+    optional string cursor = 3;
+}
+
+message TagListReply {
+    repeated tag.Tag tags = 1;
+    string next_cursor = 2;
+}
+
+message MediaListRequest {
     oneof param {
-        TapeMGetRequest mget = 1;
-        tape.TapeFilter list = 2;
+        MediaMGetRequest mget = 1;
+        media.MediaFilter list = 2;
     }
 }
 
-message TapeMGetRequest {
+message MediaMGetRequest {
     repeated int64 ids = 1;
 }
 
-message TapeListReply {
-    repeated tape.Tape tapes = 1;
+message MediaListReply {
+    repeated media.Media media = 1;
+    bool has_more = 2;
 }
 
-message TapeDeleteRequest {
+message MediaInspectRequest {
+    oneof target {
+        MediaInspectTapeTarget tape = 1;
+        MediaInspectVolumeTarget volume = 2;
+    }
+    optional string identity = 17;
+}
+
+message MediaInspectTapeTarget {
+    string device = 1;
+}
+
+message MediaInspectVolumeTarget {
+    string uuid = 1;
+}
+
+message MediaInspectReply {
+    string identity = 1;
+    optional media.Media media = 2;
+    int64 file_count = 3;
+    optional int64 last_write_time = 4;
+    optional string mount_point = 5;
+}
+
+message MediaDeleteRequest {
     repeated int64 ids = 1;
 }
 
-message TapeDeleteReply {
+message MediaDeleteReply {
 }
 
-message TapeGetPositionsRequest {
+message MediaGetPositionsRequest {
     int64 id = 1;
     string directory = 2;
+    optional int64 limit = 33;
+    optional string after_path = 34;
 }
 
-message TapeGetPositionsReply {
+message MediaGetPositionsReply {
     repeated position.Position positions = 1;
+    bool has_more = 2;
 }
 
-message JobListRequest {
-    oneof param {
-        JobMGetRequest mget = 1;
-        job.JobFilter list = 2;
-        job.JobRecentlyUpdateFilter recently_update = 3;
-    }
+message VolumeInitializeRequest {
+    string mount_point = 1;
+    string name = 2;
+    media.VolumeMediaProfile profile = 3;
 }
 
-message JobMGetRequest {
-    repeated int64 ids = 1;
+message VolumeInitializeReply {
+    media.Media media = 1;
 }
 
-message JobListReply {
-    repeated job.Job jobs = 1;
+message VolumeRegisterRequest {
+    string mount_point = 1;
+    string name = 2;
 }
 
-message JobCreateRequest {
-    job.CreatableJob job = 1;
-}
-
-message JobCreateReply {
-    job.Job job = 1;
-}
-
-message JobEditStateRequest {
-    int64 id = 1;
-    optional job.JobStatus status = 2;
-    optional job.JobState state = 3;
-}
-
-message JobEditStateReply {
-}
-
-message JobDeleteRequest {
-    repeated int64 ids = 1;
-}
-
-message JobDeleteReply {
-}
-
-message JobDispatchRequest {
-    int64 id = 1;
-    job.JobDispatchParam param = 2;
-}
-
-message JobDispatchReply {
-}
-
-message JobDisplayRequest {
-    int64 id = 1;
-}
-
-message JobDisplayReply {
-    job.JobDisplay display = 1;
-}
-
-message JobGetLogRequest {
-    int64 job_id = 1;
-    optional int64 offset = 2;
-}
-
-message JobGetLogReply {
-    bytes logs = 1;
-    int64 offset = 2;
-}
-
-message SourceListRequest {
-    string path = 1;
-}
-
-message SourceListReply {
-    source.SourceFile file = 1;
-    repeated source.SourceFile chain = 2;
-    repeated source.SourceFile children = 17;
-}
-
-message SourceGetSizeRequest {
-    string path = 1;
-}
-
-message SourceGetSizeReply {
-    int64 size = 1;
+message VolumeRegisterReply {
+    media.Media media = 1;
 }
 
 message DeviceListRequest {}
 
 message DeviceListReply {
     repeated string devices = 1;
-}
-
-message LibraryExportRequest {
-    repeated library_entity_type.LibraryEntityType types = 1;
-}
-
-message LibraryExportReply {
-    bytes json = 1;
 }
 
 message LibraryTrimRequest {

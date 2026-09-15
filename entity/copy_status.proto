@@ -4,11 +4,12 @@ package copy_status;
 option go_package = "github.com/samuelncui/yatm/entity";
 
 enum CopyStatus {
-    DRAFT     = 0;
-    PENDING   = 1; // waiting in queue
-    RUNNING   = 2;
-    STAGED    = 3;
-    SUBMITED  = 4;
+    reserved 2, 255;
+    reserved "DRAFT", "RUNNING", "FAILED", "SUBMITED";
 
-    FAILED  = 255;
+    COPY_STATUS_UNSPECIFIED = 0;
+    PENDING = 1;
+    STAGED = 3;
+    SUBMITTED = 4;
+    COMPLETED = 5;
 }

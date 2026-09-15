@@ -2,73 +2,124 @@ syntax = "proto3";
 package job;
 option go_package = "github.com/samuelncui/yatm/entity";
 
-import "job_archive.proto";
-import "job_restore.proto";
+service JobService {
+    rpc Get(GetJobRequest) returns (GetJobReply) {}
+    rpc List(ListJobsRequest) returns (ListJobsReply) {}
+    rpc Delete(DeleteJobsRequest) returns (DeleteJobsReply) {}
+    rpc Cancel(CancelJobRequest) returns (CancelJobReply) {}
+    rpc RetryIndex(RetryJobIndexRequest) returns (RetryJobIndexReply) {}
+    rpc GetLog(GetJobLogRequest) returns (GetJobLogReply) {}
+}
 
 enum JobStatus {
-    DRAFT       = 0;
-    NOT_READY    = 1; // dependencies not satisfied
-    PENDING     = 2;  // waiting in queue
-    PROCESSING  = 3;
-    COMPLETED   = 4;
+    reserved 1, 3, 127, 255;
+    reserved "DRAFT", "NOT_READY", "PROCESSING", "FAILED", "DELETED";
 
-    FAILED = 127;
+    JOB_STATUS_UNSPECIFIED = 0;
+    PENDING = 2;
+    COMPLETED = 4;
+    INDEXING = 5;
+}
 
-    DELETED = 255;
+enum JobKind {
+    JOB_KIND_UNSPECIFIED = 0;
+    ARCHIVE = 1;
+    RESTORE = 2;
+    SCAN = 4;
+}
+
+// JobPhase is the current in-memory execution phase reported by a Job runner.
+enum JobPhase {
+    JOB_PHASE_UNSPECIFIED = 0;
+    JOB_PHASE_WAITING_FOR_INDEX_RETRY = 1;
+    JOB_PHASE_INDEXING = 2;
+    JOB_PHASE_WAITING_FOR_MEDIA = 3;
+    JOB_PHASE_PREPARING_MEDIA = 4;
+    JOB_PHASE_COPYING_TO_MEDIA = 5;
+    JOB_PHASE_COPYING_FROM_MEDIA = 6;
+    JOB_PHASE_FINALIZING_MEDIA = 7;
+    JOB_PHASE_COMPLETED = 8;
+    JOB_PHASE_GENERATING_PREVIEWS = 9;
+    JOB_PHASE_APPLYING_SCAN = 11;
+    JOB_PHASE_VALIDATING_SOURCE = 12;
+    JOB_PHASE_PUBLISHING_SOURCE = 13;
+    JOB_PHASE_VERIFYING_MEDIA = 14;
 }
 
 message Job {
+    reserved 17;
+    reserved "state";
+
     int64 id = 1;
     JobStatus status = 2;
     int64 priority = 3;
-    int64 create_time_ns = 4;
-    int64 update_time_ns = 5;
-
-    JobState state = 17;
-}
-
-message JobParam {
-    oneof param {
-        job_archive.JobArchiveParam archive = 1;
-        job_restore.JobRestoreParam restore = 2;
-    }
-}
-
-message JobState {
-    oneof state {
-        job_archive.JobArchiveState archive = 1;
-        job_restore.JobRestoreState restore = 2;
-    }
-}
-
-message JobDispatchParam {
-    oneof param {
-        job_archive.JobArchiveDispatchParam archive = 1;
-        job_restore.JobRestoreDispatchParam restore = 2;
-    }
-}
-
-message CreatableJob {
-    int64 priority = 3;
-    JobParam param = 17;
+    int64 created_at_ms = 4;
+    int64 updated_at_ms = 5;
+    int64 deleted_at_ms = 6;
+    JobKind kind = 7;
+    JobPhase phase = 8;
+    int64 revision = 9;
+    optional string target_name = 10;
+    optional int64 location_id = 11;
+    optional int64 media_id = 12;
 }
 
 message JobFilter {
-    optional JobStatus status = 1;
+    reserved 1;
 
+    optional int64 changed_after_revision = 3;
+    optional int64 snapshot_revision = 4;
     optional int64 limit = 33;
     optional int64 offset = 34;
+    optional int64 before_id = 35;
+    optional int64 location_id = 36;
+    optional int64 media_id = 37;
+    optional JobKind kind = 38;
+    optional JobStatus status = 39;
 }
 
-message JobRecentlyUpdateFilter {
-    optional int64 update_since_ns = 1;
-
-    optional int64 limit = 33;
+message GetJobRequest {
+    int64 id = 1;
 }
 
-message JobDisplay {
-    oneof display {
-        job_archive.JobArchiveDisplay archive = 1;
-        job_restore.JobRestoreDisplay restore = 2;
-    }
+message GetJobReply {
+    Job job = 1;
+}
+
+message ListJobsRequest {
+    JobFilter filter = 1;
+}
+
+message ListJobsReply {
+    repeated Job jobs = 1;
+    int64 revision = 3;
+    bool has_more = 4;
+}
+
+message DeleteJobsRequest {
+    repeated int64 ids = 1;
+}
+
+message DeleteJobsReply {}
+
+message CancelJobRequest {
+    int64 id = 1;
+}
+
+message CancelJobReply {}
+
+message RetryJobIndexRequest {
+    int64 id = 1;
+}
+
+message RetryJobIndexReply {}
+
+message GetJobLogRequest {
+    int64 id = 1;
+    optional int64 offset = 2;
+}
+
+message GetJobLogReply {
+    bytes logs = 1;
+    int64 offset = 2;
 }

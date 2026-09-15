@@ -3,67 +3,108 @@ package job_restore;
 option go_package = "github.com/samuelncui/yatm/entity";
 
 import "copy_status.proto";
+import "progress.proto";
+import "job.proto";
+import "job_storage.proto";
+import "media.proto";
 
-enum JobRestoreStep {
-    PENDING     = 0;
-    WAIT_FOR_TAPE = 1;
-    COPYING     = 2;
-
-    FINISHED = 255;
+service RestoreJobService {
+    rpc Create(CreateRestoreJobRequest) returns (CreateRestoreJobReply) {}
+    rpc RestoreMedia(RestoreMediaRequest) returns (RestoreMediaReply) {}
+    rpc GetProgress(GetRestoreJobProgressRequest) returns (GetRestoreJobProgressReply) {}
+    rpc ListMedia(ListRestoreJobMediaRequest) returns (ListRestoreJobMediaReply) {}
+    rpc ListFiles(ListRestoreJobFilesRequest) returns (ListRestoreJobFilesReply) {}
 }
-
-message JobRestoreParam {
-    repeated int64 file_ids = 1;
-}
-
-message JobRestoreDispatchParam {
-    oneof param {
-        JobRestoreWaitForTapeParam wait_for_tape = 1;
-        JobRestoreCopyingParam copying = 2;
-        JobRestoreFinishedParam finished = 255;
-    }
-}
-
-message JobRestoreWaitForTapeParam {}
-
-message JobRestoreCopyingParam {
-    string device = 1;
-}
-
-message JobRestoreFinishedParam {}
 
 message RestoreFile {
+    reserved 2, 3, 17, 18, 33;
+    reserved "tape_id", "position_id", "status", "size", "tape_path";
+
     int64 file_id = 1;
-    int64 tape_id = 2;
-    int64 position_id = 3;
-
-    copy_status.CopyStatus status = 17;
-    int64 size = 18;
+    int64 file_version_id = 35;
     bytes hash = 19;
-
-    string tape_path = 33;
     string target_path = 34;
 }
 
-message RestoreTape {
-    int64 tape_id = 1;
-    string barcode = 2;
+message RestoreCandidate {
+    int64 id = 1;
+    int64 media_id = 2;
+    string media_path = 3;
+}
 
+message RestoreItem {
+    int64 id = 1;
+    copy_status.CopyStatus status = 2;
+    int64 size = 3;
+    RestoreFile file = 5;
+    RestoreCandidate candidate = 6;
+    int64 result_file_id = 7;
+    bool damaged = 8;
+    string result_message = 9;
+    bool linked = 10;
+    bytes actual_sha256 = 11;
+    int64 actual_size = 12;
+}
+
+message CreateRestoreJobRequest {
+    int64 priority = 1;
+    yatm.job_storage.RestoreJobSpec spec = 2;
+}
+
+message CreateRestoreJobReply {
+    job.Job job = 1;
+}
+
+message RestoreMediaRequest {
+    int64 id = 1;
+    media.ReadMediaTarget target = 2;
+}
+
+message RestoreMediaReply {}
+
+message RestoreMedia {
+    int64 media_id = 1;
+    string identity = 2;
+    int64 total = 3;
     copy_status.CopyStatus status = 17;
-    repeated RestoreFile files = 18;
 }
 
-message JobRestoreState {
-    JobRestoreStep step = 1;
-    repeated RestoreTape tapes = 2;
+message GetRestoreJobProgressRequest {
+    int64 id = 1;
 }
 
-message JobRestoreDisplay {
-    int64 copied_bytes = 1;
-    int64 copied_files = 2;
-    int64 total_bytes = 3;
-    int64 total_files = 4;
+message GetRestoreJobProgressReply {
+    progress.Progress progress = 1;
+    RestoreSummary summary = 2;
+}
 
-    optional int64 speed = 5;
-    int64 start_time = 6;
+message RestoreSummary {
+    int64 verified_files = 1;
+    int64 damaged_files = 2;
+    int64 unlinked_files = 3;
+    int64 pending_files = 4;
+}
+
+message ListRestoreJobMediaRequest {
+    int64 id = 1;
+    int32 limit = 2;
+    optional int64 offset = 3;
+    repeated copy_status.CopyStatus filter_status = 4;
+}
+
+message ListRestoreJobMediaReply {
+    repeated RestoreMedia media = 1;
+    bool has_more = 2;
+}
+
+message ListRestoreJobFilesRequest {
+    int64 id = 1;
+    int64 media_id = 2;
+    int32 limit = 3;
+    optional int64 offset = 4;
+    repeated copy_status.CopyStatus filter_status = 5;
+}
+
+message ListRestoreJobFilesReply {
+    repeated RestoreItem items = 1;
 }

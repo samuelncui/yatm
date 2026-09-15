@@ -1,5 +1,7 @@
 package entity
 
+//go:generate go run ./gen
+
 import (
 	"bytes"
 	"database/sql/driver"

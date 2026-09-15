@@ -41,6 +41,7 @@ type CacheOnce[K comparable, V any] struct {
 type cacheOnceItem[V any] struct {
 	once  sync.Once
 	value V
+	err   error
 }
 
 func NewCacheOnce[K comparable, V any](getter func(context.Context, K) (V, error)) *CacheOnce[K, V] {
@@ -51,7 +52,11 @@ func (c *CacheOnce[K, V]) Get(ctx context.Context, req K) (V, error) {
 	if v, have := c.cached.Load(req); have {
 		item, ok := v.(*cacheOnceItem[V])
 		if ok {
-			return c.get(ctx, item, req)
+			val, err := c.get(ctx, item, req)
+			if err == nil {
+				return val, nil
+			}
+			c.Remove(req)
 		}
 	}
 
@@ -64,20 +69,13 @@ func (c *CacheOnce[K, V]) Remove(req K) {
 }
 
 func (c *CacheOnce[K, V]) get(ctx context.Context, item *cacheOnceItem[V], key K) (V, error) {
-	var err error
 	item.once.Do(func() {
 		v, e := c.getter(ctx, key)
 		if e != nil {
-			err = e
+			item.err = e
 			return
 		}
 		item.value = v
 	})
-
-	if err != nil {
-		var v V
-		return v, err
-	}
-
-	return item.value, nil
+	return item.value, item.err
 }

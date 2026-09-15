@@ -1,0 +1,74 @@
+syntax = "proto3";
+package files;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+import "file.proto";
+import "file_operation.proto";
+
+// Provider-neutral entry browsing. References are forwarded unchanged by clients.
+// Pure reads never collect originals; collection is a separate explicit operation.
+service FilesService {
+  rpc List(ListFilesRequest) returns (ListFilesReply) {}
+  rpc Get(GetFilesEntryRequest) returns (FilesEntry) {}
+  rpc Inspect(InspectFilesRequest) returns (InspectFilesReply) {}
+  rpc Collect(CollectFilesRequest) returns (CollectFilesReply) {}
+  rpc UpdateMetadata(UpdateFilesMetadataRequest) returns (FilesEntry) {}
+}
+
+enum EntryKind {
+  ENTRY_FILE = 0;
+  ENTRY_DIRECTORY = 1;
+  ENTRY_LINK = 2;
+  ENTRY_OTHER = 3;
+}
+
+message FilesEntry {
+  file_operation.FileOperationRef reference = 1;
+  string name = 2;
+  string path = 3;
+  EntryKind kind = 4;
+  optional int64 size = 5;
+  int64 mtime_ns = 6;
+  file.File file = 7;
+  file.FileContentSummary summary = 8;
+  repeated file_operation.FileOperationKind operations = 9;
+  bool can_read = 10;
+  // Exact observed content object. Obtain through Get immediately before a content request.
+  file_operation.FileOperationRef content_reference = 11;
+}
+message ListFilesRequest {
+  file_operation.FileOperationRef directory = 1;
+  string cursor = 2;
+  int32 limit = 3;
+  file.FileScope scope = 4;
+  string name_filter = 5;
+  // Shared querystring grammar; unsupported predicates are errors, never silently ignored.
+  string query = 6;
+  // Explicit Library data-usage request; ordinary listing never walks descendants.
+  bool need_size = 7;
+}
+message ListFilesReply {
+  repeated FilesEntry entries = 1;
+  string next_cursor = 2;
+  file.FileScope scope = 3;
+}
+message GetFilesEntryRequest { file_operation.FileOperationRef reference = 1; }
+message InspectFilesRequest { repeated file_operation.FileOperationRef references = 1; }
+message FilesObservation {
+  file_operation.FileOperationRef reference = 1;
+  file.FileContentSummary summary = 2;
+  string error = 3;
+}
+message InspectFilesReply { repeated FilesObservation observations = 1; }
+message CollectFilesRequest {
+  repeated file_operation.FileOperationRef references = 1;
+  // Automatic collection respects the persistent setting and Location Ignore.
+  bool automatic = 2;
+}
+message CollectFilesReply { repeated FilesEntry entries = 1; }
+message UpdateFilesMetadataRequest {
+  file_operation.FileOperationRef reference = 1;
+  optional string note = 2;
+  repeated string add_tags = 3;
+  repeated string remove_tags = 4;
+}

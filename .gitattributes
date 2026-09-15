@@ -1,0 +1,2 @@
+# Patch context markers and upstream whitespace must remain intact.
+frontend/patches/*.patch -whitespace

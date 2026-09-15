@@ -1,0 +1,15 @@
+syntax = "proto3";
+package progress;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+message Progress {
+    int64 copied_bytes = 1;
+    int64 copied_files = 2;
+    int64 total_bytes = 3;
+    int64 total_files = 4;
+
+    int64 speed = 5;
+    int64 start_time = 6;
+    int64 average_speed = 7;
+    int64 historical_average_speed = 8;
+}

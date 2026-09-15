@@ -2,49 +2,69 @@ syntax = "proto3";
 package job_archive;
 option go_package = "github.com/samuelncui/yatm/entity";
 
-import "source.proto";
+import "progress.proto";
+import "copy_status.proto";
+import "job.proto";
+import "job_storage.proto";
+import "media.proto";
 
-enum JobArchiveStep {
-    PENDING     = 0;
-    WAIT_FOR_TAPE = 1;
-    COPYING     = 2;
-
-    FINISHED = 255;
+service ArchiveJobService {
+    rpc Create(CreateArchiveJobRequest) returns (CreateArchiveJobReply) {}
+    rpc WriteMedia(WriteArchiveMediaRequest) returns (WriteArchiveMediaReply) {}
+    rpc GetProgress(GetArchiveJobProgressRequest) returns (GetArchiveJobProgressReply) {}
+    rpc ListFiles(ListArchiveJobFilesRequest) returns (ListArchiveJobFilesReply) {}
 }
 
-message JobArchiveParam {
-    repeated source.Source sources = 1;
+message ArchiveFile {
+    string source_path = 1;
+    string media_path = 2;
+    string target_path = 3;
+    yatm.job_storage.ExpectedFile expected = 4;
 }
 
-message JobArchiveDispatchParam {
-    oneof param {
-        JobArchiveWaitForTapeParam wait_for_tape = 1;
-        JobArchiveCopyingParam copying = 2;
-        JobArchiveFinishedParam finished = 255;
-    }
+message ArchiveItem {
+    int64 id = 1;
+    copy_status.CopyStatus status = 2;
+    int64 size = 3;
+    optional int64 media_id = 4;
+    ArchiveFile file = 5;
 }
 
-message JobArchiveWaitForTapeParam {}
-
-message JobArchiveCopyingParam {
-    string device = 1;
-    string barcode = 2;
-    string name = 3;
+message CreateArchiveJobRequest {
+    int64 priority = 1;
+    yatm.job_storage.ArchiveJobSpec spec = 2;
+    bool force_rehash = 4;
+    yatm.job_storage.PreviewPolicy preview_policy = 6;
 }
 
-message JobArchiveFinishedParam {}
-
-message JobArchiveState {
-    JobArchiveStep step = 1;
-    repeated source.SourceState sources = 2;
+message CreateArchiveJobReply {
+    job.Job job = 1;
 }
 
-message JobArchiveDisplay {
-    int64 copied_bytes = 1;
-    int64 copied_files = 2;
-    int64 total_bytes = 3;
-    int64 total_files = 4;
+message WriteArchiveMediaRequest {
+    int64 id = 1;
+    media.ArchiveMediaTarget target = 2;
+}
 
-    optional int64 speed = 5;
-    int64 start_time = 6;
+message WriteArchiveMediaReply {}
+
+message GetArchiveJobProgressRequest {
+    int64 id = 1;
+}
+
+message GetArchiveJobProgressReply {
+    progress.Progress progress = 1;
+    int64 preview_job_id = 2;
+    string preview_error = 3;
+}
+
+message ListArchiveJobFilesRequest {
+    int64 id = 1;
+    int32 limit = 2;
+    optional int64 offset = 3;
+    repeated copy_status.CopyStatus filter_status = 4;
+}
+
+message ListArchiveJobFilesReply {
+    repeated ArchiveItem items = 1;
 }

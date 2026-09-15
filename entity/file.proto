@@ -2,6 +2,52 @@ syntax = "proto3";
 package file;
 option go_package = "github.com/samuelncui/yatm/entity";
 
+enum FileKind {
+    FILE_KIND_REGULAR = 0;
+    FILE_KIND_DIRECTORY = 1;
+}
+
+enum FileScope {
+    FILE_SCOPE_DEFAULT = 0;
+    FILE_SCOPE_ALL = 1;
+    FILE_SCOPE_SAVED = 2;
+}
+
+message LocationSelection {
+    int64 location_id = 1;
+    string path = 2;
+    int64 revision = 3;
+    LocationEntryRef reference = 4;
+}
+
+// Facts identify an observed filesystem object, not immutable content.
+message LocationFileFacts {
+    int64 size = 1;
+    uint32 mode = 2;
+    int64 mtime_ns = 3;
+    string identity = 4;
+}
+
+message LocationEntryRef {
+    int64 location_id = 1;
+    string path = 2;
+    string binding_token = 3;
+    LocationFileFacts facts = 4;
+}
+
+// Selections retain the browser source and scope until bounded Job indexing freezes leaves.
+message FileSelection {
+    oneof target {
+        LibrarySelection library = 1;
+        LocationSelection location = 2;
+    }
+    FileScope scope = 3;
+}
+
+message LibrarySelection {
+    int64 file_id = 1;
+}
+
 message File {
     int64 id = 1;
     int64 parent_id = 2;
@@ -11,9 +57,53 @@ message File {
     int64 mod_time = 18;
     int64 size = 19;
     bytes hash = 20;
+    repeated string tags = 21;
+    string note = 22;
+    FileKind kind = 24;
+    int64 created_at_ms = 25;
+    int64 updated_at_ms = 26;
+    // Catalog coverage and explicitly timed original observations, never a health guarantee.
+    FileContentSummary content_summary = 27;
 }
 
-message EditedFile {
-    optional int64 parent_id = 2;
-    optional string name = 3;
+enum OriginalAvailability {
+    ORIGINAL_UNCHECKED = 0;
+    ORIGINAL_PRESENT = 1;
+    ORIGINAL_MISSING = 2;
+    ORIGINAL_UNLINKED = 3;
+    ORIGINAL_UNAVAILABLE = 4;
+}
+
+message FileContentSummary {
+    bool has_original = 1;
+    bool has_versions = 2;
+    bool signature_known = 3;
+    int64 archived_copies = 4;
+    int64 healthy_copies = 5;
+    int64 unchecked_copies = 6;
+    int64 unhealthy_copies = 7;
+    OriginalAvailability original_availability = 8;
+    int64 observed_at_ms = 9;
+    // Signature-linked history counts deduplicate physical Positions across versions.
+    int64 version_copies = 10;
+    int64 restorable_version_copies = 11;
+    int64 unhealthy_version_copies = 12;
+    int64 latest_version_id = 13;
+    int64 latest_version_restorable_copies = 14;
+    // Current content counts require a valid binding and matching live object facts.
+  bool current_observation_valid = 15;
+  int64 restorable_current_copies = 16;
+}
+
+// An immutable archived content state owned by one independently organized File.
+message FileVersion {
+    int64 id = 1;
+    int64 file_id = 2;
+    bytes signature = 3;
+    bytes sha256 = 4;
+    int64 size = 5;
+    uint32 mode = 6;
+    int64 mtime_ns = 7;
+    optional int64 first_archived_at_ms = 8;
+    optional int64 last_archived_at_ms = 9;
 }

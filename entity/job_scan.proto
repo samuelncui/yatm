@@ -1,0 +1,158 @@
+syntax = "proto3";
+package job_scan;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+import "job.proto";
+import "progress.proto";
+import "file.proto";
+import "media.proto";
+import "online.proto";
+import "storage.proto";
+import "job_storage.proto";
+
+service ScanJobService {
+    rpc Create(CreateScanJobRequest) returns (CreateScanJobReply) {}
+    rpc ReadMedia(ReadScanMediaRequest) returns (ReadScanMediaReply) {}
+    rpc GetProgress(GetScanJobProgressRequest) returns (GetScanJobProgressReply) {}
+    rpc ListEntries(ListScanJobEntriesRequest) returns (ListScanJobEntriesReply) {}
+    rpc ListScopes(ListScanJobScopesRequest) returns (ListScanJobScopesReply) {}
+}
+
+enum ScanChange {
+    SCAN_CHANGE_UNSPECIFIED = 0;
+    SCAN_CHANGE_ADDED = 1;
+    SCAN_CHANGE_CHANGED = 2;
+    SCAN_CHANGE_REMOVED = 3;
+    SCAN_CHANGE_UNCHANGED = 4;
+}
+
+enum ScanSignaturePolicy {
+    FILL_MISSING = 0;
+    KNOWN_ONLY = 1;
+    FORCE_READ = 2;
+}
+
+enum ScanResultPolicy {
+    REPORT_ONLY = 0;
+    PUBLISH_ORIGINALS = 1;
+    PUBLISH_INVENTORY = 2;
+    VERIFY_COPIES = 3;
+}
+
+enum ScanFinding {
+    NOT_CHECKED = 0;
+    MATCH = 1;
+    MISMATCH = 2;
+    MISSING = 3;
+    UNREADABLE = 4;
+    UNVERIFIABLE = 5;
+}
+
+enum ScanPreviewOutcome {
+    PREVIEW_NOT_REQUESTED = 0;
+    PREVIEW_READY = 1;
+    PREVIEW_SKIPPED = 2;
+    PREVIEW_FAILED = 3;
+}
+
+message ScanJobSpec {
+
+    int64 media_id = 1;
+    int64 location_id = 4;
+    repeated string paths = 5;
+    repeated file.FileSelection selections = 6;
+    ScanSignaturePolicy signature_policy = 7;
+    ScanResultPolicy result_policy = 8;
+    bool compare_library = 9;
+    yatm.job_storage.PreviewPolicy preview_policy = 12;
+}
+
+message ScanEntry {
+    string path = 1;
+    ScanChange change = 2;
+    int64 size = 3;
+    uint32 mode = 4;
+    int64 mtime_ns = 5;
+    bytes sha256 = 6;
+    int64 id = 7;
+    int64 location_id = 8;
+    bytes signature = 9;
+    online.OnlinePosition before = 10;
+    online.OnlinePosition after = 11;
+    int64 position_id = 12;
+    ScanFinding finding = 13;
+    int64 actual_size = 14;
+    bytes actual_hash = 15;
+    int64 checked_at_ms = 16;
+    string detail = 17;
+    bool stale = 18;
+    ScanPreviewOutcome preview = 19;
+    string preview_error = 20;
+    int64 matching_copies = 21;
+    yatm.storage.StoragePosition storage = 22;
+}
+
+message ScanScopeResult {
+    int64 location_id = 1;
+    string path = 2;
+    string error = 3;
+    int64 published_at_ms = 4;
+    int64 id = 5;
+}
+
+message ReadScanMediaRequest { int64 id = 1; media.ReadMediaTarget target = 2; }
+message ReadScanMediaReply {}
+
+message CreateScanJobRequest {
+    int64 priority = 1;
+    ScanJobSpec spec = 2;
+}
+
+message CreateScanJobReply {
+    job.Job job = 1;
+}
+
+message GetScanJobProgressRequest {
+    int64 id = 1;
+}
+
+message GetScanJobProgressReply {
+    progress.Progress progress = 1;
+    int64 added = 2;
+    int64 changed = 3;
+    int64 removed = 4;
+    int64 bytes = 5;
+    int64 unchanged = 6;
+    int64 matched = 7;
+    int64 damaged = 8;
+    int64 missing = 9;
+    int64 unreadable = 10;
+    int64 unverifiable = 11;
+    int64 previews_ready = 12;
+    int64 previews_skipped = 13;
+    int64 previews_failed = 14;
+    repeated ScanScopeResult scopes = 15;
+    bool scopes_has_more = 16;
+}
+
+message ListScanJobScopesRequest {
+    int64 id = 1;
+    int32 limit = 2;
+    optional int64 after_id = 3;
+}
+
+message ListScanJobScopesReply {
+    repeated ScanScopeResult scopes = 1;
+    bool has_more = 2;
+}
+
+message ListScanJobEntriesRequest {
+    int64 id = 1;
+    int32 limit = 2;
+    optional int64 after_id = 4;
+}
+
+message ListScanJobEntriesReply {
+    repeated ScanEntry entries = 1;
+    bool has_more = 2;
+}

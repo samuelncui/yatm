@@ -1,321 +1,244 @@
-import { Fragment, ChangeEvent, useState, useMemo, useContext, useCallback } from "react";
-import format from "format-duration";
-
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 
-import { styled } from "@mui/material/styles";
-import Grid from "@mui/material/Grid";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import ListItemButton from "@mui/material/ListItemButton";
 import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
-import Chip, { ChipProps } from "@mui/material/Chip";
-import Stack from "@mui/material/Stack";
+import Alert from "@mui/material/Alert";
+import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import LinearProgress from "@mui/material/LinearProgress";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemText from "@mui/material/ListItemText";
+import Stack from "@mui/material/Stack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { TreeView, TreeItem } from "@mui/x-tree-view";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { styled } from "@mui/material/styles";
 
-import { cli } from "../api";
-import { Job, JobDispatchRequest, CopyStatus, JobArchiveStep } from "../entity";
-import { JobRestoreCopyingParam, JobRestoreStep, JobRestoreDisplay, JobRestoreState } from "../entity";
-import { RestoreTape } from "../entity";
+import { cli, restoreJobCli } from "@/api";
+import { CopyStatus, Job, JobPhase, JobStatus, Media, Progress, RestoreItem, RestoreMedia, type RestoreSummary } from "@/entity";
+import { ReadMediaDialog } from "@/components/read-media-dialog";
+import { CancelJobButton, IndexingActions, isJobActive, JobCard, JobProgress, jobProgressFields } from "@/components/job-card";
+import { FileRow, FileRowPlaceholder } from "@/components/job-file-list-item";
+import { errorMessage } from "@/tools";
 
-import { formatFilesize } from "../tools";
+const mediaPageSize = 100;
 
-import { JobCard } from "./job-card";
-import { RefreshContext } from "../pages/jobs";
-import { FileListItem } from "./job-file-list-item";
+export const RestoreCard = ({ job }: { job: Job }) => {
+  const [visible, setVisible] = useState(false);
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [summary, setSummary] = useState<RestoreSummary>();
+  const [media, setMedia] = useState<RestoreMedia[]>([]);
+  const [storage, setStorage] = useState<Map<bigint, Media>>(new Map());
+  const [error, setError] = useState("");
 
-const tapeStatusToColor = (status: CopyStatus): ChipProps["color"] => {
-  switch (status) {
-    case CopyStatus.DRAFT:
-      return "primary";
-    case CopyStatus.PENDING:
-      return "primary";
-    case CopyStatus.RUNNING:
-      return "secondary";
-    case CopyStatus.STAGED:
-      return "warning";
-    case CopyStatus.SUBMITED:
-      return "success";
-    case CopyStatus.FAILED:
-      return "error";
-    default:
-      return "default";
-  }
-};
+  useEffect(() => {
+    if (!visible) return;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const progressResponse = await restoreJobCli.getProgress({ id: job.id }).response;
+        setProgress(progressResponse.progress ?? null);
+        setSummary(progressResponse.summary);
+        if (job.status === JobStatus.INDEXING) return;
 
-export const RestoreCard = ({ job, state, display }: { job: Job; state: JobRestoreState; display: JobRestoreDisplay | null }): JSX.Element => {
-  const [fields, progress] = useMemo(() => {
-    const totalFiles = state.tapes.reduce((count, tape) => count + tape.files.length, 0);
-    let successFiles = 0,
-      successBytes = 0,
-      copiedFiles = Number(display?.copiedFiles || 0n),
-      copiedBytes = Number(display?.copiedBytes || 0n),
-      totalBytes = 0;
-    for (const tape of state.tapes) {
-      for (const file of tape.files) {
-        totalBytes += Number(file.size);
-
-        if (file.status === CopyStatus.SUBMITED || file.status === CopyStatus.STAGED) {
-          successFiles++;
-          successBytes += Number(file.size);
+        const loaded: RestoreMedia[] = [];
+        const names = new Map<bigint, Media>();
+        let offset = 0n;
+        let hasMore = true;
+        while (hasMore) {
+          const response = await restoreJobCli.listMedia({
+            id: job.id,
+            limit: mediaPageSize,
+            offset,
+            filterStatus: [],
+          }).response;
+          loaded.push(...response.media);
+          if (response.media.length > 0) {
+            const catalog = await cli.mediaList({ param: { oneofKind: "mget", mget: { ids: response.media.map((value) => value.mediaId) } } }).response;
+            for (const value of catalog.media) names.set(value.id, value);
+          }
+          hasMore = response.hasMore;
+          offset += BigInt(mediaPageSize);
         }
-
-        if (file.status === CopyStatus.SUBMITED) {
-          copiedFiles++;
-          copiedBytes += Number(file.size);
-        }
+        setMedia(loaded);
+        setStorage(names);
+        setError("");
+      } catch (error) {
+        setError(errorMessage(error, "Could not load restore progress"));
+      } finally {
+        refreshing = false;
       }
-    }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 2000);
+    return () => clearInterval(timer);
+  }, [visible, job.id, job.status]);
 
-    const avgSpeed = (() => {
-      if (!display || !display.copiedBytes || !display.startTime) {
-        return NaN;
-      }
-
-      const duration = Date.now() / 1000 - Number(display.startTime);
-      if (duration <= 0) {
-        return NaN;
-      }
-
-      return Number(display.copiedBytes) / duration;
-    })();
-
-    const progress = (totalBytes > 0 ? copiedBytes / totalBytes : 1) * 100;
-    const fields = [
-      { name: "Current Step", value: JobArchiveStep[state.step] },
-      { name: "Current Speed", value: display?.speed ? `${formatFilesize(display?.speed)}/s` : "--" },
-      { name: "Average Speed", value: !isNaN(avgSpeed) ? `${formatFilesize(avgSpeed)}/s` : "--" },
-      { name: "Estimated Time", value: !isNaN(avgSpeed) ? format(((totalBytes - copiedBytes) * 1000) / avgSpeed) : "--" },
-      { name: "Copied Files", value: copiedFiles },
-      { name: "Copied Bytes", value: formatFilesize(copiedBytes) },
-      { name: "Success Files", value: successFiles },
-      { name: "Success Bytes", value: formatFilesize(successBytes) },
-      { name: "Total Files", value: totalFiles },
-      { name: "Total Bytes", value: formatFilesize(totalBytes) },
-    ];
-
-    return [fields, progress];
-  }, [state, display]);
-
+  const [fields, percentage] = useMemo(() => jobProgressFields(job, progress), [job, progress]);
+  const indexing = job.status === JobStatus.INDEXING;
+  const active = isJobActive(job);
   return (
     <JobCard
       job={job}
+      onVisibilityChange={setVisible}
       detail={
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Box sx={{ paddingTop: "1em" }}>
-              <LinearProgress variant="determinate" value={progress} />
-            </Box>
-          </Grid>
-          {fields.map((field, idx) => (
-            <Grid item xs={12} md={3} key={idx}>
-              <Typography variant="body1">
-                <b>{field.name}</b>: {field.value}
-              </Typography>
-            </Grid>
-          ))}
-          <Grid item xs={12} md={12}>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-              {state.tapes.map((tape) => (
-                <Chip label={`${tape.barcode}: ${CopyStatus[tape.status]}`} color={tapeStatusToColor(tape.status)} variant="outlined" key={`${tape.tapeId}`} />
+        <Fragment>
+          <JobProgress fields={fields} indexing={indexing && active} percentage={percentage} />
+          {summary && (
+            <div className="product-actions" aria-label="Restore results">
+              <Chip label={`${summary.verifiedFiles} verified`} color="success" variant="outlined" />
+              <Chip label={`${summary.damagedFiles} recovered with damage`} color={summary.damagedFiles > 0n ? "warning" : "default"} variant="outlined" />
+              <Chip label={`${summary.unlinkedFiles} not linked`} variant="outlined" />
+              <Chip label={`${summary.pendingFiles} pending`} variant="outlined" />
+            </div>
+          )}
+          {error && <Alert severity="warning">{error}</Alert>}
+          {!indexing && (
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", marginTop: 2 }}>
+              {media.map((value) => (
+                <Chip
+                  key={value.mediaId.toString()}
+                  label={`${storage.get(value.mediaId)?.name || value.identity}: ${CopyStatus[value.status].toLowerCase()}`}
+                  color={value.status === CopyStatus.COMPLETED ? "success" : "primary"}
+                  variant="outlined"
+                />
               ))}
             </Stack>
-          </Grid>
-        </Grid>
+          )}
+        </Fragment>
       }
       buttons={
         <Fragment>
-          {state.step === JobRestoreStep.WAIT_FOR_TAPE && <LoadTapeDialog key="LOAD_TAPE" job={job} />}
-          <RestoreViewFilesDialog key="RESTORE_VIEW_FILES" tapes={state.tapes} />
+          {indexing ? (
+            <IndexingActions job={job} />
+          ) : (
+            <Fragment>
+              {job.phase === JobPhase.WAITING_FOR_MEDIA && (
+                <ReadMediaDialog
+                  mediaIDs={media.filter((value) => value.status === CopyStatus.PENDING).map((value) => value.mediaId)}
+                  operation="restore"
+                  onRead={async (target) => {
+                    await restoreJobCli.restoreMedia({ id: job.id, target }).response;
+                  }}
+                />
+              )}
+              {active && <CancelJobButton jobID={job.id} />}
+              <RestoreViewFilesDialog media={media} jobID={job.id} />
+            </Fragment>
+          )}
         </Fragment>
       }
     />
   );
 };
 
-const LoadTapeDialog = ({ job }: { job: Job }) => {
-  const refresh = useContext(RefreshContext);
+const MediaRow = styled(ListItemButton)(({ theme }) => ({
+  padding: "0.2rem",
+  width: "100%",
+  position: "sticky",
+  top: 0,
+  zIndex: 10,
+  backgroundColor: theme.palette.background.paper,
+}));
+const MediaRowText = styled(ListItemText)({ padding: 0, margin: 5, marginLeft: 10 });
 
-  const [devices, setDevices] = useState<string[] | null>(null);
-  const [device, setDevice] = useState<string | null>(null);
-  const handleClickOpen = async () => {
-    const reply = await cli.deviceList({}).response;
-    setDevices(reply.devices);
-  };
-  const handleClose = () => {
-    setDevices(null);
-    setDevice(null);
-  };
-
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setDevice(event.target.value);
-  };
-  const handleSubmit = async () => {
-    if (!device) {
-      return;
-    }
-
-    const trimedParam: JobRestoreCopyingParam = {
-      device: device,
-    };
-
-    const req = makeRestoreCopyingParam(job.id, trimedParam);
-    console.log("job dispatch start, request= ", req);
-
-    const reply = await cli.jobDispatch(req).response;
-    console.log("job dispatch success, reply= ", reply);
-    await refresh();
-    handleClose();
-  };
+const MediaFiles = ({ value, jobID, scrollParent }: { value: RestoreMedia; jobID: bigint; scrollParent: HTMLElement | null }) => {
+  const [cache, setCache] = useState<Record<number, RestoreItem>>({});
+  const requestSequence = useRef(0);
+  const loadRange = useCallback(
+    async ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) => {
+      const request = ++requestSequence.current;
+      const response = await restoreJobCli.listFiles({
+        id: jobID,
+        mediaId: value.mediaId,
+        limit: endIndex - startIndex + 1,
+        offset: BigInt(startIndex),
+        filterStatus: [],
+      }).response;
+      if (request !== requestSequence.current) return;
+      const next: Record<number, RestoreItem> = {};
+      response.items.forEach((item, index) => {
+        next[startIndex + index] = item;
+      });
+      setCache(next);
+    },
+    [jobID, value.mediaId],
+  );
 
   return (
-    <Fragment>
-      <Button size="small" onClick={handleClickOpen}>
-        Load Tape
-      </Button>
-      {devices && (
-        <Dialog open={true} onClose={handleClose} maxWidth={"sm"} fullWidth>
-          <DialogTitle>Load Tape</DialogTitle>
-          <DialogContent>
-            <DialogContentText>After load tape into tape drive, click 'Submit'</DialogContentText>
-            <TextField select required margin="dense" label="Drive Device" fullWidth variant="standard" value={device} onChange={handleChange}>
-              {devices.map((device) => (
-                <MenuItem key={device} value={device}>
-                  {device}
-                </MenuItem>
-              ))}
-            </TextField>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Cancel</Button>
-            <Button onClick={handleSubmit}>Submit</Button>
-          </DialogActions>
-        </Dialog>
-      )}
-    </Fragment>
+    <Virtuoso
+      style={{ width: "100%" }}
+      useWindowScroll
+      customScrollParent={scrollParent ?? undefined}
+      totalCount={Number(value.total)}
+      defaultItemHeight={54}
+      rangeChanged={loadRange}
+      itemContent={(index) => {
+        const item = cache[index];
+        if (!item?.candidate) return <FileRowPlaceholder indent={27} />;
+        return (
+          <FileRow
+            src={{
+              path: item.file?.targetPath || item.candidate.mediaPath,
+              size: item.size,
+              status: item.status,
+              resultLabel: item.damaged
+                ? "Recovered with damage"
+                : item.status === CopyStatus.COMPLETED
+                  ? item.linked
+                    ? "Verified · Linked"
+                    : "Verified · Not linked"
+                  : undefined,
+              resultMessage: item.resultMessage,
+              resultFileID: item.resultFileId,
+            }}
+            indent={27}
+          />
+        );
+      }}
+    />
   );
 };
 
-const TapeRow = styled(ListItemButton)({
-  padding: "0.2rem",
-  width: "100%",
-  cursor: "pointer",
-});
-const FileRow = styled(FileListItem)({ paddingLeft: "1rem" });
-
-interface RowData {
-  type: "tape" | "file";
-  label: React.ReactNode;
-  opened?: boolean;
-}
-
-const RestoreViewFilesDialog = ({ tapes }: { tapes: RestoreTape[] }) => {
+const RestoreViewFilesDialog = ({ media, jobID }: { media: RestoreMedia[]; jobID: bigint }) => {
   const [open, setOpen] = useState(false);
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-  const handleClose = () => {
-    setOpen(false);
-  };
-
-  const [openedTapeIDs, setOpenedTapeIDs] = useState<bigint[]>([]);
-  const clickTapeRow = useCallback(
-    (id: bigint, opened: boolean) => {
-      if (opened) {
-        setOpenedTapeIDs(openedTapeIDs.filter((tapeID) => tapeID !== id));
-        return;
-      }
-
-      setOpenedTapeIDs([...openedTapeIDs, id]);
-      return;
-    },
-    [openedTapeIDs, setOpenedTapeIDs],
-  );
-
-  const rows = useMemo(() => {
-    const rows: RowData[] = [];
-    for (const tape of tapes) {
-      const opened = openedTapeIDs.includes(tape.tapeId);
-      rows.push({
-        type: "tape",
-        label: (
-          <TapeRow onClick={() => clickTapeRow(tape.tapeId, opened)}>
-            {opened ? <ExpandMoreIcon /> : <ChevronRightIcon />}
-            {tape.barcode}
-          </TapeRow>
-        ),
-        opened,
-      });
-
-      if (!opened) {
-        continue;
-      }
-
-      for (const file of tape.files) {
-        rows.push({
-          type: "file",
-          label: <FileRow src={{ path: file.tapePath, size: file.size, status: file.status }} />,
-        });
-      }
-    }
-
-    return rows;
-  }, [tapes, openedTapeIDs]);
+  const [openedMediaID, setOpenedMediaID] = useState<bigint | null>(null);
+  const [scrollParent, setScrollParent] = useState<HTMLElement | null>(null);
+  const activeMediaID = media.some((value) => value.mediaId === openedMediaID) ? openedMediaID : null;
 
   return (
     <Fragment>
-      <Button size="small" onClick={handleClickOpen}>
+      <Button size="small" onClick={() => setOpen(true)}>
         View Files
       </Button>
       {open && (
-        <Dialog open={true} onClose={handleClose} maxWidth={"lg"} fullWidth scroll="paper" sx={{ height: "100%" }} className="view-log-dialog">
+        <Dialog open onClose={() => setOpen(false)} maxWidth="lg" fullWidth scroll="paper" className="job-view-dialog">
           <DialogTitle>View Files</DialogTitle>
-          <DialogContent dividers style={{ padding: 0 }}>
-            <Virtuoso
-              style={{ width: "100%", height: "100%" }}
-              totalCount={rows.length}
-              itemContent={(idx) => {
-                const row = rows[idx];
-                if (!row) {
-                  return null;
-                }
-
-                return row.label;
-              }}
-            />
+          <DialogContent dividers style={{ padding: 0 }} ref={setScrollParent}>
+            <List style={{ width: "100%", padding: 0 }}>
+              {media.map((value) => {
+                const opened = activeMediaID === value.mediaId;
+                return (
+                  <Fragment key={value.mediaId.toString()}>
+                    <MediaRow onClick={() => setOpenedMediaID(opened ? null : value.mediaId)}>
+                      {opened ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                      <MediaRowText primary={`Media: ${value.identity}`} secondary={`Files: ${value.total} | Status: ${CopyStatus[value.status]}`} />
+                    </MediaRow>
+                    {opened && <MediaFiles value={value} jobID={jobID} scrollParent={scrollParent} />}
+                  </Fragment>
+                );
+              })}
+            </List>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleClose}>Close</Button>
+            <Button onClick={() => setOpen(false)}>Close</Button>
           </DialogActions>
         </Dialog>
       )}
     </Fragment>
   );
 };
-
-function makeRestoreCopyingParam(jobID: bigint, param: JobRestoreCopyingParam): JobDispatchRequest {
-  return {
-    id: jobID,
-    param: {
-      param: {
-        oneofKind: "restore",
-        restore: {
-          param: {
-            oneofKind: "copying",
-            copying: param,
-          },
-        },
-      },
-    },
-  };
-}

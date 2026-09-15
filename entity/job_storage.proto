@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package yatm.job_storage;
+
+option go_package = "github.com/samuelncui/yatm/entity";
+
+import "source.proto";
+import "storage.proto";
+import "file.proto";
+
+enum PreviewPolicy {
+  PREVIEW_NONE = 0;
+  PREVIEW_MISSING_ONLY = 1;
+  PREVIEW_REGENERATE_ALL = 2;
+}
+
+message ArchiveJobSpec {
+  repeated source.Source sources = 1;
+  repeated int64 file_ids = 2;
+  repeated file.FileSelection selections = 3;
+}
+
+message RestoreJobSpec {
+  repeated int64 file_version_ids = 2;
+  repeated file.FileSelection selections = 3;
+  RestoreDestination destination = 4;
+  bool allow_damaged_copies = 5;
+  RestoreVersionPolicy version_policy = 6;
+  // Explicit consent to omit automatic selections with no matching dated version.
+  bool skip_unmatched_versions = 7;
+}
+
+// Unset cutoff selects the latest saved version. Explicit version IDs override this policy.
+message RestoreVersionPolicy {
+  optional int64 before_at_ms = 1;
+}
+
+// The server resolves and freezes root_path/executor_id when the Job is created.
+message RestoreDestination {
+  int64 location_id = 1;
+  string path = 2;
+  string root_path = 3;
+  string executor_id = 4;
+  string binding_token = 5;
+}
+
+// ArchiveManifestFile is stored only in an Archive Job database.
+message ArchiveManifestFile {
+  string source_path = 1;
+  ExpectedFile expected = 3;
+  bool library_selected = 4;
+}
+
+// ExpectedFile freezes selected content identity without interpreting its signature.
+message ExpectedFile {
+  int64 file_id = 1;
+  bytes signature = 2;
+  bytes sha256 = 3;
+  int64 size = 4;
+  int64 file_version_id = 5;
+  uint32 mode = 6;
+  int64 mtime_ns = 7;
+  // Navigation provenance captured with the original observation, not content identity.
+  int64 original_location_id = 8;
+}
+
+// ArchiveCopyResult is staged after one file is copied and verified.
+message ArchiveCopyResult {
+  int64 size = 1;
+  uint32 mode = 2;
+  int64 mod_time_ns = 3;
+  int64 write_time_ns = 4;
+  bytes sha256 = 5;
+  yatm.storage.StoragePosition storage = 6;
+}

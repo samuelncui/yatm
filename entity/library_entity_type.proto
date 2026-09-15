@@ -3,8 +3,15 @@ package library_entity_type;
 option go_package = "github.com/samuelncui/yatm/entity";
 
 enum LibraryEntityType {
+    reserved "TAPE";
+
     NONE = 0;
     FILE = 1;
-    TAPE = 2;
+    MEDIA = 2;
     POSITION = 3;
+    LOCATION = 4;
+    FILE_LOCATION = 5;
+    FILE_VERSION = 6;
+    FILE_TRACKING_KEY = 7;
+    RESTORE_RESULT = 8;
 }

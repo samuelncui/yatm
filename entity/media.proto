@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package media;
+option go_package = "github.com/samuelncui/yatm/entity";
+
+enum MediaKind {
+    MEDIA_KIND_UNSPECIFIED = 0;
+    MEDIA_KIND_TAPE = 1;
+    MEDIA_KIND_VOLUME = 2;
+}
+
+enum MediaAccess {
+    MEDIA_ACCESS_UNSPECIFIED = 0;
+    MEDIA_ACCESS_CONCURRENT_RANDOM = 1;
+    MEDIA_ACCESS_RANDOM = 2;
+    MEDIA_ACCESS_SEQUENTIAL = 3;
+}
+
+enum VolumeType {
+    VOLUME_TYPE_UNSPECIFIED = 0;
+    VOLUME_TYPE_HDD = 1;
+    VOLUME_TYPE_HM_SMR = 2;
+}
+
+enum ArchiveTapeWriteMode {
+    ARCHIVE_TAPE_WRITE_MODE_UNSPECIFIED = 0;
+    ARCHIVE_TAPE_WRITE_MODE_FORMAT = 1;
+    ARCHIVE_TAPE_WRITE_MODE_APPEND = 2;
+}
+
+message Capabilities {
+    MediaAccess read = 1;
+    MediaAccess write = 2;
+}
+
+message TapeMediaProfile {
+    string serial_number = 1;
+    string encryption = 2;
+    string format = 3;
+}
+
+message VolumeMediaProfile {
+    string serial_number = 1;
+    VolumeType type = 2;
+}
+
+message MediaProfile {
+    oneof kind {
+        TapeMediaProfile tape = 1;
+        VolumeMediaProfile volume = 2;
+    }
+}
+
+message Media {
+
+    int64 id = 1;
+    MediaKind kind = 2;
+    string identity = 3;
+    string name = 4;
+    Capabilities capabilities = 6;
+    MediaProfile profile = 9;
+
+    int64 create_time = 17;
+    optional int64 destroy_time = 18;
+    int64 capacity_bytes = 19;
+    int64 written_bytes = 20;
+    optional bool mounted = 21;
+    optional int64 filesystem_available_bytes = 22;
+}
+
+message MediaFilter {
+    repeated MediaKind kinds = 1;
+    // Literal, case-insensitive substring of the Media name or identity.
+    string query = 2;
+    optional int64 limit = 33;
+    optional int64 offset = 34;
+    // Selects ID-ascending pagination; use zero for its first page. Exclusive with offset.
+    optional int64 after_id = 35;
+}
+
+message ArchiveTapeTarget {
+    string device = 1;
+    string barcode = 2;
+    string name = 3;
+    ArchiveTapeWriteMode mode = 4;
+}
+
+message ArchiveVolumeTarget {
+    string uuid = 1;
+}
+
+message ArchiveMediaTarget {
+    oneof backend {
+        ArchiveTapeTarget tape = 1;
+        ArchiveVolumeTarget volume = 2;
+    }
+}
+
+message ReadTapeTarget {
+    string device = 1;
+}
+
+message ReadVolumeTarget {
+    string uuid = 1;
+}
+
+message ReadMediaTarget {
+    oneof backend {
+        ReadTapeTarget tape = 1;
+        ReadVolumeTarget volume = 2;
+    }
+    // Populated from the frozen Job manifest by the runner, never trusted from a client.
+    int64 expected_media_id = 3;
+    string expected_identity = 4;
+    MediaProfile expected_profile = 5;
+}

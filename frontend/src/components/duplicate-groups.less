@@ -1,0 +1,43 @@
+.duplicate-results {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px 8px;
+
+  .duplicate-results-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 4px 12px;
+    > div {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    span {
+      color: #657187;
+      font-size: 12px;
+    }
+  }
+
+  .duplicate-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: #657187;
+  }
+  .duplicate-signature {
+    font-size: 12px;
+    padding: 8px 12px;
+    color: #657187;
+    summary {
+      cursor: pointer;
+    }
+    code {
+      display: block;
+      overflow-wrap: anywhere;
+      user-select: text;
+      margin-top: 8px;
+    }
+  }
+}

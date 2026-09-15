@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "${script_dir}/.." && pwd)
+demo_root=${YATM_DEMO_ROOT:-"${TMPDIR:-/tmp}/yatm-demo"}
+listen=${YATM_DEMO_LISTEN:-127.0.0.1:18080}
+
+cd "${repo_root}"
+prepare_args=(-root "${demo_root}" -listen "${listen}")
+if [[ ${YATM_DEMO_RESET:-0} == 1 ]]; then
+    prepare_args+=(-reset)
+fi
+if [[ -n ${YATM_DEMO_VIDEO:-} ]]; then
+    prepare_args+=(-video "${YATM_DEMO_VIDEO}")
+fi
+go run ./cmd/demo "${prepare_args[@]}"
+
+pnpm --dir frontend build
+go build -o "${demo_root}/yatm-httpd" ./cmd/httpd
+
+rm -rf "${demo_root}/frontend"
+mkdir -p "${demo_root}/frontend"
+cp frontend/dist/index.html "${demo_root}/frontend/index.html"
+cp -R frontend/dist/assets "${demo_root}/frontend/assets"
+
+cd "${demo_root}"
+exec ./yatm-httpd -config ./config.yaml
