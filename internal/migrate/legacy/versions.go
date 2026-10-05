@@ -8,6 +8,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) error {
@@ -21,29 +22,59 @@ func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) e
 		if len(copies) == 0 {
 			break
 		}
+
+		// Load each page's File facts once, without retaining the complete catalog.
+		ids := make([]int64, 0, len(copies))
 		for _, copy := range copies {
-			var file stagedLibraryFile
 			if copy.FileID > 0 {
-				if err := db.WithContext(ctx).Where("id = ?", copy.FileID).Limit(1).Find(&file).Error; err != nil {
-					return err
-				}
+				ids = append(ids, copy.FileID)
 			}
-			matches := file.ID != 0 && file.Size == copy.Size && (len(file.Hash) == 0 || bytes.Equal(file.Hash, copy.Hash))
-			signature := file.Signature
-			if !matches || len(signature) == 0 {
+		}
+		var files []*stagedLibraryFile
+		if len(ids) > 0 {
+			if err := db.WithContext(ctx).Where("id IN ?", ids).Find(&files).Error; err != nil {
+				return fmt.Errorf("read archived File facts failed, %w", err)
+			}
+		}
+		byID := make(map[int64]*stagedLibraryFile, len(files))
+		for _, file := range files {
+			byID[file.ID] = file
+		}
+
+		// Reconcile saved versions in physical-copy order, including duplicates within this page.
+		type content struct {
+			fileID    int64
+			signature string
+		}
+		seen := make(map[content]*stagedLibraryVersion)
+		versions := make([]*stagedLibraryVersion, 0, len(copies))
+		for _, copy := range copies {
+			file := byID[copy.FileID]
+			matches := file != nil && file.Size == copy.Size && (len(file.Hash) == 0 || bytes.Equal(file.Hash, copy.Hash))
+			var signature []byte
+			if matches {
+				signature = file.Signature
+			}
+			if len(signature) == 0 {
 				signature, _ = library.NewFileSignature(copy.Hash, copy.Size)
 			}
-			if err := db.WithContext(ctx).Model(copy).Update("signature", signature).Error; err != nil {
-				return err
-			}
-			if file.ID == 0 || len(signature) == 0 || file.Kind != entity.FileKind_FILE_KIND_REGULAR {
+			copy.Signature = signature
+			if file == nil || len(signature) == 0 || file.Kind != entity.FileKind_FILE_KIND_REGULAR {
 				continue
 			}
-			var existing stagedLibraryVersion
-			if err := db.WithContext(ctx).Where("file_id = ? AND signature = ?", file.ID, signature).Limit(1).Find(&existing).Error; err != nil {
-				return err
+			key := content{fileID: file.ID, signature: string(signature)}
+			existing := seen[key]
+			if existing == nil {
+				var stored stagedLibraryVersion
+				if err := db.WithContext(ctx).Where("file_id = ? AND signature = ?", file.ID, signature).Limit(1).Find(&stored).Error; err != nil {
+					return fmt.Errorf("read saved content for File %d failed, %w", file.ID, err)
+				}
+				if stored.ID != 0 {
+					existing = &stored
+					seen[key] = existing
+				}
 			}
-			if existing.ID != 0 {
+			if existing != nil {
 				if existing.Size != copy.Size || !bytes.Equal(existing.Hash, copy.Hash) {
 					return fmt.Errorf("legacy archived facts disagree, File %d", file.ID)
 				}
@@ -55,8 +86,19 @@ func prepareArchivedVersions(ctx context.Context, db *gorm.DB, report *Report) e
 			if matches {
 				version.Mode, version.MtimeNS = file.Mode, file.MtimeNS
 			}
-			if err := db.WithContext(ctx).Create(version).Error; err != nil {
-				return err
+			seen[key] = version
+			versions = append(versions, version)
+		}
+
+		// Commit bounded batches instead of syncing the database once per physical copy.
+		if err := db.WithContext(ctx).Select("id", "signature").Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"signature"}),
+		}).CreateInBatches(copies, 256).Error; err != nil {
+			return fmt.Errorf("write migrated Position signatures failed, %w", err)
+		}
+		if len(versions) > 0 {
+			if err := db.WithContext(ctx).CreateInBatches(versions, 256).Error; err != nil {
+				return fmt.Errorf("write migrated saved versions failed, %w", err)
 			}
 		}
 		after = copies[len(copies)-1].ID

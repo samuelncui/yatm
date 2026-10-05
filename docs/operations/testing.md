@@ -93,8 +93,10 @@ The [suite manifest](../../dev/performance/suites.json) selects the appropriate 
 | `fast` | 10,000-entry List, Ignore, Search and Scan benchmarks | Related pull requests and local changes |
 | `critical` | The same workloads with 100,000 entries | Traversal, SQL, projection and buffering changes |
 | `release` | Critical benchmarks plus candidate-only 1,000,000-entry correctness checks | Release acceptance |
+| `migration` | 10,000 Files and 20,000 physical copies on disk SQLite | Legacy archived-content reconciliation changes |
 
-Choose one tier; do not repeat the smaller tiers inside a release run. Large-data correctness
+For List/Scan choose one of `fast`, `critical` or `release`; do not repeat the smaller tiers inside
+a release run. Use `migration` separately when its reconciliation changes. Large-data correctness
 checks remain separate from timing and run once. Frontend changes also use the relevant list
 interaction and virtualization tests described in [Local Checks](#local-checks), and the
 [frontend benchmark](../../frontend/README.md#frontend-benchmarks) uses Vitest's native comparison
@@ -115,6 +117,14 @@ completion, first-result-page and total latency, plus allocations. Scan intentio
 `-benchtime=1x -count=1`: it modifies catalog state, so a second operation on that same catalog
 would measure a different workload. Catalog setup and Job deletion remain outside the timer.
 The million-entry Scan check verifies completion and all result pages once on the candidate.
+
+Legacy migration changes use the same collector with `--tier migration`; it runs
+`BenchmarkPrepareArchivedVersions` once on each source with `-benchtime=1x`, records identities
+and feeds the same comparison command. Each operation consumes fresh on-disk staging tables,
+including duplicate copies across pages; setup and result-count checks remain outside the timer.
+This focused check measures archived-content reconciliation, while complete migration acceptance
+uses the packaged installer and a copied legacy backup through the
+[package controller](e2e-test.md#remote-packaged-binary-acceptance).
 
 The collector snapshots the supplied sources and installs the same reviewed harness in both.
 It records commits and actual source hashes, including dirty changes, then compiles both suites

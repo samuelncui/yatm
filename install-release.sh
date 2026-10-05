@@ -616,8 +616,7 @@ complete_legacy_migration() {
   mkdir -m 700 "$evidence"
   (cd "$BACKUP_DIRECTORY" && sha256sum --check yatm.tar.gz.sha256)
   tar --acls --xattrs --xattrs-include='*' --numeric-owner -xzf "$BACKUP_DIRECTORY/yatm.tar.gz" -C "$evidence"
-  STAGE=validate
-  run_migrator -phase validate -backup-root "$evidence" -install-root "$INSTALL_DIRECTORY"
+  # Cleanup fully validates the migration against the backup before removing obsolete artifacts.
   STAGE=cleanup
   run_migrator -phase cleanup -backup-root "$evidence" -install-root "$INSTALL_DIRECTORY" --confirm
 }

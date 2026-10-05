@@ -99,8 +99,8 @@ Space checks cover the complete installation, candidate and migration work on th
 | Stop and backup | Recheck active work, quiesce supported service admission, stop normally, revalidate the reviewed inputs, and create/verify the complete archive before changing data. |
 | Prepare | Create staging tables and complete Job bundles; retain the JSON report on success, failure or cancellation. Existing legacy database rows remain available until Commit. |
 | Report approval | Review reconciliation and every historical Job/item. Declining or failing Prepare removes only prepared output through Abort before the old service can restart. |
-| Commit and validate | Activate current tables, then compare migrated Library, every historical Job/item and logs against the explicit complete backup. An uncertain Commit or failed validation keeps the service stopped. |
-| Cleanup and replace | Remove confirmed obsolete active tables, old Job storage and transferred logs. Apply the approved configuration/Settings conversion after legacy evidence has been consumed. Replace release-owned files/trees completely. |
+| Commit | Activate current tables. An uncertain Commit keeps the service stopped. |
+| Cleanup and replace | Cleanup fully compares migrated Library, every historical Job/item and logs against the explicit complete backup before removing obsolete active tables, old Job storage and transferred logs. Failed validation or cleanup keeps the service stopped. Apply the approved configuration/Settings conversion after legacy evidence has been consumed, then replace release-owned files/trees completely. |
 | Start and accept | Check [service-bound readiness](install.md#install-or-update), Library, Jobs, served assets and version identity. Remove successful-attempt `.work/` scratch. Report installation readiness separately from manual Tape adaptation. |
 
 `upgrade.log` records the attempt; `config.diff` retains the reviewed YAML changes. Migration additionally retains `migration.json`. Candidate downloads, extracted releases, private review JSON and extracted legacy evidence live in `.work/`; success removes this scratch. Failures retain relevant evidence and the failed stage. A `.partial` archive is not a recovery backup. Failures before mutation restore the original service state; failures after mutation keep it stopped. A declined Prepare first aborts its staging output before restoring the old service.
@@ -126,13 +126,18 @@ cd /opt/yatm
   -report-file "$yatm_reports_dir/migration.json"
 # Review the report and historical manifests before continuing.
 "$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase commit --confirm
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase validate \
-  -install-root /opt/yatm -backup-root "$yatm_backup_dir"
 "$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase cleanup \
   -install-root /opt/yatm -backup-root "$yatm_backup_dir" --confirm
 ```
 
-On a failed or declined Prepare, use `-phase abort --confirm`; restart the legacy service only after Abort succeeds. Keep the report. Validate and clean up before resuming business activity: later Library edits or Job progress can legitimately differ from the migration baseline. Apply the previously reviewed configuration only after validation/cleanup. Cleanup is repeatable and removes only verified obsolete active artifacts, not the archive. [Migration implementation](../../internal/migrate/legacy/migrate.go) owns conversion and validation details.
+The installer runs Cleanup once after Commit. Cleanup owns the complete validation before deleting obsolete artifacts. To inspect a committed migration and obtain a validation report separately, use the standalone phase:
+
+```shell
+"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase validate \
+  -install-root /opt/yatm -backup-root "$yatm_backup_dir"
+```
+
+On a failed or declined Prepare, use `-phase abort --confirm`; restart the legacy service only after Abort succeeds. Keep the report. Complete Cleanup before resuming business activity: later Library edits or Job progress can legitimately differ from the migration baseline. Apply the previously reviewed configuration only after Cleanup succeeds. Cleanup is repeatable and removes only verified obsolete active artifacts, not the archive. [Migration implementation](../../internal/migrate/legacy/migrate.go) owns conversion and validation details.
 
 Historical Job repair reads evidence from the explicitly selected backup, not legacy tables retained indefinitely in the active Catalog:
 

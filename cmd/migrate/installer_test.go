@@ -64,16 +64,36 @@ func TestInstallerFailureBoundaries(t *testing.T) {
 		wantSuccess          bool
 		want, absent         []string
 	}{
-		{name: "success", input: "y\n", wantSuccess: true, want: []string{"phase:quiesce", "service:stop", "backup", "phase:prepare", "phase:commit", "phase:validate", "phase:cleanup", "replacement-allowed"}, absent: []string{"phase:abort", "service:start"}},
+		{
+			name: "success", input: "y\n", wantSuccess: true,
+			want: []string{
+				"phase:quiesce", "service:stop", "backup", "phase:prepare",
+				"phase:commit\nverify-backup\nextract-backup\nphase:cleanup\nphase:config-apply\nreplacement-allowed",
+			},
+			absent: []string{"phase:validate", "phase:abort", "service:start"},
+		},
 		{name: "prepare failure", failure: "prepare", want: []string{"phase:abort", "service:start", "Stage: reversed"}, absent: []string{"phase:commit", "replacement-allowed"}},
 		{name: "report declined", input: "n\n", wantSuccess: true, want: []string{"phase:abort", "service:start"}, absent: []string{"phase:commit", "replacement-allowed"}},
 		{name: "report EOF", wantSuccess: true, want: []string{"phase:abort", "service:start"}, absent: []string{"phase:commit", "replacement-allowed"}},
 		{name: "commit failure", failure: "commit", input: "y\n", want: []string{"phase:commit", "Stage: commit", "service:stop"}, absent: []string{"phase:abort", "service:start", "replacement-allowed"}},
-		{name: "validation failure", failure: "validate", input: "y\n", want: []string{"Stage: validate"}, absent: []string{"phase:cleanup", "replacement-allowed"}},
-		{name: "cleanup failure", failure: "cleanup", input: "y\n", want: []string{"Stage: cleanup"}, absent: []string{"replacement-allowed"}},
+		{
+			name: "backup checksum failure", failure: "checksum", input: "y\n",
+			want:   []string{"verify-backup", "Stage: commit"},
+			absent: []string{"extract-backup", "phase:cleanup", "phase:config-apply", "replacement-allowed", "service:start"},
+		},
+		{
+			name: "backup extraction failure", failure: "extract", input: "y\n",
+			want:   []string{"extract-backup", "Stage: commit"},
+			absent: []string{"phase:cleanup", "phase:config-apply", "replacement-allowed", "service:start"},
+		},
+		{
+			name: "cleanup failure", failure: "cleanup", input: "y\n",
+			want:   []string{"phase:cleanup", "Stage: cleanup", "service:stop"},
+			absent: []string{"phase:validate", "phase:abort", "phase:config-apply", "replacement-allowed", "service:start"},
+		},
 		{name: "backup failure", failure: "backup", want: []string{"Stage: backup"}, absent: []string{"phase:prepare", "replacement-allowed"}},
 		{name: "abort failure", failure: "abort", input: "n\n", want: []string{"Abort failed", "phase:abort"}, absent: []string{"service:start", "replacement-allowed"}},
-		{name: "busy", failure: "quiesce", want: []string{"phase:quiesce"}, absent: []string{"service:stop", "backup", "phase:prepare"}},
+		{name: "busy", failure: "quiesce", want: []string{"phase:quiesce"}, absent: []string{"service:stop", "\nbackup\n", "phase:prepare"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Inject failures at the service/backup/migration boundary, not inside the domain conversion.
@@ -81,18 +101,27 @@ func TestInstallerFailureBoundaries(t *testing.T) {
 SCHEMA=legacy
 SERVICE_ACTIVE=1
 FAIL_PHASE="$1"
-REPORT_DIRECTORY=/test-reports
-run_migrator() { echo "phase:$2"; [[ "$2" != "$FAIL_PHASE" ]]; }
+WORK_DIRECTORY="$2"
+BACKUP_DIRECTORY="$2"
+INSTALL_DIRECTORY="$2/install"
+REPORT_DIRECTORY="$2"
+CONFIG_CHANGED=true
+run_migrator() {
+  echo "phase:$2"
+  if [[ "$2" == cleanup ]]; then
+    [[ "$*" == "-phase cleanup -backup-root $WORK_DIRECTORY/backup -install-root $INSTALL_DIRECTORY --confirm" ]] || return 1
+  fi
+  [[ "$2" != "$FAIL_PHASE" ]]
+}
 systemctl() { echo "service:$1"; }
 quiesce_and_stop() { run_migrator -phase quiesce --confirm; STAGE=stopping; systemctl stop "$SERVICE_NAME"; }
 backup_installation() { STAGE=backup; echo backup; [[ "$FAIL_PHASE" != backup ]]; }
-complete_legacy_migration() {
-  for phase in commit validate cleanup; do STAGE="$phase"; run_migrator -phase "$phase"; done
-}
+sha256sum() { echo verify-backup; [[ "$FAIL_PHASE" != checksum ]]; }
+tar() { echo extract-backup; [[ "$FAIL_PHASE" != extract ]]; }
 trap 'on_failure "$?"' ERR
 upgrade_existing
 echo replacement-allowed
-`, test.input, test.failure)
+`, test.input, test.failure, t.TempDir())
 
 			// No failed or declined migration may reach replacement or restart an uncertain catalog.
 			if test.wantSuccess {
@@ -100,6 +129,7 @@ echo replacement-allowed
 			} else {
 				require.Error(t, err, output)
 			}
+			require.LessOrEqual(t, strings.Count(output, "phase:cleanup"), 1, output)
 			for _, want := range test.want {
 				require.Contains(t, output, want)
 			}
@@ -235,7 +265,8 @@ inspect_installation
 }
 
 func TestInstallerPostReplacementFailureKeepsServiceStopped(t *testing.T) {
-	for _, stage := range []string{"commit", "validate", "cleanup", "replace-programs", "readiness"} {
+	for _, stage := range []string{"commit", "cleanup", "replace-programs", "readiness"} {
+		// An uncertain catalog or mixed program tree must stay offline until complete-backup recovery.
 		output, err := installerShell(t, `
 STAGE="$1"
 INSTALLATION_CHANGED=1

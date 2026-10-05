@@ -1,5 +1,14 @@
 {
   "tiers": {
+    "migration": {
+      "harness": ["internal/migrate/legacy/versions_test.go"],
+      "suites": [{
+        "package": "./internal/migrate/legacy",
+        "bench": "^BenchmarkPrepareArchivedVersions$",
+        "benchtime": "1x",
+        "benchmarks": ["BenchmarkPrepareArchivedVersions"]
+      }]
+    },
     "fast": {
       "harness": [
         "internal/apis/files_performance_test.go",

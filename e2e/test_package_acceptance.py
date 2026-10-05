@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 from package_acceptance import Acceptance, check_arguments, documents
-from package_cases import fixture_archives
+from package_cases import Workflows, fixture_archives
 
 
 class ControllerTests(unittest.TestCase):
@@ -87,6 +87,31 @@ class ControllerTests(unittest.TestCase):
                 self.assertEqual(archive.extractfile("source/" + name).read(), value["data"])
         with tarfile.open(invalid, encoding="utf-8", errors="surrogateescape") as archive:
             self.assertIn(b"invalid-\xff.txt", [entry.name.encode("utf-8", "surrogateescape") for entry in archive])
+
+    def test_backup_exercises_both_rejected_timestamp_shapes(self):
+        controller = self.controller()
+        original = {"entry": {"associated_file_id": "1"}, "organization": {"note": "original"}}
+        edited = {"entries": [{"entry": original["entry"], "organization": {"note": "changed after export"}}]}
+        records = [{"type": "file", "data": {"id": str(index), "note": "original",
+                                             "created_at_ns": "1720000000000000001"}}
+                   for index in (1, 2)]
+        encoded = b"".join(json.dumps(record).encode() + b"\n" for record in records)
+        workflow = SimpleNamespace(test=controller, locations={"source": "1"})
+        with mock.patch.object(controller, "one", side_effect=[original, edited, original]), \
+                mock.patch.object(controller, "remote", return_value=SimpleNamespace(stdout=encoded)), \
+                mock.patch.object(controller, "cli", side_effect=[[], [], records, [], records, [], records]) as cli, \
+                mock.patch.object(controller, "write") as write:
+            Workflows.backup(workflow)
+
+        self.assertEqual(write.call_count, 2)
+        obsolete, numeric = [documents(call.args[1]) for call in write.call_args_list]
+        self.assertEqual(obsolete[-1]["data"]["created_at_ms"], "1720000000000000001")
+        self.assertNotIn("created_at_ns", obsolete[-1]["data"])
+        self.assertEqual(numeric[-1]["data"]["created_at_ns"], 1720000000000000001)
+        self.assertEqual([call.kwargs for call in cli.call_args_list if call.args[:2] == ("library", "import")],
+                         [{}, {"expected": 1}, {"expected": 1}])
+        self.assertEqual(records[0]["data"]["note"], "original")
+        self.assertEqual(records[-1]["data"]["created_at_ns"], "1720000000000000001")
 
     def test_timeout_retains_partial_transcripts_without_claiming_an_exit(self):
         controller = self.controller()
