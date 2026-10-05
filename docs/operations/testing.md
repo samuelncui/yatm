@@ -389,6 +389,9 @@ source review and physical acceptance retain their own explicit decisions.
    [Check Scope and Reuse](#check-scope-and-reuse); do not run a full preflight per fix.
    Complete the [performance acceptance](#performance-acceptance) before source-push approval,
    retaining unaffected measurements and checking only changed operations again.
+   For workflow edits, validate GitHub syntax and expression contexts before pushing with
+   `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=`;
+   script diagnostics remain covered by the existing shell checks.
 4. **Run the final source preflight on the clean release commit.** The candidate workflow owns
    the final full run before its platform matrix. A local full run is available for an intentional
    integration check or diagnosis, but is not a prerequisite that CI must then repeat.

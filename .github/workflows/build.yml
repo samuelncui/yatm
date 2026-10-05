@@ -161,7 +161,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
       OSARCH_TESTED: ${{ matrix.tested }}
-      FRONTEND_ARTIFACT_DIRECTORY: ${{ runner.temp }}/shared-frontend
+      FRONTEND_ARTIFACT_DIRECTORY: ${{ github.workspace }}/output/shared-frontend
       CGO_ENABLED: ${{ matrix.goos == 'linux' && '1' || '0' }}
 
     steps:
@@ -201,7 +201,7 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: shared-frontend
-        path: ${{ runner.temp }}/shared-frontend
+        path: ${{ env.FRONTEND_ARTIFACT_DIRECTORY }}
 
     - name: Build
       run: make release
@@ -230,7 +230,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       RELEASE_VERSION: ${{ inputs.version }}
-      CCACHE_DIR: ${{ runner.temp }}/preview-ccache
+      CCACHE_DIR: ${{ github.workspace }}/output/preview-ccache
     steps:
       - uses: actions/checkout@v7
         with:
