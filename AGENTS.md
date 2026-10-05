@@ -59,7 +59,7 @@ Follow the document that owns each area. The [architecture overview](docs/archit
 
 ## Verification
 
-Use existing verification entrypoints first and maintain recurring checks with the implementation under the [test maintenance policy](docs/operations/testing.md#test-maintenance). Performance-sensitive changes follow [Performance Acceptance](docs/operations/testing.md#performance-acceptance).
+Use existing verification entrypoints first and maintain recurring checks with the implementation under the [test maintenance policy](docs/operations/testing.md#test-maintenance). Choose affected checks during development/review and retain unaffected evidence under [Check Scope and Reuse](docs/operations/testing.md#check-scope-and-reuse); reserve full verification for final integration/release. Performance-sensitive changes follow [Performance Acceptance](docs/operations/testing.md#performance-acceptance).
 
 Before remote E2E acceptance or NAS delivery, check ignored top-level workspace directories for an `AGENTS.md` and read any applicable operator notes. Such notes provide host context only and do not authorize production actions.
 

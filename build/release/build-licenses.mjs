@@ -8,8 +8,13 @@ const repository = path.resolve(import.meta.dirname, "../..");
 const output = path.resolve(process.argv[2] || path.join(repository, "output/licenses"));
 process.chdir(repository);
 fs.mkdirSync(output, { recursive: true });
-const records = [];
-if ((process.env.GOOS || execFileSync('go', ['env', 'GOOS'], { encoding: 'utf8' }).trim()) === 'linux') {
+const mode = process.argv[3] || 'all';
+if (!['all', 'frontend', 'backend'].includes(mode)) throw new Error('Unknown notice collection mode');
+const records = mode === 'backend' ? JSON.parse(fs.readFileSync(path.join(output, 'dependencies.json'), 'utf8')) : [];
+if (mode === 'backend' && (!Array.isArray(records) || !records.length || records.some(item => item.kind !== 'node'))) {
+  throw new Error('Backend notice collection requires the validated frontend notices');
+}
+if (mode !== 'frontend' && (process.env.GOOS || execFileSync('go', ['env', 'GOOS'], { encoding: 'utf8' }).trim()) === 'linux') {
   records.push(...copyMuslNotices(output));
 }
 
@@ -41,18 +46,21 @@ function copyNotices(kind, name, version, directory, license = "") {
 }
 
 // Go reports precisely the modules used by the five target programs, not test-only modules.
-const modules = new Map();
-const lines = execFileSync("go", ["list", "-deps", "-f", "{{with .Module}}{{.Path}}\t{{.Version}}\t{{.Dir}}{{end}}",
-  "./cmd/httpd", "./cmd/yatm-cli", "./cmd/export-library", "./cmd/lto-info", "./cmd/migrate"], { encoding: "utf8" });
-for (const line of lines.split("\n")) {
-  const [name, version, directory] = line.split("\t");
-  if (name && version && directory) modules.set(`${name}@${version}`, { name, version, directory });
+if (mode !== 'frontend') {
+  const modules = new Map();
+  const lines = execFileSync("go", ["list", "-deps", "-f", "{{with .Module}}{{.Path}}\t{{.Version}}\t{{.Dir}}{{end}}",
+    "./cmd/httpd", "./cmd/yatm-cli", "./cmd/export-library", "./cmd/lto-info", "./cmd/migrate"], { encoding: "utf8" });
+  for (const line of lines.split("\n")) {
+    const [name, version, directory] = line.split("\t");
+    if (name && version && directory) modules.set(`${name}@${version}`, { name, version, directory });
+  }
+  for (const item of [...modules.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    copyNotices("go", item.name, item.version, item.directory);
+  }
+  const root = execFileSync("go", ["env", "GOROOT"], { encoding: "utf8" }).trim();
+  copyNotices("go", "stdlib", execFileSync("go", ["env", "GOVERSION"], { encoding: "utf8" }).trim(), root);
+
 }
-for (const item of [...modules.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-  copyNotices("go", item.name, item.version, item.directory);
-}
-const root = execFileSync("go", ["env", "GOROOT"], { encoding: "utf8" }).trim();
-copyNotices("go", "stdlib", execFileSync("go", ["env", "GOVERSION"], { encoding: "utf8" }).trim(), root);
 
 // Follow the installed production graph, resolving pnpm's symlinks without its mutable store index.
 const visited = new Set();
@@ -76,13 +84,17 @@ function dependency(name, from, optional = false) {
   }
   if (!optional) throw new Error(`Installed production dependency is missing: ${name}`);
 }
-const frontend = path.resolve("frontend");
-const pkg = JSON.parse(fs.readFileSync(path.join(frontend, "package.json"), "utf8"));
-for (const name of Object.keys(pkg.dependencies).sort()) dependency(name, frontend);
+if (mode !== 'backend') {
+  const frontend = path.resolve("frontend");
+  const pkg = JSON.parse(fs.readFileSync(path.join(frontend, "package.json"), "utf8"));
+  for (const name of Object.keys(pkg.dependencies).sort()) dependency(name, frontend);
+}
 fs.writeFileSync(path.join(output, "dependencies.json"), JSON.stringify(records, null, 2) + "\n");
 
 // Keep copied-source attribution outside the module graph as an explicit maintained input.
-fs.copyFileSync("THIRD_PARTY_NOTICES", path.join(output, "THIRD_PARTY_NOTICES"));
-fs.copyFileSync("licenses/lto-info.LICENSE", path.join(output, "lto-info.LICENSE"));
+if (mode !== "frontend") {
+  fs.copyFileSync("THIRD_PARTY_NOTICES", path.join(output, "THIRD_PARTY_NOTICES"));
+  fs.copyFileSync("licenses/lto-info.LICENSE", path.join(output, "lto-info.LICENSE"));
+}
 fs.copyFileSync("licenses/react-dnd.LICENSE", path.join(output, "react-dnd.LICENSE"));
 console.log(`Collected notices for ${records.length} distributed dependencies.`);

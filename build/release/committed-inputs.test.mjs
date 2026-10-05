@@ -35,13 +35,22 @@ function fixture(t) {
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'mount.openltfs', 'readinfo', 'umount'].map(name => `scripts/${name}`),
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'readinfo', 'umount', 'README.md'].map(name => `e2e/ltfs-file-backend/${name}`)]) write(root, name, 'committed fixture');
   write(root, 'e2e/ltfs-file-backend/mount.test.mjs', '// maintained local regression, not a runtime adapter');
-  for (const name of ['build/release/build.sh', 'build/release/check-release.mjs']) {
+  for (const name of ['build/release/build.sh', 'build/release/check-release.mjs', 'build/release/build-frontend.sh', 'build/release/frontend-artifact.mjs', 'build/release/package-assets.mjs']) {
     write(root, name, fs.readFileSync(path.join(repository, name)), fs.statSync(path.join(repository, name)).mode);
   }
   write(root, 'build/backend/build.sh', '#!/usr/bin/env bash\nset -eu\nfor item in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate; do printf fixture > "$OUTPUT_DIRECTORY/$item"; done\n', 0o755);
   write(root, 'frontend/scripts/build.sh', '#!/usr/bin/env bash\nset -eu\nmkdir -p "$OUTPUT_DIRECTORY/frontend"\nprintf \'<meta name="yatm-version" content="%s"><meta name="yatm-commit" content="%s">\' "$RELEASE_VERSION" "$RELEASE_COMMIT" > "$OUTPUT_DIRECTORY/frontend/index.html"\n', 0o755);
   write(root, 'build/release/build-documents.mjs', '// fixture document conversion\n');
-  write(root, 'build/release/build-licenses.mjs', "import fs from 'node:fs'; import path from 'node:path'; const output=process.argv[2];fs.mkdirSync(output);fs.writeFileSync(path.join(output,'dependencies.json'),'[]');fs.writeFileSync(path.join(output,'THIRD_PARTY_NOTICES'),'fixture');\n");
+  write(root, 'frontend/pnpm-lock.yaml', 'fixture locked dependencies');
+  write(root, 'build/release/build-licenses.mjs', `import fs from 'node:fs'; import path from 'node:path';
+    const output=process.argv[2]; fs.mkdirSync(output, {recursive:true});
+    if (process.argv[3] === 'frontend') {
+      const dir=path.join(output,'node/fixture@1'); fs.mkdirSync(dir,{recursive:true});
+      fs.writeFileSync(path.join(dir,'LICENSE'),'fixture'); fs.writeFileSync(path.join(dir,'package.json'),'{}');
+      fs.writeFileSync(path.join(output,'dependencies.json'),JSON.stringify([{kind:'node',name:'fixture',version:'1',notices:['LICENSE']}]));
+      fs.writeFileSync(path.join(output,'react-dnd.LICENSE'),'fixture');
+    } else fs.writeFileSync(path.join(output,'THIRD_PARTY_NOTICES'),'fixture');
+  `);
   git('add', '.');
   const tree = git('write-tree');
   const commit = execFileSync('git', ['-C', root, '-c', 'user.name=Packaging Test', '-c', 'user.email=packaging@example.invalid', 'commit-tree', tree],

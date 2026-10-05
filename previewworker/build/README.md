@@ -83,6 +83,29 @@ guide](../../docs/operations/install.md#preview-preferences), or verify its chec
 in an explicitly selected installation. Configure the native helper executable path in Preview
 Settings when it is outside YATM's executable directory.
 
+## Native Compiler Cache
+
+Set `CCACHE_DIR` to opt into [ccache](https://ccache.dev/manual/latest.html) when it is installed.
+Without it, the build uses the ordinary compilers. CI restores the native object cache by target,
+compiler and SDK identity, and native build recipe; a YATM source commit alone does not discard it.
+Each build still creates the Go helper, verifies runtime behavior and collects licenses and
+corresponding sources from its current committed inputs.
+
+The cache normalizes the temporary build root with `CCACHE_BASEDIR`, retains the public compiler
+path maps and checks compiler content. It does not relax header or source checks. Native configure
+commands use the cache wrapper; Go and runtime-license discovery retain the underlying compiler.
+CI reports cache statistics. Compare one cold and one warm build in the same environment when
+changing this integration; verify hits, elapsed time, relocation and path sanitization. From a
+repository checkout:
+
+```shell
+RELEASE_VERSION=<tag> node previewworker/build/check-cache.mjs /new/private/cache-check-output
+```
+
+This optional check runs the normal build twice with its own fresh cache, retaining logs and a
+`report.json`. `PREVIEW_SOURCE_DIRECTORY` can supply verified native archives to exclude downloads
+from the comparison. The check does not clear a user's existing cache or add another release gate.
+
 ## Rebuild From Distributed Sources
 
 The corresponding-source archive includes the exact native archives, checksums, FFmpeg

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EntryKind, FileOperationKind, FilesEntry, FileScope, FilesInclude, FilesArchive, FilesCoverage, FilesIssue, OriginalAvailability } from "@/entity";
 import { filesEntryData, filesPage, listDirectory, libraryDirectoryReference, locationDirectoryReference } from "./files-browser";

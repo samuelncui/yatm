@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { dateFromNs, dateToNs, maxUnixNs, minUnixNs, parseUnixNs } from "./time";
 

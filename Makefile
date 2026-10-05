@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build backend backend-linux frontend release release-check preview generate demo check test-race test-e2e test-performance-tools performance-collect performance-check
+.PHONY: help build backend backend-linux frontend release release-check preview generate demo demo-dev check test-race test-e2e test-performance-tools performance-collect performance-check
 
 PERF_TIER ?= fast
 
@@ -15,7 +15,8 @@ help:
 	  '  preview       Build the optional native Preview release (RELEASE_VERSION required)' \
 	  '  generate      Generate Go, TypeScript and legacy protobuf code' \
 	  '  demo          Start the local Demo (YATM_DEMO_RESET=1 resets its fixture)' \
-	  '  check         Run Go, frontend and build-tool checks' \
+	  '  demo-dev      Start the Demo backend and Vite hot reload' \
+	  '  check         Run full integration checks (use affected runners during review)' \
 	  '  test-race     Run Go race checks' \
 	  '  test-e2e      Run CLI E2E against explicitly selected candidate binaries' \
 	  '  test-package-tools Check the local SSH package-acceptance controller' \
@@ -46,6 +47,10 @@ generate:
 demo:
 	./dev/demo.sh
 
+demo-dev:
+	./dev/demo.sh --dev
+
+# Development/review uses affected native runners; this is the explicit full integration gate.
 check:
 	node dev/check-documents.mjs
 	go run ./dev/check-idl.go
@@ -53,12 +58,12 @@ check:
 	go vet ./...
 	go vet -tags=e2e ./e2e
 	pnpm --dir frontend check
-	node --test build/backend/*.test.mjs build/release/*.test.mjs previewworker/build/*.test.mjs e2e/ltfs-file-backend/*.test.mjs
+	node --test dev/demo.test.mjs build/backend/*.test.mjs build/release/*.test.mjs previewworker/build/*.test.mjs e2e/ltfs-file-backend/*.test.mjs
 	$(MAKE) test-performance-tools
 	$(MAKE) test-package-tools
 	./dev/check-shell.sh
 
-# Run once before the platform matrix; individual packagers also enforce committed inputs.
+# Candidate CI runs this once before the platform matrix; no duplicate local preflight is required.
 release-check:
 	node build/release/check-source.mjs
 	node build/release/check-content.mjs source . HEAD

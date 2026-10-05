@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { JobLogDirection, type JobLogLine, type ListJobLogLinesResponse } from "@/entity/job";
 
@@ -59,6 +59,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   listLogLines.mockReturnValue(result(page([], 0n, 0n)));
 });
+
+afterEach(() => vi.useRealTimers());
 
 it("opens at the log tail and pages older lines using the returned cursor", async () => {
   listLogLines
@@ -181,6 +183,7 @@ it("stops before the first filtered reply and offers a resume from the beginning
 });
 
 it("keeps a stopped active search paused until Resume", async () => {
+  vi.useFakeTimers();
   let resolveOld!: (reply: ListJobLogLinesResponse) => void;
   const resumed = line(100n, "level=error msg=resumed", "error");
   listLogLines
@@ -189,24 +192,28 @@ it("keeps a stopped active search paused until Resume", async () => {
     .mockReturnValueOnce({ response: new Promise<ListJobLogLinesResponse>((resolve) => (resolveOld = resolve)) })
     .mockReturnValueOnce(result(page([resumed], 0n, 300n)));
   open(true);
-  await waitFor(() => expect(listLogLines).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(listLogLines).toHaveBeenCalledTimes(1);
   filterErrors();
-  await waitFor(() => expect(listLogLines).toHaveBeenCalledTimes(3));
+  await act(async () => {});
+  expect(listLogLines).toHaveBeenCalledTimes(3);
 
   fireEvent.click(screen.getByRole("button", { name: "Stop search" }));
   expect(screen.getByRole("status")).toHaveTextContent("Search stopped.");
   expect(screen.queryByText("No matching log lines.")).not.toBeInTheDocument();
-  await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 2200))));
+  await act(async () => vi.advanceTimersByTimeAsync(2200));
   expect(listLogLines).toHaveBeenCalledTimes(3);
 
   fireEvent.click(screen.getByRole("button", { name: "Resume search" }));
-  expect(await screen.findByText(/resumed/)).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText(/resumed/)).toBeInTheDocument();
   expect(listLogLines).toHaveBeenNthCalledWith(4, { id: 7n, direction: JobLogDirection.OLDER, cursor: 300n, level: "error", query: "" });
   await act(async () => resolveOld(page([line(200n, "level=info msg=obsolete")], 200n, 300n)));
   expect(screen.queryByText(/obsolete/)).not.toBeInTheDocument();
 });
 
 it("keeps following an active Job after a scrolled log is filtered to no matches", async () => {
+  vi.useFakeTimers();
   const old = line(0n, "level=info msg=old");
   const first = line(old.endOffset, "level=error msg=first match", "error");
   const second = line(first.endOffset, "level=error msg=second match", "error");
@@ -216,13 +223,16 @@ it("keeps following an active Job after a scrolled log is filtered to no matches
     .mockReturnValueOnce(result(page([first], old.endOffset, first.endOffset)))
     .mockReturnValueOnce(result(page([second], first.endOffset, second.endOffset)));
   open(true);
-  expect(await screen.findByText(/msg=old/)).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText(/msg=old/)).toBeInTheDocument();
   act(() => virtuoso.current?.atBottomStateChange?.(false));
   expect(virtuoso.current?.followOutput).toBe(false);
 
   filterErrors();
-  expect(await screen.findByText("No matching log lines.")).toBeInTheDocument();
-  expect(await screen.findByText(/first match/, {}, { timeout: 4000 })).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText("No matching log lines.")).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(screen.getByText(/first match/)).toBeInTheDocument();
   expect(virtuoso.current?.followOutput).toBe("auto");
   expect(listLogLines).toHaveBeenNthCalledWith(3, {
     id: 7n,
@@ -232,7 +242,8 @@ it("keeps following an active Job after a scrolled log is filtered to no matches
     query: "",
   });
 
-  expect(await screen.findByText(/second match/, {}, { timeout: 4000 })).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(screen.getByText(/second match/)).toBeInTheDocument();
   expect(listLogLines).toHaveBeenNthCalledWith(4, {
     id: 7n,
     direction: JobLogDirection.NEWER,
@@ -240,9 +251,10 @@ it("keeps following an active Job after a scrolled log is filtered to no matches
     level: "error",
     query: "",
   });
-}, 10000);
+});
 
 it("polls an empty filtered page even when the old viewport reports atBottom false", async () => {
+  vi.useFakeTimers();
   const old = line(0n, "level=info msg=old");
   const match = line(old.endOffset, "level=error msg=new match", "error");
   listLogLines
@@ -250,14 +262,17 @@ it("polls an empty filtered page even when the old viewport reports atBottom fal
     .mockReturnValueOnce(result(page([], old.endOffset, old.endOffset)))
     .mockReturnValueOnce(result(page([match], old.endOffset, match.endOffset)));
   open(true);
-  expect(await screen.findByText(/msg=old/)).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText(/msg=old/)).toBeInTheDocument();
   const reportAtBottom = virtuoso.current?.atBottomStateChange;
 
   filterErrors();
-  expect(await screen.findByText("No matching log lines.")).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText("No matching log lines.")).toBeInTheDocument();
   act(() => reportAtBottom?.(false));
 
-  expect(await screen.findByText(/new match/, {}, { timeout: 4000 })).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(screen.getByText(/new match/)).toBeInTheDocument();
   expect(listLogLines).toHaveBeenNthCalledWith(3, {
     id: 7n,
     direction: JobLogDirection.NEWER,
@@ -281,6 +296,7 @@ it("loads newer lines and replaces a growing partial row", async () => {
 });
 
 it("joins a level-matched continuation onto the filtered partial row", async () => {
+  vi.useFakeTimers();
   const partial = line(0n, "level=error msg=half", "error", false);
   const continuation = { ...line(partial.endOffset, " done", "error"), continuation: true };
   listLogLines
@@ -288,17 +304,21 @@ it("joins a level-matched continuation onto the filtered partial row", async () 
     .mockReturnValueOnce(result(page([partial], 0n, partial.endOffset)))
     .mockReturnValueOnce(result(page([continuation], partial.endOffset, continuation.endOffset)));
   open(true);
-  await waitFor(() => expect(listLogLines).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(listLogLines).toHaveBeenCalledTimes(1);
   filterErrors();
-  expect(await screen.findByText(/half/)).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText(/half/)).toBeInTheDocument();
 
-  expect(await screen.findByText(/half done/, {}, { timeout: 4000 })).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(screen.getByText(/half done/)).toBeInTheDocument();
   expect(listLogLines).toHaveBeenNthCalledWith(3, { id: 7n, direction: JobLogDirection.NEWER, cursor: partial.endOffset, level: "error", query: "" });
   expect(virtuoso.current?.data).toHaveLength(1);
   expect(virtuoso.current?.data[0]).toMatchObject({ offset: 0n, endOffset: continuation.endOffset, complete: true });
 });
 
 it("rechecks the raw partial tail before a text-filtered newer read", async () => {
+  vi.useFakeTimers();
   const partial = line(0n, "level=info msg=need", "info", false);
   const complete = line(0n, "level=info msg=needle", "info");
   listLogLines
@@ -307,11 +327,14 @@ it("rechecks the raw partial tail before a text-filtered newer read", async () =
     .mockReturnValueOnce(result(page([partial], 0n, partial.endOffset)))
     .mockReturnValueOnce(result(page([complete], 0n, complete.endOffset)));
   open(true);
-  await waitFor(() => expect(listLogLines).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(listLogLines).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByRole("textbox", { name: "Search log" }), { target: { value: "needle" } });
-  expect(await screen.findByText("No matching log lines.")).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(300));
+  expect(screen.getByText("No matching log lines.")).toBeInTheDocument();
 
-  expect(await screen.findByText(/needle/, {}, { timeout: 4000 })).toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(screen.getByText(/needle/)).toBeInTheDocument();
   expect(listLogLines).toHaveBeenNthCalledWith(3, { id: 7n, direction: JobLogDirection.OLDER, cursor: partial.endOffset, level: "", query: "" });
   expect(listLogLines).toHaveBeenNthCalledWith(4, { id: 7n, direction: JobLogDirection.NEWER, cursor: 0n, level: "", query: "needle" });
 });

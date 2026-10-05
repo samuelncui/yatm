@@ -27,11 +27,51 @@ automate repeatable setup and checks where useful, and record each manual step's
 why it needs an operator or visual judgment. Follow [Media and Migration Safety](#media-and-migration-safety);
 automation does not expand access or publication authorization.
 
+### Check Scope and Reuse
+
+During development and review, test the changed behavior and its affected callers. Choose the
+scope before running commands; include unchanged code when a shared dependency, contract or
+configuration change can affect it. A new commit by itself does not invalidate every earlier
+check. Batch related fixes before expensive integration checks.
+
+| Change | Checks during development and review |
+| --- | --- |
+| Documentation | Document links/examples and `git diff --check` |
+| Go implementation | Changed packages and affected callers; add race checks for concurrency/shared state and both drivers for SQLite behavior |
+| Frontend | Affected Vitest tests and type checking; style/lint checks for touched presentation, browser interactions for affected visible behavior |
+| API, persistence or shared infrastructure | Both sides of the changed boundary, generated output where relevant, and the workflows that consume it |
+| Installer, packaging or test tooling | The owning script tests and the affected installation/package workflow |
+| Performance-sensitive implementation | The affected native benchmarks, once per source; larger fixtures when traversal or scale behavior changes |
+
+Use runner selection (`go test PACKAGE -run PATTERN`, Vitest file filters and explicit script
+tests) rather than creating another test framework. After fixing a failure, rerun its reproducer
+and affected suite/callers. Do not restart unrelated passed suites to get another all-green run.
+A failed or interrupted full run remains incomplete; record the completed checks separately.
+
+For slow verification, report the whole workflow's elapsed time, including setup, transfers,
+queueing, retries and diagnosis, separately from test execution. Use existing runner/CI timings
+to identify the costly stages; individual step timings do not explain the whole wait.
+
+Finish review and fixes before the final full source and package acceptance. The candidate CI
+runs `make release-check` once before its platform matrix; a duplicate local full preflight is
+not required. Use `make check` for an intentional full integration check, not after every edit.
+If a final check finds a defect, verify the fix locally at its affected boundaries before
+starting the replacement candidate. Changes to shared contracts or infrastructure may justify
+wider checks; record the reason instead of automatically repeating everything.
+
+Retain passing evidence for unaffected components when their implementation, relevant
+dependencies, configuration, fixtures, harness and environment remain unchanged. Record the
+old and final source identities and the reviewed diff that establishes this. New archives still
+need their own content, identity and checksum checks. Rebuilt binaries require relevant package
+smoke tests; changed behavior requires its package workflows. Acceptance of earlier bytes alone
+cannot certify a new archive, but a new archive does not require repeating unrelated benchmarks
+or every exploratory/manual check.
+
 ## Repository Layout and Entrypoints
 
 File ownership and placement rules are maintained in [Repository Layout](../../AGENTS.md#repository-layout). Follow those rules when adding or moving files; this section owns the development commands and output overrides.
 
-The root [Makefile](../../Makefile) is the common development/CI entrypoint. Its default target displays help; implementation stays with the owning project or script. Frontend compilation remains in package.json. Use `make build`, `make backend`, `make backend-linux`, `make frontend`, `make release`, `make preview`, `make generate`, or `make demo`. `make check` runs documentation and IDL naming checks, Go unit tests/vet, compilation and vet of the E2E harness, frontend checks, tool-script tests and shell syntax checks; `make test-race` and `make test-e2e` are explicit additional checks. Set `YATM_E2E_BIN_DIR` to the extracted candidate directory for `make test-e2e`; the [E2E guide](e2e-test.md) also documents source-based harness runs. Native Preview module validation remains separate from the root Go test suite.
+The root [Makefile](../../Makefile) is the common development/CI entrypoint. Its default target displays help; implementation stays with the owning project or script. Frontend compilation remains in package.json. Use `make build`, `make backend`, `make backend-linux`, `make frontend`, `make release`, `make preview`, `make generate`, or `make demo` / `make demo-dev`. `make check` runs documentation and IDL naming checks, Go unit tests/vet, compilation and vet of the E2E harness, frontend checks, tool-script tests and shell syntax checks; `make test-race` and `make test-e2e` are explicit additional checks. Set `YATM_E2E_BIN_DIR` to the extracted candidate directory for `make test-e2e`; the [E2E guide](e2e-test.md) also documents source-based harness runs. Native Preview module validation remains separate from the root Go test suite.
 
 Scripts locate the checkout independently of the caller's working directory. `RELEASE_DIRECTORY` overrides the final archive directory; relative values resolve from the caller's working directory before scripts change directories. Build tools are source files, not build output. The root `install-release.sh` remains the user installation entrypoint, and installation package paths are independent of source layout.
 
@@ -49,18 +89,25 @@ For official LTFS file-backend acceptance, explicitly configure the optional `te
 
 ## Local Checks
 
+Select checks using [Check Scope and Reuse](#check-scope-and-reuse). For example, a legacy
+migration repair checks its implementation and installer caller:
+
 ```shell
-go test ./...
-go vet ./...
-go test -race ./internal/library ./internal/migrate/legacy ./internal/apis ./internal/executor/... ./internal/preview/...
+go test ./internal/migrate/legacy ./cmd/migrate
+go vet ./internal/migrate/legacy ./cmd/migrate
+go test -race ./internal/migrate/legacy ./cmd/migrate
+CGO_ENABLED=0 go test ./internal/migrate/legacy ./cmd/migrate
 git diff --check
 ```
+
+The coverage below is an inventory for choosing affected checks, not a requirement to run
+every listed suite after each change. The [Release SOP](#release-sop) owns full verification.
 
 For content-model changes, cover opaque nullable signatures, unique File/version pairs, independent same-content Files, one original per File, repeated-content version reuse, shared-copy lookup, cross-batch import rollback, and evidence-based legacy migration with source preservation. These checks do not repair or maintain compatibility with old Draft databases.
 
 Restore association checks include existing original associations, ignored outputs, multi-version candidate freezing, exact-content adoption, namespace collisions, final Media identity failure and explicit Library/Job publication failure. Scan verification checks include real uncached reads, per-item versus device errors, absent baselines and content-guarded health publication. Run both SQLite drivers and race checks for `./internal/executor/restore`, `./internal/executor/scan` and `./internal/library`; imported restored Files and original associations must remain intact, and imported bad-copy observations must not become healthy or unchecked accidentally.
 
-For Files and Location changes, include `./internal/executor/scan`, `./internal/executor/observation`, `./internal/executor/fileops`, `./internal/treeops`, `./internal/ignore`, `./internal/demo`, and `./cmd/yatm-cli` in affected unit/race checks, and run the [live-file, Volume, and Preview CLI E2E](e2e-test.md). Cover optional File identity, pure browsing versus explicit collection, complete directory List, paged Search and changefeed departures, Ignore versus authorization, guarded references, physical-operation results without persistent receipts and ordered continuity. Run the shared organization contract against Library, filesystem and object-storage-semantic test adapters: directory merges, retained target associations, duplicate selections, conflicts, cancellation, bounded traversal and partial publication. Do not add user Copy acceptance to the supported move/mkdir/delete contract.
+For Files and Location changes, inspect callers in `./internal/executor/scan`, `./internal/executor/observation`, `./internal/executor/fileops`, `./internal/treeops`, `./internal/ignore`, `./internal/demo`, and `./cmd/yatm-cli`; run the affected unit/race checks and select the affected [live-file, Volume, or Preview CLI E2E](e2e-test.md). Cover optional File identity, pure browsing versus explicit collection, complete directory List, paged Search and changefeed departures, Ignore versus authorization, guarded references, physical-operation results without persistent receipts and ordered continuity where changed. Shared organization changes run the contract against its affected Library, filesystem and object-storage-semantic adapters: directory merges, retained target associations, duplicate selections, conflicts, cancellation, bounded traversal and partial publication. Do not add user Copy acceptance to the supported move/mkdir/delete contract.
 
 Scan tests exercise one pipeline with known-only, fill-missing and force-read policies, optional comparison/Preview and each publication policy. Known-only cache misses must not hash; verification must neither trust cache nor replace its saved baseline. Preview failures must preserve otherwise valid observations, while source-read and physical-identity failures prevent publication of the current scope; a new Scan reads its complete selection. `analyze`, `preview create` and `verify` CLI presets must resolve to this same Scan service, not separate runners.
 
@@ -126,6 +173,19 @@ This focused check measures archived-content reconciliation, while complete migr
 uses the packaged installer and a copied legacy backup through the
 [package controller](e2e-test.md#remote-packaged-binary-acceptance).
 
+Use repeatable `--package ./internal/apis` or `--package ./internal/executor/scan` to compare
+only that package's suites within the selected tier. Package names must match the manifest;
+structural checks and common harness files follow the selected packages. `pair.json` records
+requested, selected, executed and skipped packages and structural scope. A completed subset is
+not a full release comparison. Baseline and candidate use independent mutable temporary fixtures.
+The manifest and shared harness are captured once and applied identically to both sources.
+
+Fixture-only changes can measure preparation separately with
+`go test ./internal/apis -run '^$' -bench '^BenchmarkFilesFixtureSetup$' -benchtime=1x -benchmem -count=1`.
+It measures fresh file creation and catalog seeding at 10,000 and 100,000 entries; deferred cleanup
+is outside the timer. It is not a List/Search runtime comparison. Reuse their existing measurements
+when their implementation and equivalent input distribution remain unchanged.
+
 The collector snapshots the supplied sources and installs the same reviewed harness in both.
 It records commits and actual source hashes, including dirty changes, then compiles both suites
 before measuring. Each suite executes its standard Go test binary once per source. This is the
@@ -179,11 +239,12 @@ an incomplete comparison or unexplained flag remains open work. A completed loca
 satisfies this requirement without uploading its baseline or repeating it on a hosted runner.
 Candidate assembly runs its source and package gates without automatically invoking Performance.
 
-If only documentation or unrelated test tooling changes after measurement, retain the measured
-commit and comparison unchanged. Record the final commit and review the complete diff to establish
-that runtime source, dependencies, benchmark harness and measurement settings are identical.
-Such a diff does not require another performance run; changed runtime inputs or harnesses do.
-The final source preflight and acceptance of the exact release archives are still required.
+After measurement, review the diff against each measured operation. Retain its evidence when
+the relevant runtime source, dependencies, harness, fixtures and measurement settings are
+unchanged, recording the measured and final commits. Documentation or unrelated runtime/tooling
+changes do not require repeating that operation. Rerun only affected benchmarks and resolve their
+flags; do not repeat the whole release tier for a change to one component. The final source
+preflight and acceptance of the exact release archives remain required.
 
 ## Large Identical Results
 
@@ -206,6 +267,12 @@ memory; use an external process measurement when peak memory matters. The ordina
 skips this fixture, and the default Demo remains small enough for interactive review.
 
 ## Local Demo
+
+`make demo-dev` prepares the same Demo fixture and builds the backend incrementally, then serves
+Vite hot reload at `http://localhost:5173`, proxying the selected backend listen address.
+`YATM_DEMO_FRONTEND_PORT` overrides the strict frontend port. A port conflict fails startup;
+both children stop on signals or either child's exit. Fixture reset remains explicit through
+`YATM_DEMO_RESET=1`. `make demo` retains the production frontend build for packaged-browser checks.
 
 `make demo` builds and serves the disposable review fixture at `http://127.0.0.1:18080`, normally
 under the system temporary directory. Restarting preserves reviewer changes. Select an isolated
@@ -317,7 +384,15 @@ source review and physical acceptance retain their own explicit decisions.
    Do not publish the backup branch or rewrite already public history. Review the final diff and
    commit message again; squashing does not sanitize final content. Finish required dependency
    releases and update their pins before freezing YATM.
-3. **Run the source preflight on the clean release commit.** Put Bash 4.4 or newer on `PATH` for
+3. **Complete review and fixes with affected checks.** Review the integrated source and finish
+   focused fixes/verification until no unresolved, unaccepted finding remains. Use
+   [Check Scope and Reuse](#check-scope-and-reuse); do not run a full preflight per fix.
+   Complete the [performance acceptance](#performance-acceptance) before source-push approval,
+   retaining unaffected measurements and checking only changed operations again.
+4. **Run the final source preflight on the clean release commit.** The candidate workflow owns
+   the final full run before its platform matrix. A local full run is available for an intentional
+   integration check or diagnosis, but is not a prerequisite that CI must then repeat.
+   Put Bash 4.4 or newer on `PATH` for
    the Linux installer unit tests; macOS's bundled Bash 3.2 is insufficient. Install the frozen frontend dependencies,
    pinned scanner and the protobuf tools used by current generated source: protoc 26.0,
    protoc-gen-go 1.33.0 and protoc-gen-go-grpc 1.3.0. Preview acceptance also requires a separate
@@ -343,12 +418,6 @@ source review and physical acceptance retain their own explicit decisions.
    Native Preview race tests and vet run with its private libraries during each runnable helper build.
    Its corresponding-source archive has a separate inventory that retains required vendor/native
    sources. Filename gates do not prove that a module is used or documentation is semantically correct.
-4. **Complete review and fixes.** Review the integrated source and repeat focused fixes/verification
-   until no unresolved, unaccepted finding remains. Source changes require a new clean commit and
-   another preflight; record each check against its actual inputs and follow the performance
-   policy above when only unrelated tooling or documentation changed.
-   Complete the final-source [performance acceptance](#performance-acceptance) before approving
-   the candidate or source push.
 5. **Build and accept one candidate set.** GitHub Actions requires the exact reviewed commit to
    exist in this repository's remote. Obtain explicit authorization for that source push before
    dispatch; this does not authorize a tag, Release or asset upload. Dispatch the Release candidate
@@ -397,6 +466,15 @@ node build/release/check-static-linux.mjs output/yatm-httpd
 ```
 
 The [optional native Preview helper](../../previewworker/build/README.md) has its own module, build, platform baseline and private native libraries. Its native dependencies are never linked into the main binaries.
+
+The source-check job builds the frontend once and collects its locked production dependency
+notices. The internal `shared-frontend` artifact records version, commit, lockfile hash and every
+file checksum. Each main-platform build validates its identity and exact file inventory, then
+copies the same frontend and Node notices and adds its own Go/native notices. Source maps, private
+configuration, missing files and extra files are rejected. The internal manifest is never copied
+into a release archive. Local `make release` calls the same collector; set
+`FRONTEND_ARTIFACT_DIRECTORY` to reuse a previously collected artifact with matching inputs.
+Preview native-object caching follows the [native build guide](../../previewworker/build/README.md#native-compiler-cache).
 
 Release validation requires exactly nine main archives, three optional helper archives and three matching source archives. Each main archive still passes `build/release/check-release.mjs`; `build/release/check-candidate-set.mjs` additionally verifies the complete platform set, matching identities, helper file boundaries and corresponding-source checksums. Linux E2E receives the extracted helper through `YATM_TEST_PREVIEW_HELPER` so native Preview acceptance cannot silently skip.
 
@@ -461,6 +539,6 @@ a new build and acceptance run before publication. Mocked provenance and upload 
 
 ## Delivery Gates
 
-The candidate preserves [independent format identities](../architecture/persistence.md#published-data-formats) and legacy migration/import. Record acceptance for the exact candidate bytes; earlier development results do not certify a rebuilt release. Preserve a forward path for supported published data. Before the first stable v1 release, replace the [pre-stable compatibility policy](../README.md#pre-stable-compatibility) with the published stable API/upgrade policy.
+The candidate preserves [independent format identities](../architecture/persistence.md#published-data-formats) and legacy migration/import. Record acceptance for the exact candidate bytes, reusing unaffected source-level evidence under [Check Scope and Reuse](#check-scope-and-reuse); earlier development results alone do not certify a rebuilt release. Preserve a forward path for supported published data. Before the first stable v1 release, replace the [pre-stable compatibility policy](../README.md#pre-stable-compatibility) with the published stable API/upgrade policy.
 
 Branch, push and publication gates follow [Delivery and Authorization](../../AGENTS.md#delivery-and-authorization). Release packages include only the operator documents allowlisted in the [documentation convention](../README.md#release-packages); development and architecture documents remain in the repository checkout.

@@ -5,6 +5,9 @@ REPOSITORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 RELEASE_DIRECTORY="${RELEASE_DIRECTORY:-$REPOSITORY/output/releases}"
 case "$RELEASE_DIRECTORY" in /*) ;; *) RELEASE_DIRECTORY="$PWD/$RELEASE_DIRECTORY" ;; esac
 export RELEASE_DIRECTORY
+if [[ -n "${FRONTEND_ARTIFACT_DIRECTORY:-}" && "$FRONTEND_ARTIFACT_DIRECTORY" != /* ]]; then
+  FRONTEND_ARTIFACT_DIRECTORY="$PWD/$FRONTEND_ARTIFACT_DIRECTORY"
+fi
 cd "$REPOSITORY"
 : "${RELEASE_VERSION:?Set RELEASE_VERSION to the candidate tag}"
 : "${TARGET_NAME:?Set TARGET_NAME to the release platform name}"
@@ -46,9 +49,13 @@ node build/release/build-documents.mjs "$OUTPUT_DIRECTORY" "$RELEASE_VERSION"
 printf '%s\n' "$RELEASE_VERSION" > "$OUTPUT_DIRECTORY/VERSION"
 printf '%s\n' "$RELEASE_COMMIT" > "$OUTPUT_DIRECTORY/COMMIT"
 
+if [[ -z "${FRONTEND_ARTIFACT_DIRECTORY:-}" ]]; then
+  FRONTEND_ARTIFACT_DIRECTORY="$PACKAGE_DIRECTORY/shared-frontend"
+  bash build/release/build-frontend.sh "$FRONTEND_ARTIFACT_DIRECTORY"
+fi
+node build/release/frontend-artifact.mjs install "$FRONTEND_ARTIFACT_DIRECTORY" "$OUTPUT_DIRECTORY"
 ./build/backend/build.sh
-./frontend/scripts/build.sh
-node build/release/build-licenses.mjs "$OUTPUT_DIRECTORY/licenses"
+node build/release/build-licenses.mjs "$OUTPUT_DIRECTORY/licenses" backend
 
 # Each archive has a portable companion checksum; CI aggregates only complete target sets.
 TARGET_FILE="$RELEASE_DIRECTORY/yatm-${TARGET_NAME}-${RELEASE_VERSION}.tar.gz"

@@ -7,6 +7,9 @@ RELEASE_DIRECTORY="${RELEASE_DIRECTORY:-$REPOSITORY/output/releases}"
 if [[ -n "${PREVIEW_SOURCE_DIRECTORY:-}" && "$PREVIEW_SOURCE_DIRECTORY" != /* ]]; then
   PREVIEW_SOURCE_DIRECTORY="$PWD/$PREVIEW_SOURCE_DIRECTORY"
 fi
+if [[ -n "${CCACHE_DIR:-}" && "$CCACHE_DIR" != /* ]]; then
+  export CCACHE_DIR="$PWD/$CCACHE_DIR"
+fi
 cd "$REPOSITORY"
 : "${RELEASE_VERSION:?Set RELEASE_VERSION to the candidate tag}"
 [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]] || { echo 'Invalid release version' >&2; exit 1; }
@@ -69,6 +72,7 @@ if [[ "$TARGET" != "$HOST_TARGET" ]]; then
     *) echo "Unsupported Preview cross target: $HOST_TARGET to $TARGET" >&2; exit 1 ;;
   esac
 fi
+source "$REPOSITORY/previewworker/build/compiler-cache.sh"
 command -v pkg-config >/dev/null
 if [[ "$RUNNABLE" == true ]]; then
   node build/release/check-preview-fixtures.mjs
@@ -99,7 +103,7 @@ node "$REPOSITORY/previewworker/build/native-notices.mjs" "$BUILD_DIRECTORY" "$P
 
 # Disable optional system dependency discovery; every non-system library is private.
 cd "$BUILD_DIRECTORY/libwebp-1.6.0"
-./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} --prefix="$PREFIX" --enable-shared --disable-static \
+CC="$NATIVE_CC" CXX="$NATIVE_CXX" ./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} --prefix="$PREFIX" --enable-shared --disable-static \
   --disable-gl --disable-sdl --disable-png --disable-jpeg --disable-tiff --disable-gif \
   --disable-libwebpdemux --disable-libwebpmux
 make -j "$JOBS"
@@ -110,15 +114,15 @@ export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig"
 cd "$BUILD_DIRECTORY/zlib-1.3.1"
 if [[ "$GOOS" == linux && "$TARGET" != "$HOST_TARGET" ]]; then
-  LDSHARED="$CC -shared -Wl,-soname,libz.so.1,--version-script,zlib.map,--undefined-version" ./configure --prefix="$PREFIX" --shared
+  CC="$NATIVE_CC" CXX="$NATIVE_CXX" LDSHARED="$NATIVE_CC -shared -Wl,-soname,libz.so.1,--version-script,zlib.map,--undefined-version" ./configure --prefix="$PREFIX" --shared
 else
-  ./configure --prefix="$PREFIX" --shared
+  CC="$NATIVE_CC" CXX="$NATIVE_CXX" ./configure --prefix="$PREFIX" --shared
 fi
 make -j "$JOBS"
 make install
 cp LICENSE "$PACKAGE/licenses/zlib-LICENSE"
 cd "$BUILD_DIRECTORY/jpeg-9f"
-./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} --prefix="$PREFIX" --enable-shared --disable-static
+CC="$NATIVE_CC" CXX="$NATIVE_CXX" ./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} --prefix="$PREFIX" --enable-shared --disable-static
 make -j "$JOBS"
 make install
 cp README "$PACKAGE/licenses/libjpeg-README"
@@ -133,7 +137,7 @@ if [[ "$GOOS" == linux ]]; then
     RAW_LIBS='-lc++ -lc++abi -lc'
   fi
 fi
-CPPFLAGS="-I$PREFIX/include" LDFLAGS="$RAW_LDFLAGS" LIBS="$RAW_LIBS" ./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} \
+CPPFLAGS="-I$PREFIX/include" LDFLAGS="$RAW_LDFLAGS" LIBS="$RAW_LIBS" CC="$NATIVE_CC" CXX="$NATIVE_CXX" ./configure ${WEBP_TARGET[@]+"${WEBP_TARGET[@]}"} \
   --prefix="$PREFIX" --enable-shared --disable-static --disable-examples --disable-openmp \
   --disable-lcms --enable-jpeg --enable-zlib
 make -j "$JOBS"
@@ -142,7 +146,7 @@ cp COPYRIGHT LICENSE.LGPL LICENSE.CDDL "$PACKAGE/licenses/"
 cd "$BUILD_DIRECTORY/ffmpeg-8.0"
 # Some cross sysroots expose the legacy symbol without its removed header.
 patch -p1 < "$REPOSITORY/previewworker/build/ffmpeg-sysctl-header.patch"
-./configure ${FFMPEG_TARGET[@]+"${FFMPEG_TARGET[@]}"} --prefix="$PREFIX" --cc="$CC" --cxx="$CXX" \
+./configure ${FFMPEG_TARGET[@]+"${FFMPEG_TARGET[@]}"} --prefix="$PREFIX" --cc="$NATIVE_CC" --cxx="$NATIVE_CXX" \
   --extra-cflags="$CFLAGS" --extra-cxxflags="$CXXFLAGS" \
   --disable-autodetect --disable-programs --disable-doc --disable-debug \
   --disable-x86asm --disable-static --enable-shared --enable-pic --enable-libwebp --enable-zlib \

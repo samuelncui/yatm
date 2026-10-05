@@ -20,6 +20,14 @@ import (
 
 func setupFilesLocationBenchmark(t testing.TB, entries, depth int, ignoreText string) (*filesService, *entity.FileOperationRef, string) {
 	t.Helper()
+	service, directory, physical, _ := setupFilesLocationBenchmarkNames(t, entries, depth, ignoreText, func(index int) string {
+		return fmt.Sprintf("file-%05d.txt", index)
+	})
+	return service, directory, physical
+}
+
+func setupFilesLocationBenchmarkNames(t testing.TB, entries, depth int, ignoreText string, name func(int) string) (*filesService, *entity.FileOperationRef, string, *gorm.DB) {
+	t.Helper()
 
 	// Register one nested live directory holding the enumerated entries.
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -33,6 +41,7 @@ func setupFilesLocationBenchmark(t testing.TB, entries, depth int, ignoreText st
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 
+	// Preserve the directory depth and configured Ignore rules independently of its names.
 	parts := make([]string, 0, depth)
 	for index := 0; index < depth; index++ {
 		parts = append(parts, fmt.Sprintf("d%02d", index))
@@ -45,40 +54,37 @@ func setupFilesLocationBenchmark(t testing.TB, entries, depth int, ignoreText st
 		location.Config.Ignore = &entity.IgnoreRules{Format: "gitignore", Text: ignoreText}
 	}
 	require.NoError(t, lib.CreateLocation(context.Background(), location))
+
+	// Write each final name once in the supplied creation order.
 	for index := 0; index < entries; index++ {
-		name := fmt.Sprintf("file-%05d.txt", index)
-		require.NoError(t, os.WriteFile(filepath.Join(physical, name), []byte("content"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(physical, name(index)), []byte("content"), 0644))
 	}
 
+	// Expose the same service and fixture connection for optional catalog seeding.
 	exe := executor.New(db, lib, nil, executor.Paths{Access: []executor.AccessRange{{Root: root}}, Work: filepath.Join(root, "work")}, executor.Scripts{}, nil)
 	directory := &entity.FileOperationRef{Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: location.ID, Path: relative}}}
-	return &filesService{api: New(lib, exe)}, directory, physical
+	return &filesService{api: New(lib, exe)}, directory, physical, db
 }
 
 // setupFilesListMixedBenchmark keeps the timed List fixture identical for both source revisions.
 func setupFilesListMixedBenchmark(t testing.TB, count int, order string, depth int, ignoreText string) (*filesService, *entity.FileOperationRef) {
 	t.Helper()
+
 	// Register the same live directory and fixed-seed name order for every implementation.
-	service, directory, physical := setupFilesLocationBenchmark(t, count, depth, ignoreText)
-	location, err := service.api.lib.GetLocation(context.Background(), directory.GetLocation().LocationId)
-	require.NoError(t, err)
-	names := rand.New(rand.NewSource(19)).Perm(count)
+	var names []int
 	if order == "reverse" {
+		names = make([]int, count)
 		for i := range names {
 			names[i] = count - i - 1
 		}
+	} else {
+		names = rand.New(rand.NewSource(19)).Perm(count)
 	}
-	for i := 0; i < count; i++ {
-		require.NoError(t, os.Rename(filepath.Join(physical, fmt.Sprintf("file-%05d.txt", i)), filepath.Join(physical, fmt.Sprintf("entry-%08d", names[i]))))
-	}
+	service, directory, physical, db := setupFilesLocationBenchmarkNames(t, count, depth, ignoreText, func(index int) string {
+		return fmt.Sprintf("entry-%08d", names[index])
+	})
 
 	// Seed alternate lexical names in one fixture transaction; setup is never part of List timing.
-	db, err := resource.OpenSQLite(filepath.Join(filepath.Dir(location.RootPath), "library.db"))
-	require.NoError(t, err)
-	db.Logger = logger.Discard
-	connection, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = connection.Close() })
 	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 		lib := library.New(tx)
 		for i := 0; i < count; i += 2 {
@@ -91,7 +97,7 @@ func setupFilesListMixedBenchmark(t testing.TB, count int, order string, depth i
 			if err != nil {
 				return err
 			}
-			if err := tx.Create(&library.FileLocation{FileID: file.ID, LocationID: location.ID, Path: directory.GetLocation().Path + "/" + name,
+			if err := tx.Create(&library.FileLocation{FileID: file.ID, LocationID: directory.GetLocation().LocationId, Path: directory.GetLocation().Path + "/" + name,
 				Size: info.Size(), Mode: uint32(info.Mode()), MtimeNS: info.ModTime().UnixNano()}).Error; err != nil {
 				return err
 			}

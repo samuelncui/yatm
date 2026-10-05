@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { collect, options, validateTier } from "./collect.mjs";
-import { readSamples, validateInventory, validatePair, validateSamples } from "./evidence.mjs";
+import { digest, readSamples, validateInventory, validatePair, validateSamples } from "./evidence.mjs";
 import { comparePair } from "../check-performance.mjs";
 
 function fixture(t) {
@@ -358,4 +358,128 @@ test("snapshot rejects source symlinks including dangling links", async (t) => {
     assert.throws(() => collect(f.config, f.run, () => {}), /ordinary files, not symlinks/);
     assert.equal(JSON.parse(readFileSync(join(f.config.out, "pair.json"))).complete, false);
   });
+});
+
+function packageFixture(t) {
+  const f = fixture(t);
+  const extra = "internal/other/performance_test.go";
+  f.tier.harness.push(extra);
+  f.tier.suites.push({ package: "./internal/other", bench: "^BenchmarkOther$", benchmarks: ["BenchmarkOther"], benchtime: "1x" });
+  f.tier.structural = f.tier.suites.map((suite, index) => ({ scope: "candidate", package: suite.package,
+    run: `^TestRows${index}$`, tests: [`TestRows${index}`] }));
+  f.config.tier = "release";
+  writeFileSync(f.config.manifest, JSON.stringify({ tiers: { release: f.tier } }));
+  for (const side of ["baseline", "candidate"]) {
+    mkdirSync(join(f.root, side, "internal/other"), { recursive: true });
+    writeFileSync(join(f.root, side, extra), `other harness from ${side}\n`);
+  }
+  const original = f.run;
+  f.run = (file, args, settings = {}) => {
+    if (file === "git" && args.includes("ls-files")) return original(file, args, settings) + extra + "\0";
+    if (basename(file) === "go" && args[0] === "test") {
+      f.calls.push({ file, args, settings });
+      const pkg = args.at(-1).replace(/^\.\//, "");
+      const expected = pkg.endsWith("other") ? "other harness from candidate\n" : "common harness from candidate\n";
+      assert.equal(readFileSync(join(settings.cwd, pkg, "performance_test.go"), "utf8"), expected);
+      assert.equal(f.calls.some((call) => call.file.endsWith(".test")), false);
+      return "";
+    }
+    if (file.endsWith(".test")) {
+      f.calls.push({ file, args, settings });
+      const list = /^-test.list=\^(TestRows\d+)\$$/.exec(args[0]);
+      if (list) return list[1] + "\n";
+      const structural = /^-test.run=\^(TestRows\d+)\$$/.exec(args[0]);
+      if (structural) return `--- PASS: ${structural[1]} (0.00s)\nPASS\n`;
+      const benchmark = basename(settings.cwd) === "other" ? "BenchmarkOther" : "BenchmarkList";
+      return `goos: linux\ngoarch: amd64\ncpu: synthetic test CPU\n${benchmark}-2 1 100 ns/op 0 B/op 0 allocs/op\nPASS\n`;
+    }
+    return original(file, args, settings);
+  };
+  return f;
+}
+
+test("package selection filters an existing tier, harness and applicable structural checks", (t) => {
+  const f = packageFixture(t);
+  f.config.packages = ["./internal/other", "./internal/other"];
+  const record = collect(f.config, (file, args, settings) => {
+    if (args.includes("-test.run=^$")) {
+      const state = join(settings.env.TMPDIR, "mutable-fixture");
+      assert.equal(existsSync(state), false, "the baseline fixture cannot leak into the candidate");
+      writeFileSync(state, "owned by this source");
+    }
+    return f.run(file, args, settings);
+  }, () => {});
+  assert.deepEqual(record.scope, { requestedPackages: ["./internal/other"], selectedPackages: ["./internal/other"],
+    executedPackages: ["./internal/other"], skippedPackages: ["./internal/example"], fullTier: false,
+    structural: [{ package: "./internal/other", tests: ["TestRows1"] }],
+    skippedStructural: [{ package: "./internal/example", tests: ["TestRows0"] }] });
+  assert.equal(record.fullReleaseComparison, false, "a completed subset cannot claim release comparison");
+  assert.deepEqual(record.harness.files.map(([name]) => name), ["internal/other/performance_test.go"]);
+  assert.deepEqual(record.runs.map(({ side, package: pkg }) => [side, pkg]), [["baseline", "./internal/other"], ["candidate", "./internal/other"]]);
+  const benchmarks = f.calls.filter((call) => call.args.includes("-test.run=^$"));
+  assert.equal(benchmarks.length, 2);
+  assert.deepEqual(benchmarks[0].args, benchmarks[1].args);
+  assert.ok(benchmarks[0].args.includes("-test.count=1"));
+  assert.ok(benchmarks[0].args.includes("-test.benchtime=1x"));
+  assert.notEqual(benchmarks[0].settings.env.TMPDIR, benchmarks[1].settings.env.TMPDIR);
+  assert.equal(validatePair(f.config.out).fullReleaseComparison, false);
+  assert.equal(comparePair(f.config.out).flagged, false);
+
+  for (const change of [
+    (value) => { value.fullReleaseComparison = true; },
+    (value) => { value.scope.fullTier = true; },
+    (value) => { value.scope.executedPackages = []; },
+    (value) => { value.structural = []; },
+    (value) => { delete value.scope; },
+  ]) {
+    const invalid = structuredClone(record); change(invalid);
+    writeFileSync(join(f.config.out, "pair.json"), JSON.stringify(invalid));
+    assert.throws(() => validatePair(f.config.out), /scope|structural/);
+  }
+});
+
+test("explicit package requests retain manifest order and complete default release scope", (t) => {
+  const f = packageFixture(t);
+  f.config.packages = ["./internal/other", "./internal/example"];
+  const record = collect(f.config, f.run, () => {});
+  assert.deepEqual(record.scope.requestedPackages, f.config.packages);
+  assert.deepEqual(record.scope.executedPackages, ["./internal/example", "./internal/other"]);
+  assert.equal(record.fullReleaseComparison, true);
+  assert.equal(validatePair(f.config.out).scope.fullTier, true);
+  const compile = f.calls.filter((call) => call.args.includes("-c"));
+  const benchmarks = f.calls.filter((call) => call.args.includes("-test.run=^$"));
+  assert.equal(compile.length, 4);
+  assert.equal(benchmarks.length, 4);
+  for (const call of benchmarks) {
+    const side = basename(call.file).split("-")[0], pkg = "./internal/" + basename(call.settings.cwd);
+    assert.equal(call.settings.env.TMPDIR, compile.find((item) => basename(item.settings.cwd) === side && item.args.at(-1) === pkg).settings.env.TMPDIR);
+  }
+});
+
+test("unknown or incomplete package requests fail before source or fixture setup", (t) => {
+  const f = packageFixture(t);
+  assert.throws(() => collect({ ...f.config, packages: ["./internal/absent"] }, f.run, () => {}), /not in the release tier/);
+  assert.equal(f.calls.length, 0);
+  assert.equal(existsSync(f.config.out), false);
+  const args = ["--baseline", "a", "--candidate", "b", "--out", "c", "--environment", "d", "--idle"];
+  assert.deepEqual(options([...args, "--package", "./internal/apis", "--package", "./internal/executor/scan"]).packages,
+    ["./internal/apis", "./internal/executor/scan"]);
+  assert.throws(() => options([...args, "--package"]), /incomplete option --package/);
+});
+
+test("collection records attempted package scope on failure and hashes the consumed immutable manifest", (t) => {
+  const f = packageFixture(t);
+  f.config.packages = ["./internal/other"];
+  const manifest = readFileSync(f.config.manifest);
+  assert.throws(() => collect(f.config, (file, args, settings) => {
+    if (basename(file) === "go" && args[0] === "env") writeFileSync(f.config.manifest, "changed after selection");
+    if (file.endsWith("baseline-0.test")) throw new Error("selected benchmark failed");
+    return f.run(file, args, settings);
+  }, () => {}), /selected benchmark failed/);
+  const record = JSON.parse(readFileSync(join(f.config.out, "pair.json")));
+  assert.equal(record.collector.manifestSHA256, digest(manifest));
+  assert.deepEqual(record.scope.executedPackages, ["./internal/other"]);
+  assert.equal(record.complete, false);
+  assert.equal(record.fullReleaseComparison, false);
+  assert.equal(readdirSync(f.root).some((name) => name.startsWith(".yatm-performance-")), false);
 });

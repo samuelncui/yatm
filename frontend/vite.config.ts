@@ -13,11 +13,14 @@ export default defineConfig(({ mode }) => {
       react(),
       {
         name: "release-identity",
-        transformIndexHtml() {
-          return [
-            { tag: "meta", attrs: { name: "yatm-version", content: process.env.VITE_YATM_VERSION || "development" }, injectTo: "head" },
-            { tag: "meta", attrs: { name: "yatm-commit", content: process.env.VITE_YATM_COMMIT || "unknown" }, injectTo: "head" },
-          ];
+        transformIndexHtml(html, context) {
+          return {
+            html: context.server ? html.replace("%%API_BASE%%", "/services") : html,
+            tags: [
+              { tag: "meta", attrs: { name: "yatm-version", content: process.env.VITE_YATM_VERSION || "development" }, injectTo: "head" },
+              { tag: "meta", attrs: { name: "yatm-commit", content: process.env.VITE_YATM_COMMIT || "unknown" }, injectTo: "head" },
+            ],
+          };
         },
       },
     ],

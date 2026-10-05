@@ -306,18 +306,25 @@ class Workflows:
 
 
 def run_cases(test):
-    workflows = Workflows(test)
-    for name, method in (("literal-filenames-and-nanoseconds", workflows.listing),
-                         ("invalid-byte-row-and-cli-failure", workflows.invalid_listing),
-                         ("scan-all-source-preparation-barrier", workflows.preparation_barrier),
-                         ("scan-overlap-multiple-locations-and-recreate", workflows.scan),
-                         ("recorded-library-and-live-location-search", workflows.search),
-                         ("dryrun-delete-and-recover-literal-path", workflows.file_operations),
-                         ("volume-archive-restore-and-media-scan", workflows.archive_restore),
-                         ("volume-copy-damage-missing-and-health", workflows.verify),
-                         ("volume-inventory-import-delete-and-register", workflows.inventory),
-                         ("lossless-jsonl-export-import", workflows.backup)):
-        test.case(name, method)
+    cases = (("literal-filenames-and-nanoseconds", "listing"),
+             ("invalid-byte-row-and-cli-failure", "invalid_listing"),
+             ("scan-all-source-preparation-barrier", "preparation_barrier"),
+             ("scan-overlap-multiple-locations-and-recreate", "scan"),
+             ("recorded-library-and-live-location-search", "search"),
+             ("dryrun-delete-and-recover-literal-path", "file_operations"),
+             ("volume-archive-restore-and-media-scan", "archive_restore"),
+             ("volume-copy-damage-missing-and-health", "verify"),
+             ("volume-inventory-import-delete-and-register", "inventory"),
+             ("lossless-jsonl-export-import", "backup"))
+    names = [name for name, _ in cases] + ["native-preview-assets-and-generation-policies",
+                                         "ltfs-format-append-restore-verify", "ltfs-full-prefix-second-media-restore-verify",
+                                         "sqlite-wal-enable-persist-and-disable"]
+    if not any(test.wants_case(name) for name in names):
+        return
+    with test.phase("workflow-fixtures"):
+        workflows = Workflows(test)
+    for name, method in cases:
+        test.case(name, getattr(workflows, method))
     if test.args.preview_archive:
         test.case("native-preview-assets-and-generation-policies", workflows.preview)
     else:

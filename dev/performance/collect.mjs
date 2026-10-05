@@ -7,11 +7,12 @@ import { resolveGo } from "./toolchain.mjs";
 import { digest, readSamples, validateInventory, validateSamples } from "./evidence.mjs";
 
 export function options(args) {
-  const result = { tier: "fast", cpu: 2, benchtime: "1s", cgo: "1" };
+  const result = { tier: "fast", cpu: 2, benchtime: "1s", cgo: "1", packages: [] };
   for (let index = 0; index < args.length; index++) {
     const key = args[index].replace(/^--/, "");
     if (key === "idle") { result.idle = true; continue; }
-    if (!["baseline", "candidate", "harness", "out", "tier", "cpu", "benchtime", "cgo", "environment", "manifest"].includes(key) || !args[index + 1] || args[index + 1].startsWith("--")) throw new Error(`Unknown or incomplete option ${args[index]}`);
+    if (!["baseline", "candidate", "harness", "out", "tier", "cpu", "benchtime", "cgo", "environment", "manifest", "package"].includes(key) || !args[index + 1] || args[index + 1].startsWith("--")) throw new Error(`Unknown or incomplete option ${args[index]}`);
+    if (key === "package") { result.packages.push(args[++index]); continue; }
     result[key] = args[++index];
   }
   for (const key of ["baseline", "candidate", "out", "environment"]) if (!result[key]) throw new Error(`--${key} is required`);
@@ -84,8 +85,15 @@ function idle() {
 
 export function collect(config, run = command, checkIdle = idle) {
   const manifestPath = resolve(config.manifest ?? join(dirname(fileURLToPath(import.meta.url)), "suites.json"));
-  const tier = validateTier(JSON.parse(readFileSync(manifestPath, "utf8")).tiers[config.tier]);
-  if (config.tier === "release" && !tier.structural?.length) throw new Error("Release tier requires explicit 1m structural checks");
+  const manifest = readFileSync(manifestPath);
+  const fullTier = validateTier(JSON.parse(manifest).tiers[config.tier]);
+  if (config.tier === "release" && !fullTier.structural?.length) throw new Error("Release tier requires explicit 1m structural checks");
+  const requested = [...new Set(config.packages ?? [])];
+  for (const pkg of requested) if (!fullTier.suites.some((suite) => suite.package === pkg)) throw new Error(`Package is not in the ${config.tier} tier: ${pkg}`);
+  const suites = fullTier.suites.filter((suite) => !requested.length || requested.includes(suite.package));
+  const packages = suites.map((suite) => suite.package);
+  const tier = { ...fullTier, suites, harness: fullTier.harness.filter((name) => packages.some((pkg) => name.startsWith(localPath(pkg) + "/"))),
+    structural: (fullTier.structural ?? []).filter((check) => packages.includes(check.package)) };
   const output = physicalPath(config.out), harnessRoot = realpathSync(config.harness ?? config.candidate);
   if (existsSync(output)) throw new Error("Output must be a new directory; existing evidence is never overwritten");
   for (const root of [config.baseline, config.candidate, harnessRoot]) {
@@ -95,7 +103,12 @@ export function collect(config, run = command, checkIdle = idle) {
   checkIdle();
   mkdirSync(output, { recursive: true });
   const workspace = mkdtempSync(join(dirname(output), ".yatm-performance-"));
-  const record = { format: 1, complete: false, tier: config.tier, idleConfirmed: true, startedAt: new Date().toISOString(), sources: {}, runs: [], structural: [] };
+  const record = { format: 1, complete: false, tier: config.tier, idleConfirmed: true, startedAt: new Date().toISOString(), sources: {}, runs: [], structural: [],
+    fullReleaseComparison: false, scope: { requestedPackages: requested.length ? requested : packages, selectedPackages: packages, executedPackages: [],
+      skippedPackages: fullTier.suites.map((suite) => suite.package).filter((pkg) => !packages.includes(pkg)),
+      structural: tier.structural.map(({ package: pkg, tests }) => ({ package: pkg, tests })),
+      skippedStructural: (fullTier.structural ?? []).filter((check) => !packages.includes(check.package)).map(({ package: pkg, tests }) => ({ package: pkg, tests })) } };
+  record.scope.fullTier = record.scope.skippedPackages.length === 0;
   const save = () => writeFileSync(join(output, "pair.json"), JSON.stringify(record, null, 2) + "\n");
   try {
     // One environment and fixture filesystem serve both source revisions.
@@ -106,6 +119,10 @@ export function collect(config, run = command, checkIdle = idle) {
     mkdirSync(env.TMPDIR);
     const selectedGo = resolveGo(`go${toolchain}`, harnessRoot, env, run);
     env = selectedGo.env;
+    const fixtureEnvs = Object.fromEntries(["baseline", "candidate"].map((side) => {
+      const TMPDIR = join(env.TMPDIR, side); mkdirSync(TMPDIR);
+      return [side, { ...env, TMPDIR }];
+    }));
     const go = selectedGo.info;
     const fs = statfsSync(workspace);
     record.environment = { label: config.environment, go, compiler: config.cgo === "1" ? run(go.CC, ["--version"], { env }).split("\n")[0] : null,
@@ -122,7 +139,7 @@ export function collect(config, run = command, checkIdle = idle) {
       if (!lstatSync(path).isFile()) throw new Error(`Harness paths must name files: ${name}`);
       return { name, bytes: readFileSync(path) };
     });
-    record.collector = { sha256: digest(readFileSync(fileURLToPath(import.meta.url))), manifestSHA256: digest(readFileSync(manifestPath)) };
+    record.collector = { sha256: digest(readFileSync(fileURLToPath(import.meta.url))), manifestSHA256: digest(manifest) };
     record.harness = { commit: run("git", ["-C", harnessRoot, "rev-parse", "HEAD"]).trim(), files: harness.map(({ name, bytes }) => [name, digest(bytes)]), sha256: digest(JSON.stringify(harness.map(({ name, bytes }) => [name, digest(bytes)]))) };
     for (const side of ["baseline", "candidate"]) {
       for (const suite of tier.suites) {
@@ -134,15 +151,17 @@ export function collect(config, run = command, checkIdle = idle) {
         writeFileSync(join(workspace, side, name), bytes);
       }
       writeFileSync(join(output, `${side}.bench`), "");
-      for (const [index, suite] of record.suites.entries()) run(selectedGo.file, ["test", "-c", "-p=1", "-o", join(workspace, `${side}-${index}.test`), suite.package], { cwd: join(workspace, side), env });
+      for (const [index, suite] of record.suites.entries()) run(selectedGo.file, ["test", "-c", "-p=1", "-o", join(workspace, `${side}-${index}.test`), suite.package], { cwd: join(workspace, side), env: fixtureEnvs[side] });
     }
     save();
 
     // Run each standard Go benchmark suite once per source. Go calibrates its own loop.
     for (const [index, suite] of record.suites.entries()) {
       for (const side of ["baseline", "candidate"]) {
+        if (!record.scope.executedPackages.includes(suite.package)) record.scope.executedPackages.push(suite.package);
+        save();
         const args = ["-test.run=^$", `-test.bench=${suite.bench}`, "-test.benchmem", `-test.benchtime=${suite.benchtime}`, "-test.count=1", `-test.cpu=${config.cpu}`, "-test.parallel=1", "-test.timeout=30m"];
-        const stdout = run(join(workspace, `${side}-${index}.test`), args, { cwd: join(workspace, side, localPath(suite.package)), env });
+        const stdout = run(join(workspace, `${side}-${index}.test`), args, { cwd: join(workspace, side, localPath(suite.package)), env: fixtureEnvs[side] });
         const text = `pkg: ${suite.importPath}\n${stdout}\n`;
         appendFileSync(join(output, `${side}.bench`), text);
         if (!/^PASS\s*$/m.test(stdout)) throw new Error("Benchmark suite did not complete");
@@ -156,7 +175,7 @@ export function collect(config, run = command, checkIdle = idle) {
       const result = { ...check, passed: false, outputs: {} }; record.structural.push(result);
       // Structural correctness is checked once on the candidate, separately from timing.
       const binary = join(workspace, `candidate-${suiteIndex}.test`);
-      const settings = { cwd: join(workspace, "candidate", localPath(check.package)), env: { ...env, ...check.env } };
+      const settings = { cwd: join(workspace, "candidate", localPath(check.package)), env: { ...fixtureEnvs.candidate, ...check.env } };
       const listed = run(binary, [`-test.list=${check.run}`], settings).trim().split(/\r?\n/).sort();
       if (JSON.stringify(listed) !== JSON.stringify([...check.tests].sort())) throw new Error("Required candidate structural tests are absent");
       const stdout = run(binary, [`-test.run=${check.run}`, "-test.count=1", "-test.v", "-test.timeout=60m"], settings);
@@ -167,7 +186,8 @@ export function collect(config, run = command, checkIdle = idle) {
     }
     validateSamples(readSamples(readFileSync(join(output, "baseline.bench"), "utf8")), readSamples(readFileSync(join(output, "candidate.bench"), "utf8")), record.suites);
     record.outputs = Object.fromEntries(["baseline", "candidate"].map((side) => [side, digest(readFileSync(join(output, `${side}.bench`)))]));
-    record.complete = true; record.finishedAt = new Date().toISOString(); save();
+    record.complete = true; record.fullReleaseComparison = config.tier === "release" && record.scope.fullTier;
+    record.finishedAt = new Date().toISOString(); save();
     return record;
   } catch (error) {
     record.error = error.message; save();

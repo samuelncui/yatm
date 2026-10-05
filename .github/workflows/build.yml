@@ -63,6 +63,8 @@ jobs:
     env:
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_COMMIT: ${{ github.sha }}
+      VITE_YATM_VERSION: ${{ inputs.version }}
+      VITE_YATM_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -87,7 +89,7 @@ jobs:
       - name: Install the Preview fixture generator
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libx264-dev libx265-dev zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config ccache libx264-dev libx265-dev zlib1g-dev
           bash build/release/build-test-ffmpeg.sh "$RUNNER_TEMP/preview-test-tools"
           echo "$RUNNER_TEMP/preview-test-tools/bin" >> "$GITHUB_PATH"
       - name: Install the pinned protobuf generators
@@ -102,6 +104,13 @@ jobs:
           echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
       - name: Run the release source preflight
         run: make release-check
+      - name: Collect the checked frontend and its notices
+        run: bash build/release/build-frontend.sh "$RUNNER_TEMP/shared-frontend" frontend/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared-frontend
+          path: ${{ runner.temp }}/shared-frontend
+          if-no-files-found: error
 
   build:
     needs: [prepare, source-check]
@@ -152,6 +161,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
       OSARCH_TESTED: ${{ matrix.tested }}
+      FRONTEND_ARTIFACT_DIRECTORY: ${{ runner.temp }}/shared-frontend
       CGO_ENABLED: ${{ matrix.goos == 'linux' && '1' || '0' }}
 
     steps:
@@ -188,9 +198,10 @@ jobs:
         tar -xJf "$archive" -C "$RUNNER_TEMP"
         echo "$RUNNER_TEMP/zig-x86_64-linux-0.15.2" >> "$GITHUB_PATH"
 
-    - uses: pnpm/action-setup@v4
+    - uses: actions/download-artifact@v4
       with:
-        package_json_file: frontend/package.json
+        name: shared-frontend
+        path: ${{ runner.temp }}/shared-frontend
 
     - name: Build
       run: make release
@@ -219,6 +230,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       RELEASE_VERSION: ${{ inputs.version }}
+      CCACHE_DIR: ${{ runner.temp }}/preview-ccache
     steps:
       - uses: actions/checkout@v7
         with:
@@ -235,12 +247,23 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config patchelf libx264-dev libx265-dev zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config patchelf ccache libx264-dev libx265-dev zlib1g-dev
           bash build/release/build-test-ffmpeg.sh "$RUNNER_TEMP/preview-test-tools"
           echo "$RUNNER_TEMP/preview-test-tools/bin" >> "$GITHUB_PATH"
       - name: Install macOS native build and fixture tools
         if: runner.os == 'macOS'
-        run: brew install pkgconf ffmpeg
+        run: brew install pkgconf ffmpeg ccache
+      - id: compiler-cache
+        name: Identify native compiler cache inputs
+        env:
+          PREVIEW_TARGET: ${{ matrix.target }}
+        run: echo "key=$(bash previewworker/build/compiler-cache.sh key)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: preview-native-${{ matrix.target }}-${{ steps.compiler-cache.outputs.key }}-${{ github.run_id }}
+          restore-keys: |
+            preview-native-${{ matrix.target }}-${{ steps.compiler-cache.outputs.key }}-
       - name: Verify the Preview fixture generator
         run: node build/release/check-preview-fixtures.mjs
       - name: Prepare verified CC0 camera fixtures
@@ -249,6 +272,9 @@ jobs:
           echo "YATM_TEST_RAW_DIRECTORY=$RUNNER_TEMP/raw-fixtures" >> "$GITHUB_ENV"
       - name: Build and test the optional native helper
         run: make preview
+      - name: Report native compiler cache statistics
+        if: always()
+        run: ccache --show-stats
       - name: Test relocation from the archive
         run: |
           set -euo pipefail

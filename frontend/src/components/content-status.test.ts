@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { FileContentSummary, OriginalAvailability as Original } from "@/entity";
 import { archiveIndicator, archiveSummary, contentTime } from "./content-status";

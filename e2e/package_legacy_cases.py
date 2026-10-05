@@ -84,6 +84,7 @@ def run_legacy(test):
             archive.add(item, arcname=item.name)
     test.report["legacy_inputs"] = {"version": legacy_version, "package_sha256": sha256(args.legacy_package),
                                     "source_sha256": source_hash, "fixture_sha256": sha256(fixture)}
+    test.report["limits"].append("Legacy acceptance uses copied metadata and Archive history; no original file or physical Tape is accessed.")
     test.save()
     test.upload([args.legacy_package, fixture], test.root)
     test.remote(["mkdir", test.install])
@@ -133,6 +134,10 @@ def run_legacy(test):
     test.case("legacy-readonly-installer-review", lambda: test.installer(check=True))
     test.case("legacy-prepare-decline-and-abort", abort)
     test.case("legacy-exact-package-installer-upgrade", upgrade)
+    if not test.wants_case("legacy-exact-package-installer-upgrade"):
+        require(sha256(args.legacy_fixture) == source_hash, "Original copied backup changed.")
+        test.save()
+        return
     test.verify_programs(test.install)
     test.one("status")
 
@@ -194,9 +199,9 @@ def run_legacy(test):
 
     # Finish migration validation before an import can regenerate derived directory IDs.
     from package_install_cases import wait_for_service
-    test.remote(["systemctl", "start", test.service])
-    wait_for_service(test)
-    test.case("legacy-complete-jsonl-roundtrip", roundtrip)
+    if test.wants_case("legacy-complete-jsonl-roundtrip"):
+        test.remote(["systemctl", "start", test.service])
+        wait_for_service(test)
+        test.case("legacy-complete-jsonl-roundtrip", roundtrip)
     require(sha256(args.legacy_fixture) == source_hash, "Original copied backup changed.")
-    test.report["limits"].append("Legacy acceptance uses copied metadata and Archive history; no original file or physical Tape is accessed.")
     test.save()

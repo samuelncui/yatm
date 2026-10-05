@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { errorMessage, formatFilesize } from "./tools";
 import { RpcError } from "@protobuf-ts/runtime-rpc";

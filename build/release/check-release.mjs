@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { readArchive, checkDirectories, checkMemberPath } from './archive-members.mjs';
+import { readArchive, checkDirectories } from './archive-members.mjs';
+import { dependencyFiles, frontendFiles } from './package-assets.mjs';
 
 const archive = process.argv[2];
 assert(archive, 'usage: node check-release.mjs <archive.tar.gz>');
@@ -30,37 +31,17 @@ if (path.basename(archive).startsWith('yatm-linux-')) {
     assert(record && record.version === version && notices.every(notice => record.notices?.includes(notice)), `Missing pinned ${name} runtime notices`);
   }
 }
-for (const { kind, name, version, notices } of dependencies) {
-  assert(['go', 'node', 'native'].includes(kind) && typeof name === 'string' && typeof version === 'string'
-    && Array.isArray(notices) && notices.length, 'Invalid dependency notice ownership');
-  if (kind === 'native') assert((name === 'musl' && version === 'zig-0.15.2') || (name === 'zig' && version === '0.15.2'), 'Unowned native runtime notice');
-  const directory = `licenses/${kind}/${name}@${version}`;
-  checkMemberPath(directory);
-  for (const notice of notices) {
-    assert(typeof notice === 'string' && /^(licen[cs]e|notice|copying|copyright|patents)([.-].*)?$/i.test(notice)
-      && !notice.includes('/'), 'Invalid dependency notice filename');
-    const entry = `${directory}/${notice}`;
-    allowed.add(entry);
-    assert(files.has(entry), `Required dependency notice missing: ${entry}`);
-  }
-  if (kind === 'node') {
-    allowed.add(`${directory}/package.json`);
-    assert(files.has(`${directory}/package.json`), `Required dependency metadata missing: ${directory}`);
-  }
-}
+for (const entry of dependencyFiles(files)) allowed.add(entry);
+const version = files.get('VERSION').toString().trim();
+const commit = files.get('COMMIT').toString().trim();
+assert.match(version, /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
+assert.match(commit, /^[a-f0-9]{40}$/);
+for (const entry of frontendFiles(files, version, commit)) allowed.add(entry);
 for (const entry of files.keys()) {
   assert(!/(^|\/)(\.git|\.local|node_modules|config\.yaml)(\/|$)|(?:\.log|\.tmp|\.temp|~)$/i.test(entry), `Development/private file in archive: ${entry}`);
   if (entry.startsWith('docs/')) assert(documents.includes(entry), `Unexpected packaged documentation: ${entry}`);
   // Vite owns the flat, hashed asset output. Source maps and arbitrary nested files are not runtime assets.
-  assert(allowed.has(entry) || /^frontend\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.(?:js|css|svg)$/.test(entry), `Unexpected archive entry: ${entry}`);
+  assert(allowed.has(entry), `Unexpected archive entry: ${entry}`);
 }
 checkDirectories(members);
-const read = entry => files.get(entry).toString().trim();
-const version = read('VERSION');
-const commit = read('COMMIT');
-assert.match(version, /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
-assert.match(commit, /^[a-f0-9]{40}$/);
-const html = read('frontend/index.html');
-assert(html.includes(`name="yatm-version" content="${version}"`), 'Frontend version does not match package');
-assert(html.includes(`name="yatm-commit" content="${commit}"`), 'Frontend commit does not match package');
 console.log(`Validated ${path.basename(archive)} (${files.size} files; ${commit}).`);

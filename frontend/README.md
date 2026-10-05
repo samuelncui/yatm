@@ -1,7 +1,14 @@
 # YATM frontend
 
-Use Node.js 24 and the repository's pnpm lockfile. Run `pnpm check` in this
-folder for formatting, lint, tests, type checking and the production build.
+Use Node.js 24 and the repository's pnpm lockfile. During development/review, select
+affected Vitest files (for example `pnpm exec vitest run src/components/files-browser.test.ts`)
+and run `pnpm typecheck`; add the relevant style/lint, build or browser checks when those
+boundaries change. `pnpm check` runs all formatting, lint, tests, type checking and the
+production build for final integration/release. The
+[check-scope policy](../docs/operations/testing.md#check-scope-and-reuse) owns evidence reuse.
+
+DOM-free tests declare `// @vitest-environment node`. Shared setup loads browser helpers only in
+jsdom. Component tests and benchmarks retain jsdom; tests default to two workers.
 
 ## Shared file browser
 

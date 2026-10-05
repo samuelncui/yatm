@@ -1,6 +1,8 @@
 """Local SSH controller for shipped YATM programs on an isolated Linux test host."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -11,10 +13,75 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PROGRAMS = ("yatm-httpd", "yatm-cli", "yatm-migrate", "yatm-export-library", "yatm-lto-info")
+
+# Dependencies own required state, not the preceding case's position in the full run.
+CASE_DEPENDENCIES = {
+    "normal": {
+        "fresh-systemd-installation": (),
+        "readonly-checks-and-unchanged-rerun": ("fresh-systemd-installation",),
+        "literal-filenames-and-nanoseconds": ("fresh-systemd-installation",),
+        "invalid-byte-row-and-cli-failure": ("fresh-systemd-installation",),
+        "scan-all-source-preparation-barrier": ("fresh-systemd-installation",),
+        "scan-overlap-multiple-locations-and-recreate": ("fresh-systemd-installation",),
+        "recorded-library-and-live-location-search": ("scan-overlap-multiple-locations-and-recreate",),
+        "dryrun-delete-and-recover-literal-path": ("fresh-systemd-installation",),
+        "volume-archive-restore-and-media-scan": ("fresh-systemd-installation",),
+        "volume-copy-damage-missing-and-health": ("volume-archive-restore-and-media-scan",),
+        "volume-inventory-import-delete-and-register": ("volume-copy-damage-missing-and-health",),
+        "lossless-jsonl-export-import": ("scan-overlap-multiple-locations-and-recreate",),
+        "native-preview-assets-and-generation-policies": ("fresh-systemd-installation",),
+        "ltfs-format-append-restore-verify": ("fresh-systemd-installation",),
+        "ltfs-full-prefix-second-media-restore-verify": ("fresh-systemd-installation",),
+        "sqlite-wal-enable-persist-and-disable": ("scan-overlap-multiple-locations-and-recreate",),
+        # Preserve actual Catalog and historical Jobs rather than comparing empty inventories.
+        "same-version-replacement-and-complete-backup-recovery": ("scan-overlap-multiple-locations-and-recreate",),
+    },
+    "legacy": {
+        "legacy-readonly-installer-review": (),
+        "legacy-prepare-decline-and-abort": (),
+        "legacy-exact-package-installer-upgrade": (),
+        "legacy-repeated-cleanup-and-historical-repair": ("legacy-exact-package-installer-upgrade",),
+        "legacy-complete-jsonl-roundtrip": ("legacy-exact-package-installer-upgrade",),
+    },
+}
+
+
+def case_scope(args):
+    profile = "legacy" if getattr(args, "legacy_package", None) else "normal"
+    dependencies = CASE_DEPENDENCIES[profile]
+    unavailable = {}
+    if profile == "normal":
+        if not args.preview_archive:
+            unavailable["native-preview-assets-and-generation-policies"] = "No Preview archive was selected."
+        if not args.ltfs:
+            for name in ("ltfs-format-append-restore-verify", "ltfs-full-prefix-second-media-restore-verify"):
+                unavailable[name] = "--ltfs was not selected."
+    available = [name for name in dependencies if name not in unavailable]
+    requested = list(dict.fromkeys(getattr(args, "case", None) or available))
+    selected = set()
+
+    def include(name):
+        require(name in dependencies, f"Unknown {profile} case: {name}.")
+        require(name not in unavailable, f"Case {name} is unavailable: {unavailable.get(name)}")
+        if name in selected:
+            return
+        for prerequisite in dependencies[name]:
+            include(prerequisite)
+        selected.add(name)
+
+    for name in requested:
+        include(name)
+    return {"profile": profile, "requested": requested,
+            "prerequisite": [name for name in dependencies if name in selected and name not in requested],
+            "selected": [name for name in dependencies if name in selected], "executed": [],
+            "skipped": [{"name": name, "reason": unavailable.get(name, "Not selected by --case.")}
+                        for name in dependencies if name not in selected],
+            "subset": selected != set(available)}
 
 
 def require(condition, message):
@@ -51,6 +118,7 @@ def check_arguments(args):
         require(not args.ltfs and not args.preview_archive, "Run legacy migration separately from LTFS/Preview acceptance.")
         require(re.fullmatch(r"yatm-linux-amd64-v0\.1\.\d+\.tar\.gz", legacy_package.name),
                 "Select a published Linux amd64 v0.1.x package.")
+    case_scope(args)
 
 
 class Acceptance:
@@ -61,32 +129,53 @@ class Acceptance:
         self.install = None
         self.url = None
         self.sequence = 0
+        self.started = time.monotonic()
+        self.current_case = None
+        self.current_phase = None
+        scope = case_scope(args)
+        self.selected_cases = set(scope["selected"])
         args.out.mkdir(parents=True, mode=0o700)
         self.report = {"status": "running", "version": args.version, "commit": args.commit,
-                       "host": args.host, "cases": [], "commands": [], "limits": [],
+                       "host": args.host, "cases": [], "commands": [], "phases": [], "limits": [],
+                       "case_scope": scope,
                        "release_accepted": False,
                        "scope": "Exact Linux package over SSH; controller and assertions remain local."}
         self.save()
 
     def save(self):
+        self.report["duration_seconds"] = time.monotonic() - self.started
         (self.args.out / "report.json").write_text(json.dumps(self.report, indent=2) + "\n")
 
-    def run(self, argv, body=None, expected=0, timeout=180):
+    def command_record(self, argv):
         self.sequence += 1
         stem = f"{self.sequence:04d}"
-        record = {"argv": [str(value) for value in argv], "stdout": stem + ".stdout", "stderr": stem + ".stderr"}
+        record = {"argv": [str(value) for value in argv], "stdout": stem + ".stdout", "stderr": stem + ".stderr",
+                  "case": self.current_case, "phase": self.current_phase}
         self.report["commands"].append(record)
-        self.save()
+        return record
+
+    @staticmethod
+    def invoke(argv, body, timeout):
+        start = time.monotonic()
         try:
-            result = subprocess.run(record["argv"], input=body, capture_output=True, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            (self.args.out / record["stdout"]).write_bytes(error.stdout or b"")
-            (self.args.out / record["stderr"]).write_bytes(error.stderr or b"")
+            result = subprocess.run(argv, input=body, capture_output=True, timeout=timeout)
+        except Exception as error:
+            result = error
+        return result, time.monotonic() - start
+
+    def command_result(self, record, outcome, expected, timeout):
+        result, record["duration_seconds"] = outcome
+        (self.args.out / record["stdout"]).write_bytes(getattr(result, "stdout", None) or b"")
+        (self.args.out / record["stderr"]).write_bytes(getattr(result, "stderr", None) or b"")
+        stem = record["stdout"].removesuffix(".stdout")
+        if isinstance(result, subprocess.TimeoutExpired):
             record["timed_out_seconds"] = timeout
             self.save()
-            raise RuntimeError(f"Command {stem} timed out; inspect its private transcript.") from error
-        (self.args.out / record["stdout"]).write_bytes(result.stdout)
-        (self.args.out / record["stderr"]).write_bytes(result.stderr)
+            raise RuntimeError(f"Command {stem} timed out; inspect its private transcript.") from result
+        if isinstance(result, Exception):
+            record["error"] = str(result)
+            self.save()
+            raise result
         record["exit_code"] = result.returncode
         self.save()
         if expected is not None:
@@ -94,11 +183,36 @@ class Acceptance:
                     f"Command {stem} exited {result.returncode}, expected {expected}; inspect its private transcript.")
         return result
 
-    def remote(self, argv, body=None, expected=0, timeout=180):
+    def run(self, argv, body=None, expected=0, timeout=180):
+        record = self.command_record(argv)
+        self.save()
+        return self.command_result(record, self.invoke(record["argv"], body, timeout), expected, timeout)
+
+    def remote_arguments(self, argv, timeout):
         # Quote each argument once; no fixture filename or CLI selection becomes shell source.
         command = ["timeout", "--kill-after=10s", f"{timeout}s", *map(str, argv)]
-        return self.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", self.args.host,
-                         shlex.join(command)], body, expected, timeout + 20)
+        return ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", self.args.host, shlex.join(command)]
+
+    def remote(self, argv, body=None, expected=0, timeout=180):
+        return self.run(self.remote_arguments(argv, timeout), body, expected, timeout + 20)
+
+    def remote_batch(self, commands, expected=0, timeout=180):
+        """Batch independent read-only calls; retain every result even when one fails."""
+        if not commands:
+            return []
+        records = [self.command_record(self.remote_arguments(argv, timeout)) for argv in commands]
+        self.save()
+        results, failures = [], []
+        with ThreadPoolExecutor(max_workers=min(4, len(records))) as pool:
+            futures = [pool.submit(self.invoke, record["argv"], None, timeout + 20) for record in records]
+            for record, future in zip(records, futures):
+                try:
+                    results.append(self.command_result(record, future.result(), expected, timeout + 20))
+                except Exception as error:
+                    failures.append(error)
+        if failures:
+            raise failures[0]
+        return results
 
     def upload(self, files, directory):
         require(directory == self.root or directory.startswith(self.root + "/"), "Upload is outside the owned root.")
@@ -128,10 +242,37 @@ class Acceptance:
         require(response["job"]["status"] == status, "Job reached an unexpected durable state.")
         return response["job"]
 
+    def wants_case(self, name):
+        return name in self.selected_cases
+
+    @contextmanager
+    def phase(self, name):
+        item = {"name": name, "status": "running"}
+        self.report["phases"].append(item)
+        previous, self.current_phase = self.current_phase, name
+        self.save()
+        start = time.monotonic()
+        try:
+            yield
+        except Exception:
+            item["status"] = "failed"
+            raise
+        else:
+            item["status"] = "passed"
+        finally:
+            item["duration_seconds"] = time.monotonic() - start
+            self.current_phase = previous
+            self.save()
+
     def case(self, name, operation):
+        if not self.wants_case(name):
+            return
         item = {"name": name, "status": "running"}
         self.report["cases"].append(item)
+        self.report["case_scope"]["executed"].append(name)
+        previous, self.current_case = self.current_case, name
         self.save()
+        start = time.monotonic()
         try:
             operation()
         except Exception:
@@ -141,6 +282,8 @@ class Acceptance:
             item["status"] = "passed"
             print(name + " passed", flush=True)
         finally:
+            item["duration_seconds"] = time.monotonic() - start
+            self.current_case = previous
             self.save()
 
     def verify_inputs(self):
@@ -169,17 +312,17 @@ class Acceptance:
 
     def prepare_host(self):
         # No service or existing installation is touched before host and storage checks succeed.
-        require(self.remote(["uname", "-sm"]).stdout.strip() == b"Linux x86_64", "Linux x86_64 is required.")
-        require(self.remote(["id", "-u"]).stdout.strip() == b"0", "Systemd acceptance needs an authorized root test session.")
-        space = self.remote(["df", "-Pk", self.args.test_parent]).stdout.decode()
-        required_gib = 16 if self.args.ltfs else 4
-        require(int(space.splitlines()[-1].split()[3]) >= required_gib * 1024 * 1024,
-                f"At least {required_gib} GiB of test space is required.")
         required_tools = ["bash", "tar", "sha256sum", "systemctl", "curl", "jq", "ss", "setfattr", "getfattr"]
         if self.args.ltfs:
             required_tools += ["mkltfs", "ltfs", "fusermount", "mountpoint", "realpath", "findmnt", "truncate"]
-        for tool in required_tools:
-            self.remote(["sh", "-c", 'command -v "$1"', "check-tool", tool])
+        checks = self.remote_batch([["uname", "-sm"], ["id", "-u"], ["df", "-Pk", self.args.test_parent],
+                                    *[["sh", "-c", 'command -v "$1"', "check-tool", tool] for tool in required_tools]])
+        require(checks[0].stdout.strip() == b"Linux x86_64", "Linux x86_64 is required.")
+        require(checks[1].stdout.strip() == b"0", "Systemd acceptance needs an authorized root test session.")
+        space = checks[2].stdout.decode()
+        required_gib = 16 if self.args.ltfs else 4
+        require(int(space.splitlines()[-1].split()[3]) >= required_gib * 1024 * 1024,
+                f"At least {required_gib} GiB of test space is required.")
         root = self.remote(["mktemp", "-d", self.args.test_parent.rstrip("/") + "/yatm-package-acceptance.XXXXXXXX"]).stdout.decode().strip()
         require(re.fullmatch(re.escape(self.args.test_parent.rstrip("/")) + r"/yatm-package-acceptance\.[A-Za-z0-9]{8}", root),
                 "Remote allocation returned an unexpected root.")
@@ -223,9 +366,11 @@ class Acceptance:
                      "-C", self.root + "/package"])
         self.verify_programs(self.root + "/package")
         # Supply an explicit Volume-only configuration using the published template's field names.
-        template = self.remote(["cat", self.root + "/package/templates/config.example.yaml"]).stdout
+        template_result, listeners = self.remote_batch([["cat", self.root + "/package/templates/config.example.yaml"],
+                                                       ["ss", "-H", "-lnt"]])
+        template = template_result.stdout
         require(b"database:" in template and b"paths:" in template, "Packaged configuration template is missing.")
-        used = self.remote(["ss", "-H", "-lnt"]).stdout.decode()
+        used = listeners.stdout.decode()
         ports = []
         while len(ports) < 2:
             port = 20000 + secrets.randbelow(30000)
@@ -245,8 +390,9 @@ class Acceptance:
         self.save()
 
     def verify_programs(self, directory):
-        for program in PROGRAMS:
-            value = json.loads(self.remote([directory + "/" + program, "--version"]).stdout)
+        results = self.remote_batch([[directory + "/" + program, "--version"] for program in PROGRAMS])
+        for program, result in zip(PROGRAMS, results):
+            value = json.loads(result.stdout)
             require(value.get("program") == program and value.get("version") == self.args.version
                     and value.get("commit") == self.args.commit, f"Offline identity differs: {program}.")
 
@@ -309,6 +455,44 @@ class Acceptance:
             self.report["cleanup"]["root_retained"] = False
         self.save()
 
+    def execute(self):
+        try:
+            with self.phase("verify-inputs"):
+                self.verify_inputs()
+            with self.phase("prepare-host"):
+                self.prepare_host()
+            with self.phase("stage"):
+                self.stage()
+            with self.phase("cases"):
+                if getattr(self.args, "legacy_package", None):
+                    from package_legacy_cases import run_legacy
+                    run_legacy(self)
+                else:
+                    self.case("fresh-systemd-installation", self.install_fresh)
+                    self.case("readonly-checks-and-unchanged-rerun", self.installation_checks)
+                    from package_cases import run_cases
+                    run_cases(self)
+                    from package_install_cases import installation_replacement
+                    self.case("same-version-replacement-and-complete-backup-recovery", lambda: installation_replacement(self))
+                require(self.report["case_scope"]["executed"] == self.report["case_scope"]["selected"],
+                        "Selected cases did not execute in their stable order.")
+            self.report["status"] = "passed"
+        except Exception as error:
+            self.report.update(status="failed", error=str(error))
+            raise
+        finally:
+            try:
+                with self.phase("cleanup"):
+                    self.cleanup()
+            except Exception as error:
+                self.report.update(status="failed", cleanup_error=str(error))
+                raise
+            finally:
+                scope = self.report["case_scope"]
+                scope["skipped"] += [{"name": name, "reason": "Not reached after failure."}
+                                     for name in scope["selected"] if name not in scope["executed"]]
+                self.save()
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -323,36 +507,12 @@ def main():
     parser.add_argument("--keep-root", action="store_true", help="Retain fixture data after stopping the owned service.")
     parser.add_argument("--legacy-package", type=Path, help="Published v0.1.x Linux package for isolated upgrade acceptance.")
     parser.add_argument("--legacy-fixture", type=Path, help="Approved copied metadata archive; never a live installation.")
+    parser.add_argument("--case", action="append", help="Select an exact existing case name; repeat to select more. Required cases run automatically.")
     args = parser.parse_args()
     check_arguments(args)
     os.umask(0o077)
     acceptance = Acceptance(args)
-    try:
-        acceptance.verify_inputs()
-        acceptance.prepare_host()
-        acceptance.stage()
-        if args.legacy_package:
-            from package_legacy_cases import run_legacy
-            run_legacy(acceptance)
-        else:
-            acceptance.case("fresh-systemd-installation", acceptance.install_fresh)
-            acceptance.case("readonly-checks-and-unchanged-rerun", acceptance.installation_checks)
-            from package_cases import run_cases
-            run_cases(acceptance)
-            from package_install_cases import installation_replacement
-            acceptance.case("same-version-replacement-and-complete-backup-recovery", lambda: installation_replacement(acceptance))
-        acceptance.report["status"] = "passed"
-    except Exception as error:
-        acceptance.report.update(status="failed", error=str(error))
-        raise
-    finally:
-        try:
-            acceptance.cleanup()
-        except Exception as error:
-            acceptance.report.update(status="failed", cleanup_error=str(error))
-            raise
-        finally:
-            acceptance.save()
+    acceptance.execute()
     return 0
 
 

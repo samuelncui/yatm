@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { normalizeTags, tagDelta, unicodeLength, validateNote, validateTags } from "./file-metadata";
 

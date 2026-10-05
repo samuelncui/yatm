@@ -75,6 +75,18 @@ A missing or non-executable candidate fails explicitly. Package checks reject al
 
 ### Remote Packaged-Binary Acceptance
 
+Use repeatable `--case NAME` to select exact existing case names. The controller automatically
+runs their required cases in normal order and always allocates a fresh isolated environment.
+Omit `--case` for the complete selected profile. The report's `case_scope` distinguishes requested
+cases, prerequisites, executed cases and skipped cases with reasons; a passing subset does not
+establish full acceptance. The legacy profile supports the same selection: upgrade is required
+before historical repair or JSONL roundtrip, while review/decline/abort checks do not run those actions.
+
+Reports use monotonic elapsed times for preparation, transfer, installation, workflows and cleanup,
+plus individual commands, cases and the whole run. Independent read-only host, tool and identity
+checks run in batches of at most four; each retains its result and exit status even if another fails.
+Nested or concurrent durations overlap and must not be added to claim total elapsed time.
+
 Keep the test controller on the local machine. On the explicitly selected isolated test host, verify and extract the approved release archive into an isolated attempt directory; invoke only its shipped YATM programs through SSH. Read their offline `--version` output and compare the commit/version and archive checksum before starting. The package's installer/templates/scripts and approved fixture data are the transfer boundary. Repository source, separately built harnesses and additional test-helper source are not deployed.
 
 The [package controller](../../e2e/package_acceptance.py) runs from the local checkout. It requires

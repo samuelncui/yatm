@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 import { FileScope, FileSelection, FileVersion, RestoreVersionMatch, RestoreVersionResolution } from "@/entity";
 import { followRestorePolicy, restoreCutoff, restoreVersionLabel } from "./restore-version-policy";
