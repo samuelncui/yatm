@@ -344,7 +344,7 @@ jobs:
       - name: Exercise the packaged UI with disposable Demo data
         run: |
           set -euo pipefail
-          demo=$(mktemp -d "$RUNNER_TEMP/yatm-demo-browser.XXXXXX")
+          demo=$(mktemp -d "${TMPDIR:-/tmp}/yatm-demo-browser.XXXXXX")
           go run ./cmd/demo -root "$demo" -reset -listen 127.0.0.1:18080 -identical-files 1001
           (cd "$YATM_E2E_BIN_DIR" && exec ./yatm-httpd -config "$demo/config.yaml") > "$RUNNER_TEMP/browser-server.log" 2>&1 &
           server=$!
