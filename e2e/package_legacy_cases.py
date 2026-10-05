@@ -153,8 +153,6 @@ def run_legacy(test):
                 "Legacy Library changed during a complete JSONL roundtrip.")
         test.report["legacy_export_sha256"] = before.decode()
         test.report["legacy_export_after_sha256"] = sha256(exports[1])
-    test.case("legacy-complete-jsonl-roundtrip", roundtrip)
-
     test.remote(["systemctl", "stop", test.service])
     from legacy_metadata import check
 
@@ -193,6 +191,12 @@ def run_legacy(test):
         migrate("validate", *common)
         test.report["independent_repaired_metadata"] = check(original, observe("legacy-repaired"), revisions=revisions)
     test.case("legacy-repeated-cleanup-and-historical-repair", repair)
+
+    # Finish migration validation before an import can regenerate derived directory IDs.
+    from package_install_cases import wait_for_service
+    test.remote(["systemctl", "start", test.service])
+    wait_for_service(test)
+    test.case("legacy-complete-jsonl-roundtrip", roundtrip)
     require(sha256(args.legacy_fixture) == source_hash, "Original copied backup changed.")
     test.report["limits"].append("Legacy acceptance uses copied metadata and Archive history; no original file or physical Tape is accessed.")
     test.save()
