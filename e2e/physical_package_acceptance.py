@@ -78,7 +78,7 @@ class PhysicalAcceptance(Acceptance):
                                      "selected": [name], "executed": [], "skipped": [], "subset": True}
         self.report["physical_device"] = args.physical_device
         self.report["physical_barcode"] = args.physical_barcode
-        self.report["limits"].append("Runner-level wrong-barcode fault injection reuses local/CI coverage; hardware checks the public CLI refusal.")
+        self.report["limits"].append("Hardware checks CLI barcode refusal; backend Session identity and failed-Media lifecycle checks reuse local/CI evidence, not a physical RPC mismatch probe.")
         self.save()
 
     def save_state(self):

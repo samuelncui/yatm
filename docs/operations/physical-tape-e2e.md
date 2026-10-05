@@ -142,7 +142,7 @@ Expected results:
 - CLI preflight refuses the request before admitting an Archive Media operation. The prepared Job, existing Tape Media and Positions remain unchanged; no encryption, formatting, mounting or copying occurs.
 - Reloading and inspecting the cartridge still returns the original barcode.
 
-Reuse the local/CI fault-harness evidence for the runner's independent identity check. That check bypasses CLI preflight with a typed Archive write request and proves that a mismatch returns the admitted operation to its pre-Media `READY` state before physical writes. Physical CLI refusal does not prove that separate runner boundary.
+Reuse `TestTapeSessionsRejectUnverifiedIdentityBeforeMutation` for the backend's independent rejection before encryption, formatting or mounting, and `TestArchiveFailedMediaAttemptSettlesPhaseAndReopens` for a failed Media operation returning the Job to its pre-Media `READY` state. These are local/CI checks at separate boundaries; physical CLI refusal does not prove an admitted runner mismatch through RPC.
 
 ### PT-05: Append to the Existing Tape
 
@@ -242,7 +242,7 @@ The release gate passes only when PT-01 through PT-08 complete without manual da
 
 - the version and hardware record;
 - source and restored SHA-256 manifests;
-- packaged CLI request results and the reused local/CI runner-mismatch evidence;
+- packaged CLI request results and the reused local/CI Session identity and failed-Media lifecycle evidence;
 - every Job log and report;
 - every Job's catalog and bundle metadata plus the sorted evidence SHA-256 manifest;
 - captured LTFS Index files from FORMAT and APPEND;
