@@ -115,16 +115,10 @@ func (s *tapeReadSession) SourcePath(relative string) (string, error) {
 }
 
 func (s *tapeReadSession) Finalize(ctx context.Context) error {
-	// A successful read observation requires the same cartridge through physical finalization.
+	// Identity was validated before mounting and the attempt still owns the drive.
+	// Re-running ReadInfo would issue mt load while LTFS is using that cartridge.
 	defer s.recycleKey()
-	barcode, identityErr := s.backend.executor.ReadTapeBarcode(ctx, s.device)
-	if identityErr == nil && barcode != s.media.Identity {
-		identityErr = fmt.Errorf("Tape identity changed during read, expected=%q actual=%q", s.media.Identity, barcode)
-	}
-
-	// Always release LTFS resources, even when identity validation invalidates all observed results.
-	unmountErr := s.backend.unmountTape(ctx, s.device, s.mountPoint, s.tapeDir)
-	return errors.Join(identityErr, unmountErr)
+	return s.backend.unmountTape(ctx, s.device, s.mountPoint, s.tapeDir)
 }
 
 func (s *tapeReadSession) WalkInventory(ctx context.Context, yield func(*mediapkg.InventoryEntry) error) error {

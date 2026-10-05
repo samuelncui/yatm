@@ -25,7 +25,7 @@ func (a *jobRestoreRunner) stageOutput(ctx context.Context, copy *copyCandidate,
 }
 
 func (a *jobRestoreRunner) finalizeOutputs(ctx context.Context, mediaID int64) error {
-	// Only a successful final identity check authorizes these complete outputs for Library publication.
+	// Only successful physical finalization authorizes these complete outputs for Library publication.
 	if err := a.db.WithContext(ctx).Model(&File{}).Where("ready = ? AND read_media_id = ?", true, mediaID).
 		Update("finalized", true).Error; err != nil {
 		return err

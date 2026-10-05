@@ -69,24 +69,39 @@ func TestTapeReadRejectsWrongExpectedIdentityBeforeMount(t *testing.T) {
 	require.NoFileExists(t, mutationMarker)
 }
 
-func TestTapeReadFinalizeAlwaysUnmountsAfterIdentityFailure(t *testing.T) {
-	// A different ending barcode invalidates observations without skipping the normal cleanup boundary.
-	root := t.TempDir()
-	readInfo := writeExecutorTestScript(t, "identity", `printf '%s\n' '{"barcode":"OTHER1"}' > "$OUT"`)
-	unmounted := filepath.Join(root, "unmounted")
-	umount := writeExecutorTestScript(t, "umount", fmt.Sprintf(": > %s", strconv.Quote(unmounted)))
-	exe := New(nil, nil, nil, Paths{}, Scripts{ReadInfo: readInfo, Umount: umount}, nil)
-	mountPoint := filepath.Join(root, "mounted")
-	require.NoError(t, os.Mkdir(mountPoint, 0755))
-	recycled := false
-	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
-		media: &mediapkg.Descriptor{Identity: "ABC001"}, device: "fixture-device", mountPoint: mountPoint,
-		tapeDir: root, recycleKey: func() { recycled = true }}
+func TestTapeReadFinalizeDoesNotReloadTheMountedCartridge(t *testing.T) {
+	for _, unmountFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unmountFails=%t", unmountFails), func(t *testing.T) {
+			// ReadInfo would load the cartridge; a held read Session must never invoke it again.
+			root := t.TempDir()
+			reloaded := filepath.Join(root, "reloaded")
+			readInfo := writeExecutorTestScript(t, "identity", fmt.Sprintf(": > %s\nexit 1", strconv.Quote(reloaded)))
+			unmounted := filepath.Join(root, "unmounted")
+			unmount := fmt.Sprintf(": > %s", strconv.Quote(unmounted))
+			if unmountFails {
+				unmount += "\nexit 1"
+			}
+			umount := writeExecutorTestScript(t, "umount", unmount)
+			exe := New(nil, nil, nil, Paths{}, Scripts{ReadInfo: readInfo, Umount: umount}, nil)
+			mountPoint := filepath.Join(root, "mounted")
+			require.NoError(t, os.Mkdir(mountPoint, 0755))
+			recycled := 0
+			session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
+				media: &mediapkg.Descriptor{Identity: "ABC001"}, device: "fixture-device", mountPoint: mountPoint,
+				tapeDir: root, recycleKey: func() { recycled++ }}
 
-	// Finalization reports the invalid identity but releases the mount directory and temporary key once.
-	err := session.Finalize(context.Background())
-	require.ErrorContains(t, err, "identity changed")
-	require.FileExists(t, unmounted)
-	require.NoDirExists(t, mountPoint)
-	require.True(t, recycled)
+			// Unmount determines success, and either outcome releases the temporary key exactly once.
+			err := session.Finalize(context.Background())
+			if unmountFails {
+				require.ErrorContains(t, err, "unmount Tape failed")
+				require.DirExists(t, mountPoint)
+			} else {
+				require.NoError(t, err)
+				require.NoDirExists(t, mountPoint)
+			}
+			require.NoFileExists(t, reloaded)
+			require.FileExists(t, unmounted)
+			require.Equal(t, 1, recycled)
+		})
+	}
 }

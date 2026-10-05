@@ -63,7 +63,7 @@ File-operation transport tests additionally cover partial-result exit codes, abs
 
 `job wait` returns the last observed Job as JSON on stdout, including when a later network poll fails or times out. It succeeds when the durable status is completed and the runner phase is completed or unspecified after detachment; a required Media or other operator decision exits nonzero with `action_required` on stderr. A bounded wait timeout uses `deadline_exceeded`; no successful observation means no Job JSON. It never selects Media, starts another attempt, formats or cancels automatically. Per-request `--timeout` and total `--wait-timeout` are independent.
 
-The [integrity CLI tests](../../e2e/integrity_cli_test.go) supplement semantic tests for final Media identity failure, missing baselines, cancellation, unreadable entries, guarded health publication and explicit Restore publication failures. Verify and Restore must not fabricate successful catalog observations when only physical bytes were produced. Resource-filter departures are covered by catalog change-feed tests; UI tests cover restoring filters and navigation.
+The [integrity CLI tests](../../e2e/integrity_cli_test.go) supplement semantic tests for Media finalization failure, missing baselines, cancellation, unreadable entries, guarded health publication and explicit Restore publication failures. Verify and Restore must not fabricate successful catalog observations when only physical bytes were produced. Resource-filter departures are covered by catalog change-feed tests; UI tests cover restoring filters and navigation.
 
 ## Release Candidates and Upgrades
 
@@ -260,7 +260,7 @@ The [live workflow](../../e2e/live_analysis_cli_test.go) starts the real server 
 go test -tags=e2e -v ./e2e -run 'Test(LocationAnalyzeReadArchive|CLILiveAdmissionAnalyzeAndArchive|CLIQueuedMediaCancellationAndExplicitRestart)$'
 ```
 
-Library, Scan, Archive, API, CLI, and Demo unit tests cover the larger failure/compatibility matrix. Shared engine contract tests cover object-store prefixes, partial outcomes and no native rename; Scan tests cover cache-only zero-read, final Media identity, frozen verification baselines and safe Preview handling of damaged bytes. Local tests do not replace LTFS regression when physical I/O changes.
+Library, Scan, Archive, API, CLI, and Demo unit tests cover the larger failure/compatibility matrix. Shared engine contract tests cover object-store prefixes, partial outcomes and no native rename; Scan tests cover cache-only zero-read, Media finalization, frozen verification baselines and safe Preview handling of damaged bytes. Local tests do not replace LTFS regression when physical I/O changes.
 
 ## LTFS File Backend
 

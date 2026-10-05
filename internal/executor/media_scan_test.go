@@ -63,12 +63,13 @@ func TestTapeReadFinalizeDoesNotRequireASecondInventoryCapture(t *testing.T) {
 	require.NoError(t, os.Mkdir(mountPoint, 0o700))
 	index := filepath.Join(root, "ABC001.schema")
 	require.NoError(t, os.WriteFile(index, []byte(readInventoryFixture), 0o600))
-	identity := writeExecutorTestScript(t, "identity", `printf '%s\n' '{"barcode":"ABC001"}' > "$OUT"`)
 	unmount := writeExecutorTestScript(t, "unmount", ":")
-	exe := New(nil, nil, nil, Paths{}, Scripts{ReadInfo: identity, Umount: unmount}, nil)
+	exe := New(nil, nil, nil, Paths{}, Scripts{Umount: unmount}, nil)
 	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
 		media: &mediapkg.Descriptor{Identity: "ABC001"}, device: "fixture-device", mountPoint: mountPoint,
 		tapeDir: root, indexPath: index, recycleKey: func() {}}
+
+	// Finalization consumes no second inventory or cartridge probe after the current mount's read.
 	require.NoError(t, session.readInventory(context.Background(), nil))
 	require.NoError(t, session.Finalize(context.Background()))
 }

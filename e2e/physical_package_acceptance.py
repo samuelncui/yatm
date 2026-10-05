@@ -150,7 +150,7 @@ class PhysicalAcceptance(Acceptance):
                 with self.phase("verify-inputs"):
                     self.verify_inputs()
                 with self.phase("prepare-host"):
-                    for tool in ("sg_map", "mt", "stenc", "fuser", "umount", "openssl", "sqlite3", "findmnt",
+                    for tool in ("mt", "stenc", "fuser", "umount", "openssl", "sqlite3", "findmnt",
                                  self.args.mkltfs, self.args.ltfs_binary):
                         self.remote(["sh", "-c", 'command -v "$1"', "check-tool", tool])
                     self.prepare_host()

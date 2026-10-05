@@ -14,22 +14,34 @@ for (const adapter of adapters) {
       const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'yatm-ltfs-mount-test-')));
       t.after(() => fs.rmSync(root, { recursive: true, force: true }));
       const caller = path.join(root, 'caller directory');
-      const scripts = path.join(root, 'scripts');
+      const scripts = path.join(root, 'Tape adapters');
       const binaries = path.join(root, 'bin');
-      const mountPoint = path.join(root, 'mount');
+      const mountPoint = path.join(root, 'Tape mount [*]');
       const tapeDirectory = path.join(caller, 'work files/jobs/7/tapes/TEST01');
+      const device = path.join(root, 'TEST device [*]');
+      const fileBackend = adapter === 'e2e/ltfs-file-backend/mount';
+      const expectedArguments = [
+        ...(fileBackend ? ['-o', 'tape_backend=file'] : []),
+        '-o', `devname=${device}`,
+        ...(fileBackend ? [] : ['-o', 'noatime']),
+        '-o', 'sync_type=unmount', '-o', `work_directory=${tapeDirectory}`,
+        '-o', adapter === 'scripts/mount.openltfs' ? `capture_index=${tapeDirectory}` : 'capture_index',
+        ...(fileBackend ? [] : ['-o', 'min_pool_size=256', '-o', 'max_pool_size=1024', '-o', 'eject']),
+        '-s', mountPoint,
+      ];
       for (const directory of [caller, scripts, binaries, mountPoint]) fs.mkdirSync(directory, { recursive: true });
       fs.copyFileSync(path.join(repository, adapter), path.join(scripts, 'mount'));
       const executable = (name, contents) => fs.writeFileSync(name, contents, { mode: 0o755 });
       executable(path.join(scripts, 'get_device'), '#!/usr/bin/env bash\nprintf "%s\\n" "$YATM_TEST_DEVICE"\n');
       executable(path.join(binaries, 'sleep'), '#!/usr/bin/env bash\nexit 0\n');
-      executable(path.join(binaries, 'mountpoint'), '#!/usr/bin/env bash\n[[ "$1" == -q && "$2" == "$MOUNT_POINT" ]]\n');
-      executable(path.join(binaries, 'df'), '#!/usr/bin/env bash\nprintf "Mounted on\\n%s\\n" "$MOUNT_POINT"\n');
+      executable(path.join(binaries, 'mountpoint'), '#!/usr/bin/env bash\n[[ "$#" == 2 && "$1" == -q && "$2" == "$MOUNT_POINT" ]]\n');
+      executable(path.join(binaries, 'df'), '#!/usr/bin/env bash\n[[ "$#" == 2 && "$1" == "$MOUNT_POINT" && "$2" == --output=target ]] || exit 1\nprintf "Mounted on\\n%s\\n" "$MOUNT_POINT"\n');
       executable(path.join(binaries, 'ltfs'), `#!/usr/bin/env node
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 const options = process.argv.slice(2);
+assert.deepEqual(options, JSON.parse(process.env.YATM_TEST_LTFS_ARGUMENTS));
 const work = options.find(option => option.startsWith('work_directory=')).slice('work_directory='.length);
 assert.equal(work, process.env.YATM_TEST_TAPE_DIRECTORY);
 assert(path.isAbsolute(work));
@@ -48,7 +60,8 @@ fs.writeFileSync(path.join(work, 'TEST01.schema'), '<ltfsindex/>');
           MOUNT_POINT: mountPoint,
           TAPE_DIR: relative ? path.relative(caller, tapeDirectory) : tapeDirectory,
           YATM_TEST_TAPE_DIRECTORY: tapeDirectory,
-          YATM_TEST_DEVICE: path.join(root, 'TEST01'),
+          YATM_TEST_DEVICE: device,
+          YATM_TEST_LTFS_ARGUMENTS: JSON.stringify(expectedArguments),
         },
         encoding: 'utf8',
         timeout: 10000,

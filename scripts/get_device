@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e;
+set -euo pipefail
 
-DEVICE=`readlink -f ${DEVICE}`
-REGEXP='/dev/n?st([0-9]+)[alm]?'
+DEVICE=$(readlink -f -- "${DEVICE}")
+REGEXP='^/dev/n?st([0-9]+)[alm]?$'
 
 if [[ ! $DEVICE =~ $REGEXP ]]; then
     echo "'$DEVICE' doesn't match" >&2
@@ -10,15 +10,13 @@ if [[ ! $DEVICE =~ $REGEXP ]]; then
 fi
 
 NUM="${BASH_REMATCH[1]}"
-TRIES=("/dev/nst${NUM}" "/dev/st${NUM}")
-for TRY in ${TRIES[@]}; do
-    SG_DEVICE=`sg_map | grep ${TRY} || echo ''`;
-
-    if [[ $SG_DEVICE != "" ]]; then
-        echo $SG_DEVICE | awk '{print $1}'
-        exit 0;
-    fi
-done
-
-echo "'$DEVICE' not found" >&2
-exit 1
+# sg_map opens devices and omits the Tape mapping while LTFS holds the SG device.
+# The kernel mapping remains available throughout mount and unmount.
+DEVICE_PATH=$(readlink -f -- "/sys/class/scsi_tape/st${NUM}/device")
+shopt -s nullglob
+SG_DEVICES=("${DEVICE_PATH}"/scsi_generic/sg*)
+if [[ ${#SG_DEVICES[@]} -ne 1 || ! -d ${SG_DEVICES[0]} ]]; then
+    echo "'$DEVICE' has no unique SCSI generic device" >&2
+    exit 1
+fi
+printf '/dev/%s\n' "${SG_DEVICES[0]##*/}"

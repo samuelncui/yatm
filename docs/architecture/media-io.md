@@ -48,6 +48,10 @@ arguments to `mkltfs`; spaces and shell pattern characters in the name do not sp
 Regression checks execute the shipped script with a stub LTFS command, while physical acceptance
 uses the packaged script with only the host executable path and test placement rule adapted.
 
+The Linux `get_device` adapter resolves the Tape node through the kernel's sysfs mapping to its
+SCSI generic node. This lookup does not open the drive, so it still works while LTFS owns the
+device and during unmount; an absent or ambiguous mapping fails explicitly.
+
 Bundled mount scripts resolve the Job's Tape artifact directory to an absolute path before passing it to LTFS. LTFS can change its working directory when it runs in the background; captured indexes must still land in the supplied Job directory when `paths.work` is relative.
 
 The bundled encryption script loads the drive and retries `stenc` at most 60 times. If
@@ -67,6 +71,11 @@ unmount timeout or invalid/missing final Index publishes no unverified result. A
 remains unavailable for that Executor lifetime. Force and lazy unmount are manual stopped-service
 recovery tools whose write result must be discarded. Ordinary LTFS files stay readable without a
 YATM-specific segmented format.
+
+Read Sessions validate the expected Tape before mounting and keep the attempt's device lease
+through normal unmount. Finalize does not run `readinfo` again: that script loads the cartridge,
+which must not occur while LTFS owns it. Successful reads become publishable only after normal
+unmount succeeds; a failed unmount still withholds publication and keeps the device unavailable.
 
 ## Volume
 
@@ -106,16 +115,16 @@ validation coverage.
 
 ## Copy Health
 
-Position stores the latest health observation, check time and local checking Job ID. Detailed findings belong to Verify or Restore. Verification reads against the Job's frozen expected content, and [publication](../../internal/library/position_health.go) records the completed check after final Media identity validation.
+Position stores the latest health observation, check time and local checking Job ID. Detailed findings belong to Verify or Restore. Verification reads against the Job's frozen expected content, and [publication](../../internal/library/position_health.go) records the completed check after successful Session Finalize on the Media validated before access.
 
 | Health | Evidence | Restore and subsequent changes |
 | --- | --- | --- |
 | Unknown | No usable completed verification baseline | Candidate by default, but actual transfer must verify; never counted as healthy |
-| Healthy | Actual hash/size matched and Session identity finalized | Candidate; a newer complete check can supersede the observation |
+| Healthy | Actual hash/size matched and Session finalized successfully | Candidate; a newer complete check can supersede the observation |
 | Damaged | Complete read mismatched frozen expected content | Excluded by default; explicit salvage may retain complete mismatched output |
 | Missing | A specific recorded path was absent during valid Media access | Not a candidate; expected content and version history remain |
 | Unreadable | A specific path could not be read | Excluded by default; explicit salvage permits another read attempt |
 
-Successful Archive writing does not manufacture a readback check or check timestamp. Inventory publication preserves health only for unchanged content and never accepts damaged bytes as a replacement baseline. Only actual successful reads with final Media identity verification can clear bad observations. Checks have no automatic expiry and do not claim continuous health. Whole-Media unavailability and canceled/unattempted entries do not mark individual copies bad. Export/import preserves historical observations tied to the same expected content; installation-specific Job links do not survive import.
+Successful Archive writing does not manufacture a readback check or check timestamp. Inventory publication preserves health only for unchanged content and never accepts damaged bytes as a replacement baseline. Only actual successful reads on the expected Media after successful finalization can clear bad observations. Checks have no automatic expiry and do not claim continuous health. Whole-Media unavailability and canceled/unattempted entries do not mark individual copies bad. Export/import preserves historical observations tied to the same expected content; installation-specific Job links do not survive import.
 
-Media access (unchecked/reachable/unavailable), lease state (free/owned/uncertain), and Position health are independent. Inspection observes Media identity/capacity, not bytes. Preparation acquires a lease; normal Finalize releases it. Uncertain device cleanup preserves the existing lifetime-level unavailable guard; it is not a Position corruption finding. No health transition deletes physical bytes or saved history.
+Media access (unchecked/reachable/unavailable), lease state (free/owned/uncertain), and Position health are independent. Inspection observes Media identity/capacity, not bytes. Preparation acquires a lease; the attempt releases it after physical finalization and settlement. Uncertain device cleanup preserves the existing lifetime-level unavailable guard; it is not a Position corruption finding. No health transition deletes physical bytes or saved history.

@@ -225,8 +225,6 @@ func TestUnmountScriptWaitsForDeviceReleaseAndEject(t *testing.T) {
 	fuserCount := filepath.Join(root, "fuser-count")
 	mtCount := filepath.Join(root, "mt-count")
 	unmounted := filepath.Join(root, "unmounted")
-	writeExecutorTestScriptAt(t, filepath.Join(bin, "readlink"), `printf '%s\n' "$2"`)
-	writeExecutorTestScriptAt(t, filepath.Join(bin, "sg_map"), `printf '/dev/sg0 /dev/nst0\n'`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "umount"), `: > "$UNMOUNTED"`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "sleep"), `exit 0`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "fuser"), `
@@ -260,8 +258,6 @@ func TestUnmountScriptTimesOutWhileDeviceIsBusy(t *testing.T) {
 	bin := filepath.Join(root, "bin")
 	require.NoError(t, os.Mkdir(bin, 0o755))
 	dateCount := filepath.Join(root, "date-count")
-	writeExecutorTestScriptAt(t, filepath.Join(bin, "readlink"), `printf '%s\n' "$2"`)
-	writeExecutorTestScriptAt(t, filepath.Join(bin, "sg_map"), `printf '/dev/sg0 /dev/nst0\n'`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "umount"), `exit 0`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "sleep"), `exit 0`)
 	writeExecutorTestScriptAt(t, filepath.Join(bin, "fuser"), `exit 0`)
@@ -282,12 +278,27 @@ if [ "$count" -eq 1 ]; then printf '100\n'; else printf '700\n'; fi
 
 func runUnmountTestScript(t *testing.T, root, bin string, environment []string) (string, error) {
 	t.Helper()
+
+	// Resolve the Tape through a fake kernel mapping without accessing host devices or sysfs.
+	kernelDevice := filepath.Join(root, "kernel device")
+	require.NoError(t, os.MkdirAll(filepath.Join(kernelDevice, "scsi_generic", "sg0"), 0o755))
+	writeExecutorTestScriptAt(t, filepath.Join(bin, "readlink"), `
+test "$#" -eq 3 && test "$1" = -f && test "$2" = --
+case "$3" in
+  /dev/nst0) printf '%s\n' "$3" ;;
+  /sys/class/scsi_tape/st0/device) printf '%s\n' "$KERNEL_DEVICE" ;;
+  *) exit 1 ;;
+esac
+`)
+
+	// Exercise the shipped unmount adapter against the simulated release and eject commands.
 	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "umount"))
 	require.NoError(t, err)
 	cmd := exec.Command(script)
 	cmd.Env = append([]string{
 		"PATH=" + bin + ":" + os.Getenv("PATH"),
 		"DEVICE=/dev/nst0",
+		"KERNEL_DEVICE=" + kernelDevice,
 		"MOUNT_POINT=" + filepath.Join(root, "mount"),
 		"TAPE_DIR=" + filepath.Join(root, "tape"),
 	}, environment...)

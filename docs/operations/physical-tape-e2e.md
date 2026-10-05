@@ -12,7 +12,7 @@ Before starting:
 
 1. Record the expected six-character barcode and confirm it on the physical cartridge.
 2. Use an isolated YATM configuration with empty Executor and Library databases and dedicated work, source, and restore directories.
-3. Confirm that the configured Tape device resolves through `sg_map` and that `mkltfs`, `ltfs`, `mt`, `stenc`, `umount`, `fuser`, `timeout`, `openssl`, `sqlite3`, `findmnt`, and the packaged `yatm-lto-info` are available.
+3. Confirm that the configured Tape device resolves to its SCSI generic device through Linux sysfs and that `mkltfs`, `ltfs`, `mt`, `stenc`, `umount`, `fuser`, `timeout`, `openssl`, `sqlite3`, `findmnt`, and the packaged `yatm-lto-info` are available.
 4. Confirm that the drive, cartridge generation, LTFS implementation, and encryption support are compatible.
 5. Use an isolated copy of the configured format script whose `mkltfs` command includes `-r 'size=1M/name=*.txt'`. Do not change the default production policy solely for this test.
 6. Reserve about 20 GiB for three 4 GiB ordinary boundary source files and up to two restored files, plus headroom for the baseline fixture, databases and evidence. The bulk filler streams directly to Tape and requires no cartridge-sized local file.
@@ -59,6 +59,11 @@ The full-write stage first fills most of the cartridge with the isolated service
 The stage saves its Archive Job ID before submitting the Archive write and permits that write only for the Job created by that invocation. A later invocation with an existing Job validates its complete no-space checkpoint and exits without repeating the write. An incomplete prefill, fixture generation or checkpoint stops the stage and retains evidence for diagnosis. The full-verify stage never writes Archive data.
 
 An unmount failure invalidates the attempt and keeps the device unavailable for the lifetime of that YATM process. Stop the isolated YATM service before manual cleanup, identify processes holding its recorded owned mount with `fuser -vm MOUNT_POINT`, and have them release the mount before attempting a normal `umount`. A force or lazy unmount is only a last-resort manual cleanup after the service has stopped; discard that write result and restart YATM before using the device again. Do not enter an owned LTFS mount while a physical stage is running.
+
+Stopping a systemd unit can also terminate its LTFS child. If the mount has already disappeared,
+verify that no process holds the assigned SG device. When a normal eject reports "Medium removal
+prevented", release that failed session's lock with `mt -f DEVICE unlock`, then use
+`mt -f DEVICE offline` and confirm `DR_OPEN`. This cleanup never makes the failed write acceptable.
 
 ## Fixture
 

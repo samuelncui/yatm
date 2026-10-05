@@ -5,14 +5,14 @@ mkdir -p "${TAPE_DIR}"
 TAPE_DIR=$(cd -- "${TAPE_DIR}" && pwd -P)
 exec > >(tee -a "${TAPE_DIR}/ltfs.log") 2>&1
 
-CURDIR=$(cd $(dirname $0); pwd);
-SG_DEVICE=`${CURDIR}/get_device`
+CURDIR=$(cd -- "$(dirname -- "$0")" && pwd)
+SG_DEVICE=$("${CURDIR}/get_device")
 
-ltfs -o devname=${SG_DEVICE} -o noatime -o sync_type=unmount -o work_directory="${TAPE_DIR}" -o capture_index="${TAPE_DIR}" -o min_pool_size=256 -o max_pool_size=1024 -o eject -s ${MOUNT_POINT}
+ltfs -o devname="${SG_DEVICE}" -o noatime -o sync_type=unmount -o work_directory="${TAPE_DIR}" -o capture_index="${TAPE_DIR}" -o min_pool_size=256 -o max_pool_size=1024 -o eject -s "${MOUNT_POINT}"
 sleep 3
 
-MOUNT_POINT_TARGET=`df ${MOUNT_POINT} --output=target | sed -n '1!p'`
-if [[ $MOUNT_POINT != $MOUNT_POINT_TARGET ]]; then
+MOUNT_POINT_TARGET=$(df "${MOUNT_POINT}" --output=target | sed -n '1!p')
+if [[ "$MOUNT_POINT" != "$MOUNT_POINT_TARGET" ]]; then
     echo "mount '$MOUNT_POINT' fail, current target is '$MOUNT_POINT_TARGET'" >&2
     exit 1
 fi
