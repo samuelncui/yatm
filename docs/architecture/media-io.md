@@ -43,6 +43,11 @@ Concurrent random access uses configured ACP concurrency, random access uses a s
 
 Configured scripts are the anti-corruption boundary for environment-specific executable paths, device mapping, vendor options and helper logic. The service supplies operation inputs and validates identity, content and final Index output; it does not absorb those local decisions into configuration switches. The [migration guide](../operations/migration.md#tape-script-adaptation) owns input/output contracts and upgrade examples. Installer preflight never invokes these scripts.
 
+The format script passes the resolved device, barcode and complete Tape name as separate literal
+arguments to `mkltfs`; spaces and shell pattern characters in the name do not split or expand it.
+Regression checks execute the shipped script with a stub LTFS command, while physical acceptance
+uses the packaged script with only the host executable path and test placement rule adapted.
+
 Bundled mount scripts resolve the Job's Tape artifact directory to an absolute path before passing it to LTFS. LTFS can change its working directory when it runs in the background; captured indexes must still land in the supplied Job directory when `paths.work` is relative.
 
 The bundled encryption script loads the drive and retries `stenc` at most 60 times. If

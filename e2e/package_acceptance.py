@@ -494,7 +494,7 @@ class Acceptance:
                 self.save()
 
 
-def main():
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", required=True)
     parser.add_argument("--test-parent", required=True)
@@ -508,7 +508,11 @@ def main():
     parser.add_argument("--legacy-package", type=Path, help="Published v0.1.x Linux package for isolated upgrade acceptance.")
     parser.add_argument("--legacy-fixture", type=Path, help="Approved copied metadata archive; never a live installation.")
     parser.add_argument("--case", action="append", help="Select an exact existing case name; repeat to select more. Required cases run automatically.")
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = argument_parser().parse_args()
     check_arguments(args)
     os.umask(0o077)
     acceptance = Acceptance(args)

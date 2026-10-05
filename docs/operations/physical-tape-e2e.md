@@ -12,43 +12,53 @@ Before starting:
 
 1. Record the expected six-character barcode and confirm it on the physical cartridge.
 2. Use an isolated YATM configuration with empty Executor and Library databases and dedicated work, source, and restore directories.
-3. Confirm that the configured Tape device resolves through `sg_map` and that `mkltfs`, `ltfs`, `mt`, `stenc`, `umount`, `fuser`, `timeout`, and `yatm-lto-info` are available.
+3. Confirm that the configured Tape device resolves through `sg_map` and that `mkltfs`, `ltfs`, `mt`, `stenc`, `umount`, `fuser`, `timeout`, `openssl`, `sqlite3`, `findmnt`, and the packaged `yatm-lto-info` are available.
 4. Confirm that the drive, cartridge generation, LTFS implementation, and encryption support are compatible.
 5. Use an isolated copy of the configured format script whose `mkltfs` command includes `-r 'size=1M/name=*.txt'`. Do not change the default production policy solely for this test.
-6. Confirm that the source and restore filesystems have enough real free space for the baseline fixture, one native cartridge of incompressible data, and the selected boundary-file restores.
+6. Reserve about 20 GiB for three 4 GiB ordinary boundary source files and up to two restored files, plus headroom for the baseline fixture, databases and evidence. The bulk filler streams directly to Tape and requires no cartridge-sized local file.
 7. Record the YATM commit, ACP commit, LTFS version, drive model and firmware, cartridge generation, native cartridge capacity, barcode, and start time.
 
 Keep the host on stable power and reserve the drive for the complete run. Do not test process crashes or power loss as part of this suite.
 
 ## Automated Stages
 
-Build `./e2e` as a Linux test binary and place it, `yatm-lto-info`, an isolated copy of `e2e/testdata/generate-physical-eom.sh` at `scripts/generate-physical-eom.sh`, and isolated copies of the configured Tape scripts under the test root. Set the following environment variables for every stage:
+Run `python3 e2e/physical_package_acceptance.py` locally against the exact accepted Linux package and matching Preview package. The controller and assertions stay local; the host runs the packaged service, CLI and helpers. Do not transfer repository source or a custom test binary to the host.
+
+Baseline creates a fresh owned installation under `--test-parent` and records its identity and resources in the local `--state` file. An existing state file cannot be overwritten by another baseline. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new local `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
+
+Set the variables below to the authorized test host, scratch device/barcode, accepted local archives and full package commit. Run stages separately so Restore checks the same durable installation after a service restart, and full-verify checks the capacity boundary without repeating the write:
 
 ```bash
-export YATM_E2E_PHYSICAL_ROOT=/path/to/isolated-test-root
-export YATM_E2E_PHYSICAL_DEVICE=/dev/nst0
-export YATM_E2E_PHYSICAL_BARCODE=ABC001
-export YATM_E2E_PHYSICAL_SCRIPTS="$YATM_E2E_PHYSICAL_ROOT/scripts"
+common=(
+  --host "$SSH_HOST" --test-parent "$TEST_PARENT"
+  --archive "$MAIN_ARCHIVE" --preview-archive "$PREVIEW_ARCHIVE"
+  --version "$VERSION" --commit "$COMMIT"
+  --physical-device "$SCRATCH_DEVICE" --physical-barcode "$SCRATCH_BARCODE"
+  --state "$LOCAL_STATE"
+)
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage baseline --out "$BASELINE_EVIDENCE"
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage restore --out "$RESTORE_EVIDENCE"
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage full-write --out "$FULL_WRITE_EVIDENCE"
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage full-verify --out "$FULL_VERIFY_EVIDENCE"
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage cleanup --out "$CLEANUP_EVIDENCE"
 ```
 
-Run the four stages as separate processes so Restore proves restart behavior and post-boundary validation can be retried without filling the Tape again:
-
-```bash
-cd "$YATM_E2E_PHYSICAL_ROOT"
-YATM_E2E_PHYSICAL_STAGE=baseline ./yatm-physical-e2e.test -test.v -test.run TestPhysicalTapeBaseline -test.timeout 2h
-YATM_E2E_PHYSICAL_STAGE=restore ./yatm-physical-e2e.test -test.v -test.run TestPhysicalTapeRestartRestore -test.timeout 2h
-scripts/generate-physical-eom.sh source/eom 25 64
-YATM_E2E_PHYSICAL_STAGE=full-write ./yatm-physical-e2e.test -test.v -test.run TestPhysicalTapeFullBoundaryWrite -test.timeout 8h
-YATM_E2E_PHYSICAL_STAGE=full-verify ./yatm-physical-e2e.test -test.v -test.run TestPhysicalTapeFullBoundaryVerify -test.timeout 4h
-```
+`--mkltfs PATH` and `--ltfs-binary PATH` select the host's LTFS executables; their defaults are `mkltfs` and `ltfs`. Supply the same selections on resumed stages. Retain the local state and every stage's evidence until acceptance and explicit cleanup are complete.
 
 The configured `readinfo` script starts every physical operation with `mt -f DEVICE load`. It then spends at most about one minute polling the explicit MAM Barcode field. The script removes an attached media-generation suffix such as `L5`; YATM validates the resulting six-character identity before encryption, formatting, or mounting.
 
 Normal unmount keeps the Job attempt and device lease until the mount is gone, no process holds the resolved SG device, and `mt -f DEVICE status` reports `DR_OPEN`. This post-unmount wait shares a ten-minute deadline. A successful Job therefore exposes the drive only after eject completion; timeout follows the unmount-failure rules below.
 
-The full-write stage saves its Archive Job ID before mounting the Tape and permits a write only for the Job created by that invocation. A later invocation with an existing Job validates a complete no-space checkpoint and exits without writing. If its structured checkpoint event, final Index, item prefix, or Positions are incomplete, the stage fails immediately; clean the isolated environment and start the full-Media case again. The full-verify stage never writes Archive data and may be rerun after a test assertion or restore-side failure.
+The full-write stage first fills most of the cartridge with the isolated service stopped, streaming incompressible data directly to an owned LTFS mount and leaving about 8 GiB available. It unmounts and ejects normally, retains the final Index, then restarts the service. The filler is outside Library inventory. Three ordinary 4 GiB source files exercise the actual Archive capacity boundary through the packaged CLI.
 
-An unmount failure invalidates the attempt and keeps the device unavailable for the lifetime of that YATM process. Stop YATM before cleanup, identify and leave any process holding the mount with `fuser -vm /tmp/yatm-ltfs-*`, then attempt a normal `umount`. A force or lazy unmount is only a last-resort manual cleanup after the service has stopped; discard that write result and restart YATM before using the device again. Do not enter a `/tmp/yatm-ltfs-*` mount while a physical stage is running.
+The stage saves its Archive Job ID before submitting the Archive write and permits that write only for the Job created by that invocation. A later invocation with an existing Job validates its complete no-space checkpoint and exits without repeating the write. An incomplete prefill, fixture generation or checkpoint stops the stage and retains evidence for diagnosis. The full-verify stage never writes Archive data.
+
+An unmount failure invalidates the attempt and keeps the device unavailable for the lifetime of that YATM process. Stop the isolated YATM service before manual cleanup, identify processes holding its recorded owned mount with `fuser -vm MOUNT_POINT`, and have them release the mount before attempting a normal `umount`. A force or lazy unmount is only a last-resort manual cleanup after the service has stopped; discard that write result and restart YATM before using the device again. Do not enter an owned LTFS mount while a physical stage is running.
 
 ## Fixture
 
@@ -60,13 +70,13 @@ Create deterministic source files and record their size and SHA-256 before start
 | `dataset/data-small.bin` | 64 KiB | Data |
 | `dataset/data-large.txt` | 2.15 MiB | Data |
 | `dataset/empty.bin` | Empty | No data extent |
-| `dataset/nested/payload.fixture` | 6.25 MiB supported by the test Preview generator | Data |
+| `dataset/nested/payload.png` | Small PNG supported by the packaged native Preview helper | Data |
 | `append/index-small.txt` | Different 65 KiB content | Index |
 | `append/data.bin` | 2.34 MiB of non-sparse data | Data |
 
 The placement rule uses AND semantics: a file must be no larger than 1 MiB and match `*.txt` to be placed in the index partition. Resolve the physical partition letters from the LTFS partition map; the usual mapping is index `a` and data `b`.
 
-For the mandatory full-Media case, create an `eom` directory containing deterministic high-entropy, non-sparse files in lexical path order. Use independently checksummed 64 or 256 GiB chunks whose total size exceeds the cartridge's recorded native capacity by at least one complete chunk. Use one fixed test seed with a distinct stream or IV per file, and retain the path, size, stream identifier, and SHA-256 manifest. Do not use `truncate`, sparse files, zero-filled files, or repeating byte patterns: filesystem holes and drive compression would make logical size an invalid proxy for physical Tape consumption.
+The mandatory full-Media case must reach a real physical capacity boundary with incompressible data and exercise ordinary Archive source files. Retain the path, size and SHA-256 manifest for files selected for Archive and Restore. Sparse files, zero-filled files and repeating byte patterns do not establish physical Tape consumption because filesystem holes and drive compression can reduce the bytes written.
 
 ## Required Cases
 
@@ -75,7 +85,7 @@ Run the cases in order because they share one cartridge and one isolated YATM in
 ### PT-01: Device and Barcode Preflight
 
 1. Start YATM with the isolated configuration and load the scratch cartridge.
-2. Inspect the configured Tape device through the Media API.
+2. Inspect the configured Tape device through the packaged CLI.
 3. Compare the returned barcode with the recorded barcode.
 
 Expected results:
@@ -99,14 +109,14 @@ Expected results:
 - Every non-empty source file has the expected size and SHA-256 in the Archive result.
 - Every Archive item is `SUBMITTED`; the Library contains one `ltfs_v1` Tape Media and one Position per source file.
 - The captured LTFS Index contains valid extents for every non-empty file. Each persisted Position has the same first logical extent encoded as partition, block, and byte offset in its 17-byte storage order.
-- `index-small.txt` is on the index partition. `data-small.bin`, `data-large.txt`, and `payload.fixture` are on the data partition. `empty.bin` has no extent.
+- `index-small.txt` is on the index partition. `data-small.bin`, `data-large.txt`, and `payload.png` are on the data partition. `empty.bin` has no extent.
 - The Job Tape directory contains the LTFS log, captured Index, Archive report, and manifest.
 - The Preview bundle and its HTTP asset are readable.
 
 ### PT-03: Reload and Inspect the Durable Tape
 
 1. Reload the ejected cartridge with `mt -f DEVICE load` without changing the databases. A standalone drive may take about one minute to become ready.
-2. Inspect it through the Media API.
+2. Inspect it through the packaged CLI.
 3. Leave it loaded for the next Archive operation; inspection does not mount or change its contents.
 
 Expected results:
@@ -119,18 +129,19 @@ Expected results:
 
 1. Reload the same cartridge.
 2. Create a second Archive Job for `append` and wait until it is ready for Media.
-3. In the local/CI fault harness, bypass the CLI barcode preflight and send the typed Archive write request with a different requested barcode to exercise the runner's independent identity check.
+3. Request a different barcode through the packaged CLI and record its preflight refusal against the loaded physical cartridge.
 
 Expected results:
 
-- The Job log contains an exact mismatch with both requested and device barcodes. A MAM-unavailable result is not a pass; the automated case may repeat that Media operation once and must then observe the mismatch.
-- YATM rejects the operation before creating the requested Tape work directory, configuring encryption, formatting, mounting, or copying.
-- The admitted Archive Media operation fails and returns the Job to its pre-Media `READY` state with its failure reason/timing and no live phase, retaining the prepared manifest for another explicit load-Media operation. Existing Tape Media and Positions are unchanged. An ordinary CLI barcode refusal happens before attempt admission and leaves the existing Job state unchanged.
+- The CLI reports the requested/device barcode mismatch. An unavailable MAM barcode is not a pass.
+- CLI preflight refuses the request before admitting an Archive Media operation. The prepared Job, existing Tape Media and Positions remain unchanged; no encryption, formatting, mounting or copying occurs.
 - Reloading and inspecting the cartridge still returns the original barcode.
+
+Reuse the local/CI fault-harness evidence for the runner's independent identity check. That check bypasses CLI preflight with a typed Archive write request and proves that a mismatch returns the admitted operation to its pre-Media `READY` state before physical writes. Physical CLI refusal does not prove that separate runner boundary.
 
 ### PT-05: Append to the Existing Tape
 
-1. Start the pending Archive Job's next Media attempt from PT-04 against the same cartridge with mode `APPEND` and the original barcode.
+1. Submit the prepared Archive Job from PT-04 against the same cartridge with mode `APPEND` and the original barcode.
 2. Wait for completion and eject.
 
 Expected results:
@@ -164,7 +175,7 @@ Expected results:
 
 ### PT-07: Physical Full-Media Boundary
 
-1. In the full-write stage, create and checkpoint a new Archive Job for the ordered `eom` fixture, then wait until it is ready for Media.
+1. In the full-write stage, stop the isolated service, verify the cartridge identity and stream the filler to Tape. Preserve the filler manifest and final Index after normal unmount/eject, then restart the service. Create the three-file ordered `eom` fixture and checkpoint a new Archive Job, then wait until it is ready for Media.
 2. Reload the original cartridge and write the Job in `APPEND` mode.
 3. Wait until the mounted Tape has insufficient capacity for the next complete file or the device reports end-of-media, and YATM has unmounted, captured the final Index, and ejected the cartridge.
 4. In the full-verify stage, compare the Archive item states, Tape Media, Positions, final captured Index, Job progress, and Archive report.
@@ -179,6 +190,7 @@ Expected results:
 - Every successfully finalized prefix item has the first Tape's Media ID and one matching Library Position. No pending item has a Media ID or Library Position, including the first item rejected at the capacity boundary and every later prefetched item.
 - No Archive item remains `STAGED`. If the device reached end-of-media during a write, a partial physical file may be present in the LTFS Index, but it is never published as a valid Position unless its path, size, and extents match the completed ACP result.
 - The original Tape Media remains committed as `ltfs_v1`; its final captured Index and typed Position metadata retain valid extents and storage order for every submitted non-empty file.
+- The filler remains in the final Index with its complete size and data-partition extents; it never appears as a Library Position. Both earlier Archives remain intact.
 - Within each partition, the submitted physical files retain the deterministic Archive prefix order.
 - Job progress and the Archive report count only submitted files and bytes; they do not count a partial or unverified suffix.
 - The first and last submitted boundary files remain readable from the full Tape and match their original SHA-256 values.
@@ -190,7 +202,7 @@ Expected results:
 2. Before deleting anything, copy each Job's catalog and bundle metadata, complete Job log, LTFS log, Archive report, and captured Index into the evidence directory.
 3. Generate a path-sorted SHA-256 manifest for the preserved Job evidence. Any capture or checksum failure stops cleanup and leaves every Job intact.
 4. Delete the completed and pending test Jobs through the API.
-5. Stop the isolated YATM instance and remove its temporary databases, Job directories, mount points, large EOM fixture, and restored output after collecting the compact evidence.
+5. Stop the isolated YATM instance and remove its temporary databases, Job directories, mount points, ordinary boundary source files, and restored output after collecting the compact evidence.
 
 Expected results:
 
@@ -221,14 +233,15 @@ After preserving the original evidence, delete the Tape Media metadata through Y
 
 ## Pass Criteria and Evidence
 
-The release gate passes only when PT-01 through PT-08 complete without manual database edits or direct modifications to mounted Tape files. PT-X1 and PT-X2 are recorded separately when run. Retain:
+The release gate passes only when PT-01 through PT-08 complete without manual database edits or changes to archived Tape files. The controlled stopped-service prefill creates only its separate filler file. PT-X1 and PT-X2 are recorded separately when run. Retain:
 
 - the version and hardware record;
 - source and restored SHA-256 manifests;
-- gRPC request results or equivalent UI operation records;
+- packaged CLI request results and the reused local/CI runner-mismatch evidence;
 - every Job log and report;
 - every Job's catalog and bundle metadata plus the sorted evidence SHA-256 manifest;
 - captured LTFS Index files from FORMAT and APPEND;
+- the prefill manifest, LTFS log and captured Index;
 - the Library JSONL metadata backup;
 - a concise result for each case, including elapsed Archive, full-Media boundary, and Restore time.
 

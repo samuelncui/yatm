@@ -67,6 +67,11 @@ smoke tests; changed behavior requires its package workflows. Acceptance of earl
 cannot certify a new archive, but a new archive does not require repeating unrelated benchmarks
 or every exploratory/manual check.
 
+Reuse downloaded candidate files for subsequent checks when their run, commit and checksums
+match. Transfer only the packages and fixtures needed by the selected host and cases. A new
+report or another case selection does not require another download. Complete-set validation
+belongs to candidate CI; use its run and artifact records for checks already completed there.
+
 ## Repository Layout and Entrypoints
 
 File ownership and placement rules are maintained in [Repository Layout](../../AGENTS.md#repository-layout). Follow those rules when adding or moving files; this section owns the development commands and output overrides.
@@ -424,8 +429,8 @@ source review and physical acceptance retain their own explicit decisions.
 5. **Build and accept one candidate set.** GitHub Actions requires the exact reviewed commit to
    exist in this repository's remote. Obtain explicit authorization for that source push before
    dispatch; this does not authorize a tag, Release or asset upload. Dispatch the Release candidate
-   workflow with `publish=false`. Its platform matrix waits for `make release-check`. Validate the complete
-   [package set](#release-backend-builds), public archive content, packaged documents, licenses,
+   workflow with `publish=false`. Its platform matrix waits for `make release-check`. Candidate CI
+   validates the complete [package set](#release-backend-builds), public archive content, packaged documents, licenses,
    identities and checksums. Run installation/upgrade, supported `v0.1.x` migration, Archive,
    Restore, Scan, Volume/LTFS and native Preview acceptance against those exact extracted bytes.
    Use the [local package controller](e2e-test.md#remote-packaged-binary-acceptance) with the exact
@@ -512,6 +517,23 @@ full Linux E2E suite against extracted candidate binaries and the native helper.
 retains the complete accepted set, companion checksums and `SHA256SUMS` in `accepted-candidates`.
 Build completion establishes neither performance acceptance nor publication approval.
 Creating a GitHub Release does not start a build or upload.
+
+For local or remote package acceptance, download only the selected platform's artifacts into
+one directory identified by the candidate run. For example, Linux amd64 acceptance uses:
+
+```shell
+gh run download "$CANDIDATE_RUN_ID" --repo samuelncui/yatm \
+  --name candidate-linux-amd64 --name candidate-preview-linux-amd64 \
+  --dir "$CANDIDATE_DIRECTORY"
+```
+
+Multiple selected artifacts are extracted into per-artifact subdirectories. The Preview artifact
+includes its helper and matching corresponding-source archive. Verify the
+downloaded checksums and expected commit, and retain these files for subsequent cases and physical
+acceptance. Record the final successful run and artifact IDs; tests started before candidate CI
+finishes remain provisional until that same run succeeds. Do not download the complete
+`accepted-candidates` merely to repeat passed CI inventory, content or checksum checks locally.
+The publication job retrieves that complete artifact on GitHub when it needs all release assets.
 
 To deliver those accepted bytes, explicitly create the matching Release and tag first, then dispatch
 with the same `version`, `publish=true` and its successful build `candidate_run_id`. Publishing runs
