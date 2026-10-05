@@ -581,19 +581,26 @@ func TestArchiveReporterReportsAFailedFlush(t *testing.T) {
 		Data: &entity.ArchiveManifestFile{SourcePath: "/source/file.txt"},
 	})
 	reporter := startTestReporter(t, runner)
+	failure := errors.New("job database is unavailable")
 	reporter.store = func(context.Context, []itemOutcome) error {
-		return errors.New("job database is unavailable")
+		return failure
 	}
 	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: "file.txt"}
 
-	require.NoError(t, reporter.onResults([]acp.Result{{
+	// The asynchronous write may fail before Enqueue returns. Either observation must retain
+	// the same terminal failure, rather than depend on the scheduler.
+	err := reporter.onResults([]acp.Result{{
 		Job: target, Size: 4, Mode: 0o644, WriteTime: time.Unix(0, 1),
 		SHA256:  sha256Sum([]byte("data")),
 		Targets: []acp.TargetResult{{Path: "file.txt", Size: 4}},
-	}}))
-	err := reporter.Close()
-	require.ErrorContains(t, err, "job database is unavailable")
-	require.ErrorContains(t, reporter.err(), "job database is unavailable")
+	}})
+	if err != nil {
+		require.ErrorIs(t, err, failure)
+	}
+
+	// Draining always observes the error and must leave the manifest item unchanged.
+	require.ErrorIs(t, reporter.Close(), failure)
+	require.ErrorIs(t, reporter.err(), failure)
 	flushed, _ := reporter.counters()
 	require.Zero(t, flushed)
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, readItemStatus(t, runner, 1))
