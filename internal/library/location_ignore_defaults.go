@@ -16,8 +16,8 @@ const DefaultLocationIgnore = `# YATM-managed entries. Edit or remove these rule
 .yatm-fileops-*
 `
 
-// WithDefaultLocationIgnore starts a registration or an imported catalog from the default
-// YATM entry rules when it carries no rules of its own. Authored text is never rewritten.
+// WithDefaultLocationIgnore starts a new registration from the default YATM entry rules
+// when it carries no rules of its own. Updates and imports preserve the saved text.
 func WithDefaultLocationIgnore(exclusions *entity.IgnoreRules) *entity.IgnoreRules {
 	if strings.TrimSpace(exclusions.GetText()) != "" {
 		return exclusions

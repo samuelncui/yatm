@@ -345,7 +345,6 @@ func importCatalogRecord(ctx context.Context, tx *gorm.DB, record *jsonlInputRec
 		if err := validateLocation(source); err != nil {
 			return err
 		}
-		source.Config.Ignore = WithDefaultLocationIgnore(source.Config.Ignore)
 		source.LastJobID, source.LastSyncJobID, source.Revision = 0, 0, 0
 		// Preserve explicit zero timestamps while retaining normal Location save hooks.
 		return tx.Session(&gorm.Session{NowFunc: func() time.Time { return time.Unix(0, 0) }}).Create(source).Error

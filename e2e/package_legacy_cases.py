@@ -1,5 +1,6 @@
 """Real copied metadata acceptance using only the shipped installer, migrator and CLI."""
 
+from collections import Counter
 import json
 from pathlib import PurePosixPath
 import re
@@ -8,6 +9,25 @@ import sqlite3
 import tarfile
 
 from package_acceptance import require, sha256
+
+
+def snapshot_records(path):
+    """Compare stored metadata, allowing only regenerated directory IDs and Location revisions."""
+    records = Counter()
+    with path.open() as source:
+        for line in source:
+            record = json.loads(line)
+            data = record.get("data", {})
+            field = None
+            if record["type"] == "location":
+                field = "revision"
+            elif record["type"] == "position" and data.get("is_dir"):
+                field = "id"
+            if field:
+                require(type(data.get(field)) is int and data[field] > 0, "Regenerated metadata identity is invalid.")
+                del data[field]
+            records[json.dumps(record, sort_keys=True, separators=(",", ":"))] += 1
+    return records
 
 
 def prepare_metadata(source, destination):
@@ -123,9 +143,16 @@ def run_legacy(test):
         test.cli("library", "import", "--input", snapshot, timeout=600)
         after = test.root + "/legacy-export-after.jsonl"
         test.cli("library", "export", "--output", after, timeout=600)
-        require(test.remote(["sha256sum", after]).stdout.split()[0] == before,
+        exports = []
+        for remote in (snapshot, after):
+            local = args.out / PurePosixPath(remote).name
+            test.run(["scp", "-q", args.host + ":" + remote, str(local)], timeout=600)
+            exports.append(local)
+        require(sha256(exports[0]) == before.decode(), "Copied export checksum differs.")
+        require(snapshot_records(exports[0]) == snapshot_records(exports[1]),
                 "Legacy Library changed during a complete JSONL roundtrip.")
         test.report["legacy_export_sha256"] = before.decode()
+        test.report["legacy_export_after_sha256"] = sha256(exports[1])
     test.case("legacy-complete-jsonl-roundtrip", roundtrip)
 
     test.remote(["systemctl", "stop", test.service])

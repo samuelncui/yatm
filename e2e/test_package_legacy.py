@@ -1,6 +1,7 @@
 """Portable legacy-fixture boundaries; no SSH or real backup inputs."""
 
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
@@ -8,7 +9,7 @@ from types import SimpleNamespace
 import unittest
 
 from package_acceptance import check_arguments
-from package_legacy_cases import check_legacy_package, prepare_metadata
+from package_legacy_cases import check_legacy_package, prepare_metadata, snapshot_records
 
 
 class LegacyFixtureTests(unittest.TestCase):
@@ -77,6 +78,36 @@ class LegacyFixtureTests(unittest.TestCase):
         args.ltfs = True
         with self.assertRaisesRegex(RuntimeError, "separately"):
             check_arguments(args)
+
+    def test_roundtrip_compares_all_metadata_except_regenerated_fields(self):
+        rows = [{"type": "header", "format": "yatm-library-backup", "version": 1},
+                {"type": "location", "data": {"id": 1, "revision": 10, "config": {"ignore": {"text": ""}}}},
+                {"type": "position", "data": {"id": 2, "media_id": 1, "path": "folder/", "is_dir": True}},
+                {"type": "position", "data": {"id": 3, "media_id": 1, "path": "folder/file", "mtime_ns": "123"}},
+                {"type": "end"}]
+        path = self.root / "export.jsonl"
+
+        def snapshot(values):
+            path.write_text("".join(json.dumps(row) + "\n" for row in values))
+            return snapshot_records(path)
+
+        expected = snapshot(rows)
+        changed = json.loads(json.dumps(rows))
+        changed[1]["data"]["revision"] = 20
+        changed[2]["data"]["id"] = 4
+        self.assertEqual(snapshot(list(reversed(changed))), expected)
+        for index, field, value in ((1, "config", {"ignore": {"text": "*.tmp"}}),
+                                    (1, "id", 5), (2, "path", "other/"),
+                                    (3, "id", 6), (3, "mtime_ns", "124")):
+            with self.subTest(index=index, field=field):
+                changed = json.loads(json.dumps(rows))
+                changed[index]["data"][field] = value
+                self.assertNotEqual(snapshot(changed), expected)
+        self.assertNotEqual(snapshot(rows[:-1]), expected)
+        self.assertNotEqual(snapshot(rows + [rows[3]]), expected)
+        rows[1]["data"]["revision"] = 0
+        with self.assertRaisesRegex(RuntimeError, "identity is invalid"):
+            snapshot(rows)
 
 
 if __name__ == "__main__":

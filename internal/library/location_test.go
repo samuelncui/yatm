@@ -288,6 +288,32 @@ func TestIgnoreConfigurationHasOneTypedFormat(t *testing.T) {
 	}
 }
 
+func TestLocationImportPreservesAuthoredIgnore(t *testing.T) {
+	for name, text := range map[string]string{"empty": "", "whitespace": " \n\t", "custom": "private/\n"} {
+		t.Run(name, func(t *testing.T) {
+			// Save an operator edit, including deliberately removing every default rule.
+			ctx := context.Background()
+			_, source := newTestLibrary(t)
+			location := locationTestSource(t, source)
+			location.Config = &entity.LocationConfig{Ignore: &entity.IgnoreRules{Format: "gitignore", Text: text}, UseMmap: true}
+			_, err := source.UpdateLocation(ctx, location)
+			require.NoError(t, err)
+
+			// Import preserves the saved configuration while issuing a fresh local revision.
+			var backup bytes.Buffer
+			types := []entity.LibraryEntityType{entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_FILE,
+				entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_LOCATION, entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_FILE_LOCATION}
+			require.NoError(t, source.Export(ctx, &backup, types))
+			_, target := newTestLibrary(t)
+			require.NoError(t, target.Import(ctx, &backup, false))
+			imported, err := target.GetLocation(ctx, location.ID)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(location.Config, imported.Config))
+			require.Greater(t, imported.Revision, int64(0))
+		})
+	}
+}
+
 func TestLocationConfigRoundTripAndLegacyIDReplacement(t *testing.T) {
 	// Export a complete online reference group and import it as it stands.
 	ctx := context.Background()
