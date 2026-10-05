@@ -3,12 +3,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTheme, ThemeProvider, useTheme } from "@mui/material/styles";
-import { FileScope, FileSelection, FileVersion, InspectSelectionReply } from "@/entity";
+import { FileScope, FileSelection, FileVersion, SelectionInspectionResult } from "@/entity";
 import { SelectionWaitlist, type SelectionEntry } from "./selection-waitlist";
 const { inform, filesPage, inspect } = vi.hoisted(() => ({ inform: vi.fn(), filesPage: vi.fn(), inspect: vi.fn() }));
 vi.mock("react-toastify", () => ({ toast: { info: inform } }));
 vi.mock("@/components/files-browser", async (original) => ({ ...(await original<typeof import("@/components/files-browser")>()), filesPage }));
-vi.mock("@/api", async (original) => ({ ...(await original<typeof import("@/api")>()), fileCatalogCli: { inspectSelection: inspect } }));
+vi.mock("@/api", async (original) => ({
+  ...(await original<typeof import("@/api")>()),
+  restoreJobCli: { estimate: (...args: unknown[]) => ({ response: inspect(...args).response.then((result: unknown) => ({ result })) }) },
+}));
 
 vi.mock("react-virtuoso", () => {
   const Items = ({ totalCount, itemContent }: { totalCount: number; itemContent: (index: number) => ReactNode }) => (
@@ -21,8 +24,8 @@ vi.mock("react-virtuoso", () => {
   return { Virtuoso: Items, VirtuosoGrid: Items };
 });
 const initial: SelectionEntry[] = [
-  { key: "a", name: "one.jpg", path: "Trip/one.jpg", fileID: "1", version: FileVersion.create({ id: 11n, size: 10n }) },
-  { key: "b", name: "two.jpg", path: "Other/two.jpg", fileID: "2", version: FileVersion.create({ id: 12n, size: 20n }) },
+  { key: "a", name: "one.jpg", path: "Trip/one.jpg", fileID: "1", version: FileVersion.create({ id: 11n, sizeBytes: 10n }) },
+  { key: "b", name: "two.jpg", path: "Other/two.jpg", fileID: "2", version: FileVersion.create({ id: 12n, sizeBytes: 20n }) },
 ];
 const folder: SelectionEntry = {
   key: "folder",
@@ -35,7 +38,7 @@ beforeEach(() => {
   filesPage.mockReset();
   inspect.mockReset();
   inspect.mockReturnValue({
-    response: Promise.resolve(InspectSelectionReply.create({ resolvedVersions: [{ fileId: 8n, version: { id: 80n, fileId: 8n, size: 12n } }] })),
+    response: Promise.resolve(SelectionInspectionResult.create({ resolvedVersions: [{ fileId: 8n, version: { id: 80n, fileId: 8n, sizeBytes: 12n } }] })),
   });
 });
 const Harness = ({ choose, footer }: { choose: (entry: SelectionEntry) => void; footer?: ReactNode }) => {
@@ -148,7 +151,7 @@ describe("Chonky selection waitlist", () => {
     );
     const choose = vi.fn();
     const remove = vi.fn();
-    const label = kind === "restore" ? "Restore" : "Backup";
+    const label = kind === "restore" ? "Restore" : "Archive";
     render(<SelectionWaitlist kind={kind} label={label} entries={[folder]} busy={false} onRemove={remove} onClear={vi.fn()} onChooseVersion={choose} />);
     await userEvent.dblClick(await screen.findByText("Library/Trip"));
     await userEvent.dblClick(await screen.findByText("Library/Trip/Day one"));

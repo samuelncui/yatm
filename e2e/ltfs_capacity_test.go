@@ -14,13 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samuelncui/yatm/apis"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	_ "github.com/samuelncui/yatm/executor/archive"
-	_ "github.com/samuelncui/yatm/executor/restore"
-	"github.com/samuelncui/yatm/library"
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/internal/apis"
+	"github.com/samuelncui/yatm/internal/executor"
+	_ "github.com/samuelncui/yatm/internal/executor/archive"
+	_ "github.com/samuelncui/yatm/internal/executor/restore"
+	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,6 +43,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	require.NoError(t, lib.AutoMigrate())
 	paths := executor.Paths{
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"), Target: filepath.Join(root, "target"),
+		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "target")}},
 	}
 	firstDevice := filepath.Join(root, "tapes", "FUL001")
 	secondDevice := filepath.Join(root, "tapes", "FUL002")
@@ -82,7 +83,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	})
 	require.NoError(t, err)
 	archiveID := created.Job.Id
-	waitForPendingJob(t, ctx, jobClient, archiveID)
+	waitForReadyJob(t, ctx, jobClient, archiveID)
 
 	// Fill the first Tape, then assert that only its continuous verified prefix was published.
 	_, err = archiveClient.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
@@ -94,10 +95,11 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return !exe.IsRunning(archiveID) }, time.Minute, 100*time.Millisecond)
-	pendingJob, err := jobClient.Get(ctx, &entity.GetJobRequest{Id: archiveID})
+	failedJob, err := jobClient.Get(ctx, &entity.GetJobRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_PENDING, pendingJob.Job.Status)
-	require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, pendingJob.Job.Phase)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, failedJob.Job.Status)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, failedJob.Job.Phase)
+	require.NotEmpty(t, failedJob.Job.Error)
 	firstReply, err := archiveClient.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{Id: archiveID, Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, firstReply.Items, len(files))
@@ -105,15 +107,15 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	var submittedBytes int64
 	prefixEnded := false
 	for _, item := range firstReply.Items {
-		if item.Status == entity.CopyStatus_SUBMITTED {
+		if item.Status == entity.CopyStatus_COPY_STATUS_SUBMITTED {
 			require.False(t, prefixEnded)
 			require.NotNil(t, item.MediaId)
 			submitted++
-			submittedBytes += item.Size
+			submittedBytes += item.SizeBytes
 			continue
 		}
 		prefixEnded = true
-		require.Equal(t, entity.CopyStatus_PENDING, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 		require.Nil(t, item.MediaId)
 		require.Empty(t, item.File.MediaPath)
 	}
@@ -121,11 +123,10 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	require.Less(t, submitted, len(files))
 
 	// Verify the first Tape checkpoint contains exactly the submitted prefix.
-	tapes, err := lib.MGetTapeByBarcode(ctx, "FUL001")
+	firstTape, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "FUL001")
 	require.NoError(t, err)
-	firstTape := tapes["FUL001"]
 	require.NotNil(t, firstTape)
-	require.Equal(t, library.TapeFormatLTFSV1, firstTape.Format)
+	require.Equal(t, library.TapeFormatLTFSV1, firstTape.Profile.GetTape().Format)
 	firstPositions, err := lib.ListMediaFilePositions(ctx, firstTape.ID, "", len(files))
 	require.NoError(t, err)
 	require.Len(t, firstPositions, submitted)
@@ -135,8 +136,8 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	}
 	for _, item := range firstReply.Items {
 		_, published := positionPaths[item.File.MediaPath]
-		require.Equal(t, item.Status == entity.CopyStatus_SUBMITTED, published, item.File.TargetPath)
-		if item.Status == entity.CopyStatus_SUBMITTED {
+		require.Equal(t, item.Status == entity.CopyStatus_COPY_STATUS_SUBMITTED, published, item.File.TargetPath)
+		if item.Status == entity.CopyStatus_COPY_STATUS_SUBMITTED {
 			require.Equal(t, firstTape.ID, *item.MediaId)
 		}
 	}
@@ -144,9 +145,10 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	// Count only the durable prefix in progress and the per-Tape report.
 	progressReply, err := archiveClient.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, int64(submitted), progressReply.Progress.CopiedFiles)
+	require.True(t, progressReply.Progress.TotalKnown)
+	require.Equal(t, int64(submitted), progressReply.Progress.CopiedFileCount)
 	require.Equal(t, submittedBytes, progressReply.Progress.CopiedBytes)
-	require.Equal(t, int64(len(files)), progressReply.Progress.TotalFiles)
+	require.Equal(t, int64(len(files)), progressReply.Progress.TotalFileCount)
 	reportData, err := os.ReadFile(filepath.Join(
 		paths.Work, "jobs", fmt.Sprint(archiveID), "tapes", "FUL001", "yatm-report.json",
 	))
@@ -180,7 +182,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	require.NoError(t, err)
 	mediaIDs := make(map[int64]struct{})
 	for _, item := range completed.Items {
-		require.Equal(t, entity.CopyStatus_SUBMITTED, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_SUBMITTED, item.Status)
 		require.NotNil(t, item.MediaId)
 		mediaIDs[*item.MediaId] = struct{}{}
 	}
@@ -218,7 +220,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	})
 	require.NoError(t, err)
 	restoreID := restored.Job.Id
-	waitForPendingJob(t, ctx, jobClient, restoreID)
+	waitForReadyJob(t, ctx, jobClient, restoreID)
 	_, err = restoreClient.RestoreMedia(ctx, &entity.RestoreMediaRequest{
 		Id: restoreID, Target: (&entity.ReadTapeTarget{Device: firstDevice}).Pack(),
 	})

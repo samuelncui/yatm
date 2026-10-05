@@ -4,11 +4,16 @@ set -ex;
 mkdir -p "${TAPE_DIR}"
 exec > >(tee -a "${TAPE_DIR}/ltfs.log") 2>&1
 
-mt -f ${DEVICE} load
+mt -f "${DEVICE}" load
 sleep 5
 
 for i in {1..60}; do
-    stenc -f ${DEVICE} -e on -k ${KEY_FILE} -kd ${TAPE_BARCODE} -a 1 --ckod && break || sleep 5;
+    if stenc -f "${DEVICE}" -e on -k "${KEY_FILE}" -kd "${TAPE_BARCODE}" -a 1 --ckod; then
+        sleep 3
+        exit 0
+    fi
+    if (( i == 60 )); then
+        exit 1
+    fi
+    sleep 5
 done
-
-sleep 3

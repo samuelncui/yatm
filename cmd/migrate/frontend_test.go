@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samuelncui/yatm/config"
+	"github.com/samuelncui/yatm/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

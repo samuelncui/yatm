@@ -39,6 +39,19 @@ func (r *rpcCallRecorder) interceptor(
 	return handler(ctx, request)
 }
 
+// streamInterceptor records streaming procedures, which a unary interceptor never sees.
+func (r *rpcCallRecorder) streamInterceptor(
+	service any,
+	stream grpc.ServerStream,
+	info *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
+	r.mu.Lock()
+	r.calls[info.FullMethod]++
+	r.mu.Unlock()
+	return handler(service, stream)
+}
+
 func (r *rpcCallRecorder) count(method string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -47,87 +60,95 @@ func (r *rpcCallRecorder) count(method string) int {
 
 type stubJobService struct {
 	entity.UnimplementedJobServiceServer
-	list   func(context.Context, *entity.ListJobsRequest) (*entity.ListJobsReply, error)
-	get    func(context.Context, *entity.GetJobRequest) (*entity.GetJobReply, error)
-	delete func(context.Context, *entity.DeleteJobsRequest) (*entity.DeleteJobsReply, error)
-	getLog func(context.Context, *entity.GetJobLogRequest) (*entity.GetJobLogReply, error)
+	list     func(context.Context, *entity.ListJobsRequest) (*entity.ListJobsResponse, error)
+	get      func(context.Context, *entity.GetJobRequest) (*entity.GetJobResponse, error)
+	delete   func(context.Context, *entity.DeleteJobsRequest) (*entity.DeleteJobsResponse, error)
+	getLog   func(context.Context, *entity.GetJobLogRequest) (*entity.GetJobLogResponse, error)
+	logLines func(context.Context, *entity.ListJobLogLinesRequest) (*entity.ListJobLogLinesResponse, error)
 }
 
 func (s *stubJobService) List(
 	ctx context.Context,
 	request *entity.ListJobsRequest,
-) (*entity.ListJobsReply, error) {
+) (*entity.ListJobsResponse, error) {
 	if s.list != nil {
 		return s.list(ctx, request)
 	}
-	return &entity.ListJobsReply{}, nil
+	return &entity.ListJobsResponse{}, nil
 }
 
 func (s *stubJobService) Get(
 	ctx context.Context,
 	request *entity.GetJobRequest,
-) (*entity.GetJobReply, error) {
+) (*entity.GetJobResponse, error) {
 	if s.get != nil {
 		return s.get(ctx, request)
 	}
-	return &entity.GetJobReply{}, nil
+	return &entity.GetJobResponse{}, nil
 }
 
 func (s *stubJobService) Delete(
 	ctx context.Context,
 	request *entity.DeleteJobsRequest,
-) (*entity.DeleteJobsReply, error) {
+) (*entity.DeleteJobsResponse, error) {
 	if s.delete != nil {
 		return s.delete(ctx, request)
 	}
-	return &entity.DeleteJobsReply{}, nil
+	return &entity.DeleteJobsResponse{}, nil
 }
 
 func (s *stubJobService) GetLog(
 	ctx context.Context,
 	request *entity.GetJobLogRequest,
-) (*entity.GetJobLogReply, error) {
+) (*entity.GetJobLogResponse, error) {
 	if s.getLog != nil {
 		return s.getLog(ctx, request)
 	}
-	return &entity.GetJobLogReply{}, nil
+	return &entity.GetJobLogResponse{}, nil
+}
+
+func (s *stubJobService) ListLogLines(ctx context.Context, request *entity.ListJobLogLinesRequest) (*entity.ListJobLogLinesResponse, error) {
+	if s.logLines != nil {
+		return s.logLines(ctx, request)
+	}
+	return &entity.ListJobLogLinesResponse{}, nil
 }
 
 type stubArchiveJobService struct {
 	entity.UnimplementedArchiveJobServiceServer
-	create      func(context.Context, *entity.CreateArchiveJobRequest) (*entity.CreateArchiveJobReply, error)
-	writeMedia  func(context.Context, *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaReply, error)
-	getProgress func(context.Context, *entity.GetArchiveJobProgressRequest) (*entity.GetArchiveJobProgressReply, error)
+	create      func(context.Context, *entity.CreateArchiveJobRequest) (*entity.CreateArchiveJobResponse, error)
+	writeMedia  func(context.Context, *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaResponse, error)
+	getProgress func(context.Context, *entity.GetArchiveJobProgressRequest) (*entity.GetArchiveJobProgressResponse, error)
 }
 
 func (s *stubArchiveJobService) Create(
 	ctx context.Context,
 	request *entity.CreateArchiveJobRequest,
-) (*entity.CreateArchiveJobReply, error) {
+) (*entity.CreateArchiveJobResponse, error) {
 	if s.create != nil {
 		return s.create(ctx, request)
 	}
-	return &entity.CreateArchiveJobReply{}, nil
+	return &entity.CreateArchiveJobResponse{}, nil
 }
 
 func (s *stubArchiveJobService) WriteMedia(
 	ctx context.Context,
 	request *entity.WriteArchiveMediaRequest,
-) (*entity.WriteArchiveMediaReply, error) {
+) (*entity.WriteArchiveMediaResponse, error) {
 	if s.writeMedia != nil {
 		return s.writeMedia(ctx, request)
 	}
-	return &entity.WriteArchiveMediaReply{}, nil
+	return &entity.WriteArchiveMediaResponse{}, nil
 }
 
 func (s *stubArchiveJobService) GetProgress(
 	ctx context.Context,
 	request *entity.GetArchiveJobProgressRequest,
-) (*entity.GetArchiveJobProgressReply, error) {
+) (*entity.GetArchiveJobProgressResponse, error) {
 	if s.getProgress != nil {
 		return s.getProgress(ctx, request)
 	}
-	return &entity.GetArchiveJobProgressReply{}, nil
+	return &entity.GetArchiveJobProgressResponse{}, nil
 }
 
 type stubRestoreJobService struct {
@@ -137,34 +158,34 @@ type stubRestoreJobService struct {
 func (s *stubRestoreJobService) GetProgress(
 	context.Context,
 	*entity.GetRestoreJobProgressRequest,
-) (*entity.GetRestoreJobProgressReply, error) {
-	return &entity.GetRestoreJobProgressReply{}, nil
+) (*entity.GetRestoreJobProgressResponse, error) {
+	return &entity.GetRestoreJobProgressResponse{}, nil
 }
 
 type stubScanJobService struct {
 	entity.UnimplementedScanJobServiceServer
-	getProgress func(context.Context, *entity.GetScanJobProgressRequest) (*entity.GetScanJobProgressReply, error)
-	listEntries func(context.Context, *entity.ListScanJobEntriesRequest) (*entity.ListScanJobEntriesReply, error)
+	getProgress func(context.Context, *entity.GetScanJobProgressRequest) (*entity.GetScanJobProgressResponse, error)
+	listEntries func(context.Context, *entity.ListScanJobEntriesRequest) (*entity.ListScanJobEntriesResponse, error)
 }
 
 func (s *stubScanJobService) GetProgress(
 	ctx context.Context,
 	request *entity.GetScanJobProgressRequest,
-) (*entity.GetScanJobProgressReply, error) {
+) (*entity.GetScanJobProgressResponse, error) {
 	if s.getProgress != nil {
 		return s.getProgress(ctx, request)
 	}
-	return &entity.GetScanJobProgressReply{}, nil
+	return &entity.GetScanJobProgressResponse{}, nil
 }
 
 func (s *stubScanJobService) ListEntries(
 	ctx context.Context,
 	request *entity.ListScanJobEntriesRequest,
-) (*entity.ListScanJobEntriesReply, error) {
+) (*entity.ListScanJobEntriesResponse, error) {
 	if s.listEntries != nil {
 		return s.listEntries(ctx, request)
 	}
-	return &entity.ListScanJobEntriesReply{}, nil
+	return &entity.ListScanJobEntriesResponse{}, nil
 }
 
 func newGRPCWebTestServer(
@@ -177,7 +198,7 @@ func newGRPCWebTestServer(
 
 	// Serve the same stripped gRPC-Web and file paths as the production binary.
 	recorder := newRPCCallRecorder()
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(recorder.interceptor))
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(recorder.interceptor), grpc.StreamInterceptor(recorder.streamInterceptor))
 	register(grpcServer)
 	mux := http.NewServeMux()
 	mux.Handle("/services/", http.StripPrefix("/services", grpcweb.WrapServer(grpcServer)))
@@ -220,11 +241,11 @@ func TestStatusUsesGRPCWebAndBasicAuth(t *testing.T) {
 			entity.RegisterJobServiceServer(server, &stubJobService{list: func(
 				_ context.Context,
 				request *entity.ListJobsRequest,
-			) (*entity.ListJobsReply, error) {
+			) (*entity.ListJobsResponse, error) {
 				require.NotNil(t, request.Filter)
 				require.NotNil(t, request.Filter.Limit)
 				require.Equal(t, int64(1), *request.Filter.Limit)
-				return &entity.ListJobsReply{}, nil
+				return &entity.ListJobsResponse{}, nil
 			}})
 		},
 		files,
@@ -319,9 +340,9 @@ func TestJobProgressDispatchesByKind(t *testing.T) {
 		kind           entity.JobKind
 		progressMethod string
 	}{
-		{name: "archive", kind: entity.JobKind_ARCHIVE, progressMethod: entity.ArchiveJobService_GetProgress_FullMethodName},
-		{name: "restore", kind: entity.JobKind_RESTORE, progressMethod: entity.RestoreJobService_GetProgress_FullMethodName},
-		{name: "scan", kind: entity.JobKind_SCAN, progressMethod: entity.ScanJobService_GetProgress_FullMethodName},
+		{name: "archive", kind: entity.JobKind_JOB_KIND_ARCHIVE, progressMethod: entity.ArchiveJobService_GetProgress_FullMethodName},
+		{name: "restore", kind: entity.JobKind_JOB_KIND_RESTORE, progressMethod: entity.RestoreJobService_GetProgress_FullMethodName},
+		{name: "scan", kind: entity.JobKind_JOB_KIND_SCAN, progressMethod: entity.ScanJobService_GetProgress_FullMethodName},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -330,8 +351,8 @@ func TestJobProgressDispatchesByKind(t *testing.T) {
 				entity.RegisterJobServiceServer(server, &stubJobService{get: func(
 					context.Context,
 					*entity.GetJobRequest,
-				) (*entity.GetJobReply, error) {
-					return &entity.GetJobReply{Job: &entity.Job{Id: 17, Kind: test.kind}}, nil
+				) (*entity.GetJobResponse, error) {
+					return &entity.GetJobResponse{Job: &entity.Job{Id: 17, Kind: test.kind}}, nil
 				}})
 				entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{})
 				entity.RegisterRestoreJobServiceServer(server, &stubRestoreJobService{})

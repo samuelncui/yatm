@@ -19,24 +19,24 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	JobService_Get_FullMethodName        = "/job.JobService/Get"
-	JobService_List_FullMethodName       = "/job.JobService/List"
-	JobService_Delete_FullMethodName     = "/job.JobService/Delete"
-	JobService_Cancel_FullMethodName     = "/job.JobService/Cancel"
-	JobService_RetryIndex_FullMethodName = "/job.JobService/RetryIndex"
-	JobService_GetLog_FullMethodName     = "/job.JobService/GetLog"
+	JobService_Get_FullMethodName          = "/yatm.v1.JobService/Get"
+	JobService_List_FullMethodName         = "/yatm.v1.JobService/List"
+	JobService_Delete_FullMethodName       = "/yatm.v1.JobService/Delete"
+	JobService_Cancel_FullMethodName       = "/yatm.v1.JobService/Cancel"
+	JobService_GetLog_FullMethodName       = "/yatm.v1.JobService/GetLog"
+	JobService_ListLogLines_FullMethodName = "/yatm.v1.JobService/ListLogLines"
 )
 
 // JobServiceClient is the client API for JobService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type JobServiceClient interface {
-	Get(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobReply, error)
-	List(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsReply, error)
-	Delete(ctx context.Context, in *DeleteJobsRequest, opts ...grpc.CallOption) (*DeleteJobsReply, error)
-	Cancel(ctx context.Context, in *CancelJobRequest, opts ...grpc.CallOption) (*CancelJobReply, error)
-	RetryIndex(ctx context.Context, in *RetryJobIndexRequest, opts ...grpc.CallOption) (*RetryJobIndexReply, error)
-	GetLog(ctx context.Context, in *GetJobLogRequest, opts ...grpc.CallOption) (*GetJobLogReply, error)
+	Get(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
+	List(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
+	Delete(ctx context.Context, in *DeleteJobsRequest, opts ...grpc.CallOption) (*DeleteJobsResponse, error)
+	Cancel(ctx context.Context, in *CancelJobRequest, opts ...grpc.CallOption) (*CancelJobResponse, error)
+	GetLog(ctx context.Context, in *GetJobLogRequest, opts ...grpc.CallOption) (*GetJobLogResponse, error)
+	ListLogLines(ctx context.Context, in *ListJobLogLinesRequest, opts ...grpc.CallOption) (*ListJobLogLinesResponse, error)
 }
 
 type jobServiceClient struct {
@@ -47,8 +47,8 @@ func NewJobServiceClient(cc grpc.ClientConnInterface) JobServiceClient {
 	return &jobServiceClient{cc}
 }
 
-func (c *jobServiceClient) Get(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobReply, error) {
-	out := new(GetJobReply)
+func (c *jobServiceClient) Get(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error) {
+	out := new(GetJobResponse)
 	err := c.cc.Invoke(ctx, JobService_Get_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -56,8 +56,8 @@ func (c *jobServiceClient) Get(ctx context.Context, in *GetJobRequest, opts ...g
 	return out, nil
 }
 
-func (c *jobServiceClient) List(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsReply, error) {
-	out := new(ListJobsReply)
+func (c *jobServiceClient) List(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error) {
+	out := new(ListJobsResponse)
 	err := c.cc.Invoke(ctx, JobService_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -65,8 +65,8 @@ func (c *jobServiceClient) List(ctx context.Context, in *ListJobsRequest, opts .
 	return out, nil
 }
 
-func (c *jobServiceClient) Delete(ctx context.Context, in *DeleteJobsRequest, opts ...grpc.CallOption) (*DeleteJobsReply, error) {
-	out := new(DeleteJobsReply)
+func (c *jobServiceClient) Delete(ctx context.Context, in *DeleteJobsRequest, opts ...grpc.CallOption) (*DeleteJobsResponse, error) {
+	out := new(DeleteJobsResponse)
 	err := c.cc.Invoke(ctx, JobService_Delete_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -74,8 +74,8 @@ func (c *jobServiceClient) Delete(ctx context.Context, in *DeleteJobsRequest, op
 	return out, nil
 }
 
-func (c *jobServiceClient) Cancel(ctx context.Context, in *CancelJobRequest, opts ...grpc.CallOption) (*CancelJobReply, error) {
-	out := new(CancelJobReply)
+func (c *jobServiceClient) Cancel(ctx context.Context, in *CancelJobRequest, opts ...grpc.CallOption) (*CancelJobResponse, error) {
+	out := new(CancelJobResponse)
 	err := c.cc.Invoke(ctx, JobService_Cancel_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -83,18 +83,18 @@ func (c *jobServiceClient) Cancel(ctx context.Context, in *CancelJobRequest, opt
 	return out, nil
 }
 
-func (c *jobServiceClient) RetryIndex(ctx context.Context, in *RetryJobIndexRequest, opts ...grpc.CallOption) (*RetryJobIndexReply, error) {
-	out := new(RetryJobIndexReply)
-	err := c.cc.Invoke(ctx, JobService_RetryIndex_FullMethodName, in, out, opts...)
+func (c *jobServiceClient) GetLog(ctx context.Context, in *GetJobLogRequest, opts ...grpc.CallOption) (*GetJobLogResponse, error) {
+	out := new(GetJobLogResponse)
+	err := c.cc.Invoke(ctx, JobService_GetLog_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *jobServiceClient) GetLog(ctx context.Context, in *GetJobLogRequest, opts ...grpc.CallOption) (*GetJobLogReply, error) {
-	out := new(GetJobLogReply)
-	err := c.cc.Invoke(ctx, JobService_GetLog_FullMethodName, in, out, opts...)
+func (c *jobServiceClient) ListLogLines(ctx context.Context, in *ListJobLogLinesRequest, opts ...grpc.CallOption) (*ListJobLogLinesResponse, error) {
+	out := new(ListJobLogLinesResponse)
+	err := c.cc.Invoke(ctx, JobService_ListLogLines_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -105,12 +105,12 @@ func (c *jobServiceClient) GetLog(ctx context.Context, in *GetJobLogRequest, opt
 // All implementations must embed UnimplementedJobServiceServer
 // for forward compatibility
 type JobServiceServer interface {
-	Get(context.Context, *GetJobRequest) (*GetJobReply, error)
-	List(context.Context, *ListJobsRequest) (*ListJobsReply, error)
-	Delete(context.Context, *DeleteJobsRequest) (*DeleteJobsReply, error)
-	Cancel(context.Context, *CancelJobRequest) (*CancelJobReply, error)
-	RetryIndex(context.Context, *RetryJobIndexRequest) (*RetryJobIndexReply, error)
-	GetLog(context.Context, *GetJobLogRequest) (*GetJobLogReply, error)
+	Get(context.Context, *GetJobRequest) (*GetJobResponse, error)
+	List(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
+	Delete(context.Context, *DeleteJobsRequest) (*DeleteJobsResponse, error)
+	Cancel(context.Context, *CancelJobRequest) (*CancelJobResponse, error)
+	GetLog(context.Context, *GetJobLogRequest) (*GetJobLogResponse, error)
+	ListLogLines(context.Context, *ListJobLogLinesRequest) (*ListJobLogLinesResponse, error)
 	mustEmbedUnimplementedJobServiceServer()
 }
 
@@ -118,23 +118,23 @@ type JobServiceServer interface {
 type UnimplementedJobServiceServer struct {
 }
 
-func (UnimplementedJobServiceServer) Get(context.Context, *GetJobRequest) (*GetJobReply, error) {
+func (UnimplementedJobServiceServer) Get(context.Context, *GetJobRequest) (*GetJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedJobServiceServer) List(context.Context, *ListJobsRequest) (*ListJobsReply, error) {
+func (UnimplementedJobServiceServer) List(context.Context, *ListJobsRequest) (*ListJobsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedJobServiceServer) Delete(context.Context, *DeleteJobsRequest) (*DeleteJobsReply, error) {
+func (UnimplementedJobServiceServer) Delete(context.Context, *DeleteJobsRequest) (*DeleteJobsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
-func (UnimplementedJobServiceServer) Cancel(context.Context, *CancelJobRequest) (*CancelJobReply, error) {
+func (UnimplementedJobServiceServer) Cancel(context.Context, *CancelJobRequest) (*CancelJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Cancel not implemented")
 }
-func (UnimplementedJobServiceServer) RetryIndex(context.Context, *RetryJobIndexRequest) (*RetryJobIndexReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RetryIndex not implemented")
-}
-func (UnimplementedJobServiceServer) GetLog(context.Context, *GetJobLogRequest) (*GetJobLogReply, error) {
+func (UnimplementedJobServiceServer) GetLog(context.Context, *GetJobLogRequest) (*GetJobLogResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLog not implemented")
+}
+func (UnimplementedJobServiceServer) ListLogLines(context.Context, *ListJobLogLinesRequest) (*ListJobLogLinesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListLogLines not implemented")
 }
 func (UnimplementedJobServiceServer) mustEmbedUnimplementedJobServiceServer() {}
 
@@ -221,24 +221,6 @@ func _JobService_Cancel_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobService_RetryIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RetryJobIndexRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(JobServiceServer).RetryIndex(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: JobService_RetryIndex_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobServiceServer).RetryIndex(ctx, req.(*RetryJobIndexRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _JobService_GetLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetJobLogRequest)
 	if err := dec(in); err != nil {
@@ -257,11 +239,29 @@ func _JobService_GetLog_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JobService_ListLogLines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListJobLogLinesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobServiceServer).ListLogLines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: JobService_ListLogLines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobServiceServer).ListLogLines(ctx, req.(*ListJobLogLinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // JobService_ServiceDesc is the grpc.ServiceDesc for JobService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var JobService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "job.JobService",
+	ServiceName: "yatm.v1.JobService",
 	HandlerType: (*JobServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -281,12 +281,12 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JobService_Cancel_Handler,
 		},
 		{
-			MethodName: "RetryIndex",
-			Handler:    _JobService_RetryIndex_Handler,
-		},
-		{
 			MethodName: "GetLog",
 			Handler:    _JobService_GetLog_Handler,
+		},
+		{
+			MethodName: "ListLogLines",
+			Handler:    _JobService_ListLogLines_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

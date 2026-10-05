@@ -43,7 +43,7 @@ export const PasteFilesAction = defineFileAction({
 export const AddLocationFileAction = defineFileAction({
   id: "admit_location_files",
   requiresSelection: true,
-  fileFilter: (file) => file?.isRegularFile === true,
+  fileFilter: (file) => !!file && (file.isDir || file.isRegularFile === true),
   button: { name: "Add to Library", toolbar: true, contextMenu: true, group: "Actions", icon: ChonkyIconName.file },
 });
 export const ScanFilesAction = defineFileAction({
@@ -56,9 +56,10 @@ export const GetDataUsageAction = defineFileAction({
   id: "get_data_usage",
   button: {
     name: "Data Usage",
+    tooltip: "Data Usage",
     toolbar: true,
     icon: "mui-data-usage",
-    // iconOnly: true,
+    iconOnly: true,
   },
   __extraStateType: {} as RenameFileState,
 } as FileAction);
@@ -83,13 +84,19 @@ export const EditFileMetadataAction = defineFileAction({
 export const ArchiveLibraryAction = defineFileAction({
   id: "archive_library_selection",
   requiresSelection: true,
-  button: { name: "Back up selection", toolbar: true, contextMenu: true, group: "Actions", icon: "mui-fiber-new" },
+  button: { name: "Archive selection", toolbar: true, contextMenu: true, group: "Actions", icon: "mui-fiber-new" },
+} as FileAction);
+
+export const RestoreLibraryAction = defineFileAction({
+  id: "restore_library_selection",
+  requiresSelection: true,
+  button: { name: "Add to Restore list", toolbar: true, contextMenu: true, group: "Actions", icon: "mui-fiber-new" },
 } as FileAction);
 
 export const ImportPositionsAction = defineFileAction({
   id: "import_archive_positions",
   requiresSelection: true,
-  fileFilter: (file) => !!file?.positionID && !file.isDir && file.signature instanceof Uint8Array && file.signature.length > 0,
+  fileFilter: (file) => !!file?.position && (!!file.isDir || (file.position.signature instanceof Uint8Array && file.position.signature.length > 0)),
   button: { name: "Add to Library", toolbar: true, contextMenu: true, group: "Actions", icon: "mui-fiber-new" },
 } as FileAction);
 
@@ -188,10 +195,4 @@ export const DeleteMediaAction = defineFileAction({
   ...ChonkyActions.DeleteFiles,
   fileFilter: (file) => file?.isMedia === true,
   button: { ...ChonkyActions.DeleteFiles.button, name: "Remove from Library" },
-} as FileAction);
-
-export const ViewArchiveCopiesAction = defineFileAction({
-  ...ViewFileDetailsAction,
-  fileFilter: (file) => typeof file?.positionID === "bigint" && !file.isDir,
-  button: { ...ViewFileDetailsAction.button, name: "Archived copies" },
 } as FileAction);

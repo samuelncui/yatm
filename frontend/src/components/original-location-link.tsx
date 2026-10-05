@@ -1,4 +1,4 @@
-import { Box, Chip, Link } from "@mui/material";
+import { Box, Link } from "@mui/material";
 import { Link as RouterLink } from "react-router";
 import type { Location } from "@/entity";
 
@@ -11,20 +11,18 @@ export function locationBrowserURL(id: bigint, path = "", reveal = "") {
   return `/file?${query}`;
 }
 
+export function revealLocationFileURL(id: bigint, path: string) {
+  return locationBrowserURL(id, path.slice(0, Math.max(0, path.lastIndexOf("/"))), path);
+}
+
 export const OriginalLocationLink = ({ location, path }: { location: Pick<Location, "id" | "name" | "rootPath">; path: string }) => {
-  const parent = path.slice(0, Math.max(0, path.lastIndexOf("/")));
   return (
-    <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, minWidth: 0 }}>
-      <Chip
-        component={RouterLink}
-        to={locationBrowserURL(location.id)}
-        label={location.name}
-        title={location.rootPath}
-        clickable
-        size="small"
-        variant="outlined"
-      />
-      <Link component={RouterLink} to={locationBrowserURL(location.id, parent, path)} underline="hover" sx={{ overflowWrap: "anywhere", minWidth: 0 }}>
+    <Box component="span" sx={{ overflowWrap: "anywhere" }}>
+      <Link component={RouterLink} to={locationBrowserURL(location.id)} title={location.rootPath} underline="hover">
+        {location.name}
+      </Link>
+      {" / "}
+      <Link component={RouterLink} to={revealLocationFileURL(location.id, path)} underline="hover">
         {path || "/"}
       </Link>
     </Box>

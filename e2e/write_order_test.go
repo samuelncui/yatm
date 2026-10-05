@@ -5,7 +5,7 @@ package e2e
 import (
 	"bytes"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/internal/library"
 	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"

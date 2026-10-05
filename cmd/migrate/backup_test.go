@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
-	"github.com/samuelncui/yatm/config"
+	"github.com/samuelncui/yatm/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,6 +35,37 @@ func TestMigrationBackupMapsEvidenceButPreservesRestoreDestination(t *testing.T)
 	require.NoError(t, os.Symlink(filepath.Join(root, "tapes.db"), filepath.Join(backupRoot, "tapes.db")))
 	_, err = migrationBackup(root, backupRoot, "config.yaml")
 	require.ErrorContains(t, err, "escapes the preserved installation")
+}
+
+func TestMigrationBackupPreservesRelativeSymlinkChainAfterExtraction(t *testing.T) {
+	// Preserve a legacy installation's relative catalog and work links in an actual archive.
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(root, "storage"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "storage", "tapes.db"), []byte("preserved catalog"), 0o600))
+	require.NoError(t, os.Symlink("storage", filepath.Join(root, "current")))
+	require.NoError(t, os.Symlink("current", filepath.Join(root, "jobs")))
+	text := "database:\n  dialect: sqlite\n  dsn: ./jobs/tapes.db\npaths:\n  work: ./jobs\n"
+	require.NoError(t, os.WriteFile(filepath.Join(root, "config.yaml"), []byte(text), 0o600))
+	archive := filepath.Join(t.TempDir(), "legacy.tar")
+	output, err := exec.Command("tar", "-cf", archive, "-C", root, ".").CombinedOutput()
+	require.NoError(t, err, string(output))
+	backupRoot := t.TempDir()
+	output, err = exec.Command("tar", "-xf", archive, "-C", backupRoot).CombinedOutput()
+	require.NoError(t, err, string(output))
+
+	// Backup evidence follows the preserved chain, never a changed active catalog.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "storage", "tapes.db"), []byte("active catalog"), 0o600))
+	backup, err := migrationBackup(root, backupRoot, "config.yaml")
+	require.NoError(t, err)
+	data, err := os.ReadFile(backup.CatalogPath)
+	require.NoError(t, err)
+	require.Equal(t, "preserved catalog", string(data))
+	link, err := os.Readlink(filepath.Join(backupRoot, "jobs"))
+	require.NoError(t, err)
+	require.Equal(t, "current", link)
+	data, err = os.ReadFile(filepath.Join(root, "jobs", "tapes.db"))
+	require.NoError(t, err)
+	require.Equal(t, "active catalog", string(data))
 }
 
 func TestFreshInspectionUsesFutureInstallationRootWithoutWrites(t *testing.T) {

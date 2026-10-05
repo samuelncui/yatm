@@ -108,6 +108,7 @@ func findPbGoFiles(entityDir string) ([]string, error) {
 }
 
 func parsePbGoFile(path string) (map[string]messageOneofInfo, map[string][]wrapperInfo, error) {
+	// Discover generated messages and variants without type-checking the entire package.
 	messageInfos := map[string]messageOneofInfo{}
 	wrapperInfos := map[string][]wrapperInfo{}
 	fset := token.NewFileSet()
@@ -144,12 +145,14 @@ func parsePbGoFile(path string) (map[string]messageOneofInfo, map[string][]wrapp
 	}
 
 	for name := range wrapperInfos {
-		// Scalar oneofs use protoc's native wrappers; Go cannot attach methods to built-in types.
+		// Scalar or repeated-type variants require their native discriminator, not type-only packing.
+		seen := map[string]bool{}
 		for _, variant := range wrapperInfos[name] {
-			if !strings.HasPrefix(variant.fieldType, "*") {
+			if !strings.HasPrefix(variant.fieldType, "*") || seen[variant.fieldType] {
 				delete(messageInfos, name)
 				break
 			}
+			seen[variant.fieldType] = true
 		}
 		sort.Slice(wrapperInfos[name], func(i, j int) bool {
 			return wrapperInfos[name][i].wrapperType < wrapperInfos[name][j].wrapperType

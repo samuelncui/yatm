@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +33,7 @@ const (
 	Detach           Deletion = "detach"
 	Retain           Deletion = "retain"
 	EmptyDirectories Deletion = "empty_directories"
+	Recycle          Deletion = "recycle"
 )
 
 const (
@@ -55,11 +57,12 @@ type Receipt struct {
 	PublicationPending bool
 }
 
-// Store implements storage primitives, not organization policy. ListChildren must
-// return bounded pages and must not follow symbolic links or perform admission.
+// Store implements storage primitives, not organization policy. WalkChildren owns
+// its bounded enumeration resources until it returns and propagates visit errors.
+// It must not follow symbolic links or perform admission.
 type Store interface {
 	Stat(context.Context, string) (Node, error)
-	ListChildren(context.Context, Node, string) ([]Node, string, error)
+	WalkChildren(context.Context, Node, func(Node) error) error
 	ResolveChild(context.Context, Node, string, bool) (Node, error)
 	ApplyPrimitive(context.Context, Primitive) (Receipt, error)
 }
@@ -134,19 +137,22 @@ func New(ctx context.Context, db *gorm.DB, store Store, options Options, transac
 
 // relativeNames parses the shared relative-path shortcut, never a provider key.
 func relativeNames(value string, allowCurrent bool) ([]string, error) {
-	value = strings.TrimSpace(strings.ReplaceAll(value, "\\", "/"))
-	if strings.HasPrefix(value, "/") || strings.ContainsRune(value, 0) {
+	// Interpret slash shortcuts without rewriting literal filename text.
+	if strings.HasPrefix(value, "/") {
 		return nil, fmt.Errorf("name must be a relative path")
 	}
 	var names []string
 	for _, name := range strings.Split(value, "/") {
-		if name == ".." {
-			return nil, fmt.Errorf("parent path traversal is not allowed")
+		if name == "" || name == "." {
+			continue
 		}
-		if name != "" && name != "." {
-			names = append(names, name)
+		if err := entity.ValidatePathComponent(name); err != nil {
+			return nil, err
 		}
+		names = append(names, name)
 	}
+
+	// Bound the authored path after removing only explicit current-directory shortcuts.
 	if len(names) == 0 && !allowCurrent {
 		return nil, fmt.Errorf("name is empty")
 	}

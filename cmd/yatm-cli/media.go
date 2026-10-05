@@ -44,7 +44,7 @@ type mediaInspectVolumeCommand struct {
 
 type mediaDeleteCommand struct {
 	runtime *runtime
-	Confirm bool        `long:"confirm" description:"Confirm deletion of the resolved Media metadata"`
+	DryRun  bool        `long:"dryrun" description:"Report the resolved Media and its recorded Positions without deleting them"`
 	Args    fileIDsArgs `positional-args:"yes"`
 }
 
@@ -52,7 +52,7 @@ type volumeInitializeCommand struct {
 	runtime      *runtime
 	Name         string `long:"name" required:"yes" description:"Library display name"`
 	Type         string `long:"type" required:"yes" choice:"hdd" choice:"hm-smr" description:"Volume access type"`
-	SerialNumber string `long:"serial-number" description:"Optional physical serial number"`
+	SerialNumber string `long:"serial-number" description:"Optional physical serial number; read from the device when omitted"`
 	Args         struct {
 		MountPoint string `positional-arg-name:"MOUNT_POINT" required:"yes"`
 	} `positional-args:"yes"`
@@ -64,6 +64,22 @@ type volumeRegisterCommand struct {
 	Args    struct {
 		MountPoint string `positional-arg-name:"MOUNT_POINT" required:"yes"`
 	} `positional-args:"yes"`
+}
+
+type volumeCandidatesCommand struct {
+	runtime *runtime
+}
+
+func (c *volumeCandidatesCommand) Execute(_ []string) error {
+	// List configured discovery candidates without registering or initializing anything.
+	ctx, cancel := c.runtime.context()
+	defer cancel()
+	reply, err := callRPC[entity.ListVolumeCandidatesRequest, entity.ListVolumeCandidatesResponse](
+		ctx, c.runtime, entity.MediaService_ListVolumeCandidates_FullMethodName, &entity.ListVolumeCandidatesRequest{})
+	if err != nil {
+		return err
+	}
+	return writeProto(c.runtime.stdout, reply)
 }
 
 type tapeDeviceListCommand struct {
@@ -104,6 +120,7 @@ func registerVolumeCommands(root *flags.Command, commandRuntime *runtime) error 
 		group,
 		commandSpec{name: "initialize", description: "Create a Volume marker and Library Media", handler: &volumeInitializeCommand{runtime: commandRuntime}},
 		commandSpec{name: "register", description: "Register an existing Volume marker", handler: &volumeRegisterCommand{runtime: commandRuntime}},
+		commandSpec{name: "candidates", description: "List mounted Volume discovery candidates", handler: &volumeCandidatesCommand{runtime: commandRuntime}},
 	)
 }
 
@@ -143,10 +160,10 @@ func (c *mediaListCommand) Execute(_ []string) error {
 	// Keep search and cursor constraints on the server-side catalog page.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.MediaListRequest, entity.MediaListReply](
+	reply, err := callRPC[entity.ListMediaRequest, entity.ListMediaResponse](
 		ctx,
 		c.runtime,
-		entity.Service_MediaList_FullMethodName,
+		entity.MediaService_List_FullMethodName,
 		(&entity.MediaFilter{Kinds: kinds, Query: c.Query, Limit: c.Limit, Offset: c.Offset, AfterId: c.AfterID}).Pack(),
 	)
 	if err != nil {
@@ -169,12 +186,12 @@ func (c *mediaGetCommand) Execute(_ []string) error {
 	return writeProto(c.runtime.stdout, reply)
 }
 
-func getMedia(ctx context.Context, commandRuntime *runtime, ids []int64) (*entity.MediaListReply, error) {
-	return callRPC[entity.MediaListRequest, entity.MediaListReply](
+func getMedia(ctx context.Context, commandRuntime *runtime, ids []int64) (*entity.ListMediaResponse, error) {
+	return callRPC[entity.ListMediaRequest, entity.ListMediaResponse](
 		ctx,
 		commandRuntime,
-		entity.Service_MediaList_FullMethodName,
-		(&entity.MediaMGetRequest{Ids: ids}).Pack(),
+		entity.MediaService_List_FullMethodName,
+		(&entity.MediaIds{Ids: ids}).Pack(),
 	)
 }
 
@@ -187,11 +204,11 @@ func (c *mediaPositionsCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.MediaGetPositionsRequest, entity.MediaGetPositionsReply](
+	reply, err := callRPC[entity.ListMediaPositionsRequest, entity.ListMediaPositionsResponse](
 		ctx,
 		c.runtime,
-		entity.Service_MediaGetPositions_FullMethodName,
-		&entity.MediaGetPositionsRequest{
+		entity.MediaService_ListPositions_FullMethodName,
+		&entity.ListMediaPositionsRequest{
 			Id: c.Args.ID, Directory: c.Directory, Limit: c.Limit, AfterPath: c.AfterPath,
 		},
 	)
@@ -216,7 +233,7 @@ func inspectTape(
 	commandRuntime *runtime,
 	device string,
 	identity *string,
-) (*entity.MediaInspectReply, error) {
+) (*entity.InspectMediaResponse, error) {
 	device = strings.TrimSpace(device)
 	if device == "" {
 		return nil, usageError(fmt.Errorf("Tape device is empty"))
@@ -228,12 +245,12 @@ func inspectTape(
 		}
 		identity = &value
 	}
-	request := (&entity.MediaInspectTapeTarget{Device: device}).Pack()
+	request := (&entity.InspectMediaTapeTarget{Device: device}).Pack()
 	request.Identity = identity
-	return callRPC[entity.MediaInspectRequest, entity.MediaInspectReply](
+	return callRPC[entity.InspectMediaRequest, entity.InspectMediaResponse](
 		ctx,
 		commandRuntime,
-		entity.Service_MediaInspect_FullMethodName,
+		entity.MediaService_Inspect_FullMethodName,
 		request,
 	)
 }
@@ -245,11 +262,11 @@ func (c *mediaInspectVolumeCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.MediaInspectRequest, entity.MediaInspectReply](
+	reply, err := callRPC[entity.InspectMediaRequest, entity.InspectMediaResponse](
 		ctx,
 		c.runtime,
-		entity.Service_MediaInspect_FullMethodName,
-		(&entity.MediaInspectVolumeTarget{Uuid: uuid}).Pack(),
+		entity.MediaService_Inspect_FullMethodName,
+		(&entity.InspectMediaVolumeTarget{Uuid: uuid}).Pack(),
 	)
 	if err != nil {
 		return err
@@ -258,10 +275,7 @@ func (c *mediaInspectVolumeCommand) Execute(_ []string) error {
 }
 
 func (c *mediaDeleteCommand) Execute(_ []string) error {
-	// Require confirmation and a valid target set before any remote reads.
-	if !c.Confirm {
-		return safetyError(fmt.Errorf("media delete requires --confirm"))
-	}
+	// Validate the target set before any remote reads.
 	ids, err := positiveIDs("Media ID", c.Args.IDs)
 	if err != nil {
 		return err
@@ -288,11 +302,11 @@ func (c *mediaDeleteCommand) Execute(_ []string) error {
 	}
 
 	// Delete the exact validated identifier set once.
-	reply, err := callRPC[entity.MediaDeleteRequest, entity.MediaDeleteReply](
+	reply, err := callRPC[entity.DeleteMediaRequest, entity.DeleteMediaResponse](
 		ctx,
 		c.runtime,
-		entity.Service_MediaDelete_FullMethodName,
-		&entity.MediaDeleteRequest{Ids: ids},
+		entity.MediaService_Delete_FullMethodName,
+		&entity.DeleteMediaRequest{Ids: ids, Dryrun: c.DryRun},
 	)
 	if err != nil {
 		return err
@@ -313,11 +327,11 @@ func (c *volumeInitializeCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.VolumeInitializeRequest, entity.VolumeInitializeReply](
+	reply, err := callRPC[entity.InitializeVolumeRequest, entity.InitializeVolumeResponse](
 		ctx,
 		c.runtime,
-		entity.Service_VolumeInitialize_FullMethodName,
-		&entity.VolumeInitializeRequest{
+		entity.MediaService_InitializeVolume_FullMethodName,
+		&entity.InitializeVolumeRequest{
 			MountPoint: c.Args.MountPoint,
 			Name:       c.Name,
 			Profile: &entity.VolumeMediaProfile{
@@ -341,11 +355,11 @@ func (c *volumeRegisterCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.VolumeRegisterRequest, entity.VolumeRegisterReply](
+	reply, err := callRPC[entity.RegisterVolumeRequest, entity.RegisterVolumeResponse](
 		ctx,
 		c.runtime,
-		entity.Service_VolumeRegister_FullMethodName,
-		&entity.VolumeRegisterRequest{MountPoint: c.Args.MountPoint, Name: c.Name},
+		entity.MediaService_RegisterVolume_FullMethodName,
+		&entity.RegisterVolumeRequest{MountPoint: c.Args.MountPoint, Name: c.Name},
 	)
 	if err != nil {
 		return err
@@ -356,11 +370,11 @@ func (c *volumeRegisterCommand) Execute(_ []string) error {
 func (c *tapeDeviceListCommand) Execute(_ []string) error {
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.DeviceListRequest, entity.DeviceListReply](
+	reply, err := callRPC[entity.ListDevicesRequest, entity.ListDevicesResponse](
 		ctx,
 		c.runtime,
-		entity.Service_DeviceList_FullMethodName,
-		&entity.DeviceListRequest{},
+		entity.MediaService_ListDevices_FullMethodName,
+		&entity.ListDevicesRequest{},
 	)
 	if err != nil {
 		return err

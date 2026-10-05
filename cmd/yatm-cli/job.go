@@ -22,8 +22,7 @@ type jobListCommand struct {
 type jobQueryOptions struct {
 	LocationID *int64 `long:"location-id" description:"Only Jobs associated with this Location"`
 	MediaID    *int64 `long:"media-id" description:"Only Jobs associated with this Media"`
-	Kind       string `long:"kind" description:"ARCHIVE, RESTORE, PREVIEW, SCAN, ANALYZE, or VERIFY"`
-	Status     string `long:"status" description:"INDEXING, PENDING, or COMPLETED; changes include departures"`
+	Kind       string `long:"kind" description:"ARCHIVE, RESTORE, or SCAN"`
 }
 
 type jobChangesCommand struct {
@@ -61,14 +60,9 @@ type jobCancelCommand struct {
 	Args    fileIDArgs `positional-args:"yes"`
 }
 
-type jobRetryIndexCommand struct {
-	runtime *runtime
-	Args    fileIDArgs `positional-args:"yes"`
-}
-
 type jobDeleteCommand struct {
 	runtime *runtime
-	Confirm bool        `long:"confirm" description:"Confirm deletion of the resolved Jobs"`
+	DryRun  bool        `long:"dryrun" description:"Report the resolved Jobs without deleting them"`
 	Args    fileIDsArgs `positional-args:"yes"`
 }
 
@@ -85,8 +79,8 @@ func registerJobCommands(root *flags.Command, commandRuntime *runtime) error {
 		commandSpec{name: "progress", description: "Get typed progress for one Job", handler: &jobProgressCommand{runtime: commandRuntime}},
 		commandSpec{name: "wait", description: "Wait for completion or required intervention; never run follow-up actions", handler: &jobWaitCommand{runtime: commandRuntime}},
 		commandSpec{name: "log", description: "Read one bounded Job log page", handler: &jobLogCommand{runtime: commandRuntime}},
+		commandSpec{name: "log-lines", description: "Read filtered Job log lines from either direction", handler: &jobLogLinesCommand{runtime: commandRuntime}},
 		commandSpec{name: "cancel", description: "Cancel the current Job attempt", handler: &jobCancelCommand{runtime: commandRuntime}},
-		commandSpec{name: "retry-index", description: "Retry Job manifest indexing", handler: &jobRetryIndexCommand{runtime: commandRuntime}},
 		commandSpec{name: "delete", description: "Delete Jobs and their retained state", handler: &jobDeleteCommand{runtime: commandRuntime}},
 	)
 }
@@ -120,7 +114,7 @@ func (c *jobListCommand) Execute(_ []string) error {
 	// Query one snapshot page after validating every filter.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListJobsRequest, entity.ListJobsReply](
+	reply, err := callRPC[entity.ListJobsRequest, entity.ListJobsResponse](
 		ctx,
 		c.runtime,
 		entity.JobService_List_FullMethodName,
@@ -146,7 +140,7 @@ func (c *jobChangesCommand) Execute(_ []string) error {
 	filter.ChangedAfterRevision, filter.Limit = &c.AfterRevision, c.Limit
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListJobsRequest, entity.ListJobsReply](
+	reply, err := callRPC[entity.ListJobsRequest, entity.ListJobsResponse](
 		ctx,
 		c.runtime,
 		entity.JobService_List_FullMethodName,
@@ -172,20 +166,12 @@ func (c *jobQueryOptions) filter() (*entity.JobFilter, error) {
 	}
 	filter := &entity.JobFilter{LocationId: c.LocationID, MediaId: c.MediaID}
 	if c.Kind != "" {
-		value, ok := entity.JobKind_value[strings.ToUpper(c.Kind)]
+		value, ok := entity.JobKind_value["JOB_KIND_"+strings.ToUpper(c.Kind)]
 		if !ok || value == 0 {
 			return nil, usageError(fmt.Errorf("invalid Job kind %q", c.Kind))
 		}
 		kind := entity.JobKind(value)
 		filter.Kind = &kind
-	}
-	if c.Status != "" {
-		value, ok := entity.JobStatus_value[strings.ToUpper(c.Status)]
-		if !ok || value == 0 {
-			return nil, usageError(fmt.Errorf("invalid Job status %q", c.Status))
-		}
-		status := entity.JobStatus(value)
-		filter.Status = &status
 	}
 	return filter, nil
 }
@@ -203,8 +189,8 @@ func (c *jobGetCommand) Execute(_ []string) error {
 	return writeProto(c.runtime.stdout, reply)
 }
 
-func getJob(ctx context.Context, commandRuntime *runtime, id int64) (*entity.GetJobReply, error) {
-	return callRPC[entity.GetJobRequest, entity.GetJobReply](
+func getJob(ctx context.Context, commandRuntime *runtime, id int64) (*entity.GetJobResponse, error) {
+	return callRPC[entity.GetJobRequest, entity.GetJobResponse](
 		ctx,
 		commandRuntime,
 		entity.JobService_Get_FullMethodName,
@@ -212,20 +198,54 @@ func getJob(ctx context.Context, commandRuntime *runtime, id int64) (*entity.Get
 	)
 }
 
+// jobAttemptReason never reports a settled Job without a cause: a FAILED Job whose error was not
+// recorded is itself the defect a reader must see, not an empty string.
+func jobAttemptReason(job *entity.Job) string {
+	if job.Error != "" {
+		return job.Error
+	}
+	return "the attempt recorded no reason"
+}
+
+// jobRunning reports an admitted attempt, including a queue for shared Media resources. An idle
+// Job has no live phase and needs an operator action rather than continued polling.
+func jobRunning(job *entity.Job) bool {
+	switch job.Phase {
+	case entity.JobPhase_JOB_PHASE_QUEUED,
+		entity.JobPhase_JOB_PHASE_INDEXING,
+		entity.JobPhase_JOB_PHASE_PREPARING_MEDIA,
+		entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA,
+		entity.JobPhase_JOB_PHASE_COPYING_FROM_MEDIA,
+		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
+		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
+		entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE,
+		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
+		entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA,
+		entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT,
+		entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *jobWaitCommand) Execute(_ []string) error {
-	// Bound both the complete wait and each network observation independently.
+	// Reject invalid wait controls before allocating polling resources.
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
 		return err
 	}
 	if c.WaitTimeout <= 0 || c.PollInterval < 100*time.Millisecond {
 		return usageError(fmt.Errorf("wait-timeout must be positive and poll-interval at least 100ms"))
 	}
+
+	// Own the overall deadline and polling timer for this wait.
 	ctx, cancel := context.WithTimeout(context.Background(), c.WaitTimeout)
 	defer cancel()
 	ticker := time.NewTicker(c.PollInterval)
 	defer ticker.Stop()
-	var last *entity.GetJobReply
+	var last *entity.GetJobResponse
 	for {
+		// Observe one Job under the request timeout while retaining the overall deadline.
 		requestCtx, requestCancel := context.WithCancel(ctx)
 		if c.runtime.options.Timeout > 0 {
 			requestCancel()
@@ -250,16 +270,32 @@ func (c *jobWaitCommand) Execute(_ []string) error {
 		last = reply
 
 		// Emit the last observation before returning a terminal or actionable result.
-		if reply.Job.Status == entity.JobStatus_COMPLETED && reply.Job.Phase == entity.JobPhase_JOB_PHASE_COMPLETED {
+		if reply.Job.Status == entity.JobStatus_JOB_STATUS_COMPLETED &&
+			(reply.Job.Phase == entity.JobPhase_JOB_PHASE_COMPLETED || reply.Job.Phase == entity.JobPhase_JOB_PHASE_UNSPECIFIED) {
 			return writeProto(c.runtime.stdout, reply)
 		}
-		switch reply.Job.Phase {
-		case entity.JobPhase_JOB_PHASE_WAITING_FOR_INDEX_RETRY, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA:
+
+		// The durable state ends the wait; the caller decides what to do, never a phase.
+		switch reply.Job.Status {
+		case entity.JobStatus_JOB_STATUS_FAILED:
 			if err := writeProto(c.runtime.stdout, reply); err != nil {
 				return err
 			}
-			return runtimeError("action_required", fmt.Errorf("Job requires intervention: %s", reply.Job.Phase))
+			return runtimeError("action_required", fmt.Errorf("Job %s: %s", reply.Job.Status, jobAttemptReason(reply.Job)))
+		case entity.JobStatus_JOB_STATUS_READY:
+			// Idle READY needs an explicit Media choice; an admitted attempt keeps polling.
+			if !jobRunning(reply.Job) {
+				if err := writeProto(c.runtime.stdout, reply); err != nil {
+					return err
+				}
+				if reply.Job.Error != "" {
+					return runtimeError("action_required", fmt.Errorf("Job %s: %s", reply.Job.Status, reply.Job.Error))
+				}
+				return runtimeError("action_required", fmt.Errorf("Job requires intervention: %s", reply.Job.Status))
+			}
 		}
+
+		// Keep observing the admitted attempt until settlement or the overall deadline.
 		select {
 		case <-ctx.Done():
 			if err := writeProto(c.runtime.stdout, reply); err != nil {
@@ -288,8 +324,8 @@ func (c *jobProgressCommand) Execute(_ []string) error {
 
 	// Dispatch the progress request once from the common Job kind.
 	switch job.Job.Kind {
-	case entity.JobKind_ARCHIVE:
-		reply, err := callRPC[entity.GetArchiveJobProgressRequest, entity.GetArchiveJobProgressReply](
+	case entity.JobKind_JOB_KIND_ARCHIVE:
+		reply, err := callRPC[entity.GetArchiveJobProgressRequest, entity.GetArchiveJobProgressResponse](
 			ctx, c.runtime, entity.ArchiveJobService_GetProgress_FullMethodName,
 			&entity.GetArchiveJobProgressRequest{Id: c.Args.ID},
 		)
@@ -297,8 +333,8 @@ func (c *jobProgressCommand) Execute(_ []string) error {
 			return err
 		}
 		return writeProto(c.runtime.stdout, reply)
-	case entity.JobKind_RESTORE:
-		reply, err := callRPC[entity.GetRestoreJobProgressRequest, entity.GetRestoreJobProgressReply](
+	case entity.JobKind_JOB_KIND_RESTORE:
+		reply, err := callRPC[entity.GetRestoreJobProgressRequest, entity.GetRestoreJobProgressResponse](
 			ctx, c.runtime, entity.RestoreJobService_GetProgress_FullMethodName,
 			&entity.GetRestoreJobProgressRequest{Id: c.Args.ID},
 		)
@@ -306,8 +342,8 @@ func (c *jobProgressCommand) Execute(_ []string) error {
 			return err
 		}
 		return writeProto(c.runtime.stdout, reply)
-	case entity.JobKind_SCAN:
-		reply, err := callRPC[entity.GetScanJobProgressRequest, entity.GetScanJobProgressReply](
+	case entity.JobKind_JOB_KIND_SCAN:
+		reply, err := callRPC[entity.GetScanJobProgressRequest, entity.GetScanJobProgressResponse](
 			ctx, c.runtime, entity.ScanJobService_GetProgress_FullMethodName,
 			&entity.GetScanJobProgressRequest{Id: c.Args.ID},
 		)
@@ -329,7 +365,7 @@ func (c *jobLogCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.GetJobLogRequest, entity.GetJobLogReply](
+	reply, err := callRPC[entity.GetJobLogRequest, entity.GetJobLogResponse](
 		ctx,
 		c.runtime,
 		entity.JobService_GetLog_FullMethodName,
@@ -347,7 +383,7 @@ func (c *jobCancelCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.CancelJobRequest, entity.CancelJobReply](
+	reply, err := callRPC[entity.CancelJobRequest, entity.CancelJobResponse](
 		ctx,
 		c.runtime,
 		entity.JobService_Cancel_FullMethodName,
@@ -359,29 +395,9 @@ func (c *jobCancelCommand) Execute(_ []string) error {
 	return writeProto(c.runtime.stdout, reply)
 }
 
-func (c *jobRetryIndexCommand) Execute(_ []string) error {
-	if err := positiveID("Job ID", c.Args.ID); err != nil {
-		return err
-	}
-	ctx, cancel := c.runtime.context()
-	defer cancel()
-	reply, err := callRPC[entity.RetryJobIndexRequest, entity.RetryJobIndexReply](
-		ctx,
-		c.runtime,
-		entity.JobService_RetryIndex_FullMethodName,
-		&entity.RetryJobIndexRequest{Id: c.Args.ID},
-	)
-	if err != nil {
-		return err
-	}
-	return writeProto(c.runtime.stdout, reply)
-}
-
 func (c *jobDeleteCommand) Execute(_ []string) error {
-	// Require confirmation and a valid target set before any remote reads.
-	if !c.Confirm {
-		return safetyError(fmt.Errorf("job delete requires --confirm"))
-	}
+	// Validate the target set before any remote reads.
+
 	ids, err := positiveIDs("Job ID", c.Args.IDs)
 	if err != nil {
 		return err
@@ -401,11 +417,11 @@ func (c *jobDeleteCommand) Execute(_ []string) error {
 	}
 
 	// Delete the exact validated identifier set once.
-	reply, err := callRPC[entity.DeleteJobsRequest, entity.DeleteJobsReply](
+	reply, err := callRPC[entity.DeleteJobsRequest, entity.DeleteJobsResponse](
 		ctx,
 		c.runtime,
 		entity.JobService_Delete_FullMethodName,
-		&entity.DeleteJobsRequest{Ids: ids},
+		&entity.DeleteJobsRequest{Ids: ids, Dryrun: c.DryRun},
 	)
 	if err != nil {
 		return err

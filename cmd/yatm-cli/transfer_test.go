@@ -161,7 +161,7 @@ func TestLibraryImportChecksInputAndServiceBeforeOneUpload(t *testing.T) {
 	var pings atomic.Int64
 	var imports atomic.Int64
 	var imported []byte
-	var contentType string
+	var contentType, importQuery string
 	files := http.NewServeMux()
 	files.HandleFunc("/ping", func(output http.ResponseWriter, _ *http.Request) {
 		pings.Add(1)
@@ -169,6 +169,7 @@ func TestLibraryImportChecksInputAndServiceBeforeOneUpload(t *testing.T) {
 	})
 	files.HandleFunc("/library/_import", func(output http.ResponseWriter, request *http.Request) {
 		imports.Add(1)
+		importQuery = request.URL.RawQuery
 		contentType = request.Header.Get("Content-Type")
 		var err error
 		imported, err = io.ReadAll(request.Body)
@@ -184,7 +185,7 @@ func TestLibraryImportChecksInputAndServiceBeforeOneUpload(t *testing.T) {
 	exit, stdout, _ := executeTestCLI(
 		server.URL,
 		"",
-		"library", "import", "--input", missing, "--confirm",
+		"library", "import", "--input", missing,
 	)
 	require.Equal(t, exitFailure, exit)
 	require.Empty(t, stdout)
@@ -196,7 +197,7 @@ func TestLibraryImportChecksInputAndServiceBeforeOneUpload(t *testing.T) {
 	exit, stdout, stderr := executeTestCLI(
 		server.URL,
 		snapshot,
-		"library", "import", "--input", "-", "--confirm",
+		"library", "import", "--input", "-",
 	)
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.JSONEq(t, `{"result":"ok"}`, stdout)
@@ -204,7 +205,13 @@ func TestLibraryImportChecksInputAndServiceBeforeOneUpload(t *testing.T) {
 	require.Equal(t, int64(1), imports.Load())
 	require.Equal(t, 1, recorder.count(entity.JobService_List_FullMethodName))
 	require.Equal(t, "application/x-ndjson", contentType)
+	require.Empty(t, importQuery, "a bare import writes")
 	require.Equal(t, []byte(snapshot), imported)
+
+	// A dry run marks the upload so the server validates and rolls it back.
+	exit, _, stderr = executeTestCLI(server.URL, snapshot, "library", "import", "--input", "-", "--dryrun")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, "dryrun=true", importQuery)
 }
 
 func TestLibraryTrimChecksStatusBeforeOneMutation(t *testing.T) {
@@ -213,15 +220,15 @@ func TestLibraryTrimChecksStatusBeforeOneMutation(t *testing.T) {
 	files.HandleFunc("/ping", func(output http.ResponseWriter, _ *http.Request) {
 		_, _ = output.Write([]byte(`{"result":"pong"}`))
 	})
-	var trimmed *entity.LibraryTrimRequest
+	var trimmed *entity.TrimLibraryRequest
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
 		entity.RegisterJobServiceServer(server, &stubJobService{})
-		entity.RegisterServiceServer(server, &stubService{libraryTrim: func(
+		registerTestServices(server, &stubService{libraryTrim: func(
 			_ context.Context,
-			request *entity.LibraryTrimRequest,
-		) (*entity.LibraryTrimReply, error) {
-			trimmed = proto.Clone(request).(*entity.LibraryTrimRequest)
-			return &entity.LibraryTrimReply{}, nil
+			request *entity.TrimLibraryRequest,
+		) (*entity.TrimLibraryResponse, error) {
+			trimmed = proto.Clone(request).(*entity.TrimLibraryRequest)
+			return &entity.TrimLibraryResponse{}, nil
 		}})
 	}, files, nil)
 
@@ -229,12 +236,18 @@ func TestLibraryTrimChecksStatusBeforeOneMutation(t *testing.T) {
 	exit, stdout, stderr := executeTestCLI(
 		server.URL,
 		"",
-		"library", "trim", "--positions", "--files", "--confirm",
+		"library", "trim", "--positions", "--files",
 	)
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.JSONEq(t, `{}`, stdout)
 	require.True(t, trimmed.TrimPosition)
 	require.True(t, trimmed.TrimFile)
-	require.Equal(t, 1, recorder.count(entity.JobService_List_FullMethodName))
-	require.Equal(t, 1, recorder.count(entity.Service_LibraryTrim_FullMethodName))
+	require.False(t, trimmed.Dryrun)
+
+	// A dry run reports the same selection without trimming anything.
+	exit, _, stderr = executeTestCLI(server.URL, "", "library", "trim", "--positions", "--files", "--dryrun")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.True(t, trimmed.Dryrun)
+	require.Equal(t, 2, recorder.count(entity.JobService_List_FullMethodName))
+	require.Equal(t, 2, recorder.count(entity.LibraryService_Trim_FullMethodName))
 }

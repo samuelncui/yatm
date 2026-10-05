@@ -1,28 +1,40 @@
 syntax = "proto3";
-package job_restore;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 import "copy_status.proto";
 import "progress.proto";
 import "job.proto";
 import "job_storage.proto";
 import "media.proto";
+import "file.proto";
+import "location.proto";
 
 service RestoreJobService {
-    rpc Create(CreateRestoreJobRequest) returns (CreateRestoreJobReply) {}
-    rpc RestoreMedia(RestoreMediaRequest) returns (RestoreMediaReply) {}
-    rpc GetProgress(GetRestoreJobProgressRequest) returns (GetRestoreJobProgressReply) {}
-    rpc ListMedia(ListRestoreJobMediaRequest) returns (ListRestoreJobMediaReply) {}
-    rpc ListFiles(ListRestoreJobFilesRequest) returns (ListRestoreJobFilesReply) {}
+    rpc Estimate(EstimateRestoreJobRequest) returns (EstimateRestoreJobResponse) {}
+    rpc Create(CreateRestoreJobRequest) returns (CreateRestoreJobResponse) {}
+    rpc GetCreation(GetRestoreJobCreationRequest) returns (GetRestoreJobCreationResponse) {}
+    rpc RestoreMedia(RestoreMediaRequest) returns (RestoreMediaResponse) {}
+    rpc GetProgress(GetRestoreJobProgressRequest) returns (GetRestoreJobProgressResponse) {}
+    rpc ListMedia(ListRestoreJobMediaRequest) returns (ListRestoreJobMediaResponse) {}
+    rpc ListFiles(ListRestoreJobFilesRequest) returns (ListRestoreJobFilesResponse) {}
 }
 
+message EstimateRestoreJobRequest {
+    repeated FileSelection selections = 1;
+    repeated int64 file_version_ids = 2;
+    RestoreDestination destination = 3;
+    bool allow_damaged_copies = 4;
+    RestoreVersionPolicy version_policy = 5;
+    bool skip_unmatched_versions = 6;
+}
+message EstimateRestoreJobResponse { SelectionInspectionResult result = 1; }
+
 message RestoreFile {
-    reserved 2, 3, 17, 18, 33;
-    reserved "tape_id", "position_id", "status", "size", "tape_path";
 
     int64 file_id = 1;
     int64 file_version_id = 35;
-    bytes hash = 19;
+    bytes sha256 = 19;
     string target_path = 34;
 }
 
@@ -34,8 +46,8 @@ message RestoreCandidate {
 
 message RestoreItem {
     int64 id = 1;
-    copy_status.CopyStatus status = 2;
-    int64 size = 3;
+    CopyStatus status = 2;
+    int64 size_bytes = 3;
     RestoreFile file = 5;
     RestoreCandidate candidate = 6;
     int64 result_file_id = 7;
@@ -43,38 +55,48 @@ message RestoreItem {
     string result_message = 9;
     bool linked = 10;
     bytes actual_sha256 = 11;
-    int64 actual_size = 12;
+    int64 actual_size_bytes = 12;
 }
 
 message CreateRestoreJobRequest {
     int64 priority = 1;
-    yatm.job_storage.RestoreJobSpec spec = 2;
+    RestoreJobSpec spec = 2;
 }
 
-message CreateRestoreJobReply {
-    job.Job job = 1;
+message CreateRestoreJobResponse {
+    Job job = 1;
+}
+
+message GetRestoreJobCreationRequest {
+    int64 id = 1;
+}
+
+message GetRestoreJobCreationResponse {
+    CreateRestoreJobRequest request = 1;
+    // Nonempty when some original inputs cannot be recovered; request may be partial.
+    string unavailable_reason = 2;
 }
 
 message RestoreMediaRequest {
     int64 id = 1;
-    media.ReadMediaTarget target = 2;
+    ReadMediaTarget target = 2;
 }
 
-message RestoreMediaReply {}
+message RestoreMediaResponse {}
 
 message RestoreMedia {
     int64 media_id = 1;
     string identity = 2;
-    int64 total = 3;
-    copy_status.CopyStatus status = 17;
+    int64 file_count = 3;
+    CopyStatus status = 17;
 }
 
 message GetRestoreJobProgressRequest {
     int64 id = 1;
 }
 
-message GetRestoreJobProgressReply {
-    progress.Progress progress = 1;
+message GetRestoreJobProgressResponse {
+    Progress progress = 1;
     RestoreSummary summary = 2;
 }
 
@@ -89,22 +111,31 @@ message ListRestoreJobMediaRequest {
     int64 id = 1;
     int32 limit = 2;
     optional int64 offset = 3;
-    repeated copy_status.CopyStatus filter_status = 4;
+    repeated CopyStatus filter_status = 4;
+    string cursor = 5;
+    JobResultOrder order = 6;
+    bool include_total = 7;
 }
 
-message ListRestoreJobMediaReply {
+message ListRestoreJobMediaResponse {
     repeated RestoreMedia media = 1;
     bool has_more = 2;
+    optional int64 total_media_count = 3;
 }
 
 message ListRestoreJobFilesRequest {
     int64 id = 1;
-    int64 media_id = 2;
+    optional int64 media_id = 2;
     int32 limit = 3;
     optional int64 offset = 4;
-    repeated copy_status.CopyStatus filter_status = 5;
+    repeated CopyStatus filter_status = 5;
+    string cursor = 6;
+    JobResultOrder order = 7;
+    bool include_total = 8;
 }
 
-message ListRestoreJobFilesReply {
+message ListRestoreJobFilesResponse {
     repeated RestoreItem items = 1;
+    bool has_more = 2;
+    optional int64 total_file_count = 3;
 }

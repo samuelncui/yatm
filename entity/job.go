@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"path"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 )
 
 var (
@@ -64,7 +64,8 @@ func (x *ArchiveManifestFile) Validate() error {
 	if x == nil {
 		return fmt.Errorf("archive file is nil")
 	}
-	if !filepath.IsAbs(x.SourcePath) || filepath.Clean(x.SourcePath) != x.SourcePath {
+	if !utf8.ValidString(x.SourcePath) || strings.ContainsRune(x.SourcePath, 0) ||
+		!filepath.IsAbs(x.SourcePath) || filepath.Clean(x.SourcePath) != x.SourcePath {
 		return fmt.Errorf("invalid archive source path, path=%q", x.SourcePath)
 	}
 	return nil
@@ -91,8 +92,8 @@ func (x *ArchiveCopyResult) Validate() error {
 	if x == nil {
 		return fmt.Errorf("archive copy result is nil")
 	}
-	if x.Size < 0 {
-		return fmt.Errorf("invalid archive copy size, size=%d", x.Size)
+	if x.SizeBytes < 0 {
+		return fmt.Errorf("invalid archive copy size, size=%d", x.SizeBytes)
 	}
 	if len(x.Sha256) != 32 {
 		return fmt.Errorf("invalid archive copy SHA-256 length, length=%d", len(x.Sha256))
@@ -100,16 +101,24 @@ func (x *ArchiveCopyResult) Validate() error {
 	return nil
 }
 
+// ValidatePathComponent accepts literal UTF-8 filename text without separators or traversal.
+// Arbitrary non-UTF-8 bytes cannot be represented by the current protocol and metadata formats.
+func ValidatePathComponent(value string) error {
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("path component is not valid UTF-8, name=%q", value)
+	}
+	if value == "" || value == "." || value == ".." || strings.ContainsAny(value, "/\x00") {
+		return fmt.Errorf("invalid path component, name=%q", value)
+	}
+	return nil
+}
+
+// ValidateRelativePath requires slash-separated literal components, without cleaning their identity.
 func ValidateRelativePath(value string) error {
-	// Reject traversal components before any caller resolves a relative content path.
-	if value == "" || value == "." {
-		return fmt.Errorf("path is empty")
-	}
-	if strings.Contains(value, "\\") {
-		return fmt.Errorf("path contains backslash, path=%q", value)
-	}
-	if value == ".." || strings.ContainsRune(value, 0) || path.IsAbs(value) || path.Clean(value) != value || strings.HasPrefix(value, "../") {
-		return fmt.Errorf("path is not clean and relative, path=%q", value)
+	for component := range strings.SplitSeq(value, "/") {
+		if err := ValidatePathComponent(component); err != nil {
+			return fmt.Errorf("invalid relative path %q, %w", value, err)
+		}
 	}
 	return nil
 }

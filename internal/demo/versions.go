@@ -4,32 +4,24 @@ import (
 	"context"
 	"fmt"
 	"image/color"
-	"os"
-	"path/filepath"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	scanjob "github.com/samuelncui/yatm/executor/scan"
-	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/executor"
+	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
+	"github.com/samuelncui/yatm/internal/library"
 )
 
-func seedImageVersions(ctx context.Context, lib *library.Library, exe *executor.Executor, volume *seededVolume) error {
+func seedImageVersions(
+	ctx context.Context, lib *library.Library, exe *executor.Executor, volume *seededVolume, location *library.Location,
+) error {
 	// Extend the existing blue image's history without allocating a new File or changing its annotations.
 	fileID := volume.files["featured/photos/archive-room.png"]
 	colors := []color.RGBA{{R: 145, G: 65, B: 25, A: 255}, {R: 26, G: 112, B: 77, A: 255}}
-	root := filepath.Join(exe.Paths().Source, "Image Versions")
-	if err := os.MkdirAll(root, 0755); err != nil {
-		return err
-	}
-	root, err := exe.OnlineRoot(root)
-	if err != nil {
-		return err
-	}
-	location := &library.Location{Name: "Photos", RootPath: root, ExecutorID: "local"}
-	if err := lib.CreateOnlineSource(ctx, location); err != nil {
-		return err
-	}
+	root := location.RootPath
+	var previousJobID int64
 	for index, base := range colors {
+		// Publish this revision's original facts before generating its Preview.
 		content, err := demoPreviewImageWithColor(base)
 		if err != nil {
 			return err
@@ -43,8 +35,13 @@ func seedImageVersions(ctx context.Context, lib *library.Library, exe *executor.
 		if err != nil {
 			return err
 		}
-		_, err = lib.AdmitObservation(ctx, location.ID, location.BindingToken, &library.OnlinePosition{
-			FileID: fileID, Path: original.Path, Size: original.Size, Mode: uint32(original.Mode), MtimeNS: original.ModTime.UnixNano(), Hash: original.Hash, Signature: signature,
+		mtimeNS, err := dataformat.Nanoseconds(original.ModTime)
+		if err != nil {
+			return fmt.Errorf("convert Demo original mtime failed, %w", err)
+		}
+		_, err = lib.AdmitObservation(ctx, location.ID, &library.ObservedEntry{
+			FileID: fileID, Path: original.Path, Size: original.Size, Mode: uint32(original.Mode),
+			MtimeNS: mtimeNS, Hash: original.Hash, Signature: signature,
 		})
 		if err != nil {
 			return err
@@ -52,13 +49,16 @@ func seedImageVersions(ctx context.Context, lib *library.Library, exe *executor.
 
 		// Generate each revision from its real source before the next edit replaces that source.
 		job, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Priority: 15, Spec: &entity.ScanJobSpec{
-			Selections:      []*entity.FileSelection{{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: fileID}}}},
-			SignaturePolicy: entity.ScanSignaturePolicy_FORCE_READ, ResultPolicy: entity.ScanResultPolicy_PUBLISH_ORIGINALS, PreviewPolicy: entity.PreviewPolicy_PREVIEW_MISSING_ONLY,
+			Selections: []*entity.FileSelection{{Target: &entity.FileSelection_Library{
+				Library: &entity.LibrarySelection{FileId: fileID},
+			}}},
+			SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
+			PreviewPolicy:   entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
 		}})
 		if err != nil {
 			return fmt.Errorf("create Demo image version Preview failed, %w", err)
 		}
-		if err := waitForStatus(ctx, exe, job.Job.Id, entity.JobStatus_COMPLETED); err != nil {
+		if err := waitForStatus(ctx, exe, job.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
 			return err
 		}
 
@@ -74,11 +74,23 @@ func seedImageVersions(ctx context.Context, lib *library.Library, exe *executor.
 		if err != nil {
 			return err
 		}
+		mtimeNS, err = dataformat.Nanoseconds(copy.ModTime)
+		if err != nil {
+			return fmt.Errorf("convert Demo copy mtime failed, %w", err)
+		}
 		copy.Expected = &entity.ExpectedFile{FileId: fileID, Signature: signature, Sha256: copy.Hash,
-			Size: copy.Size, Mode: uint32(copy.Mode), MtimeNs: copy.ModTime.UnixNano()}
+			SizeBytes: copy.Size, Mode: uint32(copy.Mode), MtimeNs: mtimeNS}
 		if _, err := lib.CommitMedia(ctx, volume.media, mediaFileSource(copies)); err != nil {
 			return fmt.Errorf("publish Demo image version failed, %w", err)
 		}
+
+		// Versions and assets remain after the earlier generation Job becomes redundant.
+		if previousJobID != 0 {
+			if _, err := exe.DeleteJobs(ctx, false, previousJobID); err != nil {
+				return err
+			}
+		}
+		previousJobID = job.Job.Id
 	}
 	return nil
 }

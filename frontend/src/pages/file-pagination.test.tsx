@@ -1,19 +1,22 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { PreviewSettings } from "@/entity";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, type UIEventHandler } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { File, FileGetReply, FileScope, FileSelection, FileStateReply, InspectSelectionReply, ListLocationEntriesReply, LocationReply } from "@/entity";
+import { File, FileScope, FileSelection, SelectionInspectionResult, LocationEntriesPage, GetLocationResponse, SettingsGroup } from "@/entity";
 import { FileBrowser } from "@/pages/file";
 import { SelectionJobPage } from "@/components/selection-job";
 import { libraryLayouts, type LibraryLayout } from "@/pages/routes";
 
-import { libraryPage, libraryEntry, livePage, locationPageRequest } from "@/test/files-fixture";
+import { streamListing } from "@/test/files-fixture";
+import { libraryPage, libraryDetail, livePage, type FilePageFixture, locationPageRequest } from "@/test/files-fixture";
+const filePageFixture = (value: FilePageFixture) => value;
 
-const { fileGet, locationEntries, getState, inspectSelection } = vi.hoisted(() => ({
+const { fileGet, locationEntries, inspectSelection } = vi.hoisted(() => ({
   fileGet: vi.fn(),
   locationEntries: vi.fn(),
-  getState: vi.fn(),
   inspectSelection: vi.fn(),
 }));
 vi.mock("@/api", async (original) => {
@@ -22,15 +25,29 @@ vi.mock("@/api", async (original) => {
   return {
     ...api,
     filesCli: {
-      list: ({ directory, cursor, query, scope, needSize = false }: any) => ({
-        response:
+      list: ({ directory, cursor, query, scope, needSize = false }: any) =>
+        streamListing(
           directory.target.oneofKind === "fileId"
-            ? fileGet({ id: directory.target.fileId, cursor, scope, needSize, limit: 100 }).response.then(libraryPage)
+            ? fileGet({ id: directory.target.fileId, cursor, scope, needSize, limit: 100 }).response.then((reply: any) =>
+                libraryPage(reply, directory.target.fileId),
+              )
             : locationEntries(locationPageRequest(directory, cursor, query)).response.then((reply: any) =>
-                livePage(reply, directory.target.location.locationId),
+                livePage(reply, directory.target.location.locationId, directory.target.location.path),
               ),
+        ),
+      search: ({ directory, cursor, query, scope }: any) =>
+        call(
+          directory.target.oneofKind === "fileId"
+            ? fileGet({ id: directory.target.fileId, cursor, scope, limit: 100 }).response.then((reply: any) => libraryPage(reply, directory.target.fileId))
+            : locationEntries(locationPageRequest(directory, cursor, query)).response.then((reply: any) =>
+                livePage(reply, directory.target.location.locationId, directory.target.location.path),
+              ),
+        ),
+      get: ({ reference }: any) => ({
+        response: fileGet({ id: reference.target.fileId ?? 0n }).response.then((reply: any) =>
+          libraryDetail(reply.file ?? File.create({ id: reference.target.fileId ?? 0n, name: "Subfolder" })),
+        ),
       }),
-      get: ({ reference }: any) => ({ response: Promise.resolve(libraryEntry(File.create({ id: reference.target.fileId ?? 0n }))) }),
       inspect: () => ({ response: Promise.resolve({ observations: [] }) }),
       collect: () => ({ response: Promise.resolve({ entries: [] }) }),
     },
@@ -50,11 +67,22 @@ vi.mock("@/api", async (original) => {
           ],
           hasMore: false,
         }),
-      get: ({ id }: { id: bigint }) => call(LocationReply.create({ location: { id, name: id === 4n ? "Photos" : "Documents" } })),
+      get: ({ id }: { id: bigint }) => call(GetLocationResponse.create({ location: { id, name: id === 4n ? "Photos" : "Documents" } })),
       listEntries: locationEntries,
     },
-    fileCatalogCli: { ...api.fileCatalogCli, getState, inspectSelection },
-    settingsCli: { ...api.settingsCli, getLibrary: () => call({ includeUnbackedFiles: true, revision: 1n }) },
+    restoreJobCli: {
+      ...api.restoreJobCli,
+      estimate: (...args: unknown[]) => ({ response: inspectSelection(...args).response.then((result: unknown) => ({ result })) }),
+    },
+    settingsCli: {
+      ...api.settingsCli,
+      get: ({ group }: { group: SettingsGroup }) =>
+        call(
+          group === SettingsGroup.LIBRARY
+            ? { value: { value: { oneofKind: "library", library: { includeUnbackedFiles: true, confirmRemove: true } } } }
+            : { value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } } },
+        ),
+    },
   };
 });
 
@@ -85,24 +113,23 @@ beforeEach(() => {
   fileGet.mockReset();
   locationEntries.mockReset().mockReturnValue({
     response: Promise.resolve(
-      ListLocationEntriesReply.create({
+      LocationEntriesPage.create({
         entries: [
           {
             path: "physical.jpg",
             file: { id: 19n, name: "logical.jpg" },
-            reference: { locationId: 4n, path: "physical.jpg", bindingToken: "bound", facts: { mode: 420, size: 40n } },
+            reference: { locationId: 4n, path: "physical.jpg", facts: { mode: 420, sizeBytes: 40n } },
           },
         ],
       }),
     ),
   });
-  getState.mockReset().mockReturnValue({ response: Promise.resolve(FileStateReply.create({ latestVersion: { id: 91n, fileId: 19n, size: 40n } })) });
-  inspectSelection.mockReset().mockReturnValue({ response: Promise.resolve(InspectSelectionReply.create({ files: 1n, bytes: 40n })) });
-  fileGet.mockImplementation(({ id, cursor }: { id: bigint; cursor?: string }) => ({
+  inspectSelection.mockReset().mockReturnValue({ response: Promise.resolve(SelectionInspectionResult.create({ fileCount: 1n, totalBytes: 40n })) });
+  // One read returns the whole directory, so a listing arrives in one batch.
+  fileGet.mockImplementation(({ id }: { id: bigint }) => ({
     response: Promise.resolve(
-      FileGetReply.create({
-        children: [File.create({ id: id * 10n + (cursor ? 2n : 1n), name: `${id}-${cursor ? "second" : "first"}.txt` })],
-        nextCursor: cursor ? "" : "next-page",
+      filePageFixture({
+        children: [File.create({ id: id * 10n + 1n, name: `${id}-first.txt` }), File.create({ id: id * 10n + 2n, name: `${id}-second.txt` })],
         scope: FileScope.ALL,
       }),
     ),
@@ -110,6 +137,28 @@ beforeEach(() => {
 });
 
 describe("Composed Chonky pagination", () => {
+  it.each([
+    [libraryLayouts.inspector, 1],
+    [libraryLayouts.dual, 2],
+  ] as const)("loads only visible %s panes once and never refreshes them on a timer", async (layout, panes) => {
+    render(
+      <MemoryRouter>
+        <FileBrowser layout={layout} />
+      </MemoryRouter>,
+    );
+    await screen.findAllByTitle("0-first.txt");
+    await act(async () => {});
+    expect(fileGet).toHaveBeenCalledTimes(panes);
+    expect(fileGet.mock.calls.every(([request]) => request.limit === 100)).toBe(true);
+    vi.useFakeTimers();
+    try {
+      await act(async () => vi.advanceTimersByTimeAsync(30_000));
+      expect(fileGet).toHaveBeenCalledTimes(panes);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   const pane = (side: "Left" | "Right") => screen.getByRole("region", { name: `${side} file pane` });
   const chooseSource = async (side: "Left" | "Right", name: string) => {
     await userEvent.click(within(pane(side)).getByRole("button", { name: "Choose file source" }));
@@ -117,7 +166,7 @@ describe("Composed Chonky pagination", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   };
   const livePage = (locationId: bigint, parentPath = "") =>
-    ListLocationEntriesReply.create({
+    LocationEntriesPage.create({
       entries: [{ path: `${parentPath}${locationId}.txt`, reference: { locationId, path: `${parentPath}${locationId}.txt`, facts: { mode: 420 } } }],
     });
 
@@ -168,9 +217,9 @@ describe("Composed Chonky pagination", () => {
   });
 
   it("discards both panes' pending rows when a different Location is selected", async () => {
-    const pending: ((value: ListLocationEntriesReply) => void)[] = [];
+    const pending: ((value: LocationEntriesPage) => void)[] = [];
     locationEntries.mockImplementation(({ locationId }: { locationId: bigint }) => ({
-      response: locationId === 4n ? new Promise<ListLocationEntriesReply>((resolve) => pending.push(resolve)) : Promise.resolve(livePage(locationId)),
+      response: locationId === 4n ? new Promise<LocationEntriesPage>((resolve) => pending.push(resolve)) : Promise.resolve(livePage(locationId)),
     }));
     render(
       <MemoryRouter>
@@ -189,11 +238,11 @@ describe("Composed Chonky pagination", () => {
 
   it("does not reopen a pending File deep link after the other pane changes source", async () => {
     const get = fileGet.getMockImplementation()!;
-    const pending: ((value: FileGetReply) => void)[] = [];
+    const pending: ((value: FilePageFixture) => void)[] = [];
     fileGet.mockImplementation((input: { id: bigint }) =>
       input.id === 8n
         ? {
-            response: new Promise<FileGetReply>((resolve) => {
+            response: new Promise<FilePageFixture>((resolve) => {
               pending.push(resolve);
             }),
           }
@@ -205,11 +254,11 @@ describe("Composed Chonky pagination", () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ id: 8n })));
-    await waitFor(() => expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ id: 0n, scope: FileScope.ALL })));
+    await waitFor(() => expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ id: 0n, scope: FileScope.DEFAULT })));
     const requestsBeforeSwitch = fileGet.mock.calls.filter(([input]) => input.id === 8n).length;
     await chooseSource("Right", "Photos");
     await within(pane("Left")).findAllByTitle("physical.jpg");
-    await act(async () => pending.forEach((resolve) => resolve(FileGetReply.create({ file: { id: 8n, parentId: 3n, name: "target.txt" } }))));
+    await act(async () => pending.forEach((resolve) => resolve(filePageFixture({ file: File.create({ id: 8n, parentId: 3n, name: "target.txt" }) }))));
     expect(screen.getAllByRole("button", { name: "Go to Photos root" })).toHaveLength(2);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(fileGet.mock.calls.filter(([input]) => input.id === 8n)).toHaveLength(requestsBeforeSwitch);
@@ -225,7 +274,7 @@ describe("Composed Chonky pagination", () => {
     await screen.findAllByTitle("physical.jpg");
     await userEvent.click(within(screen.getByTestId("file-viewport")).getByRole("listitem"));
     await userEvent.click(screen.getByRole("button", { name: "Add to list" }));
-    const label = { archive: "Backup", restore: "Restore" }[kind];
+    const label = { archive: "Archive", restore: "Restore" }[kind];
     const todo = screen.getByRole("region", { name: `${label} selection` });
     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(`job-selection:${kind}`)!)).toHaveLength(1));
     expect(todo).toHaveTextContent(kind === "restore" ? "Subfolder" : "Photos/physical.jpg");
@@ -233,7 +282,6 @@ describe("Composed Chonky pagination", () => {
     expect(saved.fileID).toBe("19");
     expect(saved.target).toBe("Subfolder");
     if (kind === "restore") {
-      expect(getState).not.toHaveBeenCalled();
       expect(saved.version).toBeUndefined();
       expect(FileSelection.fromJsonString(saved.selection)).toEqual(
         FileSelection.create({ target: { oneofKind: "library", library: { fileId: 19n } }, scope: FileScope.SAVED }),
@@ -243,11 +291,11 @@ describe("Composed Chonky pagination", () => {
     expect(saved.path).toBe("Photos/physical.jpg");
     expect(FileSelection.fromJsonString(saved.selection).target).toMatchObject({
       oneofKind: "location",
-      location: { reference: { locationId: 4n, path: "physical.jpg" } },
+      location: { locationId: 4n, path: "physical.jpg" },
     });
   });
 
-  it("forwards native list scrolling from both independent panes", async () => {
+  it("renders each pane as one complete listing and refreshes it in place", async () => {
     localStorage.setItem("file_browser:right:current_id:library", "3");
     render(
       <MemoryRouter>
@@ -256,36 +304,25 @@ describe("Composed Chonky pagination", () => {
     );
     await screen.findAllByTitle("0-first.txt");
     await screen.findAllByTitle("3-first.txt");
-    const viewports = screen.getAllByTestId("file-viewport");
-    fireEvent.scroll(viewports[0]);
+    // A listing is complete on arrival: no scroll position contributes a page request.
     await screen.findAllByTitle("0-second.txt");
-    expect(screen.queryAllByTitle("3-second.txt")).toHaveLength(0);
-    fireEvent.scroll(screen.getAllByTestId("file-viewport")[1]);
     await screen.findAllByTitle("3-second.txt");
-    await waitFor(() => expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ id: 3n, cursor: "next-page" })));
     fileGet.mockClear();
     fireEvent.click(screen.getAllByRole("button", { name: "Refresh" })[0]);
-    await waitFor(() =>
-      expect(fileGet.mock.calls.map(([input]) => [input.id, input.cursor])).toEqual([
-        [0n, ""],
-        [0n, "next-page"],
-      ]),
-    );
+    await waitFor(() => expect(fileGet.mock.calls.map(([input]) => input.id)).toEqual([0n]));
     expect(screen.getAllByTitle("0-second.txt")).not.toHaveLength(0);
   });
 
-  it.each(["archive", "restore"] as const)("forwards native list scrolling from the %s Todo browser", async (kind) => {
+  it.each(["archive", "restore"] as const)("renders the %s selection browser as one complete listing", async (kind) => {
     render(
       <MemoryRouter>
         <SelectionJobPage kind={kind} />
       </MemoryRouter>,
     );
     await screen.findAllByTitle("0-first.txt");
-    fireEvent.scroll(screen.getByTestId("file-viewport"));
     await screen.findAllByTitle("0-second.txt");
-    expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ cursor: "next-page" }));
     fileGet.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(fileGet).toHaveBeenCalledWith(expect.objectContaining({ cursor: "next-page" })));
+    await waitFor(() => expect(fileGet.mock.calls.map(([input]) => input.id)).toEqual([0n]));
   });
 });

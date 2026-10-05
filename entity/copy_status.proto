@@ -1,15 +1,13 @@
 syntax = "proto3";
-package copy_status;
+package yatm.v1;
 
-option go_package = "github.com/samuelncui/yatm/entity";
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 enum CopyStatus {
-    reserved 2, 255;
-    reserved "DRAFT", "RUNNING", "FAILED", "SUBMITED";
 
     COPY_STATUS_UNSPECIFIED = 0;
-    PENDING = 1;
-    STAGED = 3;
-    SUBMITTED = 4;
-    COMPLETED = 5;
+    COPY_STATUS_PENDING = 1;
+    COPY_STATUS_STAGED = 3;
+    COPY_STATUS_SUBMITTED = 4;
+    COPY_STATUS_COMPLETED = 5;
 }

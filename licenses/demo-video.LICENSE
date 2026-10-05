@@ -1,0 +1,64 @@
+Big Buck Bunny Demo media
+
+(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org
+
+The excerpt in internal/demo/assets/big-buck-bunny.mp4 and its derived
+poster.png and timeline.png use Creative Commons Attribution 3.0 Unported:
+https://creativecommons.org/licenses/by/3.0/
+https://creativecommons.org/licenses/by/3.0/legalcode
+
+The project's license and required credit for reusing parts of the movie:
+https://peach.blender.org/about/
+Official download page: https://peach.blender.org/download/
+Official source listing: https://download.blender.org/demo/movies/BBB/
+Verified filename there: bbb_sunflower_1080p_30fps_normal.mp4.zip
+
+Actual downloaded source (the 24 fps film, not that 30 fps ZIP):
+https://uploads.video-commander.com/sample/BigBuckBunny.mp4
+Mirror publisher: https://github.com/video-commander/public-test-streams
+Source size: 158008374 bytes
+Source SHA-256: 1cadc5e09cbb81044e256f9fc67090fcf86d7a596145eb615844fe15341451e6
+
+Modifications: trim 01:00 through 06:00, remove audio, resize to 640x360,
+transcode to H.264 at 24 fps, and generate a poster and thirty sampled images
+with the production YATM native Preview worker, using its 320x180 tile,
+10-second interval and 30-frame defaults. The VTT maps the thirty images
+to the complete five-minute excerpt. The Demo File's Note carries the credit,
+license URL and modification notice.
+
+Transcode tool: FFmpeg 8.1.1, libx264, darwin-arm64.
+Native worker: YATM v1.0.0-alpha.2, darwin-arm64, FFmpeg 8.0.
+
+Reproduction from the repository root (PREVIEW_HELPER names a packaged
+worker with its adjacent private libraries; no helper is needed to run the
+default Demo):
+
+curl --fail --location \
+  https://uploads.video-commander.com/sample/BigBuckBunny.mp4 \
+  --output /private/tmp/yatm-demo-bbb-source.mp4
+ffmpeg -hide_banner -loglevel warning -nostdin -y \
+  -ss 60 -i /private/tmp/yatm-demo-bbb-source.mp4 -t 300 -map 0:v:0 -an \
+  -vf scale=640:360 -r 24 -c:v libx264 -preset medium -crf 27 \
+  -pix_fmt yuv420p -g 48 -keyint_min 48 -sc_threshold 0 -map_metadata -1 \
+  -fflags +bitexact -flags:v +bitexact -movflags +faststart \
+  internal/demo/assets/big-buck-bunny.mp4
+
+DEMO_ASSETS="$(pwd)/internal/demo/assets"
+PREVIEW_OUTPUT=$(mktemp -d)
+python3 - "$DEMO_ASSETS" "$PREVIEW_OUTPUT" <<'PY' | "$PREVIEW_HELPER"
+import json, sys
+print(json.dumps(dict(
+    protocol=1, kind="video", source_path=sys.argv[1]+"/big-buck-bunny.mp4",
+    output_dir=sys.argv[2], format="png", quality=75,
+    poster_width=512, poster_height=512, timeline_width=320, timeline_height=180,
+    timeline_interval_seconds=10, timeline_max_frames=30, max_input_pixels=64000000,
+)))
+PY
+cp "$PREVIEW_OUTPUT/poster.png" "$PREVIEW_OUTPUT/timeline.png" \
+  "$PREVIEW_OUTPUT/timeline.vtt" "$DEMO_ASSETS/"
+
+SHA-256 of shipped assets:
+9414ee60a0156893a9d2e4d7861969d743a061e39377989d56969d8b0de50fed  internal/demo/assets/big-buck-bunny.mp4
+5ca6d50080aaef4ce5ba7c0df6c93383784e1bc3d66311060328127b2e9f29b3  internal/demo/assets/poster.png
+ab71d9aab4836d16b4b0d699d2aa1fe7622ce3423b2dd90a0ac7752df75fec39  internal/demo/assets/timeline.png
+04be146e64c0320471482e9b8d1936a513eb4207f5e62f0b74904a593197f670  internal/demo/assets/timeline.vtt

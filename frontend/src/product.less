@@ -11,23 +11,6 @@
   max-width: 760px;
   margin: 0 auto;
 }
-.locations-page {
-  overflow-y: auto;
-  text-align: left;
-}
-.settings-form-page {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 20px 0;
-  box-sizing: border-box;
-}
-.location-config-form {
-  background: #fff;
-  border: 1px solid #e0e6ee;
-  border-radius: 12px;
-  padding: 24px;
-}
 .location-purposes {
   margin: 0;
   padding: 4px 12px;
@@ -39,34 +22,9 @@
     font-size: 13px;
   }
 }
-.location-table {
-  overflow: auto;
-  background: #fff;
-  border: 1px solid #e0e6ee;
-  border-radius: 12px;
-  a {
-    color: #2458c5;
-    font-weight: 600;
-    text-decoration: none;
-  }
-  code {
-    overflow-wrap: anywhere;
-  }
-  td {
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-}
-.location-remove {
-  margin: 20px 0;
-}
 .migration-summary {
   padding: 12px 0;
   font-size: 13px;
-}
-.location-files-page,
-.location-jobs-page {
-  padding: 12px 0;
 }
 .directory-picker {
   border: 1px solid #d6dfec;
@@ -79,9 +37,6 @@
     max-height: 240px;
     overflow: auto;
   }
-  .app-MuiListItemIcon-root {
-    min-width: 32px;
-  }
   code {
     overflow-wrap: anywhere;
   }
@@ -91,35 +46,9 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  .app-MuiBreadcrumbs-root {
-    flex: 1;
-    min-width: 0;
-  }
-  .app-MuiBreadcrumbs-ol {
-    flex-wrap: nowrap;
-  }
-  .app-MuiBreadcrumbs-li {
-    min-width: 0;
-  }
-  .app-MuiButton-root {
-    min-width: 0;
-    padding: 2px 4px;
-    font-size: 13px;
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: block;
-  }
 }
 .directory-picker-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding-top: 12px;
-  > span {
-    flex: 1;
-  }
+  margin-top: 12px;
 }
 .restore-target-dialog {
   display: flex;
@@ -164,7 +93,7 @@
   min-height: 300px;
   display: flex;
   flex-direction: column;
-  > .chonky-chonkyRoot {
+  > .file-browser {
     flex: 1;
     min-height: 0;
   }
@@ -211,7 +140,7 @@
 }
 .selection-submit {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 12px;
   gap: 8px;
   flex-shrink: 0;
@@ -262,117 +191,53 @@
   .selection-browser {
     height: 420px;
   }
-  .selection-entries {
-    max-height: none;
-  }
   .selection-todo {
     height: 70vh;
     min-height: 480px;
     flex: none;
-  }
-  .location-config-form {
-    padding: 16px;
   }
 }
 .product-muted {
   color: #667085;
   font-size: 12px;
   line-height: 1.6;
-}
-.product-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.product-page-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  text-align: left;
-  padding: 10px 4px 20px;
-  flex: 0 0 auto;
-  h1 {
-    margin: 2px 0 6px;
-    font-size: 24px;
-    letter-spacing: -0.03em;
-  }
-  p {
-    margin: 0;
-    color: #667085;
-    font-size: 13px;
-    max-width: 680px;
+
+  a {
+    white-space: nowrap;
   }
 }
-.product-empty {
+.list-placeholder {
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 32px 22px;
-  border: 1px dashed #d6dfec;
-  border-radius: 12px;
+  gap: 10px;
   color: #667085;
+  font-size: 13px;
   text-align: center;
-  svg {
-    color: #93a6c2;
-    font-size: 32px;
-  }
-  strong {
-    color: #344054;
-  }
-  p {
-    font-size: 13px;
-    margin: 0;
-    line-height: 1.7;
-  }
 }
-.backup-summary {
+.product-actions {
+  margin-top: 12px;
+}
+.archive-summary {
   font-size: 13px;
   .product-actions {
     margin: 6px 0 0;
   }
 }
-.backup-summary-label {
+.archive-summary-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-weight: 600;
 }
-.backup-dot {
+.archive-dot {
   display: inline-block;
   width: 8px;
   height: 8px;
   flex: 0 0 8px;
   border-radius: 50%;
-}
-.content-tabs {
-  margin-top: 14px;
-  border-bottom: 1px solid #e5eaf1;
-}
-.content-section {
-  padding: 18px 0;
-  border-bottom: 1px solid #e9edf3;
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    margin: 0 0 12px;
-    color: #243348;
-    svg {
-      color: #7890ac;
-    }
-  }
-  .file-detail-summary {
-    margin-top: 10px;
-  }
-  > .product-muted:first-of-type {
-    margin-top: 0;
-  }
 }
 .section-heading {
   display: flex;
@@ -399,88 +264,48 @@
     overflow-wrap: anywhere;
   }
 }
-.content-preview {
-  margin-top: 18px;
-}
-.version-list {
+.file-inline-metadata {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.version-choice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e0e6ee;
-  border-radius: 8px;
-  background: #fff;
-  color: #344054;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  > span:first-child {
-    min-width: 0;
-    flex: 1;
-  }
-  strong {
-    display: block;
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  small {
-    display: block;
-    color: #667085;
-    font-size: 11px;
-    line-height: 1.5;
-  }
-  &[aria-pressed="true"] {
-    border-color: #5586e8;
-    background: #f1f6ff;
-    box-shadow: inset 3px 0 #3973dd;
-  }
-  &:hover {
-    background: #f6f8fc;
-  }
-  &:focus-visible {
-    outline: 2px solid #2563eb;
-    outline-offset: 2px;
+  gap: 16px;
+  .file-detail-summary {
+    margin-top: 0;
   }
 }
-.version-latest {
-  font-size: 10px;
-  color: #426ab0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: #e4edfc;
-}
-.selected-version > h3 {
-  line-height: 1.6;
-}
-.copy-card {
-  padding: 12px;
-  margin: 10px 0;
-  background: #f8fafc;
-  border: 1px solid #e7ecf3;
-  border-radius: 8px;
-  .product-muted {
-    margin: 6px 0;
+.content-preview {
+  margin-top: 18px;
+
+  > .product-muted {
+    margin: 0 0 8px;
   }
+}
+.version-list {
+  display: grid;
+  gap: 6px;
+}
+.copy-card .product-muted {
+  margin: 12px 0 0;
 }
 .copy-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
-  > strong {
+  width: 100%;
+  font-size: 12px;
+  .copy-heading-text {
     min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  > span {
-    margin-left: auto;
-    font-size: 11px;
-    color: #667085;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    strong {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+    small {
+      display: block;
+      font-size: 11px;
+      color: #667085;
+    }
   }
   svg {
     color: #7890ac;
@@ -545,9 +370,6 @@
     align-items: center;
     flex-wrap: wrap;
     justify-content: flex-end;
-    .app-MuiFormControlLabel-label {
-      font-size: 12px;
-    }
   }
 }
 .search-result-bar {
@@ -563,35 +385,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-}
-.workflow-steps {
-  display: flex;
-  gap: 8px;
-  margin: 8px 0 24px;
-  font-size: 12px;
-  color: #667085;
-  > span {
-    flex: 1;
-    padding-bottom: 8px;
-    border-bottom: 2px solid #e2e8f0;
-  }
-  > span:first-child {
-    color: #2563eb;
-    border-color: #2563eb;
-    font-weight: 600;
-  }
-}
-.workflow-success {
-  padding: 18px 0;
-  text-align: center;
-  h3 {
-    font-size: 20px;
-  }
-  p {
-    color: #667085;
-    font-size: 14px;
-    line-height: 1.7;
   }
 }
 @media (max-width: 1000px) {
@@ -613,32 +406,8 @@
       grid-row: 1;
     }
   }
-  .product-page-heading {
-    align-items: flex-start;
-  }
 }
-.locations-page,
 .focused-job-page {
   overflow: auto;
   text-align: left;
-}
-
-.job-back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #2563eb;
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-.version-choice-details {
-  display: block;
-  color: #667085;
-  font-weight: 400;
-  font-size: 12px;
 }

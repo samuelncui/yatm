@@ -1,8 +1,8 @@
+import { FileBrowser } from "@/components/file-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Button, Dialog, DialogActions, DialogContent } from "@mui/material";
+import { Box } from "@mui/material";
 import {
   ChonkyActions,
-  FileBrowser,
   FileContextMenu,
   FileList,
   FileNavbar,
@@ -11,14 +11,15 @@ import {
   type FileData,
   type ChonkyFileActionData,
 } from "@samuelncui/chonky";
-import { locationCli } from "@/api";
-import { LocationEntry, Location, type LocationEntryRef } from "@/entity";
+import { FileScope, Location, type LocationEntryRef } from "@/entity";
 import { LoadMoreAction, ViewFileDetailsAction, RefreshListAction } from "@/actions";
-import { LiveFileInspector } from "@/components/live-file-inspector";
 import { DirectoryReadError } from "@/components/directory-read-error";
+import { ListPlaceholder } from "@/components/list-placeholder";
 import { chonkyI18n, errorMessage } from "@/tools";
-import { associatedLibraryFileID, fileLocationReference, locationEntryFile } from "@/components/location-files";
-import { DetailModal, useFileDetail } from "@/pages/file-detail";
+import { fileLocationReference } from "@/components/location-files";
+import { filesPage, locationDirectoryReference } from "@/components/files-browser";
+import { fileOperationReference } from "@/components/file-operations";
+import { DetailModal } from "@/pages/file-detail";
 
 const ChooseFileAction = defineFileAction({
   id: "choose-location-file",
@@ -26,36 +27,39 @@ const ChooseFileAction = defineFileAction({
   fileFilter: (file) => file?.isRegularFile === true,
   button: { name: "Choose file", toolbar: true, contextMenu: true },
 });
+const incompleteListActions = [
+  ChonkyActions.SortFilesByName.id,
+  ChonkyActions.SortFilesBySize.id,
+  ChonkyActions.SortFilesByDate.id,
+  ChonkyActions.ToggleShowFoldersFirst.id,
+  ChonkyActions.SelectAllFiles.id,
+];
 
-export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; onChoose?: (reference: LocationEntryRef) => void }) => {
-  const [parent, setParent] = useState("");
-  const [positions, setPositions] = useState<LocationEntry[]>([]);
+export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Location; onChoose?: (reference: LocationEntryRef) => void; fill?: boolean }) => {
+  const [directory, setDirectory] = useState({ sourceID: source.id, path: "" });
+  const parent = directory.sourceID === source.id ? directory.path : "";
+  const [positions, setPositions] = useState<FileData[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(true);
+  const [revision, setRevision] = useState(0);
   const request = useRef(0);
   const loading = useRef(false);
   const [detail, setDetail] = useState<FileData>();
-  const { detail: libraryDetail, loadDetail, clearDetail } = useFileDetail();
   const load = useCallback(
     async (cursor = "") => {
       const sequence = ++request.current;
       loading.current = true;
       setPending(true);
       try {
-        const reply = await locationCli.listEntries({
-          locationId: source.id,
-          parentPath: parent,
-          cursor,
-          nameFilter: "",
-          limit: 200,
-        }).response;
+        const reply = await filesPage(locationDirectoryReference(String(source.id), parent.replace(/\/$/, "")), FileScope.ALL, cursor);
         if (sequence !== request.current) return;
-        setPositions((current) => (cursor ? [...current, ...reply.entries] : reply.entries));
-        setHasMore(reply.hasMore);
+        setPositions((current) => (cursor ? [...current, ...reply.files] : reply.files));
+        setHasMore(!!reply.nextCursor);
         setCursor(reply.nextCursor);
         setError("");
+        setRevision((value) => value + 1);
       } catch (error) {
         if (sequence === request.current) {
           setHasMore(false);
@@ -75,12 +79,13 @@ export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; o
   useEffect(() => {
     const pending = request;
     setPositions([]);
+    setDetail(undefined);
     void load();
     return () => {
       pending.current++;
     };
   }, [load]);
-  const files = positions.map((entry) => locationEntryFile(entry, source));
+  const files = positions;
   const chain: FileData[] = [{ id: `${source.id}:`, physicalPath: "", name: source.name, isDir: true }];
   let path = "";
   for (const name of parent.split("/").filter(Boolean)) {
@@ -89,13 +94,6 @@ export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; o
   }
   const action = (data: ChonkyFileActionData) => {
     const showDetails = (file: FileData) => {
-      setDetail(undefined);
-      clearDetail();
-      const fileID = associatedLibraryFileID(file);
-      if (fileID) {
-        void loadDetail(fileID);
-        return;
-      }
       setDetail(file);
     };
     if (data.id === ChooseFileAction.id) {
@@ -120,7 +118,7 @@ export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; o
     const file = data.payload.targetFile ?? data.payload.files[0];
     if (!file) return;
     if (file.isDir) {
-      setParent(String(file.physicalPath ?? ""));
+      setDirectory({ sourceID: source.id, path: String(file.physicalPath ?? "") });
       return;
     }
     if (!file.isRegularFile) {
@@ -135,15 +133,15 @@ export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; o
   };
   return (
     <>
-      <Box sx={{ height: 440, minHeight: 260 }}>
+      <Box sx={fill ? { flex: 1, minHeight: 0 } : { height: 440, minHeight: 260 }}>
         <FileBrowser
-          instanceId={`online:${source.id}`}
-          files={pending && !files.length ? [null] : files}
+          instanceId={`location:${source.id}`}
+          files={files}
           folderChain={chain}
           onFileAction={action}
           disableDragAndDrop
           hideToolbarInfo={!!error || (pending && !files.length)}
-          defaultFileViewActionId={ChonkyActions.EnableListView.id}
+          disableDefaultFileActions={hasMore || pending || !!error ? incompleteListActions : undefined}
           fileActions={[
             ChonkyActions.ToggleHiddenFiles,
             ViewFileDetailsAction,
@@ -155,24 +153,28 @@ export const LocationEntryBrowser = ({ source, onChoose }: { source: Location; o
         >
           <FileNavbar />
           <FileToolbar layout="inline" />
-          <FileList emptyPlaceholder={error ? <DirectoryReadError error={error} onRetry={load} /> : undefined} />
+          <FileList
+            loading={pending && files.length ? "refreshing" : undefined}
+            emptyPlaceholder={
+              error ? (
+                <DirectoryReadError error={error} onRetry={load} />
+              ) : pending ? (
+                <ListPlaceholder loading label="Reading this folder…" />
+              ) : (
+                <ListPlaceholder label="This folder is empty" />
+              )
+            }
+          />
           <FileContextMenu />
         </FileBrowser>
       </Box>
       <DetailModal
-        detail={libraryDetail}
-        onClose={clearDetail}
-        onRefresh={async () => {
-          await load();
-          if (libraryDetail?.file) await loadDetail(String(libraryDetail.file.id));
-        }}
+        target={detail ? fileOperationReference(detail) : undefined}
+        name={detail?.name}
+        refreshKey={revision}
+        onClose={() => setDetail(undefined)}
+        onRefresh={load}
       />
-      <Dialog open={!!detail} onClose={() => setDetail(undefined)} fullWidth maxWidth="sm" slotProps={{ paper: { "aria-label": "File properties" } }}>
-        <DialogContent>{detail && <LiveFileInspector file={detail} location={source} onRefresh={load} />}</DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetail(undefined)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </>
   );
 };

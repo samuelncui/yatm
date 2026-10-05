@@ -9,22 +9,22 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ],
-    "patchedDependencies": {
-      "@samuelncui/chonky@0.3.2": "patches/@samuelncui__chonky@0.3.2.patch"
-    }
+    ]
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc6 && vite build",
-    "typecheck": "tsc6",
+    "build": "pnpm typecheck && vite build",
+    "typecheck": "tsc6 && tsc6 --project tsconfig.node.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
+    "test:e2e": "playwright test",
+    "bench": "vitest bench --run --maxWorkers=1 src/components/files-browser.bench.ts",
+    "styles:check": "node scripts/check-styles.mjs && node --test scripts/check-styles.test.mjs",
+    "check": "pnpm styles:check && pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "preview": "vite preview",
-    "gen-proto": "protoc --ts_out ./src/entity --proto_path ../entity/ `ls ../entity/*.proto` && ./src/entity/gen_index.sh"
+    "gen-proto": "protoc --ts_out ./src/entity --proto_path ../entity/ `ls ../entity/*.proto` && ./scripts/gen-index.sh"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -35,20 +35,23 @@
     "@protobuf-ts/grpcweb-transport": "^2.11.1",
     "@protobuf-ts/runtime": "^2.11.1",
     "@protobuf-ts/runtime-rpc": "^2.11.1",
-    "@samuelncui/chonky": "^0.3.2",
-    "@samuelncui/chonky-icon-fontawesome": "^0.3.2",
+    "@reduxjs/toolkit": "^2.12.0",
+    "@samuelncui/chonky": "^0.3.6",
+    "@samuelncui/chonky-icon-fontawesome": "^0.3.6",
     "filesize": "^11.0.22",
     "format-duration": "^4.0.0",
     "moment": "^2.29.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-intl": "^10.1.22",
+    "react-redux": "^9.3.0",
     "react-router": "^8.3.0",
     "react-toastify": "^11.1.0",
     "react-virtuoso": "^4.18.12"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.62.1",
     "@protobuf-ts/plugin": "^2.11.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

@@ -1,9 +1,10 @@
 import { MediaKind, PreviewPolicy, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
+import { readStored, writeStored, type StorageCodec } from "@/state/storage";
 
 export const scanPreferencesKey = "scan:last-options";
 export type ScanPreferences = {
   kind: "location" | "media";
-  location?: { id: string; rootPath: string; bindingToken: string };
+  location?: { id: string; rootPath: string };
   media?: { id: string; kind: MediaKind; identity: string };
   signaturePolicy: ScanSignaturePolicy;
   resultPolicy: ScanResultPolicy;
@@ -11,26 +12,23 @@ export type ScanPreferences = {
   previewPolicy: PreviewPolicy;
 };
 
-export function loadScanPreferences(): ScanPreferences | undefined {
-  try {
-    const value = JSON.parse(localStorage.getItem(scanPreferencesKey) ?? "null") as ScanPreferences | null;
-    if (!value || !["location", "media"].includes(value.kind) || typeof value.compare !== "boolean") return;
-    if (![ScanSignaturePolicy.FILL_MISSING, ScanSignaturePolicy.KNOWN_ONLY, ScanSignaturePolicy.FORCE_READ].includes(value.signaturePolicy)) return;
+const preferencesCodec: StorageCodec<ScanPreferences> = {
+  encode: (value) => JSON.stringify(value),
+  decode: (raw) => {
+    const value = JSON.parse(raw) as ScanPreferences | null;
+    if (!value || !["location", "media"].includes(value.kind) || typeof value.compare !== "boolean") throw new Error("Invalid Scan preferences");
+    if (![ScanSignaturePolicy.FILL_MISSING, ScanSignaturePolicy.KNOWN_ONLY, ScanSignaturePolicy.FORCE_READ].includes(value.signaturePolicy))
+      throw new Error("Invalid Scan signature policy");
     if (
       ![ScanResultPolicy.REPORT_ONLY, ScanResultPolicy.PUBLISH_ORIGINALS, ScanResultPolicy.PUBLISH_INVENTORY, ScanResultPolicy.VERIFY_COPIES].includes(
         value.resultPolicy,
       )
     )
-      return;
-    if (![PreviewPolicy.PREVIEW_NONE, PreviewPolicy.PREVIEW_MISSING_ONLY, PreviewPolicy.PREVIEW_REGENERATE_ALL].includes(value.previewPolicy)) return;
-    if (
-      value.location &&
-      (typeof value.location.id !== "string" ||
-        !/^[1-9]\d*$/.test(value.location.id) ||
-        typeof value.location.rootPath !== "string" ||
-        typeof value.location.bindingToken !== "string")
-    )
-      return;
+      throw new Error("Invalid Scan result policy");
+    if (![PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(value.previewPolicy))
+      throw new Error("Invalid Scan Preview policy");
+    if (value.location && (typeof value.location.id !== "string" || !/^[1-9]\d*$/.test(value.location.id) || typeof value.location.rootPath !== "string"))
+      throw new Error("Invalid Scan Location preference");
     if (
       value.media &&
       (typeof value.media.id !== "string" ||
@@ -38,19 +36,17 @@ export function loadScanPreferences(): ScanPreferences | undefined {
         typeof value.media.identity !== "string" ||
         ![MediaKind.TAPE, MediaKind.VOLUME].includes(value.media.kind))
     )
-      return;
+      throw new Error("Invalid Scan Media preference");
     return value;
-  } catch {
-    // Missing browser storage or obsolete preferences do not select a source.
-  }
+  },
+};
+
+export function loadScanPreferences(): ScanPreferences | undefined {
+  return readStored("local", scanPreferencesKey, preferencesCodec);
 }
 
 export function saveScanPreferences(value: ScanPreferences) {
-  try {
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(value));
-  } catch {
-    // A browser preference must not turn successful Job creation into a failure.
-  }
+  writeStored("local", scanPreferencesKey, value, preferencesCodec);
 }
 
 export function resultForSource(kind: string, result?: ScanResultPolicy) {

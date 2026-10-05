@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	restorejob "github.com/samuelncui/yatm/executor/restore"
-	scanjob "github.com/samuelncui/yatm/executor/scan"
+	"github.com/samuelncui/yatm/internal/executor"
+	restorejob "github.com/samuelncui/yatm/internal/executor/restore"
+	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
 )
 
 func seedRecoveryAndIntegrity(ctx context.Context, exe *executor.Executor, volume *seededVolume, locationID, versionID int64) error {
@@ -30,7 +30,7 @@ func seedRecoveryAndIntegrity(ctx context.Context, exe *executor.Executor, volum
 	if err != nil {
 		return fmt.Errorf("create Demo adopted Restore failed, %w", err)
 	}
-	if err := waitForStatus(ctx, exe, job.ID, entity.JobStatus_COMPLETED); err != nil {
+	if err := waitForStatus(ctx, exe, job.ID, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
 		return err
 	}
 
@@ -42,12 +42,12 @@ func seedRecoveryAndIntegrity(ctx context.Context, exe *executor.Executor, volum
 		return err
 	}
 	check, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{
-		MediaId: volume.media.ID, ResultPolicy: entity.ScanResultPolicy_VERIFY_COPIES, SignaturePolicy: entity.ScanSignaturePolicy_FORCE_READ,
+		MediaId: volume.media.ID, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
 	}})
 	if err != nil {
 		return fmt.Errorf("create Demo integrity check failed, %w", err)
 	}
-	if err := waitForStatus(ctx, exe, check.Job.Id, entity.JobStatus_COMPLETED); err != nil {
+	if err := waitForStatus(ctx, exe, check.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
 		return err
 	}
 
@@ -57,10 +57,10 @@ func seedRecoveryAndIntegrity(ctx context.Context, exe *executor.Executor, volum
 		return fmt.Errorf("find Demo Tape failed, %w", err)
 	}
 	check, err = scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{
-		MediaId: tape.ID, ResultPolicy: entity.ScanResultPolicy_VERIFY_COPIES, SignaturePolicy: entity.ScanSignaturePolicy_FORCE_READ,
+		MediaId: tape.ID, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
 	}})
 	if err != nil {
 		return fmt.Errorf("create Demo Tape integrity check failed, %w", err)
 	}
-	return waitForStatus(ctx, exe, check.Job.Id, entity.JobStatus_PENDING)
+	return waitForStatus(ctx, exe, check.Job.Id, entity.JobStatus_JOB_STATUS_READY)
 }

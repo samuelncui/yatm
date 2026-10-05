@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package media;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 enum MediaKind {
     MEDIA_KIND_UNSPECIFIED = 0;
@@ -60,8 +60,8 @@ message Media {
     Capabilities capabilities = 6;
     MediaProfile profile = 9;
 
-    int64 create_time = 17;
-    optional int64 destroy_time = 18;
+    int64 created_at_ns = 17;
+    optional int64 destroyed_at_ns = 18;
     int64 capacity_bytes = 19;
     int64 written_bytes = 20;
     optional bool mounted = 21;

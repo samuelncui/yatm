@@ -20,7 +20,7 @@ describe("Restore time picker", () => {
   it("opens an application calendar and cancels without changing the selected time", async () => {
     render(<ControlledPicker />);
     const user = userEvent.setup();
-    const expected = String(new Date("2026-09-01T12:30").getTime());
+    const expected = String(BigInt(new Date("2026-09-01T12:30").getTime()) * 1_000_000n);
     expect(screen.getByLabelText("Cutoff")).toHaveTextContent(expected);
     await user.click(screen.getByRole("button", { name: /Choose date/ }));
     const dialog = await screen.findByRole("dialog");
@@ -36,7 +36,7 @@ describe("Restore time picker", () => {
     const picker = screen.getByRole("group", { name: "Restore time" });
     await user.click(within(picker).getByRole("spinbutton", { name: "Year" }));
     await user.paste("2026-09-02 18:45");
-    expect(screen.getByLabelText("Cutoff")).toHaveTextContent(String(new Date("2026-09-02T18:45").getTime()));
+    expect(screen.getByLabelText("Cutoff")).toHaveTextContent(String(BigInt(new Date("2026-09-02T18:45").getTime()) * 1_000_000n));
     await user.click(within(picker).getByRole("spinbutton", { name: "Day" }));
     await user.keyboard("{Backspace}");
     expect(screen.getByLabelText("Cutoff")).toHaveTextContent("Invalid");
@@ -47,11 +47,23 @@ describe("Restore time picker", () => {
     const user = userEvent.setup();
     const picker = screen.getByRole("group", { name: "Restore time" });
     await user.click(within(picker).getByRole("spinbutton", { name: "Year" }));
-    await user.paste("1969-12-01 12:30");
+    await user.paste("1600-12-01 12:30");
     expect(screen.getByLabelText("Cutoff")).toHaveTextContent("Invalid");
     expect(screen.getByText("Choose a valid date and time.")).toBeVisible();
     await user.click(within(picker).getByRole("spinbutton", { name: "Year" }));
     await user.paste("2026-09-03 09:15");
-    expect(screen.getByLabelText("Cutoff")).toHaveTextContent(String(new Date("2026-09-03T09:15").getTime()));
+    expect(screen.getByLabelText("Cutoff")).toHaveTextContent(String(BigInt(new Date("2026-09-03T09:15").getTime()) * 1_000_000n));
+  });
+
+  it("accepts pre-epoch input and rejects dates outside signed Unix ns", async () => {
+    render(<ControlledPicker />);
+    const user = userEvent.setup();
+    const picker = screen.getByRole("group", { name: "Restore time" });
+    await user.click(within(picker).getByRole("spinbutton", { name: "Year" }));
+    await user.paste("1969-12-01 12:30");
+    expect(screen.getByLabelText("Cutoff")).toHaveTextContent(String(BigInt(new Date("1969-12-01T12:30").getTime()) * 1_000_000n));
+    await user.click(within(picker).getByRole("spinbutton", { name: "Year" }));
+    await user.paste("2300-01-01 12:30");
+    expect(screen.getByLabelText("Cutoff")).toHaveTextContent("Invalid");
   });
 });

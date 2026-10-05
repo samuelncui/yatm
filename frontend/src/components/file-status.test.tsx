@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ChonkyActions, FileBrowser, FileList, type FileBrowserHandle } from "@samuelncui/chonky";
 import { convertFiles } from "@/api";
-import { File } from "@/entity";
+import { File, OriginalAvailability } from "@/entity";
 import { chonkyI18n } from "@/tools";
 
 // Keep the actual shared row/selection implementation; jsdom has no virtual viewport.
@@ -29,9 +29,9 @@ describe("Shared file row status", () => {
             id: "file",
             name: "photo.jpg",
             status: {
-              label: "Local · Backed up · Changes not backed up",
+              label: "Local · Backed up · Changes not archived",
               color: "green",
-              marker: { kind: "changed", label: "Changes not backed up", color: "orange" },
+              marker: { kind: "changed", label: "Changes not archived", color: "orange" },
             },
           },
         ]}
@@ -41,7 +41,7 @@ describe("Shared file row status", () => {
         <FileList />
       </FileBrowser>,
     );
-    const dot = await screen.findByRole("img", { name: /Changes not backed up/ });
+    const dot = await screen.findByRole("img", { name: /Changes not archived/ });
     const slots = container.querySelectorAll("[data-chonky-status-slot]");
     expect(slots).toHaveLength(2);
     expect(slots[0]).toHaveAttribute("aria-hidden", "true");
@@ -54,14 +54,14 @@ describe("Shared file row status", () => {
       File.create({
         id: 4n,
         name: "notes.txt",
-        size: 12n,
+        sizeBytes: 12n,
         contentSummary: {
           hasOriginal: true,
           signatureKnown: true,
           currentObservationValid: true,
-          originalAvailability: 1,
-          restorableCurrentCopies: 1n,
-          archivedCopies: 1n,
+          originalAvailability: OriginalAvailability.PRESENT,
+          restorableCurrentCopyCount: 1n,
+          archivedCopyCount: 1n,
         },
       }),
     ]);
@@ -70,14 +70,14 @@ describe("Shared file row status", () => {
         <FileList />
       </FileBrowser>,
     );
-    const dot = await screen.findByRole("img", { name: /Local file present · Current content backed up/ });
+    const dot = await screen.findByRole("img", { name: /Local file present · Current content archived/ });
     const row = dot.parentElement!;
     expect(row.lastElementChild).toContainElement(dot);
     expect(row.textContent).toContain("notes");
     expect(row.textContent).toContain("12");
     await userEvent.hover(dot);
     const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent(/^Local file present · Current content backed up$/);
+    expect(tooltip).toHaveTextContent(/^Local file present · Current content archived$/);
     await waitFor(() => expect(tooltip).toHaveAttribute("data-popper-placement", "left"));
     await userEvent.click(dot);
     await waitFor(() => expect(ref.current?.getFileSelection()).toEqual(new Set(["4"])));

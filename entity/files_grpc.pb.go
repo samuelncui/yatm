@@ -19,22 +19,62 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	FilesService_List_FullMethodName           = "/files.FilesService/List"
-	FilesService_Get_FullMethodName            = "/files.FilesService/Get"
-	FilesService_Inspect_FullMethodName        = "/files.FilesService/Inspect"
-	FilesService_Collect_FullMethodName        = "/files.FilesService/Collect"
-	FilesService_UpdateMetadata_FullMethodName = "/files.FilesService/UpdateMetadata"
+	FilesService_List_FullMethodName                     = "/yatm.v1.FilesService/List"
+	FilesService_Search_FullMethodName                   = "/yatm.v1.FilesService/Search"
+	FilesService_Measure_FullMethodName                  = "/yatm.v1.FilesService/Measure"
+	FilesService_Get_FullMethodName                      = "/yatm.v1.FilesService/Get"
+	FilesService_UpdateMetadata_FullMethodName           = "/yatm.v1.FilesService/UpdateMetadata"
+	FilesService_Mkdir_FullMethodName                    = "/yatm.v1.FilesService/Mkdir"
+	FilesService_Move_FullMethodName                     = "/yatm.v1.FilesService/Move"
+	FilesService_Remove_FullMethodName                   = "/yatm.v1.FilesService/Remove"
+	FilesService_GetVersion_FullMethodName               = "/yatm.v1.FilesService/GetVersion"
+	FilesService_ListVersions_FullMethodName             = "/yatm.v1.FilesService/ListVersions"
+	FilesService_RemoveVersion_FullMethodName            = "/yatm.v1.FilesService/RemoveVersion"
+	FilesService_ListCopies_FullMethodName               = "/yatm.v1.FilesService/ListCopies"
+	FilesService_ListDuplicates_FullMethodName           = "/yatm.v1.FilesService/ListDuplicates"
+	FilesService_FindIdentical_FullMethodName            = "/yatm.v1.FilesService/FindIdentical"
+	FilesService_ListIdenticalRows_FullMethodName        = "/yatm.v1.FilesService/ListIdenticalRows"
+	FilesService_LookupIdenticalPositions_FullMethodName = "/yatm.v1.FilesService/LookupIdenticalPositions"
+	FilesService_CloseIdenticalResult_FullMethodName     = "/yatm.v1.FilesService/CloseIdenticalResult"
+	FilesService_ListIdenticalGroups_FullMethodName      = "/yatm.v1.FilesService/ListIdenticalGroups"
+	FilesService_ListIdenticalMembers_FullMethodName     = "/yatm.v1.FilesService/ListIdenticalMembers"
+	FilesService_KeepIdentical_FullMethodName            = "/yatm.v1.FilesService/KeepIdentical"
+	FilesService_MergeIdentical_FullMethodName           = "/yatm.v1.FilesService/MergeIdentical"
+	FilesService_ImportPositions_FullMethodName          = "/yatm.v1.FilesService/ImportPositions"
+	FilesService_RelocateOriginal_FullMethodName         = "/yatm.v1.FilesService/RelocateOriginal"
 )
 
 // FilesServiceClient is the client API for FilesService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FilesServiceClient interface {
-	List(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesReply, error)
-	Get(ctx context.Context, in *GetFilesEntryRequest, opts ...grpc.CallOption) (*FilesEntry, error)
-	Inspect(ctx context.Context, in *InspectFilesRequest, opts ...grpc.CallOption) (*InspectFilesReply, error)
-	Collect(ctx context.Context, in *CollectFilesRequest, opts ...grpc.CallOption) (*CollectFilesReply, error)
-	UpdateMetadata(ctx context.Context, in *UpdateFilesMetadataRequest, opts ...grpc.CallOption) (*FilesEntry, error)
+	// List reads one directory completely: one enumeration per call, no continuation.
+	List(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (FilesService_ListClient, error)
+	// Search answers a query over the Library or a Location, one bounded page per call.
+	Search(ctx context.Context, in *SearchFilesRequest, opts ...grpc.CallOption) (*SearchFilesResponse, error)
+	Measure(ctx context.Context, in *MeasureFilesRequest, opts ...grpc.CallOption) (FilesService_MeasureClient, error)
+	Get(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error)
+	UpdateMetadata(ctx context.Context, in *UpdateFilesMetadataRequest, opts ...grpc.CallOption) (*UpdateFilesMetadataResponse, error)
+	Mkdir(ctx context.Context, in *MkdirFilesRequest, opts ...grpc.CallOption) (FilesService_MkdirClient, error)
+	Move(ctx context.Context, in *MoveFilesRequest, opts ...grpc.CallOption) (FilesService_MoveClient, error)
+	Remove(ctx context.Context, in *RemoveFilesRequest, opts ...grpc.CallOption) (FilesService_RemoveClient, error)
+	GetVersion(ctx context.Context, in *GetFileVersionRequest, opts ...grpc.CallOption) (*GetFileVersionResponse, error)
+	ListVersions(ctx context.Context, in *ListFileVersionsRequest, opts ...grpc.CallOption) (*ListFileVersionsResponse, error)
+	RemoveVersion(ctx context.Context, in *RemoveFileVersionRequest, opts ...grpc.CallOption) (*RemoveFileVersionResponse, error)
+	ListCopies(ctx context.Context, in *ListContentCopiesRequest, opts ...grpc.CallOption) (*ListContentCopiesResponse, error)
+	ListDuplicates(ctx context.Context, in *ListContentDuplicatesRequest, opts ...grpc.CallOption) (*ListContentDuplicatesResponse, error)
+	// Identical tools over recorded signatures. Reads never scan or compute signatures.
+	FindIdentical(ctx context.Context, in *FindIdenticalRequest, opts ...grpc.CallOption) (*FindIdenticalResponse, error)
+	ListIdenticalRows(ctx context.Context, in *ListIdenticalRowsRequest, opts ...grpc.CallOption) (*ListIdenticalRowsResponse, error)
+	LookupIdenticalPositions(ctx context.Context, in *LookupIdenticalPositionsRequest, opts ...grpc.CallOption) (*LookupIdenticalPositionsResponse, error)
+	CloseIdenticalResult(ctx context.Context, in *CloseIdenticalResultRequest, opts ...grpc.CallOption) (*CloseIdenticalResultResponse, error)
+	ListIdenticalGroups(ctx context.Context, in *ListIdenticalGroupsRequest, opts ...grpc.CallOption) (*ListIdenticalGroupsResponse, error)
+	ListIdenticalMembers(ctx context.Context, in *ListIdenticalMembersRequest, opts ...grpc.CallOption) (*ListIdenticalMembersResponse, error)
+	KeepIdentical(ctx context.Context, in *KeepIdenticalRequest, opts ...grpc.CallOption) (FilesService_KeepIdenticalClient, error)
+	MergeIdentical(ctx context.Context, in *MergeIdenticalRequest, opts ...grpc.CallOption) (*MergeIdenticalResponse, error)
+	// Synchronous inventory admission. dryrun reports the same outcomes without writing.
+	ImportPositions(ctx context.Context, in *ImportPositionsRequest, opts ...grpc.CallOption) (*ImportPositionsResponse, error)
+	RelocateOriginal(ctx context.Context, in *RelocateOriginalRequest, opts ...grpc.CallOption) (*RelocateOriginalResponse, error)
 }
 
 type filesServiceClient struct {
@@ -45,17 +85,81 @@ func NewFilesServiceClient(cc grpc.ClientConnInterface) FilesServiceClient {
 	return &filesServiceClient{cc}
 }
 
-func (c *filesServiceClient) List(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesReply, error) {
-	out := new(ListFilesReply)
-	err := c.cc.Invoke(ctx, FilesService_List_FullMethodName, in, out, opts...)
+func (c *filesServiceClient) List(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (FilesService_ListClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[0], FilesService_List_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceListClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_ListClient interface {
+	Recv() (*ListFilesResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceListClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceListClient) Recv() (*ListFilesResponse, error) {
+	m := new(ListFilesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) Search(ctx context.Context, in *SearchFilesRequest, opts ...grpc.CallOption) (*SearchFilesResponse, error) {
+	out := new(SearchFilesResponse)
+	err := c.cc.Invoke(ctx, FilesService_Search_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *filesServiceClient) Get(ctx context.Context, in *GetFilesEntryRequest, opts ...grpc.CallOption) (*FilesEntry, error) {
-	out := new(FilesEntry)
+func (c *filesServiceClient) Measure(ctx context.Context, in *MeasureFilesRequest, opts ...grpc.CallOption) (FilesService_MeasureClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[1], FilesService_Measure_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceMeasureClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_MeasureClient interface {
+	Recv() (*MeasureFilesResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceMeasureClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceMeasureClient) Recv() (*MeasureFilesResponse, error) {
+	m := new(MeasureFilesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) Get(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (*GetFileResponse, error) {
+	out := new(GetFileResponse)
 	err := c.cc.Invoke(ctx, FilesService_Get_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -63,27 +167,263 @@ func (c *filesServiceClient) Get(ctx context.Context, in *GetFilesEntryRequest, 
 	return out, nil
 }
 
-func (c *filesServiceClient) Inspect(ctx context.Context, in *InspectFilesRequest, opts ...grpc.CallOption) (*InspectFilesReply, error) {
-	out := new(InspectFilesReply)
-	err := c.cc.Invoke(ctx, FilesService_Inspect_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *filesServiceClient) Collect(ctx context.Context, in *CollectFilesRequest, opts ...grpc.CallOption) (*CollectFilesReply, error) {
-	out := new(CollectFilesReply)
-	err := c.cc.Invoke(ctx, FilesService_Collect_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *filesServiceClient) UpdateMetadata(ctx context.Context, in *UpdateFilesMetadataRequest, opts ...grpc.CallOption) (*FilesEntry, error) {
-	out := new(FilesEntry)
+func (c *filesServiceClient) UpdateMetadata(ctx context.Context, in *UpdateFilesMetadataRequest, opts ...grpc.CallOption) (*UpdateFilesMetadataResponse, error) {
+	out := new(UpdateFilesMetadataResponse)
 	err := c.cc.Invoke(ctx, FilesService_UpdateMetadata_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) Mkdir(ctx context.Context, in *MkdirFilesRequest, opts ...grpc.CallOption) (FilesService_MkdirClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[2], FilesService_Mkdir_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceMkdirClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_MkdirClient interface {
+	Recv() (*MkdirFilesResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceMkdirClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceMkdirClient) Recv() (*MkdirFilesResponse, error) {
+	m := new(MkdirFilesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) Move(ctx context.Context, in *MoveFilesRequest, opts ...grpc.CallOption) (FilesService_MoveClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[3], FilesService_Move_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceMoveClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_MoveClient interface {
+	Recv() (*MoveFilesResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceMoveClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceMoveClient) Recv() (*MoveFilesResponse, error) {
+	m := new(MoveFilesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) Remove(ctx context.Context, in *RemoveFilesRequest, opts ...grpc.CallOption) (FilesService_RemoveClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[4], FilesService_Remove_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceRemoveClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_RemoveClient interface {
+	Recv() (*RemoveFilesResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceRemoveClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceRemoveClient) Recv() (*RemoveFilesResponse, error) {
+	m := new(RemoveFilesResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) GetVersion(ctx context.Context, in *GetFileVersionRequest, opts ...grpc.CallOption) (*GetFileVersionResponse, error) {
+	out := new(GetFileVersionResponse)
+	err := c.cc.Invoke(ctx, FilesService_GetVersion_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListVersions(ctx context.Context, in *ListFileVersionsRequest, opts ...grpc.CallOption) (*ListFileVersionsResponse, error) {
+	out := new(ListFileVersionsResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListVersions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) RemoveVersion(ctx context.Context, in *RemoveFileVersionRequest, opts ...grpc.CallOption) (*RemoveFileVersionResponse, error) {
+	out := new(RemoveFileVersionResponse)
+	err := c.cc.Invoke(ctx, FilesService_RemoveVersion_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListCopies(ctx context.Context, in *ListContentCopiesRequest, opts ...grpc.CallOption) (*ListContentCopiesResponse, error) {
+	out := new(ListContentCopiesResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListCopies_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListDuplicates(ctx context.Context, in *ListContentDuplicatesRequest, opts ...grpc.CallOption) (*ListContentDuplicatesResponse, error) {
+	out := new(ListContentDuplicatesResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListDuplicates_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) FindIdentical(ctx context.Context, in *FindIdenticalRequest, opts ...grpc.CallOption) (*FindIdenticalResponse, error) {
+	out := new(FindIdenticalResponse)
+	err := c.cc.Invoke(ctx, FilesService_FindIdentical_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListIdenticalRows(ctx context.Context, in *ListIdenticalRowsRequest, opts ...grpc.CallOption) (*ListIdenticalRowsResponse, error) {
+	out := new(ListIdenticalRowsResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListIdenticalRows_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) LookupIdenticalPositions(ctx context.Context, in *LookupIdenticalPositionsRequest, opts ...grpc.CallOption) (*LookupIdenticalPositionsResponse, error) {
+	out := new(LookupIdenticalPositionsResponse)
+	err := c.cc.Invoke(ctx, FilesService_LookupIdenticalPositions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) CloseIdenticalResult(ctx context.Context, in *CloseIdenticalResultRequest, opts ...grpc.CallOption) (*CloseIdenticalResultResponse, error) {
+	out := new(CloseIdenticalResultResponse)
+	err := c.cc.Invoke(ctx, FilesService_CloseIdenticalResult_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListIdenticalGroups(ctx context.Context, in *ListIdenticalGroupsRequest, opts ...grpc.CallOption) (*ListIdenticalGroupsResponse, error) {
+	out := new(ListIdenticalGroupsResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListIdenticalGroups_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ListIdenticalMembers(ctx context.Context, in *ListIdenticalMembersRequest, opts ...grpc.CallOption) (*ListIdenticalMembersResponse, error) {
+	out := new(ListIdenticalMembersResponse)
+	err := c.cc.Invoke(ctx, FilesService_ListIdenticalMembers_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) KeepIdentical(ctx context.Context, in *KeepIdenticalRequest, opts ...grpc.CallOption) (FilesService_KeepIdenticalClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FilesService_ServiceDesc.Streams[5], FilesService_KeepIdentical_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &filesServiceKeepIdenticalClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FilesService_KeepIdenticalClient interface {
+	Recv() (*KeepIdenticalResponse, error)
+	grpc.ClientStream
+}
+
+type filesServiceKeepIdenticalClient struct {
+	grpc.ClientStream
+}
+
+func (x *filesServiceKeepIdenticalClient) Recv() (*KeepIdenticalResponse, error) {
+	m := new(KeepIdenticalResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *filesServiceClient) MergeIdentical(ctx context.Context, in *MergeIdenticalRequest, opts ...grpc.CallOption) (*MergeIdenticalResponse, error) {
+	out := new(MergeIdenticalResponse)
+	err := c.cc.Invoke(ctx, FilesService_MergeIdentical_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) ImportPositions(ctx context.Context, in *ImportPositionsRequest, opts ...grpc.CallOption) (*ImportPositionsResponse, error) {
+	out := new(ImportPositionsResponse)
+	err := c.cc.Invoke(ctx, FilesService_ImportPositions_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *filesServiceClient) RelocateOriginal(ctx context.Context, in *RelocateOriginalRequest, opts ...grpc.CallOption) (*RelocateOriginalResponse, error) {
+	out := new(RelocateOriginalResponse)
+	err := c.cc.Invoke(ctx, FilesService_RelocateOriginal_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +434,33 @@ func (c *filesServiceClient) UpdateMetadata(ctx context.Context, in *UpdateFiles
 // All implementations must embed UnimplementedFilesServiceServer
 // for forward compatibility
 type FilesServiceServer interface {
-	List(context.Context, *ListFilesRequest) (*ListFilesReply, error)
-	Get(context.Context, *GetFilesEntryRequest) (*FilesEntry, error)
-	Inspect(context.Context, *InspectFilesRequest) (*InspectFilesReply, error)
-	Collect(context.Context, *CollectFilesRequest) (*CollectFilesReply, error)
-	UpdateMetadata(context.Context, *UpdateFilesMetadataRequest) (*FilesEntry, error)
+	// List reads one directory completely: one enumeration per call, no continuation.
+	List(*ListFilesRequest, FilesService_ListServer) error
+	// Search answers a query over the Library or a Location, one bounded page per call.
+	Search(context.Context, *SearchFilesRequest) (*SearchFilesResponse, error)
+	Measure(*MeasureFilesRequest, FilesService_MeasureServer) error
+	Get(context.Context, *GetFileRequest) (*GetFileResponse, error)
+	UpdateMetadata(context.Context, *UpdateFilesMetadataRequest) (*UpdateFilesMetadataResponse, error)
+	Mkdir(*MkdirFilesRequest, FilesService_MkdirServer) error
+	Move(*MoveFilesRequest, FilesService_MoveServer) error
+	Remove(*RemoveFilesRequest, FilesService_RemoveServer) error
+	GetVersion(context.Context, *GetFileVersionRequest) (*GetFileVersionResponse, error)
+	ListVersions(context.Context, *ListFileVersionsRequest) (*ListFileVersionsResponse, error)
+	RemoveVersion(context.Context, *RemoveFileVersionRequest) (*RemoveFileVersionResponse, error)
+	ListCopies(context.Context, *ListContentCopiesRequest) (*ListContentCopiesResponse, error)
+	ListDuplicates(context.Context, *ListContentDuplicatesRequest) (*ListContentDuplicatesResponse, error)
+	// Identical tools over recorded signatures. Reads never scan or compute signatures.
+	FindIdentical(context.Context, *FindIdenticalRequest) (*FindIdenticalResponse, error)
+	ListIdenticalRows(context.Context, *ListIdenticalRowsRequest) (*ListIdenticalRowsResponse, error)
+	LookupIdenticalPositions(context.Context, *LookupIdenticalPositionsRequest) (*LookupIdenticalPositionsResponse, error)
+	CloseIdenticalResult(context.Context, *CloseIdenticalResultRequest) (*CloseIdenticalResultResponse, error)
+	ListIdenticalGroups(context.Context, *ListIdenticalGroupsRequest) (*ListIdenticalGroupsResponse, error)
+	ListIdenticalMembers(context.Context, *ListIdenticalMembersRequest) (*ListIdenticalMembersResponse, error)
+	KeepIdentical(*KeepIdenticalRequest, FilesService_KeepIdenticalServer) error
+	MergeIdentical(context.Context, *MergeIdenticalRequest) (*MergeIdenticalResponse, error)
+	// Synchronous inventory admission. dryrun reports the same outcomes without writing.
+	ImportPositions(context.Context, *ImportPositionsRequest) (*ImportPositionsResponse, error)
+	RelocateOriginal(context.Context, *RelocateOriginalRequest) (*RelocateOriginalResponse, error)
 	mustEmbedUnimplementedFilesServiceServer()
 }
 
@@ -106,20 +468,74 @@ type FilesServiceServer interface {
 type UnimplementedFilesServiceServer struct {
 }
 
-func (UnimplementedFilesServiceServer) List(context.Context, *ListFilesRequest) (*ListFilesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
+func (UnimplementedFilesServiceServer) List(*ListFilesRequest, FilesService_ListServer) error {
+	return status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedFilesServiceServer) Get(context.Context, *GetFilesEntryRequest) (*FilesEntry, error) {
+func (UnimplementedFilesServiceServer) Search(context.Context, *SearchFilesRequest) (*SearchFilesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedFilesServiceServer) Measure(*MeasureFilesRequest, FilesService_MeasureServer) error {
+	return status.Errorf(codes.Unimplemented, "method Measure not implemented")
+}
+func (UnimplementedFilesServiceServer) Get(context.Context, *GetFileRequest) (*GetFileResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedFilesServiceServer) Inspect(context.Context, *InspectFilesRequest) (*InspectFilesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Inspect not implemented")
-}
-func (UnimplementedFilesServiceServer) Collect(context.Context, *CollectFilesRequest) (*CollectFilesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Collect not implemented")
-}
-func (UnimplementedFilesServiceServer) UpdateMetadata(context.Context, *UpdateFilesMetadataRequest) (*FilesEntry, error) {
+func (UnimplementedFilesServiceServer) UpdateMetadata(context.Context, *UpdateFilesMetadataRequest) (*UpdateFilesMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateMetadata not implemented")
+}
+func (UnimplementedFilesServiceServer) Mkdir(*MkdirFilesRequest, FilesService_MkdirServer) error {
+	return status.Errorf(codes.Unimplemented, "method Mkdir not implemented")
+}
+func (UnimplementedFilesServiceServer) Move(*MoveFilesRequest, FilesService_MoveServer) error {
+	return status.Errorf(codes.Unimplemented, "method Move not implemented")
+}
+func (UnimplementedFilesServiceServer) Remove(*RemoveFilesRequest, FilesService_RemoveServer) error {
+	return status.Errorf(codes.Unimplemented, "method Remove not implemented")
+}
+func (UnimplementedFilesServiceServer) GetVersion(context.Context, *GetFileVersionRequest) (*GetFileVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
+}
+func (UnimplementedFilesServiceServer) ListVersions(context.Context, *ListFileVersionsRequest) (*ListFileVersionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListVersions not implemented")
+}
+func (UnimplementedFilesServiceServer) RemoveVersion(context.Context, *RemoveFileVersionRequest) (*RemoveFileVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveVersion not implemented")
+}
+func (UnimplementedFilesServiceServer) ListCopies(context.Context, *ListContentCopiesRequest) (*ListContentCopiesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListCopies not implemented")
+}
+func (UnimplementedFilesServiceServer) ListDuplicates(context.Context, *ListContentDuplicatesRequest) (*ListContentDuplicatesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDuplicates not implemented")
+}
+func (UnimplementedFilesServiceServer) FindIdentical(context.Context, *FindIdenticalRequest) (*FindIdenticalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FindIdentical not implemented")
+}
+func (UnimplementedFilesServiceServer) ListIdenticalRows(context.Context, *ListIdenticalRowsRequest) (*ListIdenticalRowsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIdenticalRows not implemented")
+}
+func (UnimplementedFilesServiceServer) LookupIdenticalPositions(context.Context, *LookupIdenticalPositionsRequest) (*LookupIdenticalPositionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LookupIdenticalPositions not implemented")
+}
+func (UnimplementedFilesServiceServer) CloseIdenticalResult(context.Context, *CloseIdenticalResultRequest) (*CloseIdenticalResultResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CloseIdenticalResult not implemented")
+}
+func (UnimplementedFilesServiceServer) ListIdenticalGroups(context.Context, *ListIdenticalGroupsRequest) (*ListIdenticalGroupsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIdenticalGroups not implemented")
+}
+func (UnimplementedFilesServiceServer) ListIdenticalMembers(context.Context, *ListIdenticalMembersRequest) (*ListIdenticalMembersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIdenticalMembers not implemented")
+}
+func (UnimplementedFilesServiceServer) KeepIdentical(*KeepIdenticalRequest, FilesService_KeepIdenticalServer) error {
+	return status.Errorf(codes.Unimplemented, "method KeepIdentical not implemented")
+}
+func (UnimplementedFilesServiceServer) MergeIdentical(context.Context, *MergeIdenticalRequest) (*MergeIdenticalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MergeIdentical not implemented")
+}
+func (UnimplementedFilesServiceServer) ImportPositions(context.Context, *ImportPositionsRequest) (*ImportPositionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ImportPositions not implemented")
+}
+func (UnimplementedFilesServiceServer) RelocateOriginal(context.Context, *RelocateOriginalRequest) (*RelocateOriginalResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RelocateOriginal not implemented")
 }
 func (UnimplementedFilesServiceServer) mustEmbedUnimplementedFilesServiceServer() {}
 
@@ -134,26 +550,68 @@ func RegisterFilesServiceServer(s grpc.ServiceRegistrar, srv FilesServiceServer)
 	s.RegisterService(&FilesService_ServiceDesc, srv)
 }
 
-func _FilesService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListFilesRequest)
+func _FilesService_List_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ListFilesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).List(m, &filesServiceListServer{stream})
+}
+
+type FilesService_ListServer interface {
+	Send(*ListFilesResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceListServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceListServer) Send(m *ListFilesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _FilesService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchFilesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FilesServiceServer).List(ctx, in)
+		return srv.(FilesServiceServer).Search(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FilesService_List_FullMethodName,
+		FullMethod: FilesService_Search_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FilesServiceServer).List(ctx, req.(*ListFilesRequest))
+		return srv.(FilesServiceServer).Search(ctx, req.(*SearchFilesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FilesService_Measure_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MeasureFilesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).Measure(m, &filesServiceMeasureServer{stream})
+}
+
+type FilesService_MeasureServer interface {
+	Send(*MeasureFilesResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceMeasureServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceMeasureServer) Send(m *MeasureFilesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _FilesService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFilesEntryRequest)
+	in := new(GetFileRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -165,43 +623,7 @@ func _FilesService_Get_Handler(srv interface{}, ctx context.Context, dec func(in
 		FullMethod: FilesService_Get_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FilesServiceServer).Get(ctx, req.(*GetFilesEntryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FilesService_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InspectFilesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FilesServiceServer).Inspect(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FilesService_Inspect_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FilesServiceServer).Inspect(ctx, req.(*InspectFilesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FilesService_Collect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CollectFilesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FilesServiceServer).Collect(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FilesService_Collect_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FilesServiceServer).Collect(ctx, req.(*CollectFilesRequest))
+		return srv.(FilesServiceServer).Get(ctx, req.(*GetFileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -224,34 +646,449 @@ func _FilesService_UpdateMetadata_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FilesService_Mkdir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MkdirFilesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).Mkdir(m, &filesServiceMkdirServer{stream})
+}
+
+type FilesService_MkdirServer interface {
+	Send(*MkdirFilesResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceMkdirServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceMkdirServer) Send(m *MkdirFilesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _FilesService_Move_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MoveFilesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).Move(m, &filesServiceMoveServer{stream})
+}
+
+type FilesService_MoveServer interface {
+	Send(*MoveFilesResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceMoveServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceMoveServer) Send(m *MoveFilesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _FilesService_Remove_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RemoveFilesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).Remove(m, &filesServiceRemoveServer{stream})
+}
+
+type FilesService_RemoveServer interface {
+	Send(*RemoveFilesResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceRemoveServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceRemoveServer) Send(m *RemoveFilesResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _FilesService_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFileVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).GetVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_GetVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).GetVersion(ctx, req.(*GetFileVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFileVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListVersions(ctx, req.(*ListFileVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_RemoveVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveFileVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).RemoveVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_RemoveVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).RemoveVersion(ctx, req.(*RemoveFileVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListCopies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListContentCopiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListCopies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListCopies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListCopies(ctx, req.(*ListContentCopiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListDuplicates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListContentDuplicatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListDuplicates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListDuplicates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListDuplicates(ctx, req.(*ListContentDuplicatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_FindIdentical_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindIdenticalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).FindIdentical(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_FindIdentical_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).FindIdentical(ctx, req.(*FindIdenticalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListIdenticalRows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIdenticalRowsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListIdenticalRows(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListIdenticalRows_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListIdenticalRows(ctx, req.(*ListIdenticalRowsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_LookupIdenticalPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LookupIdenticalPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).LookupIdenticalPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_LookupIdenticalPositions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).LookupIdenticalPositions(ctx, req.(*LookupIdenticalPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_CloseIdenticalResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CloseIdenticalResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).CloseIdenticalResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_CloseIdenticalResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).CloseIdenticalResult(ctx, req.(*CloseIdenticalResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListIdenticalGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIdenticalGroupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListIdenticalGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListIdenticalGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListIdenticalGroups(ctx, req.(*ListIdenticalGroupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ListIdenticalMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIdenticalMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ListIdenticalMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ListIdenticalMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ListIdenticalMembers(ctx, req.(*ListIdenticalMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_KeepIdentical_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(KeepIdenticalRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FilesServiceServer).KeepIdentical(m, &filesServiceKeepIdenticalServer{stream})
+}
+
+type FilesService_KeepIdenticalServer interface {
+	Send(*KeepIdenticalResponse) error
+	grpc.ServerStream
+}
+
+type filesServiceKeepIdenticalServer struct {
+	grpc.ServerStream
+}
+
+func (x *filesServiceKeepIdenticalServer) Send(m *KeepIdenticalResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _FilesService_MergeIdentical_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MergeIdenticalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).MergeIdentical(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_MergeIdentical_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).MergeIdentical(ctx, req.(*MergeIdenticalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_ImportPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).ImportPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_ImportPositions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).ImportPositions(ctx, req.(*ImportPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FilesService_RelocateOriginal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RelocateOriginalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilesServiceServer).RelocateOriginal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilesService_RelocateOriginal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilesServiceServer).RelocateOriginal(ctx, req.(*RelocateOriginalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FilesService_ServiceDesc is the grpc.ServiceDesc for FilesService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var FilesService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "files.FilesService",
+	ServiceName: "yatm.v1.FilesService",
 	HandlerType: (*FilesServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "List",
-			Handler:    _FilesService_List_Handler,
+			MethodName: "Search",
+			Handler:    _FilesService_Search_Handler,
 		},
 		{
 			MethodName: "Get",
 			Handler:    _FilesService_Get_Handler,
 		},
 		{
-			MethodName: "Inspect",
-			Handler:    _FilesService_Inspect_Handler,
-		},
-		{
-			MethodName: "Collect",
-			Handler:    _FilesService_Collect_Handler,
-		},
-		{
 			MethodName: "UpdateMetadata",
 			Handler:    _FilesService_UpdateMetadata_Handler,
 		},
+		{
+			MethodName: "GetVersion",
+			Handler:    _FilesService_GetVersion_Handler,
+		},
+		{
+			MethodName: "ListVersions",
+			Handler:    _FilesService_ListVersions_Handler,
+		},
+		{
+			MethodName: "RemoveVersion",
+			Handler:    _FilesService_RemoveVersion_Handler,
+		},
+		{
+			MethodName: "ListCopies",
+			Handler:    _FilesService_ListCopies_Handler,
+		},
+		{
+			MethodName: "ListDuplicates",
+			Handler:    _FilesService_ListDuplicates_Handler,
+		},
+		{
+			MethodName: "FindIdentical",
+			Handler:    _FilesService_FindIdentical_Handler,
+		},
+		{
+			MethodName: "ListIdenticalRows",
+			Handler:    _FilesService_ListIdenticalRows_Handler,
+		},
+		{
+			MethodName: "LookupIdenticalPositions",
+			Handler:    _FilesService_LookupIdenticalPositions_Handler,
+		},
+		{
+			MethodName: "CloseIdenticalResult",
+			Handler:    _FilesService_CloseIdenticalResult_Handler,
+		},
+		{
+			MethodName: "ListIdenticalGroups",
+			Handler:    _FilesService_ListIdenticalGroups_Handler,
+		},
+		{
+			MethodName: "ListIdenticalMembers",
+			Handler:    _FilesService_ListIdenticalMembers_Handler,
+		},
+		{
+			MethodName: "MergeIdentical",
+			Handler:    _FilesService_MergeIdentical_Handler,
+		},
+		{
+			MethodName: "ImportPositions",
+			Handler:    _FilesService_ImportPositions_Handler,
+		},
+		{
+			MethodName: "RelocateOriginal",
+			Handler:    _FilesService_RelocateOriginal_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "List",
+			Handler:       _FilesService_List_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Measure",
+			Handler:       _FilesService_Measure_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Mkdir",
+			Handler:       _FilesService_Mkdir_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Move",
+			Handler:       _FilesService_Move_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Remove",
+			Handler:       _FilesService_Remove_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "KeepIdentical",
+			Handler:       _FilesService_KeepIdentical_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "files.proto",
 }

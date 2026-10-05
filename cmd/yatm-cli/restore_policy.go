@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/dataformat"
 )
 
 type restorePolicyOptions struct {
@@ -29,9 +30,14 @@ func (o restorePolicyOptions) policy(restore bool) (*entity.RestoreVersionPolicy
 	if err != nil {
 		return nil, usageError(fmt.Errorf("before must be RFC3339 with a timezone: %w", err))
 	}
-	stamp := value.UnixMilli()
-	if stamp < 0 {
-		return nil, usageError(fmt.Errorf("before must not precede the Unix epoch"))
+
+	// An explicit date is never the zero-time sentinel accepted by stored metadata.
+	if value.IsZero() {
+		return nil, usageError(fmt.Errorf("before timestamp is outside the signed Unix nanosecond range"))
 	}
-	return &entity.RestoreVersionPolicy{BeforeAtMs: &stamp}, nil
+	stamp, err := dataformat.Nanoseconds(value)
+	if err != nil {
+		return nil, usageError(fmt.Errorf("invalid before timestamp: %w", err))
+	}
+	return &entity.RestoreVersionPolicy{BeforeAtNs: &stamp}, nil
 }

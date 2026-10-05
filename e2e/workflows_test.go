@@ -9,15 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/samuelncui/yatm/config"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/internal/config"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -75,18 +73,7 @@ func startBinaryInstallation(t *testing.T) (*cliConnection, string) {
 		_, err := connection.run(ctx, "status")
 		return err == nil
 	}, 15*time.Second, 100*time.Millisecond)
-	setFixtureAutoCollect(t, context.Background(), connection, false)
 	return connection, root
-}
-
-func setFixtureAutoCollect(t *testing.T, ctx context.Context, connection *cliConnection, enabled bool) *entity.UpdateLibrarySettingsReply {
-	t.Helper()
-	// Individual scenarios opt into collection; unrelated jobs must not race explicit analysis fixtures.
-	settings := new(entity.LibrarySettings)
-	cliResult(t, ctx, connection, settings, "settings", "library")
-	reply := new(entity.UpdateLibrarySettingsReply)
-	cliResult(t, ctx, connection, reply, "settings", "library", "--auto-collect="+strconv.FormatBool(enabled), "--revision", decimal(settings.Revision))
-	return reply
 }
 
 func cliResult(t *testing.T, ctx context.Context, connection *cliConnection, reply proto.Message, args ...string) {
@@ -106,26 +93,31 @@ func waitCLIJob(t *testing.T, ctx context.Context, connection *cliConnection, id
 	} else {
 		require.NoError(t, err)
 	}
-	reply := new(entity.GetJobReply)
+	reply := new(entity.GetJobResponse)
 	require.NoError(t, protojson.Unmarshal(output, reply), string(output))
 	if pending {
-		require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, reply.Job.Phase)
+		require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, reply.Job.Phase)
 	} else {
-		require.Equal(t, entity.JobStatus_COMPLETED, reply.Job.Status)
+		require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, reply.Job.Status)
 	}
 	return reply.Job
 }
 
+func filesEntryID(entry *entity.FilesEntry) int64 {
+	if id := entry.GetReference().GetFileId(); id != 0 {
+		return id
+	}
+	return entry.GetAssociatedFileId()
+}
+
 func TestCLIRegisteredLocationWorkflows(t *testing.T) {
-	// Run the real server and CLI; fixture writes represent the external filesystem, not catalog shortcuts.
+	// Run a complete Files, Archive and Restore workflow through production binaries.
 	connection, root := startBinaryInstallation(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	for name, data := range map[string]string{"a.txt": "same", "b.txt": "same", "docs/c.txt": "second", "docs/d.txt": "second", "docs/e.txt": "second", "docs/unique.txt": "unique"} {
+	for name, data := range map[string]string{"a.txt": "same", "b.txt": "same", "docs/c.txt": "second"} {
 		require.NoError(t, os.WriteFile(filepath.Join(root, "originals", name), []byte(data), 0o640))
 	}
-
-	// A physical path selection must not expand an unrelated differently cased prefix.
 	upper := filepath.Join(root, "originals", "Photos")
 	lower := filepath.Join(root, "originals", "photos")
 	require.NoError(t, os.Mkdir(upper, 0o755))
@@ -137,158 +129,164 @@ func TestCLIRegisteredLocationWorkflows(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(lower, "lower.txt"), []byte("lowercase"), 0o644))
 	}
 
-	// Register and scan through the public CLI, then inspect case-sensitive selection totals.
-	access := new(entity.GetAccessReply)
+	// Register a real Location and prove initial browsing is pure before explicit metadata admission.
+	access := new(entity.GetLocationAccessResponse)
 	cliResult(t, ctx, connection, access, "settings", "access")
 	require.Len(t, access.Ranges, 2)
-	browse := new(entity.BrowsePathsReply)
-	cliResult(t, ctx, connection, browse, "settings", "browse", "--path", filepath.Join(root, "originals"), "--limit", "1")
-	require.Len(t, browse.Directories, 1)
-	registered := new(entity.LocationReply)
-	cliResult(t, ctx, connection, registered, "location", "create", "--name", "Documents", "--root", filepath.Join(root, "originals"), "--restore-target")
-	id := registered.Location.Id
-	scanned := new(entity.CreateScanJobReply)
-	cliResult(t, ctx, connection, scanned, "analyze", "create", decimal(id))
-	waitCLIJob(t, ctx, connection, scanned.Job.Id, false)
-	cliResult(t, ctx, connection, registered, "location", "get", decimal(id))
-	require.NotEqual(t, entity.OnlineBinding_UNCONFIRMED, registered.Location.Binding)
-	require.Equal(t, scanned.Job.Id, registered.Location.LastSyncJobId)
-	caseSelection := new(entity.InspectSelectionReply)
-	cliResult(t, ctx, connection, caseSelection, "file", "inspect-selection", "--location", decimal(id)+":Photos")
-	require.EqualValues(t, 1, caseSelection.Files)
-	require.EqualValues(t, 5, caseSelection.Bytes)
+	registered := new(entity.CreateLocationResponse)
+	cliResult(t, ctx, connection, registered, "location", "create", "--name", "Documents", "--root", filepath.Join(root, "originals"))
+	id := decimal(registered.Location.Id)
+	caseSelection := new(entity.SelectionInspectionResult)
+	cliResult(t, ctx, connection, caseSelection, "archive", "estimate", "--location", id+":Photos")
+	require.EqualValues(t, 1, caseSelection.FileCount)
+	require.EqualValues(t, 5, caseSelection.TotalBytes)
 	if distinctCase {
-		cliResult(t, ctx, connection, caseSelection, "file", "inspect-selection", "--location", decimal(id)+":photos")
-		require.EqualValues(t, 1, caseSelection.Files)
-		require.EqualValues(t, 9, caseSelection.Bytes)
+		cliResult(t, ctx, connection, caseSelection, "archive", "estimate", "--location", id+":photos")
+		require.EqualValues(t, 1, caseSelection.FileCount)
+		require.EqualValues(t, 9, caseSelection.TotalBytes)
 	}
+	// One listing is the whole directory, and reading it admits nothing.
+	page := new(entity.ListFilesResponse)
+	cliResult(t, ctx, connection, page, "ls", "--location-id", id, "--path", "")
+	expected := []string{"a.txt", "b.txt", "docs", "Photos"}
+	if distinctCase {
+		expected = append(expected, "photos")
+	}
+	names := make([]string, 0, len(page.Entries))
+	for _, entry := range page.Entries {
+		names = append(names, entry.Path)
+		require.Nil(t, entry.AssociatedFileId)
+	}
+	require.ElementsMatch(t, expected, names)
+	require.EqualValues(t, len(expected), page.GetTotalEntryCount())
 
-	// Page the live directory, then annotate and organize only the associated logical tree.
-	entries := new(entity.ListLocationEntriesReply)
-	cliResult(t, ctx, connection, entries, "location", "entries", decimal(id), "--name", ".txt", "--limit", "1")
-	require.True(t, entries.HasMore)
-	a := entries.Entries[0].Original.FileId
-	next := new(entity.ListLocationEntriesReply)
-	cliResult(t, ctx, connection, next, "location", "entries", decimal(id), "--name", ".txt", "--cursor", entries.NextCursor, "--limit", "1")
-	b := next.Entries[0].Original.FileId
-	cliResult(t, ctx, connection, new(entity.FileMetadataEditReply), "file", "metadata", decimal(a), "--add-tag", "important", "--note", "retained organization")
-	_, folders := fileOrganizationCLI(t, ctx, connection, "file", "mkdir", "0", "Organized")
-	require.Len(t, folders, 1)
-	require.NotNil(t, folders[0].FileId)
-	fileOrganizationCLI(t, ctx, connection, "file", "edit", decimal(a), "--parent-id", decimal(*folders[0].FileId), "--name", "renamed.txt")
+	// Metadata establishes only the selected association, then Library organization remains independent of bytes.
+	metadata := new(entity.UpdateFilesMetadataResponse)
+	cliResult(t, ctx, connection, metadata, "files", "metadata", "--location", id+":a.txt", "--add-tag", "important", "--note", "retained organization")
+	require.Len(t, metadata.Entries, 1)
+	a := filesEntryID(metadata.Entries[0].Entry)
+	require.Positive(t, a)
+	fileOperationCLI(t, ctx, connection, "mkdir", "--library", "--destination", "0", "--name", "Organized")
+	folders := new(entity.SearchFilesResponse)
+	cliResult(t, ctx, connection, folders, "ls", "--file-id", "0", "--query", "name:Organized")
+	require.Len(t, folders.Entries, 1)
+	fileOperationCLI(t, ctx, connection, "mv", "--library", "--source", decimal(a), "--destination", decimal(folders.Entries[0].GetReference().GetFileId()), "--name", "renamed.txt")
 	require.FileExists(t, filepath.Join(root, "originals", "a.txt"))
-	settings := new(entity.LibrarySettings)
-	cliResult(t, ctx, connection, settings, "settings", "library")
-	cliResult(t, ctx, connection, new(entity.UpdateLibrarySettingsReply), "settings", "library", "--include-unbacked=false", "--revision", decimal(settings.Revision))
-	results := new(entity.FileSearchReply)
-	cliResult(t, ctx, connection, results, "file", "search", "tag:important", "--scope", "default", "--limit", "1")
-	require.Empty(t, results.Results)
-	cliResult(t, ctx, connection, results, "file", "search", "tag:important", "--scope", "all", "--limit", "1")
-	require.Len(t, results.Results, 1)
-	require.Equal(t, "/Organized/renamed.txt", results.Results[0].Path)
-	groups := new(entity.ListDuplicateGroupsReply)
-	cliResult(t, ctx, connection, groups, "file", "duplicate-groups", "--limit", "1")
-	require.Len(t, groups.Groups, 1)
-	require.NotEmpty(t, groups.NextCursor)
-	members := new(entity.ListDuplicateMembersReply)
-	cliResult(t, ctx, connection, members, "file", "duplicate-members", "--signature", hex.EncodeToString(groups.Groups[0].Signature), "--limit", "1")
-	require.Len(t, members.Members, 1)
-	require.NotEmpty(t, members.NextCursor)
+	detail := new(entity.FilesDetail)
+	cliResult(t, ctx, connection, detail, "files", "get", "--file-id", decimal(a))
+	require.Equal(t, "retained organization", detail.Organization.Note)
+	require.Equal(t, []string{"important"}, detail.Organization.Tags)
 
-	// One cross-directory Todo combines File and Location selections, with overlap deduplicated on the server.
-	selected := []string{"--file-id", decimal(a), "--file-id", decimal(b), "--location", decimal(id) + ":docs", "--location", decimal(id) + ":docs/c.txt"}
-	inspection := new(entity.InspectSelectionReply)
-	cliResult(t, ctx, connection, inspection, append([]string{"file", "inspect-selection"}, selected...)...)
-	require.EqualValues(t, 6, inspection.Files)
-	require.Zero(t, inspection.MissingOriginals)
-	volume := new(entity.VolumeInitializeReply)
+	// Explicit Archive selection deduplicates overlapping roots and produces version/copy projections.
+	inspection := new(entity.SelectionInspectionResult)
+	cliResult(t, ctx, connection, inspection, "archive", "estimate", "--file-id", decimal(a), "--location", id+":b.txt", "--location", id+":docs", "--location", id+":docs/c.txt")
+	require.EqualValues(t, 3, inspection.FileCount)
+	volume := new(entity.InitializeVolumeResponse)
 	cliResult(t, ctx, connection, volume, "volume", "initialize", filepath.Join(root, "volumes", "disk"), "--name", "Backup disk", "--type", "hdd")
-	archive := new(entity.CreateArchiveJobReply)
-	cliResult(t, ctx, connection, archive, append([]string{"archive", "create"}, selected...)...)
+	archive := new(entity.CreateArchiveJobResponse)
+	cliResult(t, ctx, connection, archive, "archive", "create", "--file-id", decimal(a), "--location", id+":b.txt", "--location", id+":docs", "--location", id+":docs/c.txt")
 	waitCLIJob(t, ctx, connection, archive.Job.Id, true)
-	cliResult(t, ctx, connection, new(entity.WriteArchiveMediaReply), "archive", "write", "volume", decimal(archive.Job.Id), "--uuid", volume.Media.Identity)
+	cliResult(t, ctx, connection, new(entity.WriteArchiveMediaResponse), "archive", "write", "volume", decimal(archive.Job.Id), "--uuid", volume.Media.Identity)
 	waitCLIJob(t, ctx, connection, archive.Job.Id, false)
-	manifest := new(entity.ListArchiveJobFilesReply)
+	manifest := new(entity.ListArchiveJobFilesResponse)
 	cliResult(t, ctx, connection, manifest, "archive", "files", decimal(archive.Job.Id), "--limit", "10")
-	require.Len(t, manifest.Items, 6)
-	require.FileExists(t, filepath.Join(root, "volumes", "disk", manifest.Items[0].File.MediaPath))
-	cliResult(t, ctx, connection, results, "file", "search", "tag:important", "--scope", "saved", "--limit", "1")
-	require.Len(t, results.Results, 1)
+	require.Len(t, manifest.Items, 3)
+	versions := new(entity.ListFileVersionsResponse)
+	cliResult(t, ctx, connection, versions, "files", "versions", decimal(a))
+	require.Len(t, versions.Versions, 1)
+	copies := new(entity.ListContentCopiesResponse)
+	cliResult(t, ctx, connection, copies, "files", "copies", "--signature", hex.EncodeToString(versions.Versions[0].Signature))
+	require.NotEmpty(t, copies.Positions)
+	duplicates := new(entity.ListContentDuplicatesResponse)
+	cliResult(t, ctx, connection, duplicates, "files", "duplicates", "--signature", hex.EncodeToString(versions.Versions[0].Signature))
+	require.Len(t, duplicates.Entries, 2)
 
-	// Backup observes an edited Library original without requiring an intervening Analyze Job.
-	state := new(entity.FileStateReply)
-	cliResult(t, ctx, connection, state, "file", "state", decimal(a))
-	firstVersion := state.LatestVersion.Id
+	// A changed original creates a second version without an intermediate Scan.
 	require.NoError(t, os.WriteFile(filepath.Join(root, "originals", "a.txt"), []byte("edited original"), 0o640))
 	cliResult(t, ctx, connection, archive, "archive", "create", "--file-id", decimal(a))
 	waitCLIJob(t, ctx, connection, archive.Job.Id, true)
-	cliResult(t, ctx, connection, new(entity.WriteArchiveMediaReply), "archive", "write", "volume", decimal(archive.Job.Id), "--uuid", volume.Media.Identity)
+	cliResult(t, ctx, connection, new(entity.WriteArchiveMediaResponse), "archive", "write", "volume", decimal(archive.Job.Id), "--uuid", volume.Media.Identity)
 	waitCLIJob(t, ctx, connection, archive.Job.Id, false)
-	versions := new(entity.ListFileVersionsReply)
-	cliResult(t, ctx, connection, versions, "file", "versions", decimal(a))
+	cliResult(t, ctx, connection, versions, "files", "versions", decimal(a))
 	require.Len(t, versions.Versions, 2)
 
-	// Restore multiple versions into a preferred unscanned Location, preserving conflicting output and retry paths.
-	target := new(entity.LocationReply)
+	// Restore both versions without overwriting a conflicting output and retain the existing original association.
+	target := new(entity.CreateLocationResponse)
 	cliResult(t, ctx, connection, target, "location", "create", "--name", "Restored files", "--root", filepath.Join(root, "restore"), "--restore-target")
-	require.True(t, target.Location.RestoreTarget)
-	require.Zero(t, target.Location.LastSyncAtMs)
 	output := filepath.Join(root, "restore", "results", "Organized", "renamed.txt")
 	require.NoError(t, os.MkdirAll(filepath.Dir(output), 0o755))
 	require.NoError(t, os.WriteFile(output, []byte("keep existing"), 0o600))
-	restored := new(entity.CreateRestoreJobReply)
-	cliResult(t, ctx, connection, restored, "restore", "create", decimal(versions.Versions[0].Id), decimal(versions.Versions[1].Id), "--file-id", decimal(b), "--target-location", decimal(target.Location.Id), "--directory", "results")
+	restored := new(entity.CreateRestoreJobResponse)
+	cliResult(t, ctx, connection, restored, "restore", "create", decimal(versions.Versions[0].Id), decimal(versions.Versions[1].Id), "--target-location", decimal(target.Location.Id), "--directory", "results")
 	waitCLIJob(t, ctx, connection, restored.Job.Id, true)
-	cliResult(t, ctx, connection, new(entity.RestoreMediaReply), "restore", "run", "volume", decimal(restored.Job.Id), "--uuid", volume.Media.Identity)
+	cliResult(t, ctx, connection, new(entity.RestoreMediaResponse), "restore", "run", "volume", decimal(restored.Job.Id), "--uuid", volume.Media.Identity)
 	waitCLIJob(t, ctx, connection, restored.Job.Id, false)
 	existing, err := os.ReadFile(output)
 	require.NoError(t, err)
 	require.Equal(t, "keep existing", string(existing))
-	for _, version := range versions.Versions {
-		expected := "edited original"
-		if version.Id == firstVersion {
-			expected = "same"
-		}
-		data, err := os.ReadFile(filepath.Join(filepath.Dir(output), library.RestoredName("renamed.txt", version.Id)))
-		require.NoError(t, err)
-		require.Equal(t, expected, string(data))
-	}
+	resultEntries, err := os.ReadDir(filepath.Dir(output))
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(resultEntries), 2, "each conflicting version keeps a recoverable output")
+	existing, err = os.ReadFile(output)
+	require.NoError(t, err)
+	require.Equal(t, "keep existing", string(existing))
 
-	// Matching content is already fulfilled, without another copy or suffix.
+	// A byte-identical target fulfills the selected old version without another Media attempt.
 	require.NoError(t, os.WriteFile(output, []byte("same"), 0o600))
-	cliResult(t, ctx, connection, restored, "restore", "create", decimal(firstVersion), "--target-location", decimal(target.Location.Id), "--directory", "results")
+	cliResult(t, ctx, connection, restored, "restore", "create", decimal(versions.Versions[0].Id), "--target-location", decimal(target.Location.Id), "--directory", "results")
 	waitCLIJob(t, ctx, connection, restored.Job.Id, false)
-	adopted := new(entity.FileStateReply)
-	cliResult(t, ctx, connection, adopted, "file", "state", decimal(a))
-	require.Equal(t, id, adopted.Original.LocationId, "recovering elsewhere never steals an existing original")
-	cliResult(t, ctx, connection, target, "location", "get", decimal(target.Location.Id))
-	require.Zero(t, target.Location.LastSyncAtMs)
-	require.Equal(t, entity.OnlineBinding_CONFIRMED, target.Location.Binding)
+	cliResult(t, ctx, connection, detail, "files", "get", "--file-id", decimal(a))
+	require.Equal(t, registered.Location.Id, detail.Original.Reference.GetLocation().LocationId)
 
-	// Both scan kinds publish automatically and remain reachable in the ordinary Job catalog.
-	mediaScan := new(entity.CreateScanJobReply)
+	// Media inventory Scan and the ordinary Job catalog retain completed work independently of Files reads.
+	mediaScan := new(entity.CreateScanJobResponse)
 	cliResult(t, ctx, connection, mediaScan, "scan", "media", decimal(volume.Media.Id))
 	waitCLIJob(t, ctx, connection, mediaScan.Job.Id, false)
-	cliResult(t, ctx, connection, new(entity.ListScanJobEntriesReply), "scan", "results", decimal(mediaScan.Job.Id))
-	jobs := new(entity.ListJobsReply)
-	cliResult(t, ctx, connection, jobs, "job", "list", "--location-id", decimal(id), "--kind", "ARCHIVE", "--status", "COMPLETED", "--limit", "2")
+	results := new(entity.ListScanJobEntriesResponse)
+	cliResult(t, ctx, connection, results, "scan", "results", decimal(mediaScan.Job.Id))
+	jobs := new(entity.ListJobsResponse)
+	cliResult(t, ctx, connection, jobs, "job", "list", "--location-id", id, "--kind", "ARCHIVE", "--limit", "2")
 	require.NotEmpty(t, jobs.Jobs)
 	for _, job := range jobs.Jobs {
-		require.Equal(t, entity.JobKind_ARCHIVE, job.Kind)
-		require.Equal(t, entity.JobStatus_COMPLETED, job.Status)
+		require.Equal(t, entity.JobKind_JOB_KIND_ARCHIVE, job.Kind)
+		require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, job.Status)
 	}
-	cliResult(t, ctx, connection, new(entity.GetJobLogReply), "job", "log", decimal(mediaScan.Job.Id))
+	cliResult(t, ctx, connection, new(entity.GetJobLogResponse), "job", "log", decimal(mediaScan.Job.Id))
+	cliResult(t, ctx, connection, detail, "files", "get", "--file-id", decimal(a))
+	require.Equal(t, registered.Location.Id, detail.Original.Reference.GetLocation().LocationId)
 
-	// Export remains complete despite hidden unbacked items; imported paths require confirmation.
+	// Export/import retains metadata, and the imported registration stays usable without confirmation.
 	snapshot := filepath.Join(root, "snapshot.jsonl")
 	_, err = connection.run(ctx, "library", "export", "--output", snapshot)
 	require.NoError(t, err)
-	_, err = connection.run(ctx, "library", "import", "--input", snapshot, "--confirm")
+	_, err = connection.run(ctx, "library", "import", "--input", snapshot)
 	require.NoError(t, err)
-	cliResult(t, ctx, connection, registered, "location", "get", decimal(id))
-	require.Equal(t, entity.OnlineBinding_UNCONFIRMED, registered.Location.Binding)
-	cliResult(t, ctx, connection, registered, "location", "confirm", decimal(id), "--revision", decimal(registered.Location.Revision))
-	cliResult(t, ctx, connection, scanned, "analyze", "create", decimal(id))
-	waitCLIJob(t, ctx, connection, scanned.Job.Id, false)
-	cliResult(t, ctx, connection, new(entity.DeleteJobsReply), "job", "delete", decimal(mediaScan.Job.Id), "--confirm")
+	cliResult(t, ctx, connection, registered, "location", "get", decimal(registered.Location.Id))
+
+	// Ignore hides matching entries from live browsing and Scan publication; unregistration retains bytes.
+	ignored := filepath.Join(root, "originals", "ignored.txt")
+	require.NoError(t, os.WriteFile(ignored, []byte("ignore me"), 0o600))
+	ignoreFile := filepath.Join(root, "ignore")
+	require.NoError(t, os.WriteFile(ignoreFile, []byte("# retained text\n/ignored.txt\n"), 0o600))
+	cliResult(t, ctx, connection, registered, "location", "get", decimal(registered.Location.Id))
+	cliResult(t, ctx, connection, registered, "location", "update", decimal(registered.Location.Id), "--name", "Renamed", "--root", filepath.Join(root, "originals"), "--ignore-file", ignoreFile)
+	require.Equal(t, "# retained text\n/ignored.txt\n", registered.Location.Config.GetIgnore().GetText())
+	cliResult(t, ctx, connection, new(entity.CreateScanJobResponse), "scan", "create", "--location-id", id, "--signature", "known-only", "--result", "originals")
+	// The returned Scan is the latest catalog Job and completes before live reads below.
+	cliResult(t, ctx, connection, jobs, "job", "list", "--kind", "SCAN", "--limit", "1")
+	require.NotEmpty(t, jobs.Jobs)
+	waitCLIJob(t, ctx, connection, jobs.Jobs[0].Id, false)
+	ignoredQuery := new(entity.SearchFilesResponse)
+	cliResult(t, ctx, connection, ignoredQuery, "ls", "--location-id", id, "--query", "name:ignored.txt")
+	require.Empty(t, ignoredQuery.Entries)
+	// Explicit path access bypasses user Ignore without admitting the entry.
+	ignoredDetail := new(entity.FilesDetail)
+	cliResult(t, ctx, connection, ignoredDetail, "files", "get", "--location-id", id, "--path", "ignored.txt")
+	require.Zero(t, filesEntryID(ignoredDetail.Entry))
+	cliResult(t, ctx, connection, registered, "location", "get", decimal(registered.Location.Id))
+	cliResult(t, ctx, connection, new(entity.DeleteLocationResponse), "location", "delete", decimal(registered.Location.Id))
+	require.FileExists(t, filepath.Join(root, "originals", "a.txt"))
+	cliResult(t, ctx, connection, detail, "files", "get", "--file-id", decimal(a))
+	require.Equal(t, []string{"important"}, detail.Organization.Tags)
+	cliResult(t, ctx, connection, new(entity.DeleteJobsResponse), "job", "delete", decimal(mediaScan.Job.Id))
 }

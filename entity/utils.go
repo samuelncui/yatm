@@ -7,10 +7,10 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/modern-go/reflect2"
-	"github.com/samuelncui/yatm/tools"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -21,14 +21,14 @@ const (
 var (
 	magicHeaderV2 = []byte{0xff, 'y', 'm', '\x02'}
 
-	zstdEncoderPool = tools.NewPool(func() *zstd.Encoder {
+	zstdEncoderPool = sync.Pool{New: func() any {
 		encoder, _ := zstd.NewWriter(nil) // there will be no error without options
 		return encoder
-	})
-	zstdDecoderPool = tools.NewPool(func() *zstd.Decoder {
+	}}
+	zstdDecoderPool = sync.Pool{New: func() any {
 		decoder, _ := zstd.NewReader(nil) // there will be no error without options
 		return decoder
-	})
+	}}
 )
 
 // Scan implement database/sql.Scanner
@@ -52,7 +52,7 @@ func Scan(dst proto.Message, src interface{}) error {
 	}
 
 	if bytes.HasPrefix(buf, magicHeaderV2) {
-		decoder := zstdDecoderPool.Get()
+		decoder := zstdDecoderPool.Get().(*zstd.Decoder)
 
 		err := decoder.Reset(bytes.NewBuffer(buf[len(magicHeaderV2):]))
 		if err != nil {
@@ -89,7 +89,7 @@ func Value(src proto.Message) (driver.Value, error) {
 	buffer := bytes.NewBuffer(make([]byte, 0, len(buf)))
 	buffer.Write(magicHeaderV2)
 
-	encoder := zstdEncoderPool.Get()
+	encoder := zstdEncoderPool.Get().(*zstd.Encoder)
 	encoder.Reset(buffer)
 	_, err = encoder.Write(buf)
 	if err != nil {

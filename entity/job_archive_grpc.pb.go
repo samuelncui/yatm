@@ -19,20 +19,24 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ArchiveJobService_Create_FullMethodName      = "/job_archive.ArchiveJobService/Create"
-	ArchiveJobService_WriteMedia_FullMethodName  = "/job_archive.ArchiveJobService/WriteMedia"
-	ArchiveJobService_GetProgress_FullMethodName = "/job_archive.ArchiveJobService/GetProgress"
-	ArchiveJobService_ListFiles_FullMethodName   = "/job_archive.ArchiveJobService/ListFiles"
+	ArchiveJobService_Estimate_FullMethodName    = "/yatm.v1.ArchiveJobService/Estimate"
+	ArchiveJobService_Create_FullMethodName      = "/yatm.v1.ArchiveJobService/Create"
+	ArchiveJobService_GetCreation_FullMethodName = "/yatm.v1.ArchiveJobService/GetCreation"
+	ArchiveJobService_WriteMedia_FullMethodName  = "/yatm.v1.ArchiveJobService/WriteMedia"
+	ArchiveJobService_GetProgress_FullMethodName = "/yatm.v1.ArchiveJobService/GetProgress"
+	ArchiveJobService_ListFiles_FullMethodName   = "/yatm.v1.ArchiveJobService/ListFiles"
 )
 
 // ArchiveJobServiceClient is the client API for ArchiveJobService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ArchiveJobServiceClient interface {
-	Create(ctx context.Context, in *CreateArchiveJobRequest, opts ...grpc.CallOption) (*CreateArchiveJobReply, error)
-	WriteMedia(ctx context.Context, in *WriteArchiveMediaRequest, opts ...grpc.CallOption) (*WriteArchiveMediaReply, error)
-	GetProgress(ctx context.Context, in *GetArchiveJobProgressRequest, opts ...grpc.CallOption) (*GetArchiveJobProgressReply, error)
-	ListFiles(ctx context.Context, in *ListArchiveJobFilesRequest, opts ...grpc.CallOption) (*ListArchiveJobFilesReply, error)
+	Estimate(ctx context.Context, in *EstimateArchiveJobRequest, opts ...grpc.CallOption) (*EstimateArchiveJobResponse, error)
+	Create(ctx context.Context, in *CreateArchiveJobRequest, opts ...grpc.CallOption) (*CreateArchiveJobResponse, error)
+	GetCreation(ctx context.Context, in *GetArchiveJobCreationRequest, opts ...grpc.CallOption) (*GetArchiveJobCreationResponse, error)
+	WriteMedia(ctx context.Context, in *WriteArchiveMediaRequest, opts ...grpc.CallOption) (*WriteArchiveMediaResponse, error)
+	GetProgress(ctx context.Context, in *GetArchiveJobProgressRequest, opts ...grpc.CallOption) (*GetArchiveJobProgressResponse, error)
+	ListFiles(ctx context.Context, in *ListArchiveJobFilesRequest, opts ...grpc.CallOption) (*ListArchiveJobFilesResponse, error)
 }
 
 type archiveJobServiceClient struct {
@@ -43,8 +47,17 @@ func NewArchiveJobServiceClient(cc grpc.ClientConnInterface) ArchiveJobServiceCl
 	return &archiveJobServiceClient{cc}
 }
 
-func (c *archiveJobServiceClient) Create(ctx context.Context, in *CreateArchiveJobRequest, opts ...grpc.CallOption) (*CreateArchiveJobReply, error) {
-	out := new(CreateArchiveJobReply)
+func (c *archiveJobServiceClient) Estimate(ctx context.Context, in *EstimateArchiveJobRequest, opts ...grpc.CallOption) (*EstimateArchiveJobResponse, error) {
+	out := new(EstimateArchiveJobResponse)
+	err := c.cc.Invoke(ctx, ArchiveJobService_Estimate_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *archiveJobServiceClient) Create(ctx context.Context, in *CreateArchiveJobRequest, opts ...grpc.CallOption) (*CreateArchiveJobResponse, error) {
+	out := new(CreateArchiveJobResponse)
 	err := c.cc.Invoke(ctx, ArchiveJobService_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -52,8 +65,17 @@ func (c *archiveJobServiceClient) Create(ctx context.Context, in *CreateArchiveJ
 	return out, nil
 }
 
-func (c *archiveJobServiceClient) WriteMedia(ctx context.Context, in *WriteArchiveMediaRequest, opts ...grpc.CallOption) (*WriteArchiveMediaReply, error) {
-	out := new(WriteArchiveMediaReply)
+func (c *archiveJobServiceClient) GetCreation(ctx context.Context, in *GetArchiveJobCreationRequest, opts ...grpc.CallOption) (*GetArchiveJobCreationResponse, error) {
+	out := new(GetArchiveJobCreationResponse)
+	err := c.cc.Invoke(ctx, ArchiveJobService_GetCreation_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *archiveJobServiceClient) WriteMedia(ctx context.Context, in *WriteArchiveMediaRequest, opts ...grpc.CallOption) (*WriteArchiveMediaResponse, error) {
+	out := new(WriteArchiveMediaResponse)
 	err := c.cc.Invoke(ctx, ArchiveJobService_WriteMedia_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -61,8 +83,8 @@ func (c *archiveJobServiceClient) WriteMedia(ctx context.Context, in *WriteArchi
 	return out, nil
 }
 
-func (c *archiveJobServiceClient) GetProgress(ctx context.Context, in *GetArchiveJobProgressRequest, opts ...grpc.CallOption) (*GetArchiveJobProgressReply, error) {
-	out := new(GetArchiveJobProgressReply)
+func (c *archiveJobServiceClient) GetProgress(ctx context.Context, in *GetArchiveJobProgressRequest, opts ...grpc.CallOption) (*GetArchiveJobProgressResponse, error) {
+	out := new(GetArchiveJobProgressResponse)
 	err := c.cc.Invoke(ctx, ArchiveJobService_GetProgress_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -70,8 +92,8 @@ func (c *archiveJobServiceClient) GetProgress(ctx context.Context, in *GetArchiv
 	return out, nil
 }
 
-func (c *archiveJobServiceClient) ListFiles(ctx context.Context, in *ListArchiveJobFilesRequest, opts ...grpc.CallOption) (*ListArchiveJobFilesReply, error) {
-	out := new(ListArchiveJobFilesReply)
+func (c *archiveJobServiceClient) ListFiles(ctx context.Context, in *ListArchiveJobFilesRequest, opts ...grpc.CallOption) (*ListArchiveJobFilesResponse, error) {
+	out := new(ListArchiveJobFilesResponse)
 	err := c.cc.Invoke(ctx, ArchiveJobService_ListFiles_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -83,10 +105,12 @@ func (c *archiveJobServiceClient) ListFiles(ctx context.Context, in *ListArchive
 // All implementations must embed UnimplementedArchiveJobServiceServer
 // for forward compatibility
 type ArchiveJobServiceServer interface {
-	Create(context.Context, *CreateArchiveJobRequest) (*CreateArchiveJobReply, error)
-	WriteMedia(context.Context, *WriteArchiveMediaRequest) (*WriteArchiveMediaReply, error)
-	GetProgress(context.Context, *GetArchiveJobProgressRequest) (*GetArchiveJobProgressReply, error)
-	ListFiles(context.Context, *ListArchiveJobFilesRequest) (*ListArchiveJobFilesReply, error)
+	Estimate(context.Context, *EstimateArchiveJobRequest) (*EstimateArchiveJobResponse, error)
+	Create(context.Context, *CreateArchiveJobRequest) (*CreateArchiveJobResponse, error)
+	GetCreation(context.Context, *GetArchiveJobCreationRequest) (*GetArchiveJobCreationResponse, error)
+	WriteMedia(context.Context, *WriteArchiveMediaRequest) (*WriteArchiveMediaResponse, error)
+	GetProgress(context.Context, *GetArchiveJobProgressRequest) (*GetArchiveJobProgressResponse, error)
+	ListFiles(context.Context, *ListArchiveJobFilesRequest) (*ListArchiveJobFilesResponse, error)
 	mustEmbedUnimplementedArchiveJobServiceServer()
 }
 
@@ -94,16 +118,22 @@ type ArchiveJobServiceServer interface {
 type UnimplementedArchiveJobServiceServer struct {
 }
 
-func (UnimplementedArchiveJobServiceServer) Create(context.Context, *CreateArchiveJobRequest) (*CreateArchiveJobReply, error) {
+func (UnimplementedArchiveJobServiceServer) Estimate(context.Context, *EstimateArchiveJobRequest) (*EstimateArchiveJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Estimate not implemented")
+}
+func (UnimplementedArchiveJobServiceServer) Create(context.Context, *CreateArchiveJobRequest) (*CreateArchiveJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedArchiveJobServiceServer) WriteMedia(context.Context, *WriteArchiveMediaRequest) (*WriteArchiveMediaReply, error) {
+func (UnimplementedArchiveJobServiceServer) GetCreation(context.Context, *GetArchiveJobCreationRequest) (*GetArchiveJobCreationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCreation not implemented")
+}
+func (UnimplementedArchiveJobServiceServer) WriteMedia(context.Context, *WriteArchiveMediaRequest) (*WriteArchiveMediaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WriteMedia not implemented")
 }
-func (UnimplementedArchiveJobServiceServer) GetProgress(context.Context, *GetArchiveJobProgressRequest) (*GetArchiveJobProgressReply, error) {
+func (UnimplementedArchiveJobServiceServer) GetProgress(context.Context, *GetArchiveJobProgressRequest) (*GetArchiveJobProgressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProgress not implemented")
 }
-func (UnimplementedArchiveJobServiceServer) ListFiles(context.Context, *ListArchiveJobFilesRequest) (*ListArchiveJobFilesReply, error) {
+func (UnimplementedArchiveJobServiceServer) ListFiles(context.Context, *ListArchiveJobFilesRequest) (*ListArchiveJobFilesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFiles not implemented")
 }
 func (UnimplementedArchiveJobServiceServer) mustEmbedUnimplementedArchiveJobServiceServer() {}
@@ -117,6 +147,24 @@ type UnsafeArchiveJobServiceServer interface {
 
 func RegisterArchiveJobServiceServer(s grpc.ServiceRegistrar, srv ArchiveJobServiceServer) {
 	s.RegisterService(&ArchiveJobService_ServiceDesc, srv)
+}
+
+func _ArchiveJobService_Estimate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EstimateArchiveJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArchiveJobServiceServer).Estimate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArchiveJobService_Estimate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArchiveJobServiceServer).Estimate(ctx, req.(*EstimateArchiveJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ArchiveJobService_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -133,6 +181,24 @@ func _ArchiveJobService_Create_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArchiveJobServiceServer).Create(ctx, req.(*CreateArchiveJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArchiveJobService_GetCreation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArchiveJobCreationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArchiveJobServiceServer).GetCreation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArchiveJobService_GetCreation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArchiveJobServiceServer).GetCreation(ctx, req.(*GetArchiveJobCreationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -195,12 +261,20 @@ func _ArchiveJobService_ListFiles_Handler(srv interface{}, ctx context.Context, 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ArchiveJobService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "job_archive.ArchiveJobService",
+	ServiceName: "yatm.v1.ArchiveJobService",
 	HandlerType: (*ArchiveJobServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Estimate",
+			Handler:    _ArchiveJobService_Estimate_Handler,
+		},
+		{
 			MethodName: "Create",
 			Handler:    _ArchiveJobService_Create_Handler,
+		},
+		{
+			MethodName: "GetCreation",
+			Handler:    _ArchiveJobService_GetCreation_Handler,
 		},
 		{
 			MethodName: "WriteMedia",

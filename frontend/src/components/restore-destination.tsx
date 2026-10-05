@@ -1,93 +1,86 @@
+import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, ListItemText, MenuItem, TextField } from "@mui/material";
 import { UnfoldMore } from "@mui/icons-material";
-import { locationCli, settingsCli } from "@/api";
-import { FileOperationKind, FileOperationRef, FileOperationSpec, OnlineBinding, type Location } from "@/entity";
-import { DirectoryPicker } from "@/components/directory-picker";
+import { filesCli, locationCli } from "@/api";
+import { FileOperationKind, FileOperationSpec, type Location } from "@/entity";
+import { locationDirectoryReference } from "@/components/files-browser";
+import { canChooseLocationDirectory, DirectoryPicker, listLocationDirectories } from "@/components/directory-picker";
 import { useActionDialog } from "@/components/action-dialog";
 import { useFileOperations } from "@/components/file-operations";
-import { errorMessage } from "@/tools";
+import { readStored, writeStored, type StorageCodec } from "@/state/storage";
+import { useLocationChoices } from "./use-location-choices";
 
 export type RestoreTarget = { location: Location; path: string };
 const storageKey = "restore:last-target";
-type StoredTarget = { locationID: string; rootPath: string; bindingToken: string; path: string };
+type StoredTarget = { locationID: string; rootPath: string; path: string };
 
-function storedTarget(): StoredTarget | undefined {
-  try {
-    const value = JSON.parse(localStorage.getItem(storageKey) ?? "null") as StoredTarget | null;
+const targetCodec: StorageCodec<StoredTarget> = {
+  encode: (value) => JSON.stringify(value),
+  decode: (raw) => {
+    const value = JSON.parse(raw) as StoredTarget | null;
     if (
       value &&
+      typeof value.locationID === "string" &&
       /^[1-9]\d*$/.test(value.locationID) &&
       typeof value.rootPath === "string" &&
-      typeof value.path === "string" &&
-      typeof value.bindingToken === "string" &&
-      value.bindingToken
+      typeof value.path === "string"
     ) {
       return value;
     }
-  } catch {
-    // An unavailable or obsolete browser preference does not select a target.
-  }
-}
+    throw new Error("Invalid stored restore target");
+  },
+};
 
 export const RestoreDestinationPicker = ({
   value,
   onChange,
   disabled,
+  usePreference = true,
 }: {
   value?: RestoreTarget;
   onChange: (target: RestoreTarget) => void;
   disabled: boolean;
+  usePreference?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
-  const restoreRequest = useRef(0);
+  const restoreRequest = useRef<AbortController | null>(null);
   useEffect(() => {
-    const stored = storedTarget();
+    if (!usePreference || value) return;
+    const stored = readStored("local", storageKey, targetCodec);
     if (!stored) return;
-    const pending = restoreRequest;
-    const request = ++pending.current;
+    const controller = new AbortController();
+    restoreRequest.current = controller;
     void locationCli
-      .get({ id: BigInt(stored.locationID), revision: 0n })
+      .get({ id: BigInt(stored.locationID) }, { abort: controller.signal })
       .response.then(async (reply) => {
-        if (request !== pending.current) return;
+        if (controller.signal.aborted) return;
         const location = reply.location;
-        if (
-          !location?.restoreTarget ||
-          location.binding !== OnlineBinding.CONFIRMED ||
-          location.bindingToken !== stored.bindingToken ||
-          location.rootPath !== stored.rootPath
-        ) {
+        if (!location?.restoreTarget || location.rootPath !== stored.rootPath) {
           setNotice("The last restore target is no longer available. Choose another target.");
           return;
         }
-        await settingsCli.browsePaths({ locationId: location.id, path: stored.path, cursor: "", limit: 1 }).response;
-        if (request === pending.current) onChange({ location, path: stored.path });
+        const page = await listLocationDirectories(location.id, stored.path, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!canChooseLocationDirectory(page.directory, location.id, stored.path)) {
+          setNotice("The last restore target is no longer available. Choose another target.");
+          return;
+        }
+        onChange({ location, path: stored.path });
       })
       .catch(() => {
-        if (request === pending.current) setNotice("Could not load the last restore target. Choose a target.");
+        if (!controller.signal.aborted) setNotice("Could not load the last restore target. Choose a target.");
       });
-    return () => {
-      pending.current++;
-    };
-  }, [onChange]);
+    return () => controller.abort();
+  }, [onChange, usePreference, value]);
 
   const choose = (target: RestoreTarget) => {
     onChange(target);
     setNotice("");
     setOpen(false);
-    try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({
-          locationID: String(target.location.id),
-          rootPath: target.location.rootPath,
-          bindingToken: target.location.bindingToken,
-          path: target.path,
-        }),
-      );
-    } catch {
+    if (!writeStored("local", storageKey, { locationID: String(target.location.id), rootPath: target.location.rootPath, path: target.path }, targetCodec)) {
       setNotice("This browser could not remember the restore target.");
     }
   };
@@ -102,7 +95,7 @@ export const RestoreDestinationPicker = ({
           title={value && [value.location.rootPath, value.path].filter(Boolean).join("/")}
           disabled={disabled}
           onClick={() => {
-            restoreRequest.current++;
+            restoreRequest.current?.abort();
             setOpen(true);
           }}
         >
@@ -124,67 +117,27 @@ const RestoreDestinationDialog = ({
   onChoose: (target: RestoreTarget) => void;
   onClose: () => void;
 }) => {
-  const [locations, setLocations] = useState<Location[]>([]);
+  const { locations, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: true, restoreTarget: true });
   const [location, setLocation] = useState<Location>();
   const [directory, setDirectory] = useState(initial?.path ?? "");
-  const [more, setMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const cursor = useRef(0n);
-  const request = useRef(0);
-  const inFlight = useRef(false);
   const action = useActionDialog();
   const onOperationComplete = useCallback(async () => {}, []);
   const operations = useFileOperations(onOperationComplete);
-  const load = useCallback(async (afterId = 0n) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    const current = ++request.current;
-    setLoading(true);
-    try {
-      const page = await locationCli.list({ afterId, limit: 50, restoreTarget: true, query: "" }).response;
-      if (current !== request.current) return;
-      setLocations((previous) => [...new Map([...(afterId ? previous : []), ...page.locations].map((item) => [item.id, item])).values()]);
-      cursor.current = page.locations.at(-1)?.id ?? afterId;
-      setMore(page.hasMore);
-      setError("");
-    } catch (error) {
-      if (current === request.current) setError(errorMessage(error, "Could not load restore destinations"));
-    } finally {
-      if (current === request.current) {
-        inFlight.current = false;
-        setLoading(false);
-      }
-    }
-  }, []);
   useEffect(() => {
-    const pending = request;
-    const loading = inFlight;
-    let active = true;
-    void load();
+    const controller = new AbortController();
     // A remembered target can be beyond the first page; refresh its eligibility independently.
     if (initial) {
       void locationCli
-        .get({ id: initial.location.id, revision: 0n })
+        .get({ id: initial.location.id }, { abort: controller.signal })
         .response.then(({ location }) => {
-          if (
-            active &&
-            location?.restoreTarget &&
-            location.binding === OnlineBinding.CONFIRMED &&
-            location.bindingToken === initial.location.bindingToken &&
-            location.rootPath === initial.location.rootPath
-          ) {
+          if (!controller.signal.aborted && location?.restoreTarget && location.rootPath === initial.location.rootPath) {
             setLocation((current) => current ?? location);
           }
         })
         .catch(() => {});
     }
-    return () => {
-      active = false;
-      pending.current++;
-      loading.current = false;
-    };
-  }, [initial, load]);
+    return () => controller.abort();
+  }, [initial]);
   const options = location && !locations.some((item) => item.id === location.id) ? [location, ...locations] : locations;
   const createDirectory = (path: string) => {
     if (!location) return;
@@ -193,14 +146,13 @@ const RestoreDestinationDialog = ({
       confirmLabel: "Create",
       input: { label: "Folder name" },
       onConfirm: async (name) => {
-        if (!name || name === "." || name === ".." || /[/\\\0]/.test(name)) throw new Error("Enter one folder name.");
-        const parent = await locationCli.getEntry({ locationId: location.id, path }).response;
-        if (!parent.isDir || !parent.reference || parent.reference.bindingToken !== location.bindingToken)
-          throw new Error("The destination changed. Choose it again.");
+        if (!name || name === "." || name === ".." || /[/\0]/.test(name)) throw new Error("Enter one folder name.");
+        const parent = (await filesCli.get({ reference: locationDirectoryReference(String(location.id), path) }).response).detail?.entry;
+        if (!canChooseLocationDirectory(parent, location.id, path)) throw new Error("The destination changed. Choose it again.");
         await operations.start(
           FileOperationSpec.create({
-            kind: FileOperationKind.MAKE_DIRECTORY,
-            destination: FileOperationRef.create({ target: { oneofKind: "location", location: parent.reference } }),
+            kind: FileOperationKind.MKDIR,
+            destination: parent?.reference,
             name,
           }),
         );
@@ -233,24 +185,28 @@ const RestoreDestinationDialog = ({
               Select a Location
             </MenuItem>
             {options.map((item) => (
-              <MenuItem key={String(item.id)} value={String(item.id)} disabled={item.binding === OnlineBinding.UNCONFIRMED} title={item.rootPath}>
-                <ListItemText primary={item.name} secondary={item.binding === OnlineBinding.UNCONFIRMED ? "Confirm imported path" : undefined} />
+              <MenuItem key={String(item.id)} value={String(item.id)} title={item.rootPath}>
+                <ListItemText primary={item.name} />
               </MenuItem>
             ))}
           </TextField>
-          {more && (
-            <Button disabled={loading} onClick={() => void load(cursor.current)}>
+          {more && !error && (
+            <Button disabled={loading} onClick={loadMore}>
               More locations
             </Button>
           )}
         </div>
         {error && (
-          <Alert severity="error">
+          <Feedback
+            severity="error"
+            action={
+              <Button disabled={loading} onClick={retry}>
+                Retry destinations
+              </Button>
+            }
+          >
             {error}
-            <Button disabled={loading} onClick={() => void load(cursor.current)}>
-              Retry destinations
-            </Button>
-          </Alert>
+          </Feedback>
         )}
         {!loading && !error && !options.length && (
           <Alert severity="info">

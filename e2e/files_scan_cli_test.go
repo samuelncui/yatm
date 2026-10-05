@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,77 +26,94 @@ func TestCLISharedFilesQueriesAndMerges(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(originals, name)), 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(originals, name), []byte("abc"), 0644))
 	}
-	location := new(entity.LocationReply)
+	location := new(entity.CreateLocationResponse)
 	cliResult(t, ctx, connection, location, "location", "create", "--name", "Queries", "--root", originals)
 	id := decimal(location.Location.Id)
-	page := new(entity.ListFilesReply)
-	cliResult(t, ctx, connection, page, "files", "list", "--location-id", id, "--path", "to/package", "--query", "type:file AND size:3", "--limit", "1")
+	page := new(entity.SearchFilesResponse)
+	cliResult(t, ctx, connection, page, "ls", "--location-id", id, "--path", "to/package", "--query", "type:file AND size:3", "--limit", "1", "--long")
 	require.Len(t, page.Entries, 1)
-	require.Nil(t, page.Entries[0].File, "queries must not admit entries")
+	require.Nil(t, page.Entries[0].AssociatedFileId, "queries must not admit entries")
 	first := page.Entries[0].Name
 	require.NotEmpty(t, page.NextCursor)
-	cliResult(t, ctx, connection, page, "files", "list", "--location-id", id, "--path", "to/package", "--query", "type:file AND size:3", "--limit", "1", "--cursor", page.NextCursor)
+	cliResult(t, ctx, connection, page, "ls", "--location-id", id, "--path", "to/package", "--query", "type:file AND size:3", "--limit", "1", "--cursor", page.NextCursor, "--long")
 	require.Len(t, page.Entries, 1)
 	require.NotEqual(t, first, page.Entries[0].Name)
 	require.Empty(t, page.NextCursor)
-	_, err := connection.run(ctx, "files", "list", "--location-id", id, "--query", "unsupported:value")
+	_, err := connection.run(ctx, "ls", "--location-id", id, "--query", "unsupported:value")
 	require.Error(t, err)
 
 	// Annotations use the same query language in logical and physical views.
-	file := new(entity.FilesEntry)
-	cliResult(t, ctx, connection, file, "files", "metadata", "--location-id", id, "--path", "from/package/a.md", "--add-tag", "query-e2e", "--note", "preserve this")
-	fileID := file.File.Id
-	for _, args := range [][]string{{"--location-id", id, "--path", "from/package"}, {"--file-id", decimal(file.File.ParentId)}} {
-		cliResult(t, ctx, connection, page, append([]string{"files", "list", "--query", "tag:query-e2e AND note:preserve"}, args...)...)
-		require.Len(t, page.Entries, 1)
-		require.Equal(t, fileID, page.Entries[0].File.Id)
-	}
+	metadata := new(entity.UpdateFilesMetadataResponse)
+	cliResult(t, ctx, connection, metadata, "files", "metadata", "--location", id+":from/package/a.md", "--add-tag", "query-e2e", "--note", "preserve this")
+	fileID := *metadata.Entries[0].Entry.AssociatedFileId
+	file := new(entity.FilesDetail)
+	cliResult(t, ctx, connection, file, "files", "get", "--file-id", decimal(fileID))
+	require.Equal(t, "preserve this", file.Organization.Note)
+	require.Equal(t, []string{"query-e2e"}, file.Organization.Tags)
 
-	// Open reads use the exact current reference returned by Get, without admitting the entry.
-	entry := new(entity.FilesEntry)
+	// File byte delivery is no longer exposed through HTTP.
+	entry := new(entity.FilesDetail)
 	cliResult(t, ctx, connection, entry, "files", "get", "--location-id", id, "--path", "to/package/b.md")
-	require.Nil(t, entry.File)
+	require.Nil(t, entry.Entry.AssociatedFileId)
 	require.NotNil(t, entry.ContentReference)
 	data, err := protojson.Marshal(entry.ContentReference)
 	require.NoError(t, err)
-	content := readHTTPContent(t, ctx, connection.url+"/files/content?ref="+base64.RawURLEncoding.EncodeToString(data))
-	require.Equal(t, "abc", string(content))
+	requireHTTPNotFound(t, ctx, http.MethodGet, connection.url+"/files/content?ref="+base64.RawURLEncoding.EncodeToString(data))
 
 	// Physical and Library moves share recursive same-name directory merge semantics.
-	fileOperationCLI(t, ctx, connection, "--kind", "move", "--location", id, "--source", "from/package", "--destination", "to")
+	fileOperationCLI(t, ctx, connection, "mv", "--location", id, "--source", "from/package", "--destination", "to")
 	require.NoDirExists(t, filepath.Join(originals, "from/package"))
 	require.FileExists(t, filepath.Join(originals, "to/package/a.md"))
 	require.FileExists(t, filepath.Join(originals, "to/package/b.md"))
+	file = new(entity.FilesDetail)
 	cliResult(t, ctx, connection, file, "files", "get", "--file-id", decimal(fileID))
-	require.Equal(t, "preserve this", file.File.Note)
-	cliResult(t, ctx, connection, page, "files", "list", "--location-id", id, "--path", "to/package", "--query", "tag:query-e2e")
-	require.Len(t, page.Entries, 1)
-	require.Equal(t, fileID, page.Entries[0].File.Id)
+	require.Equal(t, "preserve this", file.Organization.Note)
+	cliResult(t, ctx, connection, file, "files", "get", "--file-id", decimal(fileID))
+	require.Equal(t, "preserve this", file.Organization.Note)
 
 	// Adopt a second file and move both logical branches through the same public operation stream.
-	second := new(entity.FilesEntry)
-	cliResult(t, ctx, connection, second, "files", "metadata", "--location-id", id, "--path", "to/package/b.md", "--add-tag", "query-e2e")
-	_, sourceDirs := fileOrganizationCLI(t, ctx, connection, "file", "mkdir", "0", "Merge source/package")
-	_, targetDirs := fileOrganizationCLI(t, ctx, connection, "file", "mkdir", "0", "Merge target/package")
-	sourceDir := *sourceDirs[len(sourceDirs)-1].FileId
-	targetDir := *targetDirs[len(targetDirs)-1].FileId
-	fileOperationCLI(t, ctx, connection, "--kind", "move", "--library", "--source", decimal(fileID), "--destination", decimal(sourceDir))
-	fileOperationCLI(t, ctx, connection, "--kind", "move", "--library", "--source", decimal(second.File.Id), "--destination", decimal(targetDir))
-	target := new(entity.FilesEntry)
-	cliResult(t, ctx, connection, target, "files", "get", "--file-id", decimal(targetDir))
-	fileOperationCLI(t, ctx, connection, "--kind", "move", "--library", "--source", decimal(sourceDir), "--destination", decimal(target.File.ParentId))
-	cliResult(t, ctx, connection, page, "files", "list", "--file-id", decimal(targetDir))
-	require.Len(t, page.Entries, 2)
+	second := new(entity.UpdateFilesMetadataResponse)
+	cliResult(t, ctx, connection, second, "files", "metadata", "--location", id+":to/package/b.md", "--add-tag", "query-e2e")
+	fileOperationCLI(t, ctx, connection, "mkdir", "--library", "--destination", "0", "--name", "Merge target")
+	fileOperationCLI(t, ctx, connection, "mv", "--library", "--source", decimal(fileID), "--destination", "0")
+	fileOperationCLI(t, ctx, connection, "mv", "--library", "--source", decimal(*second.Entries[0].Entry.AssociatedFileId), "--destination", "0")
 	require.FileExists(t, filepath.Join(originals, "to/package/a.md"))
 	require.FileExists(t, filepath.Join(originals, "to/package/b.md"))
 
 	// Known-only keeps an uncached file unknown; fill-missing then obtains actual content facts.
 	for _, policy := range []string{"known-only", "fill-missing"} {
-		job := new(entity.CreateScanJobReply)
+		job := new(entity.CreateScanJobResponse)
 		cliResult(t, ctx, connection, job, "scan", "create", "--location-id", id, "--path", "to/package/other.txt", "--signature", policy, "--result", "report")
-		require.Equal(t, entity.JobKind_SCAN, job.Job.Kind)
+		require.Equal(t, entity.JobKind_JOB_KIND_SCAN, job.Job.Kind)
 		waitCLIJob(t, ctx, connection, job.Job.Id, false)
-		results := new(entity.ListScanJobEntriesReply)
+
+		// Cache-only and actual reads both expose useful Job logs and frozen attempt timing through the CLI.
+		logs := new(entity.GetJobLogResponse)
+		cliResult(t, ctx, connection, logs, "job", "log", decimal(job.Job.Id))
+		require.Contains(t, string(logs.Logs), "Scan phase started")
+		require.Contains(t, string(logs.Logs), "Scan scope finished")
+		lines := new(entity.ListJobLogLinesResponse)
+		cliResult(t, ctx, connection, lines, "job", "log-lines", decimal(job.Job.Id))
+		require.NotEmpty(t, lines.Lines)
+		require.Contains(t, lines.Lines[len(lines.Lines)-1].Text, "Scan")
+		filtered := new(entity.ListJobLogLinesResponse)
+		cliResult(t, ctx, connection, filtered, "job", "log-lines", decimal(job.Job.Id), "--level", "info", "--query", "Scan phase")
+		require.NotEmpty(t, filtered.Lines)
+		for _, line := range filtered.Lines {
+			require.Equal(t, "info", line.Level)
+			require.Contains(t, line.Text, "Scan phase")
+		}
+		progress := new(entity.GetScanJobProgressResponse)
+		cliResult(t, ctx, connection, progress, "scan", "progress", decimal(job.Job.Id))
+		require.NotNil(t, progress.Progress.ElapsedMs)
+		require.GreaterOrEqual(t, *progress.Progress.ElapsedMs, int64(0))
+		elapsed := *progress.Progress.ElapsedMs
+		cliResult(t, ctx, connection, new(entity.GetScanJobProgressResponse), "job", "progress", decimal(job.Job.Id))
+		cliResult(t, ctx, connection, progress, "scan", "progress", decimal(job.Job.Id))
+		require.Equal(t, elapsed, *progress.Progress.ElapsedMs, "completed elapsed time must remain frozen")
+
+		// Progress reporting must not change the requested content policy.
+		results := new(entity.ListScanJobEntriesResponse)
 		cliResult(t, ctx, connection, results, "scan", "results", decimal(job.Job.Id))
 		require.Len(t, results.Entries, 1)
 		if policy == "known-only" {

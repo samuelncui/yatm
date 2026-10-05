@@ -1,27 +1,26 @@
 syntax = "proto3";
-package file_operation;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 import "file.proto";
 
 // File operations run within the request lifetime, without creating a Job.
-service FileOperationService {
-  rpc Execute(ExecuteFileOperationRequest) returns (stream FileOperationUpdate) {}
-}
-
 enum FileOperationKind {
-  FILE_OPERATION_UNSPECIFIED = 0;
-  MOVE = 1;
-  COPY = 2;
-  MAKE_DIRECTORY = 3;
-  DELETE = 4;
+  FILE_OPERATION_KIND_UNSPECIFIED = 0;
+  FILE_OPERATION_KIND_MOVE = 1;
+  FILE_OPERATION_KIND_MKDIR = 3;
+  FILE_OPERATION_KIND_REMOVE = 4;
+  FILE_OPERATION_KIND_SCAN = 5;
+  FILE_OPERATION_KIND_ARCHIVE = 6;
+  FILE_OPERATION_KIND_UPDATE_METADATA = 7;
+  FILE_OPERATION_KIND_ADMIT = 8;
 }
 
 message FileOperationRef {
   oneof target {
     // Library root (0) is valid only as a destination.
     int64 file_id = 1;
-    file.LocationEntryRef location = 2;
+    LocationEntryRef location = 2;
   }
 }
 message FileOperationSpec {
@@ -33,40 +32,37 @@ message FileOperationSpec {
   // Library accepts logical relative paths; Location requires one leaf name.
   string name = 4;
 }
-message ExecuteFileOperationRequest {
-  FileOperationSpec spec = 1;
-  // Required for permanent deletion, independently of browser confirmation preferences.
-  bool confirm_delete = 2;
-}
-
 enum FileOperationOutcome {
-  UNPROCESSED = 0;
-  SUCCEEDED = 1;
-  FAILED = 2;
+  FILE_OPERATION_OUTCOME_UNSPECIFIED = 0;
+  FILE_OPERATION_OUTCOME_UNPROCESSED = 1;
+  FILE_OPERATION_OUTCOME_SUCCEEDED = 2;
+  FILE_OPERATION_OUTCOME_FAILED = 3;
   // Physical work succeeded, but Library association publication failed.
-  PUBLICATION_PENDING = 3;
+  FILE_OPERATION_OUTCOME_PUBLICATION_PENDING = 4;
 }
 message FileOperationEntry {
   int64 id = 1;
   string source_path = 2;
   string target_path = 3;
-  bool is_dir = 4;
-  int64 size = 5;
+  bool directory = 4;
+  int64 size_bytes = 5;
   FileOperationOutcome outcome = 6;
   string error = 7;
   optional int64 file_id = 8;
 }
 message FileOperationSummary {
-  int64 total_items = 1;
+  int64 total_item_count = 1;
   int64 total_bytes = 2;
-  int64 succeeded = 3;
-  int64 failed = 4;
-  int64 unprocessed = 5;
-  int64 publication_pending = 6;
+  int64 succeeded_count = 3;
+  int64 failed_count = 4;
+  int64 unprocessed_count = 5;
+  int64 publication_pending_count = 6;
   // Final response; inspect counts to distinguish success from partial failure.
   bool completed = 7;
+  // The request only reported plans: entry paths are the resolved intent and nothing changed.
+  bool dryrun = 8;
 }
-message FileOperationUpdate {
+message FileOperationResult {
   FileOperationEntry entry = 1;
   FileOperationSummary summary = 2;
 }

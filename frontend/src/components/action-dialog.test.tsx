@@ -5,18 +5,20 @@ import { Checkbox, FormControlLabel } from "@mui/material";
 import { ActionDialog, useActionDialog } from "./action-dialog";
 
 describe("Application action dialog", () => {
-  it("cancels without running the action and supports operation-specific options", async () => {
+  it.each([undefined, "Keep editing"])("focuses cancellation and supports operation-specific options with cancel label %s", async (cancelLabel) => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
     render(
-      <ActionDialog title="Check integrity" confirmLabel="Create check" onConfirm={onConfirm} onClose={onClose}>
+      <ActionDialog title="Check integrity" confirmLabel="Create check" cancelLabel={cancelLabel} onConfirm={onConfirm} onClose={onClose}>
         <FormControlLabel control={<Checkbox />} label="An optional setting" />
       </ActionDialog>,
     );
     expect(screen.getByRole("dialog", { name: "Check integrity" })).toBeInTheDocument();
+    const cancel = screen.getByRole("button", { name: cancelLabel ?? "Cancel" });
+    await waitFor(() => expect(cancel).toHaveFocus());
     await userEvent.click(screen.getByRole("checkbox"));
     expect(onConfirm).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(cancel);
     expect(onClose).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
   });
@@ -27,12 +29,31 @@ describe("Application action dialog", () => {
     render(<ActionDialog title="Rename" confirmLabel="Save" input={{ label: "Name", defaultValue: "old.txt" }} onConfirm={onConfirm} onClose={onClose} />);
     const input = screen.getByRole("textbox", { name: "Name" });
     expect(input).toHaveValue("old.txt");
-    fireEvent.change(input, { target: { value: "  " } });
+    fireEvent.change(input, { target: { value: "" } });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.change(input, { target: { value: " new.txt " } });
     await userEvent.type(input, "{Enter}");
     expect(onConfirm).toHaveBeenCalledWith(" new.txt ");
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it.each(["  ", "one\\two", "one\ntwo", "one\ttwo"])("preserves a literal filename %j when submitted", async (name) => {
+    const onConfirm = vi.fn();
+    render(<ActionDialog title="Rename" confirmLabel="Save" input={{ label: "Name", defaultValue: name }} onConfirm={onConfirm} onClose={vi.fn()} />);
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(name);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onConfirm).toHaveBeenCalledWith(name);
+  });
+
+  it("allows Shift+Enter in a filename without submitting", async () => {
+    const onConfirm = vi.fn();
+    render(<ActionDialog title="New folder" confirmLabel="Create" input={{ label: "Name" }} onConfirm={onConfirm} onClose={vi.fn()} />);
+    const input = screen.getByRole("textbox", { name: "Name" });
+    await userEvent.type(input, "one{Shift>}{Enter}{/Shift}two");
+    expect(input).toHaveValue("one\ntwo");
+    expect(onConfirm).not.toHaveBeenCalled();
+    await userEvent.keyboard("{Enter}");
+    expect(onConfirm).toHaveBeenCalledWith("one\ntwo");
   });
 
   it("prevents duplicate submission and dismissal while pending, then retains errors for retry", async () => {
@@ -54,6 +75,9 @@ describe("Application action dialog", () => {
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    const backdrop = screen.getByRole("dialog").parentElement!;
+    fireEvent.mouseDown(backdrop);
+    fireEvent.click(backdrop);
     expect(onClose).not.toHaveBeenCalled();
     await act(async () => reject(new Error("Media is busy")));
     expect(screen.getByRole("alert")).toHaveTextContent("Media is busy");

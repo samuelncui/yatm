@@ -1,16 +1,12 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Alert, Autocomplete, Box, Button, CircularProgress, Paper, type PaperProps, Stack, TextField, Typography } from "@mui/material";
-import { cli, locationCli } from "@/api";
-import { Location, Media, MediaKind, OnlineBinding } from "@/entity";
+import { Feedback } from "@/components/feedback";
+import { useEffect, useRef, useState } from "react";
+import { Autocomplete, Box, Button, CircularProgress, Stack, TextField, Typography } from "@mui/material";
+import { mediaCli, locationCli } from "@/api";
+import { Location, Media, MediaKind } from "@/entity";
 import { errorMessage } from "@/tools";
+import { SearchPaper, type SearchPaperProps } from "./search-paper";
 
 const pageSize = 30;
-const SearchPaper = ({ children, footer, ...props }: PaperProps & { footer?: ReactNode }) => (
-  <Paper {...props}>
-    {children}
-    {footer}
-  </Paper>
-);
 
 type SelectionProps<T> = { value: T | null; onChange: (item: T | null) => void; disabled?: boolean };
 type SearchProps<T> = SelectionProps<T> & {
@@ -18,21 +14,10 @@ type SearchProps<T> = SelectionProps<T> & {
   placeholder: string;
   name: (item: T) => string;
   detail: (item: T) => string;
-  unavailable?: (item: T) => boolean;
   search: (query: string, afterId: bigint, signal: AbortSignal) => Promise<{ items: T[]; hasMore: boolean }>;
 };
 
-const CatalogSearchSelect = <T extends { id: bigint }>({
-  value,
-  onChange,
-  disabled = false,
-  label,
-  placeholder,
-  name,
-  detail,
-  unavailable,
-  search,
-}: SearchProps<T>) => {
+const CatalogSearchSelect = <T extends { id: bigint }>({ value, onChange, disabled = false, label, placeholder, name, detail, search }: SearchProps<T>) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<T[]>([]);
@@ -78,9 +63,9 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
   }, [open, disabled, query, afterId, retry, search, label]);
 
   const footer = (
-    <Stack spacing={1} sx={{ p: 1, borderTop: 1, borderColor: "divider" }}>
+    <>
       {error && (
-        <Alert
+        <Feedback
           severity="error"
           action={
             <Button
@@ -94,7 +79,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
           }
         >
           {error}
-        </Alert>
+        </Feedback>
       )}
       {!error && (cursors.length > 1 || hasMore) && (
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
@@ -119,9 +104,9 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
           </Button>
         </Stack>
       )}
-    </Stack>
+    </>
   );
-  const paperProps: PaperProps & { footer?: ReactNode } = {
+  const paperProps: SearchPaperProps = {
     ref: paper,
     footer: error || cursors.length > 1 || hasMore ? footer : undefined,
     onMouseDown: (event) => event.preventDefault(),
@@ -154,7 +139,6 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
       filterOptions={(values) => values}
       getOptionLabel={optionLabel}
       getOptionKey={(item) => String(item.id)}
-      getOptionDisabled={unavailable}
       isOptionEqualToValue={(option, selected) => option.id === selected.id}
       onOpen={() => setOpen(true)}
       onClose={(event, reason) => {
@@ -218,7 +202,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
 };
 
 const searchMedia = async (query: string, afterId: bigint, signal: AbortSignal) => {
-  const reply = await cli.mediaList(
+  const reply = await mediaCli.list(
     { param: { oneofKind: "list", list: { kinds: [MediaKind.VOLUME, MediaKind.TAPE], query, afterId, limit: BigInt(pageSize) } } },
     { abort: signal },
   ).response;
@@ -250,7 +234,6 @@ export const LocationSearchSelect = (props: SelectionProps<Location>) => (
     placeholder="Search by name or path"
     search={searchLocations}
     name={(item) => item.name}
-    detail={(item) => `${item.rootPath}${item.binding === OnlineBinding.UNCONFIRMED ? " · Confirm imported path" : ""}`}
-    unavailable={(item) => item.binding !== OnlineBinding.CONFIRMED}
+    detail={(item) => item.rootPath}
   />
 );

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,12 +12,12 @@ import (
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
-	"github.com/samuelncui/yatm/config"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/buildinfo"
+	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/dataformat"
-	"github.com/samuelncui/yatm/library"
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,8 +36,15 @@ func main() {
 		return
 	}
 
+	// Complete resource cleanup before reporting a command failure.
+	flag.Parse()
+	if err := exportLibrary(context.Background(), *configOpt, *typesOpt, *outputOpt); err != nil {
+		panic(err)
+	}
+}
+
+func exportLibrary(ctx context.Context, configPath, typeNames, outputPath string) (returnErr error) {
 	// Configure command logging before opening external resources.
-	ctx := context.Background()
 	logWriter, err := rotatelogs.New(
 		"./run.log.%Y%m%d%H%M",
 		rotatelogs.WithLinkName("./run.log"),
@@ -44,8 +52,13 @@ func main() {
 		rotatelogs.WithRotationTime(time.Duration(604800)*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	defer func() {
+		if err := logWriter.Close(); err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("close export log failed, %w", err))
+		}
+	}()
 	logrus.AddHook(lfshook.NewHook(
 		lfshook.WriterMap{
 			logrus.InfoLevel:  logWriter,
@@ -55,57 +68,73 @@ func main() {
 	))
 
 	// Open the configured Library database.
-	flag.Parse()
-	conf := config.GetConfig(*configOpt)
+	conf, err := config.Load(configPath)
+	if err != nil {
+		return err
+	}
+	logrus.Info("configuration loaded")
 	db, err := resource.NewDBConn(conf.Database.Dialect, conf.Database.DSN)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	defer func() {
+		sqlDB, err := db.DB()
+		if err == nil {
+			err = sqlDB.Close()
+		}
+		if err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("close export database failed, %w", err))
+		}
+	}()
 	empty, err := dataformat.CheckCatalog(db)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	if !empty {
 		if err := dataformat.CheckBundles(db, conf.Paths.Work); err != nil {
-			panic(err)
+			return err
 		}
 	}
 
 	// Initialize only the validated release format before streaming the export.
 	lib := library.New(db)
 	if err := lib.AutoMigrate(); err != nil {
-		panic(err)
+		return err
 	}
 
 	// Parse and validate the selected Library entity types.
-	parts := strings.Split(*typesOpt, ",")
-	toEnum := entity.ToEnum(entity.LibraryEntityType_value, entity.LibraryEntityType_NONE)
+	parts := strings.Split(typeNames, ",")
+	toEnum := entity.ToEnum(entity.LibraryEntityType_value, entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_UNSPECIFIED)
 	types := make([]entity.LibraryEntityType, 0, len(parts))
 	for _, part := range parts {
-		e := toEnum(strings.ToUpper(strings.TrimSpace(part)))
-		if e == entity.LibraryEntityType_NONE {
+		e := toEnum("LIBRARY_ENTITY_TYPE_" + strings.ToUpper(strings.TrimSpace(part)))
+		if e == entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_UNSPECIFIED {
 			continue
 		}
-
 		types = append(types, e)
 	}
 	if len(types) == 0 {
-		panic(fmt.Errorf("no export types found; use the types option to specify at least one type"))
+		return fmt.Errorf("no export types found; use the types option to specify at least one type")
 	}
 
 	// Select stdout or an explicitly requested output file without buffering the export.
 	var output io.Writer = os.Stdout
-	if *outputOpt != "stdout" {
-		file, err := os.Create(*outputOpt)
+	if outputPath != "stdout" {
+		file, err := os.Create(outputPath)
 		if err != nil {
-			panic(fmt.Errorf("open output file failed, path=%q, %w", *outputOpt, err))
+			return fmt.Errorf("open output file failed, path=%q, %w", outputPath, err)
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				returnErr = errors.Join(returnErr, fmt.Errorf("close export output failed, path=%q, %w", outputPath, err))
+			}
+		}()
 		output = file
 	}
 
 	// Stream the JSON Lines snapshot to its destination.
 	if err := lib.Export(ctx, output, types); err != nil {
-		panic(fmt.Errorf("export library failed, %w", err))
+		return fmt.Errorf("export library failed, %w", err)
 	}
+	return nil
 }

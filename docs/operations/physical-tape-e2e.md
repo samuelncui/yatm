@@ -2,7 +2,7 @@
 
 Status: Hardware release gate. See [test environment safety](testing.md); this guide does not authorize a physical run.
 
-This suite is the release gate for behavior that the LTFS `file` backend cannot prove: drive discovery, hardware encryption, physical partition placement, tape motion, unload and reload, reads after a process restart, and a real physical full-Media boundary. Run the automated LTFS file-backend E2E first; it remains the primary coverage for injected failures, deterministic capacity exhaustion, two-Media completion, backup compatibility, and cleanup.
+This suite is the last acceptance gate in the [Release SOP](testing.md#release-sop), after source, package and nonphysical acceptance. It covers behavior that the LTFS `file` backend cannot prove: drive discovery, hardware encryption, physical partition placement, tape motion, unload and reload, reads after a process restart, and a real physical full-Media boundary. Run the automated LTFS file-backend E2E first; it remains the primary coverage for injected failures, deterministic capacity exhaustion, two-Media completion, backup compatibility, and cleanup.
 
 ## Safety and Preconditions
 
@@ -22,7 +22,7 @@ Keep the host on stable power and reserve the drive for the complete run. Do not
 
 ## Automated Stages
 
-Build `./e2e` as a Linux test binary and place it, `yatm-lto-info`, and isolated copies of the configured Tape scripts under the test root. Set the following environment variables for every stage:
+Build `./e2e` as a Linux test binary and place it, `yatm-lto-info`, an isolated copy of `e2e/testdata/generate-physical-eom.sh` at `scripts/generate-physical-eom.sh`, and isolated copies of the configured Tape scripts under the test root. Set the following environment variables for every stage:
 
 ```bash
 export YATM_E2E_PHYSICAL_ROOT=/path/to/isolated-test-root
@@ -119,18 +119,18 @@ Expected results:
 
 1. Reload the same cartridge.
 2. Create a second Archive Job for `append` and wait until it is ready for Media.
-3. Attempt its Archive write using a different requested barcode.
+3. In the local/CI fault harness, bypass the CLI barcode preflight and send the typed Archive write request with a different requested barcode to exercise the runner's independent identity check.
 
 Expected results:
 
-- The Job log contains an exact mismatch with both requested and device barcodes. A MAM-unavailable result is not a pass; the automated case may retry it once and must then observe the mismatch.
+- The Job log contains an exact mismatch with both requested and device barcodes. A MAM-unavailable result is not a pass; the automated case may repeat that Media operation once and must then observe the mismatch.
 - YATM rejects the operation before creating the requested Tape work directory, configuring encryption, formatting, mounting, or copying.
-- The Archive Job remains retryable and the existing Tape Media and Positions are unchanged.
+- The admitted Archive Media operation fails and returns the Job to its pre-Media `READY` state with its failure reason/timing and no live phase, retaining the prepared manifest for another explicit load-Media operation. Existing Tape Media and Positions are unchanged. An ordinary CLI barcode refusal happens before attempt admission and leaves the existing Job state unchanged.
 - Reloading and inspecting the cartridge still returns the original barcode.
 
 ### PT-05: Append to the Existing Tape
 
-1. Retry the pending Archive Job from PT-04 against the same cartridge with mode `APPEND` and the original barcode.
+1. Start the pending Archive Job's next Media attempt from PT-04 against the same cartridge with mode `APPEND` and the original barcode.
 2. Wait for completion and eject.
 
 Expected results:
@@ -173,7 +173,7 @@ Expected results:
 
 Expected results:
 
-- A conservative pre-write boundary or device write/close no-space error is normalized to the same portable `no_space` result. The Archive Job returns to `PENDING` instead of becoming failed or completed.
+- A conservative pre-write boundary or device write/close no-space error is normalized to the same portable `no_space` result. The failed Archive Media operation returns the Job to its pre-Media `READY` state with its failure reason/timing and no live phase. Its prepared manifest and successfully submitted prefix remain for another explicit load-Media operation; pending items remain unprocessed.
 - After the usable final Index and Library commit are durable, the Job log contains `event=archive_media_checkpoint`, `reason=no_space`, `media_id`, `files`, `bytes`, and the complete diagnostic `error` field. Test control flow reads these stable fields rather than human-readable error text.
 - At least one item is `SUBMITTED` and at least one item is `PENDING`. Submitted items form one continuous prefix of the deterministic Archive order.
 - Every successfully finalized prefix item has the first Tape's Media ID and one matching Library Position. No pending item has a Media ID or Library Position, including the first item rejected at the capacity boundary and every later prefetched item.

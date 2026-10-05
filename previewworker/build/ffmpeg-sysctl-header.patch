@@ -1,0 +1,9 @@
+--- a/configure
++++ b/configure
+@@ -6721,5 +6721,5 @@
+ check_func  strerror_r
+ check_func  sysconf
+-check_func  sysctl
++check_func_headers sys/sysctl.h sysctl
+ check_func  tempnam
+ check_func  usleep

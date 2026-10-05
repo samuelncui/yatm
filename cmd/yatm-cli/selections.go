@@ -18,12 +18,6 @@ type selectionOptions struct {
 	Locations []string `long:"location" value-name:"ID:PATH" description:"Location ID and source-relative file or directory path; repeatable"`
 }
 
-type filePageOptions struct {
-	scopeOptions
-	Cursor string `long:"cursor" description:"Stable directory page cursor"`
-	Limit  int32  `long:"limit" default:"100" description:"Maximum direct children, 1 to 500"`
-}
-
 func (o scopeOptions) fileScope() entity.FileScope {
 	// CLI defaults are explicit so scripts do not depend on a browser preference.
 	switch o.Scope {
@@ -54,4 +48,15 @@ func (o selectionOptions) selections() ([]*entity.FileSelection, error) {
 		result = append(result, &entity.FileSelection{Target: &entity.FileSelection_Location{Location: &entity.LocationSelection{LocationId: id, Path: path}}, Scope: entity.FileScope_FILE_SCOPE_ALL})
 	}
 	return result, nil
+}
+
+func locationSelections(id int64, paths []string) []*entity.FileSelection {
+	if len(paths) == 0 {
+		paths = []string{""}
+	}
+	selections := make([]*entity.FileSelection, 0, len(paths))
+	for _, path := range paths {
+		selections = append(selections, &entity.FileSelection{Target: &entity.FileSelection_Location{Location: &entity.LocationSelection{LocationId: id, Path: path}}, Scope: entity.FileScope_FILE_SCOPE_ALL})
+	}
+	return selections
 }

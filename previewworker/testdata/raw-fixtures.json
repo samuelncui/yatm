@@ -1,0 +1,101 @@
+[
+  {
+    "camera": "Sony ILCE-7S",
+    "mode": "14bit 14bit compressed (3:2)",
+    "path": "sample.arw",
+    "sha256": "a35ebb2fbec929daa5beb20d1ce5c15a8aac7b1a7a231455387f3df8a7442e07",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/1582/nice/Sony%20-%20ILCE-7S%20-%2014bit%2014bit%20compressed%20%283:2%29.ARW"
+  },
+  {
+    "camera": "Canon EOS 40D",
+    "mode": "sRAW2 (sRAW) (3:2)",
+    "path": "sample.cr2",
+    "sha256": "ba644e7dd2abe74eca260e67f0206ff113bf0f62e710f8130611e964d6be5bf1",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/2102/nice/Canon%20-%20EOS%2040D%20-%20sRAW2%20%28sRAW%29%20%283:2%29.CR2"
+  },
+  {
+    "camera": "Canon EOS R6",
+    "mode": "3:2",
+    "path": "sample.cr3",
+    "sha256": "74abb0a113d075ad9887a058082f40dd2a938c4813a08474d82356f11a027778",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/4659/nice/Canon%20-%20EOS%20R6%20-%203:2.CR3"
+  },
+  {
+    "camera": "Blackmagic Micro Cinema Camera",
+    "mode": "12bit (16:9)",
+    "path": "sample.dng",
+    "sha256": "7d359fe7cecd38ce6f791d945ab973735fd161740bac3b5843d92fb556ef7047",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/7316/nice/Blackmagic%20-%20Micro%20Cinema%20Camera%20-%2012bit%20%2816:9%29.dng"
+  },
+  {
+    "camera": "Nikon D1H",
+    "mode": "12bit 12bit uncompressed (3:2)",
+    "path": "sample.nef",
+    "sha256": "d110b80a8b10a3a67b5cd1c15ef33f1a6397557b73d5d3f4e565739f0c072571",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/5364/nice/Nikon%20-%20D1H%20-%2012bit%2012bit%20uncompressed%20%283:2%29.NEF"
+  },
+  {
+    "camera": "Nikon COOLPIX P1000",
+    "mode": "12bit 12bit uncompressed (4:3)",
+    "path": "sample.nrw",
+    "sha256": "1d9470ee083f914e51aa0be782161b432f27f87dbef551a59ec435f5dbc289dd",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/3381/nice/Nikon%20-%20COOLPIX%20P1000%20-%2012bit%2012bit%20uncompressed%20%284:3%29.NRW"
+  },
+  {
+    "camera": "Olympus E-10",
+    "mode": "16bit (4:3)",
+    "path": "sample.orf",
+    "sha256": "2bfdade72439017a60a47aad1e5bbcb1aca36f2be7a21e94a4257a678fb6f4da",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/5424/nice/Olympus%20-%20E-10%20-%2016bit%20%284:3%29.ORF"
+  },
+  {
+    "camera": "Pentax K10D",
+    "mode": "12bit 12bit compressed (3:2)",
+    "path": "sample.pef",
+    "sha256": "e35ae4154a468be3154f5f462e884ba5941f010d3e8f23d347fbec14809f44d3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/2239/nice/Pentax%20-%20K10D%20-%2012bit%2012bit%20compressed%20%283:2%29.PEF"
+  },
+  {
+    "camera": "Fujifilm FinePix S5000",
+    "mode": "4:3",
+    "path": "sample.raf",
+    "sha256": "dabd5e74521a6980156be9fd4b88d0c37b0fe4d0e0e6f5c12db8cffff1b76297",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/2726/nice/Fujifilm%20-%20FinePix%20S5000%20-%204:3.RAF"
+  },
+  {
+    "camera": "Panasonic DMC-LX7",
+    "mode": "1:1",
+    "path": "sample.rw2",
+    "sha256": "d142a23aca836053ed53e9ce3cb3ed2d434541d734d71a94a6eefadcd08bd31b",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/7008/nice/Panasonic%20-%20DMC-LX7%20-%201:1.RW2"
+  },
+  {
+    "camera": "Samsung NX500",
+    "mode": "12bit 12bit normal compression (3:2)",
+    "path": "sample.srw",
+    "sha256": "156e43118811bcecb6fcc600b5f41ee1773c4f00b6a5b2dd72e177e35f6596ab",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "url": "https://raw.pixls.us/getfile.php/3668/nice/Samsung%20-%20NX500%20-%2012bit%2012bit%20normal%20compression%20%283:2%29.SRW"
+  }
+]

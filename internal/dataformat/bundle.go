@@ -1,13 +1,14 @@
 package dataformat
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -20,14 +21,14 @@ const (
 var ErrBundleMissing = errors.New("job bundle is missing")
 
 type Bundle struct {
-	Format        string    `json:"format"`
-	FormatVersion int       `json:"format_version"`
-	ID            int64     `json:"id"`
-	CreatedAt     time.Time `json:"created_at"`
+	Format        string `json:"format"`
+	FormatVersion int    `json:"format_version"`
+	ID            int64  `json:"id"`
+	CreatedAtNS   int64  `json:"created_at_ns,string"`
 }
 
-func NewBundle(id int64, createdAt time.Time) Bundle {
-	return Bundle{Format: BundleFormat, FormatVersion: BundleRevision, ID: id, CreatedAt: createdAt}
+func NewBundle(id, createdAtNS int64) Bundle {
+	return Bundle{Format: BundleFormat, FormatVersion: BundleRevision, ID: id, CreatedAtNS: createdAtNS}
 }
 
 // CheckBundle validates the published family before any Job database writes.
@@ -46,11 +47,24 @@ func CheckBundle(dir string, id int64) error {
 		return fmt.Errorf("read Job bundle metadata failed, id=%d, %w", id, err)
 	}
 
-	// The revision alone cannot identify an unpublished Draft artifact.
-	var metadata Bundle
-	if err := json.Unmarshal(data, &metadata); err != nil {
+	// Decode the required timestamp shape and consume one complete metadata document.
+	var metadata struct {
+		Bundle
+		CreatedAtNS *int64 `json:"created_at_ns,string"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&metadata); err != nil {
 		return fmt.Errorf("decode Job bundle metadata failed, id=%d, %w", id, err)
 	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("invalid Job bundle metadata trailing data, id=%d", id)
+	}
+	if metadata.CreatedAtNS == nil {
+		return fmt.Errorf("unsupported Job bundle format, id=%d: created_at_ns is required", id)
+	}
+
+	// Validate bundle identity against the current published format.
 	if metadata.Format != BundleFormat || metadata.FormatVersion != BundleRevision || metadata.ID != id {
 		return fmt.Errorf("unsupported Job bundle format, id=%d format=%q revision=%d", id, metadata.Format, metadata.FormatVersion)
 	}
@@ -66,7 +80,7 @@ func CheckBundles(db *gorm.DB, workRoot string) error {
 	for {
 		// Bound startup/preflight reads without loading any execution manifests.
 		var ids []int64
-		if err := db.Table("jobs").Where("id > ? AND deleted_at = 0", after).Order("id").Limit(100).Pluck("id", &ids).Error; err != nil {
+		if err := db.Table("jobs").Where("id > ? AND deleted_at_ns = 0", after).Order("id").Limit(100).Pluck("id", &ids).Error; err != nil {
 			return fmt.Errorf("list Job bundle identities failed, %w", err)
 		}
 		if len(ids) == 0 {

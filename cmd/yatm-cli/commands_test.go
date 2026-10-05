@@ -25,95 +25,85 @@ func TestHelpUsesExecutableName(t *testing.T) {
 }
 
 type stubService struct {
-	entity.UnimplementedServiceServer
-	fileGet          func(context.Context, *entity.FileGetRequest) (*entity.FileGetReply, error)
-	mediaList        func(context.Context, *entity.MediaListRequest) (*entity.MediaListReply, error)
-	mediaInspect     func(context.Context, *entity.MediaInspectRequest) (*entity.MediaInspectReply, error)
-	mediaDelete      func(context.Context, *entity.MediaDeleteRequest) (*entity.MediaDeleteReply, error)
-	volumeInitialize func(context.Context, *entity.VolumeInitializeRequest) (*entity.VolumeInitializeReply, error)
-	volumeRegister   func(context.Context, *entity.VolumeRegisterRequest) (*entity.VolumeRegisterReply, error)
-	deviceList       func(context.Context, *entity.DeviceListRequest) (*entity.DeviceListReply, error)
-	libraryTrim      func(context.Context, *entity.LibraryTrimRequest) (*entity.LibraryTrimReply, error)
+	entity.UnimplementedMediaServiceServer
+	entity.UnimplementedLibraryServiceServer
+	mediaList        func(context.Context, *entity.ListMediaRequest) (*entity.ListMediaResponse, error)
+	mediaInspect     func(context.Context, *entity.InspectMediaRequest) (*entity.InspectMediaResponse, error)
+	mediaDelete      func(context.Context, *entity.DeleteMediaRequest) (*entity.DeleteMediaResponse, error)
+	volumeInitialize func(context.Context, *entity.InitializeVolumeRequest) (*entity.InitializeVolumeResponse, error)
+	volumeRegister   func(context.Context, *entity.RegisterVolumeRequest) (*entity.RegisterVolumeResponse, error)
+	deviceList       func(context.Context, *entity.ListDevicesRequest) (*entity.ListDevicesResponse, error)
+	libraryTrim      func(context.Context, *entity.TrimLibraryRequest) (*entity.TrimLibraryResponse, error)
 }
 
-func (s *stubService) FileGet(
+func (s *stubService) List(
 	ctx context.Context,
-	request *entity.FileGetRequest,
-) (*entity.FileGetReply, error) {
-	if s.fileGet != nil {
-		return s.fileGet(ctx, request)
-	}
-	return &entity.FileGetReply{}, nil
-}
-
-func (s *stubService) MediaList(
-	ctx context.Context,
-	request *entity.MediaListRequest,
-) (*entity.MediaListReply, error) {
+	request *entity.ListMediaRequest,
+) (*entity.ListMediaResponse, error) {
 	if s.mediaList != nil {
 		return s.mediaList(ctx, request)
 	}
-	return &entity.MediaListReply{}, nil
+	return &entity.ListMediaResponse{}, nil
 }
 
-func (s *stubService) MediaInspect(
+func (s *stubService) Inspect(
 	ctx context.Context,
-	request *entity.MediaInspectRequest,
-) (*entity.MediaInspectReply, error) {
+	request *entity.InspectMediaRequest,
+) (*entity.InspectMediaResponse, error) {
 	if s.mediaInspect != nil {
 		return s.mediaInspect(ctx, request)
 	}
-	return &entity.MediaInspectReply{}, nil
+	return &entity.InspectMediaResponse{}, nil
 }
 
-func (s *stubService) MediaDelete(
+func (s *stubService) Delete(
 	ctx context.Context,
-	request *entity.MediaDeleteRequest,
-) (*entity.MediaDeleteReply, error) {
+	request *entity.DeleteMediaRequest,
+) (*entity.DeleteMediaResponse, error) {
 	if s.mediaDelete != nil {
 		return s.mediaDelete(ctx, request)
 	}
-	return &entity.MediaDeleteReply{}, nil
+	return &entity.DeleteMediaResponse{}, nil
 }
 
-func (s *stubService) VolumeInitialize(
+func (s *stubService) InitializeVolume(
 	ctx context.Context,
-	request *entity.VolumeInitializeRequest,
-) (*entity.VolumeInitializeReply, error) {
+	request *entity.InitializeVolumeRequest,
+) (*entity.InitializeVolumeResponse, error) {
 	if s.volumeInitialize != nil {
 		return s.volumeInitialize(ctx, request)
 	}
-	return &entity.VolumeInitializeReply{}, nil
+	return &entity.InitializeVolumeResponse{}, nil
 }
 
-func (s *stubService) VolumeRegister(
+func (s *stubService) RegisterVolume(
 	ctx context.Context,
-	request *entity.VolumeRegisterRequest,
-) (*entity.VolumeRegisterReply, error) {
+	request *entity.RegisterVolumeRequest,
+) (*entity.RegisterVolumeResponse, error) {
 	if s.volumeRegister != nil {
 		return s.volumeRegister(ctx, request)
 	}
-	return &entity.VolumeRegisterReply{}, nil
+	return &entity.RegisterVolumeResponse{}, nil
 }
 
-func (s *stubService) DeviceList(
+func (s *stubService) ListDevices(
 	ctx context.Context,
-	request *entity.DeviceListRequest,
-) (*entity.DeviceListReply, error) {
+	request *entity.ListDevicesRequest,
+) (*entity.ListDevicesResponse, error) {
 	if s.deviceList != nil {
 		return s.deviceList(ctx, request)
 	}
-	return &entity.DeviceListReply{}, nil
+	return &entity.ListDevicesResponse{}, nil
 }
 
-func (s *stubService) LibraryTrim(
+func (s *stubService) Trim(
 	ctx context.Context,
-	request *entity.LibraryTrimRequest,
-) (*entity.LibraryTrimReply, error) {
+	request *entity.TrimLibraryRequest,
+) (*entity.TrimLibraryResponse, error) {
 	if s.libraryTrim != nil {
 		return s.libraryTrim(ctx, request)
 	}
-	return &entity.LibraryTrimReply{}, nil
+	return &entity.TrimLibraryResponse{}, nil
 }
 
 func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
@@ -123,9 +113,9 @@ func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
 		entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{create: func(
 			_ context.Context,
 			request *entity.CreateArchiveJobRequest,
-		) (*entity.CreateArchiveJobReply, error) {
+		) (*entity.CreateArchiveJobResponse, error) {
 			created = proto.Clone(request).(*entity.CreateArchiveJobRequest)
-			return &entity.CreateArchiveJobReply{
+			return &entity.CreateArchiveJobResponse{
 				Job: &entity.Job{Id: 9_007_199_254_740_993},
 			}, nil
 		}})
@@ -145,44 +135,43 @@ func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
 	require.Empty(t, stderr)
 	require.Equal(t, 1, recorder.count(entity.ArchiveJobService_Create_FullMethodName))
 	require.Equal(t, int64(7), created.Priority)
-	require.Equal(t, entity.PreviewPolicy_PREVIEW_MISSING_ONLY, created.PreviewPolicy)
+	require.Equal(t, entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, created.PreviewPolicy)
 	require.True(t, created.ForceRehash)
 	require.Len(t, created.Spec.Selections, 2)
 	require.EqualValues(t, 12, created.Spec.Selections[0].GetLibrary().FileId)
 	require.Equal(t, entity.FileScope_FILE_SCOPE_SAVED, created.Spec.Selections[0].Scope)
 	require.EqualValues(t, 4, created.Spec.Selections[1].GetLocation().LocationId)
 	require.Equal(t, "clip.mov", created.Spec.Selections[1].GetLocation().Path)
-	require.Empty(t, created.Spec.Sources)
 }
 
 func TestListPaginationRequests(t *testing.T) {
 	// Capture page controls across the three public pagination shapes.
-	var mediaRequest *entity.MediaListRequest
+	var mediaRequest *entity.ListMediaRequest
 	var jobRequests []*entity.ListJobsRequest
 	var scanRequest *entity.ListScanJobEntriesRequest
 	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterServiceServer(server, &stubService{mediaList: func(
+		registerTestServices(server, &stubService{mediaList: func(
 			_ context.Context,
-			request *entity.MediaListRequest,
-		) (*entity.MediaListReply, error) {
-			mediaRequest = proto.Clone(request).(*entity.MediaListRequest)
-			return &entity.MediaListReply{HasMore: true}, nil
+			request *entity.ListMediaRequest,
+		) (*entity.ListMediaResponse, error) {
+			mediaRequest = proto.Clone(request).(*entity.ListMediaRequest)
+			return &entity.ListMediaResponse{HasMore: true}, nil
 		}})
-		entity.RegisterJobServiceServer(server, &stubJobService{get: func(_ context.Context, request *entity.GetJobRequest) (*entity.GetJobReply, error) {
-			return &entity.GetJobReply{Job: &entity.Job{Id: request.Id, Kind: entity.JobKind_SCAN}}, nil
+		entity.RegisterJobServiceServer(server, &stubJobService{get: func(_ context.Context, request *entity.GetJobRequest) (*entity.GetJobResponse, error) {
+			return &entity.GetJobResponse{Job: &entity.Job{Id: request.Id, Kind: entity.JobKind_JOB_KIND_SCAN}}, nil
 		}, list: func(
 			_ context.Context,
 			request *entity.ListJobsRequest,
-		) (*entity.ListJobsReply, error) {
+		) (*entity.ListJobsResponse, error) {
 			jobRequests = append(jobRequests, proto.Clone(request).(*entity.ListJobsRequest))
-			return &entity.ListJobsReply{}, nil
+			return &entity.ListJobsResponse{}, nil
 		}})
 		entity.RegisterScanJobServiceServer(server, &stubScanJobService{listEntries: func(
 			_ context.Context,
 			request *entity.ListScanJobEntriesRequest,
-		) (*entity.ListScanJobEntriesReply, error) {
+		) (*entity.ListScanJobEntriesResponse, error) {
 			scanRequest = proto.Clone(request).(*entity.ListScanJobEntriesRequest)
-			return &entity.ListScanJobEntriesReply{}, nil
+			return &entity.ListScanJobEntriesResponse{}, nil
 		}})
 	}, nil, nil)
 
@@ -191,7 +180,7 @@ func TestListPaginationRequests(t *testing.T) {
 		{"media", "list", "--kind", "volume", "--limit", "5", "--offset", "2"},
 		{"job", "list", "--limit", "4", "--before-id", "99", "--snapshot-revision", "12", "--location-id", "7", "--media-id", "8"},
 		{"job", "changes", "--after-revision", "10", "--limit", "3"},
-		{"scan", "results", "8", "--limit", "6", "--after-id", "9"},
+		{"scan", "results", "8", "--limit", "6", "--cursor", "9", "--order", "desc", "--include-total"},
 	}
 	for _, args := range commands {
 		exit, _, stderr := executeTestCLI(server.URL, "", args...)
@@ -212,34 +201,36 @@ func TestListPaginationRequests(t *testing.T) {
 	require.Equal(t, int64(3), *jobRequests[1].Filter.Limit)
 	require.Equal(t, int64(8), scanRequest.Id)
 	require.Equal(t, int32(6), scanRequest.Limit)
-	require.EqualValues(t, 9, scanRequest.GetAfterId())
+	require.EqualValues(t, "9", scanRequest.GetCursor())
+	require.Equal(t, entity.JobResultOrder_JOB_RESULT_ORDER_DESCENDING, scanRequest.GetOrder())
+	require.True(t, scanRequest.GetIncludeTotal())
 }
 
 func TestVolumeAndTapeDeviceCommands(t *testing.T) {
 	// Capture both Volume mutations and serve one available Tape device.
-	var initialized *entity.VolumeInitializeRequest
-	var registered *entity.VolumeRegisterRequest
+	var initialized *entity.InitializeVolumeRequest
+	var registered *entity.RegisterVolumeRequest
 	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterServiceServer(server, &stubService{
+		registerTestServices(server, &stubService{
 			volumeInitialize: func(
 				_ context.Context,
-				request *entity.VolumeInitializeRequest,
-			) (*entity.VolumeInitializeReply, error) {
-				initialized = proto.Clone(request).(*entity.VolumeInitializeRequest)
-				return &entity.VolumeInitializeReply{}, nil
+				request *entity.InitializeVolumeRequest,
+			) (*entity.InitializeVolumeResponse, error) {
+				initialized = proto.Clone(request).(*entity.InitializeVolumeRequest)
+				return &entity.InitializeVolumeResponse{}, nil
 			},
 			volumeRegister: func(
 				_ context.Context,
-				request *entity.VolumeRegisterRequest,
-			) (*entity.VolumeRegisterReply, error) {
-				registered = proto.Clone(request).(*entity.VolumeRegisterRequest)
-				return &entity.VolumeRegisterReply{}, nil
+				request *entity.RegisterVolumeRequest,
+			) (*entity.RegisterVolumeResponse, error) {
+				registered = proto.Clone(request).(*entity.RegisterVolumeRequest)
+				return &entity.RegisterVolumeResponse{}, nil
 			},
 			deviceList: func(
 				context.Context,
-				*entity.DeviceListRequest,
-			) (*entity.DeviceListReply, error) {
-				return &entity.DeviceListReply{Devices: []string{"/dev/nst0"}}, nil
+				*entity.ListDevicesRequest,
+			) (*entity.ListDevicesResponse, error) {
+				return &entity.ListDevicesResponse{Devices: []string{"/dev/nst0"}}, nil
 			},
 		})
 	}, nil, nil)
@@ -279,7 +270,7 @@ func TestRPCErrorUsesConnectCode(t *testing.T) {
 		entity.RegisterJobServiceServer(server, &stubJobService{get: func(
 			context.Context,
 			*entity.GetJobRequest,
-		) (*entity.GetJobReply, error) {
+		) (*entity.GetJobResponse, error) {
 			return nil, status.Error(codes.NotFound, "missing Job")
 		}})
 	}, nil, nil)
@@ -299,10 +290,10 @@ func TestJobLogReturnsTextAndNextOffset(t *testing.T) {
 		entity.RegisterJobServiceServer(server, &stubJobService{getLog: func(
 			_ context.Context,
 			request *entity.GetJobLogRequest,
-		) (*entity.GetJobLogReply, error) {
+		) (*entity.GetJobLogResponse, error) {
 			require.NotNil(t, request.Offset)
 			require.Equal(t, int64(4), *request.Offset)
-			return &entity.GetJobLogReply{Logs: []byte("next line\n"), Offset: 14}, nil
+			return &entity.GetJobLogResponse{Logs: []byte("next line\n"), Offset: 14}, nil
 		}})
 	}, nil, nil)
 
@@ -319,9 +310,9 @@ func TestInvalidArgumentsReturnUsageExit(t *testing.T) {
 		args []string
 	}{
 		{name: "negative timeout", args: []string{"--timeout", "-1s", "status"}},
-		{name: "zero File ID", args: []string{"file", "get", "0"}},
+		{name: "invalid File ID", args: []string{"files", "get", "--file-id=-2"}},
 		{name: "zero limit", args: []string{"media", "list", "--limit", "0"}},
-		{name: "conflicting note", args: []string{"file", "metadata", "1", "--note", "x", "--clear-note"}},
+		{name: "metadata root", args: []string{"files", "metadata", "--file-id", "0", "--note", "x"}},
 		{name: "Preview option dependency", args: []string{"archive", "create", "a", "--force-rehash"}},
 	}
 	for _, test := range tests {
@@ -334,4 +325,9 @@ func TestInvalidArgumentsReturnUsageExit(t *testing.T) {
 			require.Equal(t, "usage", output.Code)
 		})
 	}
+}
+
+func registerTestServices(server *grpc.Server, service *stubService) {
+	entity.RegisterMediaServiceServer(server, service)
+	entity.RegisterLibraryServiceServer(server, service)
 }

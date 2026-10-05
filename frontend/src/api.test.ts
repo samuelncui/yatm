@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { convertFiles, convertSearchResults, convertMedia, convertPositions, MODE_DIR } from "@/api";
-import { File, Media, MediaAccess, MediaKind, Position, VolumeType } from "@/entity";
+import { convertFiles, convertMedia, convertPositions, convertSourceFiles, MODE_DIR } from "@/api";
+import { File, Media, MediaAccess, MediaKind, OriginalAvailability, Position, SourceFile, VolumeType } from "@/entity";
+
+it("keeps original ns for row sorting and converts File, source, Media and Position dates only for display", () => {
+  const ns = 1_700_000_000_123_999_999n;
+  const rows = [
+    ...convertFiles([File.create({ mtimeNs: ns })]),
+    ...convertSourceFiles([SourceFile.create({ mtimeNs: ns })]),
+    ...convertMedia([Media.create({ createdAtNs: ns })]),
+    ...convertPositions([Position.create({ writtenAtNs: ns })]),
+  ];
+  for (const row of rows) {
+    expect(row.modDateNs).toBe(ns);
+    expect(row.modDate).toEqual(new Date("2023-11-14T22:13:20.123Z"));
+  }
+});
 
 describe("Library row status", () => {
   it("projects supplied summaries to small accessible dots for folder and search rows", () => {
@@ -12,15 +26,14 @@ describe("Library row status", () => {
         hasOriginal: true,
         signatureKnown: true,
         currentObservationValid: true,
-        originalAvailability: 1,
+        originalAvailability: OriginalAvailability.PRESENT,
         hasVersions: true,
-        restorableVersionCopies: 1n,
-        archivedCopies: 0n,
+        restorableVersionCopyCount: 1n,
+        archivedCopyCount: 0n,
       },
     });
     const result = convertFiles([file])[0];
-    expect(result.status).toMatchObject({ color: "#15803d", label: expect.stringContaining("Changes not backed up") });
-    expect(convertSearchResults([{ file, path: "/docs/notes.txt" }])[0].status).toEqual(result.status);
+    expect(result.status).toMatchObject({ color: "#15803d", label: expect.stringContaining("Changes not archived") });
     expect(convertFiles([File.create({ id: 2n, mode: MODE_DIR, contentSummary: file.contentSummary })])[0].status).toBeUndefined();
     expect(convertFiles([File.create({ id: 3n })])[0].status).toBeUndefined();
   });
@@ -61,7 +74,7 @@ describe("convertPositions", () => {
 
     const [linkedFile, unlinkedFile, directoryFile] = convertPositions([linked, unlinked, directory]);
 
-    expect(linkedFile).toMatchObject({ positionID: 42n, signature: linked.signature, detailsAvailable: true, openable: true });
+    expect(linkedFile).toMatchObject({ position: linked, detailsAvailable: true, openable: true });
     expect(unlinkedFile).toMatchObject({ detailsAvailable: true, openable: true });
     expect(unlinkedFile).not.toHaveProperty("libraryFileId");
     expect(directoryFile).toMatchObject({ detailsAvailable: false, openable: true });

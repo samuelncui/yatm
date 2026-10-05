@@ -42,7 +42,7 @@ func TestCLICatalogSearch(t *testing.T) {
 		if item.preferred {
 			args = append(args, "--restore-target")
 		}
-		reply := new(entity.LocationReply)
+		reply := new(entity.CreateLocationResponse)
 		cliResult(t, ctx, connection, reply, args...)
 		locations = append(locations, reply.Location)
 		if item.preferred && strings.HasPrefix(item.name, "Quarterly") {
@@ -53,7 +53,7 @@ func TestCLICatalogSearch(t *testing.T) {
 	// A case-insensitive name query and recommendation filter combine before ID-ascending pagination.
 	foundLocations := make([]int64, 0, len(wantLocations))
 	for after := int64(0); ; {
-		page := new(entity.ListLocationsReply)
+		page := new(entity.ListLocationsResponse)
 		cliResult(t, ctx, connection, page, "location", "list", "--query", "qUaRtErLy",
 			"--restore-target", "true", "--after-id", decimal(after), "--limit", "1")
 		require.Len(t, page.Locations, 1)
@@ -67,7 +67,7 @@ func TestCLICatalogSearch(t *testing.T) {
 	require.Equal(t, wantLocations, foundLocations)
 
 	// Root paths and LIKE punctuation remain searchable literally, without catalog admission or scans.
-	locationPage := new(entity.ListLocationsReply)
+	locationPage := new(entity.ListLocationsResponse)
 	cliResult(t, ctx, connection, locationPage, "location", "list", "--query", "ROOT-003")
 	require.Len(t, locationPage.Locations, 1)
 	require.Equal(t, locations[3].Id, locationPage.Locations[0].Id)
@@ -87,7 +87,7 @@ func TestCLICatalogSearch(t *testing.T) {
 	for index, name := range []string{"Other disk", "Quarterly 100AA", "Quarterly 100%_!", "Quarterly photos", "Quarterly documents"} {
 		directory := filepath.Join(root, "volumes", fmt.Sprintf("catalog-disk-%d", index))
 		require.NoError(t, os.Mkdir(directory, 0o755))
-		reply := new(entity.VolumeInitializeReply)
+		reply := new(entity.InitializeVolumeResponse)
 		cliResult(t, ctx, connection, reply, "volume", "initialize", directory, "--name", name, "--type", "hdd")
 		media = append(media, reply.Media)
 		if strings.HasPrefix(name, "Quarterly") {
@@ -98,7 +98,7 @@ func TestCLICatalogSearch(t *testing.T) {
 	// Media names are searched on the server, with a two-row bound and explicit backend kind.
 	foundMedia := make([]int64, 0, len(wantMedia))
 	for after := int64(0); ; {
-		page := new(entity.MediaListReply)
+		page := new(entity.ListMediaResponse)
 		cliResult(t, ctx, connection, page, "media", "list", "--query", "qUaRtErLy",
 			"--kind", "volume", "--after-id", decimal(after), "--limit", "2")
 		require.NotEmpty(t, page.Media)
@@ -116,7 +116,7 @@ func TestCLICatalogSearch(t *testing.T) {
 	require.Equal(t, wantMedia, foundMedia)
 
 	// Exact identities, literal metacharacters, absent kinds and stale IDs use the same public transport.
-	mediaPage := new(entity.MediaListReply)
+	mediaPage := new(entity.ListMediaResponse)
 	cliResult(t, ctx, connection, mediaPage, "media", "list", "--query", strings.ToUpper(media[3].Identity), "--after-id", "0")
 	require.Len(t, mediaPage.Media, 1)
 	require.Equal(t, media[3].Id, mediaPage.Media[0].Id)

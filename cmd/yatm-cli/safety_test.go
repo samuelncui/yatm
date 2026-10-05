@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -14,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestHighRiskCommandsRequireConfirmationBeforeRequests(t *testing.T) {
-	// Count every request that could cross the confirmation boundary.
+func TestMutatingCommandsReachTransportWithoutLocalConfirmation(t *testing.T) {
+	// A bare invocation writes; the request itself carries the dry-run decision.
 	var requests atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(output http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
@@ -23,140 +22,154 @@ func TestHighRiskCommandsRequireConfirmationBeforeRequests(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	// Exercise every high-risk command without its required confirmation.
+	// These mutating commands reach transport without a local confirmation gate.
 	tests := []struct {
 		name string
 		args []string
 	}{
-		{name: "File delete", args: []string{"file", "delete", "1"}},
+		{name: "File remove", args: []string{"rm", "--library", "--source", "1"}},
+		{name: "File move", args: []string{"mv", "--library", "--source", "1", "--destination", "0"}},
+		{name: "Library trim", args: []string{"library", "trim", "--files"}},
 		{name: "Media delete", args: []string{"media", "delete", "1"}},
 		{name: "Job delete", args: []string{"job", "delete", "1"}},
-		{name: "Library import", args: []string{"library", "import", "--input", "-"}},
-		{name: "Library trim", args: []string{"library", "trim", "--files"}},
-		{
-			name: "Tape FORMAT",
-			args: []string{
-				"archive", "write", "tape", "format", "1",
-				"--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tape A",
-			},
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			before := requests.Load()
-			exit, stdout, stderr := executeTestCLI(server.URL, "", test.args...)
-			require.Equal(t, exitUsage, exit)
-			require.Empty(t, stdout)
-			var output errorOutput
-			require.NoError(t, json.Unmarshal([]byte(stderr), &output))
-			require.Contains(t, []string{"safety", "usage"}, output.Code)
-			require.Equal(t, before, requests.Load())
+			exit, _, _ := executeTestCLI(server.URL, "", test.args...)
+			require.Equal(t, exitFailure, exit)
+			require.Greater(t, requests.Load(), before, "the command must not stop at a local gate")
 		})
 	}
 }
 
-func TestFileDeleteValidatesEveryTargetAndMutatesOnce(t *testing.T) {
-	// Resolve all requested Files and capture the eventual delete request.
-	var deleted *entity.ExecuteFileOperationRequest
-	var executions atomic.Int64
-	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterServiceServer(server, &stubService{
-			fileGet: func(
-				_ context.Context,
-				request *entity.FileGetRequest,
-			) (*entity.FileGetReply, error) {
-				return &entity.FileGetReply{File: &entity.File{Id: request.Id}}, nil
-			},
-		})
-		entity.RegisterFileOperationServiceServer(server, &fileOperationStub{execute: func(request *entity.ExecuteFileOperationRequest, stream entity.FileOperationService_ExecuteServer) error {
-			executions.Add(1)
-			deleted = proto.Clone(request).(*entity.ExecuteFileOperationRequest)
-			return stream.Send(&entity.FileOperationUpdate{Summary: &entity.FileOperationSummary{Completed: true, TotalItems: 2, Succeeded: 2}})
+// TestTapeFormatStillRequiresTheInspectedBarcode keeps the physical-write gate that is not a
+// dry-run decision: FORMAT must match the barcode returned by the inspection.
+func TestTapeFormatStillRequiresTheInspectedBarcode(t *testing.T) {
+	var requests atomic.Int64
+	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		registerTestServices(server, &stubService{mediaInspect: func(
+			_ context.Context,
+			_ *entity.InspectMediaRequest,
+		) (*entity.InspectMediaResponse, error) {
+			requests.Add(1)
+			return &entity.InspectMediaResponse{Identity: "ABC123"}, nil
 		}})
 	}, nil, nil)
 
-	// Deduplicate targets while retaining one read per effective ID and one mutation.
-	exit, stdout, stderr := executeTestCLI(server.URL, "", "file", "delete", "7", "8", "7", "--confirm")
+	exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "1",
+		"--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tape A")
+	require.Equal(t, exitUsage, exit)
+	require.Contains(t, stderr, "confirm-format")
+}
+
+func TestFileRemoveRetainsAllTargetsAndMutatesOnce(t *testing.T) {
+	// Capture the operation submitted to the streamed executor.
+	var operation *entity.FileOperationSpec
+	var executions atomic.Int64
+	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		entity.RegisterFilesServiceServer(server, &fileOperationStub{execute: func(request *entity.FileOperationSpec, stream operationTestStream) error {
+			executions.Add(1)
+			operation = proto.Clone(request).(*entity.FileOperationSpec)
+			return stream.Send(&entity.FileOperationResult{Summary: &entity.FileOperationSummary{Completed: true, TotalItemCount: 2, SucceededCount: 2}})
+		}})
+	}, nil, nil)
+
+	// The common server planner owns deduplication; CLI does not silently discard selections.
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "rm", "--library", "--source", "7", "--source", "8", "--source", "7")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Contains(t, stdout, `"completed":true`)
-	require.Equal(t, 2, recorder.count(entity.Service_FileGet_FullMethodName))
+	require.Zero(t, recorder.count(entity.FilesService_Get_FullMethodName))
 	require.EqualValues(t, 1, executions.Load())
-	require.Equal(t, entity.FileOperationKind_DELETE, deleted.Spec.Kind)
-	require.True(t, deleted.ConfirmDelete)
-	require.Len(t, deleted.Spec.Sources, 2)
-	require.EqualValues(t, 7, deleted.Spec.Sources[0].GetFileId())
-	require.EqualValues(t, 8, deleted.Spec.Sources[1].GetFileId())
+	require.Equal(t, entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE, operation.Kind)
+	require.Len(t, operation.Sources, 3)
+	require.EqualValues(t, 7, operation.Sources[0].GetFileId())
+	require.EqualValues(t, 8, operation.Sources[1].GetFileId())
 }
 
 func TestMediaAndJobDeleteValidateTargetsAndMutateOnce(t *testing.T) {
 	// Return every requested target from each read-only preflight.
-	var mediaDeleted *entity.MediaDeleteRequest
+	var mediaDeleted *entity.DeleteMediaRequest
 	var jobsDeleted *entity.DeleteJobsRequest
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterServiceServer(server, &stubService{
+		registerTestServices(server, &stubService{
 			mediaList: func(
 				_ context.Context,
-				request *entity.MediaListRequest,
-			) (*entity.MediaListReply, error) {
-				media := make([]*entity.Media, 0, len(request.GetMget().Ids))
-				for _, id := range request.GetMget().Ids {
+				request *entity.ListMediaRequest,
+			) (*entity.ListMediaResponse, error) {
+				media := make([]*entity.Media, 0, len(request.GetIds().Ids))
+				for _, id := range request.GetIds().Ids {
 					media = append(media, &entity.Media{Id: id})
 				}
-				return &entity.MediaListReply{Media: media}, nil
+				return &entity.ListMediaResponse{Media: media}, nil
 			},
 			mediaDelete: func(
 				_ context.Context,
-				request *entity.MediaDeleteRequest,
-			) (*entity.MediaDeleteReply, error) {
-				mediaDeleted = proto.Clone(request).(*entity.MediaDeleteRequest)
-				return &entity.MediaDeleteReply{}, nil
+				request *entity.DeleteMediaRequest,
+			) (*entity.DeleteMediaResponse, error) {
+				mediaDeleted = proto.Clone(request).(*entity.DeleteMediaRequest)
+				return &entity.DeleteMediaResponse{}, nil
 			},
 		})
 		entity.RegisterJobServiceServer(server, &stubJobService{
 			get: func(
 				_ context.Context,
 				request *entity.GetJobRequest,
-			) (*entity.GetJobReply, error) {
-				return &entity.GetJobReply{Job: &entity.Job{Id: request.Id}}, nil
+			) (*entity.GetJobResponse, error) {
+				return &entity.GetJobResponse{Job: &entity.Job{Id: request.Id}}, nil
 			},
 			delete: func(
 				_ context.Context,
 				request *entity.DeleteJobsRequest,
-			) (*entity.DeleteJobsReply, error) {
+			) (*entity.DeleteJobsResponse, error) {
 				jobsDeleted = proto.Clone(request).(*entity.DeleteJobsRequest)
-				return &entity.DeleteJobsReply{}, nil
+				return &entity.DeleteJobsResponse{}, nil
 			},
 		})
 	}, nil, nil)
 
 	// Delete the resolved Media set with one MGet and one mutation.
-	exit, _, stderr := executeTestCLI(server.URL, "", "media", "delete", "3", "4", "--confirm")
+	exit, _, stderr := executeTestCLI(server.URL, "", "media", "delete", "3", "4")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Equal(t, []int64{3, 4}, mediaDeleted.Ids)
-	require.Equal(t, 1, recorder.count(entity.Service_MediaList_FullMethodName))
-	require.Equal(t, 1, recorder.count(entity.Service_MediaDelete_FullMethodName))
+	require.Equal(t, 1, recorder.count(entity.MediaService_List_FullMethodName))
+	require.Equal(t, 1, recorder.count(entity.MediaService_Delete_FullMethodName))
+
+	require.False(t, mediaDeleted.Dryrun)
 
 	// Delete the resolved Job set after one lookup per retained Job.
-	exit, _, stderr = executeTestCLI(server.URL, "", "job", "delete", "5", "6", "--confirm")
+	exit, _, stderr = executeTestCLI(server.URL, "", "job", "delete", "5", "6")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Equal(t, []int64{5, 6}, jobsDeleted.Ids)
+	require.False(t, jobsDeleted.Dryrun)
 	require.Equal(t, 2, recorder.count(entity.JobService_Get_FullMethodName))
 	require.Equal(t, 1, recorder.count(entity.JobService_Delete_FullMethodName))
+
+	// A dry run carries the same resolved targets and marks the request instead of changing it.
+	exit, _, stderr = executeTestCLI(server.URL, "", "media", "delete", "3", "--dryrun")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, []int64{3}, mediaDeleted.Ids)
+	require.True(t, mediaDeleted.Dryrun)
+
+	exit, _, stderr = executeTestCLI(server.URL, "", "job", "delete", "5", "--dryrun")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, []int64{5}, jobsDeleted.Ids)
+	require.True(t, jobsDeleted.Dryrun)
 }
 
 func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	// Return physical identities and one registered append-compatible Tape profile.
 	var writes []*entity.WriteArchiveMediaRequest
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterServiceServer(server, &stubService{mediaInspect: func(
+		registerTestServices(server, &stubService{mediaInspect: func(
 			_ context.Context,
-			request *entity.MediaInspectRequest,
-		) (*entity.MediaInspectReply, error) {
+			request *entity.InspectMediaRequest,
+		) (*entity.InspectMediaResponse, error) {
 			switch request.GetIdentity() {
 			case "ABC123":
-				return &entity.MediaInspectReply{Identity: "ABC123"}, nil
+				return &entity.InspectMediaResponse{Identity: "ABC123"}, nil
 			case "XYZ789":
-				return &entity.MediaInspectReply{
+				return &entity.InspectMediaResponse{
 					Identity: "XYZ789",
 					Media: &entity.Media{
 						Id:      8,
@@ -164,15 +177,15 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 					},
 				}, nil
 			default:
-				return &entity.MediaInspectReply{Identity: "ABC123"}, nil
+				return &entity.InspectMediaResponse{Identity: "ABC123"}, nil
 			}
 		}})
 		entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{writeMedia: func(
 			_ context.Context,
 			request *entity.WriteArchiveMediaRequest,
-		) (*entity.WriteArchiveMediaReply, error) {
+		) (*entity.WriteArchiveMediaResponse, error) {
 			writes = append(writes, proto.Clone(request).(*entity.WriteArchiveMediaRequest))
-			return &entity.WriteArchiveMediaReply{}, nil
+			return &entity.WriteArchiveMediaResponse{}, nil
 		}})
 	}, nil, nil)
 
@@ -228,6 +241,6 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	require.Equal(t, exitUsage, exit)
 	require.Empty(t, stdout)
 	require.Len(t, writes, 2)
-	require.Equal(t, 4, recorder.count(entity.Service_MediaInspect_FullMethodName))
+	require.Equal(t, 4, recorder.count(entity.MediaService_Inspect_FullMethodName))
 	require.Equal(t, 2, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 }

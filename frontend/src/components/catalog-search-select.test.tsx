@@ -2,10 +2,10 @@ import { useState } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Location, Media, MediaKind, OnlineBinding } from "@/entity";
+import { Location, Media, MediaKind } from "@/entity";
 
 const { mediaList, locations } = vi.hoisted(() => ({ mediaList: vi.fn(), locations: vi.fn() }));
-vi.mock("@/api", () => ({ cli: { mediaList }, locationCli: { list: locations } }));
+vi.mock("@/api", () => ({ mediaCli: { list: mediaList }, locationCli: { list: locations } }));
 import { LocationSearchSelect, MediaSearchSelect } from "./catalog-search-select";
 
 const media = (id: number, name = `Archive ${id}`) => Media.create({ id: BigInt(id), name, identity: `VOLUME-${id}`, kind: MediaKind.VOLUME });
@@ -193,20 +193,22 @@ describe("Server-backed catalog selection", () => {
     expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("None");
   });
 
-  it("uses the same paged search for Location paths and disables imported roots", async () => {
+  it("uses the same paged search for Location paths and offers every root", async () => {
     locations.mockReturnValue(
       call({
         locations: [
-          Location.create({ id: 4n, name: "Photos", rootPath: "/data/photos", binding: OnlineBinding.CONFIRMED }),
-          Location.create({ id: 5n, name: "Imported", rootPath: "/data/imported", binding: OnlineBinding.UNCONFIRMED }),
+          Location.create({ id: 4n, name: "Photos", rootPath: "/data/photos" }),
+          Location.create({ id: 5n, name: "Imported", rootPath: "/data/imported" }),
         ],
         hasMore: false,
       }),
     );
     render(<LocationPicker />);
     await userEvent.type(screen.getByRole("combobox", { name: "Location" }), "/data");
-    const unavailable = await screen.findByRole("option", { name: /Imported/ });
-    expect(unavailable).toHaveAttribute("aria-disabled", "true");
+    const imported = await screen.findByRole("option", { name: /Imported/ });
+    // A registered Location is immediately usable; no confirmation state gates it.
+    expect(imported).not.toHaveAttribute("aria-disabled", "true");
+    expect(imported).toHaveTextContent("/data/imported");
     expect(locations).toHaveBeenCalledWith({ query: "/data", afterId: 0n, limit: 30 }, { abort: expect.any(AbortSignal) });
     await userEvent.click(screen.getByRole("option", { name: /Photos/ }));
     expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("4");

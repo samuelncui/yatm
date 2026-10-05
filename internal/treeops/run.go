@@ -1,7 +1,6 @@
 package treeops
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 )
@@ -85,27 +84,14 @@ func stepResult(item step, rootError string) Result {
 	if outcome == Succeeded {
 		fileID = item.Result.FileID
 	}
-	return Result{ID: item.ID, Source: item.Source, Target: item.Target, FileID: fileID, Outcome: outcome, Error: errText}
+	target := item.Target
+	if item.Result.Ref != "" {
+		target = item.Result
+	}
+	return Result{ID: item.ID, Source: item.Source, Target: target, FileID: fileID, Outcome: outcome, Error: errText}
 }
 
 func (e *Engine) runRoot(ctx context.Context, store Store, root *Root, settled func(step) error) error {
-	// Revalidate complete native-move trees before changing any selected source.
-	if err := e.each(ctx, root.ID, func(item step) error {
-		if !item.Source.Exists {
-			return nil
-		}
-		current, err := store.Stat(ctx, item.Source.Ref)
-		if err != nil {
-			return err
-		}
-		if !current.Exists || !bytes.Equal(current.Guard, item.Source.Guard) {
-			return fmt.Errorf("source changed: %q", item.Source.Path)
-		}
-		return nil
-	}); err != nil {
-		return e.failFirst(ctx, root.ID, err)
-	}
-
 	// Ordered primitives preserve their actual per-entry result before proceeding.
 	return e.each(ctx, root.ID, func(item step) error {
 		if item.CheckOnly {
@@ -124,9 +110,16 @@ func (e *Engine) runRoot(ctx context.Context, store Store, root *Root, settled f
 		if receipt.Node.FileID == 0 {
 			receipt.Node.FileID = item.Source.FileID
 		}
+
+		// Once admitted, a physical primitive settles its Library change and receipt before stopping.
+		// Logical roots retain their cancellable metadata transaction and rollback boundary.
+		primitiveCtx := ctx
+		if e.transaction == nil {
+			primitiveCtx = context.WithoutCancel(ctx)
+		}
 		var applyErr error
 		if item.Kind != "" {
-			receipt, applyErr = store.ApplyPrimitive(ctx, Primitive{ID: item.ID, Kind: item.Kind, Source: item.Source, Target: item.Target})
+			receipt, applyErr = store.ApplyPrimitive(primitiveCtx, Primitive{ID: item.ID, Kind: item.Kind, Source: item.Source, Target: item.Target})
 		}
 		item.Result, item.Outcome = receipt.Node, Succeeded
 		if applyErr != nil {
@@ -136,7 +129,7 @@ func (e *Engine) runRoot(ctx context.Context, store Store, root *Root, settled f
 			}
 			item.Error = fmt.Sprintf("%s %q to %q failed: %v", item.Kind, item.Source.Path, item.Target.Path, applyErr)
 		}
-		if err := e.db.WithContext(ctx).Save(&item).Error; err != nil {
+		if err := e.db.WithContext(primitiveCtx).Save(&item).Error; err != nil {
 			return err
 		}
 		if settled != nil {
@@ -146,18 +139,6 @@ func (e *Engine) runRoot(ctx context.Context, store Store, root *Root, settled f
 		}
 		return applyErr
 	})
-}
-
-func (e *Engine) failFirst(ctx context.Context, rootID int64, cause error) error {
-	var first step
-	if err := e.db.WithContext(ctx).Where("root_id = ? AND check_only = ?", rootID, false).Order("id").First(&first).Error; err != nil {
-		return err
-	}
-	first.Outcome, first.Error = Failed, cause.Error()
-	if err := e.db.WithContext(ctx).Save(&first).Error; err != nil {
-		return err
-	}
-	return cause
 }
 
 func (e *Engine) each(ctx context.Context, rootID int64, use func(step) error) error {

@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/stretchr/testify/require"
 )
 
 func (c *cliConnection) arguments(method string, request any) ([]string, error) {
@@ -25,10 +27,8 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 		return args, nil
 	case *entity.CancelJobRequest:
 		return []string{"job", "cancel", decimal(r.Id)}, nil
-	case *entity.RetryJobIndexRequest:
-		return []string{"job", "retry-index", decimal(r.Id)}, nil
 	case *entity.DeleteJobsRequest:
-		args := []string{"job", "delete", "--confirm"}
+		args := []string{"job", "delete"}
 		for _, id := range r.Ids {
 			args = append(args, decimal(id))
 		}
@@ -50,24 +50,20 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			}
 		}
 		return args, nil
-	case *entity.FileGetRequest:
-		args := []string{"file", "get", decimal(r.Id), "--scope", scopeArgument(r.Scope)}
-		if r.GetNeedSize() {
-			args = append(args, "--need-size")
-		}
-		if r.Limit > 0 {
-			args = append(args, "--limit", decimal(int64(r.Limit)))
-		}
-		if r.Cursor != "" {
-			args = append(args, "--cursor", r.Cursor)
-		}
-		return args, nil
-	case *entity.FileListParentsRequest:
-		return []string{"file", "parents", decimal(r.Id)}, nil
-	case *entity.FileMetadataEditRequest:
-		args := []string{"file", "metadata"}
-		for _, id := range r.Ids {
-			args = append(args, decimal(id))
+	case *entity.GetFileRequest:
+		return filesGetArguments(r.Reference)
+	case *entity.ListFilesRequest:
+		return filesListArguments(r.Directory, r.Scope, r.Include, "", "", 0, false)
+	case *entity.SearchFilesRequest:
+		return filesListArguments(r.Directory, r.Scope, r.Include, r.Query, r.Cursor, r.Limit, r.Recursive)
+	case *entity.UpdateFilesMetadataRequest:
+		args := []string{"files", "metadata"}
+		for _, ref := range r.References {
+			selection, err := selectionArgument(ref)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, selection...)
 		}
 		for _, tag := range r.AddTags {
 			args = append(args, "--add-tag", tag)
@@ -79,16 +75,7 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			args = append(args, "--note", *r.Note)
 		}
 		return args, nil
-	case *entity.FileSearchRequest:
-		args := []string{"file", "search", r.Query, "--scope", scopeArgument(r.Scope)}
-		if r.Limit != nil {
-			args = append(args, "--limit", decimal(*r.Limit))
-		}
-		if r.Cursor != nil {
-			args = append(args, "--cursor", *r.Cursor)
-		}
-		return args, nil
-	case *entity.TagListRequest:
+	case *entity.ListTagsRequest:
 		args := []string{"tag", "list"}
 		if r.Prefix != nil {
 			args = append(args, "--prefix", *r.Prefix)
@@ -100,10 +87,10 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			args = append(args, "--cursor", *r.Cursor)
 		}
 		return args, nil
-	case *entity.DeviceListRequest:
+	case *entity.ListDevicesRequest:
 		return []string{"tape", "device", "list"}, nil
-	case *entity.MediaListRequest:
-		if value := r.GetMget(); value != nil {
+	case *entity.ListMediaRequest:
+		if value := r.GetIds(); value != nil {
 			args := []string{"media", "get"}
 			for _, id := range value.Ids {
 				args = append(args, decimal(id))
@@ -123,7 +110,7 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			}
 		}
 		return args, nil
-	case *entity.MediaGetPositionsRequest:
+	case *entity.ListMediaPositionsRequest:
 		args := []string{"media", "positions", decimal(r.Id), "--directory", r.Directory}
 		if r.Limit != nil {
 			args = append(args, "--limit", decimal(*r.Limit))
@@ -132,13 +119,13 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			args = append(args, "--after-path", *r.AfterPath)
 		}
 		return args, nil
-	case *entity.MediaDeleteRequest:
-		args := []string{"media", "delete", "--confirm"}
+	case *entity.DeleteMediaRequest:
+		args := []string{"media", "delete"}
 		for _, id := range r.Ids {
 			args = append(args, decimal(id))
 		}
 		return args, nil
-	case *entity.MediaInspectRequest:
+	case *entity.InspectMediaRequest:
 		if value := r.GetTape(); value != nil {
 			args := []string{"media", "inspect", "tape", "--device", value.Device}
 			if r.Identity != nil {
@@ -147,37 +134,41 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			return args, nil
 		}
 		return []string{"media", "inspect", "volume", "--uuid", r.GetVolume().Uuid}, nil
-	case *entity.VolumeInitializeRequest:
+	case *entity.InitializeVolumeRequest:
 		typeName := "hdd"
 		if r.Profile.Type == entity.VolumeType_VOLUME_TYPE_HM_SMR {
 			typeName = "hm-smr"
 		}
 		return []string{"volume", "initialize", r.MountPoint, "--name", r.Name, "--type", typeName, "--serial-number", r.Profile.SerialNumber}, nil
-	case *entity.VolumeRegisterRequest:
+	case *entity.RegisterVolumeRequest:
 		return []string{"volume", "register", r.MountPoint, "--name", r.Name}, nil
 	case *entity.CreateLocationRequest:
 		return c.locationArguments([]string{"location", "create"}, r.Location)
 	case *entity.UpdateLocationRequest:
-		return c.locationArguments([]string{"location", "update", decimal(r.Location.Id), "--revision", decimal(r.Location.Revision)}, r.Location)
+		return c.locationArguments([]string{"location", "update", decimal(r.Location.Id)}, r.Location)
 	case *entity.ListLocationsRequest:
 		return []string{"location", "list", "--after-id", decimal(r.AfterId), "--limit", pageSize(r.Limit)}, nil
-	case *entity.LocationRef:
-		switch method {
-		case entity.LocationService_Get_FullMethodName:
-			return []string{"location", "get", decimal(r.Id)}, nil
-		case entity.LocationService_Confirm_FullMethodName:
-			return []string{"location", "confirm", decimal(r.Id), "--revision", decimal(r.Revision)}, nil
-		case entity.LocationService_Delete_FullMethodName:
-			return []string{"location", "delete", decimal(r.Id), "--revision", decimal(r.Revision), "--confirm"}, nil
+	case *entity.GetLocationRequest:
+		return []string{"location", "get", decimal(r.Id)}, nil
+	case *entity.DeleteLocationRequest:
+		if method == entity.LocationService_Delete_FullMethodName {
+			return []string{"location", "delete", decimal(r.Id)}, nil
 		}
-	case *entity.ListLocationEntriesRequest:
-		return []string{"location", "entries", decimal(r.LocationId), "--parent", r.ParentPath, "--cursor", r.Cursor, "--name", r.NameFilter, "--limit", pageSize(r.Limit)}, nil
 	case *entity.CreateScanJobRequest:
 		return scanArguments(r)
 	case *entity.ListScanJobEntriesRequest:
 		args := []string{"scan", "results", decimal(r.Id), "--limit", pageSize(r.Limit)}
-		if r.AfterId != nil {
-			args = append(args, "--after-id", decimal(*r.AfterId))
+		if r.Cursor != "" {
+			args = append(args, "--cursor", r.Cursor)
+		}
+		if r.Offset != nil {
+			args = append(args, "--offset", decimal(*r.Offset))
+		}
+		if r.Order == entity.JobResultOrder_JOB_RESULT_ORDER_DESCENDING {
+			args = append(args, "--order", "desc")
+		}
+		if r.IncludeTotal {
+			args = append(args, "--include-total")
 		}
 		return args, nil
 	case *entity.GetScanJobProgressRequest:
@@ -186,24 +177,21 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 		return []string{"job", "progress", decimal(r.Id)}, nil
 	case *entity.GetRestoreJobProgressRequest:
 		return []string{"job", "progress", decimal(r.Id)}, nil
-	case *entity.GetFileStateRequest:
-		return []string{"file", "state", decimal(r.FileId)}, nil
 	case *entity.GetFileVersionRequest:
-		return []string{"file", "version", decimal(r.Id)}, nil
+		return []string{"files", "version", decimal(r.Id)}, nil
 	case *entity.ListFileVersionsRequest:
-		return []string{"file", "versions", decimal(r.FileId), "--after-id", decimal(r.AfterId), "--limit", pageSize(r.Limit)}, nil
+		return []string{"files", "versions", decimal(r.FileId), "--after-id", decimal(r.AfterId), "--limit", pageSize(r.Limit)}, nil
 	case *entity.ListContentCopiesRequest:
-		return []string{"file", "copies", "--signature", hex.EncodeToString(r.Signature), "--after-id", decimal(r.AfterId), "--limit", pageSize(r.Limit)}, nil
+		return []string{"files", "copies", "--signature", hex.EncodeToString(r.Signature), "--after-id", decimal(r.AfterId), "--limit", pageSize(r.Limit)}, nil
 	case *entity.CreateArchiveJobRequest:
-		if len(r.Spec.Sources) > 0 {
-			return nil, fmt.Errorf("E2E must register and scan Locations before selecting archive content")
-		}
-		selections, err := selectionArguments(r.Spec.Selections, r.Spec.FileIds)
+		selections, err := selectionArguments(r.Spec.Selections)
 		if err != nil {
 			return nil, err
 		}
 		args := append([]string{"archive", "create", "--priority", decimal(r.Priority)}, selections...)
-		args = append(args, "--preview-policy", previewPolicyArgument(r.PreviewPolicy))
+		if r.PreviewPolicy != entity.PreviewPolicy_PREVIEW_POLICY_UNSPECIFIED {
+			args = append(args, "--preview-policy", previewPolicyArgument(r.PreviewPolicy))
+		}
 		if r.ForceRehash {
 			args = append(args, "--force-rehash")
 		}
@@ -220,12 +208,12 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 		}
 		return args, nil
 	case *entity.ListArchiveJobFilesRequest:
-		return copyPageArguments([]string{"archive", "files", decimal(r.Id)}, r.Limit, r.Offset, r.FilterStatus), nil
+		return jobResultPageArguments([]string{"archive", "files", decimal(r.Id)}, r.Limit, r.Cursor, r.Order, r.Offset, r.IncludeTotal, r.FilterStatus), nil
 	case *entity.CreateRestoreJobRequest:
 		if r.Spec.Destination == nil {
 			return nil, fmt.Errorf("E2E Restore requires a registered destination")
 		}
-		selections, err := selectionArguments(r.Spec.Selections, nil)
+		selections, err := selectionArguments(r.Spec.Selections)
 		if err != nil {
 			return nil, err
 		}
@@ -243,46 +231,52 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 		}
 		return []string{"restore", "run", "tape", decimal(r.Id), "--device", r.Target.GetTape().Device}, nil
 	case *entity.ListRestoreJobMediaRequest:
-		return copyPageArguments([]string{"restore", "media", decimal(r.Id)}, r.Limit, r.Offset, r.FilterStatus), nil
+		return jobResultPageArguments([]string{"restore", "media", decimal(r.Id)}, r.Limit, r.Cursor, r.Order, r.Offset, r.IncludeTotal, r.FilterStatus), nil
 	case *entity.ListRestoreJobFilesRequest:
-		return copyPageArguments([]string{"restore", "files", decimal(r.Id), "--media-id", decimal(r.MediaId)}, r.Limit, r.Offset, r.FilterStatus), nil
+		args := []string{"restore", "files", decimal(r.Id)}
+		if r.MediaId != nil {
+			args = append(args, "--media-id", decimal(*r.MediaId))
+		}
+		return jobResultPageArguments(args, r.Limit, r.Cursor, r.Order, r.Offset, r.IncludeTotal, r.FilterStatus), nil
 	}
 	return nil, fmt.Errorf("no CLI acceptance mapping for %s (%T)", method, request)
 }
 
 func scanArguments(request *entity.CreateScanJobRequest) ([]string, error) {
-	// Encode explicit policies rather than deriving a different CLI workflow.
-	policies := map[entity.ScanSignaturePolicy]string{entity.ScanSignaturePolicy_KNOWN_ONLY: "known-only", entity.ScanSignaturePolicy_FILL_MISSING: "fill-missing", entity.ScanSignaturePolicy_FORCE_READ: "force-read"}
-	results := map[entity.ScanResultPolicy]string{entity.ScanResultPolicy_REPORT_ONLY: "report", entity.ScanResultPolicy_PUBLISH_ORIGINALS: "originals", entity.ScanResultPolicy_PUBLISH_INVENTORY: "inventory", entity.ScanResultPolicy_VERIFY_COPIES: "verify"}
+	// Preserve explicit policies; leave unspecified values to the CLI defaults.
+	policies := map[entity.ScanSignaturePolicy]string{entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY: "known-only", entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING: "fill-missing", entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ: "force-read"}
+	results := map[entity.ScanResultPolicy]string{entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY: "report", entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS: "originals", entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY: "inventory", entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES: "verify"}
 	spec := request.Spec
-	selections, err := selectionArguments(spec.Selections, nil)
+	selections, err := selectionArguments(spec.Selections)
 	if err != nil {
 		return nil, err
 	}
-	args := append([]string{"scan", "create", "--priority", decimal(request.Priority), "--signature", policies[spec.SignaturePolicy], "--result", results[spec.ResultPolicy]}, selections...)
+	args := append([]string{"scan", "create", "--priority", decimal(request.Priority)}, selections...)
+	if spec.SignaturePolicy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_UNSPECIFIED {
+		args = append(args, "--signature", policies[spec.SignaturePolicy])
+	}
+	if spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_UNSPECIFIED {
+		args = append(args, "--result", results[spec.ResultPolicy])
+	}
 	if spec.MediaId != 0 {
 		args = append(args, "--media-id", decimal(spec.MediaId))
-	}
-	if spec.LocationId != 0 {
-		args = append(args, "--location-id", decimal(spec.LocationId))
-	}
-	for _, path := range spec.Paths {
-		args = append(args, "--path", path)
 	}
 	if spec.CompareLibrary {
 		args = append(args, "--compare-library")
 	}
-	args = append(args, "--preview-policy", previewPolicyArgument(spec.PreviewPolicy))
+	if spec.PreviewPolicy != entity.PreviewPolicy_PREVIEW_POLICY_UNSPECIFIED {
+		args = append(args, "--preview-policy", previewPolicyArgument(spec.PreviewPolicy))
+	}
 	return args, nil
 }
 
 func previewPolicyArgument(policy entity.PreviewPolicy) string {
 	switch policy {
-	case entity.PreviewPolicy_PREVIEW_NONE:
+	case entity.PreviewPolicy_PREVIEW_POLICY_NONE:
 		return "none"
-	case entity.PreviewPolicy_PREVIEW_MISSING_ONLY:
+	case entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY:
 		return "missing-only"
-	case entity.PreviewPolicy_PREVIEW_REGENERATE_ALL:
+	case entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL:
 		return "regenerate-all"
 	default:
 		return policy.String()
@@ -295,14 +289,16 @@ func (c *cliConnection) locationArguments(args []string, location *entity.Locati
 	if location.RestoreTarget {
 		args = append(args, "--restore-target")
 	}
-	if location.WriteTrackingUuid {
-		args = append(args, "--write-tracking-uuid")
+	if location.Config.GetUseMmap() {
+		args = append(args, "--use-mmap")
 	}
-	if location.Ignore == nil {
+
+	// Pass raw Ignore text through the CLI's file input.
+	if location.Config.GetIgnore() == nil {
 		return args, nil
 	}
 	filename := filepath.Join(c.directory, "ignore.txt")
-	if err := os.WriteFile(filename, []byte(location.Ignore.Text), 0o600); err != nil {
+	if err := os.WriteFile(filename, []byte(location.Config.GetIgnore().GetText()), 0o600); err != nil {
 		return nil, err
 	}
 	return append(args, "--ignore-file", filename), nil
@@ -326,13 +322,120 @@ func scopeArgument(scope entity.FileScope) string {
 	}
 }
 
-func copyPageArguments(args []string, limit int32, offset *int64, statuses []entity.CopyStatus) []string {
+func jobResultPageArguments(args []string, limit int32, cursor string, order entity.JobResultOrder, offset *int64, includeTotal bool, statuses []entity.CopyStatus) []string {
 	args = append(args, "--limit", pageSize(limit))
+	if cursor != "" {
+		args = append(args, "--cursor", cursor)
+	}
+	if order == entity.JobResultOrder_JOB_RESULT_ORDER_DESCENDING {
+		args = append(args, "--order", "desc")
+	}
 	if offset != nil {
 		args = append(args, "--offset", decimal(*offset))
 	}
+	if includeTotal {
+		args = append(args, "--include-total")
+	}
 	for _, status := range statuses {
-		args = append(args, "--status", strings.ToLower(status.String()))
+		args = append(args, "--status", strings.ToLower(strings.TrimPrefix(status.String(), "COPY_STATUS_")))
 	}
 	return args
+}
+
+func filesGetArguments(ref *entity.FileOperationRef) ([]string, error) {
+	args, err := filesReferenceArguments([]string{"files", "get"}, ref)
+	if err != nil {
+		return nil, err
+	}
+	return args, nil
+}
+
+// filesListArguments translates one Files read into the `ls` invocation that expresses it: a
+// listing names only its directory, while a query adds the page flags it keeps.
+func filesListArguments(ref *entity.FileOperationRef, scope entity.FileScope, include []entity.FilesInclude, query, cursor string, limit int32, recursive bool) ([]string, error) {
+	args, err := filesReferenceArguments([]string{"ls"}, ref)
+	if err != nil {
+		return nil, err
+	}
+	if query != "" {
+		args = append(args, "--query", query)
+	}
+	if recursive {
+		args = append(args, "--recursive")
+	}
+	if cursor != "" {
+		args = append(args, "--cursor", cursor)
+	}
+	if limit > 0 {
+		args = append(args, "--limit", decimal(int64(limit)))
+	}
+	args = append(args, "--scope", scopeArgument(scope))
+	for _, group := range include {
+		switch group {
+		case entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES:
+			args = append(args, "--long")
+		case entity.FilesInclude_FILES_INCLUDE_STATUS:
+			args = append(args, "--status")
+		case entity.FilesInclude_FILES_INCLUDE_OPERATIONS:
+			args = append(args, "--include", "operations")
+		case entity.FilesInclude_FILES_INCLUDE_NAVIGATION:
+			args = append(args, "--include", "navigation")
+		default:
+			return nil, fmt.Errorf("unsupported Files include: %v", group)
+		}
+	}
+	return args, nil
+}
+
+func filesReferenceArguments(args []string, ref *entity.FileOperationRef) ([]string, error) {
+	if ref == nil {
+		return nil, fmt.Errorf("Files reference is required")
+	}
+	if id, ok := ref.Target.(*entity.FileOperationRef_FileId); ok {
+		return append(args, "--file-id", decimal(id.FileId)), nil
+	}
+	if location, ok := ref.Target.(*entity.FileOperationRef_Location); ok {
+		return append(args, "--location-id", decimal(location.Location.LocationId), "--path", location.Location.Path), nil
+	}
+	return nil, fmt.Errorf("unsupported Files reference %T", ref.Target)
+}
+
+func selectionArgument(ref *entity.FileOperationRef) ([]string, error) {
+	if ref == nil {
+		return nil, fmt.Errorf("Files metadata reference is required")
+	}
+	if id, ok := ref.Target.(*entity.FileOperationRef_FileId); ok {
+		return []string{"--file-id", decimal(id.FileId)}, nil
+	}
+	if location, ok := ref.Target.(*entity.FileOperationRef_Location); ok {
+		return []string{"--location", decimal(location.Location.LocationId) + ":" + location.Location.Path}, nil
+	}
+	return nil, fmt.Errorf("unsupported Files metadata reference %T", ref.Target)
+}
+
+func TestCLIEnumArguments(t *testing.T) {
+	// Archive defaults to no Preview without emitting the renamed zero enum as CLI text.
+	selection := &entity.FileSelection{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: 7}}, Scope: entity.FileScope_FILE_SCOPE_ALL}
+	archive := &entity.CreateArchiveJobRequest{Spec: &entity.ArchiveJobSpec{Selections: []*entity.FileSelection{selection}}}
+	args, err := new(cliConnection).arguments("", archive)
+	require.NoError(t, err)
+	require.NotContains(t, args, "--preview-policy")
+
+	// An explicit generation policy keeps its user-facing spelling.
+	archive.PreviewPolicy = entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY
+	args, err = new(cliConnection).arguments("", archive)
+	require.NoError(t, err)
+	require.Equal(t, []string{"--preview-policy", "missing-only"}, args[len(args)-2:])
+
+	// Scan uses CLI defaults only for unspecified policies.
+	scan := &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{Selections: []*entity.FileSelection{selection}, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS}}
+	args, err = scanArguments(scan)
+	require.NoError(t, err)
+	require.NotContains(t, args, "--signature")
+	require.NotContains(t, args, "--preview-policy")
+	require.Contains(t, args, "originals")
+
+	// Copy status filters also omit the enum's protobuf prefix.
+	args = jobResultPageArguments(nil, 0, "", entity.JobResultOrder_JOB_RESULT_ORDER_UNSPECIFIED, nil, false, []entity.CopyStatus{entity.CopyStatus_COPY_STATUS_PENDING})
+	require.Equal(t, []string{"--status", "pending"}, args[len(args)-2:])
 }

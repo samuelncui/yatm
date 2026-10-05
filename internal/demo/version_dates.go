@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/library"
 	"gorm.io/gorm"
 )
 
@@ -37,14 +38,23 @@ func seedVersionDates(ctx context.Context, lib *library.Library, db *gorm.DB) er
 		// Endpoints and observations change together; restoration never uses the source modification date.
 		if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			for index, version := range versions {
-				stamp := time.Date(2026, time.August, sample.days[index], 2, 0, 0, 0, time.UTC).UnixMilli()
-				if err := tx.Model(version).Updates(map[string]any{"first_archived_at": stamp, "last_archived_at": stamp}).Error; err != nil {
+				stamp, err := dataformat.Nanoseconds(time.Date(
+					2026, time.August, sample.days[index], 2, 0, 0, 0, time.UTC,
+				))
+				if err != nil {
+					return fmt.Errorf("convert Demo archive date failed, %w", err)
+				}
+				if err := tx.Model(version).Updates(map[string]any{
+					"first_archived_at_ns": stamp, "last_archived_at_ns": stamp,
+				}).Error; err != nil {
 					return err
 				}
 				if err := tx.Where("version_id = ?", version.ID).Delete(&library.FileVersionArchive{}).Error; err != nil {
 					return err
 				}
-				if err := tx.Create(&library.FileVersionArchive{VersionID: version.ID, ArchivedAt: stamp}).Error; err != nil {
+				if err := tx.Create(&library.FileVersionArchive{
+					VersionID: version.ID, ArchivedAtNS: stamp,
+				}).Error; err != nil {
 					return err
 				}
 			}

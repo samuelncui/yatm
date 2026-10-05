@@ -1,18 +1,20 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/pages/backup", () => ({
-  BackupBrowser: () => <div>Archive creation page</div>,
+vi.mock("@/pages/archive", () => ({
+  ArchiveBrowser: () => <div>Archive creation page</div>,
 }));
 vi.mock("@/pages/restore", () => ({ RestoreBrowser: () => <div>Restore creation page</div> }));
 vi.mock("@/pages/scan", () => ({ ScanBrowser: () => <div>Scan creation page</div> }));
-vi.mock("@/pages/online", () => ({ LocationsBrowser: () => <div>Locations page</div> }));
+vi.mock("@/pages/locations", () => ({ LocationsBrowser: () => <div>Locations page</div> }));
 vi.mock("@/pages/file", () => ({ FileBrowser: () => <div>Library files page</div> }));
 vi.mock("@/pages/media", () => ({ MediaBrowser: () => <div>Library media page</div> }));
 vi.mock("@/pages/jobs", () => ({ JobsBrowser: () => <div>Jobs page</div> }));
 vi.mock("@/pages/settings", () => ({ SettingsBrowser: () => <div>Settings page</div> }));
+vi.mock("@/pages/settings-preview", () => ({ PreviewSettingsBrowser: () => <div>Preview settings page</div> }));
 
 import App from "@/app";
 
@@ -44,7 +46,7 @@ describe("Job creation navigation", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText("Scan creation page")).toBeInTheDocument();
-    for (const name of ["Backup", "Restore", "Scan"]) expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    for (const name of ["Archive", "Restore", "Scan"]) expect(screen.getByRole("tab", { name })).toBeInTheDocument();
     for (const name of ["Preview", "Analyze", "Sync"]) expect(screen.queryByRole("tab", { name })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Jobs" })).toHaveAttribute("aria-selected", "true");
   });
@@ -62,6 +64,9 @@ describe("Job creation navigation", () => {
     await userEvent.click(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" }));
     expect(await screen.findByText("Settings page")).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Preview" }));
+    expect(await screen.findByText("Preview settings page")).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Preview" })).toHaveAttribute("aria-selected", "true");
     await userEvent.click(within(screen.getByRole("tablist", { name: "YATM modules" })).getByRole("tab", { name: "Library" }));
     expect(await screen.findByText("Library files page")).toBeInTheDocument();
   });

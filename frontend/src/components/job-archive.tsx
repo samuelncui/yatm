@@ -1,5 +1,5 @@
-import { ChangeEvent, Fragment, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { Feedback } from "@/components/feedback";
+import { ChangeEvent, Fragment, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
@@ -11,73 +11,56 @@ import DialogTitle from "@mui/material/DialogTitle";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 
-import { archiveJobCli, cli } from "@/api";
-import { ArchiveItem, ArchiveTapeWriteMode, GetArchiveJobProgressReply, Job, JobPhase, JobStatus, Media, MediaKind } from "@/entity";
-import { CancelJobButton, IndexingActions, isJobActive, JobCard, JobProgress, jobProgressFields } from "@/components/job-card";
-import { FileRow, FileRowPlaceholder } from "@/components/job-file-list-item";
+import { archiveJobCli, mediaCli } from "@/api";
+import { ArchiveItem, ArchiveTapeWriteMode, GetArchiveJobProgressResponse, Job, JobStatus, Media, MediaKind } from "@/entity";
+import { CancelJobButton, JobProgressCard, isJobRunning } from "@/components/job-card";
+import { FileRow } from "@/components/job-file-list-item";
+import { JobResultsDialog, type JobItemViews } from "@/components/job-results-dialog";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { RefreshContext } from "@/pages/jobs";
-import { errorMessage, formatFilesize } from "@/tools";
+import { errorMessage, formatFilesize, runUIAction } from "@/tools";
+import { useJobProgress } from "@/components/use-job-progress";
 
 export const ArchiveCard = ({ job }: { job: Job }) => {
   const [visible, setVisible] = useState(false);
-  const [archive, setArchive] = useState(GetArchiveJobProgressReply.create());
+  const loadProgress = useCallback(
+    async (signal: AbortSignal) => GetArchiveJobProgressResponse.create(await archiveJobCli.getProgress({ id: job.id }, { abort: signal }).response),
+    [job.id],
+  );
+  const { data, error: progressError } = useJobProgress(job.id, visible, loadProgress, "Could not load archive progress");
+  const archive = data ?? GetArchiveJobProgressResponse.create();
   const progress = archive.progress ?? null;
-  const [progressError, setProgressError] = useState("");
 
-  useEffect(() => {
-    if (!visible) return;
-    let active = true;
-    const fetchProgress = async () => {
-      try {
-        const response = await archiveJobCli.getProgress({ id: job.id }).response;
-        if (active) {
-          setArchive(response);
-          setProgressError("");
-        }
-      } catch (error) {
-        if (active) setProgressError(errorMessage(error, "Could not load backup progress"));
-      }
-    };
-    void fetchProgress();
-    const timer = setInterval(() => void fetchProgress(), 2000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [visible, job.id]);
-
-  const [fields, percentage] = useMemo(() => jobProgressFields(job, progress), [job, progress]);
-  const indexing = job.status === JobStatus.INDEXING;
-  const active = isJobActive(job);
+  const running = isJobRunning(job);
   return (
-    <JobCard
+    <JobProgressCard
       job={job}
+      progress={progress}
       onVisibilityChange={setVisible}
-      detail={
+      extras={
         <>
-          <JobProgress fields={fields} indexing={indexing && active} percentage={percentage} />
-          {progressError && <Alert severity="warning">{progressError}</Alert>}
-          {!!archive.previewJobId && <a href={`/jobs/${archive.previewJobId}`}>View preview job</a>}
-          {archive.previewError && <Alert severity="warning">Preview creation failed: {archive.previewError}</Alert>}
+          {progressError && <Feedback severity="warning">{progressError}</Feedback>}
+          {archiveExtras(archive)}
         </>
       }
       buttons={
         <Fragment>
-          {indexing ? (
-            <IndexingActions job={job} />
-          ) : (
-            <Fragment>
-              {job.phase === JobPhase.WAITING_FOR_MEDIA && <WriteMediaDialog job={job} />}
-              {active && <CancelJobButton jobID={job.id} />}
-              <ArchiveViewFilesDialog jobID={job.id} totalFiles={Number(progress?.totalFiles ?? 0n)} />
-            </Fragment>
-          )}
+          {job.status === JobStatus.READY && !running && <WriteMediaDialog key={job.id.toString()} job={job} />}
+          {running && <CancelJobButton jobID={job.id} />}
+          <JobResultsDialog jobId={job.id} title="Archive results" views={archiveResultViews} />
         </Fragment>
       }
     />
   );
 };
+
+/** The companion Preview the Archive started, or the reason it could not be created. */
+export const archiveExtras = (reply: GetArchiveJobProgressResponse): ReactNode => (
+  <>
+    {!!reply.previewJobId && <a href={`/jobs/${reply.previewJobId}`}>View preview job</a>}
+    {reply.previewError && <Feedback severity="warning">Preview creation failed: {reply.previewError}</Feedback>}
+  </>
+);
 
 type TapeForm = {
   device: string;
@@ -105,6 +88,14 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
   const { reply: inspected, loading: inspecting, error: inspectError, inspect, reset: resetInspection } = useMediaInspect();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const request = useRef(0);
+  const loadingVolumes = useRef(false);
+  useEffect(() => {
+    const pending = request;
+    return () => {
+      pending.current++;
+    };
+  }, []);
 
   const inspectTape = useCallback(
     async (device: string, identity?: string) => {
@@ -123,34 +114,44 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
     [inspect],
   );
 
-  const loadVolumes = async (reset: boolean) => {
+  const loadVolumes = async (reset: boolean, sequence = request.current) => {
+    if (!reset && loadingVolumes.current) return;
+    loadingVolumes.current = true;
     setVolumeLoading(true);
     try {
       const current = reset ? [] : volumes;
-      const reply = await cli.mediaList({
+      const reply = await mediaCli.list({
         param: { oneofKind: "list", list: { kinds: [MediaKind.VOLUME], offset: BigInt(current.length), limit: 100n, query: "" } },
       }).response;
+      if (sequence !== request.current) return;
       setVolumes(reset ? reply.media : [...current, ...reply.media]);
       setVolumeHasMore(reply.hasMore);
     } catch (error) {
-      setSubmitError(errorMessage(error, "Could not load backup volumes"));
+      if (sequence === request.current) setSubmitError(errorMessage(error, "Could not load archive volumes"));
     } finally {
-      setVolumeLoading(false);
+      if (sequence === request.current) {
+        loadingVolumes.current = false;
+        setVolumeLoading(false);
+      }
     }
   };
 
   const open = async () => {
+    const sequence = ++request.current;
     setDevices([]);
     setSubmitError("");
     try {
-      const [deviceReply] = await Promise.all([cli.deviceList({}).response, loadVolumes(true)]);
+      const [deviceReply] = await Promise.all([mediaCli.listDevices({}).response, loadVolumes(true, sequence)]);
+      if (sequence !== request.current) return;
       setDevices(deviceReply.devices);
     } catch (error) {
-      setSubmitError(errorMessage(error, "Could not load available storage"));
+      if (sequence === request.current) setSubmitError(errorMessage(error, "Could not load available storage"));
     }
   };
-  const close = () => {
-    if (submitting) return;
+  const resetDialog = () => {
+    request.current++;
+    loadingVolumes.current = false;
+    setVolumeLoading(false);
     resetInspection();
     setDevices(null);
     setVolumes([]);
@@ -161,6 +162,9 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
     setSubmitting(false);
     setSubmitError("");
   };
+  const close = () => {
+    if (!submitting) resetDialog();
+  };
   const selectDevice = (event: ChangeEvent<HTMLInputElement>) => {
     const device = event.target.value;
     setTape({ ...emptyTapeForm(), device });
@@ -168,6 +172,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
     void inspectTape(device);
   };
   const submit = async () => {
+    if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -186,9 +191,8 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
               },
             };
       await archiveJobCli.writeMedia({ id: job.id, target }).response;
-      await refresh();
-      setDevices(null);
-      setSubmitting(false);
+      resetDialog();
+      runUIAction(refresh, "Archive started, but the Job list could not refresh");
     } catch (reason) {
       setSubmitError(reason instanceof Error ? reason.message : "Unable to start the Media write");
       setSubmitting(false);
@@ -206,12 +210,12 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
 
   return (
     <Fragment>
-      <Button size="small" onClick={open}>
-        Choose backup storage
+      <Button size="small" disabled={devices !== null || submitting} onClick={open}>
+        Choose archive storage
       </Button>
       {devices && (
         <Dialog open onClose={close} maxWidth="sm" fullWidth>
-          <DialogTitle>Choose backup storage</DialogTitle>
+          <DialogTitle>Choose archive storage</DialogTitle>
           <DialogContent>
             <TextField
               select
@@ -302,14 +306,14 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                 {!inspected?.identity && <MediaInspectResult reply={inspected} loading={inspecting} error={inspectError} />}
               </Fragment>
             )}
-            {submitError && <Alert severity="error">{submitError}</Alert>}
+            {submitError && <Feedback severity="error">{submitError}</Feedback>}
           </DialogContent>
           <DialogActions>
+            <Button disabled={!canSubmit} onClick={submit}>
+              Start archive
+            </Button>
             <Button disabled={submitting} onClick={close}>
               Cancel
-            </Button>
-            <Button disabled={!canSubmit} onClick={submit}>
-              Start backup
             </Button>
           </DialogActions>
         </Dialog>
@@ -318,59 +322,15 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
   );
 };
 
-const ArchiveViewFilesDialog = ({ jobID, totalFiles }: { jobID: bigint; totalFiles: number }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <Fragment>
-      <Button size="small" onClick={() => setOpen(true)}>
-        View Files
-      </Button>
-      {open && <ArchiveFileList jobID={jobID} totalFiles={totalFiles} onClose={() => setOpen(false)} />}
-    </Fragment>
-  );
-};
-
-const ArchiveFileList = memo(({ jobID, totalFiles, onClose }: { jobID: bigint; totalFiles: number; onClose: () => void }) => {
-  const [cache, setCache] = useState<Record<number, ArchiveItem>>({});
-  const requestSequence = useRef(0);
-  const loadRange = useCallback(
-    async ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) => {
-      const request = ++requestSequence.current;
-      const response = await archiveJobCli.listFiles({
-        id: jobID,
-        limit: endIndex - startIndex + 1,
-        offset: BigInt(startIndex),
-        filterStatus: [],
-      }).response;
-      if (request !== requestSequence.current) return;
-      const next: Record<number, ArchiveItem> = {};
-      response.items.forEach((item, index) => {
-        next[startIndex + index] = item;
-      });
-      setCache(next);
-    },
-    [jobID],
-  );
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="lg" fullWidth scroll="paper" className="job-view-dialog">
-      <DialogTitle>View Files</DialogTitle>
-      <DialogContent dividers style={{ padding: 0 }}>
-        <Virtuoso
-          style={{ width: "100%", height: "100%" }}
-          totalCount={totalFiles}
-          defaultItemHeight={54}
-          rangeChanged={loadRange}
-          itemContent={(index) => {
-            const item = cache[index];
-            if (!item?.file) return <FileRowPlaceholder />;
-            return <FileRow src={{ path: item.file.mediaPath || item.file.targetPath, size: item.size, status: item.status }} />;
-          }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-});
+const archiveResultViews: JobItemViews = [
+  {
+    id: "files",
+    label: "Files",
+    emptyLabel: "No archive results yet.",
+    listing: "archive-files",
+    cursorOf: (item: ArchiveItem) => item.file?.targetPath ?? "",
+    render: (item: ArchiveItem) => (
+      <FileRow src={{ path: item.file?.mediaPath || item.file?.targetPath || "Unknown file", size: item.sizeBytes, status: item.status }} />
+    ),
+  },
+];

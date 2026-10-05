@@ -1,17 +1,15 @@
 syntax = "proto3";
-package library_entity_type;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 enum LibraryEntityType {
-    reserved "TAPE";
 
-    NONE = 0;
-    FILE = 1;
-    MEDIA = 2;
-    POSITION = 3;
-    LOCATION = 4;
-    FILE_LOCATION = 5;
-    FILE_VERSION = 6;
-    FILE_TRACKING_KEY = 7;
-    RESTORE_RESULT = 8;
+    LIBRARY_ENTITY_TYPE_UNSPECIFIED = 0;
+    LIBRARY_ENTITY_TYPE_FILE = 1;
+    LIBRARY_ENTITY_TYPE_MEDIA = 2;
+    LIBRARY_ENTITY_TYPE_POSITION = 3;
+    LIBRARY_ENTITY_TYPE_LOCATION = 4;
+    LIBRARY_ENTITY_TYPE_FILE_LOCATION = 5;
+    LIBRARY_ENTITY_TYPE_FILE_VERSION = 6;
+    LIBRARY_ENTITY_TYPE_FILE_TRACKING_KEY = 7;
 }

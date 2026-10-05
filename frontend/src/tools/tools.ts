@@ -4,8 +4,18 @@ import { Nullable } from "tsdef";
 import { filesize } from "filesize";
 import { I18nConfig, FileData, defaultFormatters } from "@samuelncui/chonky";
 import { toast } from "react-toastify";
+import { RpcError } from "@protobuf-ts/runtime-rpc";
 
-export const errorMessage = (error: unknown, fallback: string): string => (error instanceof Error ? error.message : fallback);
+export const errorMessage = (error: unknown, fallback: string): string => {
+  if (!(error instanceof Error)) return fallback;
+  // The installed gRPC-Web transport retains percent-encoded grpc-message text.
+  if (!(error instanceof RpcError)) return error.message;
+  try {
+    return decodeURIComponent(error.message);
+  } catch {
+    return error.message;
+  }
+};
 
 export const runUIAction = (action: () => Promise<unknown>, fallback: string): void => {
   try {

@@ -8,10 +8,6 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-type fileStateCommand struct {
-	runtime *runtime
-	Args    fileIDArgs `positional-args:"yes"`
-}
 type fileVersionCommand struct {
 	runtime *runtime
 	Args    fileIDArgs `positional-args:"yes"`
@@ -37,7 +33,9 @@ type contentDuplicatesCommand struct {
 }
 type importPositionsCommand struct {
 	runtime *runtime
-	Args    fileIDsArgs `positional-args:"yes"`
+	MediaID int64           `long:"media-id" description:"Restrict the admission to one Media; its top-level directories are used when no Position is given"`
+	DryRun  bool            `long:"dryrun" description:"Report what would be added without changing Library metadata"`
+	Args    positionIDsArgs `positional-args:"yes"`
 }
 
 type inspectSelectionCommand struct {
@@ -45,29 +43,25 @@ type inspectSelectionCommand struct {
 	selectionOptions
 	restorePolicyOptions
 	VersionIDs         []int64 `long:"version-id" description:"Explicit saved version; repeatable"`
-	Restore            bool    `long:"restore" description:"Inspect a Restore selection rather than current originals"`
-	TargetLocation     int64   `long:"target-location" description:"Optional Restore destination for Ignore warnings"`
-	Directory          string  `long:"directory" description:"Restore destination subdirectory"`
-	AllowDamagedCopies bool    `long:"allow-damaged-copies" description:"Include damaged copies in Restore availability estimates"`
+	Restore            bool
+	TargetLocation     int64  `long:"target-location" description:"Optional Restore destination for Ignore warnings"`
+	Directory          string `long:"directory" description:"Restore destination subdirectory"`
+	AllowDamagedCopies bool   `long:"allow-damaged-copies" description:"Include damaged copies in Restore availability estimates"`
 }
 
 func registerCatalogCommands(root *flags.Command, rt *runtime) error {
 	// Attach content queries to the existing File command tree.
-	group := root.Find("file")
+	group := root.Find("files")
 	if group == nil {
 		return fmt.Errorf("File commands must be registered before the content catalog")
 	}
 	return addCommands(group,
-		commandSpec{name: "state", description: "Inspect the original and current archive coverage", handler: &fileStateCommand{runtime: rt}},
 		commandSpec{name: "locate-original", description: "Explicitly associate a live path with an existing File", handler: &locateOriginalCommand{runtime: rt}},
 		commandSpec{name: "versions", description: "List one File's archived versions", handler: &fileVersionsCommand{runtime: rt}},
 		commandSpec{name: "version", description: "Get a FileVersion by version ID", handler: &fileVersionCommand{runtime: rt}},
 		commandSpec{name: "copies", description: "List copies of exact opaque content", handler: &contentCopiesCommand{runtime: rt}},
 		commandSpec{name: "duplicates", description: "Find independent Files with matching content", handler: &contentDuplicatesCommand{runtime: rt}},
-		commandSpec{name: "duplicate-groups", description: "Search grouped duplicate originals", handler: &duplicateGroupsCommand{runtime: rt}},
-		commandSpec{name: "duplicate-members", description: "Page every original in one content group", handler: &duplicateMembersCommand{runtime: rt}},
-		commandSpec{name: "import-positions", description: "Add selected archive inventory as independent Library Files", handler: &importPositionsCommand{runtime: rt}},
-		commandSpec{name: "inspect-selection", description: "Resolve a selection's scope, count and missing content before creating a Job", handler: &inspectSelectionCommand{runtime: rt}},
+		commandSpec{name: "import-positions", description: "Add archive inventory as independent Library Files", handler: &importPositionsCommand{runtime: rt}},
 	)
 }
 
@@ -101,7 +95,7 @@ func (c *inspectSelectionCommand) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
-	request := &entity.InspectSelectionRequest{Selections: selections, FileVersionIds: c.VersionIDs, Restore: c.Restore,
+	request := &entity.EstimateRestoreJobRequest{Selections: selections, FileVersionIds: c.VersionIDs,
 		AllowDamagedCopies: c.AllowDamagedCopies, VersionPolicy: policy, SkipUnmatchedVersions: c.SkipUnmatchedVersions}
 	if c.TargetLocation != 0 {
 		request.Destination = &entity.RestoreDestination{LocationId: c.TargetLocation, Path: c.Directory}
@@ -110,34 +104,30 @@ func (c *inspectSelectionCommand) Execute(_ []string) error {
 	// Inspect with the same bounded expansion and scope rules used by Job creation.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.InspectSelectionRequest, entity.InspectSelectionReply](ctx, c.runtime,
-		entity.FileCatalogService_InspectSelection_FullMethodName,
-		request)
-	if err != nil {
-		return err
+	var reply *entity.SelectionInspectionResult
+	if c.Restore {
+		response, callErr := callRPC[entity.EstimateRestoreJobRequest, entity.EstimateRestoreJobResponse](ctx, c.runtime, entity.RestoreJobService_Estimate_FullMethodName, request)
+		if callErr != nil {
+			return callErr
+		}
+		reply = response.GetResult()
+	} else {
+		response, callErr := callRPC[entity.EstimateArchiveJobRequest, entity.EstimateArchiveJobResponse](ctx, c.runtime, entity.ArchiveJobService_Estimate_FullMethodName, &entity.EstimateArchiveJobRequest{Selections: selections})
+		if callErr != nil {
+			return callErr
+		}
+		reply = response.GetResult()
 	}
 	return writeProto(c.runtime.stdout, reply)
 }
 
-func (c *fileStateCommand) Execute(_ []string) error {
-	if err := positiveID("File ID", c.Args.ID); err != nil {
-		return err
-	}
-	ctx, cancel := c.runtime.context()
-	defer cancel()
-	reply, err := callRPC[entity.GetFileStateRequest, entity.FileStateReply](ctx, c.runtime, entity.FileCatalogService_GetState_FullMethodName, &entity.GetFileStateRequest{FileId: c.Args.ID})
-	if err != nil {
-		return err
-	}
-	return writeProto(c.runtime.stdout, reply)
-}
 func (c *fileVersionCommand) Execute(_ []string) error {
 	if err := positiveID("FileVersion ID", c.Args.ID); err != nil {
 		return err
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.GetFileVersionRequest, entity.FileVersionReply](ctx, c.runtime, entity.FileCatalogService_GetVersion_FullMethodName, &entity.GetFileVersionRequest{Id: c.Args.ID})
+	reply, err := callRPC[entity.GetFileVersionRequest, entity.GetFileVersionResponse](ctx, c.runtime, entity.FilesService_GetVersion_FullMethodName, &entity.GetFileVersionRequest{Id: c.Args.ID})
 	if err != nil {
 		return err
 	}
@@ -149,7 +139,7 @@ func (c *fileVersionsCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListFileVersionsRequest, entity.ListFileVersionsReply](ctx, c.runtime, entity.FileCatalogService_ListVersions_FullMethodName, &entity.ListFileVersionsRequest{FileId: c.Args.ID, AfterId: c.AfterID, Limit: c.Limit})
+	reply, err := callRPC[entity.ListFileVersionsRequest, entity.ListFileVersionsResponse](ctx, c.runtime, entity.FilesService_ListVersions_FullMethodName, &entity.ListFileVersionsRequest{FileId: c.Args.ID, AfterId: c.AfterID, Limit: c.Limit})
 	if err != nil {
 		return err
 	}
@@ -169,7 +159,7 @@ func (c *contentCopiesCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListContentCopiesRequest, entity.ListContentCopiesReply](ctx, c.runtime, entity.FileCatalogService_ListCopies_FullMethodName, &entity.ListContentCopiesRequest{Signature: signature, AfterId: c.AfterID, Limit: c.Limit})
+	reply, err := callRPC[entity.ListContentCopiesRequest, entity.ListContentCopiesResponse](ctx, c.runtime, entity.FilesService_ListCopies_FullMethodName, &entity.ListContentCopiesRequest{Signature: signature, AfterId: c.AfterID, Limit: c.Limit})
 	if err != nil {
 		return err
 	}
@@ -182,20 +172,30 @@ func (c *contentDuplicatesCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListContentDuplicatesRequest, entity.ListContentDuplicatesReply](ctx, c.runtime, entity.FileCatalogService_ListDuplicates_FullMethodName, &entity.ListContentDuplicatesRequest{Signature: signature, AfterFileId: c.AfterID, Limit: c.Limit})
+	reply, err := callRPC[entity.ListContentDuplicatesRequest, entity.ListContentDuplicatesResponse](ctx, c.runtime, entity.FilesService_ListDuplicates_FullMethodName, &entity.ListContentDuplicatesRequest{Signature: signature, AfterFileId: c.AfterID, Limit: c.Limit})
 	if err != nil {
 		return err
 	}
 	return writeProto(c.runtime.stdout, reply)
 }
 func (c *importPositionsCommand) Execute(_ []string) error {
-	ids, err := positiveIDs("Position ID", c.Args.IDs)
+	ids, err := optionalPositiveIDs("Position ID", c.Args.IDs)
 	if err != nil {
 		return err
 	}
+	if c.MediaID < 0 {
+		return usageError(fmt.Errorf("Media ID must not be negative"))
+	}
+	if len(ids) == 0 && c.MediaID == 0 {
+		return usageError(fmt.Errorf("select at least one Position or one Media"))
+	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ImportArchivePositionsRequest, entity.ImportArchivePositionsReply](ctx, c.runtime, entity.FileCatalogService_ImportPositions_FullMethodName, &entity.ImportArchivePositionsRequest{PositionIds: ids})
+	request := &entity.ImportPositionsRequest{PositionIds: ids, Dryrun: c.DryRun}
+	if c.MediaID > 0 {
+		request.MediaId = &c.MediaID
+	}
+	reply, err := callRPC[entity.ImportPositionsRequest, entity.ImportPositionsResponse](ctx, c.runtime, entity.FilesService_ImportPositions_FullMethodName, request)
 	if err != nil {
 		return err
 	}

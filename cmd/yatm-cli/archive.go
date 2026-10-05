@@ -19,10 +19,9 @@ type archiveCreateCommand struct {
 
 type archiveFilesCommand struct {
 	runtime  *runtime
-	Statuses []string   `long:"status" description:"Copy status; repeatable"`
-	Limit    *int32     `long:"limit" description:"Maximum results in this page"`
-	Offset   *int64     `long:"offset" description:"Page offset"`
-	Args     fileIDArgs `positional-args:"yes"`
+	Statuses []string `long:"status" description:"Copy status; repeatable"`
+	jobResultPageOptions
+	Args fileIDArgs `positional-args:"yes"`
 }
 
 type archiveWriteVolumeCommand struct {
@@ -54,6 +53,7 @@ func registerArchiveCommands(root *flags.Command, commandRuntime *runtime) error
 	}
 	if err := addCommands(
 		group,
+		commandSpec{name: "estimate", description: "Estimate Archive selections", handler: &inspectSelectionCommand{runtime: commandRuntime}},
 		commandSpec{name: "create", description: "Create an Archive Job", handler: &archiveCreateCommand{runtime: commandRuntime}},
 		commandSpec{name: "files", description: "List one Archive manifest page", handler: &archiveFilesCommand{runtime: commandRuntime}},
 	); err != nil {
@@ -88,7 +88,7 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
-	if preview == entity.PreviewPolicy_PREVIEW_NONE && c.ForceRehash {
+	if preview == entity.PreviewPolicy_PREVIEW_POLICY_NONE && c.ForceRehash {
 		return usageError(fmt.Errorf("force-rehash requires a Preview generation policy"))
 	}
 
@@ -103,8 +103,8 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 		return usageError(fmt.Errorf("at least one file-id or location selection is required"))
 	}
 
-	// Create one Archive Job from the resolved Source identities.
-	reply, err := callRPC[entity.CreateArchiveJobRequest, entity.CreateArchiveJobReply](
+	// Create one Archive Job from the selected roots.
+	reply, err := callRPC[entity.CreateArchiveJobRequest, entity.CreateArchiveJobResponse](
 		ctx,
 		c.runtime,
 		entity.ArchiveJobService_Create_FullMethodName,
@@ -125,28 +125,22 @@ func (c *archiveFilesCommand) Execute(_ []string) error {
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
 		return err
 	}
-	if err := validateLimit32("Archive file limit", c.Limit); err != nil {
-		return err
-	}
-	if err := validateOffset("Archive file offset", c.Offset); err != nil {
+	if err := c.jobResultPageOptions.validate(); err != nil {
 		return err
 	}
 	statuses, err := parseCopyStatuses(c.Statuses)
 	if err != nil {
 		return err
 	}
-	limit := int32(0)
-	if c.Limit != nil {
-		limit = *c.Limit
-	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListArchiveJobFilesRequest, entity.ListArchiveJobFilesReply](
+	reply, err := callRPC[entity.ListArchiveJobFilesRequest, entity.ListArchiveJobFilesResponse](
 		ctx,
 		c.runtime,
 		entity.ArchiveJobService_ListFiles_FullMethodName,
 		&entity.ListArchiveJobFilesRequest{
-			Id: c.Args.ID, Limit: limit, Offset: c.Offset, FilterStatus: statuses,
+			Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset,
+			IncludeTotal: c.IncludeTotal, FilterStatus: statuses,
 		},
 	)
 	if err != nil {
@@ -165,7 +159,7 @@ func (c *archiveWriteVolumeCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaReply](
+	reply, err := callRPC[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaResponse](
 		ctx,
 		c.runtime,
 		entity.ArchiveJobService_WriteMedia_FullMethodName,
@@ -256,7 +250,7 @@ func inspectExpectedTape(
 	ctx context.Context,
 	commandRuntime *runtime,
 	device, barcode string,
-) (*entity.MediaInspectReply, error) {
+) (*entity.InspectMediaResponse, error) {
 	device = strings.TrimSpace(device)
 	barcode = strings.TrimSpace(barcode)
 	if device == "" {
@@ -285,7 +279,7 @@ func writeArchiveTape(
 	id int64,
 	target *entity.ArchiveTapeTarget,
 ) error {
-	reply, err := callRPC[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaReply](
+	reply, err := callRPC[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaResponse](
 		ctx,
 		commandRuntime,
 		entity.ArchiveJobService_WriteMedia_FullMethodName,

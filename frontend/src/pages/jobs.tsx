@@ -1,10 +1,9 @@
+import { Feedback } from "@/components/feedback";
 import { createContext, memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import LinearProgress from "@mui/material/LinearProgress";
-import Alert from "@mui/material/Alert";
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import { useParams, useLocation, useSearchParams, Link } from "react-router";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 
@@ -14,12 +13,12 @@ import { JobFilters, jobFilterFromParams } from "@/components/job-filters";
 
 import { JobCard, jobLabel } from "@/components/job-card";
 import { contentTime } from "@/components/content-status";
+import { PageHeading } from "@/components/page-heading";
 import { errorMessage } from "@/tools";
 import { ArchiveCard } from "@/components/job-archive";
 import { RestoreCard } from "@/components/job-restore";
 import { ScanCard } from "@/components/job-scan";
 import { useJobListState } from "@/components/job-list-state";
-import { jobListPath } from "@/pages/routes";
 
 export const RefreshContext = createContext<() => Promise<void>>(async () => {});
 
@@ -34,7 +33,7 @@ const mergeJobs = (current: Job[], changed: Job[]) => {
     byID.set(job.id, job);
   }
   return Array.from(byID.values()).sort((a, b) => {
-    if (a.createdAtMs !== b.createdAtMs) return a.createdAtMs > b.createdAtMs ? -1 : 1;
+    if (a.createdAtNs !== b.createdAtNs) return a.createdAtNs > b.createdAtNs ? -1 : 1;
     if (a.id === b.id) return 0;
     return a.id > b.id ? -1 : 1;
   });
@@ -52,7 +51,6 @@ export const JobsBrowser = () => {
 
 const FocusedJob = ({ id }: { id: bigint }) => {
   const location = useLocation();
-  const returnTo = jobListPath(location.state?.returnTo);
   const [job, setJob] = useState<Job>();
   const [error, setError] = useState("");
   const request = useRef(0);
@@ -61,9 +59,9 @@ const FocusedJob = ({ id }: { id: bigint }) => {
     try {
       const reply = await jobCli.get({ id }).response;
       if (sequence !== request.current) return;
-      if (!reply.job || reply.job.deletedAtMs > 0n) {
+      if (!reply.job || reply.job.deletedAtNs !== 0n) {
         setJob(undefined);
-        throw new Error("This job no longer exists. Your Library files and backup copies are not deleted with it.");
+        throw new Error("This job no longer exists. Your Library files and archive copies are not deleted with it.");
       }
       setJob(reply.job);
       setError("");
@@ -90,27 +88,24 @@ const FocusedJob = ({ id }: { id: bigint }) => {
   }, [refresh]);
   return (
     <RefreshContext.Provider value={refresh}>
-      <Box className="browser-box focused-job-page">
-        <header className="product-page-heading">
-          <div>
-            <Link className="job-back-link" to={returnTo}>
-              <ArrowBackRoundedIcon fontSize="small" />
-              Jobs
-            </Link>
-            <h1>{job ? jobLabel(job.kind) : "Job"} details</h1>
-            {job ? <p>Created {contentTime(job.createdAtMs)}</p> : !error && <p>Loading your job…</p>}
-          </div>
-          {typeof location.state?.returnTo === "string" && /^\/settings\/locations\/[1-9]\d*\?tab=jobs$/.test(location.state.returnTo) && (
-            <Button component={Link} to={location.state.returnTo}>
-              Back to Location
-            </Button>
-          )}
-        </header>
+      <Box className="browser-box jobs-page focused-job-page">
+        <Box sx={{ pb: 2.5 }}>
+          <PageHeading
+            title={`${job ? jobLabel(job.kind) : "Job"} details`}
+            description={job ? `Created ${contentTime(job.createdAtNs || undefined)}` : error ? undefined : "Loading your job…"}
+            actions={
+              typeof location.state?.returnTo === "string" && /^\/settings\/locations\/[1-9]\d*\?tab=jobs$/.test(location.state.returnTo) ? (
+                <Button component={Link} to={location.state.returnTo}>
+                  Back to Location
+                </Button>
+              ) : undefined
+            }
+          />
+        </Box>
         {error && (
-          <Alert severity="error">
+          <Feedback severity="error" action={<Button onClick={() => void refresh()}>Retry</Button>}>
             {error}
-            <Button onClick={() => void refresh()}>Retry</Button>
-          </Alert>
+          </Feedback>
         )}
         {job ? (
           <div className="job-list">
@@ -125,107 +120,93 @@ const FocusedJob = ({ id }: { id: bigint }) => {
 };
 
 const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: string }) => {
-  const [saved, saveSnapshot] = useJobListState(filterKey);
-  const [query] = useState(filter);
-  const [initial] = useState(saved);
-  const [jobs, setJobs] = useState<Job[] | null>(initial?.jobs ?? null);
+  const { snapshot, save: saveSnapshot, getSnapshot, scroll } = useJobListState(filterKey);
+  const [initialScroll] = useState(snapshot?.scrollTop ?? 0);
+  const jobs = snapshot?.jobs ?? null;
+  const canLoadMore = snapshot?.hasMore ?? false;
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [catalogError, setCatalogError] = useState("");
-  const [canLoadMore, setCanLoadMore] = useState(initial?.hasMore ?? false);
-  const revision = useRef(initial?.revision ?? 0n);
-  const snapshotRevision = useRef(initial?.snapshotRevision ?? 0n);
-  const beforeID = useRef(initial?.beforeID);
-  const hasMore = useRef(initial?.hasMore ?? false);
   const loadingMoreRef = useRef(false);
   const refreshing = useRef(false);
+  const generation = useRef(0);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = initial?.scrollTop ?? 0;
-  }, [initial]);
-  useEffect(() => {
-    if (jobs)
-      saveSnapshot({
-        jobs,
-        revision: revision.current,
-        snapshotRevision: snapshotRevision.current,
-        beforeID: beforeID.current,
-        hasMore: hasMore.current,
-        scrollTop: listRef.current?.scrollTop ?? 0,
-      });
-  }, [jobs, saveSnapshot]);
+    if (listRef.current) listRef.current.scrollTop = initialScroll;
+  }, [initialScroll]);
 
   const loadJobs = useCallback(async () => {
-    const reply = await jobCli.list({ filter: { ...query, limit: catalogPageSize } }).response;
-    revision.current = reply.revision;
-    snapshotRevision.current = reply.revision;
-    beforeID.current = reply.jobs.at(-1)?.id;
-    hasMore.current = reply.hasMore;
-    setCanLoadMore(reply.hasMore);
+    const request = generation.current;
+    const reply = await jobCli.list({ filter: { ...filter, limit: catalogPageSize } }).response;
+    if (request !== generation.current) return;
+    saveSnapshot({
+      jobs: reply.jobs,
+      revision: reply.revision,
+      snapshotRevision: reply.revision,
+      beforeID: reply.jobs.at(-1)?.id,
+      hasMore: reply.hasMore,
+      scrollTop: 0,
+    });
     setLoadMoreFailed(false);
-    setJobs(reply.jobs);
-  }, [query]);
+  }, [filter, saveSnapshot]);
 
   const loadMore = useCallback(async () => {
-    if (!hasMore.current || loadingMoreRef.current || beforeID.current === undefined) return;
-
+    const current = getSnapshot();
+    if (!current?.hasMore || loadingMoreRef.current || current.beforeID === undefined) return;
+    const request = generation.current;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const reply = await jobCli.list({
-        filter: {
-          ...query,
-          limit: catalogPageSize,
-          snapshotRevision: snapshotRevision.current,
-          beforeId: beforeID.current,
-        },
-      }).response;
-      beforeID.current = reply.jobs.at(-1)?.id;
-      hasMore.current = reply.hasMore;
-      setCanLoadMore(reply.hasMore);
+      const reply = await jobCli.list({ filter: { ...filter, limit: catalogPageSize, snapshotRevision: current.snapshotRevision, beforeId: current.beforeID } })
+        .response;
+      if (request !== generation.current) return;
+      saveSnapshot((latest) => latest && { ...latest, jobs: mergeJobs(latest.jobs, reply.jobs), beforeID: reply.jobs.at(-1)?.id, hasMore: reply.hasMore });
       setLoadMoreFailed(false);
-      setJobs((current) => mergeJobs(current ?? [], reply.jobs));
     } catch (error) {
+      if (request !== generation.current) return;
       console.error("load more jobs failed", error);
       setLoadMoreFailed(true);
     } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
-    }
-  }, [query]);
-
-  const refresh = useCallback(async () => {
-    let hasMoreChanges = true;
-    while (hasMoreChanges) {
-      const reply = await jobCli.list({
-        filter: { ...query, status: undefined, changedAfterRevision: revision.current, limit: changePageSize },
-      }).response;
-      revision.current = reply.revision;
-      hasMoreChanges = reply.hasMore;
-      if (reply.jobs.length > 0) {
-        setJobs((current) => mergeJobs(current ?? [], reply.jobs));
+      if (request === generation.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
       }
     }
-  }, [query]);
+  }, [filter, getSnapshot, saveSnapshot]);
+
+  const refresh = useCallback(async () => {
+    const request = generation.current;
+    let more = true;
+    while (more) {
+      const current = getSnapshot();
+      if (!current || request !== generation.current) return;
+      const reply = await jobCli.list({ filter: { ...filter, changedAfterRevision: current.revision, limit: changePageSize } }).response;
+      if (request !== generation.current) return;
+      saveSnapshot((latest) => latest && { ...latest, revision: reply.revision, jobs: reply.jobs.length ? mergeJobs(latest.jobs, reply.jobs) : latest.jobs });
+      more = reply.hasMore;
+    }
+  }, [filter, getSnapshot, saveSnapshot]);
   const updateCatalog = useCallback(async () => {
     if (refreshing.current) return;
+    const request = generation.current;
     refreshing.current = true;
     try {
-      if (jobs === null) await loadJobs();
+      if (!getSnapshot()) await loadJobs();
       else await refresh();
-      setCatalogError("");
+      if (request === generation.current) setCatalogError("");
     } catch (error) {
-      setCatalogError(errorMessage(error, "Could not load jobs"));
+      if (request === generation.current) setCatalogError(errorMessage(error, "Could not load jobs"));
     } finally {
-      refreshing.current = false;
+      if (request === generation.current) refreshing.current = false;
     }
-  }, [jobs, loadJobs, refresh]);
+  }, [getSnapshot, loadJobs, refresh]);
   const loadMoreEvent = useEffectEvent(loadMore);
   const updateCatalogEvent = useEffectEvent(updateCatalog);
 
   useEffect(() => {
     let cancelled = false;
+    const requests = generation;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
@@ -237,6 +218,9 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
 
     return () => {
       cancelled = true;
+      requests.current++;
+      refreshing.current = false;
+      loadingMoreRef.current = false;
       if (timer) clearTimeout(timer);
     };
   }, []);
@@ -249,7 +233,7 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
       (entries) => {
         if (entries[0]?.isIntersecting) void loadMoreEvent();
       },
-      { rootMargin: "200px" },
+      { root: listRef.current, rootMargin: "200px" },
     );
     observer.observe(target);
     return () => observer.disconnect();
@@ -257,7 +241,7 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
 
   return (
     <RefreshContext.Provider value={updateCatalog}>
-      <Box className="browser-box">
+      <Box className="browser-box jobs-page">
         <JobFilters />
         <div
           className="job-list"
@@ -265,19 +249,16 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
           ref={listRef}
           onScroll={(event) => {
             const scrollTop = event.currentTarget.scrollTop;
-            saveSnapshot((current) => (current ? { ...current, scrollTop } : current));
+            scroll(scrollTop);
           }}
         >
           {catalogError && (
-            <Alert severity="error">
+            <Feedback severity="error" action={<Button onClick={() => void updateCatalog()}>Retry</Button>}>
               {catalogError}
-              <Button onClick={() => void updateCatalog()}>Retry</Button>
-            </Alert>
+            </Feedback>
           )}
           {jobs
-            ? jobs
-                .filter((job) => job.deletedAtMs === 0n && (query.status === undefined || job.status === query.status))
-                .map((job) => <GetJobCard job={job} key={job.id.toString()} />)
+            ? jobs.filter((job) => job.deletedAtNs === 0n).map((job) => <GetJobCard job={job} key={job.id.toString()} />)
             : !catalogError && <LinearProgress />}
           <div className="job-list-end" ref={endRef}>
             {loadingMore && <LinearProgress />}

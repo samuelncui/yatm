@@ -17,9 +17,9 @@ import (
 	"testing"
 
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
-	"github.com/samuelncui/yatm/apis"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
+	"github.com/samuelncui/yatm/internal/apis"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -125,7 +125,6 @@ func serveCLI(t *testing.T, api *apis.API, exe *executor.Executor) *cliConnectio
 	t.Helper()
 	// Fault-injection fixtures retain server ownership, but use the production HTTP transport.
 	server := grpc.NewServer()
-	entity.RegisterServiceServer(server, api)
 	entity.RegisterJobServiceServer(server, api)
 	api.RegisterLocations(server)
 	exe.RegisterJobServices(server)
@@ -135,7 +134,6 @@ func serveCLI(t *testing.T, api *apis.API, exe *executor.Executor) *cliConnectio
 	httpServer := httptest.NewServer(mux)
 	t.Cleanup(func() { httpServer.Close(); server.Stop() })
 	connection := &cliConnection{binary: testBinary(t, "yatm-cli"), url: httpServer.URL, directory: t.TempDir()}
-	setFixtureAutoCollect(t, context.Background(), connection, false)
 	return connection
 }
 
@@ -173,8 +171,13 @@ func (c *cliConnection) Invoke(ctx context.Context, method string, request, repl
 }
 
 func decodeCLIOutput(output []byte, message proto.Message) error {
+	// The detail CLI prints the inner projection instead of the unary RPC envelope.
+	if reply, ok := message.(*entity.GetFileResponse); ok {
+		reply.Detail = new(entity.FilesDetail)
+		return protojson.Unmarshal(output, reply.Detail)
+	}
 	// Job logs intentionally use readable UTF-8 text instead of protobuf's base64 bytes representation.
-	if reply, ok := message.(*entity.GetJobLogReply); ok {
+	if reply, ok := message.(*entity.GetJobLogResponse); ok {
 		var value struct {
 			Logs   string `json:"logs"`
 			Offset int64  `json:"offset,string"`
@@ -185,7 +188,33 @@ func decodeCLIOutput(output []byte, message proto.Message) error {
 		reply.Logs, reply.Offset = []byte(value.Logs), value.Offset
 		return nil
 	}
+	// A listing writes one message per batch, so its batches merge into the one reply a
+	// caller reads; every other command writes exactly one message.
+	if reply, ok := message.(*entity.ListFilesResponse); ok {
+		return decodeListBatches(output, reply)
+	}
 	return protojson.Unmarshal(output, message)
+}
+
+// decodeListBatches merges one listing's JSON Lines batches into a single reply: rows
+// accumulate, and the directory facts its first batch states stay stated.
+func decodeListBatches(output []byte, reply *entity.ListFilesResponse) error {
+	batches := 0
+	for _, line := range bytes.Split(output, []byte("\n")) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var batch entity.ListFilesResponse
+		if err := protojson.Unmarshal(line, &batch); err != nil {
+			return err
+		}
+		proto.Merge(reply, &batch)
+		batches++
+	}
+	if batches == 0 {
+		return fmt.Errorf("listing wrote no batch")
+	}
+	return nil
 }
 
 func (*cliConnection) NewStream(context.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
@@ -194,12 +223,9 @@ func (*cliConnection) NewStream(context.Context, *grpc.StreamDesc, string, ...gr
 
 func decimal(value int64) string { return strconv.FormatInt(value, 10) }
 
-func selectionArguments(selections []*entity.FileSelection, ids []int64) ([]string, error) {
+func selectionArguments(selections []*entity.FileSelection) ([]string, error) {
 	// CLI selections preserve identity and scope; the server freezes and expands them.
 	var result []string
-	for _, id := range ids {
-		result = append(result, "--file-id", decimal(id))
-	}
 	for _, selected := range selections {
 		switch value := selected.Target.(type) {
 		case *entity.FileSelection_Library:
@@ -220,7 +246,7 @@ func indexedSelections(t *testing.T, ctx context.Context, connection *cliConnect
 	t.Helper()
 	selections := liveSelections(t, ctx, connection, root, paths...)
 	// Tests for content matching explicitly request analysis; ordinary content workflows do not require it.
-	job, err := entity.NewScanJobServiceClient(connection).Create(ctx, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{LocationId: selections[0].GetLocation().LocationId, ResultPolicy: entity.ScanResultPolicy_PUBLISH_ORIGINALS}})
+	job, err := entity.NewScanJobServiceClient(connection).Create(ctx, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{Selections: []*entity.FileSelection{{Target: &entity.FileSelection_Location{Location: &entity.LocationSelection{LocationId: selections[0].GetLocation().LocationId, Path: ""}}, Scope: entity.FileScope_FILE_SCOPE_ALL}}, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_NONE}})
 	require.NoError(t, err)
 	_, err = connection.run(ctx, "job", "wait", decimal(job.Job.Id), "--wait-timeout", "2m", "--poll-interval", "100ms")
 	require.NoError(t, err)
@@ -252,12 +278,6 @@ func liveSelections(t *testing.T, ctx context.Context, connection *cliConnection
 		require.NoError(t, err)
 		source = registered.Location
 	}
-	if source.Binding == entity.OnlineBinding_UNCONFIRMED {
-		confirmed, err := locations.Confirm(ctx, &entity.LocationRef{Id: source.Id, Revision: source.Revision})
-		require.NoError(t, err)
-		source = confirmed.Location
-	}
-
 	// Select real paths without collection or content analysis.
 	result := make([]*entity.FileSelection, 0, len(paths))
 	for _, path := range paths {

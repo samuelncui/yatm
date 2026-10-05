@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Feedback } from "@/components/feedback";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack } from "@mui/material";
 import type { FileData } from "@samuelncui/chonky";
-import { fileCatalogCli } from "@/api";
-import { InspectSelectionRequest, type FileVersion, type PreviewManifest } from "@/entity";
+import { restoreJobCli } from "@/api";
+import { EstimateRestoreJobRequest, type FileVersion } from "@/entity";
 import { errorMessage, formatFilesize } from "@/tools";
 import { contentTime } from "@/components/content-status";
 import { PreviewMedia } from "@/components/file-preview";
+import { SavedVersionChoice } from "@/components/saved-version-choice";
+import { useContentPreview } from "./use-content-preview";
+import { useFileVersionPages } from "./use-file-versions";
 export const ChooseVersionDialog = ({
   file,
   selectedVersion,
@@ -21,44 +25,21 @@ export const ChooseVersionDialog = ({
   onClose: () => void;
   onChoose: (version: FileVersion) => Promise<void>;
 }) => {
-  const [versions, setVersions] = useState<FileVersion[]>([]);
   const selectedVersionID = selectedVersion?.id;
+  const { versions, more, loading, failure, load } = useFileVersionPages(BigInt(file.id), selectedVersionID);
   const [selectedID, setSelectedID] = useState(selectedVersionID);
-  const [more, setMore] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const request = useRef(0);
   const mounted = useRef(true);
-  const load = useCallback(
-    async (afterId = 0n) => {
-      const sequence = ++request.current;
-      setLoading(true);
-      try {
-        const reply = await fileCatalogCli.listVersions({ fileId: BigInt(file.id), afterId, limit: 20 }).response;
-        if (sequence !== request.current) return;
-        setVersions((current) => (afterId ? [...current, ...reply.versions] : reply.versions));
-        setMore(reply.hasMore);
-        setError("");
-      } catch (error) {
-        if (sequence === request.current) setError(errorMessage(error, "Load versions failed"));
-      } finally {
-        if (sequence === request.current) setLoading(false);
-      }
-    },
-    [file.id],
-  );
   useEffect(() => {
-    const pending = request;
     mounted.current = true;
-    setVersions([]);
     setSelectedID(selectedVersionID);
-    void load();
+    setError("");
     return () => {
-      pending.current++;
       mounted.current = false;
     };
-  }, [load, selectedVersionID]);
+  }, [file.id, selectedVersionID]);
+  const loadError = failure === undefined ? "" : errorMessage(failure, "Load versions failed");
   const choices = selectedVersion && !versions.some((version) => version.id === selectedVersion.id) ? [selectedVersion, ...versions] : versions;
   const selected = choices.find((version) => version.id === selectedID);
   const choose = async () => {
@@ -79,37 +60,36 @@ export const ChooseVersionDialog = ({
       <DialogTitle>Choose a version of {file.name}</DialogTitle>
       <DialogContent dividers>
         {loading && <LinearProgress />}
-        {error && (
-          <Alert
+        {(error || loadError) && (
+          <Feedback
             severity="error"
             action={
-              <Button disabled={loading} onClick={() => void load()}>
+              <Button
+                disabled={loading}
+                onClick={() => {
+                  setError("");
+                  void load();
+                }}
+              >
                 Retry
               </Button>
             }
           >
-            {error}
-          </Alert>
+            {error || loadError}
+          </Feedback>
         )}
-        {!loading && !error && choices.length === 0 && <p>No saved versions.</p>}
+        {!loading && !error && !loadError && choices.length === 0 && <p>No saved versions.</p>}
         <Stack spacing={1}>
           {choices.map((version) => (
-            <Button
-              key={String(version.id)}
-              variant={version.id === selectedID ? "outlined" : "text"}
-              aria-pressed={version.id === selectedID}
-              sx={{ justifyContent: "flex-start", textAlign: "left", textTransform: "none" }}
-              disabled={saving}
-              onClick={() => setSelectedID(version.id)}
-            >
+            <SavedVersionChoice key={String(version.id)} selected={version.id === selectedID} disabled={saving} onClick={() => setSelectedID(version.id)}>
               <span>
-                {contentTime(version.lastArchivedAtMs ?? version.firstArchivedAtMs, "Backup date unknown")} · {formatFilesize(version.size)}
-                <small className="version-choice-details">
+                {contentTime(version.lastArchivedAtNs ?? version.firstArchivedAtNs, "Archive date unknown")} · {formatFilesize(version.sizeBytes)}
+                <small>
                   Version #{String(version.id)}
                   {version.id === selectedVersionID ? " · Current selection" : ""}
                 </small>
               </span>
-            </Button>
+            </SavedVersionChoice>
           ))}
         </Stack>
         {more && (
@@ -120,11 +100,11 @@ export const ChooseVersionDialog = ({
         {selected && <VersionDetails key={String(selected.id)} version={selected} cutoff={cutoff} allowDamagedCopies={allowDamagedCopies} />}
       </DialogContent>
       <DialogActions>
-        <Button disabled={saving} onClick={onClose}>
-          Cancel
-        </Button>
         <Button variant="contained" disabled={!selected || saving} onClick={() => void choose()}>
           Choose version
+        </Button>
+        <Button disabled={saving} onClick={onClose}>
+          Cancel
         </Button>
       </DialogActions>
     </Dialog>
@@ -132,41 +112,48 @@ export const ChooseVersionDialog = ({
 };
 
 const VersionDetails = ({ version, cutoff, allowDamagedCopies }: { version: FileVersion; cutoff?: bigint; allowDamagedCopies: boolean }) => {
-  const [preview, setPreview] = useState<PreviewManifest>();
+  const { assets: preview, error: previewError, reload: reloadPreview } = useContentPreview(version.signature);
   const [unavailable, setUnavailable] = useState<boolean>();
-  const [error, setError] = useState("");
+  const [availabilityError, setAvailabilityError] = useState("");
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    setPreview(undefined);
     setUnavailable(undefined);
-    setError("");
-    void Promise.all([
-      fileCatalogCli.getVersion({ id: version.id }).response,
-      fileCatalogCli.inspectSelection(InspectSelectionRequest.create({ fileVersionIds: [version.id], restore: true, allowDamagedCopies })).response,
-    ])
-      .then(([detail, availability]) => {
+    setAvailabilityError("");
+    void restoreJobCli
+      .estimate(EstimateRestoreJobRequest.create({ fileVersionIds: [version.id], allowDamagedCopies }))
+      .response.then((availability) => {
         if (!active) return;
-        setPreview(detail.preview);
-        setUnavailable(availability.missingCopies > 0n);
+        if (!availability.result) throw new Error("Selection estimate is missing");
+        setUnavailable(availability.result.missingCopyCount > 0n);
       })
       .catch((error) => {
-        if (active) setError(errorMessage(error, "Could not check this version"));
+        if (active) setAvailabilityError(errorMessage(error, "Could not check this version"));
       });
     return () => {
       active = false;
     };
-  }, [version.id, allowDamagedCopies]);
-  const afterCutoff = cutoff !== undefined && version.firstArchivedAtMs !== undefined && version.firstArchivedAtMs > cutoff;
+  }, [version.id, allowDamagedCopies, availabilityAttempt]);
+  const afterCutoff = cutoff !== undefined && version.firstArchivedAtNs !== undefined && version.firstArchivedAtNs > cutoff;
   return (
     <Stack spacing={1} sx={{ mt: 2 }}>
-      {preview && (
+      {!!preview?.length && (
         <Box sx={{ "& img": { maxWidth: "100%", maxHeight: 180, objectFit: "contain" } }}>
-          <PreviewMedia fileID={version.fileId} versionID={version.id} manifest={preview} />
+          <PreviewMedia key={JSON.stringify(preview)} assets={preview} />
         </Box>
       )}
       {afterCutoff ? <Alert severity="info">This custom version was saved after the selected time.</Alert> : null}
       {unavailable && <Alert severity="warning">No usable archived copy.</Alert>}
-      {error && <Alert severity="warning">{error}</Alert>}
+      {previewError && (
+        <Feedback severity="info" action={<Button onClick={reloadPreview}>Retry Preview</Button>}>
+          {previewError}
+        </Feedback>
+      )}
+      {availabilityError && (
+        <Feedback severity="warning" action={<Button onClick={() => setAvailabilityAttempt((value) => value + 1)}>Retry availability</Button>}>
+          {availabilityError}
+        </Feedback>
+      )}
     </Stack>
   );
 };

@@ -16,9 +16,7 @@ vendor/
 output/
 frontend/node_modules/
 
-tests/
 tapes.db
-upload_test.sh
 
 # Additional exclusions when building from source
 yatm-*.tar.gz
@@ -27,3 +25,7 @@ yatm-*.tar.gz.sha256
 /config.yaml
 /run.log
 /run.log.*
+
+# Private experiments and local deployment scripts
+/.local/
+/.pnpm-store/

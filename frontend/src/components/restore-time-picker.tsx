@@ -3,6 +3,7 @@ import moment from "moment";
 import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { dateFromNs, minUnixNs, maxUnixNs } from "@/tools/time";
 
 const storedFormat = "YYYY-MM-DDTHH:mm";
 
@@ -17,7 +18,7 @@ export default function RestoreTimePicker({
   disabled: boolean;
   error: boolean;
 }) {
-  const date = useMemo(() => (value ? moment(value, storedFormat, true) : null), [value]);
+  const date = useMemo(() => (value ? moment(value, [storedFormat, moment.ISO_8601], true) : null), [value]);
   return (
     <LocalizationProvider dateAdapter={AdapterMoment}>
       <DateTimePicker
@@ -27,10 +28,11 @@ export default function RestoreTimePicker({
         disabled={disabled}
         ampm={false}
         format="YYYY-MM-DD HH:mm"
-        minDateTime={moment(0)}
+        minDateTime={moment(dateFromNs(minUnixNs))}
+        maxDateTime={moment(dateFromNs(maxUnixNs))}
         slotProps={{
           textField: { fullWidth: true, error, helperText: error ? "Choose a valid date and time." : undefined },
-          actionBar: { actions: ["cancel", "accept"] },
+          actionBar: { actions: ["accept", "cancel"], sx: { justifyContent: "flex-start" } },
         }}
       />
     </LocalizationProvider>

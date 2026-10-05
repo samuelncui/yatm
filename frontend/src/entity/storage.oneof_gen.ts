@@ -2,10 +2,10 @@
 
 import {
 	StorageMetadata,
-	LTFSMetadata,
+	LtfsMetadata,
 } from ".";
 
-export function unpackStorageMetadata(wrapper: StorageMetadata): LTFSMetadata | undefined {
+export function unpackStorageMetadata(wrapper: StorageMetadata): LtfsMetadata | undefined {
 	if (!wrapper.backend) return undefined;
 	switch (wrapper.backend.oneofKind) {
 		case "ltfs":
@@ -15,7 +15,7 @@ export function unpackStorageMetadata(wrapper: StorageMetadata): LTFSMetadata | 
 	}
 }
 
-export function packLTFSMetadata(param: LTFSMetadata): StorageMetadata {
+export function packLtfsMetadata(param: LtfsMetadata): StorageMetadata {
 	return StorageMetadata.create({
 		backend: {
 			oneofKind: "ltfs",

@@ -14,27 +14,41 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/acp"
-	"github.com/samuelncui/yatm/apis"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	_ "github.com/samuelncui/yatm/executor/archive"
-	_ "github.com/samuelncui/yatm/executor/restore"
-	_ "github.com/samuelncui/yatm/executor/scan"
-	"github.com/samuelncui/yatm/library"
-	previewcore "github.com/samuelncui/yatm/preview"
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/internal/apis"
+	"github.com/samuelncui/yatm/internal/executor"
+	_ "github.com/samuelncui/yatm/internal/executor/archive"
+	_ "github.com/samuelncui/yatm/internal/executor/restore"
+	_ "github.com/samuelncui/yatm/internal/executor/scan"
+	"github.com/samuelncui/yatm/internal/library"
+	previewcore "github.com/samuelncui/yatm/internal/preview"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 )
 
 type legacyLibraryBackup struct {
 	Files     []legacyFile     `json:"files"`
-	Tapes     []*library.Tape  `json:"tapes"`
+	Tapes     []*legacyTape    `json:"tapes"`
 	Positions []legacyPosition `json:"positions"`
+}
+
+type legacyTape struct {
+	ID            int64      `json:"id,omitempty"`
+	Barcode       string     `json:"barcode,omitempty"`
+	Name          string     `json:"name,omitempty"`
+	SerialNumber  string     `json:"serial_number,omitempty"`
+	Encryption    string     `json:"encryption,omitempty"`
+	Format        string     `json:"format,omitempty"`
+	CreateTime    time.Time  `json:"create_time,omitempty"`
+	DestroyTime   *time.Time `json:"destroy_time,omitempty"`
+	CapacityBytes int64      `json:"capacity_bytes,omitempty"`
+	WritenBytes   int64      `json:"writen_bytes,omitempty"`
 }
 
 type legacyFile struct {
@@ -61,6 +75,10 @@ type legacyPosition struct {
 }
 
 type previewFixtureGenerator struct{}
+
+type ltfsPreviewFixture struct{ *previewcore.Manager }
+
+func (*ltfsPreviewFixture) CheckGeneration(context.Context) error { return nil }
 
 func (*previewFixtureGenerator) Generate(_ context.Context, _ string, outputDir string) ([]*previewcore.Asset, error) {
 	data, err := base64.StdEncoding.DecodeString(
@@ -108,6 +126,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	}
 	paths := executor.Paths{
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"), Target: filepath.Join(root, "target"),
+		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "target")}},
 	}
 	failedDevice := filepath.Join(root, "failed-tapes", "ABC001")
 	device := filepath.Join(root, "tapes", "ABC001")
@@ -115,7 +134,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Kind: "e2e-fixture", Extensions: []string{"fixture"},
 	}}}, paths.Work)
 	require.NoError(t, err)
-	exe := executor.New(executorDB, lib, []string{failedDevice, device}, paths, scripts, previews)
+	exe := executor.New(executorDB, lib, []string{failedDevice, device}, paths, scripts, &ltfsPreviewFixture{previews})
 	require.NoError(t, exe.AutoMigrate())
 	require.NoError(t, exe.ReconcileStorage(context.Background()))
 	require.NoError(t, os.MkdirAll(filepath.Join(paths.Source, "dataset"), 0o755))
@@ -135,18 +154,20 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	jobClient := entity.NewJobServiceClient(conn)
-	serviceClient := entity.NewServiceClient(conn)
+	mediaClient := entity.NewMediaServiceClient(conn)
+	filesClient := entity.NewFilesServiceClient(conn)
+	previewClient := entity.NewPreviewServiceClient(conn)
 	archiveClient := entity.NewArchiveJobServiceClient(conn)
 	restoreClient := entity.NewRestoreJobServiceClient(conn)
 
 	// Create and index the Archive and its independent Preview Job.
 	created, err := archiveClient.Create(ctx, &entity.CreateArchiveJobRequest{
-		PreviewPolicy: entity.PreviewPolicy_PREVIEW_MISSING_ONLY,
+		PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
 		Spec:          &entity.ArchiveJobSpec{Selections: indexedSelections(t, ctx, conn, paths.Source, "dataset")},
 	})
 	require.NoError(t, err)
 	archiveID := created.Job.Id
-	waitForPendingJob(t, ctx, jobClient, archiveID)
+	waitForReadyJob(t, ctx, jobClient, archiveID)
 	prepared, err := archiveClient.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: archiveID})
 	require.NoError(t, err)
 	require.Empty(t, prepared.PreviewError)
@@ -166,19 +187,20 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.Eventually(t, func() bool { return !exe.IsRunning(archiveID) }, time.Minute, 100*time.Millisecond)
 	failed, err := jobClient.Get(ctx, &entity.GetJobRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_PENDING, failed.Job.Status)
-	require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, failed.Job.Phase)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, failed.Job.Status)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, failed.Job.Phase)
+	require.NotEmpty(t, failed.Job.Error)
 	failedItems, err := archiveClient.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{Id: archiveID})
 	require.NoError(t, err)
 	require.Len(t, failedItems.Items, len(fixtures))
 	for _, item := range failedItems.Items {
-		require.Equal(t, entity.CopyStatus_PENDING, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 		require.Nil(t, item.MediaId)
 		require.Empty(t, item.File.MediaPath)
 	}
-	tapesByBarcode, err := lib.MGetTapeByBarcode(ctx, "ABC001")
+	failedMedia, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
-	require.Nil(t, tapesByBarcode["ABC001"])
+	require.Nil(t, failedMedia)
 	require.Equal(t, []string{device}, exe.ListAvailableDevices())
 
 	// Make the next normal unmount expose an invalid final Index and reject that checkpoint too.
@@ -193,19 +215,20 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.Eventually(t, func() bool { return !exe.IsRunning(archiveID) }, time.Minute, 100*time.Millisecond)
 	invalidIndexJob, err := jobClient.Get(ctx, &entity.GetJobRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_PENDING, invalidIndexJob.Job.Status)
-	require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, invalidIndexJob.Job.Phase)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, invalidIndexJob.Job.Status)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, invalidIndexJob.Job.Phase)
+	require.NotEmpty(t, invalidIndexJob.Job.Error)
 	invalidIndexItems, err := archiveClient.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{Id: archiveID})
 	require.NoError(t, err)
 	require.Len(t, invalidIndexItems.Items, len(fixtures))
 	for _, item := range invalidIndexItems.Items {
-		require.Equal(t, entity.CopyStatus_PENDING, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 		require.Nil(t, item.MediaId)
 		require.Empty(t, item.File.MediaPath)
 	}
-	tapesByBarcode, err = lib.MGetTapeByBarcode(ctx, "ABC001")
+	invalidMedia, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
-	require.Nil(t, tapesByBarcode["ABC001"])
+	require.Nil(t, invalidMedia)
 	require.Equal(t, []string{device}, exe.ListAvailableDevices())
 	invalidIndex, err := os.ReadFile(filepath.Join(
 		paths.Work, "jobs", fmt.Sprint(archiveID), "tapes", "ABC001", "ABC001.schema",
@@ -228,14 +251,13 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	archiveItems := reply.Items
 	require.Len(t, archiveItems, len(fixtures))
 	for _, item := range archiveItems {
-		require.Equal(t, entity.CopyStatus_SUBMITTED, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_SUBMITTED, item.Status)
 		require.NotNil(t, item.MediaId)
 	}
-	tapesByBarcode, err = lib.MGetTapeByBarcode(ctx, "ABC001")
+	originalTape, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
-	originalTape := tapesByBarcode["ABC001"]
 	require.NotNil(t, originalTape)
-	require.Equal(t, library.TapeFormatLTFSV1, originalTape.Format)
+	require.Equal(t, library.TapeFormatLTFSV1, originalTape.Profile.GetTape().Format)
 
 	// Verify the format-time placement policy put only the matching small file in the index partition.
 	positions, err := lib.ListMediaFilePositions(ctx, originalTape.ID, "", len(fixtures))
@@ -265,7 +287,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		firstExtent := extents[0]
 		for _, extent := range extents {
 			require.Equal(t, want, extent.Partition, position.Path)
-			if extent.FileOffset < firstExtent.FileOffset {
+			if extent.FileOffsetBytes < firstExtent.FileOffsetBytes {
 				firstExtent = extent
 			}
 		}
@@ -306,7 +328,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoErrorf(t, err, "unmount remounted LTFS cartridge:\n%s", unmountOutput)
 	require.NoError(t, os.Remove(remountPoint))
 
-	inspected, err := serviceClient.MediaInspect(ctx, (&entity.MediaInspectTapeTarget{Device: device}).Pack())
+	inspected, err := mediaClient.Inspect(ctx, (&entity.InspectMediaTapeTarget{Device: device}).Pack())
 	require.NoError(t, err)
 	require.Equal(t, "ABC001", inspected.Identity)
 	require.NotNil(t, inspected.Media)
@@ -322,7 +344,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	})
 	require.NoError(t, err)
 	appendArchiveID := appended.Job.Id
-	waitForPendingJob(t, ctx, jobClient, appendArchiveID)
+	waitForReadyJob(t, ctx, jobClient, appendArchiveID)
 	_, err = archiveClient.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
 		Id: appendArchiveID,
 		Target: (&entity.ArchiveTapeTarget{
@@ -335,13 +357,13 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, appendedItems.Items, 1)
 	appendedItem := appendedItems.Items[0]
-	require.Equal(t, entity.CopyStatus_SUBMITTED, appendedItem.Status)
+	require.Equal(t, entity.CopyStatus_COPY_STATUS_SUBMITTED, appendedItem.Status)
 	require.Equal(t, "Unforged/Archive/additional/appended.bin", appendedItem.File.TargetPath)
 	require.NotEqual(t, appendedItem.File.TargetPath, appendedItem.File.MediaPath)
 	require.Equal(t, originalTape.ID, *appendedItem.MediaId)
-	tapesByBarcode, err = lib.MGetTapeByBarcode(ctx, "ABC001")
+	appendedMedia, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
-	require.Equal(t, originalTape.ID, tapesByBarcode["ABC001"].ID)
+	require.Equal(t, originalTape.ID, appendedMedia.ID)
 	appendedFile, err := lib.GetByPath(ctx, library.Root.ID, appendedItem.File.TargetPath)
 	require.NoError(t, err)
 	require.NotNil(t, appendedFile)
@@ -351,17 +373,27 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	archivedImage, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.fixture")
 	require.NoError(t, err)
 	require.NotNil(t, archivedImage)
-	imageDetail, err := serviceClient.FileGet(ctx, &entity.FileGetRequest{Id: archivedImage.ID})
+	imageDetail, err := filesClient.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: archivedImage.ID}}})
 	require.NoError(t, err)
-	require.NotNil(t, imageDetail.Preview)
-	require.Len(t, imageDetail.Preview.Assets, 1)
-	previewData := readHTTPContent(t, ctx, fmt.Sprintf("%s/files/previews/%d/thumbnail", conn.url, archivedImage.ID))
+	require.NotNil(t, imageDetail.Detail.GetEntry())
+	// Preview bytes use the served asset URL, the same path a browser rendering follows.
+	preview, err := previewClient.Get(ctx, &entity.GetPreviewRequest{Signature: imageDetail.Detail.ContentSignature})
+	require.NoError(t, err)
+	require.Equal(t, entity.PreviewAvailability_PREVIEW_AVAILABILITY_READY, preview.Availability)
+	thumbnail := ""
+	for _, asset := range preview.Assets {
+		if asset.Role == "thumbnail" {
+			thumbnail = asset.Url
+		}
+	}
+	require.NotEmpty(t, thumbnail)
+	previewData := readHTTPContent(t, ctx, conn.url+thumbnail)
 	require.NotEmpty(t, previewData)
 
 	// Attach annotations through the public API before crossing the JSON Lines boundary.
 	note := "LTFS JSONL round-trip"
-	_, err = serviceClient.FileMetadataEdit(ctx, &entity.FileMetadataEditRequest{
-		Ids: []int64{archivedImage.ID}, AddTags: []string{"archive", "preview"}, Note: &note,
+	_, err = filesClient.UpdateMetadata(ctx, &entity.UpdateFilesMetadataRequest{
+		References: []*entity.FileOperationRef{{Target: &entity.FileOperationRef_FileId{FileId: archivedImage.ID}}}, AddTags: []string{"archive", "preview"}, Note: &note,
 	})
 	require.NoError(t, err)
 
@@ -369,27 +401,44 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	snapshotPath := filepath.Join(root, "library.jsonl")
 	_, err = conn.run(ctx, "library", "export", "--output", snapshotPath)
 	require.NoError(t, err)
-	_, err = conn.run(ctx, "library", "import", "--input", snapshotPath, "--confirm")
+	_, err = conn.run(ctx, "library", "import", "--input", snapshotPath)
 	require.NoError(t, err)
 
 	// Verify annotations survived the complete public RPC and HTTP round trip.
-	importedImage, err := serviceClient.FileGet(ctx, &entity.FileGetRequest{Id: archivedImage.ID})
+	importedImage, err := filesClient.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: archivedImage.ID}}})
 	require.NoError(t, err)
-	require.Equal(t, note, importedImage.File.Note)
-	require.Equal(t, []string{"archive", "preview"}, importedImage.File.Tags)
+	require.Equal(t, note, importedImage.Detail.Organization.Note)
+	require.Equal(t, []string{"archive", "preview"}, importedImage.Detail.Organization.Tags)
 
 	// Re-import the same Library through the exact legacy whole-object backup shape.
-	var files []*library.File
-	require.NoError(t, libraryDB.Order("id").Find(&files).Error)
+	filePage, err := lib.ListAllFileRows(ctx, library.Root.ID, entity.FileScope_FILE_SCOPE_ALL, true, "")
+	require.NoError(t, err)
+	files := filePage.Files
+	for index, file := range files {
+		files[index], err = lib.GetFile(ctx, file.ID)
+		require.NoError(t, err)
+	}
 	legacyFiles := make([]legacyFile, 0, len(files))
 	for _, file := range files {
 		legacyFiles = append(legacyFiles, legacyFile{ID: file.ID, ParentID: file.ParentID, Name: file.Name,
 			Mode: file.Mode, ModTime: file.ModTime, Hash: file.Hash, Signature: file.Signature, Size: file.Size})
 	}
-	// Materialize the legacy Tape view from the current Media row; current has no tapes table.
-	currentTape, err := lib.GetTape(ctx, originalTape.ID)
+	// Encode the retired JSON Tape shape from the current Media row for import compatibility.
+	currentMedia, err := lib.GetMedia(ctx, originalTape.ID)
 	require.NoError(t, err)
-	tapes := []*library.Tape{currentTape}
+	profile := currentMedia.Profile.GetTape()
+	require.NotNil(t, profile)
+	var destroyedAt *time.Time
+	if currentMedia.DestroyedAtNS != nil {
+		stamp := legacyFixtureTime(*currentMedia.DestroyedAtNS)
+		destroyedAt = &stamp
+	}
+	tapes := []*legacyTape{{
+		ID: currentMedia.ID, Barcode: currentMedia.Identity, Name: currentMedia.Name,
+		SerialNumber: profile.SerialNumber, Encryption: profile.Encryption, Format: profile.Format,
+		CreateTime: legacyFixtureTime(currentMedia.CreatedAtNS), DestroyTime: destroyedAt,
+		CapacityBytes: currentMedia.CapacityBytes, WritenBytes: currentMedia.WrittenBytes,
+	}}
 	var physicalPositions []*library.Position
 	require.NoError(t, libraryDB.Where("is_dir = ?", false).Order("id").Find(&physicalPositions).Error)
 	for _, position := range physicalPositions {
@@ -405,8 +454,9 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		require.Len(t, owners, 1, "the legacy fixture uses unambiguous distinct contents")
 		legacyPositions = append(legacyPositions, legacyPosition{
 			ID: position.ID, FileID: owners[0].ID, TapeID: position.MediaID, Path: position.Path,
-			Mode: position.Mode, ModTime: position.ModTime, WriteTime: position.WriteTime,
-			Size: position.Size, Hash: position.Hash,
+			Mode: position.Mode, ModTime: legacyFixtureTime(position.MtimeNS),
+			WriteTime: legacyFixtureTime(position.WrittenAtNS),
+			Size:      position.Size, Hash: position.Hash,
 		})
 	}
 	legacyBackup, err := json.Marshal(legacyLibraryBackup{Files: legacyFiles, Tapes: tapes, Positions: legacyPositions})
@@ -420,7 +470,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	legacyCLI := serveCLI(t, apis.New(legacyLibrary, legacyExecutor), legacyExecutor)
 	legacyPath := filepath.Join(root, "legacy-library.json")
 	require.NoError(t, os.WriteFile(legacyPath, legacyBackup, 0o600))
-	_, err = legacyCLI.run(ctx, "library", "import", "--input", legacyPath, "--confirm")
+	_, err = legacyCLI.run(ctx, "library", "import", "--input", legacyPath)
 	require.NoError(t, err)
 	rootPositions, err := legacyLibrary.ListPositions(ctx, tapes[0].ID, "")
 	require.NoError(t, err)
@@ -428,9 +478,9 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	for _, position := range rootPositions {
 		require.True(t, position.IsDir)
 	}
-	legacyTape, err := legacyLibrary.GetTape(ctx, tapes[0].ID)
+	legacyMedia, err := legacyLibrary.GetMedia(ctx, tapes[0].ID)
 	require.NoError(t, err)
-	require.Equal(t, library.TapeFormatLTFSV0, legacyTape.Format)
+	require.Equal(t, library.TapeFormatLTFSV0, legacyMedia.Profile.GetTape().Format)
 
 	// Restore the archived directory from the same virtual cartridge through a second Job.
 	directory, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset")
@@ -441,7 +491,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	})
 	require.NoError(t, err)
 	restoreID := restored.Job.Id
-	waitForPendingJob(t, ctx, jobClient, restoreID)
+	waitForReadyJob(t, ctx, jobClient, restoreID)
 	_, err = restoreClient.RestoreMedia(ctx, &entity.RestoreMediaRequest{
 		Id: restoreID, Target: (&entity.ReadTapeTarget{Device: device}).Pack(),
 	})
@@ -464,40 +514,39 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.Equal(t, appendedContent, actualAppend)
 
 	// Read the complete recorded cartridge through the public integrity workflow before reuse.
-	verified := new(entity.CreateScanJobReply)
+	verified := new(entity.CreateScanJobResponse)
 	cliResult(t, ctx, conn, verified, "verify", "create", decimal(originalTape.ID))
 	verifyID := verified.Job.Id
 	waitCLIJob(t, ctx, conn, verifyID, true)
-	cliResult(t, ctx, conn, new(entity.ReadScanMediaReply), "verify", "run", decimal(verifyID), "--device", device)
+	cliResult(t, ctx, conn, new(entity.ReadScanMediaResponse), "verify", "run", decimal(verifyID), "--device", device)
 	waitCLIJob(t, ctx, conn, verifyID, false)
-	verifyProgress := new(entity.GetScanJobProgressReply)
+	verifyProgress := new(entity.GetScanJobProgressResponse)
 	cliResult(t, ctx, conn, verifyProgress, "job", "progress", decimal(verifyID))
-	require.EqualValues(t, len(fixtures)+1, verifyProgress.Matched)
-	require.Equal(t, verifyProgress.Progress.TotalFiles, verifyProgress.Progress.CopiedFiles)
-	require.Zero(t, verifyProgress.Damaged)
-	require.Zero(t, verifyProgress.Missing)
-	require.Zero(t, verifyProgress.Unreadable)
-	require.Zero(t, verifyProgress.Unverifiable)
+	require.EqualValues(t, len(fixtures)+1, verifyProgress.MatchedCount)
+	require.Equal(t, verifyProgress.Progress.TotalFileCount, verifyProgress.Progress.CopiedFileCount)
+	require.Zero(t, verifyProgress.DamagedCount)
+	require.Zero(t, verifyProgress.MissingCount)
+	require.Zero(t, verifyProgress.UnreadableCount)
+	require.Zero(t, verifyProgress.UnverifiableCount)
 	var verifiedCount int
-	var afterEntry int64
+	var afterEntry string
 	for {
-		page := new(entity.ListScanJobEntriesReply)
-		cliResult(t, ctx, conn, page, "verify", "entries", decimal(verifyID), "--limit", "2", "--after-id", decimal(afterEntry))
+		page := new(entity.ListScanJobEntriesResponse)
+		cliResult(t, ctx, conn, page, "verify", "entries", decimal(verifyID), "--limit", "2", "--cursor", afterEntry)
 		for _, entry := range page.Entries {
-			require.Greater(t, entry.Id, afterEntry)
-			require.Equal(t, entity.ScanFinding_MATCH, entry.Finding)
+			require.Greater(t, entry.Id, int64(0))
+			require.Equal(t, entity.ScanFinding_SCAN_FINDING_MATCH, entry.Finding)
 			require.Equal(t, entry.Sha256, entry.ActualHash)
-			require.Equal(t, entry.Size, entry.ActualSize)
-			require.Positive(t, entry.CheckedAtMs)
-			require.False(t, entry.Stale)
-			copies := new(entity.ListContentCopiesReply)
-			cliResult(t, ctx, conn, copies, "file", "copies", "--signature", hex.EncodeToString(entry.Signature))
+			require.Equal(t, entry.SizeBytes, entry.ActualSizeBytes)
+			require.Positive(t, entry.CheckedAtNs)
+			copies := new(entity.ListContentCopiesResponse)
+			cliResult(t, ctx, conn, copies, "files", "copies", "--signature", hex.EncodeToString(entry.Signature))
 			require.Len(t, copies.Positions, 1)
 			require.Equal(t, entry.PositionId, copies.Positions[0].Id)
-			require.Equal(t, entity.PositionHealth_HEALTHY, copies.Positions[0].Health)
+			require.Equal(t, entity.PositionHealth_POSITION_HEALTH_HEALTHY, copies.Positions[0].Health)
 			require.Equal(t, verifyID, copies.Positions[0].HealthJobId)
 			verifiedCount++
-			afterEntry = entry.Id
+			afterEntry = strconv.FormatInt(entry.Id, 10)
 		}
 		if !page.HasMore {
 			break
@@ -514,8 +563,8 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	})
 	require.NoError(t, err)
 	overwriteArchiveID := overwritten.Job.Id
-	waitForPendingJob(t, ctx, jobClient, overwriteArchiveID)
-	_, err = serviceClient.MediaDelete(ctx, &entity.MediaDeleteRequest{Ids: []int64{originalTape.ID}})
+	waitForReadyJob(t, ctx, jobClient, overwriteArchiveID)
+	_, err = mediaClient.Delete(ctx, &entity.DeleteMediaRequest{Ids: []int64{originalTape.ID}})
 	require.NoError(t, err)
 	_, err = archiveClient.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
 		Id: overwriteArchiveID,
@@ -526,13 +575,12 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	})
 	require.NoError(t, err)
 	waitForCompletedJob(t, ctx, jobClient, overwriteArchiveID)
-	tapesByBarcode, err = lib.MGetTapeByBarcode(ctx, "ABC001")
+	replacementTape, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
-	replacementTape := tapesByBarcode["ABC001"]
 	require.NotNil(t, replacementTape)
 	require.NotEqual(t, originalTape.ID, replacementTape.ID)
-	require.Equal(t, library.TapeFormatLTFSV1, replacementTape.Format)
-	replacementStats, err := lib.GetTapeStats(ctx, replacementTape.ID)
+	require.Equal(t, library.TapeFormatLTFSV1, replacementTape.Profile.GetTape().Format)
+	replacementStats, err := lib.GetMediaStats(ctx, replacementTape.ID)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), replacementStats.FileCount)
 	oldLogicalFile, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.fixture")
@@ -548,11 +596,19 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoError(t, err)
 	var scans []int64
 	for _, job := range listed.Jobs {
-		require.Equal(t, entity.JobKind_SCAN, job.Kind)
+		require.Equal(t, entity.JobKind_JOB_KIND_SCAN, job.Kind)
 		scans = append(scans, job.Id)
 	}
 	_, err = jobClient.Delete(ctx, &entity.DeleteJobsRequest{Ids: scans})
 	require.NoError(t, err)
+}
+
+// legacyFixtureTime keeps the frozen v0 JSON fixture's source shape and zero sentinel.
+func legacyFixtureTime(stamp int64) time.Time {
+	if stamp == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, stamp).UTC()
 }
 
 func testScript(t *testing.T, name string) string {
@@ -574,7 +630,7 @@ func waitForCompletedJob(t *testing.T, ctx context.Context, client entity.JobSer
 		reply, err := client.Get(ctx, &entity.GetJobRequest{Id: id})
 		require.NoError(t, err)
 		job := reply.Job
-		if job.Status == entity.JobStatus_COMPLETED {
+		if job.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
 			return
 		}
 		if !isActivePhase(job.Phase) {
@@ -590,7 +646,7 @@ func waitForCompletedJob(t *testing.T, ctx context.Context, client entity.JobSer
 	}
 }
 
-func waitForPendingJob(t *testing.T, ctx context.Context, client entity.JobServiceClient, id int64) {
+func waitForReadyJob(t *testing.T, ctx context.Context, client entity.JobServiceClient, id int64) {
 	t.Helper()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -599,10 +655,10 @@ func waitForPendingJob(t *testing.T, ctx context.Context, client entity.JobServi
 		reply, err := client.Get(ctx, &entity.GetJobRequest{Id: id})
 		require.NoError(t, err)
 		job := reply.Job
-		if job.Status == entity.JobStatus_PENDING && job.Phase == entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA {
+		if job.Status == entity.JobStatus_JOB_STATUS_READY && job.Phase == entity.JobPhase_JOB_PHASE_UNSPECIFIED {
 			return
 		}
-		if job.Status == entity.JobStatus_INDEXING && job.Phase == entity.JobPhase_JOB_PHASE_WAITING_FOR_INDEX_RETRY {
+		if job.Status == entity.JobStatus_JOB_STATUS_FAILED {
 			logs, logErr := client.GetLog(ctx, &entity.GetJobLogRequest{Id: id})
 			require.NoError(t, logErr)
 			t.Fatalf("job %d stopped while indexing:\n%s", id, logs.Logs)

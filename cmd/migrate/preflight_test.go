@@ -12,7 +12,19 @@ import (
 
 func TestQuiesceService(t *testing.T) {
 	originalTransport := http.DefaultTransport
+	requests := 0
 	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if requests == 1 {
+			require.Equal(t, http.MethodGet, request.Method)
+			require.Equal(t, "/files/_upgrade/status", request.URL.Path)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"process_id":42,"running_job_ids":[]}`)),
+				Request:    request,
+			}, nil
+		}
 		require.Equal(t, http.MethodPost, request.Method)
 		require.Equal(t, "/files/_upgrade/quiesce", request.URL.Path)
 		return &http.Response{
@@ -24,9 +36,27 @@ func TestQuiesceService(t *testing.T) {
 	})
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
-	ids, err := quiesceService(context.Background(), "http://localhost:8080")
+	ids, err := quiesceService(context.Background(), "http://localhost:8080", 42)
 	require.NoError(t, err)
 	require.Equal(t, []int64{7, 9}, ids)
+	require.Equal(t, 2, requests)
+}
+
+func TestQuiesceServiceRejectsChangedProcess(t *testing.T) {
+	originalTransport := http.DefaultTransport
+	requests := 0
+	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		body := `{"process_id":42,"running_job_ids":[]}`
+		if requests == 2 {
+			body = `{"process_id":99,"running_job_ids":[]}`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	_, err := quiesceService(context.Background(), ":8080", 42)
+	require.ErrorContains(t, err, "expected systemd process 42")
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -46,12 +76,30 @@ func TestUpgradeStatusDoesNotQuiesce(t *testing.T) {
 	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		require.Equal(t, http.MethodGet, request.Method)
 		require.Equal(t, "/files/_upgrade/status", request.URL.Path)
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"running_job_ids":[]}`)), Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"process_id":42,"running_job_ids":[]}`)), Header: make(http.Header)}, nil
 	})
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
-	ids, err := requestUpgradeStatus(context.Background(), ":8080", false)
+	status, err := requestUpgradeStatus(context.Background(), ":8080", false, 42)
 	require.NoError(t, err)
-	require.Empty(t, ids)
+	require.Empty(t, status.RunningJobIDs)
+}
+
+func TestUpgradeStatusRequiresSystemdProcess(t *testing.T) {
+	// A healthy response from another local process cannot satisfy installer preflight.
+	originalTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"process_id":99,"running_job_ids":[]}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	_, err := requestUpgradeStatus(context.Background(), ":8080", false, 42)
+	require.ErrorContains(t, err, "expected systemd process 42")
+	_, err = requestUpgradeStatus(context.Background(), ":8080", false, 0)
+	require.ErrorContains(t, err, "process identity is required")
 }
 
 func TestUpgradeURLRejectsNonlocalAndRedirectSources(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/samuelncui/yatm/config"
-	"github.com/samuelncui/yatm/executor"
-	"github.com/samuelncui/yatm/migrate/legacy"
+	"github.com/samuelncui/yatm/internal/config"
+	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/migrate/legacy"
 )
 
 func migrationBackup(root, backupRoot, configPath string) (legacy.Backup, error) {

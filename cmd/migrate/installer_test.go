@@ -50,6 +50,12 @@ func TestInstallerOptionValues(t *testing.T) {
 	output, err := installerShell(t, `parse_options --help --unexpected`, "")
 	require.Error(t, err, output)
 	require.Contains(t, output, "Unknown option: --unexpected")
+
+	output, err = installerShell(t, `usage`, "")
+	require.NoError(t, err, output)
+	for _, tool := range []string{"curl", "jq", "tar", "sha256sum", "systemctl", "cp", "du", "df", "readlink", "mktemp", "find", "flock", "tee", "awk", "grep", "sed", "mv", "rm", "mkdir", "chmod", "date", "sleep", "id", "uname", "cat"} {
+		require.Contains(t, output, tool)
+	}
 }
 
 func TestInstallerFailureBoundaries(t *testing.T) {
@@ -78,7 +84,11 @@ FAIL_PHASE="$1"
 REPORT_DIRECTORY=/test-reports
 run_migrator() { echo "phase:$2"; [[ "$2" != "$FAIL_PHASE" ]]; }
 systemctl() { echo "service:$1"; }
+quiesce_and_stop() { run_migrator -phase quiesce --confirm; STAGE=stopping; systemctl stop "$SERVICE_NAME"; }
 backup_installation() { STAGE=backup; echo backup; [[ "$FAIL_PHASE" != backup ]]; }
+complete_legacy_migration() {
+  for phase in commit validate cleanup; do STAGE="$phase"; run_migrator -phase "$phase"; done
+}
 trap 'on_failure "$?"' ERR
 upgrade_existing
 echo replacement-allowed
@@ -105,7 +115,7 @@ func TestInstallerPreservesUserOwnedFiles(t *testing.T) {
 	root := t.TempDir()
 	installed := filepath.Join(root, "installed")
 	candidate := filepath.Join(root, "candidate")
-	for _, file := range []string{"config.yaml", "scripts/mount", "helper", "yatm-httpd.service", "local-note", "yatm-httpd", "frontend/obsolete.js", "docs/obsolete.md"} {
+	for _, file := range []string{"config.yaml", "config.example.yaml", "scripts/mount", "helper", "yatm-httpd.service", "local-note", "yatm-httpd", "frontend/obsolete.js", "docs/obsolete.md"} {
 		path := filepath.Join(installed, file)
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require.NoError(t, os.WriteFile(path, []byte("existing "+file), 0600))
@@ -126,6 +136,7 @@ func TestInstallerPreservesUserOwnedFiles(t *testing.T) {
 INSTALL_DIRECTORY="$1"
 RELEASE_DIRECTORY="$2"
 CURRENT_VERSION=v0.1.21
+BACKUP_COMPLETE=1
 install_managed_files
 `, "", installed, candidate)
 	require.NoError(t, err, output)
@@ -142,6 +153,7 @@ install_managed_files
 	require.Equal(t, "candidate yatm-httpd", string(data))
 	require.NoFileExists(t, filepath.Join(installed, "frontend/obsolete.js"))
 	require.NoFileExists(t, filepath.Join(installed, "docs/obsolete.md"))
+	require.NoFileExists(t, filepath.Join(installed, "config.example.yaml"))
 }
 
 func TestInstallerCancellationDoesNotInterrupt(t *testing.T) {
@@ -155,6 +167,7 @@ flock() { :; }
 resolve_version() { CURRENT_VERSION=v0.1.21; RELEASE_VERSION=v1.0.0-alpha.1; }
 download_release() { mkdir -p "$RELEASE_DIRECTORY/docs/operations"; printf 'Candidate migration guide\n' > "$RELEASE_DIRECTORY/docs/operations/migration.md"; }
 inspect_installation() { :; }
+plan_configuration() { CONFIG_CHANGED=false; }
 systemctl() { echo unexpected-service-operation; return 1; }
 run_migrator() { echo unexpected-migration-operation; return 1; }
 main
@@ -165,7 +178,7 @@ main
 		require.Contains(t, output, "Candidate migration guide")
 		require.Contains(t, output, "Installation cancelled")
 		require.NotContains(t, output, "unexpected-")
-		reports, err := filepath.Glob(filepath.Join(root, "yatm/.yatm-upgrades/*/reports/upgrade.log"))
+		reports, err := filepath.Glob(filepath.Join(root, "yatm/.backup/*/upgrade.log"))
 		require.NoError(t, err)
 		require.Len(t, reports, 1)
 		data, err := os.ReadFile(reports[0])
@@ -183,11 +196,15 @@ identify_platform() { :; }
 resolve_version() { CURRENT_VERSION=v0.1.21; RELEASE_VERSION=v1.0.0-alpha.1; }
 download_release() { mkdir -p "$RELEASE_DIRECTORY/docs/operations"; printf 'Candidate guide\n' > "$RELEASE_DIRECTORY/docs/operations/migration.md"; }
 inspect_installation() { echo read-only-inspection; }
+plan_configuration() { :; }
 systemctl() { echo unexpected-service-operation; return 1; }
 main --check
 `, "", root)
 	require.NoError(t, err, output)
 	require.Contains(t, output, "Read-only installation checks passed")
+	require.Contains(t, output, "Migration guide from the verified release")
+	require.Contains(t, output, "Read this guide before the mutating run")
+	require.NotContains(t, output, "Candidate guide\n")
 	require.NotContains(t, output, "unexpected-")
 	require.NoDirExists(t, filepath.Join(root, "yatm"))
 }
@@ -208,6 +225,7 @@ run_migrator() {
   [[ "$*" == *"-install-root $INSTALL_DIRECTORY"* && "$*" == *-fresh-install* ]]
   printf '%s\n' '{"schema":"empty","server_url":"http://127.0.0.1:8080","warnings":[]}'
 }
+verify_service_ownership() { :; }
 inspect_installation
 `, "", root)
 
@@ -220,6 +238,7 @@ func TestInstallerPostReplacementFailureKeepsServiceStopped(t *testing.T) {
 	for _, stage := range []string{"commit", "validate", "cleanup", "replace-programs", "readiness"} {
 		output, err := installerShell(t, `
 STAGE="$1"
+INSTALLATION_CHANGED=1
 systemctl() { echo "service:$1"; }
 on_failure 1
 `, "", stage)
@@ -287,17 +306,17 @@ echo accepted
 			if test.wantSuccess {
 				require.NoError(t, err, output)
 				require.Contains(t, output, "accepted")
-				for file, operation := range map[string]string{"library.json": "files list", "jobs.json": "job list"} {
+				for file, operation := range map[string]string{"library.json": "ls", "jobs.json": "job list --limit 1"} {
 					data, err := os.ReadFile(filepath.Join(root, file))
 					require.NoError(t, err)
-					require.Contains(t, string(data), operation)
+					require.Equal(t, "checked-cli:--server http://127.0.0.1:18671 --timeout 3s "+operation+"\n", string(data))
 				}
 				require.NotContains(t, output, "stopped:")
 				return
 			}
 			require.Error(t, err, output)
 			require.NotContains(t, output, "accepted")
-			require.Contains(t, output, "stopped:target.service")
+			require.NotContains(t, output, "stopped:target.service")
 			if test.changePID {
 				require.Contains(t, output, "checked-frontend")
 				require.Contains(t, output, "changed or stopped")
@@ -335,16 +354,20 @@ func TestInstallerSameVersionStillOffersSkill(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(root, program), []byte(body), 0700))
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(root, "COMMIT"), []byte("candidate"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "VERSION"), []byte("v1.0.0-alpha.1"), 0600))
 	output, err := installerShell(t, `
 INSTALL_DIRECTORY="$1"
 identify_platform() { :; }
 flock() { :; }
 resolve_version() { CURRENT_VERSION=v1.0.0-alpha.1; RELEASE_VERSION=v1.0.0-alpha.1; }
-download_release() { :; }
+download_release() { mkdir -p "$RELEASE_DIRECTORY"; printf candidate > "$RELEASE_DIRECTORY/COMMIT"; }
 inspect_installation() { :; }
+plan_configuration() { CONFIG_CHANGED=false; }
 offer_skill() { echo offer-skill; }
+managed_install_matches_candidate() { :; }
+check_readiness() { echo checked-readiness; }
 backup_installation() { echo unexpected-backup; return 1; }
-systemctl() { echo unexpected-service-operation; return 1; }
+systemctl() { [[ "$1" == start ]] && { echo service:start; return; }; echo unexpected-service-operation; return 1; }
 main
 `, "", root)
 
@@ -352,6 +375,8 @@ main
 	require.NoError(t, err, output)
 	require.Contains(t, output, "already installed")
 	require.Contains(t, output, "offer-skill")
+	require.Contains(t, output, "service:start")
+	require.Contains(t, output, "checked-readiness")
 	require.NotContains(t, output, "unexpected-")
 }
 
@@ -412,61 +437,19 @@ download_release
 }
 
 func TestInstallerRejectsReservedDirectoryConflict(t *testing.T) {
-	// Existing user data at the reserved path is never adopted or overwritten.
+	// A non-directory at the archive retention path is never adopted or overwritten.
 	root := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(root, ".yatm-upgrades"), 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".yatm-upgrades/user-note"), []byte("keep"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".backup"), []byte("keep"), 0600))
 	output, err := installerShell(t, `
 INSTALL_DIRECTORY="$1"
+flock() { :; }
 begin_attempt
 `, "", root)
 	require.Error(t, err, output)
-	require.Contains(t, output, "not an installer-owned directory")
-	require.NoFileExists(t, filepath.Join(root, ".yatm-upgrades/OWNER"))
-}
-
-func TestInstallerBackupsRemainInsideInstallation(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("The supported installer uses Linux GNU tar comparison and flock; covered by Linux acceptance")
-	}
-
-	// Include dotfiles, a user backup, a helper and linked content in the complete installation.
-	root := t.TempDir()
-	installed := filepath.Join(root, "yatm")
-	for _, file := range []string{"VERSION", ".secret", "user.backup", "scripts/helper", "content"} {
-		path := filepath.Join(installed, file)
-		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
-		require.NoError(t, os.WriteFile(path, []byte("original "+file), 0640))
-	}
-	require.NoError(t, os.Link(filepath.Join(installed, "content"), filepath.Join(installed, "hard-link")))
-	require.NoError(t, os.Symlink("content", filepath.Join(installed, "soft-link")))
-
-	// Two upgrade attempts preserve the first snapshot byte-for-byte and omit retained attempts only.
-	output, err := installerShell(t, `
-INSTALL_DIRECTORY="$1"
-CURRENT_VERSION=v0.1.8
-begin_attempt
-backup_installation
-first_backup="$BACKUP_DIRECTORY"
-printf 'new version\n' > "$INSTALL_DIRECTORY/VERSION"
-flock -u 9
-exec 9>&-
-CURRENT_VERSION=v1.0.0-alpha.1
-begin_attempt
-backup_installation
-[[ ! -e "$BACKUP_DIRECTORY/.yatm-upgrades" && ! -e "$first_backup/.yatm-upgrades" ]]
-[[ "$(< "$first_backup/VERSION")" == 'original VERSION' ]]
-[[ "$(< "$BACKUP_DIRECTORY/VERSION")" == 'new version' ]]
-[[ "$(stat -c '%a' "$first_backup")" == 700 ]]
-[[ "$(stat -c '%a' "$BACKUP_DIRECTORY/scripts/helper")" == 640 ]]
-[[ "$BACKUP_DIRECTORY/content" -ef "$BACKUP_DIRECTORY/hard-link" ]]
-[[ "$(readlink "$BACKUP_DIRECTORY/soft-link")" == content ]]
-`, "", installed)
-	require.NoError(t, err, output)
-	require.Equal(t, 2, strings.Count(output, "Passed: complete backup"))
-	entries, err := os.ReadDir(root)
-	require.NoError(t, err)
-	require.Len(t, entries, 1, "retained files must not leak into the installation parent")
+	require.Contains(t, output, "Reserved .backup path is not a directory")
+	data, readErr := os.ReadFile(filepath.Join(root, ".backup"))
+	require.NoError(t, readErr)
+	require.Equal(t, "keep", string(data))
 }
 
 func TestInstallerBackupMismatchStopsBeforeMigration(t *testing.T) {
@@ -483,8 +466,8 @@ CURRENT_VERSION=v0.1.8
 SCHEMA=legacy
 begin_attempt
 systemctl() { :; }
-run_migrator() { [[ "$2" == quiesce ]]; }
-cp() { command cp "$@"; printf 'damaged backup' > "$BACKUP_DIRECTORY/VERSION"; }
+run_migrator() { [[ "$2" == quiesce || "$2" == config-check ]]; }
+tar() { [[ "$*" != *-dzf* ]] || return 1; command tar "$@"; }
 trap 'on_failure "$?"' ERR
 upgrade_existing
 echo unexpected-migration-complete
@@ -492,4 +475,321 @@ echo unexpected-migration-complete
 	require.Error(t, err, output)
 	require.Contains(t, output, "Stage: backup")
 	require.NotContains(t, output, "unexpected-migration-complete")
+}
+
+func TestInstallerRejectsAmbiguousFreshRoot(t *testing.T) {
+	for _, name := range []string{"ordinary file", "symlink", "reserved subtree"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			switch name {
+			case "ordinary file":
+				require.NoError(t, os.WriteFile(filepath.Join(root, "note"), []byte("keep"), 0o600))
+			case "symlink":
+				require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(root, "content")))
+			case "reserved subtree":
+				require.NoError(t, os.Mkdir(filepath.Join(root, ".yatm-upgrades"), 0o700))
+			}
+			output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; reject_ambiguous_fresh_root`, "", root)
+			require.Error(t, err, output)
+			require.Contains(t, output, "non-empty installation directory")
+		})
+	}
+}
+
+func TestInstallerFreshRetryAcceptsOnlyRetainedBackups(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(root, ".backup"), 0o700))
+
+	// A cancelled fresh installation leaves its report, but no active installation content to classify.
+	output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; reject_ambiguous_fresh_root`, "", root)
+	require.NoError(t, err, output)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "note"), []byte("user data"), 0o600))
+	_, err = installerShell(t, `INSTALL_DIRECTORY="$1"; reject_ambiguous_fresh_root`, "", root)
+	require.Error(t, err)
+}
+
+func TestInstallerBindsServiceOwnershipBeforeInspection(t *testing.T) {
+	root := t.TempDir()
+	unit := filepath.Join(root, "yatm-httpd.service")
+	require.NoError(t, os.WriteFile(unit, []byte("unit"), 0o600))
+	for _, test := range []struct {
+		name, current, load, fragment, work string
+		wantSuccess                         bool
+	}{
+		{name: "fresh unused name", current: "none", load: "not-found", wantSuccess: true},
+		{name: "fresh foreign unit", current: "none", load: "loaded", fragment: "/other/yatm.service", work: "/other"},
+		{name: "owned installed unit", current: "v1.0.0-alpha.1", load: "loaded", fragment: unit, work: root, wantSuccess: true},
+		{name: "installed foreign unit", current: "v1.0.0-alpha.1", load: "loaded", fragment: "/other/yatm.service", work: root},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"; CURRENT_VERSION="$2"; LOAD="$3"; FRAGMENT="$4"; WORK="$5"
+service_property() { case "$1" in LoadState) printf '%s\n' "$LOAD";; FragmentPath) printf '%s\n' "$FRAGMENT";; WorkingDirectory) printf '%s\n' "$WORK";; esac; }
+readlink() { printf '%s\n' "${2:-$1}"; }
+verify_service_ownership
+`, "", root, test.current, test.load, test.fragment, test.work)
+			if test.wantSuccess {
+				require.NoError(t, err, output)
+			} else {
+				require.Error(t, err, output)
+			}
+		})
+	}
+}
+
+func TestInstallerFreshServiceConflictPrecedesInstallationWrite(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "yatm")
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+identify_platform() { :; }
+resolve_version() { CURRENT_VERSION=none; RELEASE_VERSION=v1.0.0-alpha.2; }
+service_property() { case "$1" in LoadState) echo loaded;; FragmentPath) echo /other/yatm.service;; WorkingDirectory) echo /other;; esac; }
+download_release() { echo unexpected-download; return 1; }
+main
+`, "", root)
+	require.Error(t, err, output)
+	require.Contains(t, output, "not owned by this fresh installation")
+	require.NotContains(t, output, "unexpected-download")
+	require.NoDirExists(t, root)
+}
+
+func TestInstallerRestoresAdmissionWhenQuiesceOrStopIsUncertain(t *testing.T) {
+	for _, failure := range []string{"quiesce", "stop"} {
+		t.Run(failure, func(t *testing.T) {
+			output, err := installerShell(t, `
+SERVICE_ACTIVE=1; FAILURE="$1"; INSTALL_DIRECTORY=/install; SERVICE_NAME=yatm.service
+service_main_pid() { echo 42; }
+run_migrator() { [[ "$FAILURE" != quiesce ]]; }
+systemctl() { if [[ "$1" == stop && "$FAILURE" == stop ]]; then return 1; fi; [[ "$1" != is-active || "$FAILURE" == stop ]]; }
+restore_previous_service() { echo admission-restored; }
+quiesce_and_stop
+`, "", failure)
+			require.Error(t, err, output)
+			require.Contains(t, output, "admission-restored")
+		})
+	}
+}
+
+func TestInstallerWaitsForPreviousServiceRecovery(t *testing.T) {
+	output, err := installerShell(t, `
+SERVICE_ACTIVE=1; SERVICE_NAME=yatm.service; SCHEMA=current; attempts=0
+systemctl() {
+  [[ "$1" == restart ]] && return 0
+  if [[ "$1" == is-active ]]; then
+    attempts=$((attempts + 1))
+    [[ "$attempts" -ge 3 ]]
+    return
+  fi
+  return 1
+}
+ready_process_id() { echo 42; }
+sleep() { :; }
+restore_previous_service
+echo "attempts:$attempts"
+`, "")
+	require.NoError(t, err, output)
+	require.Contains(t, output, "Previous service admission and active state restored")
+	require.Contains(t, output, "attempts:3")
+}
+
+func TestInstallerBackupFailureStaysExplicitlyIncomplete(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("The supported installer verifies backups with Linux GNU tar")
+	}
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "VERSION"), []byte("v0.1.8"), 0o600))
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"; CURRENT_VERSION=v0.1.8
+begin_attempt
+tar() { return 1; }
+backup_installation
+`, "", root)
+	require.Error(t, err, output)
+	require.Contains(t, output, "incomplete archive remains")
+	require.NotContains(t, output, "Passed: complete backup")
+	archives, err := filepath.Glob(filepath.Join(root, ".backup/*/yatm.tar.gz"))
+	require.NoError(t, err)
+	require.Empty(t, archives)
+}
+
+func TestInstallerManagedIdentityIncludesCandidateCommitAndCompleteTrees(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the supported installer compares managed trees with GNU tar")
+	}
+	root := t.TempDir()
+	installed, candidate := filepath.Join(root, "installed"), filepath.Join(root, "candidate")
+	items := []string{"yatm-httpd", "yatm-cli", "yatm-export-library", "yatm-lto-info", "yatm-migrate", "install-release.sh", "frontend", "README.md", "CONTEXT.md", "docs", "VERSION", "COMMIT", "LICENSE", "licenses", "skills", "templates"}
+	for _, base := range []string{installed, candidate} {
+		for _, item := range items {
+			path := filepath.Join(base, item)
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+			require.NoError(t, os.WriteFile(path, []byte(item), 0o600))
+		}
+		require.NoError(t, os.WriteFile(filepath.Join(base, "VERSION"), []byte("v1.0.0-alpha.2"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(base, "COMMIT"), []byte("candidate"), 0o600))
+	}
+	output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; RELEASE_DIRECTORY="$2"; RELEASE_VERSION=v1.0.0-alpha.2; managed_install_matches_candidate`, "", installed, candidate)
+	require.NoError(t, err, output)
+	require.NoError(t, os.WriteFile(filepath.Join(installed, "frontend"), []byte("stale"), 0o600))
+	_, err = installerShell(t, `INSTALL_DIRECTORY="$1"; RELEASE_DIRECTORY="$2"; RELEASE_VERSION=v1.0.0-alpha.2; managed_install_matches_candidate`, "", installed, candidate)
+	require.Error(t, err)
+
+	// A legacy release-owned sample means an otherwise identical package still needs replacement.
+	require.NoError(t, os.WriteFile(filepath.Join(installed, "config.example.yaml"), []byte("obsolete"), 0o600))
+	_, err = installerShell(t, `INSTALL_DIRECTORY="$1"; RELEASE_DIRECTORY="$2"; RELEASE_VERSION=v1.0.0-alpha.2; managed_install_matches_candidate`, "", installed, candidate)
+	require.Error(t, err)
+}
+
+func TestInstallerCompleteArchiveBackup(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("complete archive metadata comparison requires GNU tar; macOS coverage requires gtar")
+	}
+
+	// Preserve ordinary, hidden, linked, and legacy-retained installation input.
+	root := t.TempDir()
+	for name, data := range map[string]string{
+		"VERSION":                    "v1.0.0-alpha.1\n",
+		".hidden":                    "hidden\n",
+		"directory with spaces/file": "spaces\n",
+		"content":                    "content\n",
+		".yatm-upgrades/legacy":      "retained\n",
+	} {
+		path := filepath.Join(root, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+		require.NoError(t, os.WriteFile(path, []byte(data), 0o640))
+	}
+	require.NoError(t, os.Link(filepath.Join(root, "content"), filepath.Join(root, "hard-link")))
+	require.NoError(t, os.Symlink("content", filepath.Join(root, "soft-link")))
+
+	// A second archive must not include the first retained archive or scratch directory.
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+CURRENT_VERSION=v1.0.0-alpha.1
+begin_attempt
+backup_installation
+first="$BACKUP_DIRECTORY/yatm.tar.gz"
+printf 'changed\n' > "$INSTALL_DIRECTORY/VERSION"
+ATTEMPT_DIRECTORY="$(mktemp -d "$INSTALL_DIRECTORY/.backup/second.XXXXXX")"
+REPORT_DIRECTORY="$ATTEMPT_DIRECTORY"
+WORK_DIRECTORY="$ATTEMPT_DIRECTORY/.work"
+mkdir "$WORK_DIRECTORY"
+backup_installation
+tar -tzf "$first" | grep -Fx './.yatm-upgrades/legacy'
+! tar -tzf "$first" | grep -q '^./.backup/'
+tar -tzf "$BACKUP_DIRECTORY/yatm.tar.gz" | grep -Fx './directory with spaces/file'
+[[ "$(tar -xOzf "$first" ./VERSION)" == v1.0.0-alpha.1 ]]
+[[ "$(tar -xOzf "$BACKUP_DIRECTORY/yatm.tar.gz" ./VERSION)" == changed ]]
+(cd "$BACKUP_DIRECTORY" && sha256sum --check yatm.tar.gz.sha256)
+`, "", root)
+	require.NoError(t, err, output)
+	require.Equal(t, 2, strings.Count(output, "Passed: complete backup content and metadata comparison."))
+}
+
+func TestInstallerConfigurationPlanOrdering(t *testing.T) {
+	root := t.TempDir()
+
+	// The reviewed plan is created before any stop, rechecked after stopping, then applied only after backup.
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+TMP_DIRECTORY="$1/work"
+REPORT_DIRECTORY="$1/report"
+mkdir -p "$TMP_DIRECTORY" "$REPORT_DIRECTORY"
+LEGACY=0
+SERVICE_ACTIVE=0
+SCHEMA=current
+CONFIG_CHANGED=true
+CONFIG_PLAN="$TMP_DIRECTORY/config-plan.json"
+run_migrator() {
+  echo "migrator:$*"
+  case "$*" in
+    *config-check*) [[ "$*" == *'-plan-file '* && "$*" == *-service-stopped* ]];;
+    *config-apply*) [[ "$*" == *'-plan-file '* && "$*" == *-service-stopped* && "$*" == *--confirm* ]];;
+  esac
+}
+backup_installation() { echo backup; BACKUP_COMPLETE=1; }
+upgrade_existing
+`, "", root)
+	require.NoError(t, err, output)
+	check := strings.Index(output, "migrator:-phase config-check")
+	backup := strings.Index(output, "backup")
+	apply := strings.Index(output, "migrator:-phase config-apply")
+	require.GreaterOrEqual(t, check, 0, output)
+	require.Greater(t, backup, check, output)
+	require.Greater(t, apply, backup, output)
+}
+
+func TestInstallerConfigurationCheckFailureStopsBeforeBackup(t *testing.T) {
+	root := t.TempDir()
+
+	// Changed reviewed inputs require a fresh plan and must not create an archive or mutate the installation.
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+TMP_DIRECTORY="$1/work"
+mkdir "$TMP_DIRECTORY"
+SERVICE_ACTIVE=0
+SCHEMA=current
+CONFIG_PLAN="$TMP_DIRECTORY/config-plan.json"
+run_migrator() { [[ "$*" != *config-check* ]]; }
+backup_installation() { echo unexpected-backup; }
+upgrade_existing
+`, "", root)
+	require.Error(t, err, output)
+	require.NotContains(t, output, "unexpected-backup")
+}
+
+func TestInstallerBlocksLegacyPendingMigration(t *testing.T) {
+	root := t.TempDir()
+	pending := filepath.Join(root, ".yatm-upgrades")
+	require.NoError(t, os.MkdirAll(pending, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(pending, "migration.pending.json"), []byte("{}\n"), 0o600))
+
+	// The new installer does not resume an old phase marker, because it lacks a verified archive contract.
+	output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; reject_pending_migration`, "", root)
+	require.Error(t, err, output)
+	require.Contains(t, output, "earlier upgrade is unfinished")
+}
+
+func TestInstallerCleansOnlyRecognizedLegacyArtifactsAfterBackup(t *testing.T) {
+	root := t.TempDir()
+	old := filepath.Join(root, ".yatm-upgrades")
+	known := filepath.Join(old, "20260916010101.abc123")
+	unknown := filepath.Join(old, "keep-me")
+	require.NoError(t, os.MkdirAll(filepath.Join(known, "reports"), 0o700))
+	require.NoError(t, os.Mkdir(filepath.Join(known, "v1.0.0-alpha.1.backup"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(old, "OWNER"), []byte("yatm-installer-upgrades\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(known, "reports", "upgrade.log"), []byte("completed\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(known, "reports", "backup.status"), []byte("complete\n"), 0o600))
+	require.NoError(t, os.MkdirAll(unknown, 0o700))
+
+	// Old installer output is removed only after a complete new archive, and unknown input survives.
+	output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; BACKUP_COMPLETE=1; clean_old_upgrades`, "", root)
+	require.NoError(t, err, output)
+	require.NoDirExists(t, known)
+	require.DirExists(t, unknown)
+}
+
+func TestInstallerCleansRecognizedIncompleteAttemptsOnlyAfterNewBackup(t *testing.T) {
+	root := t.TempDir()
+	old := filepath.Join(root, ".yatm-upgrades")
+	incomplete := filepath.Join(old, "20260916010101.abc123")
+	unknown := filepath.Join(old, "20260916010102.def456")
+	pending := filepath.Join(old, "migration.pending.json")
+	require.NoError(t, os.MkdirAll(filepath.Join(incomplete, "reports"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(incomplete, "reports", "upgrade.log"), []byte("cancelled before backup\n"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(unknown, "reports"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(unknown, "reports", "unknown-report.json"), []byte("{}\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(pending), []byte("{}\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(old, "OWNER"), []byte("yatm-installer-upgrades\n"), 0o600))
+
+	// Cancellation evidence is retained until a later verified backup protects it.
+	output, err := installerShell(t, `INSTALL_DIRECTORY="$1"; BACKUP_COMPLETE=0; clean_old_upgrades`, "", root)
+	require.NoError(t, err, output)
+	require.DirExists(t, incomplete)
+
+	// A recognized incomplete attempt is now disposable; unknown reports and pending recovery evidence are not.
+	output, err = installerShell(t, `INSTALL_DIRECTORY="$1"; BACKUP_COMPLETE=1; clean_old_upgrades`, "", root)
+	require.NoError(t, err, output)
+	require.NoDirExists(t, incomplete)
+	require.DirExists(t, unknown)
+	require.FileExists(t, pending)
 }

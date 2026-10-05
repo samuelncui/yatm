@@ -1,44 +1,91 @@
 syntax = "proto3";
-package settings;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
-import "source.proto";
-
+// Every Settings group uses the same read and replacement path. Values remain typed so adding a
+// group extends this contract without exposing storage keys or unvalidated JSON.
 service SettingsService {
-  rpc GetLibrary(GetLibrarySettingsRequest) returns (LibrarySettings) {}
-  rpc UpdateLibrary(UpdateLibrarySettingsRequest) returns (UpdateLibrarySettingsReply) {}
-  rpc GetAccess(GetAccessRequest) returns (GetAccessReply) {}
-  rpc BrowsePaths(BrowsePathsRequest) returns (BrowsePathsReply) {}
+  rpc Get(GetSettingsRequest) returns (GetSettingsResponse) {}
+  rpc Update(UpdateSettingsRequest) returns (UpdateSettingsResponse) {}
 }
 
+enum SettingsGroup {
+  SETTINGS_GROUP_UNSPECIFIED = 0;
+  SETTINGS_GROUP_LIBRARY = 1;
+  SETTINGS_GROUP_PREVIEW = 2;
+  SETTINGS_GROUP_JOB = 3;
+}
+
+// Library preferences: what the Library shows and how it confirms removal.
 message LibrarySettings {
   bool include_unbacked_files = 1;
-  int64 revision = 2;
-  bool auto_collect_files = 3;
-  bool confirm_permanent_delete = 4;
+  bool confirm_remove = 2;
 }
-message GetLibrarySettingsRequest {}
-message UpdateLibrarySettingsRequest { LibrarySettings settings = 1; }
-message UpdateLibrarySettingsReply {
-  LibrarySettings settings = 1;
-  repeated int64 collection_job_ids = 2;
-  repeated string collection_errors = 3;
+// Executor preferences: how an attempt drives the pipeline its runner owns.
+message JobSettings {
+  JobExecutionSettings execution = 1;
 }
-message AccessRange { string root_path = 1; string ignore = 2; }
-message GetAccessRequest {}
-message GetAccessReply {
-  repeated AccessRange ranges = 1;
-  repeated string migration_messages = 2;
+// Job pipeline batching, buffering and delivery cadence. Every limit is an ACP option: the read
+// batch is the manifest page, and the read buffer, the result queue, the result batch and the
+// flush interval are the engine's, so the result writer of an attempt only persists the batches
+// ACP hands over.
+message JobExecutionSettings {
+  int32 read_batch = 1;
+  int32 read_buffer_max = 2;
+  int32 write_buffer_max = 3;
+  int32 write_batch_size = 4;
+  int32 flush_interval_ms = 5;
 }
-// An empty path lists authorized roots. A Location ID constrains restore-directory browsing.
-message BrowsePathsRequest {
-  string path = 1;
-  string cursor = 2;
-  int32 limit = 3;
-  int64 location_id = 4;
+// Generation preferences; storage paths remain deployment resources.
+message PreviewSettings {
+  repeated PreviewGeneratorSettings generators = 1;
+  bool enabled = 2;
+  string command = 3;
+  int32 concurrency = 4;
+  int32 timeout_seconds = 5;
+  int64 max_input_pixels = 6;
 }
-message BrowsePathsReply {
-  string path = 1;
-  repeated source.SourceFile directories = 2;
-  string next_cursor = 3;
+// The generator routes and output choices frozen when a Job is created. Runtime limits and
+// enablement remain live Settings and are intentionally absent.
+message PreviewJobSettings {
+  repeated PreviewGeneratorSettings generators = 1;
 }
+message PreviewExtension {
+  string name = 1;
+  bool enabled = 2;
+}
+message PreviewGeneratorSettings {
+  bool enabled = 1;
+  repeated PreviewExtension extensions = 2;
+  oneof options {
+    ImagePreviewSettings image = 3;
+    VideoPreviewSettings video = 4;
+  }
+}
+message ImagePreviewSettings {
+  int32 max_width = 1;
+  int32 max_height = 2;
+  string format = 3;
+  int32 quality = 4;
+}
+message VideoPreviewSettings {
+  int32 poster_width = 1;
+  int32 poster_height = 2;
+  int32 timeline_width = 3;
+  int32 timeline_height = 4;
+  int32 timeline_interval_seconds = 5;
+  int32 timeline_max_frames = 6;
+  string format = 7;
+  int32 quality = 8;
+}
+message SettingsValue {
+  oneof value {
+    LibrarySettings library = 1;
+    PreviewSettings preview = 2;
+    JobSettings job = 3;
+  }
+}
+message GetSettingsRequest { SettingsGroup group = 1; }
+message GetSettingsResponse { SettingsValue value = 1; }
+message UpdateSettingsRequest { SettingsValue value = 1; }
+message UpdateSettingsResponse { SettingsValue value = 1; }

@@ -1,8 +1,9 @@
-import { Alert, AlertTitle, Box, Button } from "@mui/material";
+import { Feedback } from "@/components/feedback";
+import { AlertTitle, Box, Button } from "@mui/material";
 import { runUIAction } from "@/tools";
 
 export const DirectoryReadError = ({ error, onRetry }: { error: string; onRetry: () => Promise<void> }) => (
-  <Alert severity="error" action={<Button onClick={() => runUIAction(onRetry, "Could not read this directory")}>Retry</Button>}>
+  <Feedback severity="error" action={<Button onClick={() => runUIAction(onRetry, "Could not read this directory")}>Retry</Button>}>
     <AlertTitle>Could not read this directory</AlertTitle>
     <details>
       <summary>Details</summary>
@@ -10,5 +11,5 @@ export const DirectoryReadError = ({ error, onRetry }: { error: string; onRetry:
         {error}
       </Box>
     </details>
-  </Alert>
+  </Feedback>
 );

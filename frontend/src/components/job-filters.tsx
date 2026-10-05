@@ -1,25 +1,19 @@
+import { Feedback } from "@/components/feedback";
 import { useState } from "react";
-import { Alert, Button, MenuItem, TextField } from "@mui/material";
+import { Button, MenuItem, TextField } from "@mui/material";
 import { useSearchParams } from "react-router";
-import { cli, locationCli } from "@/api";
-import { JobKind, JobStatus, type JobFilter, type Location, type Media } from "@/entity";
+import { mediaCli, locationCli } from "@/api";
+import { JobKind, type JobFilter, type Location, type Media } from "@/entity";
 import { jobLabel } from "@/components/job-card";
 import { errorMessage } from "@/tools";
 
 export const jobKinds = [JobKind.ARCHIVE, JobKind.RESTORE, JobKind.SCAN];
-const statuses = [
-  { value: JobStatus.INDEXING, label: "Preparing" },
-  { value: JobStatus.PENDING, label: "Pending" },
-  { value: JobStatus.COMPLETED, label: "Completed" },
-];
 export function jobFilterFromParams(params: URLSearchParams): JobFilter {
   const kind = Number(params.get("kind"));
-  const status = Number(params.get("status"));
   const location = params.get("location");
   const media = params.get("media");
   return {
     ...(params.has("kind") && jobKinds.includes(kind) ? { kind } : {}),
-    ...(params.has("status") && statuses.some((item) => item.value === status) ? { status } : {}),
     ...(location && /^[1-9]\d*$/.test(location) ? { locationId: BigInt(location) } : {}),
     ...(media && /^[1-9]\d*$/.test(media) ? { mediaId: BigInt(media) } : {}),
   };
@@ -41,7 +35,7 @@ export const JobFilters = () => {
       const [locationPage, mediaPage] = await Promise.all([
         !more || moreLocations ? locationCli.list({ limit: 50, afterId: more ? (locations.at(-1)?.id ?? 0n) : 0n, query: "" }).response : undefined,
         !more || moreMedia
-          ? cli.mediaList({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: more ? BigInt(media.length) : 0n, query: "" } } }).response
+          ? mediaCli.list({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: more ? BigInt(media.length) : 0n, query: "" } } }).response
           : undefined,
       ]);
       if (locationPage) {
@@ -83,22 +77,6 @@ export const JobFilters = () => {
         {jobKinds.map((kind) => (
           <MenuItem key={kind} value={kind}>
             {jobLabel(kind)}
-          </MenuItem>
-        ))}
-      </TextField>
-      <TextField
-        className="job-filter"
-        select
-        size="small"
-        label="Status"
-        slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
-        value={filter.status ?? ""}
-        onChange={(event) => change("status", event.target.value)}
-      >
-        <MenuItem value="">All statuses</MenuItem>
-        {statuses.map((item) => (
-          <MenuItem key={item.value} value={item.value}>
-            {item.label}
           </MenuItem>
         ))}
       </TextField>
@@ -148,12 +126,11 @@ export const JobFilters = () => {
           </MenuItem>
         )}
       </TextField>
-      {(filter.kind !== undefined || filter.status !== undefined || resource) && <Button onClick={() => setParams({})}>Clear</Button>}
+      {(filter.kind !== undefined || resource) && <Button onClick={() => setParams({})}>Clear</Button>}
       {error && (
-        <Alert severity="error">
+        <Feedback severity="error" action={<Button onClick={() => void loadResources()}>Retry</Button>}>
           {error}
-          <Button onClick={() => void loadResources()}>Retry</Button>
-        </Alert>
+        </Feedback>
       )}
     </div>
   );

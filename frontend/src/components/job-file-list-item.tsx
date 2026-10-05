@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Link } from "react-router";
 
 import { styled } from "@mui/material/styles";
-import ListItem from "@mui/material/ListItem";
+import ListItem, { type ListItemProps } from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import ListItemButton from "@mui/material/ListItemButton";
 import Skeleton from "@mui/material/Skeleton";
@@ -10,7 +10,13 @@ import Skeleton from "@mui/material/Skeleton";
 import { CopyStatus } from "@/entity";
 import { formatFilesize } from "@/tools";
 
-const FileListItemText = styled(ListItemText)({ padding: 0, margin: 5, marginLeft: 10 });
+export const JobResultRow = styled(ListItem)<ListItemProps>({
+  boxSizing: "border-box",
+  minHeight: 54,
+  padding: "0 16px",
+  borderBottom: "1px solid rgba(15, 23, 42, 0.08)",
+});
+export const JobResultText = styled(ListItemText)({ padding: 0, margin: "4px 0" });
 const FileListItemButton = styled(ListItemButton)({ padding: 0 });
 
 export interface FileState {
@@ -28,7 +34,7 @@ export const FileListItem = memo(({ src, onClick, className }: { src?: FileState
   }
 
   const text = (
-    <FileListItemText
+    <JobResultText
       primary={src.path}
       secondary={
         <>
@@ -46,25 +52,23 @@ export const FileListItem = memo(({ src, onClick, className }: { src?: FileState
   );
   if (!onClick) {
     return (
-      <ListItem component="div" className={className} disablePadding>
+      <JobResultRow component="div" className={className} disablePadding>
         {text}
-      </ListItem>
+      </JobResultRow>
     );
   }
 
   return (
-    <ListItem component="div" className={className} disablePadding>
+    <JobResultRow component="div" className={className} disablePadding>
       <FileListItemButton onClick={onClick}>{text}</FileListItemButton>
-    </ListItem>
+    </JobResultRow>
   );
 });
 
-export const FileRow = styled(FileListItem)(({ indent }: { indent?: number }) => ({
-  paddingLeft: indent !== undefined ? indent : 16,
-}));
+export const FileRow = FileListItem;
 
-export const FileRowPlaceholder = memo(({ indent }: { indent?: number }) => (
-  <div style={{ paddingLeft: indent !== undefined ? indent : 16, display: "flex", alignItems: "center", height: 54 }}>
+export const FileRowPlaceholder = memo(() => (
+  <JobResultRow component="div" disablePadding>
     <Skeleton variant="text" width="80%" height={24} animation="wave" />
-  </div>
+  </JobResultRow>
 ));

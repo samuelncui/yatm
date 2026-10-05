@@ -4,7 +4,7 @@ type OneofStorageMetadata interface {
 	isOneofStorageMetadata()
 }
 
-func (x *LTFSMetadata) isOneofStorageMetadata() {}
+func (x *LtfsMetadata) isOneofStorageMetadata() {}
 
 func (x *StorageMetadata) Unpack() OneofStorageMetadata {
 	switch param := x.Backend.(type) {
@@ -17,7 +17,7 @@ func (x *StorageMetadata) Unpack() OneofStorageMetadata {
 
 func PackStorageMetadata(param OneofStorageMetadata) *StorageMetadata {
 	switch param := param.(type) {
-	case *LTFSMetadata:
+	case *LtfsMetadata:
 		return &StorageMetadata{
 			Backend: &StorageMetadata_Ltfs{
 				Ltfs: param,
@@ -28,7 +28,7 @@ func PackStorageMetadata(param OneofStorageMetadata) *StorageMetadata {
 	}
 }
 
-func (p *LTFSMetadata) Pack() *StorageMetadata {
+func (p *LtfsMetadata) Pack() *StorageMetadata {
 	return &StorageMetadata{
 		Backend: &StorageMetadata_Ltfs{
 			Ltfs: p,
@@ -36,6 +36,6 @@ func (p *LTFSMetadata) Pack() *StorageMetadata {
 	}
 }
 
-func (p *LTFSMetadata) ToOneof() OneofStorageMetadata {
+func (p *LtfsMetadata) ToOneof() OneofStorageMetadata {
 	return p
 }

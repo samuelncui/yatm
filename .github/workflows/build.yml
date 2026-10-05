@@ -1,26 +1,111 @@
 # This workflow will build this project
 
 name: Release candidate
+run-name: ${{ inputs.publish && format('Publish {0} from candidate {1}', inputs.version, inputs.candidate_run_id) || format('Build candidate {0}', inputs.version) }}
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Candidate version (for example v1.0.0-alpha.1)
+        description: Candidate version (for example v1.0.0-alpha.2)
         required: true
         type: string
       publish:
         description: Upload accepted artifacts to an existing matching Release
         default: false
         type: boolean
-  release:
-    types: [created]
+      candidate_run_id:
+        description: Successful build run to publish (required when publish is true)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      artifact_id: ${{ steps.candidate.outputs.artifact_id }}
+      script_commit: ${{ steps.script.outputs.commit }}
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      PUBLISH: ${{ inputs.publish }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+    steps:
+      - name: Check out trusted release tools
+        uses: actions/checkout@v7
+        with:
+          ref: v1
+          persist-credentials: false
+      - id: script
+        name: Pin the trusted release tools for upload
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Validate dispatch inputs
+        run: node build/release/publish-candidate.mjs inputs
+      - id: candidate
+        name: Verify the selected accepted candidate and existing Release
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node build/release/publish-candidate.mjs inspect
+
+  source-check:
+    needs: prepare
+    if: ${{ !inputs.publish }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.8'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - name: Install the pinned content scanner
+        run: |
+          bash build/release/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+          echo "GITLEAKS_BIN=$RUNNER_TEMP/gitleaks/gitleaks" >> "$GITHUB_ENV"
+      - name: Install frozen frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile --registry=https://registry.npmjs.org
+      - name: Install the Preview fixture generator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libx264-dev libx265-dev zlib1g-dev
+          bash build/release/build-test-ffmpeg.sh "$RUNNER_TEMP/preview-test-tools"
+          echo "$RUNNER_TEMP/preview-test-tools/bin" >> "$GITHUB_PATH"
+      - name: Install the pinned protobuf generators
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/protoc.zip"
+          curl --fail --location --output "$archive" https://github.com/protocolbuffers/protobuf/releases/download/v26.0/protoc-26.0-linux-x86_64.zip
+          echo "3ed20f841fd9cb7a8344dd4158f6fcb67d333c8206b33a7dbb899bcbc08d92eb  $archive" | sha256sum --check
+          unzip -q "$archive" -d "$RUNNER_TEMP/protoc"
+          GOBIN="$RUNNER_TEMP/protoc/bin" go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
+          GOBIN="$RUNNER_TEMP/protoc/bin" go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+          echo "$RUNNER_TEMP/protoc/bin" >> "$GITHUB_PATH"
+      - name: Run the release source preflight
+        run: make release-check
+
   build:
+    needs: [prepare, source-check]
+    if: ${{ !inputs.publish }}
     strategy:
       matrix:
         include:
@@ -42,6 +127,7 @@ jobs:
           - goos: linux
             goarch: arm
             goarm: 5
+            unsupported: true
           - goos: linux
             goarch: arm
             goarm: 6
@@ -56,14 +142,17 @@ jobs:
           #   goarch: amd64
       fail-fast: false
 
+    # ARMv5 remains visible as an explicit unsupported build, never a pure-Go artifact.
+    continue-on-error: ${{ matrix.unsupported || false }}
+
     runs-on: ubuntu-latest
     env:
-      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
+      RELEASE_VERSION: ${{ inputs.version }}
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
       OSARCH_TESTED: ${{ matrix.tested }}
-      CGO_ENABLED: 0
+      CGO_ENABLED: ${{ matrix.goos == 'linux' && '1' || '0' }}
 
     steps:
     - name: Set env
@@ -76,7 +165,8 @@ jobs:
 
     - uses: actions/checkout@v7
       with:
-        ref: ${{ github.event.release.tag_name || github.sha }}
+        ref: ${{ github.sha }}
+        persist-credentials: false
 
     - name: Set up Go
       uses: actions/setup-go@v7
@@ -88,38 +178,121 @@ jobs:
       with:
         node-version: '24'
 
+    - name: Install pinned Zig for static Linux builds
+      if: matrix.goos == 'linux'
+      run: |
+        set -euo pipefail
+        archive="$RUNNER_TEMP/zig.tar.xz"
+        curl --fail --location --output "$archive" https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
+        echo "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239  $archive" | sha256sum --check
+        tar -xJf "$archive" -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/zig-x86_64-linux-0.15.2" >> "$GITHUB_PATH"
+
     - uses: pnpm/action-setup@v4
       with:
         package_json_file: frontend/package.json
 
     - name: Build
-      run: ./build.sh
+      run: make release
 
     - uses: actions/upload-artifact@v4
       with:
         name: candidate-${{ env.TARGET_NAME }}
         path: |
-          yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
-          yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz.sha256
+          output/releases/yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz
+          output/releases/yatm-${{ env.TARGET_NAME }}-${{ env.RELEASE_VERSION }}.tar.gz.sha256
         if-no-files-found: error
 
-  validate:
-    needs: build
-    runs-on: ubuntu-latest
+  preview-build:
+    needs: [prepare, source-check]
+    if: ${{ !inputs.publish }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-amd64
+          - runner: macos-15-intel
+            target: darwin-amd64
+          - runner: macos-15
+            target: darwin-arm64
+    runs-on: ${{ matrix.runner }}
     env:
-      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.8'
+          cache-dependency-path: previewworker/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install Linux native build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config patchelf libx264-dev libx265-dev zlib1g-dev
+          bash build/release/build-test-ffmpeg.sh "$RUNNER_TEMP/preview-test-tools"
+          echo "$RUNNER_TEMP/preview-test-tools/bin" >> "$GITHUB_PATH"
+      - name: Install macOS native build and fixture tools
+        if: runner.os == 'macOS'
+        run: brew install pkgconf ffmpeg
+      - name: Verify the Preview fixture generator
+        run: node build/release/check-preview-fixtures.mjs
+      - name: Prepare verified CC0 camera fixtures
+        run: |
+          node previewworker/build/fetch-raw-fixtures.mjs "$RUNNER_TEMP/raw-fixtures"
+          echo "YATM_TEST_RAW_DIRECTORY=$RUNNER_TEMP/raw-fixtures" >> "$GITHUB_ENV"
+      - name: Build and test the optional native helper
+        run: make preview
+      - name: Test relocation from the archive
+        run: |
+          set -euo pipefail
+          target=$(mktemp -d)
+          tar -xzf "output/releases/yatm-preview-${{ matrix.target }}-$RELEASE_VERSION.tar.gz" -C "$target"
+          "$target/yatm-preview" --capabilities
+          test -s "$target/preview-support/licenses/go-dependencies.json"
+          test -s "$target/preview-support/SOURCE.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-preview-${{ matrix.target }}
+          path: |
+            output/releases/yatm-preview-${{ matrix.target }}-${{ env.RELEASE_VERSION }}.tar.gz
+            output/releases/yatm-preview-${{ matrix.target }}-${{ env.RELEASE_VERSION }}.tar.gz.sha256
+            output/releases/yatm-preview-source-${{ matrix.target }}-${{ env.RELEASE_VERSION }}.tar.gz
+            output/releases/yatm-preview-source-${{ matrix.target }}-${{ env.RELEASE_VERSION }}.tar.gz.sha256
+          if-no-files-found: error
+
+  validate:
+    needs: [build, preview-build]
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.8'
-      - name: Test package and document validation
-        run: node --test build_documents.test.mjs check_release.test.mjs
+      - name: Install the Preview fixture generator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libx264-dev libx265-dev zlib1g-dev
+          bash build/release/build-test-ffmpeg.sh "$RUNNER_TEMP/preview-test-tools"
+          echo "$RUNNER_TEMP/preview-test-tools/bin" >> "$GITHUB_PATH"
+      - name: Install the pinned content scanner
+        run: |
+          bash build/release/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+          echo "GITLEAKS_BIN=$RUNNER_TEMP/gitleaks/gitleaks" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           pattern: candidate-*
@@ -128,27 +301,68 @@ jobs:
       - name: Validate the complete candidate set
         run: |
           set -euo pipefail
-          for target in linux-amd64 linux-386-experimental linux-arm64-experimental linux-arm5-experimental linux-arm6-experimental linux-arm7-experimental linux-s390x-experimental darwin-amd64-experimental darwin-arm64-experimental freebsd-amd64-experimental; do
-            node check_release.mjs "candidates/yatm-$target-$RELEASE_VERSION.tar.gz"
-          done
+          node build/release/check-candidate-set.mjs candidates "$RELEASE_VERSION" "$(git rev-parse HEAD)"
           cd candidates
           cat ./*.sha256 | sort > SHA256SUMS
           sha256sum --check SHA256SUMS
+      - name: Check public candidate content
+        run: node build/release/check-content.mjs artifacts candidates
+      - name: Test validators with the complete native corresponding sources
+        run: |
+          set -euo pipefail
+          source=$(mktemp -d)
+          trap 'rm -rf -- "$source"' EXIT
+          tar -xzf "candidates/yatm-preview-source-linux-amd64-$RELEASE_VERSION.tar.gz" -C "$source"
+          YATM_TEST_PREVIEW_SOURCE_DIRECTORY="$source" node --test build/backend/*.test.mjs build/release/*.test.mjs previewworker/build/*.test.mjs
       - name: Verify offline release identity on Linux
         run: |
           set -euo pipefail
           target=$(mktemp -d)
           tar -xzf "candidates/yatm-linux-amd64-$RELEASE_VERSION.tar.gz" -C "$target"
           for program in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate; do
+            node build/release/check-static-linux.mjs "$target/$program"
             output=$(cd "$target" && "./$program" --version)
             jq -e --arg version "$RELEASE_VERSION" --arg commit "$(git rev-parse HEAD)" --arg program "$program" '.version == $version and .commit == $commit and .program == $program' <<< "$output"
           done
           test ! -e "$target/config.yaml"
           test ! -e "$target/run.log"
           echo "YATM_E2E_BIN_DIR=$target" >> "$GITHUB_ENV"
+          preview=$(mktemp -d)
+          tar -xzf "candidates/yatm-preview-linux-amd64-$RELEASE_VERSION.tar.gz" -C "$preview"
+          "$preview/yatm-preview" --capabilities | jq -e --arg version "$RELEASE_VERSION" '.protocol == 1 and .type == "capabilities" and .capabilities.version == $version'
+          echo "YATM_TEST_PREVIEW_HELPER=$preview/yatm-preview" >> "$GITHUB_ENV"
       - name: Run the full E2E suite against the extracted Linux candidate
         run: |
-          go test -tags=e2e -count=1 -v ./e2e
+          make test-e2e
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - name: Install packaged browser acceptance tools
+        run: |
+          pnpm --dir frontend install --frozen-lockfile --registry=https://registry.npmjs.org
+          pnpm --dir frontend exec playwright install --with-deps chromium
+      - name: Exercise the packaged UI with disposable Demo data
+        run: |
+          set -euo pipefail
+          demo=$(mktemp -d "$RUNNER_TEMP/yatm-demo-browser.XXXXXX")
+          go run ./cmd/demo -root "$demo" -reset -listen 127.0.0.1:18080 -identical-files 1001
+          (cd "$YATM_E2E_BIN_DIR" && exec ./yatm-httpd -config "$demo/config.yaml") > "$RUNNER_TEMP/browser-server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true; wait "$server" 2>/dev/null || true; rm -rf -- "$demo"' EXIT
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:18080/ > /dev/null && break
+            kill -0 "$server"
+            sleep 1
+          done
+          YATM_BROWSER_URL=http://127.0.0.1:18080 YATM_BROWSER_COMMIT="$(git rev-parse HEAD)" pnpm --dir frontend test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure
+          path: |
+            output/browser-results/
+            ${{ runner.temp }}/browser-server.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: accepted-candidates
@@ -156,29 +370,39 @@ jobs:
           if-no-files-found: error
 
   upload:
-    needs: validate
-    if: github.event_name == 'release' || inputs.publish
+    needs: prepare
+    if: inputs.publish
     permissions:
       contents: write
+      actions: read
     runs-on: ubuntu-latest
     env:
-      RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.version }}
-      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      CANDIDATE_ARTIFACT_ID: ${{ needs.prepare.outputs.artifact_id }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.sha }}
-          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.script_commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@v4
         with:
-          name: accepted-candidates
+          artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
+          run-id: ${{ inputs.candidate_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
           path: candidates
-      - name: Upload only to the explicitly created matching Release
+          merge-multiple: true
+      - name: Install the pinned content scanner
         run: |
-          set -euo pipefail
-          test "$(git rev-parse "$RELEASE_VERSION^{commit}")" = "$(git rev-parse HEAD)"
-          gh release view "$RELEASE_VERSION" --json isPrerelease > release.json
-          if [[ "$RELEASE_VERSION" == *-* ]]; then jq -e '.isPrerelease' release.json; fi
-          cd candidates
-          sha256sum --check SHA256SUMS
-          gh release upload "$RELEASE_VERSION" ./*.tar.gz ./*.sha256 SHA256SUMS
+          bash build/release/install-gitleaks.sh "$RUNNER_TEMP/gitleaks"
+          echo "GITLEAKS_BIN=$RUNNER_TEMP/gitleaks/gitleaks" >> "$GITHUB_ENV"
+      - name: Recheck public candidate content
+        run: node build/release/check-content.mjs artifacts candidates
+      - name: Upload only to the explicitly created matching Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node build/release/publish-candidate.mjs upload candidates

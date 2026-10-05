@@ -1,6 +1,6 @@
 syntax = "proto3";
-package tag;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 message Tag {
     string name = 1;

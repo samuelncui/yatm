@@ -8,17 +8,19 @@ import (
 	"log"
 	"os"
 
-	"github.com/samuelncui/yatm/config"
 	"github.com/samuelncui/yatm/internal/buildinfo"
-	legacy "github.com/samuelncui/yatm/migrate/legacy"
+	"github.com/samuelncui/yatm/internal/config"
+	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
 )
 
 var (
 	configPath     = flag.String("config", "./config.yaml", "config file path")
-	phase          = flag.String("phase", "prepare", "schema, preflight, quiesce, frontend-check, prepare, commit, validate, abort, cleanup, or repair-job")
+	phase          = flag.String("phase", "prepare", "schema, preflight, quiesce, frontend-check, config-plan, config-check, config-apply, prepare, commit, validate, abort, cleanup, or repair-job")
+	planFile       = flag.String("plan-file", "", "private reviewed configuration plan for config-plan, config-check and config-apply")
 	jobID          = flag.Int64("job-id", 0, "Job ID to repair after a committed migration")
 	confirm        = flag.Bool("confirm", false, "confirm a destructive commit, abort, cleanup, or repair phase")
 	serviceStopped = flag.Bool("service-stopped", false, "confirm the YATM service is already stopped during preflight")
+	servicePID     = flag.Int("service-pid", 0, "systemd MainPID expected at the local upgrade endpoint")
 	freshInstall   = flag.Bool("fresh-install", false, "inspect new-installation configuration without opening service resources")
 	installRoot    = flag.String("install-root", "", "validate complete automatic-upgrade backup coverage under this directory")
 	backupRoot     = flag.String("backup-root", "", "complete legacy installation backup for validate, cleanup and repair-job")
@@ -36,12 +38,18 @@ func main() {
 		}
 		return
 	}
-	if *phase == "commit" || *phase == "abort" || *phase == "cleanup" || *phase == "repair-job" || *phase == "quiesce" {
+	if *phase == "commit" || *phase == "abort" || *phase == "cleanup" || *phase == "repair-job" || *phase == "quiesce" || *phase == "config-apply" {
 		requireConfirmation()
 	}
 	conf, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *phase == "config-plan" || *phase == "config-check" || *phase == "config-apply" {
+		if err := runConfigurationPhase(context.Background(), *phase, conf, *configPath, *planFile, *serviceStopped); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	if *freshInstall {
 		if *phase != "preflight" || *installRoot == "" {
@@ -85,7 +93,9 @@ func main() {
 		}
 		fmt.Println(schema)
 	case "preflight":
-		report, err := inspectInstallation(context.Background(), db, conf, *configPath, *installRoot, *serviceStopped)
+		report, err := inspectInstallation(
+			context.Background(), db, conf, *configPath, *installRoot, *serviceStopped, *servicePID,
+		)
 		if report != nil {
 			encoder := json.NewEncoder(os.Stdout)
 			if !*jsonOutput {
@@ -99,12 +109,14 @@ func main() {
 			log.Fatal(err)
 		}
 	case "quiesce":
-		if _, err := inspectInstallation(context.Background(), db, conf, *configPath, *installRoot, *serviceStopped); err != nil {
+		if _, err := inspectInstallation(
+			context.Background(), db, conf, *configPath, *installRoot, *serviceStopped, *servicePID,
+		); err != nil {
 			log.Fatal(err)
 		}
 		schema, _ := installedSchema(db)
 		if schema == legacy.SchemaCurrent && !*serviceStopped {
-			ids, err := quiesceService(context.Background(), conf.Listen)
+			ids, err := quiesceService(context.Background(), conf.Listen, *servicePID)
 			if err != nil {
 				log.Fatal(err)
 			}

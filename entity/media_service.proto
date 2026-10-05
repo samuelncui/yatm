@@ -1,0 +1,130 @@
+syntax = "proto3";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
+
+import "position.proto";
+import "media.proto";
+
+service MediaService {
+  rpc List(ListMediaRequest) returns (ListMediaResponse) {}
+  rpc Inspect(InspectMediaRequest) returns (InspectMediaResponse) {}
+  rpc Delete(DeleteMediaRequest) returns (DeleteMediaResponse) {}
+  rpc ListPositions(ListMediaPositionsRequest) returns (ListMediaPositionsResponse) {}
+  rpc InitializeVolume(InitializeVolumeRequest) returns (InitializeVolumeResponse) {}
+  rpc RegisterVolume(RegisterVolumeRequest) returns (RegisterVolumeResponse) {}
+  rpc ListVolumeCandidates(ListVolumeCandidatesRequest) returns (ListVolumeCandidatesResponse) {}
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse) {}
+}
+
+message ListMediaRequest {
+  oneof param {
+    MediaIds ids = 1;
+    MediaFilter list = 2;
+  }
+}
+
+message MediaIds { repeated int64 ids = 1; }
+
+message ListMediaResponse {
+  repeated Media media = 1;
+  bool has_more = 2;
+}
+
+message InspectMediaRequest {
+  oneof target {
+    InspectMediaTapeTarget tape = 1;
+    InspectMediaVolumeTarget volume = 2;
+  }
+  optional string identity = 17;
+}
+
+message InspectMediaTapeTarget { string device = 1; }
+message InspectMediaVolumeTarget { string uuid = 1; }
+
+message InspectMediaResponse {
+  string identity = 1;
+  optional Media media = 2;
+  int64 file_count = 3;
+  optional int64 last_written_at_ns = 4;
+  optional string mount_point = 5;
+}
+
+message DeleteMediaRequest {
+  repeated int64 ids = 1;
+  bool dryrun = 2;
+}
+
+message DeleteMediaResponse {
+  // Media rows this call deletes; under dryrun, those it would delete.
+  int64 media_count = 1;
+  // Recorded Positions that lose their Media; under dryrun, those it would lose.
+  int64 position_count = 2;
+}
+
+message ListMediaPositionsRequest {
+  int64 id = 1;
+  string directory = 2;
+  optional int64 limit = 33;
+  optional string after_path = 34;
+}
+
+message ListMediaPositionsResponse {
+  repeated Position positions = 1;
+  bool has_more = 2;
+}
+
+message InitializeVolumeRequest {
+  string mount_point = 1;
+  string name = 2;
+  VolumeMediaProfile profile = 3;
+}
+
+message InitializeVolumeResponse { Media media = 1; }
+
+message RegisterVolumeRequest {
+  string mount_point = 1;
+  string name = 2;
+}
+
+message RegisterVolumeResponse { Media media = 1; }
+
+// Volume candidate states select the applicable mounted-Volume operation.
+enum VolumeCandidateState {
+  VOLUME_CANDIDATE_STATE_UNSPECIFIED = 0;
+  // No marker: Initialize New creates a new identity.
+  VOLUME_CANDIDATE_STATE_UNINITIALIZED = 1;
+  // Valid marker without Library Media: Register Existing reuses the marker identity.
+  VOLUME_CANDIDATE_STATE_UNREGISTERED = 2;
+  VOLUME_CANDIDATE_STATE_REGISTERED = 3;
+  // The marker disagrees with the Library, or the identity is mounted more than once.
+  VOLUME_CANDIDATE_STATE_CONFLICT = 4;
+  // A present marker is unreadable or invalid.
+  VOLUME_CANDIDATE_STATE_INVALID = 5;
+}
+
+message VolumeCandidate {
+  string mount_point = 1;
+  // Library Media name when registered, otherwise the discovered directory name.
+  string name = 2;
+  VolumeCandidateState state = 3;
+  // Existing marker profile, or a prefill hint for an uninitialized disk. The probe reports
+  // only the serial number, so the caller still chooses the Volume type before initializing.
+  optional VolumeMediaProfile profile = 4;
+  // The registered Media row; present only for REGISTERED.
+  optional Media media = 5;
+  // The mount point is a separate filesystem rather than a directory on another one.
+  bool separate_filesystem = 6;
+  // Reason reported for CONFLICT and INVALID candidates.
+  string detail = 7;
+}
+
+message ListVolumeCandidatesRequest {}
+
+message ListVolumeCandidatesResponse {
+  // Configured Volume discovery roots, empty when none are configured.
+  repeated string discovery_roots = 1;
+  repeated VolumeCandidate candidates = 2;
+}
+
+message ListDevicesRequest {}
+message ListDevicesResponse { repeated string devices = 1; }

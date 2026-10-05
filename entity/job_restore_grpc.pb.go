@@ -19,22 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	RestoreJobService_Create_FullMethodName       = "/job_restore.RestoreJobService/Create"
-	RestoreJobService_RestoreMedia_FullMethodName = "/job_restore.RestoreJobService/RestoreMedia"
-	RestoreJobService_GetProgress_FullMethodName  = "/job_restore.RestoreJobService/GetProgress"
-	RestoreJobService_ListMedia_FullMethodName    = "/job_restore.RestoreJobService/ListMedia"
-	RestoreJobService_ListFiles_FullMethodName    = "/job_restore.RestoreJobService/ListFiles"
+	RestoreJobService_Estimate_FullMethodName     = "/yatm.v1.RestoreJobService/Estimate"
+	RestoreJobService_Create_FullMethodName       = "/yatm.v1.RestoreJobService/Create"
+	RestoreJobService_GetCreation_FullMethodName  = "/yatm.v1.RestoreJobService/GetCreation"
+	RestoreJobService_RestoreMedia_FullMethodName = "/yatm.v1.RestoreJobService/RestoreMedia"
+	RestoreJobService_GetProgress_FullMethodName  = "/yatm.v1.RestoreJobService/GetProgress"
+	RestoreJobService_ListMedia_FullMethodName    = "/yatm.v1.RestoreJobService/ListMedia"
+	RestoreJobService_ListFiles_FullMethodName    = "/yatm.v1.RestoreJobService/ListFiles"
 )
 
 // RestoreJobServiceClient is the client API for RestoreJobService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RestoreJobServiceClient interface {
-	Create(ctx context.Context, in *CreateRestoreJobRequest, opts ...grpc.CallOption) (*CreateRestoreJobReply, error)
-	RestoreMedia(ctx context.Context, in *RestoreMediaRequest, opts ...grpc.CallOption) (*RestoreMediaReply, error)
-	GetProgress(ctx context.Context, in *GetRestoreJobProgressRequest, opts ...grpc.CallOption) (*GetRestoreJobProgressReply, error)
-	ListMedia(ctx context.Context, in *ListRestoreJobMediaRequest, opts ...grpc.CallOption) (*ListRestoreJobMediaReply, error)
-	ListFiles(ctx context.Context, in *ListRestoreJobFilesRequest, opts ...grpc.CallOption) (*ListRestoreJobFilesReply, error)
+	Estimate(ctx context.Context, in *EstimateRestoreJobRequest, opts ...grpc.CallOption) (*EstimateRestoreJobResponse, error)
+	Create(ctx context.Context, in *CreateRestoreJobRequest, opts ...grpc.CallOption) (*CreateRestoreJobResponse, error)
+	GetCreation(ctx context.Context, in *GetRestoreJobCreationRequest, opts ...grpc.CallOption) (*GetRestoreJobCreationResponse, error)
+	RestoreMedia(ctx context.Context, in *RestoreMediaRequest, opts ...grpc.CallOption) (*RestoreMediaResponse, error)
+	GetProgress(ctx context.Context, in *GetRestoreJobProgressRequest, opts ...grpc.CallOption) (*GetRestoreJobProgressResponse, error)
+	ListMedia(ctx context.Context, in *ListRestoreJobMediaRequest, opts ...grpc.CallOption) (*ListRestoreJobMediaResponse, error)
+	ListFiles(ctx context.Context, in *ListRestoreJobFilesRequest, opts ...grpc.CallOption) (*ListRestoreJobFilesResponse, error)
 }
 
 type restoreJobServiceClient struct {
@@ -45,8 +49,17 @@ func NewRestoreJobServiceClient(cc grpc.ClientConnInterface) RestoreJobServiceCl
 	return &restoreJobServiceClient{cc}
 }
 
-func (c *restoreJobServiceClient) Create(ctx context.Context, in *CreateRestoreJobRequest, opts ...grpc.CallOption) (*CreateRestoreJobReply, error) {
-	out := new(CreateRestoreJobReply)
+func (c *restoreJobServiceClient) Estimate(ctx context.Context, in *EstimateRestoreJobRequest, opts ...grpc.CallOption) (*EstimateRestoreJobResponse, error) {
+	out := new(EstimateRestoreJobResponse)
+	err := c.cc.Invoke(ctx, RestoreJobService_Estimate_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreJobServiceClient) Create(ctx context.Context, in *CreateRestoreJobRequest, opts ...grpc.CallOption) (*CreateRestoreJobResponse, error) {
+	out := new(CreateRestoreJobResponse)
 	err := c.cc.Invoke(ctx, RestoreJobService_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -54,8 +67,17 @@ func (c *restoreJobServiceClient) Create(ctx context.Context, in *CreateRestoreJ
 	return out, nil
 }
 
-func (c *restoreJobServiceClient) RestoreMedia(ctx context.Context, in *RestoreMediaRequest, opts ...grpc.CallOption) (*RestoreMediaReply, error) {
-	out := new(RestoreMediaReply)
+func (c *restoreJobServiceClient) GetCreation(ctx context.Context, in *GetRestoreJobCreationRequest, opts ...grpc.CallOption) (*GetRestoreJobCreationResponse, error) {
+	out := new(GetRestoreJobCreationResponse)
+	err := c.cc.Invoke(ctx, RestoreJobService_GetCreation_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *restoreJobServiceClient) RestoreMedia(ctx context.Context, in *RestoreMediaRequest, opts ...grpc.CallOption) (*RestoreMediaResponse, error) {
+	out := new(RestoreMediaResponse)
 	err := c.cc.Invoke(ctx, RestoreJobService_RestoreMedia_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -63,8 +85,8 @@ func (c *restoreJobServiceClient) RestoreMedia(ctx context.Context, in *RestoreM
 	return out, nil
 }
 
-func (c *restoreJobServiceClient) GetProgress(ctx context.Context, in *GetRestoreJobProgressRequest, opts ...grpc.CallOption) (*GetRestoreJobProgressReply, error) {
-	out := new(GetRestoreJobProgressReply)
+func (c *restoreJobServiceClient) GetProgress(ctx context.Context, in *GetRestoreJobProgressRequest, opts ...grpc.CallOption) (*GetRestoreJobProgressResponse, error) {
+	out := new(GetRestoreJobProgressResponse)
 	err := c.cc.Invoke(ctx, RestoreJobService_GetProgress_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -72,8 +94,8 @@ func (c *restoreJobServiceClient) GetProgress(ctx context.Context, in *GetRestor
 	return out, nil
 }
 
-func (c *restoreJobServiceClient) ListMedia(ctx context.Context, in *ListRestoreJobMediaRequest, opts ...grpc.CallOption) (*ListRestoreJobMediaReply, error) {
-	out := new(ListRestoreJobMediaReply)
+func (c *restoreJobServiceClient) ListMedia(ctx context.Context, in *ListRestoreJobMediaRequest, opts ...grpc.CallOption) (*ListRestoreJobMediaResponse, error) {
+	out := new(ListRestoreJobMediaResponse)
 	err := c.cc.Invoke(ctx, RestoreJobService_ListMedia_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -81,8 +103,8 @@ func (c *restoreJobServiceClient) ListMedia(ctx context.Context, in *ListRestore
 	return out, nil
 }
 
-func (c *restoreJobServiceClient) ListFiles(ctx context.Context, in *ListRestoreJobFilesRequest, opts ...grpc.CallOption) (*ListRestoreJobFilesReply, error) {
-	out := new(ListRestoreJobFilesReply)
+func (c *restoreJobServiceClient) ListFiles(ctx context.Context, in *ListRestoreJobFilesRequest, opts ...grpc.CallOption) (*ListRestoreJobFilesResponse, error) {
+	out := new(ListRestoreJobFilesResponse)
 	err := c.cc.Invoke(ctx, RestoreJobService_ListFiles_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -94,11 +116,13 @@ func (c *restoreJobServiceClient) ListFiles(ctx context.Context, in *ListRestore
 // All implementations must embed UnimplementedRestoreJobServiceServer
 // for forward compatibility
 type RestoreJobServiceServer interface {
-	Create(context.Context, *CreateRestoreJobRequest) (*CreateRestoreJobReply, error)
-	RestoreMedia(context.Context, *RestoreMediaRequest) (*RestoreMediaReply, error)
-	GetProgress(context.Context, *GetRestoreJobProgressRequest) (*GetRestoreJobProgressReply, error)
-	ListMedia(context.Context, *ListRestoreJobMediaRequest) (*ListRestoreJobMediaReply, error)
-	ListFiles(context.Context, *ListRestoreJobFilesRequest) (*ListRestoreJobFilesReply, error)
+	Estimate(context.Context, *EstimateRestoreJobRequest) (*EstimateRestoreJobResponse, error)
+	Create(context.Context, *CreateRestoreJobRequest) (*CreateRestoreJobResponse, error)
+	GetCreation(context.Context, *GetRestoreJobCreationRequest) (*GetRestoreJobCreationResponse, error)
+	RestoreMedia(context.Context, *RestoreMediaRequest) (*RestoreMediaResponse, error)
+	GetProgress(context.Context, *GetRestoreJobProgressRequest) (*GetRestoreJobProgressResponse, error)
+	ListMedia(context.Context, *ListRestoreJobMediaRequest) (*ListRestoreJobMediaResponse, error)
+	ListFiles(context.Context, *ListRestoreJobFilesRequest) (*ListRestoreJobFilesResponse, error)
 	mustEmbedUnimplementedRestoreJobServiceServer()
 }
 
@@ -106,19 +130,25 @@ type RestoreJobServiceServer interface {
 type UnimplementedRestoreJobServiceServer struct {
 }
 
-func (UnimplementedRestoreJobServiceServer) Create(context.Context, *CreateRestoreJobRequest) (*CreateRestoreJobReply, error) {
+func (UnimplementedRestoreJobServiceServer) Estimate(context.Context, *EstimateRestoreJobRequest) (*EstimateRestoreJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Estimate not implemented")
+}
+func (UnimplementedRestoreJobServiceServer) Create(context.Context, *CreateRestoreJobRequest) (*CreateRestoreJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedRestoreJobServiceServer) RestoreMedia(context.Context, *RestoreMediaRequest) (*RestoreMediaReply, error) {
+func (UnimplementedRestoreJobServiceServer) GetCreation(context.Context, *GetRestoreJobCreationRequest) (*GetRestoreJobCreationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCreation not implemented")
+}
+func (UnimplementedRestoreJobServiceServer) RestoreMedia(context.Context, *RestoreMediaRequest) (*RestoreMediaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RestoreMedia not implemented")
 }
-func (UnimplementedRestoreJobServiceServer) GetProgress(context.Context, *GetRestoreJobProgressRequest) (*GetRestoreJobProgressReply, error) {
+func (UnimplementedRestoreJobServiceServer) GetProgress(context.Context, *GetRestoreJobProgressRequest) (*GetRestoreJobProgressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProgress not implemented")
 }
-func (UnimplementedRestoreJobServiceServer) ListMedia(context.Context, *ListRestoreJobMediaRequest) (*ListRestoreJobMediaReply, error) {
+func (UnimplementedRestoreJobServiceServer) ListMedia(context.Context, *ListRestoreJobMediaRequest) (*ListRestoreJobMediaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListMedia not implemented")
 }
-func (UnimplementedRestoreJobServiceServer) ListFiles(context.Context, *ListRestoreJobFilesRequest) (*ListRestoreJobFilesReply, error) {
+func (UnimplementedRestoreJobServiceServer) ListFiles(context.Context, *ListRestoreJobFilesRequest) (*ListRestoreJobFilesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFiles not implemented")
 }
 func (UnimplementedRestoreJobServiceServer) mustEmbedUnimplementedRestoreJobServiceServer() {}
@@ -132,6 +162,24 @@ type UnsafeRestoreJobServiceServer interface {
 
 func RegisterRestoreJobServiceServer(s grpc.ServiceRegistrar, srv RestoreJobServiceServer) {
 	s.RegisterService(&RestoreJobService_ServiceDesc, srv)
+}
+
+func _RestoreJobService_Estimate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EstimateRestoreJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreJobServiceServer).Estimate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreJobService_Estimate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreJobServiceServer).Estimate(ctx, req.(*EstimateRestoreJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _RestoreJobService_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -148,6 +196,24 @@ func _RestoreJobService_Create_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RestoreJobServiceServer).Create(ctx, req.(*CreateRestoreJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RestoreJobService_GetCreation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRestoreJobCreationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RestoreJobServiceServer).GetCreation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RestoreJobService_GetCreation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RestoreJobServiceServer).GetCreation(ctx, req.(*GetRestoreJobCreationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -228,12 +294,20 @@ func _RestoreJobService_ListFiles_Handler(srv interface{}, ctx context.Context, 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RestoreJobService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "job_restore.RestoreJobService",
+	ServiceName: "yatm.v1.RestoreJobService",
 	HandlerType: (*RestoreJobServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Estimate",
+			Handler:    _RestoreJobService_Estimate_Handler,
+		},
+		{
 			MethodName: "Create",
 			Handler:    _RestoreJobService_Create_Handler,
+		},
+		{
+			MethodName: "GetCreation",
+			Handler:    _RestoreJobService_GetCreation_Handler,
 		},
 		{
 			MethodName: "RestoreMedia",

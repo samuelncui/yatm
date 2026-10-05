@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,7 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	previewpkg "github.com/samuelncui/yatm/preview"
+	"github.com/samuelncui/yatm/entity"
+	previewpkg "github.com/samuelncui/yatm/internal/preview"
 )
 
 const (
@@ -25,19 +27,66 @@ func init() {
 	})
 }
 
-func newPreviewManager(root, work string, realVideo bool) (*previewpkg.Manager, error) {
+func newPreviewManager(root, work string, videoOverride bool) (*demoPreviewManager, error) {
+	// Bundled derivatives keep the default fixture independent of an installed native worker.
 	video := previewpkg.GeneratorConfig{Kind: demoVideoGeneratorKind, Extensions: []string{"mp4"}}
-	if realVideo {
+	if videoOverride {
 		video.Kind = "video"
 		video.Options = map[string]any{"format": "png"}
 	}
-	return previewpkg.New(previewpkg.Config{
+
+	// Both routes publish their assets through the normal Preview manager.
+	manager, err := previewpkg.New(previewpkg.Config{
 		Root: filepath.Join(root, "previews"),
 		Generators: []previewpkg.GeneratorConfig{
 			{Kind: demoImageGeneratorKind, Extensions: []string{"png"}},
 			video,
 		},
 	}, work)
+	if err != nil {
+		return nil, err
+	}
+	return &demoPreviewManager{Manager: manager, native: videoOverride}, nil
+}
+
+type demoPreviewManager struct {
+	*previewpkg.Manager
+	native bool
+}
+
+func (m *demoPreviewManager) CheckGeneration(ctx context.Context) error {
+	if m.native {
+		return m.Manager.CheckGeneration(ctx)
+	}
+	return nil
+}
+
+func (m *demoPreviewManager) Capabilities(ctx context.Context) (*entity.GetPreviewCapabilitiesResponse, error) {
+	// An explicit override uses the actual worker's discovery result.
+	if m.native {
+		return m.Manager.Capabilities(ctx)
+	}
+
+	// Default setup advertises only the routes supplied by the bundled fixture.
+	return &entity.GetPreviewCapabilitiesResponse{
+		Available: true, Version: "bundled-demo-assets",
+		Kinds: []string{"image", "video"}, InputExtensions: []string{"png", "mp4"}, OutputFormats: []string{"png"},
+		InputExtensionsByKind: map[string]*entity.PreviewInputFormats{
+			"image": {Extensions: []string{"png"}}, "video": {Extensions: []string{"mp4"}},
+		},
+	}, nil
+}
+
+func (m *demoPreviewManager) Generate(
+	ctx context.Context,
+	sourcePath string,
+	sha256 []byte,
+	size, mtimeNS int64,
+	force bool,
+	_ *entity.PreviewJobSettings,
+) ([]byte, error) {
+	// Publish bundled assets, or generate the supplied video, through normal Preview routing.
+	return m.Manager.Generate(ctx, sourcePath, sha256, size, mtimeNS, force, nil)
 }
 
 type demoImageGenerator struct{}
@@ -79,37 +128,31 @@ func (demoImageGenerator) Generate(ctx context.Context, sourcePath, outputDir st
 type demoVideoGenerator struct{}
 
 func (demoVideoGenerator) Generate(ctx context.Context, sourcePath, outputDir string) ([]*previewpkg.Asset, error) {
-	// Validate that the source selected by the normal Preview runner is still available.
+	// Bind the native derivatives to the exact excerpt, including copies at other physical paths.
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("generate Demo video Preview canceled, %w", err)
 	}
-	if _, err := os.Stat(sourcePath); err != nil {
-		return nil, fmt.Errorf("stat Demo video Preview source failed, path=%q, %w", sourcePath, err)
+	source, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("read Demo video Preview source failed, path=%q, %w", sourcePath, err)
+	}
+	if !bytes.Equal(source, bundledVideo) {
+		return nil, fmt.Errorf("bundled Demo video Preview requires the bundled excerpt, path=%q", sourcePath)
 	}
 
-	// Build deterministic poster and timeline images without requiring host ffmpeg.
-	poster, err := demoPreviewImage()
-	if err != nil {
+	// Carry the actual native output through the standard Preview bundle writer.
+	if err := writeDemoAsset(outputDir, "poster.png", bundledVideoPoster); err != nil {
 		return nil, err
 	}
-	timeline, err := demoTimelineImage()
-	if err != nil {
+	if err := writeDemoAsset(outputDir, "timeline.png", bundledVideoTimeline); err != nil {
 		return nil, err
 	}
-
-	// Publish the standard video Preview roles consumed by the frontend.
-	if err := writeDemoAsset(outputDir, "poster.png", poster); err != nil {
-		return nil, err
-	}
-	if err := writeDemoAsset(outputDir, "timeline.png", timeline); err != nil {
-		return nil, err
-	}
-	if err := writeDemoAsset(outputDir, "timeline.vtt", []byte(demoTimelineVTT)); err != nil {
+	if err := writeDemoAsset(outputDir, "timeline.vtt", bundledVideoTimelineMap); err != nil {
 		return nil, err
 	}
 	return []*previewpkg.Asset{
-		{Name: "poster.png", Role: "poster", MediaType: "image/png", Width: 320, Height: 180},
-		{Name: "timeline.png", Role: "timeline", MediaType: "image/png", Width: 640, Height: 90},
+		{Name: "poster.png", Role: "poster", MediaType: "image/png", Width: 512, Height: 288},
+		{Name: "timeline.png", Role: "timeline", MediaType: "image/png", Width: 3200, Height: 540},
 		{Name: "timeline.vtt", Role: "timeline-map", MediaType: "text/vtt"},
 	}, nil
 }
@@ -121,18 +164,3 @@ func writeDemoAsset(outputDir, name string, data []byte) error {
 	}
 	return nil
 }
-
-const demoTimelineVTT = `WEBVTT
-
-00:00:00.000 --> 00:00:00.250
-timeline.png#xywh=0,0,160,90
-
-00:00:00.250 --> 00:00:00.500
-timeline.png#xywh=160,0,160,90
-
-00:00:00.500 --> 00:00:00.750
-timeline.png#xywh=320,0,160,90
-
-00:00:00.750 --> 00:00:01.000
-timeline.png#xywh=480,0,160,90
-`

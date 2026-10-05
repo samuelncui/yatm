@@ -1,0 +1,104 @@
+name: Performance
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      candidate:
+        description: Full candidate commit SHA
+        required: true
+        type: string
+      tier:
+        description: Critical or release comparison with the accepted source baseline
+        default: release
+        type: string
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Full candidate commit SHA
+        required: true
+        type: string
+      tier:
+        description: Compare with the explicitly accepted source baseline
+        required: true
+        default: release
+        type: choice
+        options:
+          - critical
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paired:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      # PR code is measured, but the base revision owns the checker and common harness.
+      - name: Check out reviewed tools and harness
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          path: tools
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - id: sources
+        name: Resolve immutable comparison sources
+        working-directory: tools
+        env:
+          PERFORMANCE_ACCEPTED_BASELINE: ${{ vars.PERFORMANCE_ACCEPTED_BASELINE }}
+          PERF_CANDIDATE: ${{ inputs.candidate }}
+          PERF_TIER: ${{ inputs.tier }}
+        run: node dev/performance/ci.mjs
+      - name: Check out baseline
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.sources.outputs.baseline }}
+          path: baseline
+          persist-credentials: false
+      - name: Check out candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.sources.outputs.candidate }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/go.mod
+          cache-dependency-path: |
+            baseline/go.sum
+            candidate/go.sum
+      - name: Check collection and gate tooling
+        working-directory: tools
+        run: node --test dev/check-performance.test.mjs dev/performance/*.test.mjs
+      - name: Collect paired measurements
+        working-directory: tools
+        env:
+          PERF_TIER: ${{ steps.sources.outputs.tier }}
+        run: >-
+          node dev/performance/collect.mjs
+          --baseline "$GITHUB_WORKSPACE/baseline"
+          --candidate "$GITHUB_WORKSPACE/candidate"
+          --harness "$GITHUB_WORKSPACE/tools"
+          --out "$RUNNER_TEMP/performance-pair"
+          --tier "$PERF_TIER"
+          --environment "github-ubuntu-24.04"
+          --idle
+      - name: Compare benchmark values and flag regressions
+        working-directory: tools
+        run: node dev/check-performance.mjs "$RUNNER_TEMP/performance-pair"
+      - name: Retain measurements and comparability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/performance-pair/
+          if-no-files-found: warn
+          retention-days: 30

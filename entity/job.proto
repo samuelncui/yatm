@@ -1,71 +1,83 @@
 syntax = "proto3";
-package job;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 service JobService {
-    rpc Get(GetJobRequest) returns (GetJobReply) {}
-    rpc List(ListJobsRequest) returns (ListJobsReply) {}
-    rpc Delete(DeleteJobsRequest) returns (DeleteJobsReply) {}
-    rpc Cancel(CancelJobRequest) returns (CancelJobReply) {}
-    rpc RetryIndex(RetryJobIndexRequest) returns (RetryJobIndexReply) {}
-    rpc GetLog(GetJobLogRequest) returns (GetJobLogReply) {}
+    rpc Get(GetJobRequest) returns (GetJobResponse) {}
+    rpc List(ListJobsRequest) returns (ListJobsResponse) {}
+    rpc Delete(DeleteJobsRequest) returns (DeleteJobsResponse) {}
+    rpc Cancel(CancelJobRequest) returns (CancelJobResponse) {}
+    rpc GetLog(GetJobLogRequest) returns (GetJobLogResponse) {}
+    rpc ListLogLines(ListJobLogLinesRequest) returns (ListJobLogLinesResponse) {}
 }
 
+// JobStatus is a Job's one durable state. PREPARING means its manifest is still being built, READY
+// means the manifest is complete and the remaining work waits for the operator to choose Media,
+// and COMPLETED means every workflow item settled. FAILED is terminal preparation or Scan failure,
+// including operator cancellation; the reason is in the Job's error field. Archive/Restore Media
+// failures return to their pre-Media state with that reason and published results retained.
+// Current execution is a live observation reported through JobPhase, not durable state.
 enum JobStatus {
-    reserved 1, 3, 127, 255;
-    reserved "DRAFT", "NOT_READY", "PROCESSING", "FAILED", "DELETED";
 
     JOB_STATUS_UNSPECIFIED = 0;
-    PENDING = 2;
-    COMPLETED = 4;
-    INDEXING = 5;
+    JOB_STATUS_PREPARING = 1;
+    JOB_STATUS_READY = 2;
+    JOB_STATUS_COMPLETED = 4;
+    JOB_STATUS_FAILED = 5;
 }
 
 enum JobKind {
     JOB_KIND_UNSPECIFIED = 0;
-    ARCHIVE = 1;
-    RESTORE = 2;
-    SCAN = 4;
+    JOB_KIND_ARCHIVE = 1;
+    JOB_KIND_RESTORE = 2;
+    JOB_KIND_SCAN = 4;
 }
 
-// JobPhase is the current in-memory execution phase reported by a Job runner.
+// JobPhase is the live stage of an active Job attempt. QUEUED waits for its Media resource;
+// an idle Job reports JOB_PHASE_UNSPECIFIED even if its runner is cached. A restart never
+// resumes a former live phase or automatically starts a former queued attempt.
 enum JobPhase {
     JOB_PHASE_UNSPECIFIED = 0;
-    JOB_PHASE_WAITING_FOR_INDEX_RETRY = 1;
     JOB_PHASE_INDEXING = 2;
-    JOB_PHASE_WAITING_FOR_MEDIA = 3;
+    JOB_PHASE_QUEUED = 3;
     JOB_PHASE_PREPARING_MEDIA = 4;
     JOB_PHASE_COPYING_TO_MEDIA = 5;
     JOB_PHASE_COPYING_FROM_MEDIA = 6;
     JOB_PHASE_FINALIZING_MEDIA = 7;
     JOB_PHASE_COMPLETED = 8;
     JOB_PHASE_GENERATING_PREVIEWS = 9;
-    JOB_PHASE_APPLYING_SCAN = 11;
     JOB_PHASE_VALIDATING_SOURCE = 12;
     JOB_PHASE_PUBLISHING_SOURCE = 13;
     JOB_PHASE_VERIFYING_MEDIA = 14;
+    JOB_PHASE_PROCESSING_CONTENT = 15;
+    JOB_PHASE_COMPARING_CONTENT = 16;
+}
+
+// JobResultOrder selects the direction of one Job manifest result page.
+enum JobResultOrder {
+    JOB_RESULT_ORDER_UNSPECIFIED = 0;
+    JOB_RESULT_ORDER_ASCENDING = 1;
+    JOB_RESULT_ORDER_DESCENDING = 2;
 }
 
 message Job {
-    reserved 17;
-    reserved "state";
 
     int64 id = 1;
     JobStatus status = 2;
     int64 priority = 3;
-    int64 created_at_ms = 4;
-    int64 updated_at_ms = 5;
-    int64 deleted_at_ms = 6;
+    int64 created_at_ns = 4;
+    int64 updated_at_ns = 5;
+    int64 deleted_at_ns = 6;
     JobKind kind = 7;
     JobPhase phase = 8;
     int64 revision = 9;
     optional string target_name = 10;
     optional int64 location_id = 11;
     optional int64 media_id = 12;
+    string error = 13;
 }
 
 message JobFilter {
-    reserved 1;
 
     optional int64 changed_after_revision = 3;
     optional int64 snapshot_revision = 4;
@@ -75,14 +87,13 @@ message JobFilter {
     optional int64 location_id = 36;
     optional int64 media_id = 37;
     optional JobKind kind = 38;
-    optional JobStatus status = 39;
 }
 
 message GetJobRequest {
     int64 id = 1;
 }
 
-message GetJobReply {
+message GetJobResponse {
     Job job = 1;
 }
 
@@ -90,7 +101,7 @@ message ListJobsRequest {
     JobFilter filter = 1;
 }
 
-message ListJobsReply {
+message ListJobsResponse {
     repeated Job jobs = 1;
     int64 revision = 3;
     bool has_more = 4;
@@ -98,28 +109,57 @@ message ListJobsReply {
 
 message DeleteJobsRequest {
     repeated int64 ids = 1;
+    bool dryrun = 2;
 }
 
-message DeleteJobsReply {}
+message DeleteJobsResponse {
+    // Jobs this call deleted; under dryrun, those it would delete.
+    int64 deleted = 1;
+}
 
 message CancelJobRequest {
     int64 id = 1;
 }
 
-message CancelJobReply {}
-
-message RetryJobIndexRequest {
-    int64 id = 1;
-}
-
-message RetryJobIndexReply {}
+message CancelJobResponse {}
 
 message GetJobLogRequest {
     int64 id = 1;
     optional int64 offset = 2;
 }
 
-message GetJobLogReply {
+message GetJobLogResponse {
     bytes logs = 1;
     int64 offset = 2;
+}
+
+enum JobLogDirection {
+    JOB_LOG_DIRECTION_UNSPECIFIED = 0;
+    JOB_LOG_DIRECTION_OLDER = 1;
+    JOB_LOG_DIRECTION_NEWER = 2;
+}
+
+message ListJobLogLinesRequest {
+    int64 id = 1;
+    optional int64 cursor = 2;
+    JobLogDirection direction = 3;
+    string level = 4;
+    string query = 5;
+}
+
+message JobLogLine {
+    int64 offset = 1;
+    string text = 2;
+    string level = 3;
+    bool continuation = 4;
+    bool complete = 5;
+    int64 end_offset = 6;
+}
+
+message ListJobLogLinesResponse {
+    repeated JobLogLine lines = 1;
+    int64 before_cursor = 2;
+    int64 after_cursor = 3;
+    bool has_older = 4;
+    bool has_newer = 5;
 }

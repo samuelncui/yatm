@@ -7,43 +7,39 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	archivejob "github.com/samuelncui/yatm/executor/archive"
-	restorejob "github.com/samuelncui/yatm/executor/restore"
-	scanjob "github.com/samuelncui/yatm/executor/scan"
-	"github.com/samuelncui/yatm/library"
+	"github.com/samuelncui/yatm/internal/executor"
+	archivejob "github.com/samuelncui/yatm/internal/executor/archive"
+	restorejob "github.com/samuelncui/yatm/internal/executor/restore"
+	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
+	"github.com/samuelncui/yatm/internal/library"
 	"gorm.io/gorm"
 )
 
 func seedJobs(ctx context.Context, exe *executor.Executor, volume *seededVolume) error {
-	// New job inputs use registered directories, including an unscanned recommended destination.
-	root, err := exe.OnlineRoot(filepath.Join(exe.Paths().Source, "Incoming Review"))
+	// Archive preparation starts from a registered, browsable Location without a setup Analyze.
+	root, err := exe.LocationRoot(filepath.Join(exe.Paths().Source, "Incoming Review"))
 	if err != nil {
 		return err
 	}
 	location := &library.Location{Name: "Incoming", RootPath: root, ExecutorID: "local"}
-	if err := exe.Lib().CreateOnlineSource(ctx, location); err != nil {
+	if err := exe.Lib().CreateLocation(ctx, location); err != nil {
 		return err
 	}
-	if err := seedAnalyze(ctx, exe, location.ID, entity.JobStatus_COMPLETED); err != nil {
-		return err
-	}
-	location, err = exe.Lib().GetOnlineSource(ctx, location.ID)
-	if err != nil {
-		return err
-	}
-	selections := []*entity.FileSelection{{Target: &entity.FileSelection_Location{Location: &entity.LocationSelection{LocationId: location.ID, Revision: location.Revision}}, Scope: entity.FileScope_FILE_SCOPE_ALL}}
-	targetRoot, err := exe.OnlineRoot(exe.Paths().Target)
+	selections := demoLocationSelections(location.ID)
+
+	// Keep a separate, unscanned Restore destination with its chooser preference enabled.
+	targetRoot, err := exe.LocationRoot(exe.Paths().Target)
 	if err != nil {
 		return err
 	}
 	target := &library.Location{Name: "Restored files", RootPath: targetRoot, ExecutorID: "local", RestoreTarget: true}
-	if err := exe.Lib().CreateOnlineSource(ctx, target); err != nil {
+	if err := exe.Lib().CreateLocation(ctx, target); err != nil {
 		return err
 	}
 
 	// Create a pending Archive whose source files can be written to either mounted Volume.
-	archive, err := exe.CreateJob(ctx, entity.JobKind_ARCHIVE, 30, func(db *gorm.DB) error {
+	archive, err := exe.CreateJob(ctx, entity.JobKind_JOB_KIND_ARCHIVE, 30, func(db *gorm.DB) error {
+		// Build the ordinary Archive bundle consumed by its registered runner.
 		if err := db.AutoMigrate(&archivejob.Config{}, &archivejob.Item{}); err != nil {
 			return fmt.Errorf("create Demo Archive schema failed, %w", err)
 		}
@@ -56,8 +52,9 @@ func seedJobs(ctx context.Context, exe *executor.Executor, volume *seededVolume)
 	if err != nil {
 		return fmt.Errorf("create Demo Archive Job failed, %w", err)
 	}
-	// Admission is a Location mutation; finish this preparation before another Job observes that Location.
-	if err := waitForStatus(ctx, exe, archive.ID, entity.JobStatus_PENDING); err != nil {
+
+	// Archive admits its own sources; finish preparation before another Job observes this Location.
+	if err := waitForStatus(ctx, exe, archive.ID, entity.JobStatus_JOB_STATUS_READY); err != nil {
 		return err
 	}
 
@@ -85,34 +82,33 @@ func seedJobs(ctx context.Context, exe *executor.Executor, volume *seededVolume)
 	}
 
 	// A completed automatic inventory scan retains its inspectable differences.
-	scan, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Priority: 10,
-		Spec: &entity.ScanJobSpec{MediaId: volume.media.ID, ResultPolicy: entity.ScanResultPolicy_PUBLISH_INVENTORY}})
+	scan, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{
+		Priority: 10, Spec: &entity.ScanJobSpec{
+			MediaId: volume.media.ID, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY,
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("create Demo Scan Job failed, %w", err)
 	}
+	if err := waitForStatus(ctx, exe, scan.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
+		return err
+	}
 
-	// Complete one Preview Job so the Jobs page and Library inspector expose real Preview output.
+	// One Scan collects original content and generates Previews for the prepared Archive sources.
 	preview, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Priority: 15, Spec: &entity.ScanJobSpec{
-		Selections: selections, PreviewPolicy: entity.PreviewPolicy_PREVIEW_REGENERATE_ALL,
+		Selections: selections, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
+		PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL,
 	}})
 	if err != nil {
-		return fmt.Errorf("create Demo Preview Job failed, %w", err)
+		return fmt.Errorf("create Demo Scan with Previews failed, %w", err)
+	}
+	if err := waitForStatus(ctx, exe, preview.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
+		return err
 	}
 
-	// Wait for every asynchronous index to reach its stable, operable phase.
-	jobs := []struct {
-		id     int64
-		status entity.JobStatus
-	}{
-		{id: archive.ID, status: entity.JobStatus_PENDING},
-		{id: restore.ID, status: entity.JobStatus_PENDING},
-		{id: scan.Job.Id, status: entity.JobStatus_COMPLETED},
-		{id: preview.Job.Id, status: entity.JobStatus_COMPLETED},
-	}
-	for _, item := range jobs {
-		if err := waitForStatus(ctx, exe, item.id, item.status); err != nil {
-			return err
-		}
+	// Settle the pending Restore before creating its separate completed adoption example.
+	if err := waitForStatus(ctx, exe, restore.ID, entity.JobStatus_JOB_STATUS_READY); err != nil {
+		return err
 	}
 	return seedRecoveryAndIntegrity(ctx, exe, volume, target.ID, versionIDs[2])
 }

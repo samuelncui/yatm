@@ -1,5 +1,6 @@
+import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
+import { Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
 import { Link } from "react-router";
 import { jobCli } from "@/api";
 import type { Job } from "@/entity";
@@ -49,7 +50,7 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
           </Button>
         </div>
       </div>
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && <Feedback severity="error">{error}</Feedback>}
       <Table size="small" aria-label="Related Jobs">
         <TableHead>
           <TableRow>
@@ -68,8 +69,8 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
                 </Link>
               </TableCell>
               <TableCell>{jobStatusLabel(job)}</TableCell>
-              <TableCell>{contentTime(job.createdAtMs)}</TableCell>
-              <TableCell>{contentTime(job.updatedAtMs)}</TableCell>
+              <TableCell>{contentTime(job.createdAtNs || undefined)}</TableCell>
+              <TableCell>{contentTime(job.updatedAtNs || undefined)}</TableCell>
             </TableRow>
           ))}
           {!jobs.length && (

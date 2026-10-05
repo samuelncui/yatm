@@ -118,13 +118,15 @@ func (e *Engine) planRoot(ctx context.Context, root *Root, request Request, dest
 			return fmt.Errorf("cannot move a directory into itself")
 		}
 	}
-	name := request.Name
-	if name == "" {
-		name = root.Source.Name
-	}
-	names, err := relativeNames(name, request.Kind == Mkdir)
-	if err != nil {
-		return err
+
+	// An implicit basename is already a provider name; shortcut parsing must not trim it.
+	names := []string{root.Source.Name}
+	if request.Name != "" || request.Kind == Mkdir {
+		var err error
+		names, err = relativeNames(request.Name, request.Kind == Mkdir)
+		if err != nil {
+			return err
+		}
 	}
 	if len(names) == 0 {
 		root.Target = destination
@@ -199,9 +201,17 @@ func (e *Engine) planMove(ctx context.Context, rootID int64, source, target Node
 }
 
 func (e *Engine) planDelete(ctx context.Context, rootID int64, source Node, depth int) error {
-	// Logical deletion detaches a single tree identity; physical deletion unlinks only frozen leaves.
+	// Recycle validates the complete physical scope but executes one native move.
+	if source.Deletion == Recycle {
+		if err := e.observeTree(ctx, rootID, source, depth); err != nil {
+			return err
+		}
+		return e.add(ctx, rootID, Delete, source, Node{}, false)
+	}
+
+	// Logical deletion detaches one identity; retained files cannot be deleted again.
 	if source.Deletion == Retain {
-		return e.add(ctx, rootID, "", source, Node{}, false)
+		return fmt.Errorf("files in Trash cannot be removed")
 	}
 	if source.Deletion == Detach {
 		return e.add(ctx, rootID, Delete, source, Node{}, false)
@@ -250,28 +260,12 @@ func (e *Engine) children(ctx context.Context, source Node, depth int, use func(
 	if depth >= 256 {
 		return fmt.Errorf("operation exceeds 256 directory levels")
 	}
-	var cursor string
-	for {
+	return e.store.WalkChildren(ctx, source, func(child Node) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		children, next, err := e.store.ListChildren(ctx, source, cursor)
-		if err != nil {
-			return err
-		}
-		for _, child := range children {
-			if err := use(child); err != nil {
-				return err
-			}
-		}
-		if next == "" {
-			return nil
-		}
-		if next == cursor {
-			return fmt.Errorf("directory cursor did not advance")
-		}
-		cursor = next
-	}
+		return use(child)
+	})
 }
 
 func (e *Engine) add(ctx context.Context, rootID int64, kind Kind, source, target Node, checkOnly bool) error {

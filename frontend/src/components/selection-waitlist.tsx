@@ -1,10 +1,11 @@
+import { FileBrowser } from "@/components/file-browser";
+import { Feedback } from "@/components/feedback";
 import { type ReactNode, useMemo, useState } from "react";
-import { Alert, Box, Button } from "@mui/material";
+import { Box, Button } from "@mui/material";
 import { ThemeProvider, useTheme } from "@mui/material/styles";
 import { toast } from "react-toastify";
 import {
   ChonkyActions,
-  FileBrowser,
   FileContextMenu,
   FileList,
   FileNavbar,
@@ -13,21 +14,13 @@ import {
   type ChonkyFileActionData,
   type FileData,
 } from "@samuelncui/chonky";
-import type { FileSelection, FileVersion, RestoreVersionResolution } from "@/entity";
+import type { FileVersion, RestoreVersionResolution } from "@/entity";
 import { restoreVersionLabel } from "@/components/restore-version-policy";
+import { ListPlaceholder } from "@/components/list-placeholder";
 import { useWaitlistDirectory } from "@/components/waitlist-directory";
+import type { SelectionEntry } from "@/components/selection-waitlist-state";
 
-export type SelectionEntry = {
-  key: string;
-  name: string;
-  path: string;
-  isDir?: boolean;
-  selection?: FileSelection;
-  version?: FileVersion;
-  fileID?: string;
-  target?: string;
-  size?: number;
-};
+export type { SelectionEntry } from "@/components/selection-waitlist-state";
 export const waitlistRootID = (kind: string) => `waitlist:${kind}`;
 const RemoveSelection = defineFileAction({
   id: "remove_job_selection",
@@ -77,9 +70,16 @@ export const SelectionWaitlist = ({
   );
   const displayed = useMemo(() => {
     if (!directory) return entries;
+    const versionsByFile = new Map<string | undefined, SelectionEntry[]>();
+    for (const entry of entries) {
+      if (!entry.version) continue;
+      const versions = versionsByFile.get(entry.fileID) ?? [];
+      versions.push(entry);
+      versionsByFile.set(entry.fileID, versions);
+    }
     return browse.entries.flatMap((child) => {
-      const overrides = entries.filter((entry) => entry.version && entry.fileID === child.fileID);
-      if (!overrides.length) return [child];
+      const overrides = versionsByFile.get(child.fileID);
+      if (!overrides) return [child];
       return overrides.map((entry) => ({ ...entry, path: child.path, name: child.name }));
     });
   }, [directory, entries, browse.entries]);
@@ -93,15 +93,18 @@ export const SelectionWaitlist = ({
           id: entry.key,
           name: entry.name,
           isDir: entry.isDir,
-          size: version ? Number(version.size) : entry.size,
+          size: version ? Number(version.sizeBytes) : entry.size,
           draggable: false,
           droppable: false,
-          openable: !!entry.isDir || (kind === "restore" && !!entry.fileID),
-          versionSelectable: kind === "restore" && !entry.isDir && !!entry.fileID,
+          openable: !entry.unavailableReason && (!!entry.isDir || (kind === "restore" && !!entry.fileID)),
+          versionSelectable: kind === "restore" && !entry.isDir && !!entry.fileID && !entry.unavailableReason,
           explicitSelection: !directory && explicitKeys.has(entry.key),
           details: [
+            ...(entry.unavailableReason ? [entry.unavailableReason] : []),
             ...(entry.path !== entry.name ? [entry.path] : []),
-            ...(kind === "restore" ? [!entry.isDir && !entry.fileID ? "No saved version" : restoreVersionLabel(entry, resolution, cutoff)] : []),
+            ...(kind === "restore" && !entry.unavailableReason
+              ? [!entry.isDir && !entry.fileID ? "No saved version" : restoreVersionLabel(entry, resolution, cutoff)]
+              : []),
             ...(kind === "archive" && entry.target && entry.target !== entry.path ? [`Archive: ${entry.target}`] : []),
           ],
         };
@@ -165,35 +168,24 @@ export const SelectionWaitlist = ({
         ]}
         onFileAction={action}
         disableDefaultFileActions
-        fileActions={[
-          ChonkyActions.EnableListView,
-          ChonkyActions.OpenFiles,
-          ChonkyActions.OpenParentFolder,
-          RemoveSelection,
-          ...(kind === "restore" ? [ChangeVersion] : []),
-          ClearSelection,
-        ]}
-        defaultFileViewActionId={ChonkyActions.EnableListView.id}
+        fileActions={[ChonkyActions.OpenFiles, ChonkyActions.OpenParentFolder, RemoveSelection, ...(kind === "restore" ? [ChangeVersion] : []), ClearSelection]}
         clearSelectionOnOutsideClick={false}
         disableDragAndDrop={busy}
       >
         <FileNavbar />
         <FileToolbar layout="inline" />
         {directory && browse.error && (
-          <Alert severity="error" action={<Button onClick={browse.retry}>Retry</Button>}>
+          <Feedback severity="error" action={<Button onClick={browse.retry}>Retry</Button>}>
             {browse.error}
-          </Alert>
+          </Feedback>
         )}
         <FileList
           onScroll={({ currentTarget }) => {
             if (currentTarget.scrollTop + currentTarget.clientHeight >= currentTarget.scrollHeight - 100) browse.loadMore();
           }}
+          loading={directory && browse.loading && browse.entries.length ? "more" : undefined}
+          emptyPlaceholder={directory && browse.loading && !browse.entries.length ? <ListPlaceholder loading label="Loading folder…" /> : undefined}
         />
-        {directory && browse.loading && (
-          <Box role="status" sx={{ px: 2, py: 1 }}>
-            Loading folder…
-          </Box>
-        )}
         <FileContextMenu />
       </FileBrowser>
     </div>

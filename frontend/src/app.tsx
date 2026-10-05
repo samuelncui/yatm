@@ -1,5 +1,6 @@
+import { readStored, writeStored, stringCodec } from "@/state/storage";
 import { lazy, Suspense, SyntheticEvent, useCallback, useEffect, useState } from "react";
-import { JobListStateProvider } from "@/components/job-list-state";
+import { LibraryLayoutToggle, PageNavigation, PageNavigationDivider, PageTabs, SidebarTabs } from "@/components/page-navigation";
 import { Routes, Route, useNavigate, Navigate, useLocation, Link } from "react-router";
 
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
@@ -10,15 +11,14 @@ import WorkHistoryRoundedIcon from "@mui/icons-material/WorkHistoryRounded";
 import CssBaseline from "@mui/material/CssBaseline";
 import LinearProgress from "@mui/material/LinearProgress";
 import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import { createTheme, styled, ThemeProvider } from "@mui/material/styles";
+import { styled, ThemeProvider } from "@mui/material/styles";
+import { theme } from "@/theme";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import {
-  BackupType,
+  ArchiveType,
   FileBrowserType,
   JobsType,
   jobListPath,
@@ -35,64 +35,34 @@ import logoURL from "../favicon.svg";
 import "./app.less";
 import "./product.less";
 
+const IdenticalFiles = lazy(async () => ({ default: (await import("@/pages/identical")).IdenticalFiles }));
 const FileBrowser = lazy(async () => ({ default: (await import("@/pages/file")).FileBrowser }));
-const BackupBrowser = lazy(async () => ({ default: (await import("@/pages/backup")).BackupBrowser }));
+const ArchiveBrowser = lazy(async () => ({ default: (await import("@/pages/archive")).ArchiveBrowser }));
 const RestoreBrowser = lazy(async () => ({ default: (await import("@/pages/restore")).RestoreBrowser }));
 const ScanBrowser = lazy(async () => ({ default: (await import("@/pages/scan")).ScanBrowser }));
 const MediaBrowser = lazy(async () => ({ default: (await import("@/pages/media")).MediaBrowser }));
-const LocationsBrowser = lazy(async () => ({ default: (await import("@/pages/online")).LocationsBrowser }));
+const LocationsBrowser = lazy(async () => ({ default: (await import("@/pages/locations")).LocationsBrowser }));
 const JobsBrowser = lazy(async () => ({ default: (await import("@/pages/jobs")).JobsBrowser }));
 const SettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings")).SettingsBrowser }));
-
-const theme = createTheme({
-  palette: {
-    primary: { main: "#2563eb" },
-    secondary: { main: "#14b8a6" },
-    background: { default: "#f3f6fa", paper: "#ffffff" },
-    text: { primary: "#172033", secondary: "#667085" },
-    divider: "#e1e7ef",
-  },
-  shape: { borderRadius: 10 },
-  typography: {
-    fontFamily: 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    button: { fontWeight: 650, textTransform: "none" },
-  },
-  components: {
-    MuiButton: {
-      defaultProps: { disableElevation: true },
-      styleOverrides: { root: { borderRadius: 8 } },
-    },
-    MuiCard: {
-      defaultProps: { variant: "outlined" },
-    },
-    MuiDialog: {
-      styleOverrides: {
-        paper: { borderRadius: 14, backgroundImage: "none" },
-      },
-    },
-    MuiLinearProgress: {
-      styleOverrides: {
-        root: { height: 6, borderRadius: 999, backgroundColor: "#e8eef7" },
-        bar: { borderRadius: 999 },
-      },
-    },
-  },
-});
+const PreviewSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-preview")).PreviewSettingsBrowser }));
+const JobSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-jobs")).JobSettingsBrowser }));
 
 const NewJobType = "new-job";
 const libraryLayoutStorageKey = "library:file-layout";
 
 const navigation = [
   { label: "Library", value: FileBrowserType, icon: <Inventory2RoundedIcon /> },
+  { label: "Tools", value: "tools/identical", icon: <ViewColumnRoundedIcon /> },
   { label: "Jobs", value: JobsType, icon: <WorkHistoryRoundedIcon /> },
   { label: "Settings", value: SettingsType, icon: <SettingsRoundedIcon /> },
 ];
 
 const moduleByPage: Record<string, string> = {
+  tools: "tools/identical",
   [FileBrowserType]: FileBrowserType,
   [MediaType]: FileBrowserType,
   [JobsType]: JobsType,
-  [BackupType]: JobsType,
+  [ArchiveType]: JobsType,
   [RestoreType]: JobsType,
   [ScanType]: JobsType,
   [SettingsType]: SettingsType,
@@ -118,14 +88,29 @@ const ModuleNavigation = ({
   const location = useLocation();
   const openPage = (_: SyntheticEvent, value: string) => navigate("/" + value);
 
+  if (page === "tools")
+    return (
+      <PageNavigation label="Tools">
+        <PageTabs placement="module" value="identical">
+          <Tab value="identical" label="Identical files" />
+        </PageTabs>
+      </PageNavigation>
+    );
+
   if (page === SettingsType) {
     return (
-      <nav className="app-module-navigation" aria-label="Settings views">
-        <Tabs className="app-module-tabs" value={location.pathname === "/settings/library" ? "settings/library" : LocationsType} onChange={openPage}>
+      <PageNavigation label="Settings views">
+        <PageTabs
+          placement="module"
+          value={["/settings/library", "/settings/preview", "/settings/jobs"].includes(location.pathname) ? location.pathname.slice(1) : LocationsType}
+          onChange={openPage}
+        >
           <Tab label="Locations" value={LocationsType} />
           <Tab label="Library" value="settings/library" />
-        </Tabs>
-      </nav>
+          <Tab label="Preview" value="settings/preview" />
+          <Tab label="Jobs" value="settings/jobs" />
+        </PageTabs>
+      </PageNavigation>
     );
   }
 
@@ -136,58 +121,58 @@ const ModuleNavigation = ({
     };
 
     return (
-      <nav className="app-module-navigation" aria-label="Library views">
-        <Tabs className="app-module-tabs" value={page} onChange={openPage}>
+      <PageNavigation label="Library views">
+        <PageTabs placement="module" value={page} onChange={openPage}>
           <Tab label="Files" value={FileBrowserType} />
           <Tab label="Media" value={MediaType} />
-        </Tabs>
+        </PageTabs>
         {page === FileBrowserType && (
-          <ToggleButtonGroup className="library-layout-toggle" value={libraryLayout} exclusive onChange={changeLayout} aria-label="File browser layout">
+          <LibraryLayoutToggle className="library-layout-toggle" value={libraryLayout} exclusive onChange={changeLayout} aria-label="File browser layout">
             <ToggleButton value={libraryLayouts.dual} aria-label="Dual pane" title="Dual pane">
               <ViewColumnRoundedIcon />
             </ToggleButton>
             <ToggleButton value={libraryLayouts.inspector} aria-label="Inspector" title="Inspector">
               <PreviewRoundedIcon />
             </ToggleButton>
-          </ToggleButtonGroup>
+          </LibraryLayoutToggle>
         )}
-      </nav>
+      </PageNavigation>
     );
   }
 
-  const creatingJob = page === BackupType || page === RestoreType || page === ScanType;
+  const creatingJob = page === ArchiveType || page === RestoreType || page === ScanType;
   if (page !== JobsType && !creatingJob) return null;
 
   return (
-    <nav className="app-module-navigation" aria-label="Job views">
-      <Tabs className="app-module-tabs" value={creatingJob ? NewJobType : JobsType}>
+    <PageNavigation label="Job views">
+      <PageTabs placement="module" value={creatingJob ? NewJobType : JobsType}>
         <Tab component={Link} to={jobListPath(location.state?.returnTo)} label="All" value={JobsType} />
-        <Tab component={Link} to={"/" + BackupType} label="New" value={NewJobType} />
-      </Tabs>
+        <Tab component={Link} to={"/" + ArchiveType} label="New" value={NewJobType} />
+      </PageTabs>
       {creatingJob && (
         <>
-          <span className="app-module-navigation-divider" />
-          <Tabs className="app-module-tabs app-module-tabs-secondary" value={page} onChange={openPage}>
-            <Tab label="Backup" value={BackupType} />
+          <PageNavigationDivider />
+          <PageTabs placement="compact" value={page} onChange={openPage}>
+            <Tab label="Archive" value={ArchiveType} />
             <Tab label="Restore" value={RestoreType} />
             <Tab label="Scan" value={ScanType} />
-          </Tabs>
+          </PageTabs>
         </>
       )}
-    </nav>
+    </PageNavigation>
   );
 };
 
 const App = () => {
   const location = useLocation();
   const [libraryLayout, setLibraryLayout] = useState<LibraryLayout>(() =>
-    localStorage.getItem(libraryLayoutStorageKey) === libraryLayouts.dual ? libraryLayouts.dual : libraryLayouts.inspector,
+    readStored("local", libraryLayoutStorageKey, stringCodec) === libraryLayouts.dual ? libraryLayouts.dual : libraryLayouts.inspector,
   );
   const currentPage = location.pathname.split("/")[1] || FileBrowserType;
   const currentModule = moduleByPage[currentPage] ?? FileBrowserType;
   const changeLibraryLayout = useCallback((layout: LibraryLayout) => {
     setLibraryLayout(layout);
-    localStorage.setItem(libraryLayoutStorageKey, layout);
+    writeStored("local", libraryLayoutStorageKey, layout, stringCodec);
   }, []);
 
   useEffect(() => {
@@ -233,7 +218,7 @@ const App = () => {
               <small>Media archive</small>
             </span>
           </div>
-          <Tabs className="tabs" value={currentModule} orientation="vertical" aria-label="YATM modules">
+          <SidebarTabs className="tabs" value={currentModule} orientation="vertical" aria-label="YATM modules">
             {navigation.map((item) => (
               <Tab
                 key={item.value}
@@ -245,31 +230,32 @@ const App = () => {
                 value={item.value}
               />
             ))}
-          </Tabs>
+          </SidebarTabs>
           <span className="app-sidebar-caption">YATM {version}</span>
         </aside>
         <main className="app-content">
           <ModuleNavigation page={currentPage} libraryLayout={libraryLayout} onLibraryLayoutChange={changeLibraryLayout} />
           <div className="app-page">
-            <JobListStateProvider>
-              <Suspense fallback={<LinearProgress className="app-page-loading" />}>
-                <Routes>
-                  <Route path="/*">
-                    <Route path={FileBrowserType} element={<FileBrowser layout={libraryLayout} />} />
-                    <Route path={BackupType} element={<BackupBrowser />} />
-                    <Route path={RestoreType} element={<RestoreBrowser />} />
-                    <Route path={ScanType} element={<ScanBrowser />} />
-                    <Route path={MediaType} element={<MediaBrowser />} />
-                    <Route path={LocationsType + "/*"} element={<LocationsBrowser />} />
-                    <Route path={JobsType} element={<JobsBrowser />} />
-                    <Route path={JobsType + "/:id"} element={<JobsBrowser />} />
-                    <Route path={SettingsType} element={<Navigate to={"/" + LocationsType} replace />} />
-                    <Route path="settings/library" element={<SettingsBrowser />} />
-                    <Route path="*" element={<Navigate to={"/" + FileBrowserType} replace />} />
-                  </Route>
-                </Routes>
-              </Suspense>
-            </JobListStateProvider>
+            <Suspense fallback={<LinearProgress className="app-page-loading" />}>
+              <Routes>
+                <Route path="/*">
+                  <Route path="tools/identical" element={<IdenticalFiles />} />
+                  <Route path={FileBrowserType} element={<FileBrowser layout={libraryLayout} />} />
+                  <Route path={ArchiveType} element={<ArchiveBrowser />} />
+                  <Route path={RestoreType} element={<RestoreBrowser />} />
+                  <Route path={ScanType} element={<ScanBrowser />} />
+                  <Route path={MediaType} element={<MediaBrowser />} />
+                  <Route path={LocationsType + "/*"} element={<LocationsBrowser />} />
+                  <Route path={JobsType} element={<JobsBrowser />} />
+                  <Route path={JobsType + "/:id"} element={<JobsBrowser />} />
+                  <Route path={SettingsType} element={<Navigate to={"/" + LocationsType} replace />} />
+                  <Route path="settings/library" element={<SettingsBrowser />} />
+                  <Route path="settings/preview" element={<PreviewSettingsBrowser />} />
+                  <Route path="settings/jobs" element={<JobSettingsBrowser />} />
+                  <Route path="*" element={<Navigate to={"/" + FileBrowserType} replace />} />
+                </Route>
+              </Routes>
+            </Suspense>
           </div>
         </main>
         <ToastContainer autoClose={10000} />

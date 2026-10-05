@@ -19,30 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	LocationService_Create_FullMethodName      = "/location.LocationService/Create"
-	LocationService_List_FullMethodName        = "/location.LocationService/List"
-	LocationService_Get_FullMethodName         = "/location.LocationService/Get"
-	LocationService_Update_FullMethodName      = "/location.LocationService/Update"
-	LocationService_Confirm_FullMethodName     = "/location.LocationService/Confirm"
-	LocationService_Delete_FullMethodName      = "/location.LocationService/Delete"
-	LocationService_ListEntries_FullMethodName = "/location.LocationService/ListEntries"
-	LocationService_Admit_FullMethodName       = "/location.LocationService/Admit"
-	LocationService_GetEntry_FullMethodName    = "/location.LocationService/GetEntry"
+	LocationService_Create_FullMethodName      = "/yatm.v1.LocationService/Create"
+	LocationService_List_FullMethodName        = "/yatm.v1.LocationService/List"
+	LocationService_Get_FullMethodName         = "/yatm.v1.LocationService/Get"
+	LocationService_Update_FullMethodName      = "/yatm.v1.LocationService/Update"
+	LocationService_Delete_FullMethodName      = "/yatm.v1.LocationService/Delete"
+	LocationService_GetAccess_FullMethodName   = "/yatm.v1.LocationService/GetAccess"
+	LocationService_BrowsePaths_FullMethodName = "/yatm.v1.LocationService/BrowsePaths"
 )
 
 // LocationServiceClient is the client API for LocationService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LocationServiceClient interface {
-	Create(ctx context.Context, in *CreateLocationRequest, opts ...grpc.CallOption) (*LocationReply, error)
-	List(ctx context.Context, in *ListLocationsRequest, opts ...grpc.CallOption) (*ListLocationsReply, error)
-	Get(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*LocationReply, error)
-	Update(ctx context.Context, in *UpdateLocationRequest, opts ...grpc.CallOption) (*LocationReply, error)
-	Confirm(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*LocationReply, error)
-	Delete(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*DeleteLocationReply, error)
-	ListEntries(ctx context.Context, in *ListLocationEntriesRequest, opts ...grpc.CallOption) (*ListLocationEntriesReply, error)
-	Admit(ctx context.Context, in *LocationEntryRef, opts ...grpc.CallOption) (*LocationEntry, error)
-	GetEntry(ctx context.Context, in *GetLocationEntryRequest, opts ...grpc.CallOption) (*LocationEntry, error)
+	Create(ctx context.Context, in *CreateLocationRequest, opts ...grpc.CallOption) (*CreateLocationResponse, error)
+	List(ctx context.Context, in *ListLocationsRequest, opts ...grpc.CallOption) (*ListLocationsResponse, error)
+	Get(ctx context.Context, in *GetLocationRequest, opts ...grpc.CallOption) (*GetLocationResponse, error)
+	Update(ctx context.Context, in *UpdateLocationRequest, opts ...grpc.CallOption) (*UpdateLocationResponse, error)
+	Delete(ctx context.Context, in *DeleteLocationRequest, opts ...grpc.CallOption) (*DeleteLocationResponse, error)
+	GetAccess(ctx context.Context, in *GetLocationAccessRequest, opts ...grpc.CallOption) (*GetLocationAccessResponse, error)
+	BrowsePaths(ctx context.Context, in *BrowsePathsRequest, opts ...grpc.CallOption) (*BrowsePathsResponse, error)
 }
 
 type locationServiceClient struct {
@@ -53,8 +49,8 @@ func NewLocationServiceClient(cc grpc.ClientConnInterface) LocationServiceClient
 	return &locationServiceClient{cc}
 }
 
-func (c *locationServiceClient) Create(ctx context.Context, in *CreateLocationRequest, opts ...grpc.CallOption) (*LocationReply, error) {
-	out := new(LocationReply)
+func (c *locationServiceClient) Create(ctx context.Context, in *CreateLocationRequest, opts ...grpc.CallOption) (*CreateLocationResponse, error) {
+	out := new(CreateLocationResponse)
 	err := c.cc.Invoke(ctx, LocationService_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -62,8 +58,8 @@ func (c *locationServiceClient) Create(ctx context.Context, in *CreateLocationRe
 	return out, nil
 }
 
-func (c *locationServiceClient) List(ctx context.Context, in *ListLocationsRequest, opts ...grpc.CallOption) (*ListLocationsReply, error) {
-	out := new(ListLocationsReply)
+func (c *locationServiceClient) List(ctx context.Context, in *ListLocationsRequest, opts ...grpc.CallOption) (*ListLocationsResponse, error) {
+	out := new(ListLocationsResponse)
 	err := c.cc.Invoke(ctx, LocationService_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -71,8 +67,8 @@ func (c *locationServiceClient) List(ctx context.Context, in *ListLocationsReque
 	return out, nil
 }
 
-func (c *locationServiceClient) Get(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*LocationReply, error) {
-	out := new(LocationReply)
+func (c *locationServiceClient) Get(ctx context.Context, in *GetLocationRequest, opts ...grpc.CallOption) (*GetLocationResponse, error) {
+	out := new(GetLocationResponse)
 	err := c.cc.Invoke(ctx, LocationService_Get_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -80,8 +76,8 @@ func (c *locationServiceClient) Get(ctx context.Context, in *LocationRef, opts .
 	return out, nil
 }
 
-func (c *locationServiceClient) Update(ctx context.Context, in *UpdateLocationRequest, opts ...grpc.CallOption) (*LocationReply, error) {
-	out := new(LocationReply)
+func (c *locationServiceClient) Update(ctx context.Context, in *UpdateLocationRequest, opts ...grpc.CallOption) (*UpdateLocationResponse, error) {
+	out := new(UpdateLocationResponse)
 	err := c.cc.Invoke(ctx, LocationService_Update_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -89,17 +85,8 @@ func (c *locationServiceClient) Update(ctx context.Context, in *UpdateLocationRe
 	return out, nil
 }
 
-func (c *locationServiceClient) Confirm(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*LocationReply, error) {
-	out := new(LocationReply)
-	err := c.cc.Invoke(ctx, LocationService_Confirm_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *locationServiceClient) Delete(ctx context.Context, in *LocationRef, opts ...grpc.CallOption) (*DeleteLocationReply, error) {
-	out := new(DeleteLocationReply)
+func (c *locationServiceClient) Delete(ctx context.Context, in *DeleteLocationRequest, opts ...grpc.CallOption) (*DeleteLocationResponse, error) {
+	out := new(DeleteLocationResponse)
 	err := c.cc.Invoke(ctx, LocationService_Delete_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -107,27 +94,18 @@ func (c *locationServiceClient) Delete(ctx context.Context, in *LocationRef, opt
 	return out, nil
 }
 
-func (c *locationServiceClient) ListEntries(ctx context.Context, in *ListLocationEntriesRequest, opts ...grpc.CallOption) (*ListLocationEntriesReply, error) {
-	out := new(ListLocationEntriesReply)
-	err := c.cc.Invoke(ctx, LocationService_ListEntries_FullMethodName, in, out, opts...)
+func (c *locationServiceClient) GetAccess(ctx context.Context, in *GetLocationAccessRequest, opts ...grpc.CallOption) (*GetLocationAccessResponse, error) {
+	out := new(GetLocationAccessResponse)
+	err := c.cc.Invoke(ctx, LocationService_GetAccess_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *locationServiceClient) Admit(ctx context.Context, in *LocationEntryRef, opts ...grpc.CallOption) (*LocationEntry, error) {
-	out := new(LocationEntry)
-	err := c.cc.Invoke(ctx, LocationService_Admit_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *locationServiceClient) GetEntry(ctx context.Context, in *GetLocationEntryRequest, opts ...grpc.CallOption) (*LocationEntry, error) {
-	out := new(LocationEntry)
-	err := c.cc.Invoke(ctx, LocationService_GetEntry_FullMethodName, in, out, opts...)
+func (c *locationServiceClient) BrowsePaths(ctx context.Context, in *BrowsePathsRequest, opts ...grpc.CallOption) (*BrowsePathsResponse, error) {
+	out := new(BrowsePathsResponse)
+	err := c.cc.Invoke(ctx, LocationService_BrowsePaths_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,15 +116,13 @@ func (c *locationServiceClient) GetEntry(ctx context.Context, in *GetLocationEnt
 // All implementations must embed UnimplementedLocationServiceServer
 // for forward compatibility
 type LocationServiceServer interface {
-	Create(context.Context, *CreateLocationRequest) (*LocationReply, error)
-	List(context.Context, *ListLocationsRequest) (*ListLocationsReply, error)
-	Get(context.Context, *LocationRef) (*LocationReply, error)
-	Update(context.Context, *UpdateLocationRequest) (*LocationReply, error)
-	Confirm(context.Context, *LocationRef) (*LocationReply, error)
-	Delete(context.Context, *LocationRef) (*DeleteLocationReply, error)
-	ListEntries(context.Context, *ListLocationEntriesRequest) (*ListLocationEntriesReply, error)
-	Admit(context.Context, *LocationEntryRef) (*LocationEntry, error)
-	GetEntry(context.Context, *GetLocationEntryRequest) (*LocationEntry, error)
+	Create(context.Context, *CreateLocationRequest) (*CreateLocationResponse, error)
+	List(context.Context, *ListLocationsRequest) (*ListLocationsResponse, error)
+	Get(context.Context, *GetLocationRequest) (*GetLocationResponse, error)
+	Update(context.Context, *UpdateLocationRequest) (*UpdateLocationResponse, error)
+	Delete(context.Context, *DeleteLocationRequest) (*DeleteLocationResponse, error)
+	GetAccess(context.Context, *GetLocationAccessRequest) (*GetLocationAccessResponse, error)
+	BrowsePaths(context.Context, *BrowsePathsRequest) (*BrowsePathsResponse, error)
 	mustEmbedUnimplementedLocationServiceServer()
 }
 
@@ -154,32 +130,26 @@ type LocationServiceServer interface {
 type UnimplementedLocationServiceServer struct {
 }
 
-func (UnimplementedLocationServiceServer) Create(context.Context, *CreateLocationRequest) (*LocationReply, error) {
+func (UnimplementedLocationServiceServer) Create(context.Context, *CreateLocationRequest) (*CreateLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedLocationServiceServer) List(context.Context, *ListLocationsRequest) (*ListLocationsReply, error) {
+func (UnimplementedLocationServiceServer) List(context.Context, *ListLocationsRequest) (*ListLocationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedLocationServiceServer) Get(context.Context, *LocationRef) (*LocationReply, error) {
+func (UnimplementedLocationServiceServer) Get(context.Context, *GetLocationRequest) (*GetLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedLocationServiceServer) Update(context.Context, *UpdateLocationRequest) (*LocationReply, error) {
+func (UnimplementedLocationServiceServer) Update(context.Context, *UpdateLocationRequest) (*UpdateLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
-func (UnimplementedLocationServiceServer) Confirm(context.Context, *LocationRef) (*LocationReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Confirm not implemented")
-}
-func (UnimplementedLocationServiceServer) Delete(context.Context, *LocationRef) (*DeleteLocationReply, error) {
+func (UnimplementedLocationServiceServer) Delete(context.Context, *DeleteLocationRequest) (*DeleteLocationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
-func (UnimplementedLocationServiceServer) ListEntries(context.Context, *ListLocationEntriesRequest) (*ListLocationEntriesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListEntries not implemented")
+func (UnimplementedLocationServiceServer) GetAccess(context.Context, *GetLocationAccessRequest) (*GetLocationAccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccess not implemented")
 }
-func (UnimplementedLocationServiceServer) Admit(context.Context, *LocationEntryRef) (*LocationEntry, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Admit not implemented")
-}
-func (UnimplementedLocationServiceServer) GetEntry(context.Context, *GetLocationEntryRequest) (*LocationEntry, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetEntry not implemented")
+func (UnimplementedLocationServiceServer) BrowsePaths(context.Context, *BrowsePathsRequest) (*BrowsePathsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BrowsePaths not implemented")
 }
 func (UnimplementedLocationServiceServer) mustEmbedUnimplementedLocationServiceServer() {}
 
@@ -231,7 +201,7 @@ func _LocationService_List_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _LocationService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LocationRef)
+	in := new(GetLocationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -243,7 +213,7 @@ func _LocationService_Get_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: LocationService_Get_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).Get(ctx, req.(*LocationRef))
+		return srv.(LocationServiceServer).Get(ctx, req.(*GetLocationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -266,26 +236,8 @@ func _LocationService_Update_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LocationService_Confirm_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LocationRef)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LocationServiceServer).Confirm(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: LocationService_Confirm_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).Confirm(ctx, req.(*LocationRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _LocationService_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LocationRef)
+	in := new(DeleteLocationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -297,61 +249,43 @@ func _LocationService_Delete_Handler(srv interface{}, ctx context.Context, dec f
 		FullMethod: LocationService_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).Delete(ctx, req.(*LocationRef))
+		return srv.(LocationServiceServer).Delete(ctx, req.(*DeleteLocationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LocationService_ListEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListLocationEntriesRequest)
+func _LocationService_GetAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLocationAccessRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LocationServiceServer).ListEntries(ctx, in)
+		return srv.(LocationServiceServer).GetAccess(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LocationService_ListEntries_FullMethodName,
+		FullMethod: LocationService_GetAccess_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).ListEntries(ctx, req.(*ListLocationEntriesRequest))
+		return srv.(LocationServiceServer).GetAccess(ctx, req.(*GetLocationAccessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _LocationService_Admit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LocationEntryRef)
+func _LocationService_BrowsePaths_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BrowsePathsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LocationServiceServer).Admit(ctx, in)
+		return srv.(LocationServiceServer).BrowsePaths(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LocationService_Admit_FullMethodName,
+		FullMethod: LocationService_BrowsePaths_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).Admit(ctx, req.(*LocationEntryRef))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _LocationService_GetEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLocationEntryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LocationServiceServer).GetEntry(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: LocationService_GetEntry_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LocationServiceServer).GetEntry(ctx, req.(*GetLocationEntryRequest))
+		return srv.(LocationServiceServer).BrowsePaths(ctx, req.(*BrowsePathsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -360,7 +294,7 @@ func _LocationService_GetEntry_Handler(srv interface{}, ctx context.Context, dec
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var LocationService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "location.LocationService",
+	ServiceName: "yatm.v1.LocationService",
 	HandlerType: (*LocationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -380,447 +314,16 @@ var LocationService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _LocationService_Update_Handler,
 		},
 		{
-			MethodName: "Confirm",
-			Handler:    _LocationService_Confirm_Handler,
-		},
-		{
 			MethodName: "Delete",
 			Handler:    _LocationService_Delete_Handler,
 		},
 		{
-			MethodName: "ListEntries",
-			Handler:    _LocationService_ListEntries_Handler,
+			MethodName: "GetAccess",
+			Handler:    _LocationService_GetAccess_Handler,
 		},
 		{
-			MethodName: "Admit",
-			Handler:    _LocationService_Admit_Handler,
-		},
-		{
-			MethodName: "GetEntry",
-			Handler:    _LocationService_GetEntry_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "location.proto",
-}
-
-const (
-	FileCatalogService_GetState_FullMethodName             = "/location.FileCatalogService/GetState"
-	FileCatalogService_GetVersion_FullMethodName           = "/location.FileCatalogService/GetVersion"
-	FileCatalogService_ListVersions_FullMethodName         = "/location.FileCatalogService/ListVersions"
-	FileCatalogService_ListCopies_FullMethodName           = "/location.FileCatalogService/ListCopies"
-	FileCatalogService_ListDuplicates_FullMethodName       = "/location.FileCatalogService/ListDuplicates"
-	FileCatalogService_ListDuplicateGroups_FullMethodName  = "/location.FileCatalogService/ListDuplicateGroups"
-	FileCatalogService_ListDuplicateMembers_FullMethodName = "/location.FileCatalogService/ListDuplicateMembers"
-	FileCatalogService_ImportPositions_FullMethodName      = "/location.FileCatalogService/ImportPositions"
-	FileCatalogService_InspectSelection_FullMethodName     = "/location.FileCatalogService/InspectSelection"
-	FileCatalogService_RelocateOriginal_FullMethodName     = "/location.FileCatalogService/RelocateOriginal"
-)
-
-// FileCatalogServiceClient is the client API for FileCatalogService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type FileCatalogServiceClient interface {
-	GetState(ctx context.Context, in *GetFileStateRequest, opts ...grpc.CallOption) (*FileStateReply, error)
-	GetVersion(ctx context.Context, in *GetFileVersionRequest, opts ...grpc.CallOption) (*FileVersionReply, error)
-	ListVersions(ctx context.Context, in *ListFileVersionsRequest, opts ...grpc.CallOption) (*ListFileVersionsReply, error)
-	ListCopies(ctx context.Context, in *ListContentCopiesRequest, opts ...grpc.CallOption) (*ListContentCopiesReply, error)
-	ListDuplicates(ctx context.Context, in *ListContentDuplicatesRequest, opts ...grpc.CallOption) (*ListContentDuplicatesReply, error)
-	ListDuplicateGroups(ctx context.Context, in *ListDuplicateGroupsRequest, opts ...grpc.CallOption) (*ListDuplicateGroupsReply, error)
-	ListDuplicateMembers(ctx context.Context, in *ListDuplicateMembersRequest, opts ...grpc.CallOption) (*ListDuplicateMembersReply, error)
-	ImportPositions(ctx context.Context, in *ImportArchivePositionsRequest, opts ...grpc.CallOption) (*ImportArchivePositionsReply, error)
-	InspectSelection(ctx context.Context, in *InspectSelectionRequest, opts ...grpc.CallOption) (*InspectSelectionReply, error)
-	RelocateOriginal(ctx context.Context, in *RelocateOriginalRequest, opts ...grpc.CallOption) (*FileStateReply, error)
-}
-
-type fileCatalogServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewFileCatalogServiceClient(cc grpc.ClientConnInterface) FileCatalogServiceClient {
-	return &fileCatalogServiceClient{cc}
-}
-
-func (c *fileCatalogServiceClient) GetState(ctx context.Context, in *GetFileStateRequest, opts ...grpc.CallOption) (*FileStateReply, error) {
-	out := new(FileStateReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_GetState_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) GetVersion(ctx context.Context, in *GetFileVersionRequest, opts ...grpc.CallOption) (*FileVersionReply, error) {
-	out := new(FileVersionReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_GetVersion_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ListVersions(ctx context.Context, in *ListFileVersionsRequest, opts ...grpc.CallOption) (*ListFileVersionsReply, error) {
-	out := new(ListFileVersionsReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ListVersions_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ListCopies(ctx context.Context, in *ListContentCopiesRequest, opts ...grpc.CallOption) (*ListContentCopiesReply, error) {
-	out := new(ListContentCopiesReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ListCopies_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ListDuplicates(ctx context.Context, in *ListContentDuplicatesRequest, opts ...grpc.CallOption) (*ListContentDuplicatesReply, error) {
-	out := new(ListContentDuplicatesReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ListDuplicates_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ListDuplicateGroups(ctx context.Context, in *ListDuplicateGroupsRequest, opts ...grpc.CallOption) (*ListDuplicateGroupsReply, error) {
-	out := new(ListDuplicateGroupsReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ListDuplicateGroups_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ListDuplicateMembers(ctx context.Context, in *ListDuplicateMembersRequest, opts ...grpc.CallOption) (*ListDuplicateMembersReply, error) {
-	out := new(ListDuplicateMembersReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ListDuplicateMembers_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) ImportPositions(ctx context.Context, in *ImportArchivePositionsRequest, opts ...grpc.CallOption) (*ImportArchivePositionsReply, error) {
-	out := new(ImportArchivePositionsReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_ImportPositions_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) InspectSelection(ctx context.Context, in *InspectSelectionRequest, opts ...grpc.CallOption) (*InspectSelectionReply, error) {
-	out := new(InspectSelectionReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_InspectSelection_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *fileCatalogServiceClient) RelocateOriginal(ctx context.Context, in *RelocateOriginalRequest, opts ...grpc.CallOption) (*FileStateReply, error) {
-	out := new(FileStateReply)
-	err := c.cc.Invoke(ctx, FileCatalogService_RelocateOriginal_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// FileCatalogServiceServer is the server API for FileCatalogService service.
-// All implementations must embed UnimplementedFileCatalogServiceServer
-// for forward compatibility
-type FileCatalogServiceServer interface {
-	GetState(context.Context, *GetFileStateRequest) (*FileStateReply, error)
-	GetVersion(context.Context, *GetFileVersionRequest) (*FileVersionReply, error)
-	ListVersions(context.Context, *ListFileVersionsRequest) (*ListFileVersionsReply, error)
-	ListCopies(context.Context, *ListContentCopiesRequest) (*ListContentCopiesReply, error)
-	ListDuplicates(context.Context, *ListContentDuplicatesRequest) (*ListContentDuplicatesReply, error)
-	ListDuplicateGroups(context.Context, *ListDuplicateGroupsRequest) (*ListDuplicateGroupsReply, error)
-	ListDuplicateMembers(context.Context, *ListDuplicateMembersRequest) (*ListDuplicateMembersReply, error)
-	ImportPositions(context.Context, *ImportArchivePositionsRequest) (*ImportArchivePositionsReply, error)
-	InspectSelection(context.Context, *InspectSelectionRequest) (*InspectSelectionReply, error)
-	RelocateOriginal(context.Context, *RelocateOriginalRequest) (*FileStateReply, error)
-	mustEmbedUnimplementedFileCatalogServiceServer()
-}
-
-// UnimplementedFileCatalogServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedFileCatalogServiceServer struct {
-}
-
-func (UnimplementedFileCatalogServiceServer) GetState(context.Context, *GetFileStateRequest) (*FileStateReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetState not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) GetVersion(context.Context, *GetFileVersionRequest) (*FileVersionReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ListVersions(context.Context, *ListFileVersionsRequest) (*ListFileVersionsReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListVersions not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ListCopies(context.Context, *ListContentCopiesRequest) (*ListContentCopiesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListCopies not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ListDuplicates(context.Context, *ListContentDuplicatesRequest) (*ListContentDuplicatesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListDuplicates not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ListDuplicateGroups(context.Context, *ListDuplicateGroupsRequest) (*ListDuplicateGroupsReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListDuplicateGroups not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ListDuplicateMembers(context.Context, *ListDuplicateMembersRequest) (*ListDuplicateMembersReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListDuplicateMembers not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) ImportPositions(context.Context, *ImportArchivePositionsRequest) (*ImportArchivePositionsReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ImportPositions not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) InspectSelection(context.Context, *InspectSelectionRequest) (*InspectSelectionReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method InspectSelection not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) RelocateOriginal(context.Context, *RelocateOriginalRequest) (*FileStateReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RelocateOriginal not implemented")
-}
-func (UnimplementedFileCatalogServiceServer) mustEmbedUnimplementedFileCatalogServiceServer() {}
-
-// UnsafeFileCatalogServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to FileCatalogServiceServer will
-// result in compilation errors.
-type UnsafeFileCatalogServiceServer interface {
-	mustEmbedUnimplementedFileCatalogServiceServer()
-}
-
-func RegisterFileCatalogServiceServer(s grpc.ServiceRegistrar, srv FileCatalogServiceServer) {
-	s.RegisterService(&FileCatalogService_ServiceDesc, srv)
-}
-
-func _FileCatalogService_GetState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFileStateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).GetState(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_GetState_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).GetState(ctx, req.(*GetFileStateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFileVersionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).GetVersion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_GetVersion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).GetVersion(ctx, req.(*GetFileVersionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ListVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListFileVersionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ListVersions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ListVersions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ListVersions(ctx, req.(*ListFileVersionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ListCopies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListContentCopiesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ListCopies(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ListCopies_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ListCopies(ctx, req.(*ListContentCopiesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ListDuplicates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListContentDuplicatesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ListDuplicates(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ListDuplicates_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ListDuplicates(ctx, req.(*ListContentDuplicatesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ListDuplicateGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDuplicateGroupsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ListDuplicateGroups(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ListDuplicateGroups_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ListDuplicateGroups(ctx, req.(*ListDuplicateGroupsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ListDuplicateMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDuplicateMembersRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ListDuplicateMembers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ListDuplicateMembers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ListDuplicateMembers(ctx, req.(*ListDuplicateMembersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_ImportPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ImportArchivePositionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).ImportPositions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_ImportPositions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).ImportPositions(ctx, req.(*ImportArchivePositionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_InspectSelection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InspectSelectionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).InspectSelection(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_InspectSelection_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).InspectSelection(ctx, req.(*InspectSelectionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _FileCatalogService_RelocateOriginal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RelocateOriginalRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(FileCatalogServiceServer).RelocateOriginal(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: FileCatalogService_RelocateOriginal_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FileCatalogServiceServer).RelocateOriginal(ctx, req.(*RelocateOriginalRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// FileCatalogService_ServiceDesc is the grpc.ServiceDesc for FileCatalogService service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var FileCatalogService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "location.FileCatalogService",
-	HandlerType: (*FileCatalogServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetState",
-			Handler:    _FileCatalogService_GetState_Handler,
-		},
-		{
-			MethodName: "GetVersion",
-			Handler:    _FileCatalogService_GetVersion_Handler,
-		},
-		{
-			MethodName: "ListVersions",
-			Handler:    _FileCatalogService_ListVersions_Handler,
-		},
-		{
-			MethodName: "ListCopies",
-			Handler:    _FileCatalogService_ListCopies_Handler,
-		},
-		{
-			MethodName: "ListDuplicates",
-			Handler:    _FileCatalogService_ListDuplicates_Handler,
-		},
-		{
-			MethodName: "ListDuplicateGroups",
-			Handler:    _FileCatalogService_ListDuplicateGroups_Handler,
-		},
-		{
-			MethodName: "ListDuplicateMembers",
-			Handler:    _FileCatalogService_ListDuplicateMembers_Handler,
-		},
-		{
-			MethodName: "ImportPositions",
-			Handler:    _FileCatalogService_ImportPositions_Handler,
-		},
-		{
-			MethodName: "InspectSelection",
-			Handler:    _FileCatalogService_InspectSelection_Handler,
-		},
-		{
-			MethodName: "RelocateOriginal",
-			Handler:    _FileCatalogService_RelocateOriginal_Handler,
+			MethodName: "BrowsePaths",
+			Handler:    _LocationService_BrowsePaths_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

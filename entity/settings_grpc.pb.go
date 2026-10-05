@@ -19,20 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	SettingsService_GetLibrary_FullMethodName    = "/settings.SettingsService/GetLibrary"
-	SettingsService_UpdateLibrary_FullMethodName = "/settings.SettingsService/UpdateLibrary"
-	SettingsService_GetAccess_FullMethodName     = "/settings.SettingsService/GetAccess"
-	SettingsService_BrowsePaths_FullMethodName   = "/settings.SettingsService/BrowsePaths"
+	SettingsService_Get_FullMethodName    = "/yatm.v1.SettingsService/Get"
+	SettingsService_Update_FullMethodName = "/yatm.v1.SettingsService/Update"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SettingsServiceClient interface {
-	GetLibrary(ctx context.Context, in *GetLibrarySettingsRequest, opts ...grpc.CallOption) (*LibrarySettings, error)
-	UpdateLibrary(ctx context.Context, in *UpdateLibrarySettingsRequest, opts ...grpc.CallOption) (*UpdateLibrarySettingsReply, error)
-	GetAccess(ctx context.Context, in *GetAccessRequest, opts ...grpc.CallOption) (*GetAccessReply, error)
-	BrowsePaths(ctx context.Context, in *BrowsePathsRequest, opts ...grpc.CallOption) (*BrowsePathsReply, error)
+	Get(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error)
+	Update(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -43,36 +39,18 @@ func NewSettingsServiceClient(cc grpc.ClientConnInterface) SettingsServiceClient
 	return &settingsServiceClient{cc}
 }
 
-func (c *settingsServiceClient) GetLibrary(ctx context.Context, in *GetLibrarySettingsRequest, opts ...grpc.CallOption) (*LibrarySettings, error) {
-	out := new(LibrarySettings)
-	err := c.cc.Invoke(ctx, SettingsService_GetLibrary_FullMethodName, in, out, opts...)
+func (c *settingsServiceClient) Get(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error) {
+	out := new(GetSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_Get_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *settingsServiceClient) UpdateLibrary(ctx context.Context, in *UpdateLibrarySettingsRequest, opts ...grpc.CallOption) (*UpdateLibrarySettingsReply, error) {
-	out := new(UpdateLibrarySettingsReply)
-	err := c.cc.Invoke(ctx, SettingsService_UpdateLibrary_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *settingsServiceClient) GetAccess(ctx context.Context, in *GetAccessRequest, opts ...grpc.CallOption) (*GetAccessReply, error) {
-	out := new(GetAccessReply)
-	err := c.cc.Invoke(ctx, SettingsService_GetAccess_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *settingsServiceClient) BrowsePaths(ctx context.Context, in *BrowsePathsRequest, opts ...grpc.CallOption) (*BrowsePathsReply, error) {
-	out := new(BrowsePathsReply)
-	err := c.cc.Invoke(ctx, SettingsService_BrowsePaths_FullMethodName, in, out, opts...)
+func (c *settingsServiceClient) Update(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_Update_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,10 +61,8 @@ func (c *settingsServiceClient) BrowsePaths(ctx context.Context, in *BrowsePaths
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility
 type SettingsServiceServer interface {
-	GetLibrary(context.Context, *GetLibrarySettingsRequest) (*LibrarySettings, error)
-	UpdateLibrary(context.Context, *UpdateLibrarySettingsRequest) (*UpdateLibrarySettingsReply, error)
-	GetAccess(context.Context, *GetAccessRequest) (*GetAccessReply, error)
-	BrowsePaths(context.Context, *BrowsePathsRequest) (*BrowsePathsReply, error)
+	Get(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error)
+	Update(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -94,17 +70,11 @@ type SettingsServiceServer interface {
 type UnimplementedSettingsServiceServer struct {
 }
 
-func (UnimplementedSettingsServiceServer) GetLibrary(context.Context, *GetLibrarySettingsRequest) (*LibrarySettings, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLibrary not implemented")
+func (UnimplementedSettingsServiceServer) Get(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedSettingsServiceServer) UpdateLibrary(context.Context, *UpdateLibrarySettingsRequest) (*UpdateLibrarySettingsReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateLibrary not implemented")
-}
-func (UnimplementedSettingsServiceServer) GetAccess(context.Context, *GetAccessRequest) (*GetAccessReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetAccess not implemented")
-}
-func (UnimplementedSettingsServiceServer) BrowsePaths(context.Context, *BrowsePathsRequest) (*BrowsePathsReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BrowsePaths not implemented")
+func (UnimplementedSettingsServiceServer) Update(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 
@@ -119,74 +89,38 @@ func RegisterSettingsServiceServer(s grpc.ServiceRegistrar, srv SettingsServiceS
 	s.RegisterService(&SettingsService_ServiceDesc, srv)
 }
 
-func _SettingsService_GetLibrary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetLibrarySettingsRequest)
+func _SettingsService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSettingsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SettingsServiceServer).GetLibrary(ctx, in)
+		return srv.(SettingsServiceServer).Get(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: SettingsService_GetLibrary_FullMethodName,
+		FullMethod: SettingsService_Get_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SettingsServiceServer).GetLibrary(ctx, req.(*GetLibrarySettingsRequest))
+		return srv.(SettingsServiceServer).Get(ctx, req.(*GetSettingsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SettingsService_UpdateLibrary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateLibrarySettingsRequest)
+func _SettingsService_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSettingsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SettingsServiceServer).UpdateLibrary(ctx, in)
+		return srv.(SettingsServiceServer).Update(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: SettingsService_UpdateLibrary_FullMethodName,
+		FullMethod: SettingsService_Update_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SettingsServiceServer).UpdateLibrary(ctx, req.(*UpdateLibrarySettingsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _SettingsService_GetAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetAccessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SettingsServiceServer).GetAccess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SettingsService_GetAccess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SettingsServiceServer).GetAccess(ctx, req.(*GetAccessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _SettingsService_BrowsePaths_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BrowsePathsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SettingsServiceServer).BrowsePaths(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SettingsService_BrowsePaths_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SettingsServiceServer).BrowsePaths(ctx, req.(*BrowsePathsRequest))
+		return srv.(SettingsServiceServer).Update(ctx, req.(*UpdateSettingsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -195,24 +129,16 @@ func _SettingsService_BrowsePaths_Handler(srv interface{}, ctx context.Context, 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var SettingsService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "settings.SettingsService",
+	ServiceName: "yatm.v1.SettingsService",
 	HandlerType: (*SettingsServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetLibrary",
-			Handler:    _SettingsService_GetLibrary_Handler,
+			MethodName: "Get",
+			Handler:    _SettingsService_Get_Handler,
 		},
 		{
-			MethodName: "UpdateLibrary",
-			Handler:    _SettingsService_UpdateLibrary_Handler,
-		},
-		{
-			MethodName: "GetAccess",
-			Handler:    _SettingsService_GetAccess_Handler,
-		},
-		{
-			MethodName: "BrowsePaths",
-			Handler:    _SettingsService_BrowsePaths_Handler,
+			MethodName: "Update",
+			Handler:    _SettingsService_Update_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

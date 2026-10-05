@@ -1,45 +1,54 @@
 import { FileScope, FileSelection, RestoreVersionMatch, type RestoreVersionResolution } from "@/entity";
 import { contentTime } from "@/components/content-status";
 import type { SelectionEntry } from "@/components/selection-waitlist";
+import { dateToNs, parseUnixNs } from "@/tools/time";
 
-export type RestorePolicy = { mode: "latest" | "before"; date: string };
+export type RestorePolicy = { mode: "latest" | "before"; date: string; cutoff?: { valueNs: string; date: string } };
 
 export const restoreCutoff = (policy: RestorePolicy): bigint | undefined => {
-  if (policy.mode !== "before" || !policy.date) return undefined;
-  const value = new Date(policy.date).getTime();
-  return Number.isFinite(value) && value >= 0 ? BigInt(value) : undefined;
+  if (policy.mode !== "before") return undefined;
+  if (policy.cutoff?.date === policy.date) return parseUnixNs(policy.cutoff.valueNs);
+  if (!policy.date) return undefined;
+  return dateToNs(new Date(policy.date));
 };
 
 export const followRestorePolicy = (entries: SelectionEntry[]): SelectionEntry[] => {
   const result = new Map<string, SelectionEntry>();
   for (const entry of entries) {
-    if (!entry.version) {
+    if (!entry.version || entry.unavailableReason) {
       result.set(entry.key, entry);
       continue;
     }
     const selection = FileSelection.create({ target: { oneofKind: "library", library: { fileId: entry.version.fileId } }, scope: FileScope.SAVED });
-    const next = { ...entry, key: FileSelection.toJsonString(selection), fileID: String(entry.version.fileId), selection, version: undefined };
+    const next = {
+      ...entry,
+      key: FileSelection.toJsonString(selection),
+      fileID: String(entry.version.fileId),
+      selection,
+      version: undefined,
+      versionID: undefined,
+    };
     result.set(next.key, next);
   }
   return [...result.values()];
 };
 
 export const restoreVersionLabel = (entry: SelectionEntry, resolution?: RestoreVersionResolution, cutoff?: bigint): string => {
-  if (entry.isDir) return cutoff !== undefined ? `Latest backups at or before ${contentTime(cutoff)}` : "Latest saved versions";
+  if (entry.isDir) return cutoff !== undefined ? `Latest archives at or before ${contentTime(cutoff)}` : "Latest saved versions";
   if (entry.version) {
-    const time = entry.version.lastArchivedAtMs ?? entry.version.firstArchivedAtMs;
-    const outside = cutoff !== undefined && entry.version.firstArchivedAtMs !== undefined && entry.version.firstArchivedAtMs > cutoff;
+    const time = entry.version.lastArchivedAtNs ?? entry.version.firstArchivedAtNs;
+    const outside = cutoff !== undefined && entry.version.firstArchivedAtNs !== undefined && entry.version.firstArchivedAtNs > cutoff;
     return `Custom version · ${contentTime(time)}${outside ? " · After selected time" : ""}`;
   }
   if (!resolution) return "Finding version…";
   switch (resolution.match) {
-    case RestoreVersionMatch.RESTORE_VERSION_NO_SAVED_VERSION:
+    case RestoreVersionMatch.NO_SAVED_VERSION:
       return "No saved version";
-    case RestoreVersionMatch.RESTORE_VERSION_AFTER_CUTOFF:
-      return "No backup at or before selected time";
-    case RestoreVersionMatch.RESTORE_VERSION_DATE_UNKNOWN:
-      return "Backup date unknown";
+    case RestoreVersionMatch.AFTER_CUTOFF:
+      return "No archive at or before selected time";
+    case RestoreVersionMatch.DATE_UNKNOWN:
+      return "Archive date unknown";
     default:
-      return `Saved ${contentTime(resolution.archivedAtMs)}${cutoff !== undefined ? " · Follows selected time" : " · Latest"}`;
+      return `Saved ${contentTime(resolution.archivedAtNs)}${cutoff !== undefined ? " · Follows selected time" : " · Latest"}`;
   }
 };

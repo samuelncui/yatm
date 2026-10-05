@@ -1,8 +1,11 @@
 # YATM Domain
 
-YATM organizes ongoing files independently of their online originals and archival copies. This glossary defines the domain; the [Library contract](docs/architecture/library.md) owns implemented behavior. The [documentation index](docs/README.md) owns the published Alpha compatibility policy and the exception for unpublished Draft data.
+YATM organizes ongoing files independently of their originals and archival copies. This glossary defines the domain; the [Library contract](docs/architecture/library.md) owns implemented behavior. The [documentation index](docs/README.md) owns the published Alpha compatibility policy and the exception for unpublished Draft data.
 
 ## Language
+
+These are the domain's words, each with the alternatives to avoid. The list is closed: a new
+concept, or a new name for one already here, needs explicit developer authorization.
 
 **Library**:
 The catalog of logical Files, annotations, originals, saved versions and Media inventory. Membership does not require a backup; logical organization is independent of an original's presence or physical directory structure.
@@ -33,7 +36,7 @@ A registered directory in an Executor's access namespace for live filesystem bro
 _Avoid_: Media, temporary Source selection, device identity
 
 **Tracking key**:
-Private evidence for continuity, such as a scoped native identity or optional YATM UUID. Copied identifiers do not prove shared identity.
+Private evidence for continuity from a scoped native filesystem identity. Shared identifiers do not prove shared File identity.
 _Avoid_: content signature, File ID
 
 **Media**:
@@ -48,10 +51,6 @@ _Avoid_: drive, mount point
 An already-mounted archive filesystem registered with an immutable YATM marker. It may remain mounted permanently.
 _Avoid_: any visible directory, original Location
 
-**Source**:
-A frozen legacy Job selection containing a filesystem base and selected paths; new workflows use registered Library/Location selections.
-_Avoid_: registered Location, Media
-
 **Analyze**:
 A Scan configured to observe Location ranges and optionally publish original associations. Basic collection uses known-only content facts. Ordinary browsing does not require analysis.
 _Avoid_: archive copying, filesystem snapshot
@@ -61,8 +60,8 @@ A request-bound organization operation using shared planning and guarded Library
 _Avoid_: Job, cross-Location transfer, filesystem transaction
 
 **Archive**:
-Copying selected content to Media, verifying physical publication, and recording the File's saved content version.
-_Avoid_: indexing an original in place
+Copying selected content to Media, verifying physical publication, and recording the File's saved content version. It is also the word for the Job kind that performs it, on every surface.
+_Avoid_: backup, indexing an original in place
 
 **Restore**:
 Copying an explicitly selected FileVersion from an available matching Position and verifying the output.
@@ -85,7 +84,12 @@ Content-addressed derivative assets. Current-original and saved-version views ar
 _Avoid_: backup copy
 
 **Job**:
-A durable Archive, Restore or Scan operation with retryable execution state. Preview and integrity checking are Scan configurations. Ordinary Library and Location file actions do not create Jobs.
+A durable Archive, Restore or Scan operation with one lifecycle state. Preview and integrity checking are Scan configurations. Ordinary Library and Location file actions do not create Jobs.
+_Avoid_: backup, background task
+
+**Job state**:
+The one durable lifecycle word a Job reports. `PREPARING` means its manifest is still being built, `READY` means the manifest is complete and the remaining work waits for the operator to choose Media, `COMPLETED` means every workflow item settled, and `FAILED` means preparation or Scan execution ended with an error or an operator cancellation. These failures are terminal; create a new Job. Archive and Restore Media failures return to the state before that Media operation, retaining its reason and published results so the operator can select Media again. Execution is not a state: an active operation reports a live phase, including `QUEUED` while waiting for its Media resource. An idle Job reports no phase even when its runner is cached.
+_Avoid_: running state, outcome, status plus result, retry
 
 **Executor**:
 The owner of Job execution, accessible paths, cancellation and attempt-scoped Media allocation.
@@ -95,10 +99,10 @@ _Avoid_: Library organization
 The logical Library area for newly admitted items awaiting organization.
 
 **Trash**:
-A logical move retaining File identities and annotations, not physical deletion.
+Library's logical holding area, or a Location's owned `.trash` directory. Delete retains bytes and saved Library history; deleting a Location entry detaches its original association. Move can return entries to ordinary directories.
 
 ## Invariants and Navigation
 
-A File has at most one online original. Different Files may have equal signatures and query the same Positions without sharing organization. Library moves never rename physical originals or archive files. Known archived coverage of an observed content state establishes a saved version without another physical backup; [Library](docs/architecture/library.md#archive-inventory) owns publication and evidence rules.
+A File has at most one original. Different Files may have equal signatures and query the same Positions without sharing organization. Library moves never rename physical originals or archive files. Known archived coverage of an observed content state establishes a saved version without another physical backup; [Library](docs/architecture/library.md#archive-inventory) owns publication and evidence rules.
 
-Matching is the deterministic continuity policy path → available signature → native identity → UUID; it does not prove a move occurred. Retained metadata does not retain bytes. [Library](docs/architecture/library.md) owns identities and cleanup; [Jobs](docs/architecture/jobs.md) owns execution and recovery; [Media/I/O](docs/architecture/media-io.md) owns physical safety.
+Matching is the deterministic continuity policy path → available signature → native identity; it does not prove a move occurred. Retained metadata does not retain bytes. [Library](docs/architecture/library.md) owns identities and cleanup; [Jobs](docs/architecture/jobs.md) owns execution and recovery; [Media/I/O](docs/architecture/media-io.md) owns physical safety.

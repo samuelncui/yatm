@@ -1,0 +1,116 @@
+{
+  "tiers": {
+    "fast": {
+      "harness": [
+        "internal/apis/files_performance_test.go",
+        "internal/apis/files_performance_fixture_test.go",
+        "internal/apis/files_list_test_helpers_test.go",
+        "internal/executor/scan/input_fixture_test.go",
+        "internal/executor/scan/input_performance_test.go"
+      ],
+      "suites": [{
+        "package": "./internal/apis",
+        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^10000$",
+        "benchmarks": [
+          "BenchmarkFilesListComplete/mixed/random/10000",
+          "BenchmarkFilesListComplete/mixed/reverse/10000",
+          "BenchmarkFilesListRules/deep/random/10000",
+          "BenchmarkFilesSearchPage/first/random/10000",
+          "BenchmarkFilesSearchPage/next/random/10000"
+        ],
+        "metrics": ["first-sec/op"]
+      }, {
+        "package": "./internal/executor/scan",
+        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^10000$",
+        "benchtime": "1x",
+        "benchmarks": [
+          "BenchmarkScanInputManifest/logical/1/10000",
+          "BenchmarkScanInputManifest/logical/3/10000",
+          "BenchmarkScanInputManifest/logical/9/10000",
+          "BenchmarkScanInputManifest/partial/1/10000",
+          "BenchmarkScanInputManifest/relocation/3/10000"
+        ],
+        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
+      }]
+    },
+    "critical": {
+      "harness": [
+        "internal/apis/files_performance_test.go",
+        "internal/apis/files_performance_fixture_test.go",
+        "internal/apis/files_list_test_helpers_test.go",
+        "internal/executor/scan/input_fixture_test.go",
+        "internal/executor/scan/input_performance_test.go"
+      ],
+      "suites": [{
+        "package": "./internal/apis",
+        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
+        "benchmarks": [
+          "BenchmarkFilesListComplete/mixed/random/100000",
+          "BenchmarkFilesListComplete/mixed/reverse/100000",
+          "BenchmarkFilesListRules/deep/random/100000",
+          "BenchmarkFilesSearchPage/first/random/100000",
+          "BenchmarkFilesSearchPage/next/random/100000"
+        ],
+        "metrics": ["first-sec/op"]
+      }, {
+        "package": "./internal/executor/scan",
+        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
+        "benchtime": "1x",
+        "benchmarks": [
+          "BenchmarkScanInputManifest/logical/1/100000",
+          "BenchmarkScanInputManifest/logical/3/100000",
+          "BenchmarkScanInputManifest/logical/9/100000",
+          "BenchmarkScanInputManifest/partial/1/100000",
+          "BenchmarkScanInputManifest/relocation/3/100000"
+        ],
+        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
+      }]
+    },
+    "release": {
+      "harness": [
+        "internal/apis/files_performance_test.go",
+        "internal/apis/files_performance_fixture_test.go",
+        "internal/apis/files_list_test_helpers_test.go",
+        "internal/executor/scan/input_fixture_test.go",
+        "internal/executor/scan/input_performance_test.go"
+      ],
+      "suites": [{
+        "package": "./internal/apis",
+        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
+        "benchmarks": [
+          "BenchmarkFilesListComplete/mixed/random/100000",
+          "BenchmarkFilesListComplete/mixed/reverse/100000",
+          "BenchmarkFilesListRules/deep/random/100000",
+          "BenchmarkFilesSearchPage/first/random/100000",
+          "BenchmarkFilesSearchPage/next/random/100000"
+        ],
+        "metrics": ["first-sec/op"]
+      }, {
+        "package": "./internal/executor/scan",
+        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
+        "benchtime": "1x",
+        "benchmarks": [
+          "BenchmarkScanInputManifest/logical/1/100000",
+          "BenchmarkScanInputManifest/logical/3/100000",
+          "BenchmarkScanInputManifest/logical/9/100000",
+          "BenchmarkScanInputManifest/partial/1/100000",
+          "BenchmarkScanInputManifest/relocation/3/100000"
+        ],
+        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
+      }],
+      "structural": [{
+        "scope": "candidate",
+        "package": "./internal/apis",
+        "run": "^TestFilesListMillionStructural$",
+        "tests": ["TestFilesListMillionStructural"],
+        "env": {"YATM_PERF_MILLION": "1"}
+      }, {
+        "scope": "candidate",
+        "package": "./internal/executor/scan",
+        "run": "^TestScanInputMillionStructural$",
+        "tests": ["TestScanInputMillionStructural"],
+        "env": {"YATM_SCAN_PERF_MILLION": "1"}
+      }]
+    }
+  }
+}

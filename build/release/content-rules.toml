@@ -1,0 +1,204 @@
+title = "YATM public content checks"
+
+[extend]
+useDefault = true
+
+# The public Go checksum database verifies this module hash; its path contains "token".
+[[allowlists]]
+description = "modernc.org/token v1.1.0 public module checksum"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)go\.sum$''']
+regexTarget = "secret"
+regexes = ['''^Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=?$''']
+
+# This fixed key produces repeatable high-entropy physical-Tape test data; it protects no data.
+[[allowlists]]
+description = "Deterministic EOM fixture seed only"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)e2e/testdata/generate-physical-eom\.sh$''']
+regexTarget = "secret"
+regexes = ['''^7df4fd97a80957d40e8a0be64ffb54f503f857407132bee657fee95fe2ee88c3$''']
+
+# These are public identifiers in the exact dependency sources validated by the package checks.
+[[allowlists]]
+description = "LibRaw 0.22.2 changelog compiler define"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''!LibRaw-0\.22\.2\.tar\.gz!LibRaw-0\.22\.2/Changelog\.txt$''']
+regexTarget = "secret"
+regexes = ['''^LIBRAW_WIN32_DLLDEFS$''']
+
+[[allowlists]]
+description = "FFmpeg 8.0 HSV filter function name"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''!ffmpeg-8\.0\.tar\.xz!ffmpeg-8\.0/libavfilter/vf_hsvkey\.c$''']
+regexTarget = "secret"
+regexes = ['''^do_hsvkey16_slice$''']
+
+# The pinned upstream FATE reference records a public sample path; no workstation path is exempted.
+[[allowlists]]
+description = "FFmpeg 8.0 public FATE reference path"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!ffmpeg-8\.0\.tar\.xz!ffmpeg-8\.0/tests/ref/fate/mxf-probe-dnxhd$''']
+regexTarget = "match"
+regexes = ['''^[/]Users[/]mark[/]$''']
+
+[[rules]]
+id = "personal-build-path"
+description = "Personal filesystem path in distributed content"
+regex = '''(?:/(?:Users|home)/[A-Za-z0-9_.-]+/|/(?:private/)?var/folders/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/)'''
+
+[[rules]]
+id = "private-service-url"
+description = "Private service reference in public source or packages"
+regex = '''(?:https?|ssh)://(?:[A-Za-z0-9_-]+\.)*(?:byted\.org|bytedance\.net|byteintl\.net|corp|internal)(?:[:/\s]|$)'''
+
+# Verified public upstream metadata and fixtures. Exact source archives/modules are validated before release.
+
+[[allowlists]]
+description = "Public upstream autom4te.cache/output.0"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/autom4te\.cache/output\.0$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream autom4te.cache/output.1"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/autom4te\.cache/output\.1$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream autom4te.cache/output.2"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/autom4te\.cache/output\.2$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream autom4te.cache/output.3"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/autom4te\.cache/output\.3$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream configure"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/configure$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream m4/libtool.m4"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!LibRaw\-0\.22\.2\.tar\.gz!LibRaw\-0\.22\.2/m4/libtool\.m4$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream doc/faq.texi"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!ffmpeg\-8\.0\.tar\.xz!ffmpeg\-8\.0/doc/faq\.texi$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]me[/]$''']
+
+[[allowlists]]
+description = "Public upstream doc/fate.texi"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!ffmpeg\-8\.0\.tar\.xz!ffmpeg\-8\.0/doc/fate\.texi$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]samples[/]$''']
+
+[[allowlists]]
+description = "Public upstream doc/protocols.texi"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!ffmpeg\-8\.0\.tar\.xz!ffmpeg\-8\.0/doc/protocols\.texi$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]user[/]$''']
+
+[[allowlists]]
+description = "Public upstream libavcodec/cdgraphics.c"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!ffmpeg\-8\.0\.tar\.xz!ffmpeg\-8\.0/libavcodec/cdgraphics\.c$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]bchafy[/]$''']
+
+[[allowlists]]
+description = "Public upstream aclocal.m4"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!jpegsrc\.v9f\.tar\.gz!jpeg\-9f/aclocal\.m4$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream configure"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!jpegsrc\.v9f\.tar\.gz!jpeg\-9f/configure$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream configure"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!libwebp\-1\.6\.0\.tar\.gz!libwebp\-1\.6\.0/configure$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream m4/libtool.m4"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''!libwebp\-1\.6\.0\.tar\.gz!libwebp\-1\.6\.0/m4/libtool\.m4$''']
+regexTarget = "match"
+regexes = ['''^[/]home[/]config[/]$''']
+
+[[allowlists]]
+description = "Public upstream testdata/bw-deflate.tiff"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''(?:!|/)modules/golang\.org/x/image@v0\.36\.0/testdata/bw\-deflate\.tiff$''']
+regexTarget = "match"
+regexes = ['''^[/]Users[/]bsiegert[/]$''']
+
+[[allowlists]]
+description = "Public upstream testdata/bw-packbits.tiff"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''(?:!|/)modules/golang\.org/x/image@v0\.36\.0/testdata/bw\-packbits\.tiff$''']
+regexTarget = "match"
+regexes = ['''^[/]Users[/]bsiegert[/]$''']
+
+[[allowlists]]
+description = "Public upstream testdata/bw-uncompressed.tiff"
+targetRules = ["personal-build-path"]
+condition = "AND"
+paths = ['''(?:!|/)modules/golang\.org/x/image@v0\.36\.0/testdata/bw\-uncompressed\.tiff$''']
+regexTarget = "match"
+regexes = ['''^[/]Users[/]bsiegert[/]$''']
+
+[[allowlists]]
+description = "FFmpeg 8.0 SRTP alphabet test key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''!ffmpeg-8\.0\.tar\.xz!ffmpeg-8\.0/libavformat/tests/srtp\.c$''']
+regexTarget = "secret"
+regexes = ['''^[a]bcdefghijklmnopqrstuvwxyz1234567890ABCD$''']

@@ -1,15 +1,16 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Media, MediaInspectReply, MediaKind } from "@/entity";
+import { Media, InspectMediaResponse, MediaKind } from "@/entity";
 
 const { mediaList, deviceList, mediaInspect } = vi.hoisted(() => ({ mediaList: vi.fn(), deviceList: vi.fn(), mediaInspect: vi.fn() }));
-vi.mock("@/api", () => ({ cli: { mediaList, deviceList, mediaInspect } }));
+vi.mock("@/api", () => ({ mediaCli: { list: mediaList, listDevices: deviceList, inspect: mediaInspect } }));
 vi.mock("@/pages/jobs", async () => {
   const { createContext } = await import("react");
   return { RefreshContext: createContext(async () => {}) };
 });
 import { ReadMediaDialog } from "./read-media-dialog";
+import { RefreshContext } from "@/pages/jobs";
 
 const tape = Media.create({ id: 4n, name: "Quarterly Tape", identity: "DEMO001L9", kind: MediaKind.TAPE });
 const volume = Media.create({ id: 1n, name: "Review HDD", identity: "volume-uuid", kind: MediaKind.VOLUME, mounted: true });
@@ -18,10 +19,28 @@ beforeEach(() => {
   vi.resetAllMocks();
   mediaList.mockReturnValue(call({ media: [tape] }));
   deviceList.mockReturnValue(call({ devices: ["demo-drive"] }));
-  mediaInspect.mockReturnValue(call(MediaInspectReply.create({ media: tape, identity: tape.identity })));
+  mediaInspect.mockReturnValue(call(InspectMediaResponse.create({ media: tape, identity: tape.identity })));
 });
 
 describe("Job-bound Media selection", () => {
+  it("closes after starting Restore even when the Job list cannot refresh", async () => {
+    mediaList.mockReturnValue(call({ media: [volume] }));
+    const onRead = vi.fn().mockResolvedValue(undefined);
+    const refresh = vi.fn().mockRejectedValue(new Error("Catalog offline"));
+    render(
+      <RefreshContext.Provider value={refresh}>
+        <ReadMediaDialog mediaIDs={[1n]} operation="restore" onRead={onRead} />
+      </RefreshContext.Provider>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage to read" }));
+    await screen.findByText("Volume: Review HDD");
+    await userEvent.click(screen.getByRole("button", { name: "Start restore" }));
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(onRead).toHaveBeenCalledOnce();
+  });
+
   it("opens Tape verification directly on its required Tape and submits its inspected identity", async () => {
     const onRead = vi.fn().mockResolvedValue(undefined);
     render(<ReadMediaDialog mediaIDs={[4n]} operation="scan" onRead={onRead} />);
@@ -68,7 +87,7 @@ describe("Job-bound Media selection", () => {
   });
 
   it("rejects an inserted Tape whose identity differs even if the catalog ID matches", async () => {
-    mediaInspect.mockReturnValue(call(MediaInspectReply.create({ media: tape, identity: "ANOTHERL9" })));
+    mediaInspect.mockReturnValue(call(InspectMediaResponse.create({ media: tape, identity: "ANOTHERL9" })));
     render(<ReadMediaDialog mediaIDs={[4n]} operation="scan" onRead={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "Choose Media to read" }));
     expect(await screen.findByText("The inserted Tape does not match this Job’s required Media.")).toBeInTheDocument();
@@ -78,7 +97,7 @@ describe("Job-bound Media selection", () => {
   it("retains both storage types for a Restore with candidates on both", async () => {
     mediaList.mockReturnValue(call({ media: [tape, volume] }));
     render(<ReadMediaDialog mediaIDs={[4n, 1n]} operation="restore" onRead={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose a backup to read" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage to read" }));
     expect(await screen.findByText("Volume: Review HDD")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
     await userEvent.click(screen.getByRole("option", { name: "Tape" }));

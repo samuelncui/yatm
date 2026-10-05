@@ -7,18 +7,18 @@ import {
   MediaKind,
   RestoreJobServiceClient,
   ScanJobServiceClient,
-  FileOperationServiceClient,
   FilesServiceClient,
+  LibraryServiceClient,
   LocationServiceClient,
-  FileCatalogServiceClient,
-  ServiceClient,
+  MediaServiceClient,
+  PreviewServiceClient,
   SettingsServiceClient,
   VolumeType,
 } from "@/entity";
-import type { File, FileSearchResult, Media, Position, SourceFile } from "@/entity";
+import type { File, Media, Position, SourceFile } from "@/entity";
 
-import moment from "moment";
-import { backupIndicator } from "@/components/content-status";
+import { dateFromNs } from "@/tools/time";
+import { archiveIndicator } from "@/components/content-status";
 
 export const MODE_DIR = 2147483648n; // d: is a directory
 
@@ -37,33 +37,17 @@ export const fileBase: string = (() => {
 const transport = new GrpcWebFetchTransport({
   baseUrl: apiBase,
   format: "binary",
-  interceptors: [
-    {
-      interceptUnary(next, method, input, options) {
-        console.log(`[gRPC Request] ${method.name}`, input);
-        const call = next(method, input, options);
-        call.response
-          .then((resp) => {
-            console.log(`[gRPC Response] ${method.name}`, resp);
-          })
-          .catch((err) => {
-            console.error(`[gRPC Error] ${method.name}`, err);
-          });
-        return call;
-      },
-    },
-  ],
 });
 
-export const cli = new ServiceClient(transport);
+export const cli = new LibraryServiceClient(transport);
+export const mediaCli = new MediaServiceClient(transport);
+export const previewCli = new PreviewServiceClient(transport);
 export const jobCli = new JobServiceClient(transport);
 export const archiveJobCli = new ArchiveJobServiceClient(transport);
 export const restoreJobCli = new RestoreJobServiceClient(transport);
 export const scanJobCli = new ScanJobServiceClient(transport);
-export const fileOperationCli = new FileOperationServiceClient(transport);
 export const filesCli = new FilesServiceClient(transport);
 export const locationCli = new LocationServiceClient(transport);
-export const fileCatalogCli = new FileCatalogServiceClient(transport);
 export const settingsCli = new SettingsServiceClient(transport);
 (window as any).cli = {
   service: cli,
@@ -72,7 +56,7 @@ export const settingsCli = new SettingsServiceClient(transport);
   restoreJobs: restoreJobCli,
   scanJobs: scanJobCli,
   locations: locationCli,
-  files: fileCatalogCli,
+  files: filesCli,
 };
 
 export const Root: FileData = {
@@ -93,13 +77,21 @@ export type LibraryFileData = FileData & {
 };
 
 export type MediaPositionFileData = FileData & {
-  positionID: bigint;
-  signature: Uint8Array;
+  /** The Position this browser row stands for; its detail reads these facts. */
+  position: Position;
   detailsAvailable: boolean;
 };
 
+export type MediaFileData = FileData & {
+  isMedia: true;
+  /** The Media this browser row stands for; its detail reads these facts. */
+  media: Media;
+};
+
+export const isMediaFile = (file: FileData | null | undefined): file is MediaFileData => file?.isMedia === true;
+
 export const isArchivePosition = (file: FileData | null | undefined): file is MediaPositionFileData =>
-  !!file && typeof file.positionID === "bigint" && !file.isDir;
+  !!file && typeof file.position?.id === "bigint" && !file.isDir;
 
 export function convertFiles(files: Array<File>, dirWithSize: boolean = false): LibraryFileData[] {
   return files.map((file) => {
@@ -115,32 +107,17 @@ export function convertFiles(files: Array<File>, dirWithSize: boolean = false): 
       selectable: true,
       draggable: true,
       droppable: isDir,
-      size: !isDir || dirWithSize ? Number(file.size) : undefined,
-      modDate: moment.unix(Number(file.modTime)).toDate(),
+      size: !isDir || dirWithSize ? Number(file.sizeBytes) : undefined,
+      modDate: dateFromNs(file.mtimeNs),
+      modDateNs: file.mtimeNs,
       parentId: `${file.parentId}`,
       tags: file.tags,
       note: file.note,
       detailsAvailable: true,
       contentSummary: file.contentSummary,
-      status: !isDir && file.contentSummary ? backupIndicator(file.contentSummary) : undefined,
+      status: !isDir && file.contentSummary ? archiveIndicator(file.contentSummary) : undefined,
     };
   });
-}
-
-export function convertSearchResults(results: Array<FileSearchResult>): LibraryFileData[] {
-  const converted: LibraryFileData[] = [];
-  for (const result of results) {
-    if (!result.file) continue;
-    const file = convertFiles([result.file])[0];
-    converted.push({
-      ...file,
-      name: result.path,
-      ext: extname(result.file.name),
-      draggable: false,
-      droppable: false,
-    });
-  }
-  return converted;
 }
 
 export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
@@ -157,13 +134,14 @@ export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
       selectable: true,
       draggable: true,
       droppable: false,
-      size: isDir ? undefined : Number(file.size),
-      modDate: moment.unix(Number(file.modTime)).toDate(),
+      size: isDir ? undefined : Number(file.sizeBytes),
+      modDate: dateFromNs(file.mtimeNs),
+      modDateNs: file.mtimeNs,
     };
   });
 }
 
-export function convertMedia(media: Array<Media>): FileData[] {
+export function convertMedia(media: Array<Media>): MediaFileData[] {
   return media.map((value) => {
     const label = mediaCapabilityLabel(value);
     return {
@@ -178,12 +156,10 @@ export function convertMedia(media: Array<Media>): FileData[] {
       draggable: false,
       droppable: false,
       size: Number(value.writtenBytes),
-      modDate: moment.unix(Number(value.createTime)).toDate(),
+      modDate: dateFromNs(value.createdAtNs),
+      modDateNs: value.createdAtNs,
       isMedia: true,
-      mediaKind: value.kind,
-      mediaIdentity: value.identity,
-      mediaMounted: value.mounted,
-      mediaAvailableBytes: value.filesystemAvailableBytes,
+      media: value,
     };
   });
 }
@@ -207,7 +183,7 @@ export function mediaAvailabilityLabel(media: Media): string {
   return "Online";
 }
 
-function accessLabel(access?: MediaAccess): string {
+export function accessLabel(access?: MediaAccess): string {
   switch (access) {
     case MediaAccess.CONCURRENT_RANDOM:
       return "concurrent random";
@@ -236,11 +212,11 @@ export function convertPositions(positions: Array<Position>): MediaPositionFileD
       selectable: true,
       draggable: false,
       droppable: false,
-      size: Number(posi.size),
-      modDate: moment.unix(Number(posi.writeTime)).toDate(),
+      size: Number(posi.sizeBytes),
+      modDate: dateFromNs(posi.writtenAtNs),
+      modDateNs: posi.writtenAtNs,
       detailsAvailable,
-      positionID: posi.id,
-      signature: posi.signature,
+      position: posi,
     };
   });
 }

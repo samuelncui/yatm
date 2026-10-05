@@ -19,22 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	ScanJobService_Create_FullMethodName      = "/job_scan.ScanJobService/Create"
-	ScanJobService_ReadMedia_FullMethodName   = "/job_scan.ScanJobService/ReadMedia"
-	ScanJobService_GetProgress_FullMethodName = "/job_scan.ScanJobService/GetProgress"
-	ScanJobService_ListEntries_FullMethodName = "/job_scan.ScanJobService/ListEntries"
-	ScanJobService_ListScopes_FullMethodName  = "/job_scan.ScanJobService/ListScopes"
+	ScanJobService_Create_FullMethodName      = "/yatm.v1.ScanJobService/Create"
+	ScanJobService_GetCreation_FullMethodName = "/yatm.v1.ScanJobService/GetCreation"
+	ScanJobService_ReadMedia_FullMethodName   = "/yatm.v1.ScanJobService/ReadMedia"
+	ScanJobService_GetProgress_FullMethodName = "/yatm.v1.ScanJobService/GetProgress"
+	ScanJobService_ListEntries_FullMethodName = "/yatm.v1.ScanJobService/ListEntries"
 )
 
 // ScanJobServiceClient is the client API for ScanJobService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ScanJobServiceClient interface {
-	Create(ctx context.Context, in *CreateScanJobRequest, opts ...grpc.CallOption) (*CreateScanJobReply, error)
-	ReadMedia(ctx context.Context, in *ReadScanMediaRequest, opts ...grpc.CallOption) (*ReadScanMediaReply, error)
-	GetProgress(ctx context.Context, in *GetScanJobProgressRequest, opts ...grpc.CallOption) (*GetScanJobProgressReply, error)
-	ListEntries(ctx context.Context, in *ListScanJobEntriesRequest, opts ...grpc.CallOption) (*ListScanJobEntriesReply, error)
-	ListScopes(ctx context.Context, in *ListScanJobScopesRequest, opts ...grpc.CallOption) (*ListScanJobScopesReply, error)
+	Create(ctx context.Context, in *CreateScanJobRequest, opts ...grpc.CallOption) (*CreateScanJobResponse, error)
+	GetCreation(ctx context.Context, in *GetScanJobCreationRequest, opts ...grpc.CallOption) (*GetScanJobCreationResponse, error)
+	ReadMedia(ctx context.Context, in *ReadScanMediaRequest, opts ...grpc.CallOption) (*ReadScanMediaResponse, error)
+	GetProgress(ctx context.Context, in *GetScanJobProgressRequest, opts ...grpc.CallOption) (*GetScanJobProgressResponse, error)
+	ListEntries(ctx context.Context, in *ListScanJobEntriesRequest, opts ...grpc.CallOption) (*ListScanJobEntriesResponse, error)
 }
 
 type scanJobServiceClient struct {
@@ -45,8 +45,8 @@ func NewScanJobServiceClient(cc grpc.ClientConnInterface) ScanJobServiceClient {
 	return &scanJobServiceClient{cc}
 }
 
-func (c *scanJobServiceClient) Create(ctx context.Context, in *CreateScanJobRequest, opts ...grpc.CallOption) (*CreateScanJobReply, error) {
-	out := new(CreateScanJobReply)
+func (c *scanJobServiceClient) Create(ctx context.Context, in *CreateScanJobRequest, opts ...grpc.CallOption) (*CreateScanJobResponse, error) {
+	out := new(CreateScanJobResponse)
 	err := c.cc.Invoke(ctx, ScanJobService_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -54,8 +54,17 @@ func (c *scanJobServiceClient) Create(ctx context.Context, in *CreateScanJobRequ
 	return out, nil
 }
 
-func (c *scanJobServiceClient) ReadMedia(ctx context.Context, in *ReadScanMediaRequest, opts ...grpc.CallOption) (*ReadScanMediaReply, error) {
-	out := new(ReadScanMediaReply)
+func (c *scanJobServiceClient) GetCreation(ctx context.Context, in *GetScanJobCreationRequest, opts ...grpc.CallOption) (*GetScanJobCreationResponse, error) {
+	out := new(GetScanJobCreationResponse)
+	err := c.cc.Invoke(ctx, ScanJobService_GetCreation_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *scanJobServiceClient) ReadMedia(ctx context.Context, in *ReadScanMediaRequest, opts ...grpc.CallOption) (*ReadScanMediaResponse, error) {
+	out := new(ReadScanMediaResponse)
 	err := c.cc.Invoke(ctx, ScanJobService_ReadMedia_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -63,8 +72,8 @@ func (c *scanJobServiceClient) ReadMedia(ctx context.Context, in *ReadScanMediaR
 	return out, nil
 }
 
-func (c *scanJobServiceClient) GetProgress(ctx context.Context, in *GetScanJobProgressRequest, opts ...grpc.CallOption) (*GetScanJobProgressReply, error) {
-	out := new(GetScanJobProgressReply)
+func (c *scanJobServiceClient) GetProgress(ctx context.Context, in *GetScanJobProgressRequest, opts ...grpc.CallOption) (*GetScanJobProgressResponse, error) {
+	out := new(GetScanJobProgressResponse)
 	err := c.cc.Invoke(ctx, ScanJobService_GetProgress_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -72,18 +81,9 @@ func (c *scanJobServiceClient) GetProgress(ctx context.Context, in *GetScanJobPr
 	return out, nil
 }
 
-func (c *scanJobServiceClient) ListEntries(ctx context.Context, in *ListScanJobEntriesRequest, opts ...grpc.CallOption) (*ListScanJobEntriesReply, error) {
-	out := new(ListScanJobEntriesReply)
+func (c *scanJobServiceClient) ListEntries(ctx context.Context, in *ListScanJobEntriesRequest, opts ...grpc.CallOption) (*ListScanJobEntriesResponse, error) {
+	out := new(ListScanJobEntriesResponse)
 	err := c.cc.Invoke(ctx, ScanJobService_ListEntries_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *scanJobServiceClient) ListScopes(ctx context.Context, in *ListScanJobScopesRequest, opts ...grpc.CallOption) (*ListScanJobScopesReply, error) {
-	out := new(ListScanJobScopesReply)
-	err := c.cc.Invoke(ctx, ScanJobService_ListScopes_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +94,11 @@ func (c *scanJobServiceClient) ListScopes(ctx context.Context, in *ListScanJobSc
 // All implementations must embed UnimplementedScanJobServiceServer
 // for forward compatibility
 type ScanJobServiceServer interface {
-	Create(context.Context, *CreateScanJobRequest) (*CreateScanJobReply, error)
-	ReadMedia(context.Context, *ReadScanMediaRequest) (*ReadScanMediaReply, error)
-	GetProgress(context.Context, *GetScanJobProgressRequest) (*GetScanJobProgressReply, error)
-	ListEntries(context.Context, *ListScanJobEntriesRequest) (*ListScanJobEntriesReply, error)
-	ListScopes(context.Context, *ListScanJobScopesRequest) (*ListScanJobScopesReply, error)
+	Create(context.Context, *CreateScanJobRequest) (*CreateScanJobResponse, error)
+	GetCreation(context.Context, *GetScanJobCreationRequest) (*GetScanJobCreationResponse, error)
+	ReadMedia(context.Context, *ReadScanMediaRequest) (*ReadScanMediaResponse, error)
+	GetProgress(context.Context, *GetScanJobProgressRequest) (*GetScanJobProgressResponse, error)
+	ListEntries(context.Context, *ListScanJobEntriesRequest) (*ListScanJobEntriesResponse, error)
 	mustEmbedUnimplementedScanJobServiceServer()
 }
 
@@ -106,20 +106,20 @@ type ScanJobServiceServer interface {
 type UnimplementedScanJobServiceServer struct {
 }
 
-func (UnimplementedScanJobServiceServer) Create(context.Context, *CreateScanJobRequest) (*CreateScanJobReply, error) {
+func (UnimplementedScanJobServiceServer) Create(context.Context, *CreateScanJobRequest) (*CreateScanJobResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedScanJobServiceServer) ReadMedia(context.Context, *ReadScanMediaRequest) (*ReadScanMediaReply, error) {
+func (UnimplementedScanJobServiceServer) GetCreation(context.Context, *GetScanJobCreationRequest) (*GetScanJobCreationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCreation not implemented")
+}
+func (UnimplementedScanJobServiceServer) ReadMedia(context.Context, *ReadScanMediaRequest) (*ReadScanMediaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadMedia not implemented")
 }
-func (UnimplementedScanJobServiceServer) GetProgress(context.Context, *GetScanJobProgressRequest) (*GetScanJobProgressReply, error) {
+func (UnimplementedScanJobServiceServer) GetProgress(context.Context, *GetScanJobProgressRequest) (*GetScanJobProgressResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProgress not implemented")
 }
-func (UnimplementedScanJobServiceServer) ListEntries(context.Context, *ListScanJobEntriesRequest) (*ListScanJobEntriesReply, error) {
+func (UnimplementedScanJobServiceServer) ListEntries(context.Context, *ListScanJobEntriesRequest) (*ListScanJobEntriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListEntries not implemented")
-}
-func (UnimplementedScanJobServiceServer) ListScopes(context.Context, *ListScanJobScopesRequest) (*ListScanJobScopesReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListScopes not implemented")
 }
 func (UnimplementedScanJobServiceServer) mustEmbedUnimplementedScanJobServiceServer() {}
 
@@ -148,6 +148,24 @@ func _ScanJobService_Create_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ScanJobServiceServer).Create(ctx, req.(*CreateScanJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ScanJobService_GetCreation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetScanJobCreationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScanJobServiceServer).GetCreation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScanJobService_GetCreation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScanJobServiceServer).GetCreation(ctx, req.(*GetScanJobCreationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -206,34 +224,20 @@ func _ScanJobService_ListEntries_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ScanJobService_ListScopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListScanJobScopesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ScanJobServiceServer).ListScopes(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ScanJobService_ListScopes_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScanJobServiceServer).ListScopes(ctx, req.(*ListScanJobScopesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // ScanJobService_ServiceDesc is the grpc.ServiceDesc for ScanJobService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ScanJobService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "job_scan.ScanJobService",
+	ServiceName: "yatm.v1.ScanJobService",
 	HandlerType: (*ScanJobServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Create",
 			Handler:    _ScanJobService_Create_Handler,
+		},
+		{
+			MethodName: "GetCreation",
+			Handler:    _ScanJobService_GetCreation_Handler,
 		},
 		{
 			MethodName: "ReadMedia",
@@ -246,10 +250,6 @@ var ScanJobService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListEntries",
 			Handler:    _ScanJobService_ListEntries_Handler,
-		},
-		{
-			MethodName: "ListScopes",
-			Handler:    _ScanJobService_ListScopes_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

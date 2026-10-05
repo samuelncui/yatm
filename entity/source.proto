@@ -1,7 +1,7 @@
 syntax = "proto3";
-package source;
+package yatm.v1;
 
-option go_package = "github.com/samuelncui/yatm/entity";
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 message SourceFile {
     string path = 1;
@@ -9,11 +9,6 @@ message SourceFile {
     string name = 3;
 
     int64 mode = 17;
-    int64 mod_time = 18;
-    int64 size = 19;
-}
-
-message Source {
-    string base = 1;
-    repeated string path = 2;
+    int64 mtime_ns = 18;
+    int64 size_bytes = 19;
 }

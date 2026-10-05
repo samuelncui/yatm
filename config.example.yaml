@@ -9,6 +9,9 @@ debug_listen: 127.0.0.1:8081
 database:
   dialect: sqlite
   dsn: ./tapes.db
+  # Optional concurrent Catalog reads. The SQLite database must be on a local filesystem.
+  # Restart after changing this setting. Job databases keep their existing journal mode.
+  sqlite_wal: false
 
 # Volume-only installations leave this empty. For Tape, add the actual device
 # with an sg mapping (see sg_map) and adapt the scripts below to the environment.
@@ -29,31 +32,10 @@ paths:
   volumes:
     - /mnt
 
-# Preview bundles are addressed by content signature.
+# Preview bundles are addressed by content signature. Generation options live in Settings → Preview.
 preview:
+  # Relative roots resolve within paths.work.
   root: ./previews
-  generators:
-    - kind: image
-      extensions: [jpg, jpeg, png, webp, heic]
-      options:
-        command: ffmpeg
-        max_width: 512
-        max_height: 512
-        format: webp # webp, jpeg, or png
-        quality: 80
-    - kind: video
-      extensions: [mp4, mov, mkv, avi]
-      options:
-        ffmpeg: ffmpeg
-        ffprobe: ffprobe
-        poster_width: 512
-        poster_height: 512
-        timeline_width: 160
-        timeline_height: 90
-        timeline_interval_seconds: 10
-        timeline_max_frames: 100
-        format: webp # webp, jpeg, or png
-        quality: 75
 
 # Scripts receive TAPE_DIR after the barcode is known. Store LTFS logs and exported indexes there.
 # These scripts interact with external software and may need platform-specific changes.

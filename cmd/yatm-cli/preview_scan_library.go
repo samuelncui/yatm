@@ -45,9 +45,8 @@ type scanProgressCommand struct {
 
 type scanResultsCommand struct {
 	runtime *runtime
-	Limit   *int32     `long:"limit" description:"Maximum results in this page"`
-	AfterID *int64     `long:"after-id" description:"Stable entry ID cursor"`
-	Args    fileIDArgs `positional-args:"yes"`
+	jobResultPageOptions
+	Args fileIDArgs `positional-args:"yes"`
 }
 
 type libraryExportCommand struct {
@@ -58,14 +57,14 @@ type libraryExportCommand struct {
 type libraryImportCommand struct {
 	runtime *runtime
 	Input   string `long:"input" value-name:"FILE" required:"yes" description:"Local source or - for stdin"`
-	Confirm bool   `long:"confirm" description:"Confirm importing Library data"`
+	DryRun  bool   `long:"dryrun" description:"Validate the snapshot and roll the import back"`
 }
 
 type libraryTrimCommand struct {
 	runtime   *runtime
 	Positions bool `long:"positions" description:"Trim invalid Positions"`
 	Files     bool `long:"files" description:"Trim Files without originals or version history"`
-	Confirm   bool `long:"confirm" description:"Confirm trimming Library metadata"`
+	DryRun    bool `long:"dryrun" description:"Report the rows that would be trimmed without trimming them"`
 }
 
 func registerPreviewCommands(root *flags.Command, commandRuntime *runtime) error {
@@ -75,6 +74,8 @@ func registerPreviewCommands(root *flags.Command, commandRuntime *runtime) error
 	}
 	return addCommands(
 		group,
+		commandSpec{name: "get", description: "Read existing Preview metadata without generation", handler: &previewGetCommand{runtime: commandRuntime}},
+		commandSpec{name: "capabilities", description: "Inspect the optional Preview helper", handler: &previewCapabilitiesCommand{runtime: commandRuntime}},
 		commandSpec{name: "create", description: "Create a Scan with previews", handler: &previewCreateCommand{runtime: commandRuntime}},
 	)
 }
@@ -87,9 +88,8 @@ func registerScanCommands(root *flags.Command, commandRuntime *runtime) error {
 	return addCommands(
 		group,
 		commandSpec{name: "create", description: "Create a Scan with explicit content and result policies", handler: &scanCreateCommand{runtime: commandRuntime}},
-		commandSpec{name: "media", description: "Scan Media inventory", handler: &scanCreateCommand{runtime: commandRuntime, defaultResult: entity.ScanResultPolicy_PUBLISH_INVENTORY}},
+		commandSpec{name: "media", description: "Scan Media inventory", handler: &scanCreateCommand{runtime: commandRuntime, defaultResult: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY}},
 		commandSpec{name: "run", description: "Read an explicitly selected Volume or Tape", handler: &verifyRunCommand{runtime: commandRuntime}},
-		commandSpec{name: "scopes", description: "List completed or failed observation scopes", handler: &scanScopesCommand{runtime: commandRuntime}},
 		commandSpec{name: "progress", description: "Get Scan progress and counts", handler: &scanProgressCommand{runtime: commandRuntime}},
 		commandSpec{name: "results", description: "List one Location or Media scan result page", handler: &scanResultsCommand{runtime: commandRuntime}},
 	)
@@ -128,11 +128,11 @@ func (c *previewCreateCommand) Execute(_ []string) error {
 	}
 
 	// Preview is one stage in the common Scan, not another Job kind.
-	policy := entity.ScanSignaturePolicy_FILL_MISSING
+	policy := entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING
 	if c.ForceRehash {
-		policy = entity.ScanSignaturePolicy_FORCE_READ
+		policy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
 	}
-	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobReply](
+	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](
 		ctx,
 		c.runtime,
 		entity.ScanJobService_Create_FullMethodName,
@@ -141,7 +141,7 @@ func (c *previewCreateCommand) Execute(_ []string) error {
 			Spec: &entity.ScanJobSpec{
 				Selections:      selections,
 				SignaturePolicy: policy,
-				ResultPolicy:    entity.ScanResultPolicy_PUBLISH_ORIGINALS,
+				ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
 				PreviewPolicy:   preview,
 			},
 		},
@@ -184,34 +184,37 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 	if len(c.Paths) > 0 && c.LocationID == 0 {
 		return usageError(fmt.Errorf("path requires location-id"))
 	}
+	if c.LocationID > 0 {
+		selections = locationSelections(c.LocationID, c.Paths)
+	}
 	preview, err := parsePreviewPolicy(c.PreviewPolicy)
 	if err != nil {
 		return err
 	}
 
 	// Validate the policy matrix before creating the durable Scan.
-	signatures := map[string]entity.ScanSignaturePolicy{"known-only": entity.ScanSignaturePolicy_KNOWN_ONLY, "fill-missing": entity.ScanSignaturePolicy_FILL_MISSING, "force-read": entity.ScanSignaturePolicy_FORCE_READ}
-	results := map[string]entity.ScanResultPolicy{"report": entity.ScanResultPolicy_REPORT_ONLY, "originals": entity.ScanResultPolicy_PUBLISH_ORIGINALS, "inventory": entity.ScanResultPolicy_PUBLISH_INVENTORY, "verify": entity.ScanResultPolicy_VERIFY_COPIES}
+	signatures := map[string]entity.ScanSignaturePolicy{"known-only": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY, "fill-missing": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING, "force-read": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ}
+	results := map[string]entity.ScanResultPolicy{"report": entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, "originals": entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, "inventory": entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY, "verify": entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}
 	policy, result := signatures[c.Signature], results[c.Result]
 	if c.Result == "" {
 		result = c.defaultResult
 	}
 	if c.ForceRehash {
-		policy = entity.ScanSignaturePolicy_FORCE_READ
+		policy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
 	}
-	if mediaID == 0 && (result == entity.ScanResultPolicy_PUBLISH_INVENTORY || result == entity.ScanResultPolicy_VERIFY_COPIES) {
+	if mediaID == 0 && (result == entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY || result == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES) {
 		return usageError(fmt.Errorf("inventory and verify require Media"))
 	}
-	if mediaID != 0 && result == entity.ScanResultPolicy_PUBLISH_ORIGINALS {
+	if mediaID != 0 && result == entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS {
 		return usageError(fmt.Errorf("originals requires Location or Library selections"))
 	}
-	if result == entity.ScanResultPolicy_VERIFY_COPIES {
-		policy = entity.ScanSignaturePolicy_FORCE_READ
+	if result == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
+		policy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobReply](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName,
-		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, LocationId: c.LocationID, Paths: c.Paths, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, CompareLibrary: c.CompareLibrary, PreviewPolicy: preview}})
+	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName,
+		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, CompareLibrary: c.CompareLibrary, PreviewPolicy: preview}})
 	if err != nil {
 		return err
 	}
@@ -225,13 +228,13 @@ func (c *scanProgressCommand) Execute(args []string) error {
 func parsePreviewPolicy(value string) (entity.PreviewPolicy, error) {
 	switch value {
 	case "none":
-		return entity.PreviewPolicy_PREVIEW_NONE, nil
+		return entity.PreviewPolicy_PREVIEW_POLICY_NONE, nil
 	case "missing-only":
-		return entity.PreviewPolicy_PREVIEW_MISSING_ONLY, nil
+		return entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, nil
 	case "regenerate-all":
-		return entity.PreviewPolicy_PREVIEW_REGENERATE_ALL, nil
+		return entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL, nil
 	default:
-		return entity.PreviewPolicy_PREVIEW_NONE, usageError(fmt.Errorf("invalid Preview policy %q", value))
+		return entity.PreviewPolicy_PREVIEW_POLICY_NONE, usageError(fmt.Errorf("invalid Preview policy %q", value))
 	}
 }
 
@@ -240,15 +243,8 @@ func (c *scanResultsCommand) Execute(_ []string) error {
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
 		return err
 	}
-	if err := validateLimit32("Scan Diff limit", c.Limit); err != nil {
+	if err := c.jobResultPageOptions.validate(); err != nil {
 		return err
-	}
-	if c.AfterID != nil && *c.AfterID < 0 {
-		return usageError(fmt.Errorf("after-id must not be negative"))
-	}
-	limit := int32(0)
-	if c.Limit != nil {
-		limit = *c.Limit
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
@@ -260,14 +256,16 @@ func (c *scanResultsCommand) Execute(_ []string) error {
 		return runtimeError("internal", fmt.Errorf("Job lookup returned no Job"))
 	}
 
-	if job.Job.Kind != entity.JobKind_SCAN {
+	if job.Job.Kind != entity.JobKind_JOB_KIND_SCAN {
 		return usageError(fmt.Errorf("Job is not a Location or Media scan"))
 	}
-	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesReply](
+	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](
 		ctx,
 		c.runtime,
 		entity.ScanJobService_ListEntries_FullMethodName,
-		&entity.ListScanJobEntriesRequest{Id: c.Args.ID, Limit: limit, AfterId: c.AfterID},
+		&entity.ListScanJobEntriesRequest{
+			Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset, IncludeTotal: c.IncludeTotal,
+		},
 	)
 	if err != nil {
 		return err
@@ -297,10 +295,6 @@ func (c *libraryExportCommand) Execute(_ []string) error {
 }
 
 func (c *libraryImportCommand) Execute(_ []string) error {
-	if !c.Confirm {
-		return safetyError(fmt.Errorf("library import requires --confirm"))
-	}
-
 	// Open the local input before checking the remote mutation target.
 	input := io.Reader(c.runtime.stdin)
 	var file *os.File
@@ -319,8 +313,12 @@ func (c *libraryImportCommand) Execute(_ []string) error {
 		return err
 	}
 
-	// Stream the confirmed snapshot into the server once.
-	response, err := c.runtime.request(ctx, http.MethodPost, "/library/_import", input)
+	// Stream the confirmed snapshot into the server once; a dry run rolls it back server-side.
+	target := "/library/_import"
+	if c.DryRun {
+		target += "?dryrun=true"
+	}
+	response, err := c.runtime.request(ctx, http.MethodPost, target, input)
 	if err != nil {
 		return err
 	}
@@ -336,10 +334,7 @@ func (c *libraryImportCommand) Execute(_ []string) error {
 }
 
 func (c *libraryTrimCommand) Execute(_ []string) error {
-	// Resolve the confirmed trim scope before any remote checks.
-	if !c.Confirm {
-		return safetyError(fmt.Errorf("library trim requires --confirm"))
-	}
+	// Resolve the trim scope before any remote checks.
 	if !c.Positions && !c.Files {
 		return usageError(fmt.Errorf("library trim requires --positions or --files"))
 	}
@@ -352,11 +347,11 @@ func (c *libraryTrimCommand) Execute(_ []string) error {
 	}
 
 	// Apply the selected trims in one RPC.
-	reply, err := callRPC[entity.LibraryTrimRequest, entity.LibraryTrimReply](
+	reply, err := callRPC[entity.TrimLibraryRequest, entity.TrimLibraryResponse](
 		ctx,
 		c.runtime,
-		entity.Service_LibraryTrim_FullMethodName,
-		&entity.LibraryTrimRequest{TrimPosition: c.Positions, TrimFile: c.Files},
+		entity.LibraryService_Trim_FullMethodName,
+		&entity.TrimLibraryRequest{TrimPosition: c.Positions, TrimFile: c.Files, Dryrun: c.DryRun},
 	)
 	if err != nil {
 		return err

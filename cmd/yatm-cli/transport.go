@@ -212,7 +212,7 @@ func (r *runtime) checkStatus(ctx context.Context) error {
 
 	// Verify the gRPC-Web path through a bounded, read-only catalog request.
 	limit := int64(1)
-	_, err = callRPC[entity.ListJobsRequest, entity.ListJobsReply](
+	_, err = callRPC[entity.ListJobsRequest, entity.ListJobsResponse](
 		ctx,
 		r,
 		entity.JobService_List_FullMethodName,

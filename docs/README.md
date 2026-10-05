@@ -1,89 +1,110 @@
 # Documentation
 
-These documents describe `v1.0.0-alpha.1`. Start with [installation](operations/install.md), [v0.1.x upgrade](operations/migration.md), or the [Alpha release notes](releases/v1.0.0-alpha.1.md). Daily use is covered by [Library/Media](operations/library.md), [live Locations](operations/online-sources.md), and the bundled [CLI Skill](../.agents/skills/yatm/SKILL.md).
+These documents describe the current YATM v1 development line. Start with
+[installation](operations/install.md), the [v0.1.x upgrade](operations/migration.md),
+[Library and Media workflows](operations/library.md), or [live Locations](operations/locations.md).
+Published versions and their change notes belong to
+[GitHub Releases](https://github.com/samuelncui/yatm/releases); this tree is not a release archive.
 
-## Temporary Draft Compatibility Policy
+## Pre-stable Compatibility
 
-The supported release sequence is `v0.1.x → v1.0.0-alpha.1 → v1.0.0`. Preserve legacy migration/import and a forward upgrade/import path for published v1 data. The [persistence contract](architecture/persistence.md#published-data-formats) owns artifact identities and revisions independently of software versions. Alpha APIs may change with release notes; supported published data retains a path forward.
+The required compatibility baseline is the supported `v0.1.x` migration/import path. Until the first
+stable v1 release, changes to data formats, APIs, entities, schemas, Job bundles and metadata backups
+between unpublished or pre-stable v1 builds require no compatibility layers or version/revision bumps.
+The [persistence contract](architecture/persistence.md#published-data-formats) owns the current artifact
+identities and versions independently of software release numbers.
 
-The temporary exception applies to unpublished Draft revisions: their schemas, APIs, Job bundles and backup formats do not require compatibility adapters. Reject unsupported development data without deleting installations or physical data; regenerate disposable fixtures explicitly. Withdrawn experimental installations require separately preserved data and an explicit reinstall; the public installer has no release-number downgrade exception.
-
-Before the first stable v1 release, remove this temporary exception and its contributor reference, publish the stable API/upgrade policy, and audit stale Draft claims. The exception does not apply to `v1.0.0-alpha.1` or later once published.
+Known incompatible installations are rejected before writes. Their data is retained until the operator
+chooses backup, migration, conversion or reinstallation; YATM never clears databases or physical
+files automatically. Disposable development fixtures are regenerated only through an explicit reset.
+Remove this temporary rule when preparing the first stable v1 release and replace it with the
+published stable upgrade policy.
 
 ## Current Architecture
 
 - [Overview and ownership](architecture/overview.md)
 - [Persistence and recovery](architecture/persistence.md)
-- [Library identities, organization, and backups](architecture/library.md)
+- [Library identities, organization and backups](architecture/library.md)
 - [Jobs and execution](architecture/jobs.md)
 - [Media backends and file I/O](architecture/media-io.md)
 - [Preview storage](architecture/preview.md)
-- [APIs and user interface](architecture/api-ui.md)
-- [Entity state navigation](architecture/states.md)
-
-## Designs and Decisions
-
-- **Requirements baseline:** [Online file management](designs/online-files-requirements.md)
-- **Draft:** [Files interaction and metadata restore](designs/files-interaction-consistency.md)
-- **Implemented:** [v1 Alpha release and upgrade delivery](designs/v1-alpha-release.md)
-- **Released:** [v1 Alpha 1 changes and acceptance status](releases/v1.0.0-alpha.1.md)
-- **Accepted:** [File organization is independent of content](decisions/0002-file-organization-and-content.md)
-- **Superseded:** [Content identity owns Library organization](decisions/0001-content-identity.md)
+- [Interface contracts](architecture/contracts.md)
+- [APIs and services](architecture/api.md)
+- [User interface](architecture/ui.md)
+- [Command-line interface](architecture/cli.md)
 
 ## Operations
 
 - [Installation and service configuration](operations/install.md)
 - [Library and mounted Volume workflows](operations/library.md)
-- [Online-source workflows](operations/online-sources.md)
+- [Locations](operations/locations.md)
 - [v0.1.x to v1 migration](operations/migration.md)
-- [Local Demo](operations/demo.md)
 - [Development checks and test environments](operations/testing.md)
 - [Automated E2E](operations/e2e-test.md)
 - [Physical Tape E2E](operations/physical-tape-e2e.md)
 
-## History
+## Release Packages
 
-- **Implemented:** [Shared Files, query filters and configurable Scan](history/files-and-scan.md)
-- **Superseded:** [Browsing, Restore association and copy integrity](history/browsing-restore-integrity.md)
-- **Superseded:** [Online originals, File versions and archive copies](history/online-file-versions.md)
-- **Implemented:** [Live Locations and persistent File organization](history/location-file-organization.md)
-- **Implemented:** [Shared Library and Location organization](history/shared-file-operations.md)
-- **Implemented:** [Indexing workflows and CLI acceptance](history/indexing-workflows.md)
-- **Implemented:** [Locations and File content interface](history/online-source-interface.md)
-- **Implemented:** [Content-grouped duplicates in Locations](history/duplicate-content-groups.md)
-- **Implemented:** [Online data-source design and acceptance](history/online-sources.md)
-- [Platform design snapshot](history/platform-design.md)
-- [Platform development change summary](history/platform-changes.md)
+The release package includes this index and the four operator guides: installation, migration,
+Library/Media workflows and Locations. Architecture and developer validation remain repository
+documentation; release packaging uses an explicit allowlist rather than copying the whole tree.
 
-Historical documents are frozen context, not the maintenance target for current behavior. Old document URLs remain as navigation stubs.
+## Documentation Ownership
 
-## Documentation Convention
+Every maintained fact has one owner. Other documents link to that owner instead of restating it.
 
 | Location | Owns | Does not own |
 | --- | --- | --- |
-| Root README | Product introduction, quick start, documentation entry points | Detailed architecture or repeated runbooks |
-| Root CONTEXT | Domain vocabulary, core domain invariants, navigation | Schemas, algorithms, task notes |
-| Root AGENTS | Contributor instructions, safety gates, required document updates | A duplicate architecture specification |
-| `architecture` | Implemented behavior, boundaries, constraints, code anchors | Unimplemented proposals |
-| `designs` | Proposed changes, interfaces, failure behavior, acceptance scenarios | Claims of current capability |
-| `decisions` | Sparse numbered ADRs for durable, non-obvious tradeoffs | Routine implementation choices or discussion transcripts |
-| `operations` | Setup, migration, maintenance, and reproducible validation | Another definition of the domain model |
-| `history` | Implemented/superseded designs and historical development summaries | Current design authority |
+| Root `README.md` | Released product introduction, quick start and documentation entry points | Development status, architecture detail or repeated runbooks |
+| Root `CONTEXT.md` | Domain vocabulary and core domain invariants | Schemas, algorithms, task notes or UI layout |
+| Root `AGENTS.md` | Contributor rules, safety gates, repository layout and required verification | Product or architecture contracts |
+| `docs/architecture/` | Current implemented behavior, module interfaces, invariants and durable constraints | Proposals, implementation plans, acceptance transcripts or superseded behavior |
+| `docs/operations/` | Current setup, migration, use, maintenance and reproducible validation | Domain definitions or another architecture specification |
+| `.agents/skills/yatm/` | Installed agent operating and safety instructions | Human-facing architecture or change history |
 
-Use English Markdown, short topic-based kebab-case filenames, and repository-relative links. Current architecture filenames are version-independent; version names belong in migration guides and historical records. Link to the owning topic instead of repeating its definition. Link important claims to source files without duplicating generated schemas.
+## Decision Authority
 
-### Update Workflow
+Within overlapping scope, broader accepted constraints bound narrower descriptions: the repository
+engineering rules, the domain invariants and compatibility policy, the architecture overview, area
+architecture, operations guides, and finally implementation and tests. A lower level may provide
+evidence and implementation detail, but its existence cannot justify complexity or override a broader
+decision. When they conflict, update the lower-level documents, code and tests together.
 
-1. Read the relevant current topic and glossary before changing its behavior. Check the implementation when documentation and code disagree.
-2. Record confirmed domain terms and design constraints in their owning document during the task, not only in the final response. Keep unsettled or unimplemented behavior in a design marked **Draft**. Do not silently change code to resolve an uncertain discrepancy.
-3. Update code, semantic tests, affected current documentation, and any affected operational or Demo guide together. A design describes scope, new boundaries/interfaces, data flow, failure semantics, compatibility, acceptance cases, and implementation order; include open questions only when unresolved.
-4. After implementation and verification, update the current architecture, mark the design **Implemented** and move it to history. Mark replaced proposals **Superseded** and link their replacement. Update the index and preserve useful old entry points with short links.
-5. Before delivery, check links, code anchors, status labels, and duplicate facts manually, and run `git diff --check`. No additional documentation toolchain or CI is required.
+The repository intentionally has no documentation archive, ADR archive, design backlog or redirect
+stubs. Git already retains deleted text and rationale. Future work belongs in an Issue or pull
+request. Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
+measurements, screenshots and host-specific reports belong in CI artifacts rather than Markdown.
 
-Record outcomes and durable maintenance rationale, never chat history, backtracking, or rejected work. ADRs use sequential names such as `0001-content-identity.md`, a status, and a short decision/rationale; create one only when the choice is hard to reverse, surprising without context, and grounded in a real tradeoff.
+## Update Workflow
 
-### UI Prototypes
+1. Establish the intended behavior from the decision authority above, then inspect `CONTEXT.md`, the
+   owning document and the implementation. A mismatch is something to resolve, not a reason to
+   promote the current implementation into a requirement.
+2. Update the implementation, semantic tests, owning architecture document and affected operating
+   guide together. Describe the final behavior in present tense; remove the replaced text instead of
+   marking it historical, implemented or superseded.
+3. Keep unsettled designs out of the maintained documentation tree. A PR or Issue may explain the
+   problem, alternatives, compatibility impact and acceptance plan; after implementation, copy only
+   the durable result into its current owner.
+4. Keep implementation detail only when callers or maintainers must know it to use the module
+   correctly. Function names, CSS placement, one measurement, one candidate checksum and step-by-step
+   development history belong in code, tests or verification output.
+5. Keep repository documentation self-contained. Every repository-relative link or file reference
+   must resolve to a tracked file, or to a new file committed in the same change; external references
+   use stable public URLs. Private notes, ignored artifacts and machine-local paths are never sources
+   for repository documentation.
+6. Before delivery, run `make check` or at minimum `node dev/check-documents.mjs` and
+   `git diff --check`. The document check enforces the allowed tree, complete index, valid relative
+   links and the absence of private/history references.
 
-Build UI prototypes in React using the existing application's components, styling, and layout. Capture the rendered pages in a browser; generated concept images are not UI specifications. Label proposed behavior and sample data explicitly.
+Use English Markdown, short topic-based kebab-case filenames and repository-relative links. Current
+architecture filenames are version-independent. Adding a new documentation file requires a distinct
+current owner that cannot be expressed clearly in an existing file; update this index in the same
+change.
 
-Keep an independent page source and entry point for each prototype, with local run instructions and its screenshot. Shared application components and draft fixtures may be reused. Store temporary frontend prototypes under the ignored `frontend/.drafts/` directory for review and implementation reference, then remove their code and screenshots before committing. Keep accepted behavior and constraints in the owning design document, independently of these disposable artifacts.
+## UI Prototypes
+
+Build UI prototypes with the existing React modules, styling and layout, and capture their rendered
+pages for review. Store temporary sources and screenshots under ignored `frontend/.drafts/`, then
+remove them after the accepted behavior and constraints have been recorded in the owning current
+architecture document. Generated concept images are not interface specifications.

@@ -1,138 +1,260 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { PreviewSettings } from "@/entity";
+import { act, screen, waitFor } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes, useParams } from "react-router";
+import { useEffect } from "react";
+import { MemoryRouter, Route, Routes, useNavigate, useParams } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Location, Media, MediaKind, MediaAccess, OnlineBinding, PreviewPolicy, ScanResultPolicy as Result, ScanSignaturePolicy as Signature } from "@/entity";
-const { list, get, mediaList, scan } = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), mediaList: vi.fn(), scan: vi.fn() }));
-vi.mock("@/api", () => ({ locationCli: { list, get }, cli: { mediaList }, scanJobCli: { create: scan } }));
+import {
+  FileScope,
+  FileSelection,
+  Location,
+  LocationSelection,
+  Media,
+  MediaAccess,
+  MediaKind,
+  PreviewPolicy,
+  ScanResultPolicy as Result,
+  ScanSignaturePolicy as Signature,
+} from "@/entity";
+
+const { get, mediaList, scan, fileGet, capabilities, previewSettings, importPositions } = vi.hoisted(() => ({
+  get: vi.fn(),
+  mediaList: vi.fn(),
+  scan: vi.fn(),
+  fileGet: vi.fn(),
+  capabilities: vi.fn(),
+  previewSettings: vi.fn(),
+  importPositions: vi.fn(),
+}));
+vi.mock("@/api", () => ({
+  locationCli: { get },
+  mediaCli: { list: mediaList },
+  filesCli: { get: fileGet, importPositions },
+  scanJobCli: { create: scan },
+  previewCli: { getCapabilities: capabilities },
+  settingsCli: { get: previewSettings },
+}));
+vi.mock("@/components/scan-selection-dialog", () => ({
+  ScanSelectionDialog: ({ entries, onChoose, onClose }: { entries: unknown[]; onChoose: (entries: unknown[]) => void; onClose: () => void }) => (
+    <div role="dialog">
+      <p>{entries.length} draft roots</p>
+      <button onClick={onClose}>Cancel selection</button>
+      <button onClick={() => onChoose(entries)}>Choose selection</button>
+      <button onClick={() => onChoose([...entries, { selection: selection("Added"), name: "Added", path: "/photos/Added", isDir: true }])}>
+        Add selection
+      </button>
+    </div>
+  ),
+}));
+
 import { ScanBrowser } from "./scan";
-import { scanPreferencesKey, type ScanPreferences } from "./scan-preferences";
+import { scanPreferencesKey } from "./scan-preferences";
+
 const call = (value: unknown) => ({ response: Promise.resolve(value) });
-const source = Location.create({ id: 1n, name: "Photos", rootPath: "/photos", binding: OnlineBinding.CONFIRMED, bindingToken: "photos-binding" });
+const source = Location.create({ id: 1n, name: "Photos", rootPath: "/photos" });
+const disk = Media.create({ id: 3n, name: "Archive disk", kind: MediaKind.VOLUME, mounted: true, capabilities: { read: MediaAccess.RANDOM } });
+const selection = (path: string) =>
+  FileSelection.create({
+    target: {
+      oneofKind: "location",
+      location: LocationSelection.create({
+        locationId: 1n,
+        path,
+      }),
+    },
+    scope: FileScope.ALL,
+  });
+const filesState = (paths = ["Projects"]) => ({
+  scan: {
+    target: { kind: "files" as const, entries: paths.map((path) => ({ selection: selection(path), name: path, path: `/photos/${path}`, isDir: true })) },
+  },
+});
 const Destination = () => <div>Job {useParams().id}</div>;
-const storedOptions: ScanPreferences = {
-  kind: "location",
-  location: { id: "1", rootPath: "/photos", bindingToken: "photos-binding" },
-  signaturePolicy: Signature.KNOWN_ONLY,
-  resultPolicy: Result.REPORT_ONLY,
-  compare: false,
-  previewPolicy: PreviewPolicy.PREVIEW_MISSING_ONLY,
+const StateRedirect = ({ state, search = "" }: { state: unknown; search?: string }) => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    void navigate({ pathname: "/scan", search }, { replace: true, state });
+  }, [navigate, search, state]);
+  return null;
 };
-const show = (path = "/scan") =>
+const show = (path: string | { pathname: string; search?: string; state?: unknown } = "/scan") =>
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[typeof path === "string" ? path : "/redirect"]}>
       <Routes>
+        <Route
+          path="/redirect"
+          element={<StateRedirect state={typeof path === "string" ? undefined : path.state} search={typeof path === "string" ? undefined : path.search} />}
+        />
         <Route path="/scan" element={<ScanBrowser />} />
         <Route path="/jobs/:id" element={<Destination />} />
       </Routes>
     </MemoryRouter>,
   );
+const Reenter = ({ state }: { state: unknown }) => {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate("/scan", { state })}>Reenter scan</button>;
+};
+const showReenter = (state: unknown, next: unknown) =>
+  render(
+    <MemoryRouter initialEntries={["/redirect"]}>
+      <Routes>
+        <Route path="/redirect" element={<StateRedirect state={state} />} />
+        <Route
+          path="/scan"
+          element={
+            <>
+              <ScanBrowser />
+              <Reenter state={next} />
+            </>
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
 beforeEach(() => {
+  capabilities.mockReturnValue(call({ available: true }));
+  previewSettings.mockReturnValue(call({ value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } }));
   vi.clearAllMocks();
   localStorage.clear();
   get.mockReturnValue(call({ location: source }));
-  list.mockReturnValue(call({ locations: [source, Location.create({ id: 2n, name: "Imported", binding: OnlineBinding.UNCONFIRMED })], hasMore: false }));
-  mediaList.mockReturnValue(
-    call({
-      media: [
-        Media.create({ id: 3n, name: "Archive disk", kind: MediaKind.VOLUME, mounted: true, capabilities: { read: MediaAccess.RANDOM } }),
-        Media.create({ id: 4n, name: "Archive tape", kind: MediaKind.TAPE, capabilities: { read: MediaAccess.SEQUENTIAL } }),
-      ],
-      hasMore: false,
-    }),
-  );
+  mediaList.mockReturnValue(call({ media: [disk], hasMore: false }));
   scan.mockReturnValue(call({ job: { id: 43n } }));
+  fileGet.mockReturnValue(call({}));
+  importPositions.mockReturnValue(call({ fileCount: 12n, directoryCount: 3n, skippedFileCount: 2n, existingCount: 1n, skippedUnsignedCount: 0n }));
 });
-describe("One Scan configuration", () => {
-  it("uses the existing navigation without a duplicate creation heading or Locations shortcut", () => {
-    show();
-    expect(screen.queryByRole("heading", { name: /New scan/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Locations" })).not.toBeInTheDocument();
-    expect(scan).not.toHaveBeenCalled();
+
+describe("Scan form", () => {
+  it.each(["disabled", "missing helper", "failed check"])(
+    "blocks a requested Preview when generation is %s without silently changing policy",
+    async (state) => {
+      if (state === "disabled") previewSettings.mockReturnValue(call({ value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } }));
+      if (state === "missing helper") capabilities.mockReturnValue(call({ available: false, reason: "Helper not installed" }));
+      if (state === "failed check") capabilities.mockImplementation(() => ({ response: Promise.reject(new Error("Capability check failed")) }));
+      const input = filesState();
+      show({ pathname: "/scan", state: { scan: { ...input.scan, options: { previewPolicy: PreviewPolicy.REGENERATE_ALL } } } });
+      await screen.findByRole("link", { name: "Settings" });
+      await waitFor(() => expect(screen.queryByText("Checking Preview generation…")).not.toBeInTheDocument());
+      expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Regenerate all");
+      expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+      expect(scan).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
+      expect(screen.getByRole("option", { name: "Generate missing" })).toHaveAttribute("aria-disabled", "true");
+      await userEvent.click(screen.getByRole("option", { name: "Don’t generate" }));
+      await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+      await waitFor(() => expect(scan).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ previewPolicy: PreviewPolicy.NONE }) })));
+    },
+  );
+  it("always offers Location, Files, and Media with the full editable policy form", async () => {
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
+    expect(screen.getByRole("option", { name: "Location" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Files" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Media" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("combobox", { name: "Signatures" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Results" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Previews" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled();
   });
-  it("resolves a Location shortcut without fetching catalog pages", async () => {
-    get.mockReturnValue(call({ location: Location.create({ id: 80n, name: "Other location", binding: OnlineBinding.CONFIRMED }) }));
-    show("/scan?location=80");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    expect(list).not.toHaveBeenCalled();
-    expect(get).toHaveBeenCalledWith({ id: 80n, revision: 0n }, { abort: expect.any(AbortSignal) });
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ locationId: 80n, resultPolicy: Result.PUBLISH_ORIGINALS }) }));
-  });
-  it("submits Location and preview stages to the same Scan job with cache-only policy", async () => {
+
+  it("supports an entire Location or an editable selected range", async () => {
     show("/scan?location=1");
     await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("combobox", { name: "Scope" }));
+    expect(screen.getByRole("option", { name: "Entire Location" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: "Selected files and folders" }));
+    expect(screen.getByRole("button", { name: "Edit selection" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+  });
+
+  it("submits an entire Location through the same selections contract as a selected range", async () => {
+    show("/scan?location=1");
+    await userEvent.click(await screen.findByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ mediaId: 0n, selections: [selection("")] }) }));
+  });
+
+  it("preserves Files roots across a cancelled edit and allows removal and clearing", async () => {
+    show({ pathname: "/scan", state: filesState(["Projects", "Movies"]) });
+    await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("button", { name: "Edit selection" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("2 draft roots");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel selection" }));
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove /photos/Projects" }));
+    expect(screen.queryByText("Projects")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+  });
+
+  it("commits a chosen Files root from the selection dialog", async () => {
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("button", { name: "Edit selection" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add selection" }));
+    expect(screen.getByText("Added")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({ selections: [selection("Projects"), selection("Added")] }),
+      }),
+    );
+  });
+
+  it("keeps editable policies while changing source", async () => {
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
     await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
     await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
-    await userEvent.click(screen.getByRole("option", { name: "Generate missing" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Find matching Library content" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
+    await userEvent.click(screen.getByRole("option", { name: "Media" }));
+    expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
+    expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
+    await userEvent.click(screen.getByRole("option", { name: "Location" }));
+    expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
+  });
+
+  it("saves only after success and Files retains the prior Location target", async () => {
+    const saved = {
+      kind: "location",
+      location: { id: "1", rootPath: "/photos" },
+      signaturePolicy: Signature.FILL_MISSING,
+      resultPolicy: Result.PUBLISH_ORIGINALS,
+      compare: true,
+      previewPolicy: PreviewPolicy.NONE,
+    };
+    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
+    await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
     expect(await screen.findByText("Job 43")).toBeInTheDocument();
-    expect(scan).toHaveBeenCalledWith({
-      priority: 1n,
-      spec: expect.objectContaining({
-        locationId: 1n,
-        signaturePolicy: Signature.KNOWN_ONLY,
-        resultPolicy: Result.PUBLISH_ORIGINALS,
-        previewPolicy: PreviewPolicy.PREVIEW_MISSING_ONLY,
-      }),
-    });
-  });
-  it("uses one mutually exclusive result policy and forces real reads for recorded-copy checks", async () => {
-    show("/scan?media=3&result=verify");
-    await screen.findByDisplayValue(/Archive disk/);
-    expect(mediaList).toHaveBeenCalledWith({ param: { oneofKind: "mget", mget: { ids: [3n] } } }, { abort: expect.any(AbortSignal) });
-    expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveAttribute("aria-disabled", "true");
+    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toMatchObject({ ...saved, signaturePolicy: Signature.KNOWN_ONLY });
+
+    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
+    scan.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Busy")) }));
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(scan).toHaveBeenCalledWith({
-      priority: 1n,
-      spec: expect.objectContaining({ mediaId: 3n, signaturePolicy: Signature.FORCE_READ, resultPolicy: Result.VERIFY_COPIES }),
-    });
+    expect(await screen.findByText("Busy")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toEqual(saved);
   });
-  it("never offers Preview for sequential Tape and does not expose an Apply phase", async () => {
-    show("/scan?media=4");
-    await screen.findByDisplayValue(/Archive tape/);
-    expect(screen.getByRole("combobox", { name: "Previews" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText("Not supported on Tape")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Apply/ })).not.toBeInTheDocument();
+
+  it("reinitializes when the same route receives a new scan state", async () => {
+    showReenter(filesState(["Projects"]), filesState(["Movies"]));
+    await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("button", { name: "Reenter scan" }));
+    expect(await screen.findByText("Movies")).toBeInTheDocument();
+    expect(screen.queryByText("Projects")).not.toBeInTheDocument();
   });
-  it("keeps imported paths unselectable and shows creation errors without navigating", async () => {
-    scan.mockImplementation(() => ({ response: Promise.reject(new Error("Location is busy")) }));
-    show("/scan?location=1");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
-    expect(await screen.findByRole("option", { name: /Imported/ })).toHaveAttribute("aria-disabled", "true");
-    await userEvent.click(screen.getByRole("option", { name: /Photos/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(await screen.findByText("Location is busy")).toBeInTheDocument();
-  });
-  it("creates the explicit regenerate-all policy rather than an outdated-only option", async () => {
-    show("/scan?location=1");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
-    await userEvent.click(screen.getByRole("option", { name: "Regenerate all" }));
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ previewPolicy: PreviewPolicy.PREVIEW_REGENERATE_ALL }) }));
-  });
-  it("requires a Media option and invalidates the old selection when its label is edited", async () => {
-    show("/scan?media=3");
-    const input = await screen.findByDisplayValue(/Archive disk/);
-    await userEvent.clear(input);
-    await userEvent.type(input, "Archive");
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-    await userEvent.click(await screen.findByRole("option", { name: /Archive tape/ }));
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(scan).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ mediaId: 4n, previewPolicy: PreviewPolicy.PREVIEW_NONE }) }));
-  });
-  it("does not turn a missing requested Media into a default selection", async () => {
-    mediaList.mockReturnValue(call({ media: [], hasMore: false }));
-    show("/scan?media=999");
-    expect(await screen.findByText(/selected Media is no longer available/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-  });
-  it("shows target validation progress without allowing stale submission", async () => {
-    let resolve!: (reply: unknown) => void;
+
+  it("does not let an aborted initial lookup overwrite an edited source", async () => {
+    let resolve!: (value: { location: Location }) => void;
     get.mockReturnValue({
       response: new Promise((done) => {
         resolve = done;
@@ -140,87 +262,124 @@ describe("One Scan configuration", () => {
     });
     show("/scan?location=1");
     expect(screen.getByRole("status")).toHaveTextContent("Loading source…");
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
+    await userEvent.click(screen.getByRole("option", { name: "Files" }));
     await act(async () => resolve({ location: source }));
-    expect(screen.queryByText("Loading source…")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent("Files");
+    expect(screen.queryByRole("combobox", { name: "Scope" })).not.toBeInTheDocument();
   });
-  it("places Signatures before Results and remembers only a successfully submitted configuration", async () => {
-    const view = show("/scan?location=1");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    expect(
-      screen.getByRole("combobox", { name: "Signatures" }).compareDocumentPosition(screen.getByRole("combobox", { name: "Results" })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
-    await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Results" }));
-    await userEvent.click(screen.getByRole("option", { name: "View results only" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Find matching Library content" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
-    await userEvent.click(screen.getByRole("option", { name: "Generate missing" }));
-    expect(localStorage.getItem(scanPreferencesKey)).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(await screen.findByText("Job 43")).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toEqual(storedOptions);
-    view.unmount();
-    show();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    expect(screen.getByRole("combobox", { name: "Location" })).toHaveValue("Photos · /photos");
-    expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
-    expect(screen.getByRole("combobox", { name: "Results" })).toHaveTextContent("View results only");
-    expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Generate missing");
-    expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).not.toBeChecked();
-    expect(scan).toHaveBeenCalledTimes(1);
+
+  it("does not fall back to a whole Location when a legacy selected-path lookup fails", async () => {
+    fileGet.mockReturnValue({ response: Promise.reject(new Error("Missing path")) });
+    show({ pathname: "/scan", search: "?location=1", state: { paths: ["Projects"] } });
+    expect(await screen.findByText("Missing path")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+    expect(scan).not.toHaveBeenCalled();
   });
-  it("keeps the last successful options after a failed submission and locks controls while submitting", async () => {
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(storedOptions));
-    let reject!: (error: Error) => void;
-    scan.mockReturnValue({
-      response: new Promise((_, fail) => {
-        reject = fail;
-      }),
-    });
-    show();
+
+  it("rejects a shortcut range resolved for another Location", async () => {
+    fileGet.mockReturnValue(call({ detail: { entry: { reference: { target: { oneofKind: "location", location: { locationId: 9n, path: "Projects" } } } } } }));
+    show({ pathname: "/scan", search: "?location=1", state: { paths: ["Projects"] } });
+    expect(await screen.findByText("The selected Location has changed. Choose the range again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+  });
+
+  it("forces real reads and disables previews for sequential Tape verification", async () => {
+    const tape = Media.create({ id: 4n, name: "Archive tape", kind: MediaKind.TAPE, capabilities: { read: MediaAccess.SEQUENTIAL } });
+    mediaList.mockReturnValue(call({ media: [tape], hasMore: false }));
+    show("/scan?media=4&result=verify");
     await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
-    await userEvent.click(screen.getByRole("option", { name: "Regenerate all" }));
-    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-    expect(screen.getByRole("combobox", { name: "Location" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Source" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("combobox", { name: "Results" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("combobox", { name: "Previews" })).toHaveAttribute("aria-disabled", "true");
-    await act(async () => reject(new Error("Busy")));
-    expect(await screen.findByText("Busy")).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toEqual(storedOptions);
+    expect(screen.getByText("Not supported on Tape")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({
+          mediaId: 4n,
+          signaturePolicy: Signature.FORCE_READ,
+          resultPolicy: Result.VERIFY_COPIES,
+          previewPolicy: PreviewPolicy.NONE,
+        }),
+      }),
+    );
   });
+
   it.each([
-    ["rebound", Location.create({ ...source, bindingToken: "replacement-binding" }), "last Location has changed"],
-    ["imported", Location.create({ ...source, binding: OnlineBinding.UNCONFIRMED }), "needs confirmation"],
-    ["removed", undefined, "unavailable"],
-  ])("requires reselecting a %s remembered Location", async (_, location, message) => {
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(storedOptions));
+    ["moved Location", Location.create({ ...source, rootPath: "/moved" }), "last Location has changed"],
+    ["removed Location", undefined, "unavailable"],
+  ])("does not restore a remembered %s", async (_, location, message) => {
+    localStorage.setItem(
+      scanPreferencesKey,
+      JSON.stringify({
+        kind: "location",
+        location: { id: "1", rootPath: "/photos" },
+        signaturePolicy: Signature.FILL_MISSING,
+        resultPolicy: Result.PUBLISH_ORIGINALS,
+        compare: true,
+        previewPolicy: PreviewPolicy.NONE,
+      }),
+    );
     get.mockReturnValue(call({ location }));
     show();
     expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Location" })).toHaveValue("");
   });
-  it("lets explicit source shortcuts override a remembered source without dropping content options", async () => {
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(storedOptions));
-    show("/scan?media=4&result=verify");
-    await screen.findByDisplayValue(/Archive tape/);
-    expect(get).not.toHaveBeenCalled();
-    expect(screen.getByRole("combobox", { name: "Results" })).toHaveTextContent("Check recorded copies");
-    expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Don’t generate");
-    expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).not.toBeChecked();
-  });
-  it("ignores malformed preferences and never submits a typed target", async () => {
-    localStorage.setItem(scanPreferencesKey, "{broken");
+
+  it("reuses a remembered Location without a confirmation step", async () => {
+    localStorage.setItem(
+      scanPreferencesKey,
+      JSON.stringify({
+        kind: "location",
+        location: { id: "1", rootPath: "/photos" },
+        signaturePolicy: Signature.FILL_MISSING,
+        resultPolicy: Result.PUBLISH_ORIGINALS,
+        compare: true,
+        previewPolicy: PreviewPolicy.NONE,
+      }),
+    );
     show();
-    await userEvent.type(screen.getByRole("combobox", { name: "Location" }), "Photos");
-    expect(await screen.findByRole("option", { name: /Photos/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-    expect(scan).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+    expect(get).toHaveBeenCalledWith({ id: 1n }, expect.objectContaining({ abort: expect.anything() }));
+    expect(screen.queryByText(/confirmation|Confirm imported/)).not.toBeInTheDocument();
+  });
+
+  it("submits at most once while creation is pending", async () => {
+    let resolve!: (value: { job: { id: bigint } }) => void;
+    scan.mockReturnValue({
+      response: new Promise((done) => {
+        resolve = done;
+      }),
+    });
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    const start = screen.getByRole("button", { name: "Start scan" });
+    await userEvent.click(start);
+    expect(scan).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+    await act(async () => resolve({ job: { id: 43n } }));
+    expect(await screen.findByText("Job 43")).toBeInTheDocument();
+  });
+
+  it("counts a Media inventory admission before writing and remembers that the count is not needed", async () => {
+    show("/scan?media=3");
+    const add = await screen.findByRole("button", { name: "Add to Library" });
+    await userEvent.click(add);
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Add to Library");
+    expect(await screen.findByText("12 files from Archive disk will be added as independent Library files.")).toBeInTheDocument();
+    expect(screen.getByText("3 folder entries · 1 already in Library · 2 without signatures")).toBeInTheDocument();
+    expect(importPositions).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: true }), expect.anything());
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Don't show this next time" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add to Library" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(importPositions).toHaveBeenLastCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
+
+    // The remembered preference imports directly instead of asking for the count again.
+    await waitFor(() => expect(document.querySelector(".MuiBackdrop-root")).not.toBeInTheDocument());
+    importPositions.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "Add to Library" }));
+    await waitFor(() => expect(importPositions).toHaveBeenCalledOnce());
+    expect(importPositions).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
   });
 });

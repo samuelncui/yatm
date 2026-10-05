@@ -1,15 +1,45 @@
 syntax = "proto3";
-package progress;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
+import "job.proto";
+
+enum ProgressUnit {
+    PROGRESS_UNIT_UNSPECIFIED = 0;
+    PROGRESS_UNIT_ITEMS = 1;
+    PROGRESS_UNIT_BYTES = 2;
+}
+enum EstimateState {
+    ESTIMATE_STATE_UNSPECIFIED = 0;
+    ESTIMATE_STATE_NOT_APPLICABLE = 1;
+    ESTIMATE_STATE_ESTIMATING = 2;
+    ESTIMATE_STATE_ESTIMATED = 3;
+}
+
+// An attempt/phase/range-consistent snapshot. Business outcomes remain separate.
+message StageProgress {
+    string window_id = 1;
+    JobPhase phase = 2;
+    ProgressUnit unit = 3;
+    int64 completed = 4;
+    optional int64 total = 5;
+    optional double rate_per_second = 6;
+    EstimateState estimate_state = 7;
+    optional int64 remaining_seconds = 8;
+}
 
 message Progress {
     int64 copied_bytes = 1;
-    int64 copied_files = 2;
+    int64 copied_file_count = 2;
     int64 total_bytes = 3;
-    int64 total_files = 4;
+    int64 total_file_count = 4;
 
-    int64 speed = 5;
-    int64 start_time = 6;
-    int64 average_speed = 7;
-    int64 historical_average_speed = 8;
+    int64 speed_bytes_per_second = 5;
+    int64 started_at_ns = 6;
+    int64 average_speed_bytes_per_second = 7;
+    int64 historical_average_speed_bytes_per_second = 8;
+    bool total_known = 9;
+
+    // Latest execution attempt, excluding time waiting between attempts. Absent when unknown.
+    optional int64 elapsed_ms = 10;
+    StageProgress stage = 12;
 }

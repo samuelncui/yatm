@@ -1,8 +1,52 @@
 syntax = "proto3";
 
-package preview;
+package yatm.v1;
 
-option go_package = "github.com/samuelncui/yatm/entity";
+option go_package = "github.com/samuelncui/yatm/entity;entity";
+
+service PreviewService {
+    rpc Get(GetPreviewRequest) returns (GetPreviewResponse) {}
+    rpc GetCapabilities(GetPreviewCapabilitiesRequest) returns (GetPreviewCapabilitiesResponse) {}
+}
+
+message GetPreviewCapabilitiesRequest {}
+message PreviewInputFormats { repeated string extensions = 1; }
+message GetPreviewCapabilitiesResponse {
+    bool available = 1;
+    string reason = 2;
+    string version = 3;
+    string ffmpeg_version = 4;
+    repeated string kinds = 5;
+    repeated string input_extensions = 6;
+    repeated string output_formats = 7;
+    map<string, PreviewInputFormats> input_extensions_by_kind = 8;
+    string libraw_version = 9;
+}
+
+enum PreviewAvailability {
+    PREVIEW_AVAILABILITY_UNSPECIFIED = 0;
+    PREVIEW_AVAILABILITY_READY = 1;
+    PREVIEW_AVAILABILITY_NOT_GENERATED = 2;
+}
+
+message GetPreviewRequest {
+    // Preview storage is content-addressed, so the request names the content itself: a caller
+    // resolves a File, version or recorded Position to its signature before asking.
+    bytes signature = 1;
+}
+
+message PreviewResource {
+    string role = 1;
+    string media_type = 2;
+    uint32 width_px = 3;
+    uint32 height_px = 4;
+    string url = 5;
+}
+
+message GetPreviewResponse {
+    PreviewAvailability availability = 1;
+    repeated PreviewResource assets = 2;
+}
 
 message PreviewManifest {
     bytes file_signature = 1;
@@ -15,6 +59,6 @@ message PreviewAsset {
     string name = 1;
     string role = 2;
     string media_type = 3;
-    uint32 width = 4;
-    uint32 height = 5;
+    uint32 width_px = 4;
+    uint32 height_px = 5;
 }

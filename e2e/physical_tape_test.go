@@ -23,16 +23,17 @@ import (
 	"time"
 
 	"github.com/samuelncui/acp"
-	"github.com/samuelncui/yatm/apis"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	_ "github.com/samuelncui/yatm/executor/archive"
-	_ "github.com/samuelncui/yatm/executor/restore"
-	_ "github.com/samuelncui/yatm/executor/scan"
-	"github.com/samuelncui/yatm/library"
-	previewcore "github.com/samuelncui/yatm/preview"
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/internal/apis"
+	"github.com/samuelncui/yatm/internal/executor"
+	_ "github.com/samuelncui/yatm/internal/executor/archive"
+	_ "github.com/samuelncui/yatm/internal/executor/restore"
+	_ "github.com/samuelncui/yatm/internal/executor/scan"
+	"github.com/samuelncui/yatm/internal/library"
+	previewcore "github.com/samuelncui/yatm/internal/preview"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -72,10 +73,17 @@ type physicalTapeFixture struct {
 	lib      *library.Library
 	filesURL string
 	job      entity.JobServiceClient
-	service  entity.ServiceClient
+	media    entity.MediaServiceClient
+	files    entity.FilesServiceClient
+	library  entity.LibraryServiceClient
+	preview  entity.PreviewServiceClient
 	archive  entity.ArchiveJobServiceClient
 	restore  entity.RestoreJobServiceClient
 }
+
+type physicalPreviewFixture struct{ *previewcore.Manager }
+
+func (*physicalPreviewFixture) CheckGeneration(context.Context) error { return nil }
 
 func TestPhysicalTapeBaseline(t *testing.T) {
 	requirePhysicalStage(t, "baseline")
@@ -85,26 +93,26 @@ func TestPhysicalTapeBaseline(t *testing.T) {
 
 	files := createPhysicalBaseline(t, fixture.paths.Source)
 	// Location indexing below replaces the fixed Source directory browser.
-	devices, err := fixture.service.DeviceList(ctx, &entity.DeviceListRequest{})
+	devices, err := fixture.media.ListDevices(ctx, &entity.ListDevicesRequest{})
 	require.NoError(t, err)
 	require.Equal(t, []string{fixture.device}, devices.Devices)
 
-	inspected, err := fixture.service.MediaInspect(ctx, (&entity.MediaInspectTapeTarget{Device: fixture.device}).Pack())
+	inspected, err := fixture.media.Inspect(ctx, (&entity.InspectMediaTapeTarget{Device: fixture.device}).Pack())
 	require.NoError(t, err)
 	require.Equal(t, fixture.barcode, inspected.Identity)
 	require.Nil(t, inspected.Media)
 
 	created, err := fixture.archive.Create(ctx, &entity.CreateArchiveJobRequest{
-		PreviewPolicy: entity.PreviewPolicy_PREVIEW_MISSING_ONLY,
+		PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
 		Spec:          &entity.ArchiveJobSpec{Selections: indexedSelections(t, ctx, fixture.cli, fixture.paths.Source, "dataset")},
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_PENDING)
+	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_JOB_STATUS_READY)
 	prepared, err := fixture.archive.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: created.Job.Id})
 	require.NoError(t, err)
 	require.Empty(t, prepared.PreviewError)
 	require.Positive(t, prepared.PreviewJobId)
-	waitForPhysicalJob(t, ctx, fixture, prepared.PreviewJobId, entity.JobStatus_COMPLETED)
+	waitForPhysicalJob(t, ctx, fixture, prepared.PreviewJobId, entity.JobStatus_JOB_STATUS_COMPLETED)
 
 	_, err = fixture.archive.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
 		Id: created.Job.Id,
@@ -114,7 +122,7 @@ func TestPhysicalTapeBaseline(t *testing.T) {
 		}).Pack(),
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_COMPLETED)
+	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED)
 	requirePhysicalDeviceAvailable(t, ctx, fixture)
 
 	archiveItems, err := fixture.archive.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{
@@ -135,26 +143,27 @@ func TestPhysicalTapeBaseline(t *testing.T) {
 		Spec: &entity.ArchiveJobSpec{Selections: indexedSelections(t, ctx, fixture.cli, fixture.paths.Source, "append")},
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, appended.Job.Id, entity.JobStatus_PENDING)
+	waitForPhysicalJob(t, ctx, fixture, appended.Job.Id, entity.JobStatus_JOB_STATUS_READY)
 	requirePhysicalBarcodeMismatch(t, ctx, fixture, appended.Job.Id)
 	failed, err := fixture.job.Get(ctx, &entity.GetJobRequest{Id: appended.Job.Id})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_PENDING, failed.Job.Status)
-	require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, failed.Job.Phase)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, failed.Job.Status)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, failed.Job.Phase)
+	require.NotEmpty(t, failed.Job.Error)
 	failedItems, err := fixture.archive.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{
 		Id: appended.Job.Id, Limit: 100,
 	})
 	require.NoError(t, err)
 	require.Len(t, failedItems.Items, 2)
 	for _, item := range failedItems.Items {
-		require.Equal(t, entity.CopyStatus_PENDING, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 		require.Nil(t, item.MediaId)
 		require.Empty(t, item.File.MediaPath)
 	}
 	positionsAfterMismatch, err := fixture.lib.ListMediaFilePositions(ctx, media.ID, "", 1000)
 	require.NoError(t, err)
 	require.Equal(t, positionsBeforeMismatch, positionsAfterMismatch)
-	inspected, err = fixture.service.MediaInspect(ctx, (&entity.MediaInspectTapeTarget{Device: fixture.device}).Pack())
+	inspected, err = fixture.media.Inspect(ctx, (&entity.InspectMediaTapeTarget{Device: fixture.device}).Pack())
 	require.NoError(t, err)
 	require.Equal(t, fixture.barcode, inspected.Identity)
 	require.NotNil(t, inspected.Media)
@@ -168,7 +177,7 @@ func TestPhysicalTapeBaseline(t *testing.T) {
 		}).Pack(),
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, appended.Job.Id, entity.JobStatus_COMPLETED)
+	waitForPhysicalJob(t, ctx, fixture, appended.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED)
 	requirePhysicalDeviceAvailable(t, ctx, fixture)
 	appendItems, err := fixture.archive.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{
 		Id: appended.Job.Id, Limit: 100,
@@ -204,7 +213,7 @@ func TestPhysicalTapeRestartRestore(t *testing.T) {
 	state := readPhysicalState(t, fixture.root)
 	require.Equal(t, fixture.barcode, state.Barcode)
 
-	inspected, err := fixture.service.MediaInspect(ctx, (&entity.MediaInspectTapeTarget{Device: fixture.device}).Pack())
+	inspected, err := fixture.media.Inspect(ctx, (&entity.InspectMediaTapeTarget{Device: fixture.device}).Pack())
 	require.NoError(t, err)
 	require.Equal(t, fixture.barcode, inspected.Identity)
 	require.NotNil(t, inspected.Media)
@@ -216,14 +225,14 @@ func TestPhysicalTapeRestartRestore(t *testing.T) {
 		Spec: &entity.RestoreJobSpec{Destination: restoreDestination(t, ctx, fixture.cli, fixture.paths.Target), Selections: librarySelections(fileIDs...)},
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_PENDING)
+	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_JOB_STATUS_READY)
 	mediaReply, err := fixture.restore.ListMedia(ctx, &entity.ListRestoreJobMediaRequest{
 		Id: created.Job.Id, Limit: 10,
 	})
 	require.NoError(t, err)
 	require.Len(t, mediaReply.Media, 1)
 	fileReply, err := fixture.restore.ListFiles(ctx, &entity.ListRestoreJobFilesRequest{
-		Id: created.Job.Id, MediaId: state.MediaID, Limit: 100,
+		Id: created.Job.Id, MediaId: proto.Int64(state.MediaID), Limit: 100,
 	})
 	require.NoError(t, err)
 	require.Len(t, fileReply.Items, len(state.Files))
@@ -233,13 +242,13 @@ func TestPhysicalTapeRestartRestore(t *testing.T) {
 		Id: created.Job.Id, Target: (&entity.ReadTapeTarget{Device: fixture.device}).Pack(),
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_COMPLETED)
+	waitForPhysicalJob(t, ctx, fixture, created.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED)
 	requirePhysicalDeviceAvailable(t, ctx, fixture)
 	requireRestoredFiles(t, fixture.paths.Target, state.Files)
 	t.Logf("restored Media paths in storage order: %s", strings.Join(expectedOrder, ", "))
 	progress, err := fixture.restore.GetProgress(ctx, &entity.GetRestoreJobProgressRequest{Id: created.Job.Id})
 	require.NoError(t, err)
-	require.Equal(t, int64(len(state.Files)), progress.Progress.CopiedFiles)
+	require.Equal(t, int64(len(state.Files)), progress.Progress.CopiedFileCount)
 }
 
 func TestPhysicalTapeFullBoundaryWrite(t *testing.T) {
@@ -262,14 +271,16 @@ func TestPhysicalTapeFullBoundaryWrite(t *testing.T) {
 		writePhysicalState(t, fixture.root, state)
 		createdFullArchive = true
 	}
-	waitForPhysicalJob(t, ctx, fixture, state.FullArchiveJobID, entity.JobStatus_PENDING)
 	if !createdFullArchive {
+		// An existing full boundary records a failed attempt, never a request to write again.
+		waitForPhysicalJob(t, ctx, fixture, state.FullArchiveJobID, entity.JobStatus_JOB_STATUS_READY)
 		requirePhysicalFullBoundary(t, ctx, fixture, state.FullArchiveJobID, len(expected))
 		t.Logf("physical full boundary already recorded for Job %d", state.FullArchiveJobID)
 		return
 	}
 
 	// Write only pending items and checkpoint the usable no-space result before later validation.
+	waitForPhysicalJob(t, ctx, fixture, state.FullArchiveJobID, entity.JobStatus_JOB_STATUS_READY)
 	_, err := fixture.archive.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
 		Id: state.FullArchiveJobID,
 		Target: (&entity.ArchiveTapeTarget{
@@ -278,7 +289,7 @@ func TestPhysicalTapeFullBoundaryWrite(t *testing.T) {
 		}).Pack(),
 	})
 	require.NoError(t, err)
-	waitForStoppedJob(t, ctx, fixture.exe, state.FullArchiveJobID)
+	waitForPhysicalJob(t, ctx, fixture, state.FullArchiveJobID, entity.JobStatus_JOB_STATUS_READY)
 	requirePhysicalDeviceAvailable(t, ctx, fixture)
 	requirePhysicalFullBoundary(t, ctx, fixture, state.FullArchiveJobID, len(expected))
 }
@@ -303,16 +314,16 @@ func TestPhysicalTapeFullBoundaryVerify(t *testing.T) {
 	var submittedBytes int64
 	prefixEnded := false
 	for _, item := range reply.Items {
-		if item.Status == entity.CopyStatus_SUBMITTED {
+		if item.Status == entity.CopyStatus_COPY_STATUS_SUBMITTED {
 			require.False(t, prefixEnded, item.File.TargetPath)
 			require.NotNil(t, item.MediaId)
 			require.Equal(t, state.MediaID, *item.MediaId)
 			submitted = append(submitted, item)
-			submittedBytes += item.Size
+			submittedBytes += item.SizeBytes
 			continue
 		}
 		prefixEnded = true
-		require.Equal(t, entity.CopyStatus_PENDING, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 		require.Nil(t, item.MediaId)
 		require.Empty(t, item.File.MediaPath)
 	}
@@ -343,9 +354,9 @@ func TestPhysicalTapeFullBoundaryVerify(t *testing.T) {
 	}
 	progress, err := fixture.archive.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: state.FullArchiveJobID})
 	require.NoError(t, err)
-	require.Equal(t, int64(len(submitted)), progress.Progress.CopiedFiles)
+	require.Equal(t, int64(len(submitted)), progress.Progress.CopiedFileCount)
 	require.Equal(t, submittedBytes, progress.Progress.CopiedBytes)
-	require.Equal(t, int64(len(expected)), progress.Progress.TotalFiles)
+	require.Equal(t, int64(len(expected)), progress.Progress.TotalFileCount)
 	requirePhysicalReport(t, fixture, state.FullArchiveJobID, len(submitted), submittedBytes)
 
 	boundaryFiles := []*entity.ArchiveItem{submitted[0], submitted[len(submitted)-1]}
@@ -357,7 +368,7 @@ func TestPhysicalTapeFullBoundaryVerify(t *testing.T) {
 		boundaryIDs = append(boundaryIDs, item.File.Expected.FileId)
 		boundaryExpected = append(boundaryExpected, physicalExpectedFile{
 			TargetPath: item.File.TargetPath, MediaPath: item.File.MediaPath, RestorePath: filepath.FromSlash(item.File.TargetPath),
-			Size: item.Size, SHA256: expected[name], FileID: item.File.Expected.FileId,
+			Size: item.SizeBytes, SHA256: expected[name], FileID: item.File.Expected.FileId,
 			StorageOrder: hex.EncodeToString(position.StorageOrder),
 		})
 	}
@@ -365,13 +376,13 @@ func TestPhysicalTapeFullBoundaryVerify(t *testing.T) {
 		Spec: &entity.RestoreJobSpec{Destination: restoreDestination(t, ctx, fixture.cli, fixture.paths.Target), Selections: librarySelections(boundaryIDs...)},
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, restoreJob.Job.Id, entity.JobStatus_PENDING)
+	waitForPhysicalJob(t, ctx, fixture, restoreJob.Job.Id, entity.JobStatus_JOB_STATUS_READY)
 	expectedOrder := readRestoreStorageOrder(t, fixture, restoreJob.Job.Id, state.MediaID)
 	_, err = fixture.restore.RestoreMedia(ctx, &entity.RestoreMediaRequest{
 		Id: restoreJob.Job.Id, Target: (&entity.ReadTapeTarget{Device: fixture.device}).Pack(),
 	})
 	require.NoError(t, err)
-	waitForPhysicalJob(t, ctx, fixture, restoreJob.Job.Id, entity.JobStatus_COMPLETED)
+	waitForPhysicalJob(t, ctx, fixture, restoreJob.Job.Id, entity.JobStatus_JOB_STATUS_COMPLETED)
 	requirePhysicalDeviceAvailable(t, ctx, fixture)
 	requireRestoredFiles(t, fixture.paths.Target, boundaryExpected)
 	t.Logf("restored boundary Media paths in storage order: %s", strings.Join(expectedOrder, ", "))
@@ -404,11 +415,12 @@ func requirePhysicalFullBoundary(
 ) {
 	t.Helper()
 
-	// Require the stable retryable Job boundary before inspecting its committed files.
+	// A no-space attempt fails while retaining its prepared manifest and verified prefix.
 	job, err := fixture.job.Get(ctx, &entity.GetJobRequest{Id: jobID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_PENDING, job.Job.Status)
-	require.Equal(t, entity.JobPhase_JOB_PHASE_WAITING_FOR_MEDIA, job.Job.Phase)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, job.Job.Status)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, job.Job.Phase)
+	require.NotEmpty(t, job.Job.Error)
 	reply, err := fixture.archive.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{Id: jobID, Limit: 1000})
 	require.NoError(t, err)
 	require.Len(t, reply.Items, expectedFiles)
@@ -418,14 +430,14 @@ func requirePhysicalFullBoundary(
 	prefixEnded := false
 	for _, item := range reply.Items {
 		switch item.Status {
-		case entity.CopyStatus_SUBMITTED:
+		case entity.CopyStatus_COPY_STATUS_SUBMITTED:
 			require.False(t, prefixEnded, item.File.TargetPath)
 			require.NotNil(t, item.MediaId)
 			require.Equal(t, mediaID, *item.MediaId)
 			require.NotEmpty(t, item.File.MediaPath)
 			submitted++
-			submittedBytes += item.Size
-		case entity.CopyStatus_PENDING:
+			submittedBytes += item.SizeBytes
+		case entity.CopyStatus_COPY_STATUS_PENDING:
 			prefixEnded = true
 			require.Nil(t, item.MediaId)
 			require.Empty(t, item.File.MediaPath)
@@ -475,7 +487,7 @@ func requirePhysicalBarcodeMismatch(
 	t.Helper()
 	want := fmt.Sprintf(`archive Tape changed, requested=%q device=%q`, "BAD999", fixture.barcode)
 	// This fault probe intentionally bypasses the CLI's earlier barcode preflight to test the runner boundary.
-	client := connect.NewClient[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaReply](http.DefaultClient,
+	client := connect.NewClient[entity.WriteArchiveMediaRequest, entity.WriteArchiveMediaResponse](http.DefaultClient,
 		fixture.cli.url+"/services"+entity.ArchiveJobService_WriteMedia_FullMethodName, connect.WithGRPCWeb())
 	for attempt := 0; attempt < 2; attempt++ {
 		// Start the deliberately mismatched APPEND and wait for the asynchronous attempt to stop.
@@ -521,6 +533,7 @@ func newPhysicalTapeFixture(t *testing.T, ctx context.Context) *physicalTapeFixt
 	paths := executor.Paths{
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"),
 		Target: filepath.Join(root, "restore"),
+		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "restore")}},
 	}
 	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
 	require.NoError(t, err)
@@ -536,7 +549,7 @@ func newPhysicalTapeFixture(t *testing.T, ctx context.Context) *physicalTapeFixt
 		Encrypt: filepath.Join(scripts, "encrypt"), Mkfs: filepath.Join(scripts, "mkfs-physical.sh"),
 		Mount: filepath.Join(scripts, "mount"), Umount: filepath.Join(scripts, "umount"),
 		ReadInfo: filepath.Join(scripts, "readinfo"),
-	}, previews)
+	}, &physicalPreviewFixture{previews})
 	require.NoError(t, exe.AutoMigrate())
 	require.NoError(t, exe.ReconcileStorage(ctx))
 	require.NoError(t, os.MkdirAll(paths.Source, 0o755))
@@ -548,8 +561,8 @@ func newPhysicalTapeFixture(t *testing.T, ctx context.Context) *physicalTapeFixt
 
 	return &physicalTapeFixture{
 		root: root, device: device, barcode: barcode, paths: paths, exe: exe, lib: lib,
-		filesURL: conn.url + "/files", cli: conn, job: entity.NewJobServiceClient(conn), service: entity.NewServiceClient(conn),
-		archive: entity.NewArchiveJobServiceClient(conn), restore: entity.NewRestoreJobServiceClient(conn),
+		filesURL: conn.url + "/files", cli: conn, job: entity.NewJobServiceClient(conn), media: entity.NewMediaServiceClient(conn), files: entity.NewFilesServiceClient(conn), library: entity.NewLibraryServiceClient(conn),
+		preview: entity.NewPreviewServiceClient(conn), archive: entity.NewArchiveJobServiceClient(conn), restore: entity.NewRestoreJobServiceClient(conn),
 	}
 }
 
@@ -619,7 +632,7 @@ func requirePhysicalPositions(
 	}
 	result := make(map[string]*library.Position, len(items))
 	for _, item := range items {
-		require.Equal(t, entity.CopyStatus_SUBMITTED, item.Status)
+		require.Equal(t, entity.CopyStatus_COPY_STATUS_SUBMITTED, item.Status)
 		require.NotNil(t, item.MediaId)
 		position := byPath[item.File.MediaPath]
 		require.NotNil(t, position, item.File.MediaPath)
@@ -669,7 +682,7 @@ func requireStorageOrderMatchesExtent(t *testing.T, position *library.Position) 
 	t.Helper()
 	first := position.StorageMetadata.GetLtfs().Extents[0]
 	for _, extent := range position.StorageMetadata.GetLtfs().Extents[1:] {
-		if extent.FileOffset < first.FileOffset {
+		if extent.FileOffsetBytes < first.FileOffsetBytes {
 			first = extent
 		}
 	}
@@ -699,17 +712,17 @@ func requireBaselineUIAPIs(
 	require.NotEmpty(t, logReply.Logs)
 	progress, err := fixture.archive.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, int64(len(files)), progress.Progress.CopiedFiles)
+	require.Equal(t, int64(len(files)), progress.Progress.CopiedFileCount)
 
-	listedMedia, err := fixture.service.MediaList(ctx, (&entity.MediaFilter{
+	listedMedia, err := fixture.media.List(ctx, (&entity.MediaFilter{
 		Kinds: []entity.MediaKind{entity.MediaKind_MEDIA_KIND_TAPE},
 	}).Pack())
 	require.NoError(t, err)
 	require.Len(t, listedMedia.Media, 1)
-	gotMedia, err := fixture.service.MediaList(ctx, (&entity.MediaMGetRequest{Ids: []int64{media.ID}}).Pack())
+	gotMedia, err := fixture.media.List(ctx, (&entity.MediaIds{Ids: []int64{media.ID}}).Pack())
 	require.NoError(t, err)
 	require.Len(t, gotMedia.Media, 1)
-	rootPositions, err := fixture.service.MediaGetPositions(ctx, &entity.MediaGetPositionsRequest{
+	rootPositions, err := fixture.media.ListPositions(ctx, &entity.ListMediaPositionsRequest{
 		Id: media.ID, Directory: "", Limit: int64Pointer(1),
 	})
 	require.NoError(t, err)
@@ -719,31 +732,35 @@ func requireBaselineUIAPIs(
 	require.NoError(t, err)
 	require.NotNil(t, file)
 	note := "physical Tape UI API"
-	_, err = fixture.service.FileMetadataEdit(ctx, &entity.FileMetadataEditRequest{
-		Ids: []int64{file.ID}, AddTags: []string{"e2e", "physical"}, Note: &note,
+	_, err = fixture.files.UpdateMetadata(ctx, &entity.UpdateFilesMetadataRequest{
+		References: []*entity.FileOperationRef{{Target: &entity.FileOperationRef_FileId{FileId: file.ID}}}, AddTags: []string{"e2e", "physical"}, Note: &note,
 	})
 	require.NoError(t, err)
-	detail, err := fixture.service.FileGet(ctx, &entity.FileGetRequest{Id: file.ID})
+	detail, err := fixture.files.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: file.ID}}})
 	require.NoError(t, err)
-	require.Equal(t, note, detail.File.Note)
-	require.Equal(t, []string{"e2e", "physical"}, detail.File.Tags)
-	require.NotNil(t, detail.Preview)
-	parents, err := fixture.service.FileListParents(ctx, &entity.FileListParentsRequest{Id: file.ID})
-	require.NoError(t, err)
-	require.NotEmpty(t, parents.Parents)
-	search, err := fixture.service.FileSearch(ctx, &entity.FileSearchRequest{Query: "tag:physical AND note:Tape"})
-	require.NoError(t, err)
-	require.Len(t, search.Results, 1)
-	tags, err := fixture.service.TagList(ctx, &entity.TagListRequest{Prefix: stringPointer("phys")})
+	require.Equal(t, note, detail.Detail.Organization.Note)
+	require.Equal(t, []string{"e2e", "physical"}, detail.Detail.Organization.Tags)
+	tags, err := fixture.library.ListTags(ctx, &entity.ListTagsRequest{Prefix: stringPointer("phys")})
 	require.NoError(t, err)
 	require.Len(t, tags.Tags, 1)
 
-	// Preview bytes use the same HTTP path as browser rendering, independently of CLI control.
-	data := readHTTPContent(t, ctx, fmt.Sprintf("%s/files/previews/%d/thumbnail", fixture.cli.url, file.ID))
+	// Preview bytes use the same HTTP path as browser rendering, independently of CLI control: the
+	// asset URL the service publishes is what a client fetches.
+	assets, err := fixture.preview.Get(ctx, &entity.GetPreviewRequest{Signature: detail.Detail.ContentSignature})
+	require.NoError(t, err)
+	require.Equal(t, entity.PreviewAvailability_PREVIEW_AVAILABILITY_READY, assets.Availability)
+	thumbnail := ""
+	for _, asset := range assets.Assets {
+		if asset.Role == "thumbnail" {
+			thumbnail = asset.Url
+		}
+	}
+	require.NotEmpty(t, thumbnail)
+	data := readHTTPContent(t, ctx, fixture.cli.url+thumbnail)
 	require.NotEmpty(t, data)
 	preview, err := fixture.job.Get(ctx, &entity.GetJobRequest{Id: previewID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_COMPLETED, preview.Job.Status)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, preview.Job.Status)
 }
 
 func expectedPhysicalFiles(
@@ -885,7 +902,7 @@ func waitForPhysicalJob(
 
 func requirePhysicalDeviceAvailable(t *testing.T, ctx context.Context, fixture *physicalTapeFixture) {
 	t.Helper()
-	reply, err := fixture.service.DeviceList(ctx, &entity.DeviceListRequest{})
+	reply, err := fixture.media.ListDevices(ctx, &entity.ListDevicesRequest{})
 	require.NoError(t, err)
 	require.Equal(t, []string{fixture.device}, reply.Devices)
 }

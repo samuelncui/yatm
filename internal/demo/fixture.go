@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"image"
 	"image/color"
@@ -18,26 +17,13 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/executor"
-	"github.com/samuelncui/yatm/library"
-	mediapkg "github.com/samuelncui/yatm/media"
+	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/library"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 )
 
 const tebibyte = int64(1 << 40)
-
-const demoPreviewVideoBase64 = "AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAAhmcmVlAAAARW1kYXQAAAGzABAHAAABthYZGKm2GQhG238bbfxtt+8AAKMR" +
-	"ipthkIRtt/G238bbfgAAwxGKm2GQhG238bbfxtt+AAADQW1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAPoAAEAAAEAAAAA" +
-	"AAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAJr" +
-	"dHJhawAAAFx0a2hkAAAAAwAAAAAAAAAAAAAAAQAAAAAAAAPoAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAA" +
-	"AAAAAAAAAAAAQAAAAABAAAAAJAAAAAAAJGVkdHMAAAAcZWxzdAAAAAAAAAABAAAD6AAAAAAAAQAAAAAB421kaWEAAAAgbWRoZAAA" +
-	"AAAAAAAAAAAAAAAAQAAAAEAAVcQAAAAAAC1oZGxyAAAAAAAAAAB2aWRlAAAAAAAAAAAAAAAAVmlkZW9IYW5kbGVyAAAAAY5taW5m" +
-	"AAAAFHZtaGQAAAABAAAAAAAAAAAAAAAkZGluZgAAABxkcmVmAAAAAAAAAAEAAAAMdXJsIAAAAAEAAAFOc3RibAAAAOpzdHNkAAAA" +
-	"AAAAAAEAAADabXA0dgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAABAACQASAAAAEgAAAAAAAAAARNMYXZjNjIuMjguMTAxIG1wZWc0" +
-	"AAAAAAAAAAAAAAAAABj//wAAAGBlc2RzAAAAAAOAgIBPAAEABICAgEEgEQAAAAADDUAAAAHoBYCAgC8AAAGwAQAAAbWJEwAAAQAA" +
-	"AAEgAMSNiAANAgQElEMAAAGyTGF2YzYyLjI4LjEwMQaAgIABAgAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAw1AAAAB6AAA" +
-	"ABhzdHRzAAAAAAAAAAEAAAABAABAAAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAA9AAAAAQAAABRz" +
-	"dGNvAAAAAAAAAAEAAAAsAAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAtaWxz" +
-	"dAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDE="
 
 type fixtureFile struct {
 	path    string
@@ -59,8 +45,9 @@ func seed(
 	paths executor.Paths,
 	root string,
 	videoPath string,
+	identicalFiles int,
 ) error {
-	// Build deterministic image and video content shared by the Library and Preview source fixtures.
+	// Build image content and load the licensed video shared by the Library and Preview sources.
 	previewImage, err := demoPreviewImage()
 	if err != nil {
 		return err
@@ -86,12 +73,17 @@ func seed(
 	if err := seedOfflineVolume(ctx, lib, paths.Volumes[0], filepath.Join(root, "offline-shelf")); err != nil {
 		return err
 	}
+
+	// Leave one mounted disk without a marker so Add Volume can demonstrate initialization.
+	if err := os.MkdirAll(filepath.Join(paths.Volumes[0], "review-new-disk"), defaultPerm); err != nil {
+		return fmt.Errorf("create uninitialized Demo Volume failed, %w", err)
+	}
 	if err := seedTape(ctx, lib); err != nil {
 		return err
 	}
 
 	// Materialize logical Files, annotations, and review-friendly top-level directories.
-	if err := lib.Trim(ctx, true, true); err != nil {
+	if _, err := lib.Trim(ctx, true, true, false); err != nil {
 		return fmt.Errorf("trim Demo Library failed, %w", err)
 	}
 	if err := organizeLibrary(ctx, lib, hdd, files); err != nil {
@@ -105,19 +97,48 @@ func seed(
 	if err := seedArchiveSources(paths.Source, previewImage, previewVideo); err != nil {
 		return err
 	}
-	if err := seedOnlineSources(ctx, lib, exe, root, files, hdd); err != nil {
+	daily, offline, err := seedLocations(ctx, lib, exe, root, files, hdd)
+	if err != nil {
 		return err
 	}
-	if err := seedDuplicateOriginals(ctx, lib, exe); err != nil {
+	if err := seedDuplicateOriginals(ctx, lib, exe, hdd, offline, identicalFiles); err != nil {
 		return err
 	}
-	if err := seedImageVersions(ctx, lib, exe, hdd); err != nil {
+	if err := seedImageVersions(ctx, lib, exe, hdd, daily); err != nil {
 		return err
 	}
-	return seedJobs(ctx, exe, hdd)
+
+	// Park one Location after its current and saved evidence is complete.
+	if err := os.Rename(offline.RootPath, filepath.Join(root, "offline-shelf", "originals")); err != nil {
+		return err
+	}
+	if err := seedJobs(ctx, exe, hdd); err != nil {
+		return err
+	}
+
+	// Carry the video credit to Incoming's distinct File as well as its organized saved copy.
+	saved, err := lib.GetByPath(ctx, library.Root.ID, "Photos/"+demoVideoName)
+	if err != nil {
+		return err
+	}
+	original, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Incoming/Camera A/"+demoVideoName)
+	if err != nil {
+		return err
+	}
+	if saved == nil || original == nil {
+		return fmt.Errorf("Demo video annotation source or destination is missing")
+	}
+	original.Note = saved.Note
+	return lib.SaveFile(ctx, original)
 }
 
 func reviewFiles(previewImage, previewVideo []byte) []fixtureFile {
+	// Credit the bundled excerpt through normal File annotations, including its derived images.
+	videoNote := "User-supplied video with native poster and timeline Preview assets."
+	if bytes.Equal(previewVideo, bundledVideo) {
+		videoNote = demoVideoCredit
+	}
+
 	// Keep a small curated set for metadata and mixed-field search review.
 	files := []fixtureFile{
 		{
@@ -145,8 +166,8 @@ func reviewFiles(previewImage, previewVideo []byte) []fixtureFile {
 			note: "Archive room layout.", tags: []string{"photo", "preview", "demo"},
 		},
 		{
-			path: "featured/photos/warehouse-walkthrough.mp4", content: append([]byte(nil), previewVideo...),
-			note: "Video fixture with poster and timeline Preview assets.", tags: []string{"video", "preview", "demo"},
+			path: "featured/photos/" + demoVideoName, content: append([]byte(nil), previewVideo...),
+			note: videoNote, tags: []string{"video", "preview", "demo"},
 		},
 		{
 			path: "featured/research/retention-policy.txt", content: []byte("Retain project material for seven years.\n"),
@@ -156,14 +177,10 @@ func reviewFiles(previewImage, previewVideo []byte) []fixtureFile {
 			path: "featured/research/query-examples.txt", content: []byte("tag:project AND size:>100\nname:*.md OR note:review\n"),
 			note: "Useful search examples for the frontend review.", tags: []string{"search", "demo"},
 		},
-		{
-			path: "featured/research/field-observations.json", content: []byte("{\"site\":\"north\",\"status\":\"verified\"}\n"),
-			note: "Small structured research sample.", tags: []string{"research", "json"},
-		},
 	}
 
 	// Exceed the public page size so pagination and incremental loading remain reviewable.
-	for index := 1; index <= 125; index++ {
+	for index := 1; index <= 101; index++ {
 		files = append(files, fixtureFile{
 			path:    fmt.Sprintf("records/2026/invoice-%03d.txt", index),
 			content: []byte(fmt.Sprintf("Invoice %03d\nStatus: archived\nAmount: %d\n", index, 1000+index*37)),
@@ -204,6 +221,7 @@ func demoPreviewImageWithColor(base color.RGBA) ([]byte, error) {
 }
 
 func demoPreviewVideo(path string) ([]byte, error) {
+	// Read an explicit override for generation with the native worker.
 	if path != "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -211,40 +229,9 @@ func demoPreviewVideo(path string) ([]byte, error) {
 		}
 		return data, nil
 	}
-	data, err := base64.StdEncoding.DecodeString(demoPreviewVideoBase64)
-	if err != nil {
-		return nil, fmt.Errorf("decode Demo Preview video failed, %w", err)
-	}
-	return data, nil
-}
 
-func demoTimelineImage() ([]byte, error) {
-	// Tile four deterministic frames into the sprite consumed by the video Preview UI.
-	canvas := image.NewRGBA(image.Rect(0, 0, 640, 90))
-	colors := []color.RGBA{
-		{R: 34, G: 83, B: 132, A: 255},
-		{R: 39, G: 112, B: 128, A: 255},
-		{R: 74, G: 98, B: 145, A: 255},
-		{R: 98, G: 75, B: 130, A: 255},
-	}
-	for index, background := range colors {
-		left := index * 160
-		draw.Draw(canvas, image.Rect(left, 0, left+160, 90), &image.Uniform{C: background}, image.Point{}, draw.Src)
-		draw.Draw(
-			canvas,
-			image.Rect(left+18+index*5, 34, left+118+index*7, 50),
-			&image.Uniform{C: color.RGBA{R: 109, G: 222, B: 196, A: 255}},
-			image.Point{},
-			draw.Src,
-		)
-	}
-
-	// Encode the complete sprite once for the Preview bundle.
-	data := new(bytes.Buffer)
-	if err := png.Encode(data, canvas); err != nil {
-		return nil, fmt.Errorf("encode Demo Preview timeline failed, %w", err)
-	}
-	return data.Bytes(), nil
+	// Give fixture creation its own copy of the licensed embedded excerpt.
+	return append([]byte(nil), bundledVideo...), nil
 }
 
 func seedVolume(
@@ -265,7 +252,7 @@ func seedVolume(
 	}
 	media := &library.Media{
 		Kind: entity.MediaKind_MEDIA_KIND_VOLUME, Identity: volume.Marker.UUID, Name: name,
-		Profile: volume.Marker.Profile.Pack(), CreateTime: volume.Marker.CreatedAt, CapacityBytes: 2 * tebibyte,
+		Profile: volume.Marker.Profile.Pack(), CreatedAtNS: volume.Marker.CreatedAtNS, CapacityBytes: 2 * tebibyte,
 	}
 
 	// Commit actual fixture files when the Volume is not intentionally empty.
@@ -274,7 +261,7 @@ func seedVolume(
 		return nil, err
 	}
 
-	// Publish known backup dates for ordinary examples; only legacy Tape inventory lacks them.
+	// Publish known archive dates for ordinary examples; only legacy Tape inventory lacks them.
 	for _, item := range physical {
 		parent, err := lib.MkdirAll(ctx, library.Root.ID, path.Join("Unforged", name, path.Dir(item.Path)), defaultPerm)
 		if err != nil {
@@ -288,8 +275,12 @@ func seedVolume(
 		if err != nil {
 			return nil, err
 		}
+		mtimeNS, err := dataformat.Nanoseconds(item.ModTime)
+		if err != nil {
+			return nil, fmt.Errorf("convert Demo archive mtime failed, %w", err)
+		}
 		item.Expected = &entity.ExpectedFile{FileId: file.ID, Signature: signature, Sha256: item.Hash,
-			Size: item.Size, Mode: uint32(item.Mode), MtimeNs: item.ModTime.UnixNano()}
+			SizeBytes: item.Size, Mode: uint32(item.Mode), MtimeNs: mtimeNS}
 	}
 
 	// Commit each version together with its physically present copy.
@@ -361,7 +352,7 @@ func seedOfflineVolume(ctx context.Context, lib *library.Library, volumesRoot, s
 	}
 	if _, err := lib.CreateMedia(ctx, &library.Media{
 		Kind: entity.MediaKind_MEDIA_KIND_VOLUME, Identity: volume.Marker.UUID, Name: "Offsite Shelf 01",
-		Profile: volume.Marker.Profile.Pack(), CreateTime: volume.Marker.CreatedAt, CapacityBytes: 4 * tebibyte,
+		Profile: volume.Marker.Profile.Pack(), CreatedAtNS: volume.Marker.CreatedAtNS, CapacityBytes: 4 * tebibyte,
 	}); err != nil {
 		return fmt.Errorf("register offline Demo Volume failed, %w", err)
 	}
@@ -374,6 +365,10 @@ func seedOfflineVolume(ctx context.Context, lib *library.Library, volumesRoot, s
 func seedTape(ctx context.Context, lib *library.Library) error {
 	// Register LTFS v0 metadata so Tape remains inspectable without emulating LTFS I/O.
 	when := time.Date(2025, time.December, 12, 14, 30, 0, 0, time.UTC)
+	createdAtNS, err := dataformat.Nanoseconds(when)
+	if err != nil {
+		return fmt.Errorf("convert Demo Tape creation time failed, %w", err)
+	}
 	files := []fixtureFile{
 		{path: "legacy/board-minutes-2024.txt", content: []byte("Board minutes archive copy\n")},
 		{path: "legacy/project-ember-final.txt", content: []byte("Project Ember final delivery\n")},
@@ -391,13 +386,13 @@ func seedTape(ctx context.Context, lib *library.Library) error {
 		Profile: (&entity.TapeMediaProfile{
 			SerialNumber: "MOCK-LTO9-001", Encryption: "review-only", Format: library.TapeFormatLTFSV0,
 		}).Pack(),
-		CreateTime: when, CapacityBytes: 18 * tebibyte,
+		CreatedAtNS: createdAtNS, CapacityBytes: 18 * tebibyte,
 	}, mediaFileSource(physical))
 	if err != nil {
 		return fmt.Errorf("register Demo Tape failed, %w", err)
 	}
 
-	// Import only the two legacy copies without inventing their original backup dates.
+	// Import only the two legacy copies without inventing their original archive dates.
 	positions, err := lib.ListMediaFilePositions(ctx, tape.ID, "", len(files))
 	if err != nil {
 		return fmt.Errorf("read Demo Tape inventory failed, %w", err)
@@ -410,7 +405,7 @@ func seedTape(ctx context.Context, lib *library.Library) error {
 	if err != nil {
 		return fmt.Errorf("import Demo Tape inventory failed, %w", err)
 	}
-	note := "Legacy archive inventory: the original backup date was not recorded. " +
+	note := "Legacy archive inventory: the original archive date was not recorded. " +
 		"The mock Tape supports metadata inspection only."
 	if err := lib.EditFileMetadata(ctx, imported, library.FileMetadataEdit{Note: &note}); err != nil {
 		return fmt.Errorf("annotate Demo legacy archive failed, %w", err)
@@ -519,11 +514,8 @@ func mutateVolumeForScan(root string) error {
 func seedArchiveSources(root string, previewImage, previewVideo []byte) error {
 	// Populate a small nested source manifest for the pending Archive Job.
 	files := map[string]string{
-		"Incoming Review/Camera A/shot-list.txt":      "Shot 01\nShot 02\nShot 03\n",
 		"Incoming Review/Camera A/location.json":      "{\"location\":\"studio-a\"}\n",
 		"Incoming Review/Deliverables/review-copy.md": "# Review copy\nReady for Archive.\n",
-		"Incoming Review/Deliverables/checksums.txt":  "Mock checksum manifest\n",
-		"Incoming Review/Notes/operator-handoff.txt":  "Archive this folder to either mounted Volume.\n",
 	}
 	for name, content := range files {
 		filename := filepath.Join(root, filepath.FromSlash(name))
@@ -534,12 +526,13 @@ func seedArchiveSources(root string, previewImage, previewVideo []byte) error {
 			return fmt.Errorf("write Demo Archive source failed, path=%q, %w", filename, err)
 		}
 	}
-	// Add supported image and video files for the Preview Job.
+
+	// Add supported image and video files for Scan's Preview generation.
 	previewPath := filepath.Join(root, "Incoming Review", "Camera A", "contact-sheet.png")
 	if err := os.WriteFile(previewPath, previewImage, 0o644); err != nil {
 		return fmt.Errorf("write Demo Preview source failed, path=%q, %w", previewPath, err)
 	}
-	videoPath := filepath.Join(root, "Incoming Review", "Camera A", "warehouse-walkthrough.mp4")
+	videoPath := filepath.Join(root, "Incoming Review", "Camera A", demoVideoName)
 	if err := os.WriteFile(videoPath, previewVideo, 0o644); err != nil {
 		return fmt.Errorf("write Demo Preview video failed, path=%q, %w", videoPath, err)
 	}

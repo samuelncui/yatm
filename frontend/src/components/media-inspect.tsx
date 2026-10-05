@@ -1,27 +1,28 @@
+import { Feedback } from "@/components/feedback";
 import { useCallback, useRef, useState } from "react";
 
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
-import moment from "moment";
+import { contentTime } from "@/components/content-status";
 
-import { cli } from "@/api";
+import { mediaCli } from "@/api";
 import { MediaKind } from "@/entity";
-import type { MediaInspectReply, MediaInspectRequest } from "@/entity";
+import type { InspectMediaResponse, InspectMediaRequest } from "@/entity";
 import { formatFilesize } from "@/tools";
 
 export const useMediaInspect = () => {
-  const [reply, setReply] = useState<MediaInspectReply | null>(null);
+  const [reply, setReply] = useState<InspectMediaResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const sequence = useRef(0);
 
-  const inspect = useCallback(async (target: MediaInspectRequest["target"], identity?: string) => {
+  const inspect = useCallback(async (target: InspectMediaRequest["target"], identity?: string) => {
     const current = ++sequence.current;
     setLoading(true);
     setError("");
     try {
-      const value = await cli.mediaInspect({ target, identity: identity || undefined }).response;
+      const value = await mediaCli.inspect({ target, identity: identity || undefined }).response;
       if (current !== sequence.current) return null;
       setReply(value);
       return value;
@@ -45,7 +46,7 @@ export const useMediaInspect = () => {
   return { reply, loading, error, inspect, reset };
 };
 
-export const MediaInspectResult = ({ reply, loading, error }: { reply: MediaInspectReply | null; loading: boolean; error?: string }) => {
+export const MediaInspectResult = ({ reply, loading, error }: { reply: InspectMediaResponse | null; loading: boolean; error?: string }) => {
   if (loading) {
     return (
       <Stack direction="row" spacing={1} sx={{ mt: 2, alignItems: "center" }}>
@@ -54,12 +55,7 @@ export const MediaInspectResult = ({ reply, loading, error }: { reply: MediaInsp
       </Stack>
     );
   }
-  if (error)
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-      </Alert>
-    );
+  if (error) return <Feedback severity="error">{error}</Feedback>;
   if (!reply) return null;
 
   const media = reply.media;
@@ -76,8 +72,8 @@ export const MediaInspectResult = ({ reply, loading, error }: { reply: MediaInsp
           <span>
             {reply.fileCount.toString()} files · {formatFilesize(media.writtenBytes)} written
           </span>
-          <span>Created {moment.unix(Number(media.createTime)).format("lll")}</span>
-          {reply.lastWriteTime !== undefined && <span>Last written {moment.unix(Number(reply.lastWriteTime)).format("lll")}</span>}
+          <span>Created {contentTime(media.createdAtNs)}</span>
+          {reply.lastWrittenAtNs !== undefined && <span>Last written {contentTime(reply.lastWrittenAtNs)}</span>}
           {media.kind === MediaKind.VOLUME && (
             <span>{media.mounted ? `Online · ${formatFilesize(media.filesystemAvailableBytes ?? 0n)} available` : "Mount required"}</span>
           )}

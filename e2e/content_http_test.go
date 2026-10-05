@@ -13,7 +13,7 @@ import (
 
 func readHTTPContent(t *testing.T, ctx context.Context, url string) []byte {
 	t.Helper()
-	// Browser content and Preview delivery are HTTP protocol checks, not CLI file exports.
+	// Preview delivery is an HTTP protocol check, not a CLI file export.
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	require.NoError(t, err)
 	response, err := http.DefaultClient.Do(request)
@@ -26,4 +26,14 @@ func readHTTPContent(t *testing.T, ctx context.Context, url string) []byte {
 	require.NoError(t, closeErr)
 	require.Equal(t, http.StatusOK, response.StatusCode, string(data))
 	return data
+}
+
+func requireHTTPNotFound(t *testing.T, ctx context.Context, method, url string) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(ctx, method, url, nil)
+	require.NoError(t, err)
+	response, err := http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusNotFound, response.StatusCode)
 }

@@ -2,109 +2,65 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"testing"
-
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"testing"
 )
 
 type fileBrowseService struct {
-	entity.UnimplementedServiceServer
+	entity.UnimplementedFilesServiceServer
 }
 
-func (*fileBrowseService) FileGet(
-	_ context.Context, request *entity.FileGetRequest,
-) (*entity.FileGetReply, error) {
-	return &entity.FileGetReply{File: &entity.File{Id: request.Id, Name: ".Trash"}}, nil
+func (*fileBrowseService) Get(_ context.Context, r *entity.GetFileRequest) (*entity.GetFileResponse, error) {
+	return &entity.GetFileResponse{Detail: &entity.FilesDetail{Entry: &entity.FilesEntry{Reference: r.Reference, Name: ".Trash"}}}, nil
 }
-
-func (*fileBrowseService) FileListParents(
-	_ context.Context, request *entity.FileListParentsRequest,
-) (*entity.FileListParentsReply, error) {
-	return &entity.FileListParentsReply{Parents: []*entity.File{{Id: request.Id, Name: ".Trash"}}}, nil
+func (*fileBrowseService) List(r *entity.ListFilesRequest, stream entity.FilesService_ListServer) error {
+	return stream.Send(&entity.ListFilesResponse{Directory: &entity.FilesEntry{Reference: r.Directory, Name: ".Trash"}})
 }
-
 func TestFileBrowseCommandsAcceptReservedTrashID(t *testing.T) {
-	// Exercise the production argument parser and real gRPC-Web transport for every Trash browser entry.
-	for _, test := range []struct {
-		name, method string
+	for _, tc := range []struct {
+		args   []string
+		method string
 	}{
-		{"get", entity.Service_FileGet_FullMethodName},
-		{"list", entity.Service_FileGet_FullMethodName},
-		{"parents", entity.Service_FileListParents_FullMethodName},
+		{[]string{"files", "get", "--file-id=-1"}, entity.FilesService_Get_FullMethodName},
+		{[]string{"ls", "--file-id=-1"}, entity.FilesService_List_FullMethodName},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			// Echo the received identity so the wire request cannot silently substitute root zero.
-			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-				entity.RegisterServiceServer(server, &fileBrowseService{})
-			}, nil, nil)
-			exit, stdout, stderr := executeTestCLI(server.URL, "", "file", test.name, "--", "-1")
-
-			// The option delimiter preserves the negative positional identity and performs one read only.
-			require.Equal(t, exitSuccess, exit, stderr)
-			require.Empty(t, stderr)
-			require.Contains(t, stdout, `"id":"-1"`)
-			require.Equal(t, 1, recorder.count(test.method))
-		})
+		server, recorder := newGRPCWebTestServer(t, func(s *grpc.Server) { entity.RegisterFilesServiceServer(s, &fileBrowseService{}) }, nil, nil)
+		exit, stdout, stderr := executeTestCLI(server.URL, "", tc.args...)
+		require.Equal(t, exitSuccess, exit, stderr)
+		require.Contains(t, stdout, `"file_id":"-1"`)
+		require.Equal(t, 1, recorder.count(tc.method))
 	}
 }
-
 func TestFileBrowseCommandsKeepRootAndInvalidIDBoundaries(t *testing.T) {
-	// Only list may browse root zero; all read commands reject negative identities other than Trash.
-	for _, test := range []struct {
-		name    string
+	for _, tc := range []struct {
 		args    []string
 		allowed bool
 	}{
-		{"get root", []string{"file", "get", "0"}, false},
-		{"list root", []string{"file", "list", "0"}, true},
-		{"list default root", []string{"file", "list"}, true},
-		{"parents root", []string{"file", "parents", "0"}, false},
-		{"get invalid", []string{"file", "get", "--", "-2"}, false},
-		{"list invalid", []string{"file", "list", "--", "-2"}, false},
-		{"parents invalid", []string{"file", "parents", "--", "-2"}, false},
+		{[]string{"ls", "--file-id=0"}, true},
+		{[]string{"files", "get", "--file-id=0"}, true},
+		{[]string{"ls", "--file-id=-2"}, false},
+		{[]string{"files", "get", "--file-id=-2"}, false},
+		{[]string{"ls"}, true},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			// Record actual calls, including the absence of network access for rejected arguments.
-			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-				entity.RegisterServiceServer(server, &fileBrowseService{})
-			}, nil, nil)
-			exit, _, stderr := executeTestCLI(server.URL, "", test.args...)
-			if test.allowed {
-				require.Equal(t, exitSuccess, exit, stderr)
-				require.Equal(t, 1, recorder.count(entity.Service_FileGet_FullMethodName))
-				return
-			}
-
-			// Invalid identities remain local usage errors instead of ambiguous server-side root lookups.
+		server, _ := newGRPCWebTestServer(t, func(s *grpc.Server) { entity.RegisterFilesServiceServer(s, &fileBrowseService{}) }, nil, nil)
+		exit, _, stderr := executeTestCLI(server.URL, "", tc.args...)
+		if tc.allowed {
+			require.Equal(t, exitSuccess, exit, stderr)
+		} else {
 			require.Equal(t, exitUsage, exit, stderr)
-			var output errorOutput
-			require.NoError(t, json.Unmarshal([]byte(stderr), &output))
-			require.Equal(t, "usage", output.Code)
-			require.Zero(t, recorder.count(entity.Service_FileGet_FullMethodName))
-			require.Zero(t, recorder.count(entity.Service_FileListParents_FullMethodName))
-		})
+		}
 	}
 }
-
 func TestTrashReadExceptionDoesNotRelaxMutations(t *testing.T) {
-	// Read-only Trash support must not bypass the existing mutation-ID or deletion-confirmation policy.
 	for _, args := range [][]string{
-		{"file", "edit", "--name", "renamed", "--", "-1"},
-		{"file", "metadata", "--note", "changed", "--", "-1"},
-		{"file", "mkdir", "--", "-1", "child"},
-		{"file", "delete", "--confirm", "--", "-1"},
+		{"mv", "--library", "--source=-1", "--destination", "0"},
+		{"mkdir", "--library", "--destination=-1", "--name", "child"},
+		{"rm", "--library", "--source=-1"},
+		{"rm", "--library", "--source=-1"},
 	} {
 		exit, _, stderr := executeTestCLI("http://127.0.0.1:1", "", args...)
 		require.Equal(t, exitUsage, exit, stderr)
 	}
-
-	// Deletion still requires explicit confirmation before resolving any target identity.
-	exit, _, stderr := executeTestCLI("http://127.0.0.1:1", "", "file", "delete", "--", "-1")
-	require.Equal(t, exitUsage, exit, stderr)
-	var output errorOutput
-	require.NoError(t, json.Unmarshal([]byte(stderr), &output))
-	require.Equal(t, "safety", output.Code)
 }

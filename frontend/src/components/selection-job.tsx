@@ -1,9 +1,10 @@
+import { FileBrowser } from "@/components/file-browser";
+import { Feedback } from "@/components/feedback";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField } from "@mui/material";
 import {
   ChonkyActions,
-  FileBrowser,
   FileContextMenu,
   FileList,
   FileNavbar,
@@ -13,76 +14,59 @@ import {
   type FileBrowserHandle,
   type FileData,
 } from "@samuelncui/chonky";
-import { archiveJobCli, cli, fileCatalogCli, restoreJobCli } from "@/api";
+import { archiveJobCli, filesCli, restoreJobCli } from "@/api";
 import {
   ArchiveJobSpec,
   FileScope,
   FileSelection,
   FileVersion,
-  OnlineBinding,
+  EntryKind,
   PreviewPolicy,
   RestoreJobSpec,
-  InspectSelectionRequest,
-  type InspectSelectionReply,
+  EstimateRestoreJobRequest,
+  type SelectionInspectionResult,
 } from "@/entity";
 import { RefreshListAction } from "@/actions";
 import { useFileBrowser } from "@/pages/file";
 import { RestoreDestinationPicker, type RestoreTarget } from "@/components/restore-destination";
-import { PreviewPolicySelect } from "@/components/preview-policy-select";
+import { PreviewPolicySelect, usePreviewGeneration } from "@/components/preview-policy-select";
 import { ChooseVersionDialog } from "@/components/version-picker";
-import { associatedLibraryFileID, selectionForFile } from "@/components/location-files";
 import { ToobarInfo } from "@/components/toolbarInfo";
-import { SelectionWaitlist, waitlistRootID, type SelectionEntry as Entry } from "@/components/selection-waitlist";
+import { SelectionWaitlist, waitlistRootID } from "@/components/selection-waitlist";
+import { canAddFileToSelection, loadRestoreVersionEntry, selectionEntriesForFiles, type SelectionEntry as Entry } from "@/components/selection-waitlist-state";
 import { followRestorePolicy, restoreCutoff, type RestorePolicy } from "@/components/restore-version-policy";
 import { errorMessage, formatFilesize, runUIAction } from "@/tools";
+import { libraryDirectoryReference } from "@/components/files-browser";
+
+import { useSelections } from "@/state/react";
+import { SelectionJobRecreate, type SelectionCreation } from "./selection-job-recreate";
 
 const AddSelection = defineFileAction({ id: "add_job_selection", requiresSelection: true, button: { name: "Add to list", toolbar: true, contextMenu: true } });
-const labels = { archive: "Backup", restore: "Restore" };
+const labels = { archive: "Archive", restore: "Restore" };
 const RestoreTimePicker = lazy(() => import("@/components/restore-time-picker"));
 
-function savedEntries(key: string): Entry[] {
-  try {
-    const entries = JSON.parse(sessionStorage.getItem(key) ?? "[]") as {
-      name: string;
-      path: string;
-      selection?: string;
-      version?: string;
-      fileID?: string;
-      target?: string;
-      isDir?: boolean;
-    }[];
-    return entries.map((entry) => {
-      const selection = entry.selection ? FileSelection.fromJsonString(entry.selection) : undefined;
-      const version = entry.version ? FileVersion.fromJsonString(entry.version) : undefined;
-      return { ...entry, selection, version, key: version ? `version:${version.id}` : FileSelection.toJsonString(selection!) };
-    });
-  } catch {
-    return [];
-  }
-}
-
-function savedPolicy(key: string): RestorePolicy {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(key) ?? "null");
-    if (saved?.mode === "before" && typeof saved.date === "string") return { mode: "before", date: saved.date };
-  } catch {
-    // A discarded browser preference does not discard the waitlist.
-  }
-  return { mode: "latest", date: "" };
-}
-
 export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
+  const route = useLocation();
+  const id = new URLSearchParams(route.search).get("recreate");
+  return id !== null ? (
+    <SelectionJobRecreate key={route.key} kind={kind} id={id}>
+      {(initial) => <SelectionJobForm kind={kind} initial={initial} />}
+    </SelectionJobRecreate>
+  ) : (
+    <SelectionJobForm key={kind} kind={kind} />
+  );
+};
+
+const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initial?: SelectionCreation }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
-  const storageKey = `job-selection:${kind}`;
-  const [entries, setEntries] = useState<Entry[]>(() => savedEntries(storageKey));
-  const policyStorageKey = `${storageKey}:version-policy`;
-  const [versionPolicy, setVersionPolicy] = useState<RestorePolicy>(() => savedPolicy(policyStorageKey));
-  const [skipConsent, setSkipConsent] = useState("");
+  const { entries, revision, setEntries, versionPolicy, setVersionPolicy, merge, submitted } = useSelections(kind);
+  const consentKey = JSON.stringify([entries.map((entry) => entry.key), versionPolicy, revision]);
+  const [skipConsent, setSkipConsent] = useState(initial?.kind === "restore" && initial.request.spec?.skipUnmatchedVersions ? consentKey : "");
   const cutoff = restoreCutoff(versionPolicy);
   const validPolicy = kind !== "restore" || versionPolicy.mode === "latest" || cutoff !== undefined;
-  const [review, setReview] = useState<{ key: string; result: InspectSelectionReply }>();
+  const [review, setReview] = useState<{ key: string; result: SelectionInspectionResult }>();
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState("");
   const [estimateAttempt, setEstimateAttempt] = useState(0);
@@ -91,23 +75,32 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
   const creationTitleID = useId();
   const submitting = useRef(false);
   const [error, setError] = useState("");
-  const [previewPolicy, setPreviewPolicy] = useState(PreviewPolicy.PREVIEW_NONE);
-  const [force, setForce] = useState(false);
-  const [destination, setDestination] = useState<RestoreTarget>();
+  const [previewPolicy, setPreviewPolicy] = useState(initial?.kind === "archive" ? initial.request.previewPolicy : PreviewPolicy.NONE);
+  const validPreview = [PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(previewPolicy);
+  const generation = usePreviewGeneration(kind === "archive" && configuring);
+  const [force, setForce] = useState(initial?.kind === "archive" && initial.request.forceRehash);
+  const [destination, setDestination] = useState<RestoreTarget | undefined>(initial?.destination);
+  const [destinationError, setDestinationError] = useState(initial?.destinationError ?? "");
+  const chooseDestination = useCallback((target: RestoreTarget) => {
+    setDestination(target);
+    setDestinationError("");
+  }, []);
   const destinationID = destination ? String(destination.location.id) : "";
   const destinationPath = destination?.path ?? "";
-  const [allowDamagedCopies, setAllowDamagedCopies] = useState(false);
+  const [allowDamagedCopies, setAllowDamagedCopies] = useState(initial?.kind === "restore" && !!initial.request.spec?.allowDamagedCopies);
+  const priority = initial?.request.priority ?? 1n;
+  const unavailable = entries.some((entry) => !!entry.unavailableReason);
   const [choosing, setChoosing] = useState<Entry & { resolvedVersion?: FileVersion }>();
   const browserRef = useRef<FileBrowserHandle>(null);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const refresh = useCallback(() => refreshRef.current(), []);
-  const ignoreOpen = useCallback(() => {}, []);
+  const ignoreLocate = useCallback(() => {}, []);
   const browser = useFileBrowser(
     browserRef,
     `selection-browser:${kind}`,
     refresh,
-    ignoreOpen,
-    ignoreOpen,
+    undefined,
+    ignoreLocate,
     undefined,
     undefined,
     kind === "restore" ? FileScope.SAVED : FileScope.DEFAULT,
@@ -115,73 +108,24 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
   useEffect(() => {
     refreshRef.current = browser.refresh;
   }, [browser.refresh]);
-  useEffect(() => {
-    sessionStorage.setItem(
-      storageKey,
-      JSON.stringify(
-        entries.map((entry) => ({
-          ...entry,
-          selection: entry.selection ? FileSelection.toJsonString(entry.selection) : undefined,
-          version: entry.version ? FileVersion.toJsonString(entry.version) : undefined,
-        })),
-      ),
-    );
-  }, [entries, storageKey]);
-  useEffect(() => {
-    if (kind === "restore") sessionStorage.setItem(policyStorageKey, JSON.stringify(versionPolicy));
-  }, [kind, policyStorageKey, versionPolicy]);
-  const merge = useCallback(
-    (items: Entry[]) =>
-      setEntries((current) => {
-        const result = new Map(current.map((entry) => [entry.key, entry]));
-        let changed = false;
-        for (const entry of items) {
-          if (entry.selection && !entry.isDir && entry.fileID && [...result.values()].some((existing) => existing.version && existing.fileID === entry.fileID))
-            continue;
-          if (entry.version) {
-            for (const existing of result.values()) {
-              if (existing.selection && !existing.isDir && existing.fileID === entry.fileID) {
-                result.delete(existing.key);
-                changed = true;
-              }
-            }
-          }
-          if (!result.has(entry.key)) {
-            result.set(entry.key, entry);
-            changed = true;
-          }
-        }
-        return changed ? [...result.values()] : current;
-      }),
-    [],
-  );
-
-  const versionEntry = useCallback(async (version: FileVersion): Promise<Entry> => {
-    const parents = await cli.fileListParents({ id: version.fileId }).response;
-    const path = parents.parents
-      .filter((file) => file.id !== 0n)
-      .map((file) => file.name)
-      .join("/");
-    return {
-      key: `version:${version.id}`,
-      name: parents.parents.at(-1)?.name ?? path,
-      path,
-      target: path,
-      fileID: String(version.fileId),
-      version,
-    };
-  }, []);
   const initialVersion = params.get("version_id");
   useEffect(() => {
-    if (kind !== "restore" || !initialVersion || !/^[1-9]\d*$/.test(initialVersion)) return;
+    if (initial || kind !== "restore" || !initialVersion || !/^[1-9]\d*$/.test(initialVersion)) return;
+    let active = true;
     runUIAction(async () => {
-      const reply = await fileCatalogCli.getVersion({ id: BigInt(initialVersion) }).response;
-      if (reply.version) merge([await versionEntry(reply.version)]);
+      const reply = await filesCli.getVersion({ id: BigInt(initialVersion) }).response;
+      if (!active) return;
+      if (!reply.version) throw new Error("This saved version no longer exists.");
+      const entry = await loadRestoreVersionEntry(reply.version);
+      if (active) merge([entry]);
     }, "Could not add saved version");
-  }, [initialVersion, kind, merge, versionEntry]);
+    return () => {
+      active = false;
+    };
+  }, [initial, initialVersion, kind, merge]);
   useEffect(() => {
-    const selected = location.state?.selections as { selection: FileSelection; name: string; path: string; fileID?: string }[] | undefined;
-    if (kind !== "archive" || !selected) return;
+    const selected = location.state?.selections as { selection: FileSelection; name: string; path: string; fileID?: string; isDir?: boolean }[] | undefined;
+    if (initial || kind !== "archive" || !selected) return;
     let active = true;
     runUIAction(async () => {
       const additions: Entry[] = [];
@@ -191,16 +135,15 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
           additions.push({ ...entry, key: FileSelection.toJsonString(entry.selection) });
           continue;
         }
-        const reply = await cli.fileListParents({ id }).response;
-        const path = reply.parents
-          .filter((file) => file.id !== 0n)
-          .map((file) => file.name)
-          .join("/");
+        const reply = (await filesCli.get({ reference: libraryDirectoryReference(String(id)) }).response).detail;
+        if (!reply) throw new Error("File details are unavailable.");
+        const path = reply.organization?.path ?? reply.entry?.name ?? "";
         additions.push({
           ...entry,
           key: FileSelection.toJsonString(entry.selection),
-          name: reply.parents.at(-1)?.name ?? "Library",
+          name: reply.entry?.name ?? "Library",
           target: path,
+          isDir: reply.entry?.kind === EntryKind.DIRECTORY,
           path: entry.selection.target.oneofKind === "library" ? path || "Library" : entry.path,
         });
       }
@@ -211,51 +154,14 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
     return () => {
       active = false;
     };
-  }, [kind, location.state, location.pathname, merge, navigate]);
+  }, [initial, kind, location.state, location.pathname, merge, navigate]);
 
   const addFiles = async (files: FileData[]) => {
-    if (browser.loadError) return;
-    if (kind !== "restore" && browser.sourceLocation?.binding === OnlineBinding.UNCONFIRMED) {
-      setError("Confirm this imported Location before adding files.");
-      return;
-    }
+    if (browser.loadError || files.some((file) => !canAdd(file))) return;
     setBusy(true);
     setError("");
     try {
-      const additions: Entry[] = [];
-      for (const file of files) {
-        const fileID = associatedLibraryFileID(file);
-        if (kind === "restore" && !file.isDir) {
-          if (!fileID) throw new Error(`${file.name} has no known saved version. Scan it or choose a Library file.`);
-          const selection = FileSelection.create({ target: { oneofKind: "library", library: { fileId: BigInt(fileID) } }, scope: FileScope.SAVED });
-          const parents = await cli.fileListParents({ id: BigInt(fileID) }).response;
-          const path = parents.parents
-            .filter((parent) => parent.id !== 0n)
-            .map((parent) => parent.name)
-            .join("/");
-          additions.push({ key: FileSelection.toJsonString(selection), name: file.name, path, target: path, fileID, selection });
-          continue;
-        }
-        const selection = selectionForFile(file, browser.scope);
-        let target: string | undefined;
-        if (fileID) {
-          const parents = await cli.fileListParents({ id: BigInt(fileID) }).response;
-          target = parents.parents
-            .filter((file) => file.id !== 0n)
-            .map((file) => file.name)
-            .join("/");
-        }
-        additions.push({
-          key: FileSelection.toJsonString(selection),
-          name: file.name,
-          path: file.physicalPath !== undefined ? `${browser.sourceLocation?.name ?? "Location"}/${file.physicalPath}` : (target ?? file.name),
-          target,
-          selection,
-          fileID: file.isDir ? undefined : fileID,
-          isDir: file.isDir,
-        });
-      }
-      merge(additions);
+      merge(await selectionEntriesForFiles(kind, files, browser.scope, browser.source?.kind === "location" ? browser.source.name : "Library"));
     } catch (error) {
       setError(errorMessage(error, "Could not add selection"));
     } finally {
@@ -272,20 +178,12 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
       void addFiles(data.state.selectedFilesForAction);
       return;
     }
-    if (data.id === ChonkyActions.OpenFiles.id) {
-      const file = data.payload.targetFile ?? data.payload.files[0];
-      if (file && !file.isDir) {
-        void addFiles([file]);
-        return;
-      }
-    }
     if ([ChonkyActions.OpenFiles.id, ChonkyActions.ChangeSelection.id, RefreshListAction.id].includes(data.id)) browser.browserProps.onFileAction(data);
   };
-  const consentKey = JSON.stringify([entries.map((entry) => entry.key), versionPolicy]);
-  useEffect(() => setSkipConsent(""), [consentKey]);
   const skipUnmatchedVersions = skipConsent === consentKey;
   const create = async () => {
-    if (submitting.current || !canCreate || estimating || !summary) return;
+    if (submitting.current || !canCreate || estimating || !summary || (kind === "archive" && previewPolicy !== PreviewPolicy.NONE && !generation.available))
+      return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -294,24 +192,24 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
       const reply =
         kind === "archive"
           ? await archiveJobCli.create({
-              priority: 1n,
+              priority,
               spec: ArchiveJobSpec.create({ selections }),
               previewPolicy,
-              forceRehash: previewPolicy !== PreviewPolicy.PREVIEW_NONE && force,
+              forceRehash: previewPolicy !== PreviewPolicy.NONE && force,
             }).response
           : await restoreJobCli.create({
-              priority: 1n,
+              priority,
               spec: RestoreJobSpec.create({
                 selections,
-                fileVersionIds: entries.flatMap((entry) => (entry.version ? [entry.version.id] : [])),
+                fileVersionIds: entries.flatMap((entry) => (entry.version ? [entry.version.id] : entry.versionID ? [BigInt(entry.versionID)] : [])),
                 destination: { locationId: BigInt(destinationID), path: destinationPath },
                 allowDamagedCopies,
-                versionPolicy: { beforeAtMs: cutoff },
+                versionPolicy: { beforeAtNs: cutoff },
                 skipUnmatchedVersions,
               }),
             }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
-      sessionStorage.removeItem(storageKey);
+      submitted(revision);
       navigate(`/jobs/${reply.job.id}`);
     } catch (error) {
       setError(errorMessage(error, "Could not create job"));
@@ -322,13 +220,12 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
   };
   const inspection = useMemo(
     () =>
-      InspectSelectionRequest.create({
+      EstimateRestoreJobRequest.create({
         selections: entries.flatMap((entry) => (entry.selection ? [entry.selection] : [])),
-        fileVersionIds: entries.flatMap((entry) => (entry.version ? [entry.version.id] : [])),
-        restore: kind === "restore",
+        fileVersionIds: entries.flatMap((entry) => (entry.version ? [entry.version.id] : entry.versionID ? [BigInt(entry.versionID)] : [])),
         destination: kind === "restore" && destinationID ? { locationId: BigInt(destinationID), path: destinationPath } : undefined,
         allowDamagedCopies,
-        versionPolicy: kind === "restore" ? { beforeAtMs: cutoff } : undefined,
+        versionPolicy: kind === "restore" ? { beforeAtNs: cutoff } : undefined,
         skipUnmatchedVersions,
       }),
     [entries, kind, destinationID, destinationPath, allowDamagedCopies, cutoff, skipUnmatchedVersions],
@@ -336,15 +233,15 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
   const inspectionKey = JSON.stringify(inspection, (_, value) => (typeof value === "bigint" ? value.toString() : value));
   const summary = validPolicy && review?.key === inspectionKey ? review.result : undefined;
   useEffect(() => {
-    if (!entries.length || !validPolicy) return;
+    if (!entries.length || !validPolicy || unavailable) return;
     let active = true;
     const timer = setTimeout(() => {
       setEstimating(true);
       setEstimateError("");
-      void fileCatalogCli
-        .inspectSelection(inspection)
-        .response.then((result) => {
-          if (active) setReview({ key: inspectionKey, result });
+      void (kind === "restore" ? restoreJobCli.estimate(inspection) : archiveJobCli.estimate({ selections: inspection.selections })).response
+        .then((response) => {
+          if (!response.result) throw new Error("Selection estimate is missing");
+          if (active) setReview({ key: inspectionKey, result: response.result });
         })
         .catch((error) => {
           if (active) setEstimateError(errorMessage(error, "Could not estimate selection"));
@@ -357,44 +254,42 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
       active = false;
       clearTimeout(timer);
     };
-  }, [inspection, inspectionKey, estimateAttempt, entries.length, validPolicy]);
+  }, [inspection, inspectionKey, estimateAttempt, entries.length, validPolicy, kind, unavailable]);
   const canCreate =
     validPolicy &&
+    (kind !== "archive" || validPreview) &&
+    !unavailable &&
     !!summary &&
-    summary.files > 0n &&
+    summary.fileCount > 0n &&
     !busy &&
-    (kind === "restore"
-      ? summary.missingCopies === 0n && (summary.unmatchedVersions === 0n || skipUnmatchedVersions) && !!destinationID
-      : summary.missingOriginals === 0n);
+    (kind !== "restore" || (summary.missingCopyCount === 0n && (summary.unmatchedVersionCount === 0n || skipUnmatchedVersions) && !!destinationID));
+  const canAdd = (file: FileData | null) => canAddFileToSelection(kind, file);
   return (
     <Box className="browser-box selection-job-page">
       <div className="selection-job-workspace">
         <Stack component="section" className="selection-browser" spacing={1.5}>
-          {error && !configuring && <Alert severity="error">{error}</Alert>}
-          {kind !== "restore" && browser.sourceLocation && browser.sourceLocation.binding === OnlineBinding.UNCONFIRMED && (
-            <Alert
-              severity="info"
-              action={
-                <Button component={Link} to={`/settings/locations/${browser.sourceLocation.id}`}>
-                  Confirm path
-                </Button>
-              }
-            >
-              Confirm this imported Location before adding files.
-            </Alert>
+          {initial && (
+            <Feedback severity="info">Review the original selections and options, then submit to create a new Job. Priority: {String(priority)}.</Feedback>
           )}
+          {initial?.reason && <Feedback severity="warning">{initial.reason}</Feedback>}
+          {unavailable && <Feedback severity="error">Some selected entries are unavailable. Remove them or select them again before preparing.</Feedback>}
+          {error && !configuring && <Feedback severity="error">{error}</Feedback>}
           <FileBrowser
             ref={browserRef}
             {...browser.browserProps}
-            files={browser.files.map((file) => (file ? { ...file, draggable: !busy, droppable: false } : null))}
+            files={browser.files.map((file) => (file ? { ...file, draggable: !busy && canAdd(file), droppable: false } : null))}
             folderChain={browser.browserProps.folderChain?.map((file) => (file ? { ...file, droppable: false } : null))}
             instanceId={`select-${kind}`}
             onFileAction={action}
             disableDragAndDrop={!!browser.loadError}
-            fileActions={browser.loadError ? [RefreshListAction] : [AddSelection, ChonkyActions.ToggleHiddenFiles, RefreshListAction]}
+            fileActions={
+              browser.loadError ? [RefreshListAction] : [{ ...AddSelection, fileFilter: canAdd }, ChonkyActions.ToggleHiddenFiles, RefreshListAction]
+            }
           >
             <FileNavbar rootContent={browser.selector} />
-            <FileToolbar layout="inline">{!browser.browserProps.hideToolbarInfo && <ToobarInfo files={browser.files} />}</FileToolbar>
+            <FileToolbar layout="inline">
+              {!browser.browserProps.hideToolbarInfo && <ToobarInfo files={browser.files} measurement={browser.measurement} />}
+            </FileToolbar>
             <FileList {...browser.listProps} />
             <FileContextMenu />
           </FileBrowser>
@@ -435,10 +330,10 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
           <Stack spacing={2}>
             {summary && (
               <strong>
-                {String(summary.files)}{" "}
-                {kind === "restore" ? (summary.files === 1n ? "restore item" : "restore items") : summary.files === 1n ? "file" : "files"} ·{" "}
-                {formatFilesize(Number(summary.bytes))}
-                {summary.unknownSizeFiles > 0n ? ` known · ${summary.unknownSizeFiles} sizes unknown` : ""}
+                {String(summary.fileCount)}{" "}
+                {kind === "restore" ? (summary.fileCount === 1n ? "restore item" : "restore items") : summary.fileCount === 1n ? "file" : "files"} ·{" "}
+                {formatFilesize(Number(summary.totalBytes))}
+                {summary.unknownSizeFileCount > 0n ? ` known · ${summary.unknownSizeFileCount} sizes unknown` : ""}
               </strong>
             )}
             {kind === "restore" ? (
@@ -449,17 +344,17 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
                   label="Versions"
                   value={versionPolicy.mode}
                   disabled={busy}
-                  onChange={(event) => setVersionPolicy((current) => ({ ...current, mode: event.target.value as RestorePolicy["mode"] }))}
+                  onChange={(event) => setVersionPolicy((current) => ({ ...current, mode: event.target.value as RestorePolicy["mode"], cutoff: undefined }))}
                 >
                   <MenuItem value="latest">Latest saved version</MenuItem>
-                  <MenuItem value="before">Latest backup at or before…</MenuItem>
+                  <MenuItem value="before">Latest archive at or before…</MenuItem>
                 </TextField>
                 {versionPolicy.mode === "before" && (
                   <Suspense fallback={<Box role="status">Loading date picker…</Box>}>
                     <RestoreTimePicker
                       value={versionPolicy.date}
                       disabled={busy}
-                      onChange={(date) => setVersionPolicy((current) => ({ ...current, date }))}
+                      onChange={(date) => setVersionPolicy((current) => ({ ...current, date, cutoff: undefined }))}
                       error={!validPolicy}
                     />
                   </Suspense>
@@ -469,7 +364,8 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
                     Apply current policy to all
                   </Button>
                 )}
-                <RestoreDestinationPicker value={destination} onChange={setDestination} disabled={busy} />
+                <RestoreDestinationPicker value={destination} onChange={chooseDestination} disabled={busy} usePreference={!initial} />
+                {destinationError && <Feedback severity="error">{destinationError}</Feedback>}
                 <details>
                   <summary>Advanced recovery</summary>
                   <Stack spacing={2}>
@@ -485,35 +381,37 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
               </>
             ) : (
               <Stack spacing={2}>
-                <PreviewPolicySelect value={previewPolicy} onChange={setPreviewPolicy} disabled={busy} />
-                {previewPolicy !== PreviewPolicy.PREVIEW_NONE && (
+                <PreviewPolicySelect generation={generation} value={previewPolicy} onChange={setPreviewPolicy} disabled={busy} />
+                {!validPreview && <Feedback severity="warning">Choose a Preview option before preparing.</Feedback>}
+                {previewPolicy !== PreviewPolicy.NONE && (
                   <FormControlLabel control={<Checkbox checked={force} disabled={busy} onChange={(_, checked) => setForce(checked)} />} label="Force rehash" />
                 )}
               </Stack>
             )}
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && <Feedback severity="error">{error}</Feedback>}
             {estimateError && (
-              <Alert severity="error" action={<Button onClick={() => setEstimateAttempt((value) => value + 1)}>Retry estimate</Button>}>
+              <Feedback severity="error" action={<Button onClick={() => setEstimateAttempt((value) => value + 1)}>Retry estimate</Button>}>
                 {estimateError}
-              </Alert>
+              </Feedback>
             )}
-            {entries.length > 0 && validPolicy && !summary && !estimateError && <Box role="status">Estimating selection…</Box>}
-            {kind === "restore" && summary && summary.unmatchedVersions > 0n && !skipUnmatchedVersions && (
-              <Alert
+            {unavailable && <Feedback severity="error">Some selected entries are unavailable. Remove them or select them again before preparing.</Feedback>}
+            {entries.length > 0 && validPolicy && !unavailable && !summary && !estimateError && <Box role="status">Estimating selection…</Box>}
+            {kind === "restore" && summary && summary.unmatchedVersionCount > 0n && !skipUnmatchedVersions && (
+              <Feedback
                 severity="warning"
                 action={
                   cutoff !== undefined && (
                     <Button disabled={busy} onClick={() => setSkipConsent(consentKey)}>
-                      Skip {String(summary.unmatchedVersions)} {summary.unmatchedVersions === 1n ? "item" : "items"}
+                      Skip {String(summary.unmatchedVersionCount)} {summary.unmatchedVersionCount === 1n ? "item" : "items"}
                     </Button>
                   )
                 }
               >
-                {String(summary.unmatchedVersions)} {summary.unmatchedVersions === 1n ? "item has" : "items have"} no version matching this policy.
-              </Alert>
+                {String(summary.unmatchedVersionCount)} {summary.unmatchedVersionCount === 1n ? "item has" : "items have"} no version matching this policy.
+              </Feedback>
             )}
-            {kind === "restore" && summary && summary.skippedVersions > 0n && (
-              <Alert
+            {kind === "restore" && summary && summary.skippedVersionCount > 0n && (
+              <Feedback
                 severity="info"
                 action={
                   <Button disabled={busy} onClick={() => setSkipConsent("")}>
@@ -521,33 +419,36 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
                   </Button>
                 }
               >
-                {String(summary.skippedVersions)} {summary.skippedVersions === 1n ? "item" : "items"} skipped.
+                {String(summary.skippedVersionCount)} {summary.skippedVersionCount === 1n ? "item" : "items"} skipped.
+              </Feedback>
+            )}
+            {kind !== "restore" && summary && summary.missingOriginalCount > 0n && (
+              <Alert severity="warning">
+                {String(summary.missingOriginalCount)} {summary.missingOriginalCount === 1n ? "file has" : "files have"} no linked original and will be skipped.
               </Alert>
             )}
-            {kind !== "restore" && summary && summary.missingOriginals > 0n && (
+            {kind === "restore" && summary && summary.missingCopyCount > 0n && (
               <Alert severity="warning">
-                {String(summary.missingOriginals)} {summary.missingOriginals === 1n ? "file has" : "files have"} no usable original. Check their Location or
-                remove them from the list.
+                {String(summary.missingCopyCount)} {summary.missingCopyCount === 1n ? "item has" : "items have"} no usable archived copy.
               </Alert>
             )}
-            {kind === "restore" && summary && summary.missingCopies > 0n && (
+            {kind === "restore" && summary && summary.ignoredOutputCount > 0n && (
               <Alert severity="warning">
-                {String(summary.missingCopies)} {summary.missingCopies === 1n ? "item has" : "items have"} no usable archived copy.
-              </Alert>
-            )}
-            {kind === "restore" && summary && summary.ignoredOutputs > 0n && (
-              <Alert severity="warning">
-                {String(summary.ignoredOutputs)} outputs match Ignore rules. They will be restored without linking them to Library files.
+                {String(summary.ignoredOutputCount)} outputs match Ignore rules. They will be restored without linking them to Library files.
               </Alert>
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
+          <Button
+            variant="contained"
+            disabled={!canCreate || estimating || (kind === "archive" && previewPolicy !== PreviewPolicy.NONE && !generation.available)}
+            onClick={() => void create()}
+          >
+            {busy ? "Preparing…" : `Prepare ${labels[kind].toLowerCase()}`}
+          </Button>
           <Button disabled={busy} onClick={() => setConfiguring(false)}>
             Cancel
-          </Button>
-          <Button variant="contained" disabled={!canCreate || estimating} onClick={() => void create()}>
-            {busy ? "Preparing…" : `Prepare ${labels[kind].toLowerCase()}`}
           </Button>
         </DialogActions>
       </Dialog>
@@ -563,7 +464,7 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
           allowDamagedCopies={allowDamagedCopies}
           onClose={() => setChoosing(undefined)}
           onChoose={async (version) => {
-            const next = await versionEntry(version);
+            const next = await loadRestoreVersionEntry(version);
             setEntries((current) => [
               ...current.filter(
                 (entry) => entry.key !== choosing.key && entry.key !== next.key && !(entry.selection && !entry.isDir && entry.fileID === next.fileID),
@@ -573,6 +474,7 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
           }}
         />
       )}
+      {browser.dialog}
     </Box>
   );
 };

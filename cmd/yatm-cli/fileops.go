@@ -12,24 +12,22 @@ import (
 )
 
 type fileOperationRunCommand struct {
-	runtime       *runtime
-	Kind          string   `long:"kind" required:"true" choice:"move" choice:"mkdir" choice:"delete" description:"Organization operation"`
-	Library       bool     `long:"library" description:"Organize Library metadata instead of physical files"`
-	LocationID    *int64   `long:"location" description:"Location ID; mutually exclusive with --library"`
-	Sources       []string `long:"source" description:"Library File ID or Location-relative path; repeat for multiple selections"`
-	Destination   *string  `long:"destination" description:"Existing target directory: Library File ID (0 for root) or Location path (. for root)"`
-	Name          string   `long:"name" description:"New directory or single-source replacement name"`
-	ConfirmDelete bool     `long:"confirm-delete" description:"Confirm deletion; Location deletion permanently removes physical files"`
+	runtime     *runtime
+	kind        entity.FileOperationKind
+	Library     bool     `long:"library" description:"Organize Library metadata instead of physical files"`
+	LocationID  *int64   `long:"location" description:"Location ID; mutually exclusive with --library"`
+	Sources     []string `long:"source" description:"Library File ID or Location-relative path; repeat for multiple selections"`
+	Destination *string  `long:"destination" description:"Existing target directory: Library File ID (0 for root) or Location path (. for root)"`
+	Name        string   `long:"name" description:"New directory or single-source replacement name"`
+	DryRun      bool     `long:"dryrun" description:"Report the resolved plan without changing files or Library metadata"`
 }
 
 func registerFileOperationCommands(root *flags.Command, rt *runtime) error {
 	// Ordinary file operations finish within the request and stream bounded JSON Lines results.
-	group, err := addGroup(root, "fileops", "Organize Library metadata or real files within one Location")
-	if err != nil {
-		return err
-	}
-	return addCommands(group,
-		commandSpec{name: "run", description: "Execute a move, mkdir or deletion; emit JSON Lines until complete (no Job)", handler: &fileOperationRunCommand{runtime: rt}},
+	return addCommands(root,
+		commandSpec{name: "mv", description: "Move or rename selected entries", handler: &fileOperationRunCommand{runtime: rt, kind: entity.FileOperationKind_FILE_OPERATION_KIND_MOVE}},
+		commandSpec{name: "mkdir", description: "Create a directory", handler: &fileOperationRunCommand{runtime: rt, kind: entity.FileOperationKind_FILE_OPERATION_KIND_MKDIR}},
+		commandSpec{name: "rm", description: "Move selected entries into Trash", handler: &fileOperationRunCommand{runtime: rt, kind: entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE}},
 	)
 }
 
@@ -43,15 +41,25 @@ func (c *fileOperationRunCommand) Execute(_ []string) error {
 			return err
 		}
 	}
-	if c.Kind == "delete" && !c.ConfirmDelete {
-		return usageError(fmt.Errorf("deletion requires --confirm-delete"))
+	if c.kind == entity.FileOperationKind_FILE_OPERATION_KIND_MKDIR {
+		if len(c.Sources) > 0 || c.Destination == nil || c.Name == "" {
+			return usageError(fmt.Errorf("mkdir requires destination and name, without sources"))
+		}
+	} else if len(c.Sources) == 0 {
+		return usageError(fmt.Errorf("at least one source is required"))
 	}
-	kinds := map[string]entity.FileOperationKind{"move": entity.FileOperationKind_MOVE, "mkdir": entity.FileOperationKind_MAKE_DIRECTORY, "delete": entity.FileOperationKind_DELETE}
-	kind, ok := kinds[c.Kind]
-	if !ok {
-		return usageError(fmt.Errorf("unknown file operation %q", c.Kind))
+	if c.kind == entity.FileOperationKind_FILE_OPERATION_KIND_MOVE && c.Destination == nil {
+		return usageError(fmt.Errorf("mv requires destination"))
 	}
-	spec := &entity.FileOperationSpec{Kind: kind, Name: c.Name}
+	if c.kind == entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE && (c.Destination != nil || c.Name != "") {
+		return usageError(fmt.Errorf("rm does not accept destination or name"))
+	}
+	if c.kind == entity.FileOperationKind_FILE_OPERATION_KIND_MOVE && c.Name != "" && len(c.Sources) != 1 {
+		return usageError(fmt.Errorf("name requires exactly one source"))
+	}
+
+	// Keep the submitted name literal while resolving the operation's references.
+	spec := &entity.FileOperationSpec{Kind: c.kind, Name: c.Name}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 
@@ -71,7 +79,21 @@ func (c *fileOperationRunCommand) Execute(_ []string) error {
 		spec.Destination = ref
 	}
 
-	return executeFileOperation(ctx, c.runtime, &entity.ExecuteFileOperationRequest{Spec: spec, ConfirmDelete: c.ConfirmDelete})
+	// Run the selected mutation through its bounded result stream.
+	switch c.kind {
+	case entity.FileOperationKind_FILE_OPERATION_KIND_MOVE:
+		return executeFileOperation(ctx, c.runtime, entity.FilesService_Move_FullMethodName,
+			&entity.MoveFilesRequest{Sources: spec.Sources, Destination: spec.Destination, Name: spec.Name, Dryrun: c.DryRun},
+			(*entity.MoveFilesResponse).GetResult)
+	case entity.FileOperationKind_FILE_OPERATION_KIND_MKDIR:
+		return executeFileOperation(ctx, c.runtime, entity.FilesService_Mkdir_FullMethodName,
+			&entity.MkdirFilesRequest{Destination: spec.Destination, Name: spec.Name, Dryrun: c.DryRun},
+			(*entity.MkdirFilesResponse).GetResult)
+	default:
+		return executeFileOperation(ctx, c.runtime, entity.FilesService_Remove_FullMethodName,
+			&entity.RemoveFilesRequest{Sources: spec.Sources, Dryrun: c.DryRun},
+			(*entity.RemoveFilesResponse).GetResult)
+	}
 }
 
 func (c *fileOperationRunCommand) reference(ctx context.Context, value string, destination bool) (*entity.FileOperationRef, error) {
@@ -95,20 +117,24 @@ func (c *fileOperationRunCommand) reference(ctx context.Context, value string, d
 	return &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: id}}, nil
 }
 
-func executeFileOperation(ctx context.Context, rt *runtime, request *entity.ExecuteFileOperationRequest) error {
+func executeFileOperation[T, R any](ctx context.Context, rt *runtime, method string, request *T, resultOf func(*R) *entity.FileOperationResult) error {
 	// The common stream owns execution; disconnecting cancels pending work instead of leaving a Job.
-	client := connect.NewClient[entity.ExecuteFileOperationRequest, entity.FileOperationUpdate](
-		rt.httpClient, rt.rpcURL(entity.FileOperationService_Execute_FullMethodName), connect.WithGRPCWeb())
+	client := connect.NewClient[T, R](
+		rt.httpClient, rt.rpcURL(method), connect.WithGRPCWeb())
 	stream, err := client.CallServerStream(ctx, connect.NewRequest(request))
 	if err != nil {
 		return runtimeError(connect.CodeOf(err).String(), err)
 	}
 	defer stream.Close()
 	var result *entity.FileOperationSummary
+	var planError string
 	for stream.Receive() {
-		update := stream.Msg()
+		update := resultOf(stream.Msg())
 		if err := writeProto(rt.stdout, update); err != nil {
 			return err
+		}
+		if update.GetEntry().GetError() != "" {
+			planError = update.Entry.Error
 		}
 		if update.GetSummary().GetCompleted() {
 			result = update.Summary
@@ -118,12 +144,15 @@ func executeFileOperation(ctx context.Context, rt *runtime, request *entity.Exec
 		return runtimeError(connect.CodeOf(err).String(), err)
 	}
 
-	// A settled stream can contain partial failures, which must remain failures for automation.
+	// A dry run leaves planned entries unprocessed; real execution must settle every selected item.
 	if result == nil {
 		return runtimeError("incomplete", fmt.Errorf("file operation ended without a final result"))
 	}
-	if result.Failed > 0 || result.Unprocessed > 0 || result.PublicationPending > 0 {
-		return runtimeError("incomplete", fmt.Errorf("file operation incomplete: %d failed, %d unprocessed, %d Library updates pending", result.Failed, result.Unprocessed, result.PublicationPending))
+	if result.Dryrun && planError != "" {
+		return runtimeError("incomplete", fmt.Errorf("file operation plan failed: %s", planError))
+	}
+	if result.FailedCount > 0 || result.PublicationPendingCount > 0 || (!result.Dryrun && result.UnprocessedCount > 0) {
+		return runtimeError("incomplete", fmt.Errorf("file operation incomplete: %d failed, %d unprocessed, %d Library updates pending", result.FailedCount, result.UnprocessedCount, result.PublicationPendingCount))
 	}
 	return nil
 }
@@ -140,8 +169,8 @@ func locationOperationRef(ctx context.Context, rt *runtime, id int64, relative s
 	if err != nil {
 		return nil, err
 	}
-	if reply.GetReference().GetLocation() == nil {
+	if reply.GetEntry().GetReference().GetLocation() == nil {
 		return nil, runtimeError("internal", fmt.Errorf("Location returned no live object observation"))
 	}
-	return reply.Reference.GetLocation(), nil
+	return reply.GetEntry().GetReference().GetLocation(), nil
 }

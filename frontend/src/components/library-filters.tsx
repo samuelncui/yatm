@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Feedback } from "@/components/feedback";
+import { useId, useState } from "react";
 import {
-  Alert,
   Button,
   Checkbox,
   Dialog,
@@ -15,15 +15,15 @@ import {
   TextField,
 } from "@mui/material";
 import { Clear, SearchRounded, Tune } from "@mui/icons-material";
-import { locationCli } from "@/api";
+import { useNavigate } from "react-router";
 import type { Location } from "@/entity";
-import { errorMessage } from "@/tools";
+import { useLocationChoices } from "./use-location-choices";
 
-export const backupFilters = [
+export const archiveFilters = [
   { value: "all", label: "Any archived content", query: "" },
-  { value: "needed", label: "No known archived copy", query: "has:online AND NOT has:unknown AND NOT has:archive" },
+  { value: "needed", label: "No known archived copy", query: "has:original AND NOT has:unknown AND NOT has:archive" },
   { value: "saved", label: "Has an archived copy", query: "has:archive" },
-  { value: "unknown", label: "Content not checked", query: "has:online AND has:unknown" },
+  { value: "unknown", label: "Content not checked", query: "has:original AND has:unknown" },
 ] as const;
 
 export const buildLibraryQuery = (text: string, advanced: boolean, location: string, status: string, duplicates = false) => {
@@ -33,7 +33,7 @@ export const buildLibraryQuery = (text: string, advanced: boolean, location: str
     parts.push(advanced ? `(${text.trim()})` : `(name:${value} OR tag:${value} OR note:${value})`);
   }
   if (/^[1-9]\d*$/.test(location)) parts.push(`location:${location}`);
-  const filter = backupFilters.find((filter) => filter.value === status)?.query;
+  const filter = archiveFilters.find((filter) => filter.value === status)?.query;
   if (filter) parts.push(`(${filter})`);
   if (duplicates) parts.push("has:duplicates");
   return parts.join(" AND ");
@@ -45,84 +45,48 @@ export const LibraryFilters = ({
   initialQuery = "",
   scopeLabel = "Library",
   locationScope,
+  searchActive = false,
 }: {
   onSearch: (query: string, grouped: boolean) => void;
   onClear: () => void;
   initialQuery?: string;
   scopeLabel?: string;
   locationScope?: { id: string; name: string };
+  searchActive?: boolean;
 }) => {
+  const navigate = useNavigate();
   const [text, setText] = useState(initialQuery);
   const [open, setOpen] = useState(false);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [more, setMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [location, setLocation] = useState("all");
+  const [location, setLocation] = useState<Location>();
   const [status, setStatus] = useState("all");
   const [duplicates, setDuplicates] = useState(false);
-  const [grouped, setGrouped] = useState(false);
   const [tag, setTag] = useState("");
   const [note, setNote] = useState("");
-  const request = useRef(0);
-  const pending = useRef(false);
-  const retryAfter = useRef(0n);
+  const showLocations = open && (!locationScope || duplicates);
+  const { locations, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: showLocations });
+  const options = location && !locations.some((item) => item.id === location.id) ? [location, ...locations] : locations;
   const titleID = useId();
-  const submit = (query: string, groupResults = grouped) => {
+  const submit = (query: string) => {
     const value = query.trim();
     if (!value) {
       onClear();
       return;
     }
-    onSearch(value, groupResults);
+    onSearch(value, false);
   };
-  const load = useCallback(async (afterId = 0n) => {
-    if (pending.current) return;
-    const generation = ++request.current;
-    pending.current = true;
-    retryAfter.current = afterId;
-    setLoading(true);
-    setError("");
-    try {
-      const reply = await locationCli.list({ afterId, limit: 50, query: "" }).response;
-      if (generation !== request.current) return;
-      setLocations((current) => [...new Map([...(afterId ? current : []), ...reply.locations].map((item) => [item.id, item])).values()]);
-      setMore(reply.hasMore);
-    } catch (error) {
-      if (generation !== request.current) return;
-      setError(errorMessage(error, "Could not load Locations"));
-    } finally {
-      if (generation === request.current) {
-        pending.current = false;
-        setLoading(false);
-      }
-    }
-  }, []);
-  const showLocations = open && (!locationScope || duplicates);
-  useEffect(() => {
-    if (!showLocations) return;
-    const activeRequest = request;
-    const activeLoad = pending;
-    void load();
-    return () => {
-      activeRequest.current++;
-      activeLoad.current = false;
-    };
-  }, [showLocations, load]);
   const apply = () => {
-    const parts = [buildLibraryQuery(text, true, locationScope && !duplicates ? "all" : location, status, duplicates)];
+    const parts = [buildLibraryQuery(text, true, locationScope && !duplicates ? "all" : String(location?.id ?? "all"), status, duplicates)];
     if (tag.trim()) parts.push(`tag:${JSON.stringify(tag.trim())}`);
     if (note.trim()) parts.push(`note:${JSON.stringify(note.trim())}`);
     const query = parts.filter(Boolean).join(" AND ");
     setText(query);
-    setGrouped(duplicates);
     setOpen(false);
-    setLocation("all");
+    setLocation(undefined);
     setStatus("all");
     setDuplicates(false);
     setTag("");
     setNote("");
-    submit(query, duplicates);
+    submit(query);
   };
   return (
     <>
@@ -153,10 +117,9 @@ export const LibraryFilters = ({
                   <IconButton
                     size="small"
                     aria-label="Clear search"
-                    disabled={!text}
+                    disabled={!text && !searchActive}
                     onClick={() => {
                       setText("");
-                      setGrouped(false);
                       onClear();
                     }}
                   >
@@ -172,12 +135,14 @@ export const LibraryFilters = ({
           aria-haspopup="dialog"
           onClick={() => {
             setOpen(true);
-            setDuplicates(grouped);
           }}
         >
           More filters
         </Button>
         <Button type="submit">Search</Button>
+        <Button onClick={() => navigate(locationScope ? `/tools/identical?source=locations&location=${locationScope.id}` : "/tools/identical")}>
+          Find identical files
+        </Button>
       </form>
       <Dialog open={open} onClose={() => setOpen(false)} aria-labelledby={titleID} fullWidth maxWidth="sm">
         <DialogTitle id={titleID}>Filter {scopeLabel}</DialogTitle>
@@ -188,46 +153,54 @@ export const LibraryFilters = ({
             <TextField
               select
               label="Location"
-              value={locationScope && !duplicates ? "current" : location}
+              value={locationScope && !duplicates ? "current" : String(location?.id ?? "all")}
               disabled={!!locationScope && !duplicates}
-              onChange={(event) => setLocation(event.target.value)}
+              onChange={(event) => setLocation(options.find((item) => String(item.id) === event.target.value))}
             >
               {locationScope && !duplicates && <MenuItem value="current">{locationScope.name}</MenuItem>}
               <MenuItem value="all">All locations</MenuItem>
-              {locations.map((item) => (
+              {options.map((item) => (
                 <MenuItem key={String(item.id)} value={String(item.id)}>
                   {item.name}
                 </MenuItem>
               ))}
             </TextField>
             {showLocations && (more || loading) && !error && (
-              <Button disabled={loading} onClick={() => void load(locations.at(-1)?.id)}>
+              <Button disabled={loading} onClick={loadMore}>
                 {loading ? "Loading locations…" : "More locations"}
               </Button>
             )}
             <TextField select label="Archived content" value={status} onChange={(event) => setStatus(event.target.value)}>
-              {backupFilters.map((item) => (
+              {archiveFilters.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
               ))}
             </TextField>
-            <FormControlLabel control={<Checkbox checked={duplicates} onChange={(_, checked) => setDuplicates(checked)} />} label="Duplicates in Locations" />
+            <FormControlLabel
+              control={<Checkbox checked={duplicates} onChange={(_, checked) => setDuplicates(checked)} />}
+              label="Duplicates in Locations"
+              slotProps={{ typography: { sx: { fontSize: 12 } } }}
+            />
             {showLocations && error && (
-              <Alert severity="warning">
+              <Feedback
+                severity="warning"
+                action={
+                  <Button disabled={loading} onClick={retry}>
+                    Retry
+                  </Button>
+                }
+              >
                 {error}
-                <Button disabled={loading} onClick={() => void load(retryAfter.current)}>
-                  Retry
-                </Button>
-              </Alert>
+              </Feedback>
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={apply}>
             Apply filters
           </Button>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
         </DialogActions>
       </Dialog>
     </>

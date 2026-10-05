@@ -17,19 +17,19 @@ type verifyCommandServer struct {
 	entries atomic.Pointer[entity.ListScanJobEntriesRequest]
 }
 
-func (s *verifyCommandServer) Create(_ context.Context, request *entity.CreateScanJobRequest) (*entity.CreateScanJobReply, error) {
+func (s *verifyCommandServer) Create(_ context.Context, request *entity.CreateScanJobRequest) (*entity.CreateScanJobResponse, error) {
 	s.create.Store(request)
-	return &entity.CreateScanJobReply{Job: &entity.Job{Id: 3, Kind: entity.JobKind_SCAN}}, nil
+	return &entity.CreateScanJobResponse{Job: &entity.Job{Id: 3, Kind: entity.JobKind_JOB_KIND_SCAN}}, nil
 }
 
-func (s *verifyCommandServer) ReadMedia(_ context.Context, request *entity.ReadScanMediaRequest) (*entity.ReadScanMediaReply, error) {
+func (s *verifyCommandServer) ReadMedia(_ context.Context, request *entity.ReadScanMediaRequest) (*entity.ReadScanMediaResponse, error) {
 	s.run.Store(request)
-	return &entity.ReadScanMediaReply{}, nil
+	return &entity.ReadScanMediaResponse{}, nil
 }
 
-func (s *verifyCommandServer) ListEntries(_ context.Context, request *entity.ListScanJobEntriesRequest) (*entity.ListScanJobEntriesReply, error) {
+func (s *verifyCommandServer) ListEntries(_ context.Context, request *entity.ListScanJobEntriesRequest) (*entity.ListScanJobEntriesResponse, error) {
 	s.entries.Store(request)
-	return &entity.ListScanJobEntriesReply{Entries: []*entity.ScanEntry{{Id: 5, Finding: entity.ScanFinding_MISMATCH}}}, nil
+	return &entity.ListScanJobEntriesResponse{Entries: []*entity.ScanEntry{{Id: 5, Finding: entity.ScanFinding_SCAN_FINDING_MISMATCH}}}, nil
 }
 
 func TestVerifyCommandsPreserveExplicitMediaAndPagedFindings(t *testing.T) {
@@ -42,18 +42,18 @@ func TestVerifyCommandsPreserveExplicitMediaAndPagedFindings(t *testing.T) {
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.EqualValues(t, 7, service.create.Load().Spec.MediaId)
 	require.EqualValues(t, 2, service.create.Load().Priority)
-	require.Equal(t, entity.ScanSignaturePolicy_FORCE_READ, service.create.Load().Spec.SignaturePolicy)
-	require.Equal(t, entity.ScanResultPolicy_VERIFY_COPIES, service.create.Load().Spec.ResultPolicy)
+	require.Equal(t, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ, service.create.Load().Spec.SignaturePolicy)
+	require.Equal(t, entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, service.create.Load().Spec.ResultPolicy)
 	exit, _, stderr = executeTestCLI(server.URL, "", "verify", "run", "3", "--uuid", "139a1d3d-a54a-4b9b-8ee9-9f103f01d6b6")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.EqualValues(t, 3, service.run.Load().Id)
 	require.Equal(t, "139a1d3d-a54a-4b9b-8ee9-9f103f01d6b6", service.run.Load().Target.GetVolume().Uuid)
 	require.Empty(t, service.run.Load().Target.ExpectedIdentity)
-	exit, stdout, stderr := executeTestCLI(server.URL, "", "verify", "entries", "3", "--limit", "2", "--after-id", "4")
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "verify", "entries", "3", "--limit", "2", "--cursor", "4")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Contains(t, stdout, "MISMATCH")
 	require.EqualValues(t, 2, service.entries.Load().Limit)
-	require.EqualValues(t, 4, service.entries.Load().GetAfterId())
+	require.EqualValues(t, "4", service.entries.Load().GetCursor())
 }
 
 func TestVerifyRejectsAmbiguousTargetsBeforeTransport(t *testing.T) {

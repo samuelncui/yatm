@@ -66,3 +66,26 @@ func TestRenderOneofCodeTSUsesSingleTrailingNewline(t *testing.T) {
 		t.Fatal("generated TypeScript ends in an extra blank line")
 	}
 }
+
+func TestRepeatedMessageVariantsKeepTheirDiscriminator(t *testing.T) {
+	// Item and summary have the same payload type, so type-only packing would be ambiguous.
+	dir, err := resolveEntityDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages, wrappers, err := parsePbGoFile(filepath.Join(dir, "files.pb.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := messages["MeasureFilesUpdate"]; exists {
+		t.Fatal("ambiguous payload generated type-only wrappers")
+	}
+
+	// Both languages must use protoc's discriminated oneof instead of duplicate methods/imports.
+	for _, render := range []func(map[string]messageOneofInfo, map[string][]wrapperInfo) ([]byte, error){renderOneofCode, renderOneofCodeTS} {
+		output, err := render(messages, wrappers)
+		if err != nil || len(output) != 0 {
+			t.Fatalf("unexpected wrapper: %s, %v", output, err)
+		}
+	}
+}

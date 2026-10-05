@@ -1,7 +1,6 @@
 import { type MouseEvent, useEffect, useState } from "react";
 import InsertDriveFileRoundedIcon from "@mui/icons-material/InsertDriveFileRounded";
-import { fileBase } from "@/api";
-import type { PreviewManifest } from "@/entity";
+import type { PreviewResource } from "@/entity";
 
 type TimelineCue = {
   start: number;
@@ -12,20 +11,20 @@ type TimelineCue = {
   height: number;
 };
 
-export const PreviewMedia = ({ fileID, manifest, versionID }: { fileID: bigint; manifest: PreviewManifest; versionID?: bigint }) => {
-  const thumbnail = manifest.assets.find((asset) => asset.role === "thumbnail");
-  const poster = manifest.assets.find((asset) => asset.role === "poster");
-  const timeline = manifest.assets.find((asset) => asset.role === "timeline");
-  const timelineMap = manifest.assets.find((asset) => asset.role === "timeline-map");
+export const PreviewMedia = ({ assets }: { assets: PreviewResource[] }) => {
+  const thumbnail = assets.find((asset) => asset.role === "thumbnail");
+  const poster = assets.find((asset) => asset.role === "poster");
+  const timeline = assets.find((asset) => asset.role === "timeline");
+  const timelineMap = assets.find((asset) => asset.role === "timeline-map");
   const [cues, setCues] = useState<TimelineCue[]>([]);
   const [previewCueIndex, setPreviewCueIndex] = useState<number | null>(null);
-  const timelineMapRole = timelineMap?.role;
+  const timelineMapURL = timelineMap?.url;
 
   useEffect(() => {
-    if (!timelineMapRole) return;
+    if (!timelineMapURL) return;
 
     const controller = new AbortController();
-    void fetch(previewAssetURL(fileID, timelineMapRole, versionID), { signal: controller.signal })
+    void fetch(timelineMapURL, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Load Preview timeline failed: ${response.status}`);
         return response.text();
@@ -37,10 +36,10 @@ export const PreviewMedia = ({ fileID, manifest, versionID }: { fileID: bigint; 
         if (!(error instanceof DOMException && error.name === "AbortError")) setCues([]);
       });
     return () => controller.abort();
-  }, [fileID, timelineMapRole, versionID]);
+  }, [timelineMapURL]);
 
   if (thumbnail) {
-    return <img src={previewAssetURL(fileID, thumbnail.role, versionID)} alt="" />;
+    return <img src={thumbnail.url} alt="" />;
   }
   if (!poster) {
     return <InsertDriveFileRoundedIcon />;
@@ -68,11 +67,7 @@ export const PreviewMedia = ({ fileID, manifest, versionID }: { fileID: bigint; 
   return (
     <div className="file-detail-video-preview">
       <div className="file-detail-video-frame">
-        {activeCue && timeline ? (
-          <span style={timelineFrameStyle(fileID, timeline, activeCue, versionID)} />
-        ) : (
-          <img src={previewAssetURL(fileID, poster.role, versionID)} alt="" />
-        )}
+        {activeCue && timeline ? <span style={timelineFrameStyle(timeline, activeCue)} /> : <img src={poster.url} alt="" />}
       </div>
       <div className="file-detail-video-controls">
         <input
@@ -84,6 +79,13 @@ export const PreviewMedia = ({ fileID, manifest, versionID }: { fileID: bigint; 
           value={previewTime}
           disabled={duration === 0}
           onChange={(event) => snapToPreview(Number(event.currentTarget.value))}
+          onKeyDown={(event) => {
+            const previous = event.key === "ArrowLeft" || event.key === "ArrowDown";
+            const next = event.key === "ArrowRight" || event.key === "ArrowUp";
+            if (!previous && !next) return;
+            event.preventDefault();
+            setPreviewCueIndex((index) => Math.max(0, Math.min(cues.length - 1, (index ?? 0) + (previous ? -1 : 1))));
+          }}
           onMouseMove={showTimeline}
         />
         <output>
@@ -94,12 +96,12 @@ export const PreviewMedia = ({ fileID, manifest, versionID }: { fileID: bigint; 
   );
 };
 
-const timelineFrameStyle = (fileID: bigint, timeline: PreviewManifest["assets"][number], cue: TimelineCue, versionID?: bigint) => {
-  const horizontal = timeline.width > cue.width ? (cue.x / (timeline.width - cue.width)) * 100 : 0;
-  const vertical = timeline.height > cue.height ? (cue.y / (timeline.height - cue.height)) * 100 : 0;
+const timelineFrameStyle = (timeline: PreviewResource, cue: TimelineCue) => {
+  const horizontal = timeline.widthPx > cue.width ? (cue.x / (timeline.widthPx - cue.width)) * 100 : 0;
+  const vertical = timeline.heightPx > cue.height ? (cue.y / (timeline.heightPx - cue.height)) * 100 : 0;
   return {
-    backgroundImage: `url(${previewAssetURL(fileID, timeline.role, versionID)})`,
-    backgroundSize: `${(timeline.width / cue.width) * 100}% ${(timeline.height / cue.height) * 100}%`,
+    backgroundImage: `url(${timeline.url})`,
+    backgroundSize: `${(timeline.widthPx / cue.width) * 100}% ${(timeline.heightPx / cue.height) * 100}%`,
     backgroundPosition: `${horizontal}% ${vertical}%`,
   };
 };
@@ -109,9 +111,6 @@ const formatPreviewTime = (value: number) => {
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 };
-
-const previewAssetURL = (fileID: bigint, role: string, versionID?: bigint) =>
-  `${fileBase}/previews/${fileID}/${role}${versionID ? `?version_id=${versionID}` : ""}`;
 
 const parseTimeline = (value: string): TimelineCue[] => {
   const time = (text: string) => {

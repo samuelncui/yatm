@@ -1,8 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router";
-import App from "@/app";
 import "./index.css";
+import App from "@/app";
+import { AppStateProvider } from "@/state/react";
 
 import "./init";
 
@@ -11,6 +12,8 @@ if (!root) throw new Error("Root element not found");
 
 createRoot(root).render(
   <StrictMode>
-    <RouterProvider router={createBrowserRouter([{ path: "*", element: <App /> }])} />
+    <AppStateProvider>
+      <RouterProvider router={createBrowserRouter([{ path: "*", element: <App /> }])} />
+    </AppStateProvider>
   </StrictMode>,
 );

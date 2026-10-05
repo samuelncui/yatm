@@ -1,18 +1,47 @@
 package ignore
 
-import "strings"
+import (
+	"math/bits"
+	"strings"
+)
+
+// componentWords bounds the inline state vector to names shorter than 256 bytes, which
+// covers every filesystem name this matcher sees; longer names take the heap fallback.
+const componentWords = 4
+
+// bitVector keeps component matching allocation-free for ordinary names.
+type bitVector struct {
+	inline [componentWords]uint64
+	heap   []uint64
+}
+
+func newBitVector(length int) bitVector {
+	if length <= componentWords*64 {
+		return bitVector{}
+	}
+	return bitVector{heap: make([]uint64, (length+63)/64)}
+}
+
+func (v *bitVector) words() []uint64 {
+	if v.heap != nil {
+		return v.heap
+	}
+	return v.inline[:]
+}
 
 // matchComponent uses Git's byte-oriented wildcards, not Go's rune-oriented path.Match.
 // Two bounded state vectors avoid recursive wildcard backtracking.
 func matchComponent(pattern, name string) bool {
 	// A state records the filename prefix consumed by the pattern so far.
-	states, next := make([]bool, len(name)+1), make([]bool, len(name)+1)
-	states[0] = true
+	states, next := newBitVector(len(name)+1), newBitVector(len(name)+1)
+	current, pending := states.words(), next.words()
+	setBit(current, 0)
 	for index := 0; index < len(pattern); index++ {
-		// A star can consume any remaining bytes in this one component.
+		// A star can consume any remaining bytes in this one component, so the lowest
+		// reachable prefix fills every later prefix.
 		if pattern[index] == '*' {
-			for offset := 1; offset <= len(name); offset++ {
-				states[offset] = states[offset] || states[offset-1]
+			if lowest := lowestBit(current); lowest >= 0 {
+				fillBits(current, lowest, len(name))
 			}
 			continue
 		}
@@ -36,25 +65,78 @@ func matchComponent(pattern, name string) bool {
 		}
 
 		// Advance only prefixes whose next byte satisfies this token.
-		for offset := range next {
-			next[offset] = false
-		}
+		clearBits(pending)
 		for offset := 0; offset < len(name); offset++ {
-			if !states[offset] {
+			if !bitSet(current, offset) {
 				continue
 			}
 			switch kind {
 			case '?':
-				next[offset+1] = true
+				setBit(pending, offset+1)
 			case '[':
-				next[offset+1] = accepted[name[offset]]
+				if accepted[name[offset]] {
+					setBit(pending, offset+1)
+				}
 			default:
-				next[offset+1] = name[offset] == literal
+				if name[offset] == literal {
+					setBit(pending, offset+1)
+				}
 			}
 		}
-		states, next = next, states
+		current, pending = pending, current
 	}
-	return states[len(name)]
+	return bitSet(current, len(name))
+}
+
+func bitSet(words []uint64, position int) bool {
+	return words[position/64]&(uint64(1)<<uint(position%64)) != 0
+}
+
+func setBit(words []uint64, position int) {
+	words[position/64] |= uint64(1) << uint(position%64)
+}
+
+func clearBits(words []uint64) {
+	for index := range words {
+		words[index] = 0
+	}
+}
+
+func anyBit(words []uint64) bool {
+	for _, word := range words {
+		if word != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func lowestBit(words []uint64) int {
+	for index, word := range words {
+		if word == 0 {
+			continue
+		}
+		return index*64 + bits.TrailingZeros64(word)
+	}
+	return -1
+}
+
+// fillBits sets every bit from start through end inclusive.
+func fillBits(words []uint64, start, end int) {
+	first, last := start/64, end/64
+	if first == last {
+		words[first] |= bitRange(start%64, end%64)
+		return
+	}
+	words[first] |= ^uint64(0) << uint(start%64)
+	for index := first + 1; index < last; index++ {
+		words[index] = ^uint64(0)
+	}
+	words[last] |= ^uint64(0) >> uint(63-end%64)
+}
+
+func bitRange(low, high int) uint64 {
+	return (^uint64(0) >> uint(63-high)) & (^uint64(0) << uint(low))
 }
 
 // POSIX classes use the same ASCII ranges as Git wildmatch, independent of process locale.

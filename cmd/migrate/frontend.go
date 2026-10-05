@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samuelncui/yatm/config"
+	"github.com/samuelncui/yatm/internal/config"
 	"golang.org/x/net/html"
 )
 

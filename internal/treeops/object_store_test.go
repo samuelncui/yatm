@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,26 +45,34 @@ func (s *objectStore) add(key string, directory bool) Node {
 
 func (s *objectStore) Stat(_ context.Context, ref string) (Node, error) { return s.nodes[ref], nil }
 
-func (s *objectStore) ListChildren(_ context.Context, node Node, cursor string) ([]Node, string, error) {
-	// Tiny pages prove the shared traversal cannot assume one complete listing.
-	s.pages++
-	var refs []string
-	for ref, candidate := range s.nodes {
-		if candidate.Parent == node.Ref && ref > cursor {
-			refs = append(refs, ref)
+func (s *objectStore) WalkChildren(ctx context.Context, node Node, visit func(Node) error) error {
+	// Tiny provider pages preserve opaque references without assuming one complete listing.
+	var cursor string
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
+		s.pages++
+		var refs []string
+		for ref, candidate := range s.nodes {
+			if candidate.Parent == node.Ref && ref > cursor {
+				refs = append(refs, ref)
+			}
+		}
+		sort.Strings(refs)
+		if len(refs) > 2 {
+			refs = refs[:2]
+		}
+		for _, ref := range refs {
+			if err := visit(s.nodes[ref]); err != nil {
+				return err
+			}
+		}
+		if len(refs) < 2 {
+			return nil
+		}
+		cursor = refs[len(refs)-1]
 	}
-	sort.Strings(refs)
-	var next string
-	if len(refs) > 2 {
-		refs = refs[:2]
-		next = refs[len(refs)-1]
-	}
-	result := make([]Node, 0, len(refs))
-	for _, ref := range refs {
-		result = append(result, s.nodes[ref])
-	}
-	return result, next, nil
 }
 
 func (s *objectStore) ResolveChild(_ context.Context, parent Node, name string, directory bool) (Node, error) {

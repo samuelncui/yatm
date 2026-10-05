@@ -1,24 +1,24 @@
 syntax = "proto3";
 
-package yatm.storage;
+package yatm.v1;
 
-option go_package = "github.com/samuelncui/yatm/entity";
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
-message LTFSExtent {
+message LtfsExtent {
   string partition = 1;
   uint64 start_block = 2;
   uint64 byte_offset = 3;
   uint64 byte_count = 4;
-  uint64 file_offset = 5;
+  uint64 file_offset_bytes = 5;
 }
 
-message LTFSMetadata {
-  repeated LTFSExtent extents = 1;
+message LtfsMetadata {
+  repeated LtfsExtent extents = 1;
 }
 
 message StorageMetadata {
   oneof backend {
-    LTFSMetadata ltfs = 1;
+    LtfsMetadata ltfs = 1;
   }
 }
 

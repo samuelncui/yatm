@@ -1,4 +1,6 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { streamListing } from "@/test/files-fixture";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams, useSearchParams } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,12 +11,15 @@ import {
   FileSelection,
   Position,
   Location,
-  OnlineBinding,
-  InspectSelectionReply,
+  SelectionInspectionResult,
   RestoreVersionMatch,
-  type InspectSelectionRequest,
+  EntryKind,
+  FileOperationKind,
+  FilesEntry,
+  ListFilesResponse,
+  type EstimateRestoreJobRequest,
 } from "@/entity";
-const { parents, getVersion, listVersions, listCopies, create, list, get, browsePaths, inspect, browserFiles } = vi.hoisted(() => ({
+const { parents, getVersion, listVersions, listCopies, create, list, get, listFiles, inspect, browserFiles } = vi.hoisted(() => ({
   parents: vi.fn(),
   getVersion: vi.fn(),
   listVersions: vi.fn(),
@@ -22,17 +27,37 @@ const { parents, getVersion, listVersions, listCopies, create, list, get, browse
   create: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
-  browsePaths: vi.fn(),
+  listFiles: vi.fn(),
   inspect: vi.fn(),
   browserFiles: { current: [] as import("@samuelncui/chonky").FileData[] },
 }));
 vi.mock("@/api", async (original) => ({
   ...(await original<typeof import("@/api")>()),
-  cli: { fileListParents: parents },
-  fileCatalogCli: { getVersion, listVersions, listCopies, inspectSelection: inspect },
-  restoreJobCli: { create },
+  filesCli: {
+    list: listFiles,
+    getVersion,
+    listVersions,
+    listCopies,
+    get: ({ reference }: any) => ({
+      response: parents({ id: reference.target.fileId }).response.then((reply: any) => ({
+        detail: {
+          entry: { name: reply.parents.at(-1)?.name },
+          organization: {
+            path: reply.parents
+              .filter((file: any) => file.id !== 0n)
+              .map((file: any) => file.name)
+              .join("/"),
+          },
+        },
+      })),
+    }),
+  },
+
+  restoreJobCli: {
+    create,
+    estimate: (...args: unknown[]) => ({ response: inspect(...args).response.then((result: unknown) => ({ result })) }),
+  },
   locationCli: { list, get },
-  settingsCli: { browsePaths },
 }));
 vi.mock("@/pages/file", () => ({
   useFileBrowser: () => ({
@@ -142,7 +167,7 @@ const target = async (path = "") => {
 const before = async (date: string) => {
   if (!screen.queryByRole("group", { name: "Restore time" })) {
     await userEvent.click(screen.getByRole("combobox", { name: "Versions" }));
-    await userEvent.click(screen.getByRole("option", { name: "Latest backup at or before…" }));
+    await userEvent.click(screen.getByRole("option", { name: "Latest archive at or before…" }));
   }
   const picker = await screen.findByRole("group", { name: "Restore time" }, { timeout: 5000 });
   const user = userEvent.setup();
@@ -153,57 +178,68 @@ beforeEach(() => {
   vi.clearAllMocks();
   browserFiles.current = [];
   inspect.mockImplementation(({ selections, fileVersionIds }: { selections: FileSelection[]; fileVersionIds: bigint[] }) =>
-    call(InspectSelectionReply.create({ selections, files: BigInt(selections.length + fileVersionIds.length), bytes: 100n })),
+    call(SelectionInspectionResult.create({ selections, fileCount: BigInt(selections.length + fileVersionIds.length), totalBytes: 100n })),
   );
   sessionStorage.clear();
   localStorage.clear();
-  browsePaths.mockImplementation(({ path }: { path: string }) =>
-    call({
-      directories: path
-        ? []
-        : [
-            { name: "review", path: "review" },
-            { name: "ignored", path: "ignored" },
-          ],
-      nextCursor: "",
-    }),
-  );
+  listFiles.mockImplementation(({ directory }: { directory: { target: { location: { locationId: bigint; path: string } } } }) => {
+    const { locationId, path } = directory.target.location;
+    const entry = (path: string) =>
+      FilesEntry.create({
+        name: path.split("/").at(-1),
+        path,
+        kind: EntryKind.DIRECTORY,
+        operations: [FileOperationKind.MKDIR],
+        reference: { target: { oneofKind: "location", location: { locationId, path } } },
+      });
+    return streamListing(
+      ListFilesResponse.create({
+        directory: entry(path),
+        entries: path ? [] : [entry("review"), entry("ignored")],
+        breadcrumbs: [entry(""), ...(path ? [entry(path)] : [])],
+      }),
+    );
+  });
   parents.mockReturnValue(call({ parents: [File.create({ id: 1n, name: "Trips" }), File.create({ id: 7n, name: "organized.jpg" })] }));
   getVersion.mockImplementation(({ id }: { id: bigint }) =>
-    call({ version: FileVersion.create({ id, fileId: 7n, signature: new Uint8Array([Number(id)]), size: 100n }) }),
+    call({ version: FileVersion.create({ id, fileId: 7n, signature: new Uint8Array([Number(id)]), sizeBytes: 100n }) }),
   );
   listCopies.mockReturnValue(call({ positions: [Position.create({ id: 2n })], hasMore: false }));
-  listVersions.mockReturnValue(call({ versions: [FileVersion.create({ id: 20n, fileId: 7n, size: 100n })], hasMore: false }));
+  listVersions.mockReturnValue(call({ versions: [FileVersion.create({ id: 20n, fileId: 7n, sizeBytes: 100n })], hasMore: false }));
   list.mockReturnValue(
     call({
-      locations: [
-        Location.create({
-          id: 3n,
-          name: "Recovered files",
-          rootPath: "/restored",
-          restoreTarget: true,
-          binding: OnlineBinding.CONFIRMED,
-          bindingToken: "target-3",
-        }),
-      ],
+      locations: [Location.create({ id: 3n, name: "Recovered files", rootPath: "/restored", restoreTarget: true })],
       hasMore: false,
     }),
   );
   get.mockReturnValue(
     call({
-      location: Location.create({
-        id: 3n,
-        name: "Recovered files",
-        rootPath: "/restored",
-        restoreTarget: true,
-        binding: OnlineBinding.CONFIRMED,
-        bindingToken: "target-3",
-      }),
+      location: Location.create({ id: 3n, name: "Recovered files", rootPath: "/restored", restoreTarget: true }),
     }),
   );
   create.mockReturnValue(call({ job: { id: 42n } }));
 });
 describe("Version Restore selection", () => {
+  it("does not add a delayed deep-linked version after the route selects another version", async () => {
+    let finish!: (value: unknown) => void;
+    getVersion.mockImplementation(({ id }: { id: bigint }) =>
+      id === 19n
+        ? {
+            response: new Promise((resolve) => {
+              finish = resolve;
+            }),
+          }
+        : call({ version: FileVersion.create({ id, fileId: 7n, sizeBytes: 100n }) }),
+    );
+    show();
+    await waitFor(() => expect(getVersion).toHaveBeenCalledWith({ id: 19n }));
+    await userEvent.click(screen.getByRole("button", { name: "Add another version" }));
+    await screen.findByText("Selected · 1");
+    await act(async () => finish({ version: FileVersion.create({ id: 19n, fileId: 7n, sizeBytes: 100n }) }));
+    expect(screen.getByText("Selected · 1")).toBeInTheDocument();
+    expect(parents).toHaveBeenCalledTimes(1);
+  });
+
   it("retains a directory root and sends a nested custom version as an override", async () => {
     browserFiles.current = [{ id: "1", name: "Trips", isDir: true }];
     show("/restore");
@@ -230,17 +266,17 @@ describe("Version Restore selection", () => {
       { id: "7", name: "organized.jpg" },
       { id: "1", name: "Trips", isDir: true },
     ];
-    inspect.mockImplementation((request: InspectSelectionRequest) =>
+    inspect.mockImplementation((request: EstimateRestoreJobRequest) =>
       call(
-        InspectSelectionReply.create({
+        SelectionInspectionResult.create({
           selections: request.selections,
-          files: 1n,
-          bytes: 90n,
+          fileCount: 1n,
+          totalBytes: 90n,
           resolvedVersions: [
             {
               fileId: 7n,
-              version: { id: request.versionPolicy?.beforeAtMs ? 18n : 19n, fileId: 7n },
-              archivedAtMs: request.versionPolicy?.beforeAtMs ?? 1790000000000n,
+              version: { id: request.versionPolicy?.beforeAtNs ? 18n : 19n, fileId: 7n },
+              archivedAtNs: request.versionPolicy?.beforeAtNs ?? 1790000000000000000n,
             },
           ],
         }),
@@ -252,11 +288,11 @@ describe("Version Restore selection", () => {
     await target();
     await before("2026-09-01T12:00");
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
-    const cutoff = BigInt(new Date("2026-09-01T12:00").getTime());
+    const cutoff = BigInt(new Date("2026-09-01T12:00").getTime()) * 1_000_000n;
     expect(inspect).toHaveBeenLastCalledWith(
       expect.objectContaining({
         fileVersionIds: [],
-        versionPolicy: { beforeAtMs: cutoff },
+        versionPolicy: { beforeAtNs: cutoff },
         selections: [
           FileSelection.create({ target: { oneofKind: "library", library: { fileId: 7n } }, scope: FileScope.SAVED }),
           FileSelection.create({ target: { oneofKind: "library", library: { fileId: 1n } }, scope: FileScope.SAVED }),
@@ -265,7 +301,7 @@ describe("Version Restore selection", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ spec: expect.objectContaining({ fileVersionIds: [], versionPolicy: { beforeAtMs: cutoff }, selections: expect.any(Array) }) }),
+      expect.objectContaining({ spec: expect.objectContaining({ fileVersionIds: [], versionPolicy: { beforeAtNs: cutoff }, selections: expect.any(Array) }) }),
     );
   });
   it("keeps explicit versions across time changes and can reset all overrides into a deduplicated File selection", async () => {
@@ -288,16 +324,16 @@ describe("Version Restore selection", () => {
   });
   it("requires explicit skip for unmatched versions, resets that consent on time changes, and never skips missing copies", async () => {
     browserFiles.current = [{ id: "7", name: "organized.jpg" }];
-    inspect.mockImplementation((request: InspectSelectionRequest) =>
+    inspect.mockImplementation((request: EstimateRestoreJobRequest) =>
       call(
-        InspectSelectionReply.create({
+        SelectionInspectionResult.create({
           selections: request.selections,
-          files: 1n,
-          bytes: 50n,
-          unmatchedVersions: request.versionPolicy?.beforeAtMs ? 1n : 0n,
-          skippedVersions: request.skipUnmatchedVersions ? 1n : 0n,
-          missingCopies: request.allowDamagedCopies ? 1n : 0n,
-          resolvedVersions: [{ fileId: 7n, match: RestoreVersionMatch.RESTORE_VERSION_AFTER_CUTOFF }],
+          fileCount: 1n,
+          totalBytes: 50n,
+          unmatchedVersionCount: request.versionPolicy?.beforeAtNs ? 1n : 0n,
+          skippedVersionCount: request.skipUnmatchedVersions ? 1n : 0n,
+          missingCopyCount: request.allowDamagedCopies ? 1n : 0n,
+          resolvedVersions: [{ fileId: 7n, match: RestoreVersionMatch.AFTER_CUTOFF }],
         }),
       ),
     );
@@ -321,8 +357,14 @@ describe("Version Restore selection", () => {
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
   });
   it("does not create an empty restore after explicitly skipping all unmatched files", async () => {
-    inspect.mockImplementation((request: InspectSelectionRequest) =>
-      call(InspectSelectionReply.create({ selections: request.selections, unmatchedVersions: 1n, skippedVersions: request.skipUnmatchedVersions ? 1n : 0n })),
+    inspect.mockImplementation((request: EstimateRestoreJobRequest) =>
+      call(
+        SelectionInspectionResult.create({
+          selections: request.selections,
+          unmatchedVersionCount: 1n,
+          skippedVersionCount: request.skipUnmatchedVersions ? 1n : 0n,
+        }),
+      ),
     );
     show();
     await target();
@@ -333,16 +375,16 @@ describe("Version Restore selection", () => {
     expect(create).not.toHaveBeenCalled();
   });
   it("discards an older policy response and remembers the selected policy with the waitlist", async () => {
-    let resolveOld!: (value: InspectSelectionReply) => void;
-    const oldCutoff = BigInt(new Date("2026-09-01T12:00").getTime());
-    inspect.mockImplementation((request: InspectSelectionRequest) => {
-      if (request.versionPolicy?.beforeAtMs === oldCutoff)
+    let resolveOld!: (value: SelectionInspectionResult) => void;
+    const oldCutoff = BigInt(new Date("2026-09-01T12:00").getTime()) * 1_000_000n;
+    inspect.mockImplementation((request: EstimateRestoreJobRequest) => {
+      if (request.versionPolicy?.beforeAtNs === oldCutoff)
         return {
-          response: new Promise<InspectSelectionReply>((resolve) => {
+          response: new Promise<SelectionInspectionResult>((resolve) => {
             resolveOld = resolve;
           }),
         };
-      return call(InspectSelectionReply.create({ selections: request.selections, files: 1n, bytes: 100n }));
+      return call(SelectionInspectionResult.create({ selections: request.selections, fileCount: 1n, totalBytes: 100n }));
     });
     const page = show();
     await target();
@@ -350,7 +392,7 @@ describe("Version Restore selection", () => {
     await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
     await before("2026-09-02T12:00");
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
-    await act(async () => resolveOld(InspectSelectionReply.create({ missingCopies: 1n, files: 1n })));
+    await act(async () => resolveOld(SelectionInspectionResult.create({ missingCopyCount: 1n, fileCount: 1n })));
     expect(screen.queryByText("1 item has no usable archived copy.")).not.toBeInTheDocument();
     page.unmount();
     show("/restore");
@@ -361,7 +403,7 @@ describe("Version Restore selection", () => {
   });
   it("warns about ignored outputs after confirming a target", async () => {
     inspect.mockImplementation(({ selections, destination }: { selections: FileSelection[]; destination?: unknown }) =>
-      call(InspectSelectionReply.create({ selections, files: 1n, ignoredOutputs: destination ? 1n : 0n })),
+      call(SelectionInspectionResult.create({ selections, fileCount: 1n, ignoredOutputCount: destination ? 1n : 0n })),
     );
     show();
     await target();
@@ -370,7 +412,7 @@ describe("Version Restore selection", () => {
   });
   it("can deliberately include damaged copies and re-estimates eligibility", async () => {
     inspect.mockImplementation(({ selections, allowDamagedCopies }: { selections: FileSelection[]; allowDamagedCopies: boolean }) =>
-      call(InspectSelectionReply.create({ selections, files: 1n, missingCopies: allowDamagedCopies ? 0n : 1n })),
+      call(SelectionInspectionResult.create({ selections, fileCount: 1n, missingCopyCount: allowDamagedCopies ? 0n : 1n })),
     );
     show();
     await target();
@@ -410,7 +452,7 @@ describe("Version Restore selection", () => {
   });
   it("keeps a version with no remaining copy visible but blocks creation", async () => {
     listCopies.mockReturnValue(call({ positions: [], hasMore: false }));
-    inspect.mockImplementation(() => call(InspectSelectionReply.create({ files: 1n, missingCopies: 1n })));
+    inspect.mockImplementation(() => call(SelectionInspectionResult.create({ fileCount: 1n, missingCopyCount: 1n })));
     show();
     await target();
     await screen.findByText("1 item has no usable archived copy.");

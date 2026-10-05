@@ -1,10 +1,12 @@
-import { type ReactNode, useCallback, useId, useRef, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
+import { Feedback } from "@/components/feedback";
+import { type FormEvent, type ReactNode, useCallback, useId, useRef, useState } from "react";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
 import { errorMessage } from "@/tools";
 
 type ActionRequest = {
   title: string;
   confirmLabel: string;
+  cancelLabel?: string;
   children?: ReactNode;
   danger?: boolean;
   input?: { label: string; defaultValue?: string };
@@ -12,13 +14,22 @@ type ActionRequest = {
 };
 
 /** Application-owned confirmation with room for operation-specific content and options. */
-export const ActionDialog = ({ title, confirmLabel, children, danger, input, onConfirm, onClose }: ActionRequest & { onClose: () => void }) => {
+export const ActionDialog = ({
+  title,
+  confirmLabel,
+  cancelLabel = "Cancel",
+  children,
+  danger,
+  input,
+  onConfirm,
+  onClose,
+}: ActionRequest & { onClose: () => void }) => {
   const titleID = useId();
   const [value, setValue] = useState(input?.defaultValue ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
-  const valid = !input || value.trim().length > 0;
+  const valid = !input || value.length > 0;
   const close = () => {
     if (!submitting.current) onClose();
   };
@@ -38,39 +49,55 @@ export const ActionDialog = ({ title, confirmLabel, children, danger, input, onC
     }
   };
   return (
-    <Dialog open onClose={close} aria-labelledby={titleID} maxWidth="sm" fullWidth>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      >
-        <DialogTitle id={titleID}>{title}</DialogTitle>
-        <DialogContent>
-          {children}
-          {input && (
-            <TextField
-              autoFocus
-              required
-              fullWidth
-              margin="dense"
-              label={input.label}
-              value={value}
-              disabled={busy}
-              onChange={(event) => setValue(event.target.value)}
-            />
-          )}
-          {error && <Alert severity="error">{error}</Alert>}
-        </DialogContent>
-        <DialogActions>
-          <Button type="button" autoFocus={!input} disabled={busy} onClick={close}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="contained" color={danger ? "error" : "primary"} disabled={busy || !valid}>
-            {busy ? "Working…" : confirmLabel}
-          </Button>
-        </DialogActions>
-      </form>
+    <Dialog
+      open
+      onClose={close}
+      aria-labelledby={titleID}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          component: "form",
+          onSubmit: (event: FormEvent) => {
+            event.preventDefault();
+            void submit();
+          },
+        },
+      }}
+    >
+      <DialogTitle id={titleID}>{title}</DialogTitle>
+      <DialogContent>
+        {children}
+        {input && (
+          <TextField
+            autoFocus
+            required
+            fullWidth
+            multiline
+            minRows={1}
+            maxRows={4}
+            margin="dense"
+            label={input.label}
+            value={value}
+            disabled={busy}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              void submit();
+            }}
+          />
+        )}
+        {error && <Feedback severity="error">{error}</Feedback>}
+      </DialogContent>
+      <DialogActions>
+        <Button type="submit" variant="contained" color={danger ? "error" : "primary"} disabled={busy || !valid}>
+          {busy ? "Working…" : confirmLabel}
+        </Button>
+        <Button type="button" autoFocus={!input} disabled={busy} onClick={close}>
+          {cancelLabel}
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 };

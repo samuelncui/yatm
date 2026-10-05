@@ -6,7 +6,7 @@ import (
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/media"
+	"github.com/samuelncui/yatm/internal/media"
 )
 
 type verifyCreateCommand struct {
@@ -17,9 +17,8 @@ type verifyCreateCommand struct {
 
 type verifyEntriesCommand struct {
 	runtime *runtime
-	Limit   int32      `long:"limit" default:"100" description:"Maximum findings in this page"`
-	AfterID *int64     `long:"after-id" description:"Finding ID cursor"`
-	Args    fileIDArgs `positional-args:"yes"`
+	jobResultPageOptions
+	Args fileIDArgs `positional-args:"yes"`
 }
 
 type verifyRunCommand struct {
@@ -54,9 +53,9 @@ func (c *verifyCreateCommand) Execute(_ []string) error {
 	// Creation freezes inventory; selecting and reading the physical Media is explicit.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobReply](ctx, c.runtime,
+	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime,
 		entity.ScanJobService_Create_FullMethodName,
-		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: c.Args.ID, SignaturePolicy: entity.ScanSignaturePolicy_FORCE_READ, ResultPolicy: entity.ScanResultPolicy_VERIFY_COPIES}})
+		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: c.Args.ID, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}})
 	if err != nil {
 		return err
 	}
@@ -68,19 +67,18 @@ func (c *verifyEntriesCommand) Execute(_ []string) error {
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
 		return err
 	}
-	if c.Limit <= 0 || c.Limit > 1000 {
-		return usageError(fmt.Errorf("limit must be between 1 and 1000"))
-	}
-	if c.AfterID != nil && *c.AfterID < 0 {
-		return usageError(fmt.Errorf("after-id must not be negative"))
+	if err := c.jobResultPageOptions.validate(); err != nil {
+		return err
 	}
 
 	// Fetch one typed page; generic job progress/wait handles the shared lifecycle.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesReply](ctx, c.runtime,
+	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](ctx, c.runtime,
 		entity.ScanJobService_ListEntries_FullMethodName,
-		&entity.ListScanJobEntriesRequest{Id: c.Args.ID, Limit: c.Limit, AfterId: c.AfterID})
+		&entity.ListScanJobEntriesRequest{
+			Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset, IncludeTotal: c.IncludeTotal,
+		})
 	if err != nil {
 		return err
 	}
@@ -109,7 +107,7 @@ func (c *verifyRunCommand) Execute(_ []string) error {
 	// The server supplies the immutable expected Media identity, not caller-controlled expectations.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ReadScanMediaRequest, entity.ReadScanMediaReply](ctx, c.runtime,
+	reply, err := callRPC[entity.ReadScanMediaRequest, entity.ReadScanMediaResponse](ctx, c.runtime,
 		entity.ScanJobService_ReadMedia_FullMethodName, &entity.ReadScanMediaRequest{Id: c.Args.ID, Target: target})
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fileCatalogCli } from "@/api";
-import { FileOperationRef, FileScope, FileSelection, InspectSelectionRequest, type RestoreVersionResolution } from "@/entity";
+import { restoreJobCli } from "@/api";
+import { FileOperationRef, FileScope, FileSelection, EstimateRestoreJobRequest, type RestoreVersionResolution } from "@/entity";
 import { filesPage } from "@/components/files-browser";
 import { associatedLibraryFileID, selectionForFile } from "@/components/location-files";
 import type { SelectionEntry } from "@/components/selection-waitlist";
@@ -18,7 +18,6 @@ function directoryReference(selection: FileSelection): FileOperationRef {
           location: {
             locationId: target.location.locationId,
             path: target.location.path,
-            bindingToken: target.location.reference?.bindingToken ?? "",
           },
         },
       });
@@ -48,14 +47,15 @@ export function useWaitlistDirectory(directory: SelectionEntry | undefined, rest
         const result = await filesPage(directoryReference(selection), selection.scope, cursor);
         if (request !== sequence.current) return;
         const entries = result.files.map((file): SelectionEntry => {
-          const child = selectionForFile(file, result.scope);
+          const child = file.selectable === false ? undefined : selectionForFile(file, result.scope);
           return {
-            key: FileSelection.toJsonString(child),
+            key: child ? FileSelection.toJsonString(child) : file.id,
             name: file.name,
             path: [path, file.name].filter(Boolean).join("/"),
             isDir: file.isDir,
             selection: child,
-            fileID: file.isDir ? undefined : associatedLibraryFileID(file),
+            fileID: child && !file.isDir ? associatedLibraryFileID(file) : undefined,
+            unavailableReason: child ? undefined : file.status?.label,
             size: file.size,
           };
         });
@@ -95,17 +95,17 @@ export function useWaitlistDirectory(directory: SelectionEntry | undefined, rest
     void (async () => {
       const resolutions: RestoreVersionResolution[] = [];
       for (let offset = 0; offset < ids.length; offset += 100) {
-        const result = await fileCatalogCli.inspectSelection(
-          InspectSelectionRequest.create({
-            restore: true,
+        const result = await restoreJobCli.estimate(
+          EstimateRestoreJobRequest.create({
             selections: ids
               .slice(offset, offset + 100)
               .map((id) => FileSelection.create({ target: { oneofKind: "library", library: { fileId: BigInt(id) } }, scope: FileScope.ALL })),
-            versionPolicy: { beforeAtMs: before == null ? undefined : BigInt(before) },
+            versionPolicy: { beforeAtNs: before == null ? undefined : BigInt(before) },
           }),
         ).response;
         if (!active) return;
-        resolutions.push(...result.resolvedVersions);
+        if (!result.result) throw new Error("Selection estimate is missing");
+        resolutions.push(...result.result.resolvedVersions);
       }
       if (active) setVersions({ key: versionKey, resolutions });
     })().catch((error) => {

@@ -2,6 +2,7 @@
 set -ex;
 
 mkdir -p "${TAPE_DIR}"
+TAPE_DIR=$(cd -- "${TAPE_DIR}" && pwd -P)
 exec > >(tee -a "${TAPE_DIR}/ltfs.log") 2>&1
 
 CURDIR=$(cd $(dirname $0); pwd);

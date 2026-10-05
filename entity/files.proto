@@ -1,74 +1,316 @@
 syntax = "proto3";
-package files;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 import "file.proto";
 import "file_operation.proto";
+import "position.proto";
 
-// Provider-neutral entry browsing. References are forwarded unchanged by clients.
-// Pure reads never collect originals; collection is a separate explicit operation.
+// Reads are pure. Optional projections are computed only when requested or needed by a predicate.
 service FilesService {
-  rpc List(ListFilesRequest) returns (ListFilesReply) {}
-  rpc Get(GetFilesEntryRequest) returns (FilesEntry) {}
-  rpc Inspect(InspectFilesRequest) returns (InspectFilesReply) {}
-  rpc Collect(CollectFilesRequest) returns (CollectFilesReply) {}
-  rpc UpdateMetadata(UpdateFilesMetadataRequest) returns (FilesEntry) {}
+  // List reads one directory completely: one enumeration per call, no continuation.
+  rpc List(ListFilesRequest) returns (stream ListFilesResponse) {}
+  // Search answers a query over the Library or a Location, one bounded page per call.
+  rpc Search(SearchFilesRequest) returns (SearchFilesResponse) {}
+  rpc Measure(MeasureFilesRequest) returns (stream MeasureFilesResponse) {}
+  rpc Get(GetFileRequest) returns (GetFileResponse) {}
+  rpc UpdateMetadata(UpdateFilesMetadataRequest) returns (UpdateFilesMetadataResponse) {}
+  rpc Mkdir(MkdirFilesRequest) returns (stream MkdirFilesResponse) {}
+  rpc Move(MoveFilesRequest) returns (stream MoveFilesResponse) {}
+  rpc Remove(RemoveFilesRequest) returns (stream RemoveFilesResponse) {}
+  rpc GetVersion(GetFileVersionRequest) returns (GetFileVersionResponse) {}
+  rpc ListVersions(ListFileVersionsRequest) returns (ListFileVersionsResponse) {}
+  rpc RemoveVersion(RemoveFileVersionRequest) returns (RemoveFileVersionResponse) {}
+  rpc ListCopies(ListContentCopiesRequest) returns (ListContentCopiesResponse) {}
+  rpc ListDuplicates(ListContentDuplicatesRequest) returns (ListContentDuplicatesResponse) {}
+  // Identical tools over recorded signatures. Reads never scan or compute signatures.
+  rpc FindIdentical(FindIdenticalRequest) returns (FindIdenticalResponse) {}
+  rpc ListIdenticalRows(ListIdenticalRowsRequest) returns (ListIdenticalRowsResponse) {}
+  rpc LookupIdenticalPositions(LookupIdenticalPositionsRequest) returns (LookupIdenticalPositionsResponse) {}
+  rpc CloseIdenticalResult(CloseIdenticalResultRequest) returns (CloseIdenticalResultResponse) {}
+  rpc ListIdenticalGroups(ListIdenticalGroupsRequest) returns (ListIdenticalGroupsResponse) {}
+  rpc ListIdenticalMembers(ListIdenticalMembersRequest) returns (ListIdenticalMembersResponse) {}
+  rpc KeepIdentical(KeepIdenticalRequest) returns (stream KeepIdenticalResponse) {}
+  rpc MergeIdentical(MergeIdenticalRequest) returns (MergeIdenticalResponse) {}
+  // Synchronous inventory admission. dryrun reports the same outcomes without writing.
+  rpc ImportPositions(ImportPositionsRequest) returns (ImportPositionsResponse) {}
+  rpc RelocateOriginal(RelocateOriginalRequest) returns (RelocateOriginalResponse) {}
 }
-
-enum EntryKind {
-  ENTRY_FILE = 0;
-  ENTRY_DIRECTORY = 1;
-  ENTRY_LINK = 2;
-  ENTRY_OTHER = 3;
+// Selected inventory roots may be regular files or derived directories. Directory descendants
+// are expanded by the server in bounded path pages; unsigned descendants are skipped.
+message ImportPositionsRequest {
+  repeated int64 position_ids = 1;
+  // Restricts the admission to one Media and supplies its top-level directories when no
+  // Position is selected. Position IDs outside it reject the request instead of narrowing it.
+  optional int64 media_id = 2;
+  // Reports the same outcomes without creating Files, versions or directory nodes.
+  bool dryrun = 3;
 }
+message ImportPositionsResponse {
+  // Regular entries admitted by this call; under dryrun, those it would admit.
+  int64 file_count = 1;
+  // Logical directory nodes created or reused for those entries.
+  int64 directory_count = 2;
+  int64 skipped_file_count = 3;
+  // Recorded content already present under the Media's Unforged import directory.
+  int64 existing_count = 4;
+  // Selected directory roots whose descendants held no recorded content.
+  int64 skipped_unsigned_count = 5;
+}
+message RemoveFileVersionRequest { int64 file_id = 1; int64 version_id = 2; bool dryrun = 3; }
+message RemoveFileVersionResponse { int64 removed_version_count = 1; }
 
+enum EntryKind { ENTRY_KIND_UNSPECIFIED = 0; ENTRY_KIND_FILE = 1; ENTRY_KIND_DIRECTORY = 2; ENTRY_KIND_LINK = 3; ENTRY_KIND_OTHER = 4; }
+enum FilesInclude { FILES_INCLUDE_UNSPECIFIED = 0; FILES_INCLUDE_ATTRIBUTES = 1; FILES_INCLUDE_STATUS = 2; FILES_INCLUDE_OPERATIONS = 3; FILES_INCLUDE_NAVIGATION = 4; }
+// FilesArchive is whether a restorable archived copy of this entry is recorded. It reports known
+// inventory, not a fresh health check.
+enum FilesArchive { FILES_ARCHIVE_UNSPECIFIED = 0; FILES_ARCHIVE_AVAILABLE = 1; FILES_ARCHIVE_NONE = 2; }
+enum FilesCoverage { FILES_COVERAGE_UNSPECIFIED = 0; FILES_COVERAGE_COVERED = 1; FILES_COVERAGE_UNCOVERED = 2; FILES_COVERAGE_NOT_APPLICABLE = 3; }
+enum FilesIssue { FILES_ISSUE_UNSPECIFIED = 0; FILES_ISSUE_PARTIAL_COPIES_UNAVAILABLE = 1; FILES_ISSUE_ALL_COPIES_UNAVAILABLE = 2; FILES_ISSUE_LATEST_VERSION_UNAVAILABLE = 3; }
+message FilesStatus {
+  OriginalAvailability original = 1;
+  FilesArchive archive = 2;
+  FilesCoverage current = 3;
+  repeated FilesIssue issues = 4;
+}
 message FilesEntry {
-  file_operation.FileOperationRef reference = 1;
+  FileOperationRef reference = 1;
   string name = 2;
   string path = 3;
   EntryKind kind = 4;
-  optional int64 size = 5;
-  int64 mtime_ns = 6;
-  file.File file = 7;
-  file.FileContentSummary summary = 8;
-  repeated file_operation.FileOperationKind operations = 9;
-  bool can_read = 10;
-  // Exact observed content object. Obtain through Get immediately before a content request.
-  file_operation.FileOperationRef content_reference = 11;
+  optional int64 size_bytes = 5;
+  optional int64 mtime_ns = 6;
+  optional int64 associated_file_id = 7;
+  FilesStatus status = 8;
+  repeated FileOperationKind operations = 9;
+  // A listed child that could not be read remains in the directory total. Its name/path
+  // are escaped display text only for invalid UTF-8, kind is known only when observed, and it has no reference
+  // or attributes. An empty error denotes an ordinary usable row.
+  string error = 10;
 }
+message FilesOriginal {
+  FileOperationRef reference = 1;
+  string source_name = 2;
+  string path = 3;
+}
+message FilesOrganization {
+  FileOperationRef parent = 1;
+  string path = 2;
+  repeated string tags = 3;
+  string note = 4;
+}
+message FilesDetail {
+  FilesEntry entry = 1;
+  FilesOrganization organization = 2;
+  FilesOriginal original = 3;
+  FileOperationRef content_reference = 4;
+  // The recorded content identity of the current original, published only while its observation
+  // is applicable. Preview and every content-addressed read take exactly this identity.
+  bytes content_signature = 5;
+}
+// ListFilesRequest names one directory. A directory read carries no query and no cursor.
 message ListFilesRequest {
-  file_operation.FileOperationRef directory = 1;
+  FileOperationRef directory = 1;
+  FileScope scope = 2;
+  repeated FilesInclude include = 3;
+  // Batching is a transport detail: how many rows one reply carries.
+  int32 batch_size = 4;
+}
+// ListFilesResponse is one batch of one listing. The first batch states the directory and its
+// settled entry count; later batches carry rows only and repeat no continuation state.
+message ListFilesResponse {
+  repeated FilesEntry entries = 1;
+  FileScope scope = 2;
+  FilesEntry directory = 3;
+  repeated FilesEntry breadcrumbs = 4;
+  // total is the number of entries this listing found, stated in the first batch.
+  optional int64 total_entry_count = 5;
+}
+// SearchFilesRequest is a query over the Library or one Location directory.
+message SearchFilesRequest {
+  FileOperationRef directory = 1;
   string cursor = 2;
   int32 limit = 3;
-  file.FileScope scope = 4;
-  string name_filter = 5;
-  // Shared querystring grammar; unsupported predicates are errors, never silently ignored.
-  string query = 6;
-  // Explicit Library data-usage request; ordinary listing never walks descendants.
-  bool need_size = 7;
+  FileScope scope = 4;
+  string query = 5;
+  bool recursive = 6;
+  repeated FilesInclude include = 7;
 }
-message ListFilesReply {
+// SearchFilesResponse is one page of a query. total is absent when the query cannot state it.
+message SearchFilesResponse {
   repeated FilesEntry entries = 1;
   string next_cursor = 2;
-  file.FileScope scope = 3;
+  FileScope scope = 3;
+  FilesEntry directory = 4;
+  repeated FilesEntry breadcrumbs = 5;
+  optional int64 total_entry_count = 6;
 }
-message GetFilesEntryRequest { file_operation.FileOperationRef reference = 1; }
-message InspectFilesRequest { repeated file_operation.FileOperationRef references = 1; }
-message FilesObservation {
-  file_operation.FileOperationRef reference = 1;
-  file.FileContentSummary summary = 2;
-  string error = 3;
+message GetFileRequest { FileOperationRef reference = 1; }
+message GetFileResponse { FilesDetail detail = 1; }
+// Measures all matching roots and their contents, independent of Search pagination.
+message MeasureFilesRequest {
+  FileOperationRef directory = 1;
+  FileScope scope = 2;
+  string query = 3;
+  bool recursive = 4;
 }
-message InspectFilesReply { repeated FilesObservation observations = 1; }
-message CollectFilesRequest {
-  repeated file_operation.FileOperationRef references = 1;
-  // Automatic collection respects the persistent setting and Location Ignore.
-  bool automatic = 2;
+message FilesMeasurement {
+  FileOperationRef reference = 1;
+  int64 known_bytes = 2;
+  bool complete = 3;
+  string error = 4;
 }
-message CollectFilesReply { repeated FilesEntry entries = 1; }
+message MeasureFilesResponse {
+  // Per-root outcomes can precede a final de-duplicated summary.
+  oneof result {
+    FilesMeasurement item = 1;
+    FilesMeasurement summary = 2;
+  }
+}
 message UpdateFilesMetadataRequest {
-  file_operation.FileOperationRef reference = 1;
-  optional string note = 2;
-  repeated string add_tags = 3;
-  repeated string remove_tags = 4;
+  repeated FileOperationRef references = 1;
+  repeated string add_tags = 2;
+  repeated string remove_tags = 3;
+  optional string note = 4;
 }
+message UpdateFilesMetadataResponse { repeated FilesDetail entries = 1; }
+message ListContentDuplicatesResponse {
+  repeated FilesEntry entries = 1;
+  bool has_more = 2;
+}
+
+// Identical scope selects the independent catalog or physical-original matching domain.
+enum IdenticalSource { IDENTICAL_SOURCE_UNSPECIFIED = 0; IDENTICAL_SOURCE_LIBRARY = 1; IDENTICAL_SOURCE_LOCATIONS = 2; }
+message IdenticalRoot { int64 location_id = 1; }
+message IdenticalScope { IdenticalSource source = 1; repeated IdenticalRoot roots = 2; }
+message IdenticalGroup {
+  string id = 1;
+  string name = 2;
+  int64 member_count = 3;
+  // Binds the complete authoritative membership and content to its scope.
+  string fingerprint = 4;
+}
+message IdenticalEvidence {
+  bytes signature = 1;
+  // Zero denotes the current recorded original, otherwise a saved version.
+  int64 version_id = 2;
+}
+message IdenticalMember {
+  FilesEntry entry = 1;
+  repeated IdenticalEvidence evidence = 2;
+  string location_name = 3;
+}
+// A Find result is disposable and belongs to this service process.
+message FindIdenticalRequest { IdenticalScope scope = 1; }
+message FindIdenticalResponse {
+  string result_id = 1;
+  int64 all_row_count = 2;
+  int64 visible_row_count = 3;
+  int64 group_count = 4;
+}
+// Rows are addressed by dense position in the selected hidden-file projection.
+// A missing member identifies a group header.
+message IdenticalRow {
+  int64 position = 1;
+  IdenticalGroup group = 2;
+  int64 group_header_position = 3;
+  int64 display_member_count = 4;
+  IdenticalMember member = 5;
+}
+// FILE_ID keeps the retained result's existing member order.
+enum IdenticalSortKey {
+  option allow_alias = true;
+  IDENTICAL_SORT_KEY_UNSPECIFIED = 0;
+  IDENTICAL_SORT_KEY_FILE_ID = 0;
+  IDENTICAL_SORT_KEY_NAME = 1;
+  IDENTICAL_SORT_KEY_SIZE = 2;
+}
+enum IdenticalSortOrder {
+  IDENTICAL_SORT_ORDER_UNSPECIFIED = 0;
+  IDENTICAL_SORT_ORDER_ASC = 1;
+  IDENTICAL_SORT_ORDER_DESC = 2;
+}
+message ListIdenticalRowsRequest {
+  string result_id = 1;
+  int64 offset = 2;
+  int32 limit = 3;
+  bool include_hidden = 4;
+  IdenticalSortKey sort_key = 5;
+  IdenticalSortOrder sort_order = 6;
+}
+message ListIdenticalRowsResponse {
+  repeated IdenticalRow rows = 1;
+  int64 total_row_count = 2;
+}
+message LookupIdenticalPositionsRequest {
+  string result_id = 1;
+  repeated int64 file_ids = 2;
+  IdenticalSortKey sort_key = 3;
+  IdenticalSortOrder sort_order = 4;
+}
+message IdenticalPosition {
+  int64 file_id = 1;
+  string group_id = 2;
+  int64 all_position = 3;
+  optional int64 visible_position = 4;
+  int64 all_group_header_position = 5;
+  optional int64 visible_group_header_position = 6;
+}
+message LookupIdenticalPositionsResponse { repeated IdenticalPosition positions = 1; }
+message CloseIdenticalResultRequest { string result_id = 1; }
+message CloseIdenticalResultResponse {}
+message ListIdenticalGroupsRequest {
+  IdenticalScope scope = 1; string cursor = 2; int32 limit = 3;
+  // Optional initial member projection; zero skips member hydration and physical observations.
+  int32 member_limit = 4;
+  string result_id = 5;
+}
+message ListIdenticalGroupsResponse {
+  repeated IdenticalGroup groups = 1; string next_cursor = 2;
+  repeated ListIdenticalMembersResponse member_pages = 3;
+  string result_id = 4;
+}
+message ListIdenticalMembersRequest { IdenticalScope scope = 1; string group_id = 2; string cursor = 3; int32 limit = 4; string result_id = 5; }
+message ListIdenticalMembersResponse { IdenticalGroup group = 1; repeated IdenticalMember members = 2; string next_cursor = 3; string result_id = 4; }
+message KeepIdenticalRequest {
+  IdenticalScope scope = 1;
+  string group_id = 2;
+  string fingerprint = 3;
+  FileOperationRef keep = 4;
+  bool dryrun = 5;
+}
+message MergeIdenticalRequest {
+  IdenticalScope scope = 1;
+  string group_id = 2;
+  string fingerprint = 3;
+  int64 target_file_id = 4;
+  bool dryrun = 5;
+}
+message MergeIdenticalResponse {
+  int64 target_file_id = 1;
+  // Source Files this call merged; under dryrun, those it would merge.
+  int64 removed_file_count = 2;
+}
+
+message MkdirFilesRequest { FileOperationRef destination = 1; string name = 2; bool dryrun = 3; }
+message MoveFilesRequest { repeated FileOperationRef sources = 1; FileOperationRef destination = 2; string name = 3; bool dryrun = 4; }
+message RemoveFilesRequest { repeated FileOperationRef sources = 1; bool dryrun = 2; }
+message MkdirFilesResponse { FileOperationResult result = 1; }
+message MoveFilesResponse { FileOperationResult result = 1; }
+message RemoveFilesResponse { FileOperationResult result = 1; }
+message KeepIdenticalResponse { FileOperationResult result = 1; }
+
+message GetFileVersionRequest { int64 id = 1; }
+message GetFileVersionResponse { FileVersion version = 1; }
+message ListFileVersionsRequest { int64 file_id = 1; int64 after_id = 2; int32 limit = 3; }
+message ListFileVersionsResponse { repeated FileVersion versions = 1; bool has_more = 2; }
+message ListContentCopiesRequest { bytes signature = 1; int64 after_id = 2; int32 limit = 3; }
+message ListContentCopiesResponse { repeated Position positions = 1; bool has_more = 2; }
+message ListContentDuplicatesRequest { bytes signature = 1; int64 after_file_id = 2; int32 limit = 3; }
+
+message RelocateOriginalRequest {
+  int64 file_id = 1;
+  LocationEntryRef reference = 2;
+  bool dryrun = 4;
+}
+message RelocateOriginalResponse { FilesDetail detail = 1; }

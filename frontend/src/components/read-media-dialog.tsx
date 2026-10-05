@@ -1,10 +1,11 @@
+import { Feedback } from "@/components/feedback";
 import { type ChangeEvent, Fragment, useContext, useRef, useState } from "react";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, TextField } from "@mui/material";
-import { cli } from "@/api";
+import { mediaCli } from "@/api";
 import { type Media, MediaKind, ReadMediaTarget } from "@/entity";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { RefreshContext } from "@/pages/jobs";
-import { errorMessage, formatFilesize } from "@/tools";
+import { errorMessage, formatFilesize, runUIAction } from "@/tools";
 
 export const ReadMediaDialog = ({
   mediaIDs,
@@ -43,7 +44,7 @@ export const ReadMediaDialog = ({
     inspection.reset();
     try {
       if (!mediaIDs.length) throw new Error("This Job has no pending Media.");
-      const mediaReply = await cli.mediaList({ param: { oneofKind: "mget", mget: { ids: mediaIDs } } }).response;
+      const mediaReply = await mediaCli.list({ param: { oneofKind: "ids", ids: { ids: mediaIDs } } }).response;
       if (current !== request.current) return;
       const required = mediaReply.media.filter((value) => mediaIDs.includes(value.id));
       if (mediaIDs.some((id) => !required.some((value) => value.id === id))) throw new Error("Required Media is missing from the Library.");
@@ -54,7 +55,7 @@ export const ReadMediaDialog = ({
       setBackend(pendingVolumes.length ? "volume" : "tape");
       if (pendingVolumes.length === 1) setVolumeUUID(pendingVolumes[0].identity);
       if (!hasTape) return;
-      const deviceReply = await cli.deviceList({}).response;
+      const deviceReply = await mediaCli.listDevices({}).response;
       if (current !== request.current) return;
       setDevices(deviceReply.devices);
       if (!pendingVolumes.length && deviceReply.devices.length === 1) {
@@ -62,7 +63,7 @@ export const ReadMediaDialog = ({
         inspectTape(deviceReply.devices[0]);
       }
     } catch (error) {
-      if (current === request.current) setError(errorMessage(error, "Could not load backup storage"));
+      if (current === request.current) setError(errorMessage(error, "Could not load archive storage"));
     } finally {
       if (current === request.current) setLoading(false);
     }
@@ -89,7 +90,7 @@ export const ReadMediaDialog = ({
       const selected = backend === "volume" ? selectedVolume : inspection.reply?.media;
       if (!selected) throw new Error("Select matching Media before starting.");
       await onRead(ReadMediaTarget.create({ ...target, expectedMediaId: selected.id, expectedIdentity: selected.identity }));
-      await refresh();
+      request.current++;
       setOpen(false);
       setBackend("volume");
       setDevices([]);
@@ -97,6 +98,7 @@ export const ReadMediaDialog = ({
       setDevice("");
       setVolumeUUID("");
       inspection.reset();
+      runUIAction(refresh, "Media reading started, but the Job list could not refresh");
     } catch (error) {
       setError(errorMessage(error, `Could not start ${operation}`));
     } finally {
@@ -114,14 +116,14 @@ export const ReadMediaDialog = ({
 
   return (
     <Fragment>
-      <Button size="small" onClick={show}>
-        {operation === "restore" ? "Choose a backup to read" : "Choose Media to read"}
+      <Button size="small" disabled={open || submitting} onClick={show}>
+        {operation === "restore" ? "Choose archive storage to read" : "Choose Media to read"}
       </Button>
       {open && (
         <Dialog open onClose={close} maxWidth="sm" fullWidth>
-          <DialogTitle>{operation === "restore" ? "Restore from backup storage" : "Read scan Media"}</DialogTitle>
+          <DialogTitle>{operation === "restore" ? "Restore from archive storage" : "Read scan Media"}</DialogTitle>
           <DialogContent>
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && <Feedback severity="error">{error}</Feedback>}
             {loading && <p role="status">Loading required Media…</p>}
             {!loading && candidates.length === 1 && (
               <p>
@@ -203,16 +205,18 @@ export const ReadMediaDialog = ({
                   </TextField>
                   <MediaInspectResult {...inspection} />
                   {!devices.length && !error && <Alert severity="info">No Tape drives available.</Alert>}
-                  {inspection.reply?.identity && !tapeMatches && <Alert severity="error">The inserted Tape does not match this Job’s required Media.</Alert>}
+                  {inspection.reply?.identity && !tapeMatches && (
+                    <Feedback severity="error">The inserted Tape does not match this Job’s required Media.</Feedback>
+                  )}
                 </Fragment>
               ))}
           </DialogContent>
           <DialogActions>
-            <Button disabled={submitting} onClick={close}>
-              Cancel
-            </Button>
             <Button disabled={!canSubmit} onClick={submit}>
               {operation === "restore" ? "Start restore" : "Start reading"}
+            </Button>
+            <Button disabled={submitting} onClick={close}>
+              Cancel
             </Button>
           </DialogActions>
         </Dialog>

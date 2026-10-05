@@ -1,59 +1,78 @@
 syntax = "proto3";
-package job_archive;
-option go_package = "github.com/samuelncui/yatm/entity";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 import "progress.proto";
 import "copy_status.proto";
 import "job.proto";
 import "job_storage.proto";
 import "media.proto";
+import "file.proto";
+import "location.proto";
 
 service ArchiveJobService {
-    rpc Create(CreateArchiveJobRequest) returns (CreateArchiveJobReply) {}
-    rpc WriteMedia(WriteArchiveMediaRequest) returns (WriteArchiveMediaReply) {}
-    rpc GetProgress(GetArchiveJobProgressRequest) returns (GetArchiveJobProgressReply) {}
-    rpc ListFiles(ListArchiveJobFilesRequest) returns (ListArchiveJobFilesReply) {}
+    rpc Estimate(EstimateArchiveJobRequest) returns (EstimateArchiveJobResponse) {}
+    rpc Create(CreateArchiveJobRequest) returns (CreateArchiveJobResponse) {}
+    rpc GetCreation(GetArchiveJobCreationRequest) returns (GetArchiveJobCreationResponse) {}
+    rpc WriteMedia(WriteArchiveMediaRequest) returns (WriteArchiveMediaResponse) {}
+    rpc GetProgress(GetArchiveJobProgressRequest) returns (GetArchiveJobProgressResponse) {}
+    rpc ListFiles(ListArchiveJobFilesRequest) returns (ListArchiveJobFilesResponse) {}
 }
+
+message EstimateArchiveJobRequest {
+    repeated FileSelection selections = 1;
+}
+message EstimateArchiveJobResponse { SelectionInspectionResult result = 1; }
 
 message ArchiveFile {
     string source_path = 1;
     string media_path = 2;
     string target_path = 3;
-    yatm.job_storage.ExpectedFile expected = 4;
+    ExpectedFile expected = 4;
 }
 
 message ArchiveItem {
     int64 id = 1;
-    copy_status.CopyStatus status = 2;
-    int64 size = 3;
+    CopyStatus status = 2;
+    int64 size_bytes = 3;
     optional int64 media_id = 4;
     ArchiveFile file = 5;
 }
 
 message CreateArchiveJobRequest {
     int64 priority = 1;
-    yatm.job_storage.ArchiveJobSpec spec = 2;
+    ArchiveJobSpec spec = 2;
     bool force_rehash = 4;
-    yatm.job_storage.PreviewPolicy preview_policy = 6;
+    PreviewPolicy preview_policy = 6;
 }
 
-message CreateArchiveJobReply {
-    job.Job job = 1;
+message CreateArchiveJobResponse {
+    Job job = 1;
+}
+
+message GetArchiveJobCreationRequest {
+    int64 id = 1;
+}
+
+message GetArchiveJobCreationResponse {
+    CreateArchiveJobRequest request = 1;
+    // Nonempty when some original inputs cannot be recovered; request may be partial.
+    string unavailable_reason = 2;
 }
 
 message WriteArchiveMediaRequest {
     int64 id = 1;
-    media.ArchiveMediaTarget target = 2;
+    ArchiveMediaTarget target = 2;
 }
 
-message WriteArchiveMediaReply {}
+message WriteArchiveMediaResponse {}
 
 message GetArchiveJobProgressRequest {
     int64 id = 1;
 }
 
-message GetArchiveJobProgressReply {
-    progress.Progress progress = 1;
+message GetArchiveJobProgressResponse {
+    Progress progress = 1;
     int64 preview_job_id = 2;
     string preview_error = 3;
 }
@@ -62,9 +81,14 @@ message ListArchiveJobFilesRequest {
     int64 id = 1;
     int32 limit = 2;
     optional int64 offset = 3;
-    repeated copy_status.CopyStatus filter_status = 4;
+    repeated CopyStatus filter_status = 4;
+    string cursor = 5;
+    JobResultOrder order = 6;
+    bool include_total = 7;
 }
 
-message ListArchiveJobFilesReply {
+message ListArchiveJobFilesResponse {
     repeated ArchiveItem items = 1;
+    bool has_more = 2;
+    optional int64 total_file_count = 3;
 }

@@ -1,4 +1,4 @@
-// Command yatm-cli exposes YATM's online workflows as an agent-friendly CLI.
+// Command yatm-cli exposes YATM's Library, Location, Media and Job workflows as an agent-friendly CLI.
 package main
 
 import (
@@ -140,7 +140,6 @@ func registerCommands(root *flags.Command, commandRuntime *runtime) error {
 	// Register each public business area under one stable root command.
 	registrations := []func(*flags.Command, *runtime) error{
 		registerStatusCommand,
-		registerFileCommands,
 		registerFilesCommands,
 		registerTagCommands,
 		registerMediaCommands,
@@ -151,10 +150,12 @@ func registerCommands(root *flags.Command, commandRuntime *runtime) error {
 		registerRestoreCommands,
 		registerPreviewCommands,
 		registerScanCommands,
+		registerJobCreationCommands,
 		registerVerifyCommands,
 		registerFileOperationCommands,
-		registerOnlineCommands,
+		registerLocationCommands,
 		registerCatalogCommands,
+		registerIdenticalCommands,
 		registerAnalyzeCommands,
 		registerLibraryCommands,
 		registerSettingsCommands,

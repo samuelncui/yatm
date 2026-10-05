@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/samuelncui/yatm/config"
+	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/dataformat"
-	legacy "github.com/samuelncui/yatm/migrate/legacy"
-	"github.com/samuelncui/yatm/resource"
+	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -40,8 +40,11 @@ func inspectFreshInstallation(conf *config.Config, root string) (*installationRe
 	if err != nil {
 		return report, err
 	}
-	if err := inspectUpgradeDirectory(filepath.Join(root, ".yatm-upgrades")); err != nil {
+	if err := inspectUpgradeDirectory(filepath.Join(root, ".backup")); err != nil {
 		return report, err
+	}
+	if conf.Paths.Source != "" || conf.Paths.Target != "" || len(conf.Preview.Generators) != 0 {
+		return report, errors.New("fresh installation requires current configuration; review the release configuration template")
 	}
 	if conf.Database.Dialect != "sqlite" {
 		return report, fmt.Errorf("automatic installation requires SQLite")
@@ -65,7 +68,7 @@ func inspectFreshInstallation(conf *config.Config, root string) (*installationRe
 		previewRoot = filepath.Join(work, previewRoot)
 	}
 	for _, path := range []string{dbPath, work, previewRoot} {
-		if !withinRoot(root, path) {
+		if !withinRoot(root, path) || withinRoot(filepath.Join(root, ".backup"), path) {
 			return report, fmt.Errorf("new installation resource must fit inside the installation root: %s", path)
 		}
 	}
@@ -145,7 +148,14 @@ func openMigrationDB(conf *config.Config, readOnly bool) (*gorm.DB, error) {
 	return resource.NewDBConn("sqlite", dsn)
 }
 
-func inspectInstallation(ctx context.Context, db *gorm.DB, conf *config.Config, configPath, root string, stopped bool) (*installationReport, error) {
+func inspectInstallation(
+	ctx context.Context,
+	db *gorm.DB,
+	conf *config.Config,
+	configPath, root string,
+	stopped bool,
+	servicePID int,
+) (*installationReport, error) {
 	// Report version and access information without changing service admission.
 	report := &installationReport{BackupPaths: []string{}, TapeScripts: []string{}, Warnings: []string{}}
 	report.MigrationReport, _ = filepath.Abs(filepath.Join(conf.Paths.Work, "migration-report.json"))
@@ -163,7 +173,7 @@ func inspectInstallation(ctx context.Context, db *gorm.DB, conf *config.Config, 
 			return report, err
 		}
 	}
-	if err := preflight(ctx, db, conf.Listen, stopped); err != nil {
+	if err := preflight(ctx, db, conf.Listen, stopped, servicePID); err != nil {
 		return report, err
 	}
 
@@ -248,22 +258,25 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		if err != nil {
 			return err
 		}
-		if !withinRoot(canonicalRoot, canonical) {
+		if !withinRoot(canonicalRoot, canonical) || withinRoot(filepath.Join(canonicalRoot, ".backup"), canonical) {
 			return fmt.Errorf("complete backup does not include required resource %s; use the manual upgrade guide", path)
 		}
 		report.BackupPaths = append(report.BackupPaths, canonical)
 	}
 
-	// cp -a preserves links, not their external contents; reject incomplete backup layouts.
+	// Archives preserve links, not their external contents; reject incomplete backup layouts.
 	return filepath.WalkDir(canonicalRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if path == filepath.Join(canonicalRoot, ".yatm-upgrades") {
+		if path == filepath.Join(canonicalRoot, ".backup") {
 			if err := inspectUpgradeDirectory(path); err != nil {
 				return err
 			}
 			return filepath.SkipDir
+		}
+		if entry.Type()&os.ModeSocket != 0 {
+			return fmt.Errorf("installation contains a socket that cannot be archived: %s", path)
 		}
 		if entry.Type()&os.ModeSymlink == 0 {
 			return nil
@@ -272,27 +285,28 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		if err != nil || !withinRoot(canonicalRoot, target) {
 			return fmt.Errorf("installation contains an external or unresolved link %s; use a complete manual backup", path)
 		}
+		if withinRoot(filepath.Join(canonicalRoot, ".backup"), target) {
+			return fmt.Errorf("installation link %s points into the excluded backup directory; use a complete manual backup", path)
+		}
+		link, err := os.Readlink(path)
+		if err != nil {
+			return fmt.Errorf("read installation link %s failed, %w", path, err)
+		}
+		if filepath.IsAbs(link) {
+			return fmt.Errorf("installation contains an absolute link %s that cannot relocate with its backup; use a complete manual backup", path)
+		}
 		return nil
 	})
 }
 
 func inspectUpgradeDirectory(path string) error {
-	// Fresh and existing installations reserve the same installer-owned backup directory.
+	// Backups are excluded from recursive archiving, but cannot redirect outside the installation.
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("reserved upgrade directory is not an owned directory: %s", path)
-	}
-	marker := filepath.Join(path, "OWNER")
-	info, err = os.Lstat(marker)
-	if err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("reserved upgrade directory has no valid ownership marker: %s", path)
-	}
-	data, err := os.ReadFile(marker)
-	if err != nil || strings.TrimSpace(string(data)) != "yatm-installer-upgrades" {
-		return fmt.Errorf("reserved upgrade directory belongs to another owner: %s", path)
+		return fmt.Errorf("reserved backup directory is not a directory: %s", path)
 	}
 	return nil
 }

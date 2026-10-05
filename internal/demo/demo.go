@@ -10,11 +10,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/samuelncui/yatm/config"
-	"github.com/samuelncui/yatm/executor"
-	"github.com/samuelncui/yatm/library"
-	"github.com/samuelncui/yatm/resource"
+	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/config"
+	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/preview"
+	"github.com/samuelncui/yatm/internal/resource"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"gopkg.in/yaml.v2"
 )
 
@@ -30,11 +34,24 @@ type Options struct {
 	Listen    string
 	Reset     bool
 	VideoPath string
+
+	// IdenticalFiles counts Large group and Many groups together; nil preserves the small fixture.
+	IdenticalFiles *int
 }
 
 // Prepare creates or reuses a complete Demo environment.
-func Prepare(ctx context.Context, options Options) error {
-	// Resolve the disposable root before any destructive reset.
+func Prepare(ctx context.Context, options Options) (returnErr error) {
+	// Validate every override and cancellation before any reset or filesystem write.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("prepare Demo canceled, %w", err)
+	}
+	identicalFiles := defaultIdenticalFiles
+	if options.IdenticalFiles != nil {
+		identicalFiles = *options.IdenticalFiles
+		if identicalFiles < defaultIdenticalFiles {
+			return fmt.Errorf("Demo identical-files must be at least %d, count=%d", defaultIdenticalFiles, identicalFiles)
+		}
+	}
 	root, err := validateRoot(options.Root)
 	if err != nil {
 		return err
@@ -50,6 +67,8 @@ func Prepare(ctx context.Context, options Options) error {
 	if options.Reset && videoPath != "" && pathWithin(videoPath, root) {
 		return fmt.Errorf("Demo video cannot be inside a root being reset, path=%q", videoPath)
 	}
+
+	// Reset only after all inputs pass the disposable-root safety boundary.
 	if options.Reset {
 		if err := os.RemoveAll(root); err != nil {
 			return fmt.Errorf("reset Demo root failed, root=%q, %w", root, err)
@@ -62,6 +81,9 @@ func Prepare(ctx context.Context, options Options) error {
 		if videoPath != "" {
 			return fmt.Errorf("Demo video override requires reset, path=%q", videoPath)
 		}
+		if options.IdenticalFiles != nil {
+			return fmt.Errorf("Demo identical-files override requires reset, count=%d", identicalFiles)
+		}
 		if err := writeRuntimeFiles(root, listen); err != nil {
 			return err
 		}
@@ -73,7 +95,7 @@ func Prepare(ctx context.Context, options Options) error {
 		return err
 	}
 
-	// Seed physical Media, Library metadata, and operable Job bundles.
+	// Own the catalog pool for this preparation, including partially seeded failures.
 	paths, err := createLayout(root)
 	if err != nil {
 		return err
@@ -82,7 +104,22 @@ func Prepare(ctx context.Context, options Options) error {
 	if err != nil {
 		return fmt.Errorf("open Demo database failed, %w", err)
 	}
-	lib := library.New(db)
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("get Demo database pool failed, %w", err)
+	}
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("close Demo database failed, %w", err))
+		}
+	}()
+
+	// Configure the same Library settings and Preview manager used by the small fixture.
+	appSettings := settingspkg.New(db, settingspkg.PreviewDefinition{
+		Default:  func() (*entity.PreviewSettings, error) { return preview.SettingsFromConfig(preview.Config{}) },
+		Validate: preview.ValidateSettings,
+	})
+	lib := library.NewWithSettings(db, appSettings)
 	if err := lib.AutoMigrate(); err != nil {
 		return fmt.Errorf("migrate Demo Library failed, %w", err)
 	}
@@ -90,14 +127,33 @@ func Prepare(ctx context.Context, options Options) error {
 	if err != nil {
 		return fmt.Errorf("create Demo Preview manager failed, %w", err)
 	}
+
+	// Own active Job attempts until they settle, including failed preparation.
 	exe := executor.New(db, lib, []string{"/dev/" + TapeBarcode}, paths, executor.Scripts{}, previews)
+	defer func() {
+		// Job attempts outlive caller cancellation; settle them before the catalog pool closes.
+		for _, id := range exe.RunningJobIDs() {
+			if err := exe.Cancel(id); err != nil && !errors.Is(err, executor.ErrJobNotRunning) {
+				returnErr = errors.Join(returnErr, fmt.Errorf("cancel Demo Job failed, id=%d, %w", id, err))
+			}
+		}
+
+		// Idle runners release their bundle connections and logs in Executor.endAttempt.
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+		for len(exe.RunningJobIDs()) > 0 {
+			<-ticker.C
+		}
+	}()
 	if err := exe.AutoMigrate(); err != nil {
 		return fmt.Errorf("migrate Demo Executor failed, %w", err)
 	}
 	if err := exe.ReconcileStorage(ctx); err != nil {
 		return fmt.Errorf("prepare Demo Job storage failed, %w", err)
 	}
-	if err := seed(ctx, lib, exe, paths, root, videoPath); err != nil {
+
+	// Seed physical Media, Library metadata, and operable Job bundles.
+	if err := seed(ctx, lib, exe, paths, root, videoPath, identicalFiles); err != nil {
 		return err
 	}
 	if err := seedVersionDates(ctx, lib, db); err != nil {
