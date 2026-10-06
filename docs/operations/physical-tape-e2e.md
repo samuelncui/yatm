@@ -2,7 +2,7 @@
 
 Status: Hardware release gate. See [test environment safety](testing.md); this guide does not authorize a physical run.
 
-This suite is the last acceptance gate in the [Release SOP](testing.md#release-sop), after source, package and nonphysical acceptance. It covers behavior that the LTFS `file` backend cannot prove: drive discovery, hardware encryption, physical partition placement, tape motion, unload and reload, reads after a process restart, and a real physical full-Media boundary. Run the automated LTFS file-backend E2E first; it remains the primary coverage for injected failures, deterministic capacity exhaustion, two-Media completion, backup compatibility, and cleanup.
+This suite is a hardware gate in the [Release SOP](testing.md#release-sop). After affected source and nonphysical checks pass, it can run from a reviewed local build while release CI proceeds, following [Check Scope and Reuse](testing.md#check-scope-and-reuse). It covers behavior that the LTFS `file` backend cannot prove: drive discovery, hardware encryption, physical partition placement, tape motion, unload and reload, reads after a process restart, and a real physical full-Media boundary. Run the automated LTFS file-backend E2E first; it remains the primary coverage for injected failures, deterministic capacity exhaustion, two-Media completion, backup compatibility, and cleanup.
 
 ## Safety and Preconditions
 
@@ -22,9 +22,15 @@ Keep the host on stable power and reserve the drive for the complete run. Do not
 
 ## Automated Stages
 
-Run `python3 e2e/physical_package_acceptance.py` locally against the exact accepted Linux package and matching Preview package. The controller and assertions stay local; the host runs the packaged service, CLI and helpers. Do not transfer repository source or a custom test binary to the host.
+Run `python3 e2e/physical_package_acceptance.py` against checksum-verified Linux main and matching Preview packages built from the reviewed commit. Local builds use `build/release/build.sh` and `previewworker/build/build.sh`; a completed GitHub run is not required. Choose an SSH host or `--host local` to execute the same controller directly on the authorized hardware host. [Remote Candidate Acceptance](testing.md#remote-candidate-acceptance) owns the transfer boundary.
 
-Baseline creates a fresh owned installation under `--test-parent` and records its identity and resources in the local `--state` file. An existing state file cannot be overwritten by another baseline. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new local `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
+Prepare creates a fresh owned installation under `--test-parent`, generates the small source files and prepares the Archive/Preview Jobs without loading or operating the Tape. It records identity and resources in `--state`; an existing state file cannot be overwritten. Baseline then starts physical operations. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
+
+For a delegated run, prepare a written sequence with artifacts, assigned cartridge, pass criteria,
+failure handling and cleanup ownership before handing it over. One executor owns the drive. Stop
+after a failed gate and retain the state and evidence; do not improvise repeated formatting or
+capacity writes. The executor returns its results before the coordinating operator reviews them
+and runs cleanup. Keep evidence outside the installation root so cleanup cannot erase the report.
 
 Set the variables below to the authorized test host, scratch device/barcode, accepted local archives and full package commit. Run stages separately so Restore checks the same durable installation after a service restart, and full-verify checks the capacity boundary without repeating the write:
 
@@ -36,6 +42,8 @@ common=(
   --physical-device "$SCRATCH_DEVICE" --physical-barcode "$SCRATCH_BARCODE"
   --state "$LOCAL_STATE"
 )
+python3 e2e/physical_package_acceptance.py "${common[@]}" \
+  --physical-stage prepare --out "$PREPARE_EVIDENCE"
 python3 e2e/physical_package_acceptance.py "${common[@]}" \
   --physical-stage baseline --out "$BASELINE_EVIDENCE"
 python3 e2e/physical_package_acceptance.py "${common[@]}" \

@@ -1,4 +1,4 @@
-"""Local SSH controller for shipped YATM programs on an isolated Linux test host."""
+"""Controller for shipped YATM programs on an isolated Linux test host, locally or over SSH."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -103,7 +103,7 @@ def documents(data):
 
 
 def check_arguments(args):
-    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.@-]*", args.host), "Choose an explicit SSH test-host alias.")
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.@-]*", args.host), "Choose 'local' or an explicit SSH test-host alias.")
     parent = PurePosixPath(args.test_parent)
     require(parent.is_absolute() and parent != PurePosixPath("/") and ".." not in parent.parts
             and re.fullmatch(r"/[A-Za-z0-9_./-]+", args.test_parent), "Choose an absolute test parent without shell syntax.")
@@ -139,7 +139,9 @@ class Acceptance:
                        "host": args.host, "cases": [], "commands": [], "phases": [], "limits": [],
                        "case_scope": scope,
                        "release_accepted": False,
-                       "scope": "Exact Linux package over SSH; controller and assertions remain local."}
+                       "scope": ("Exact Linux package executed locally on the test host."
+                                 if args.host == "local" else
+                                 "Exact Linux package over SSH; controller and assertions remain local.")}
         self.save()
 
     def save(self):
@@ -191,6 +193,8 @@ class Acceptance:
     def remote_arguments(self, argv, timeout):
         # Quote each argument once; no fixture filename or CLI selection becomes shell source.
         command = ["timeout", "--kill-after=10s", f"{timeout}s", *map(str, argv)]
+        if self.args.host == "local":
+            return command
         return ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", self.args.host, shlex.join(command)]
 
     def remote(self, argv, body=None, expected=0, timeout=180):
@@ -216,6 +220,9 @@ class Acceptance:
 
     def upload(self, files, directory):
         require(directory == self.root or directory.startswith(self.root + "/"), "Upload is outside the owned root.")
+        if self.args.host == "local":
+            self.run(["cp", "--", *map(str, files), directory + "/"])
+            return
         self.run(["scp", "-q", "-o", "BatchMode=yes", "--", *map(str, files),
                   self.args.host + ":" + shlex.quote(directory + "/")])
 
@@ -496,7 +503,7 @@ class Acceptance:
 
 def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", required=True)
+    parser.add_argument("--host", required=True, help="SSH test-host alias, or 'local' to execute directly on the test host.")
     parser.add_argument("--test-parent", required=True)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--preview-archive", type=Path)

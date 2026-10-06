@@ -188,13 +188,10 @@ class PhysicalCases(TapeWorkflows):
         require(capabilities.get("available") and "image" in capabilities.get("kinds", []),
                 "Installed native Preview does not support the PNG fixture.")
 
-    def baseline(self):
-        require(not any(key in self.state for key in ("baseline_started", "format_job_id", "append_job_id", "media_id")),
-                "Baseline has existing state; never format on a resumed baseline.")
-        require(not self.inspect().get("media"), "Loaded Tape already exists in the isolated Library.")
+    def prepare(self):
         jobs = self.test.one("job", "list", "--limit", "1")
-        require(not jobs.get("jobs") and not jobs.get("has_more"), "Baseline requires an empty isolated Job catalog.")
-        self.save(baseline_started=True, physical_evidence_dir=str(self.evidence.resolve()))
+        require(not jobs.get("jobs") and not jobs.get("has_more"), "Prepare requires an empty isolated Job catalog.")
+        self.save(physical_evidence_dir=str(self.evidence.resolve()))
         for name in ("source", "restored"):
             key = name + "_location"
             root = self.test.root + "/fixtures/" + name
@@ -230,6 +227,15 @@ class PhysicalCases(TapeWorkflows):
         self.save(preview_job_id=str(progress["preview_job_id"]))
         self.settled(self.job("preview_job_id"))
         self.check_prepared(job, "dataset")
+        self.save(prepare_complete=True)
+
+    def baseline(self):
+        require(not any(key in self.state for key in ("baseline_started", "append_job_id", "media_id")),
+                "Baseline has existing state; never format on a resumed baseline.")
+        require(self.state.get("prepare_complete"), "Baseline requires completed nonphysical preparation.")
+        require(not self.inspect().get("media"), "Loaded Tape already exists in the isolated Library.")
+        self.save(baseline_started=True)
+        job = self.job("format_job_id")
         self.format(job, self.barcode)
         self.settled(job)
         self.ejected()
@@ -558,14 +564,14 @@ class PhysicalCases(TapeWorkflows):
 
 def run_stage(test, state, save_state):
     stage = test.args.physical_stage
-    require(stage in ("baseline", "restore", "full-write", "full-verify", "cleanup"), "Unknown physical stage.")
+    require(stage in ("prepare", "baseline", "restore", "full-write", "full-verify", "cleanup"), "Unknown physical stage.")
     device, barcode = test.args.physical_device, test.args.physical_barcode
     require(isinstance(device, str) and device.startswith("/dev/") and ".." not in Path(device).parts,
             "Choose the explicit physical Tape device.")
     require(re.fullmatch(r"[A-Z0-9]{6}", barcode), "Expected a six-character physical Tape barcode.")
     for key, value in (("physical_device", device), ("physical_barcode", barcode), ("physical_root", test.root)):
         require(key not in state or state[key] == value, "Physical stage identity differs from saved state.")
-        require(stage == "baseline" or key in state, "Physical stage has no saved baseline identity.")
+        require(stage == "prepare" or key in state, "Physical stage has no saved preparation identity.")
         state[key] = value
     save_state()
     getattr(PhysicalCases(test, state, save_state), stage.replace("-", "_"))()

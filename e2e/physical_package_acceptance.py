@@ -10,7 +10,7 @@ import sys
 from package_acceptance import Acceptance, argument_parser, check_arguments, require
 
 
-STAGES = ("baseline", "restore", "full-write", "full-verify", "cleanup")
+STAGES = ("prepare", "baseline", "restore", "full-write", "full-verify", "cleanup")
 TAPE_SCRIPTS = {"read_info": "readinfo", "encrypt": "encrypt", "mkfs": "mkfs",
                 "mount": "mount.openltfs", "umount": "umount"}
 
@@ -40,8 +40,8 @@ def check_physical_arguments(args):
         require(re.fullmatch(r"(?:/[A-Za-z0-9_./-]+|[A-Za-z0-9_.-]+)", executable)
                 and ".." not in PurePosixPath(executable).parts, "Choose a host LTFS executable without shell syntax.")
     check_arguments(args)
-    require(args.state.exists() != (args.physical_stage == "baseline"),
-            "Baseline needs new state; later stages require the preserved local state.")
+    require(args.state.exists() != (args.physical_stage == "prepare"),
+            "Prepare needs new state; later stages require the preserved local state.")
 
 
 def validate_state(args, state):
@@ -146,7 +146,7 @@ class PhysicalAcceptance(Acceptance):
 
     def execute(self):
         try:
-            if self.args.physical_stage == "baseline":
+            if self.args.physical_stage == "prepare":
                 with self.phase("verify-inputs"):
                     self.verify_inputs()
                 with self.phase("prepare-host"):

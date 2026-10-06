@@ -25,7 +25,7 @@ class PhysicalControllerTests(unittest.TestCase):
             "preview-archive": "yatm-preview-linux-amd64-v1.0.0-alpha.2.tar.gz",
             "version": "v1.0.0-alpha.2", "commit": "1" * 40,
             "out": str(self.directory / "evidence"), "state": str(self.directory / "state.json"),
-            "physical-device": "/dev/nst0", "physical-barcode": "TST001", "physical-stage": "baseline",
+            "physical-device": "/dev/nst0", "physical-barcode": "TST001", "physical-stage": "prepare",
         }
         # A missed stub must fail locally rather than reaching SSH or a device.
         blocker = mock.patch("package_acceptance.subprocess.run", side_effect=AssertionError("Unexpected process execution"))
@@ -47,7 +47,7 @@ class PhysicalControllerTests(unittest.TestCase):
             "remote_root": "/srv/acceptance/yatm-package-acceptance.12345678",
             "install": "/srv/acceptance/yatm-package-acceptance.12345678/install",
             "service": "yatm-acceptance-12345678.service", "url": "http://127.0.0.1:23456",
-            "completed_stages": ["baseline"],
+            "completed_stages": ["prepare", "baseline"],
         }
 
     def resumed_arguments(self):
@@ -60,7 +60,7 @@ class PhysicalControllerTests(unittest.TestCase):
             setattr(controller, field, self.owned_state()[key])
         return controller
 
-    def test_baseline_accepts_explicit_device_and_typed_local_paths(self):
+    def test_prepare_accepts_explicit_device_and_typed_local_paths(self):
         for device in ("/dev/nst0", "/dev/st1", "/dev/tape/by-id/scsi-test-nst"):
             with self.subTest(device=device):
                 args = self.arguments(**{"physical-device": device})
@@ -97,16 +97,16 @@ class PhysicalControllerTests(unittest.TestCase):
                 with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
                     self.arguments(**{field: value})
 
-    def test_baseline_never_overwrites_existing_state(self):
+    def test_prepare_never_overwrites_existing_state(self):
         path = Path(self.options["state"])
         path.write_text("preserved state\n")
-        with self.assertRaisesRegex(RuntimeError, "Baseline needs new state"):
+        with self.assertRaisesRegex(RuntimeError, "Prepare needs new state"):
             self.arguments()
         self.assertEqual(path.read_text(), "preserved state\n")
         self.assertFalse(Path(self.options["out"]).exists())
 
     def test_resumed_stages_require_state_and_new_evidence(self):
-        for stage in ("restore", "full-write", "full-verify", "cleanup"):
+        for stage in ("baseline", "restore", "full-write", "full-verify", "cleanup"):
             with self.subTest(stage=stage), self.assertRaisesRegex(RuntimeError, "preserved local state"):
                 self.arguments(**{"physical-stage": stage})
         self.resumed_arguments()
@@ -141,7 +141,7 @@ class PhysicalControllerTests(unittest.TestCase):
         args, state = self.resumed_arguments(), self.owned_state()
         with self.assertRaisesRegex(RuntimeError, "already been cleaned"):
             validate_state(args, {**state, "cleaned": True})
-        for stage in ("restore", "full-write", "full-verify", "cleanup"):
+        for stage in ("baseline", "restore", "full-write", "full-verify", "cleanup"):
             args.physical_stage = stage
             with self.subTest(stage=stage), self.assertRaisesRegex(RuntimeError, "Complete"):
                 validate_state(args, {**state, "completed_stages": []})

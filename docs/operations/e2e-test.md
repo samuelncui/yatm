@@ -67,7 +67,7 @@ The [integrity CLI tests](../../e2e/integrity_cli_test.go) supplement semantic t
 
 ## Release Candidates and Upgrades
 
-Follow the [Release SOP](testing.md#release-sop) for source preflight, candidate assembly, acceptance and publication. The [release build guide](testing.md#release-backend-builds) owns toolchains, the required archive set and the separate accepted-candidate upload procedure. Hosted CI skips opt-in LTFS and physical Tape tests. Remote release acceptance replays the public CLI workflows with the official LTFS file backend, using only shipped application binaries. Physical Tape acceptance runs last, after the preceding source, package and nonphysical acceptance gates.
+Follow the [Release SOP](testing.md#release-sop) for source preflight, candidate assembly, acceptance and publication. The [release build guide](testing.md#release-backend-builds) owns toolchains, the required archive set and the separate accepted-candidate upload procedure. Hosted CI skips opt-in LTFS and physical Tape tests. Remote release acceptance replays the public CLI workflows with the official LTFS file backend, using packaged application binaries. Physical Tape acceptance follows the affected source and nonphysical checks and may use a reviewed local build while CI proceeds; [Check Scope and Reuse](testing.md#check-scope-and-reuse) owns final-artifact checks and evidence reuse.
 
 For local/CI harness runs, set `YATM_E2E_BIN_DIR` to an extracted candidate and run the full suite without a `-run` filter. Set `YATM_E2E_LTFS=1` only in a Linux harness environment with the official file backend. Physical Tape uses the separate [package controller](physical-tape-e2e.md#automated-stages) and explicitly assigned scratch hardware. Do not move this harness or source tree to the remote package-acceptance host. Record every pass, failure and skipped test with its reason. Use a temporary filesystem supporting user xattrs; the full-capacity LTFS fixture needs at least 12 GiB of free space for its source, virtual Media and restored bytes.
 
@@ -87,10 +87,10 @@ plus individual commands, cases and the whole run. Independent read-only host, t
 checks run in batches of at most four; each retains its result and exit status even if another fails.
 Nested or concurrent durations overlap and must not be added to claim total elapsed time.
 
-Keep the test controller on the local machine. On the explicitly selected isolated test host, verify and extract the approved release archive into an isolated attempt directory; invoke only its shipped YATM programs through SSH. Read their offline `--version` output and compare the commit/version and archive checksum before starting. The package's installer/templates/scripts and approved fixture data are the transfer boundary. Repository source, separately built harnesses and additional test-helper source are not deployed.
+Run the maintained controller over SSH or directly on the explicitly selected test host with `--host local`. Verify and extract the reviewed release archive into an isolated attempt directory; invoke only its shipped YATM programs. Read their offline `--version` output and compare the commit/version and archive checksum before starting. For host-local execution, transfer the controller and its package validators with the artifacts and operating instructions under [Remote Candidate Acceptance](testing.md#remote-candidate-acceptance). Do not deploy an application checkout or separately built harness.
 
-The [package controller](../../e2e/package_acceptance.py) runs from the local checkout. It requires
-Python 3.9 or newer, Node.js for the existing package validators, and OpenSSH. The explicitly selected
+The [package controller](../../e2e/package_acceptance.py) requires Python 3.9 or newer and Node.js for
+the existing package validators; SSH mode also requires OpenSSH. The explicitly selected
 Linux amd64 test session must permit an isolated systemd installation and provide the installer's
 dependencies plus `timeout`, `ss`, `setfattr` and `getfattr`. It does not install host dependencies.
 
@@ -102,9 +102,10 @@ python3 e2e/package_acceptance.py \
 ```
 
 Checksum companions must be beside each archive. Preview validation also requires its matching
-corresponding-source archive locally; that source archive is not transferred. The controller checks
-package identities before connecting, allocates a unique remote root and service name, uses real
-systemd and the package installer, and records CLI exits, JSON and output-byte assertions locally.
+corresponding-source archive beside the controller's Preview package; it is validated without being
+installed. The controller checks package identities before preparing the host, allocates a unique
+root and service name, uses real systemd and the package installer, and records CLI exits, JSON and
+output-byte assertions in its evidence directory.
 Its workflows cover literal UTF-8 and invalid-byte filenames, exact signed file times, Scan's
 all-source preparation barrier and overlapping multi-Location selections, read-only Job creation
 inputs, explicit new submission, recorded/live Search, dry run and recoverable Delete, Volume

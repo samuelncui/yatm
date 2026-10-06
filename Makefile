@@ -19,7 +19,7 @@ help:
 	  '  check         Run full integration checks (use affected runners during review)' \
 	  '  test-race     Run Go race checks' \
 	  '  test-e2e      Run CLI E2E against explicitly selected candidate binaries' \
-	  '  test-package-tools Check the local SSH package-acceptance controller' \
+	  '  test-package-tools Check the local/SSH package-acceptance controller' \
 	  '  test-performance-tools Check performance collection and comparison tools' \
 	  '  performance-collect Collect paired benchmarks in an idle environment' \
 	  '  performance-check Check the evidence in PERF_OUTPUT'

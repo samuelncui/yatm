@@ -51,6 +51,56 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(command, ["timeout", "--kill-after=10s", "180s", "cat", "--", *names])
         self.assertEqual(run.call_args.args[0][-2], self.args.host)
 
+    def test_local_preserves_literal_arguments_and_timeout(self):
+        self.args.host = "local"
+        check_arguments(self.args)
+        controller = self.controller()
+        names = ["back\\slash", "line\nbreak", "$(not-a-command)", " leading ", "日本語", "; echo unsafe", "'quoted'"]
+        with mock.patch.object(controller, "run") as run:
+            controller.remote(["cat", "--", *names], body=b"input", expected=1, timeout=42)
+        run.assert_called_once_with(
+            ["timeout", "--kill-after=10s", "42s", "cat", "--", *names], b"input", 1, 62)
+        self.assertEqual(controller.report["scope"], "Exact Linux package executed locally on the test host.")
+
+    def test_local_upload_copies_literal_paths_and_records_command(self):
+        self.args.host = "local"
+        controller = self.controller()
+        root = self.directory / "owned 日本語 $(literal)"
+        root.mkdir()
+        controller.root = str(root)
+        files = [self.directory / "one space.txt", self.directory / "日本語; '$(literal)'.txt"]
+        for index, path in enumerate(files):
+            path.write_bytes(f"fixture {index}".encode())
+        for destination in (root, root / "nested space"):
+            with self.subTest(destination=destination):
+                destination.mkdir(exist_ok=True)
+                controller.upload(files, str(destination))
+                for path in files:
+                    self.assertEqual((destination / path.name).read_bytes(), path.read_bytes())
+                record = controller.report["commands"][-1]
+                self.assertEqual(record["argv"], ["cp", "--", *map(str, files), str(destination) + "/"])
+                self.assertEqual(record["exit_code"], 0)
+
+    def test_local_upload_rejects_external_destination_before_effects(self):
+        self.args.host = "local"
+        controller = self.controller()
+        for destination in ("/elsewhere", controller.root + "-other"):
+            with self.subTest(destination=destination), mock.patch.object(controller, "run") as run:
+                with self.assertRaisesRegex(RuntimeError, "outside the owned root"):
+                    controller.upload([self.directory / "fixture"], destination)
+                run.assert_not_called()
+        self.assertEqual(controller.report["commands"], [])
+
+    def test_ssh_upload_keeps_destination_quoted(self):
+        controller = self.controller()
+        destination = controller.root + "/日本語 space '$(literal)'"
+        files = [self.directory / "source space;literal"]
+        with mock.patch.object(controller, "run") as run:
+            controller.upload(files, destination)
+        run.assert_called_once_with(["scp", "-q", "-o", "BatchMode=yes", "--", str(files[0]),
+                                     self.args.host + ":" + shlex.quote(destination + "/")])
+        self.assertEqual(shlex.split(run.call_args.args[0][-1].split(":", 1)[1]), [destination + "/"])
+
     def test_cli_stream_keeps_escaped_newline_and_precise_ns(self):
         raw = b'{"entries":[{"name":"line\\nbreak","mtime_ns":"1720000000000000001"}]}\n{"total_entry_count":"1"}\n'
         values = documents(raw)

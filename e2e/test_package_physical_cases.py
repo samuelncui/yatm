@@ -286,7 +286,7 @@ class StageSafetyTests(unittest.TestCase):
         self.test.cli.assert_not_called()
 
     def test_resumed_baseline_cannot_inspect_or_format(self):
-        for key in ("baseline_started", "format_job_id", "append_job_id", "media_id"):
+        for key in ("baseline_started", "append_job_id", "media_id"):
             with self.subTest(key=key):
                 state = {**self.state, key: "1"}
                 with self.assertRaisesRegex(RuntimeError, "never format"):
@@ -295,6 +295,7 @@ class StageSafetyTests(unittest.TestCase):
         self.test.cli.assert_not_called()
 
     def test_existing_media_and_wrong_barcode_block_before_baseline_mutation(self):
+        self.state["prepare_complete"] = True
         for reply in ({"identity": "ABC001", "media": {"id": "8"}}, {"identity": "DEF002"}):
             self.test.one.return_value = reply
             with self.assertRaises(RuntimeError):
@@ -302,6 +303,42 @@ class StageSafetyTests(unittest.TestCase):
         self.test.write.assert_not_called()
         self.test.cli.assert_not_called()
         self.save.assert_not_called()
+
+    def test_unprepared_baseline_does_not_touch_device(self):
+        with self.assertRaisesRegex(RuntimeError, "nonphysical preparation"):
+            self.cases.baseline()
+        self.test.one.assert_not_called()
+        self.test.cli.assert_not_called()
+
+    def test_prepare_creates_ready_jobs_without_device_operations(self):
+        def one(*args):
+            if args[:2] == ("job", "list"):
+                return {}
+            if args[:2] == ("location", "create"):
+                return {"location": {"id": "1" if args[3] == "Physical source" else "2"}}
+            if args[:2] == ("location", "get"):
+                name = "source" if args[2] == "1" else "restored"
+                return {"location": {"id": args[2], "root_path": self.test.root + "/fixtures/" + name},
+                        "accessibility": {"accessible": True}}
+            if args[:2] == ("archive", "create"):
+                return {"job": {"id": "44"}}
+            if args[:2] == ("job", "progress"):
+                return {"preview_job_id": "45"}
+            self.fail("Unexpected preparation command: " + repr(args))
+
+        self.test.one.side_effect = one
+        self.test.remote.side_effect = lambda argv: self.assertEqual(argv[0], "mkdir")
+        self.cases.configure_preview = Mock()
+        self.cases.settled = Mock()
+        self.cases.check_prepared = Mock()
+        self.cases.prepare()
+        self.assertTrue(self.state["prepare_complete"])
+        self.assertEqual(self.state["format_job_id"], "44")
+        self.assertEqual(self.state["preview_job_id"], "45")
+        self.assertNotIn("baseline_started", self.state)
+        self.assertNotIn("media_id", self.state)
+        self.test.cli.assert_not_called()
+        self.cases.check_prepared.assert_called_once_with({"id": "44"}, "dataset")
 
     def test_identity_change_and_uninitialized_resume_fail_closed(self):
         self.test.args.physical_stage = "restore"

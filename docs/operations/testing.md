@@ -67,6 +67,16 @@ smoke tests; changed behavior requires its package workflows. Acceptance of earl
 cannot certify a new archive, but a new archive does not require repeating unrelated benchmarks
 or every exploratory/manual check.
 
+Hardware verification may use locally built binaries after the affected source checks pass;
+GitHub availability and completion of the full platform matrix are not prerequisites. Build
+from the reviewed commit with the repository's existing scripts and record the source,
+toolchain, build flags, binary checksums and runtime adapters. Use the release package when
+installation or package layout is part of the check. Source CI and other platform builds can
+run in parallel. Keep the final artifacts' identity, content and affected package smoke checks;
+reuse expensive hardware results, including a full Tape write, when comparison confirms that
+the relevant source, dependencies, build configuration and runtime inputs are unchanged.
+If those inputs differ or cannot be established, repeat the affected checks and explain why.
+
 Reuse downloaded candidate files for subsequent checks when their run, commit and checksums
 match. Transfer only the packages and fixtures needed by the selected host and cases. A new
 report or another case selection does not require another download. Complete-set validation
@@ -84,7 +94,7 @@ Internal packages are not an external Go API: former root implementation imports
 
 ## Remote Candidate Acceptance
 
-On the explicitly selected isolated acceptance host, YATM programs must come exclusively from the corresponding checksum-verified release package. Keep test orchestration local and invoke the packaged server/CLI and installer through SSH. Transfer only the approved candidate package, checksums and fixture data; use its packaged templates/scripts for configuration. Do not transfer repository source, separately compiled test binaries such as `e2e.test`, or standalone test-helper source. Existing systemd, LTFS/FUSE and other host dependencies remain environmental prerequisites.
+On the explicitly selected isolated acceptance host, package acceptance uses the corresponding checksum-verified release package, built locally or by CI. Earlier hardware diagnosis may use locally compiled application binaries under [Check Scope and Reuse](#check-scope-and-reuse). The maintained controller can invoke the server/CLI and installer through SSH or run on the authorized test host with `--host local`. For host-local execution, transfer the controller and its package validators alongside the reviewed archives, checksums, runtime adapters, fixture data and operating instructions. Application execution still uses packaged programs; do not deploy the application checkout, separately compiled test binaries such as `e2e.test`, or an in-process test server. Existing systemd, LTFS/FUSE and other host dependencies remain environmental prerequisites.
 
 Choose an existing, spacious, xattr-capable mounted filesystem and create a uniquely scoped test directory beneath it. Place packages, installation copies, backups, Restore outputs and a private `TMPDIR` inside that root; export `TMPDIR` for remote installer and migration invocations as well as the controller. Check available space before extraction and each capacity fixture; the test owns only that directory and its explicitly registered test resources. A temporary pathname does not imply a disposable filesystem or sufficient capacity.
 
@@ -394,6 +404,9 @@ source review and physical acceptance retain their own explicit decisions.
    [Check Scope and Reuse](#check-scope-and-reuse); do not run a full preflight per fix.
    Complete the [performance acceptance](#performance-acceptance) before source-push approval,
    retaining unaffected measurements and checking only changed operations again.
+   Start affected hardware verification from a reviewed local build as soon as its source and
+   nonphysical checks pass, following [Check Scope and Reuse](#check-scope-and-reuse). Do not
+   wait for GitHub or the full release matrix to investigate or verify a hardware fix.
    For workflow edits, validate GitHub syntax and expression contexts before pushing with
    `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=`;
    script diagnostics remain covered by the existing shell checks.
@@ -431,8 +444,10 @@ source review and physical acceptance retain their own explicit decisions.
    dispatch; this does not authorize a tag, Release or asset upload. Dispatch the Release candidate
    workflow with `publish=false`. Its platform matrix waits for `make release-check`. Candidate CI
    validates the complete [package set](#release-backend-builds), public archive content, packaged documents, licenses,
-   identities and checksums. Run installation/upgrade, supported `v0.1.x` migration, Archive,
-   Restore, Scan, Volume/LTFS and native Preview acceptance against those exact extracted bytes.
+   identities and checksums. Check the exact extracted bytes at affected package boundaries
+   for installation/upgrade, supported `v0.1.x` migration, Archive, Restore, Scan, Volume/LTFS
+   and native Preview. Apply [Check Scope and Reuse](#check-scope-and-reuse) to retain valid
+   earlier behavior and hardware evidence instead of repeating every workflow after a rebuild.
    Use the [local package controller](e2e-test.md#remote-packaged-binary-acceptance) with the exact
    Linux main/Preview archives, `--ltfs` and a new private evidence directory for its named workflows.
    Its report does not replace separate browser, legacy-backup or physical-media acceptance.
