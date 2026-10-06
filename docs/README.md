@@ -14,6 +14,11 @@ between unpublished or pre-stable v1 builds require no compatibility layers or v
 The [persistence contract](architecture/persistence.md#published-data-formats) owns the current artifact
 identities and versions independently of software release numbers.
 
+Configured Tape scripts have a separate, long-term compatibility requirement. Upgrades preserve
+user adapters wherever possible; a necessary incompatible change requires explicit approval and
+an actionable notice before upgrade, including pre-stable releases. The
+[Tape script contract](architecture/media-io.md#tape-script-compatibility) owns that boundary.
+
 Known incompatible installations are rejected before writes. Their data is retained until the operator
 chooses backup, migration, conversion or reinstallation; YATM never clears databases or physical
 files automatically. Disposable development fixtures are regenerated only through an explicit reset.

@@ -391,6 +391,13 @@ source review and physical acceptance retain their own explicit decisions.
    source. Check Demo coverage, including large results and real licensed media where relevant.
    Review terminology and affected operator/architecture instructions against actual commands and
    behavior. Update the existing owner, remove superseded claims and close verified issue records.
+   Check the [Tape script compatibility contract](../architecture/media-io.md#tape-script-compatibility)
+   against the published adapters: run unchanged historical scripts through the current caller,
+   and verify that upgrade preserves customized scripts/helpers. For an explicitly approved
+   incompatibility, check the actionable installer notice and the adapted script boundary.
+   Cover the [Tape lifecycle](../architecture/media-io.md#tape-lifecycle), including empty electronic
+   barcode FORMAT, subsequent identity checks, APPEND and Restore.
+   Keep these checks in the automated suite; a new-template hardware pass alone does not cover upgrades.
    Inspect modules, tools and temporary files for a current runtime, generator, test or packaging
    consumer before deleting them. Review ignored local directories separately; CI cannot inspect
    workstation leftovers. Accepted limitations remain documented and do not become release blockers.

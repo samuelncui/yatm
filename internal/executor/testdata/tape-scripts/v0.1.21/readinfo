@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -ex;
+
+mt -f ${DEVICE} load
+BARCODE=`./yatm-lto-info -f ${DEVICE} | grep 'Barcode' | awk '{print $3}'`
+echo "{\"barcode\": \"$BARCODE\"}" > $OUT
+sleep 3

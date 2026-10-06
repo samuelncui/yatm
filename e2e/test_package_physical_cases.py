@@ -171,6 +171,35 @@ class StageSafetyTests(unittest.TestCase):
         self.save = Mock()
         self.cases = PhysicalCases(self.test, self.state, self.save)
 
+    def test_initial_empty_barcode_checks_assigned_registration_before_format(self):
+        self.state.update(prepare_complete=True, format_job_id="44")
+        self.test.one.side_effect = [{"identity": ""}, {"identity": "ABC001"}]
+        # Stop at the write boundary: the test never formats or accesses a device.
+        self.cases.format = Mock(side_effect=RuntimeError("format boundary reached"))
+        with self.assertRaisesRegex(RuntimeError, "format boundary reached"):
+            self.cases.baseline()
+        self.test.one.assert_called_with("media", "inspect", "tape", "--device", "/dev/nst0",
+                                         "--identity", "ABC001")
+        self.cases.format.assert_called_once_with({"id": "44"}, "ABC001")
+        self.assertTrue(self.state["baseline_started"])
+
+    def test_initial_empty_barcode_still_rejects_registered_media_or_probe_failure(self):
+        self.state.update(prepare_complete=True, format_job_id="44")
+        self.cases.format = Mock()
+        for reply in ({"identity": "ABC001", "media": {"id": "8"}}, RuntimeError("probe failed")):
+            with self.subTest(reply=reply):
+                self.test.one.side_effect = [{"identity": ""}, reply]
+                with self.assertRaises(RuntimeError):
+                    self.cases.baseline()
+        self.cases.format.assert_not_called()
+        self.save.assert_not_called()
+
+    def test_reload_requires_the_written_barcode_without_manual_fallback(self):
+        self.test.one.return_value = {"identity": ""}
+        with self.assertRaisesRegex(RuntimeError, "different barcode"):
+            self.cases.inspect()
+        self.test.one.assert_called_once_with("media", "inspect", "tape", "--device", "/dev/nst0")
+
     def test_existing_full_job_only_validates_checkpoint(self):
         self.state.update(restore_complete=True, full_archive_job_id="123")
         self.cases.full_checkpoint = Mock()

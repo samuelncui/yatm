@@ -69,3 +69,39 @@ main
   assert.deepEqual(fs.readdirSync(root), ['VERSION']);
   assert.equal(fs.readFileSync(path.join(root, 'VERSION'), 'utf8'), 'v0.1.21');
 });
+
+test('legacy and Alpha upgrades show the actionable Tape adapter notice before consent', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yatm-tape-upgrade-notice-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // The guide comes from the candidate, while host actions are isolated behind stand-ins.
+  const repository = path.resolve(import.meta.dirname, '../..');
+  const guide = path.join(root, 'docs/operations/migration.md');
+  fs.mkdirSync(path.dirname(guide), { recursive: true });
+  fs.copyFileSync(path.join(repository, 'docs/operations/migration.md'), guide);
+  for (const current of ['v0.1.21', 'v1.0.0-alpha.1', 'none']) {
+    for (const checkOnly of ['0', '1']) {
+      const result = spawnSync('bash', ['-c', `
+source "$1"
+CURRENT_VERSION="$3"
+RELEASE_VERSION=v1.0.0-alpha.2
+RELEASE_DIRECTORY="$2"
+CHECK_ONLY="$4"
+show_migration_guide
+echo fixture-before-consent
+`, 'installer-test', path.join(repository, 'install-release.sh'), root, current, checkOnly], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      if (current === 'none') {
+        assert.doesNotMatch(result.stdout, /Tape adapter check required/);
+        continue;
+      }
+      assert.match(result.stdout, /completed final Index at TAPE_DIR\/<barcode>\.schema/);
+      assert.match(result.stdout, /Custom scripts are retained/);
+      assert.match(result.stdout, /Keep legacy captures through migration/);
+      assert.match(result.stdout, /adapt mount output.*device release in unmount/);
+      assert(result.stdout.indexOf('Tape adapter check required') < result.stdout.indexOf('fixture-before-consent'));
+      if (current === 'v0.1.21' && checkOnly === '0') {
+        assert.match(result.stdout, /Action required before the first Tape Job/);
+      }
+    }
+  }
+});

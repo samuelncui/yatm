@@ -8,4 +8,9 @@ Formatting requires an empty directory, apart from an optional official `filedeb
 
 Resolve the selected `mkltfs` and `ltfs` programs to absolute paths in the isolated adapter copies before starting systemd. The service then uses the same implementation checked by the controller. Normal unmount waits for both FUSE detachment and the mount's LTFS process to finish; the final captured Index is available for publication only after both complete.
 
+For older capture-enabled builds that accept only `-o capture_index`, set
+`YATM_E2E_LTFS_CAPTURE_INDEX=bare` in the native test environment. Current official LTFS uses the
+default `directory` form. Select the installed build's syntax during preparation and record it with
+the executable identity; the shared native mount adapter uses that choice throughout the test.
+
 Use these scripts for release-package acceptance of format, append, restore and integrity checking. Fault injection remains in the local/CI E2E harness, outside the release templates. See the public [development and release guide](https://github.com/samuelncui/yatm/blob/v1/docs/operations/testing.md).

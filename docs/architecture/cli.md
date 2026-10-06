@@ -154,9 +154,15 @@ The [Library guide](../operations/library.md#browse-from-the-cli) shows usage.
 The [shared rule](contracts.md#synchronous-operation-reports) owns which commands report
 under `--dryrun`, what a report contains and which operations are excluded. This surface
 adds only where the CLI differs: `archive write tape format` keeps `--confirm-format`,
-because matching the barcode returned by the physical inspection authorizes a write to a
-device rather than a dry-run decision, and a report needs no follow-up command — the
+because confirming the Tape barcode authorizes a write to a device rather than a dry-run decision,
+and a report needs no follow-up command — the
 same command without `--dryrun` performs the resolved work.
+
+Tape FORMAT first inspects the device and Library registration. A successful inspection with
+an empty electronic barcode accepts the user-supplied `--barcode`, normalized to six uppercase
+alphanumeric characters; a nonempty inspected barcode must match it. `--confirm-format` must
+exactly match that resolved barcode. Probe errors and registered Media stop before the write.
+APPEND retains its requirement for a matching inspected identity and compatible registered Media.
 
 ## Skill
 

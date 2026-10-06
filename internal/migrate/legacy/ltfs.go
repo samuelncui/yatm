@@ -9,10 +9,10 @@ import (
 
 var legacyLTFSOption = regexp.MustCompile(`(?:^|[[:space:]])(capture_index|work_directory)=("[^"]*"|'[^']*'|[^\s;]+)`)
 
-// LegacyLTFSIndexRoot reads the captured-index directory from the configured legacy mount script.
-func LegacyLTFSIndexRoot(mountScript, workRoot string) string {
+// LegacyLTFSIndexRoot resolves literal capture options from the original service working directory.
+func LegacyLTFSIndexRoot(mountScript, scriptRoot string) string {
 	// Load the configured script while retaining the conventional legacy location as fallback.
-	fallback := filepath.Join(workRoot, legacyLTFSIndexDirectory)
+	fallback := filepath.Join(scriptRoot, legacyLTFSIndexDirectory)
 	data, err := os.ReadFile(mountScript)
 	if err != nil {
 		return fallback
@@ -38,7 +38,7 @@ func LegacyLTFSIndexRoot(mountScript, workRoot string) string {
 				continue
 			}
 			if !filepath.IsAbs(value) {
-				value = filepath.Join(workRoot, value)
+				value = filepath.Join(scriptRoot, value)
 			}
 			return filepath.Clean(value)
 		}

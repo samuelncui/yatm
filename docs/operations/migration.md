@@ -36,6 +36,26 @@ Creating empty Settings tables during migration preserves the approved configura
 
 Scripts are the environment adaptation boundary: they own LTFS executable paths, device mapping, vendor options and local helper logic. Preserve that customization. Installation checks never run Tape scripts, mount a cartridge, format Media or establish physical Tape readiness.
 
+**Action required before the first Tape Job:** v1 requires a completed captured Index at
+`TAPE_DIR/<barcode>.schema`. A legacy script that writes elsewhere or captures no Index is
+incompatible until adapted. Keep the old capture directory through migration, then update the
+mount output and ensure unmount waits for final Index output and device release as described below.
+The installer displays this notice before upgrade and preserves active scripts for manual adaptation.
+
+Device-information scripts write JSON containing `barcode` to `OUT`. The service accepts the
+historical full cartridge label (for example `ABC001L5`), takes its first six characters and normalizes
+the identity to uppercase. Explicit user-supplied Tape identities remain six-character values.
+Successful `{"barcode":""}` output means the electronic barcode is unassigned: FORMAT uses the
+explicit user-supplied barcode and writes it through the formatting script. APPEND and Restore
+require an existing device identity. An unreadable field or failed probe exits nonzero rather than
+reporting an unassigned barcode. FORMAT still erases existing content regardless of barcode state.
+Check this distinction in customized probes: historical shell pipelines can hide a failed helper
+and return an empty barcode with exit status zero. Preserve local device/helper choices while
+propagating failures; the [bundled probe](../../scripts/readinfo) shows an explicit field check.
+Scripts run from the service working directory. Migration resolves literal relative capture options
+from that same directory, independently of `paths.work`; offline backup validation maps this path
+into the preserved installation.
+
 Complete data migration **before changing the legacy mount script's captured-index output directory**. Prepare reads the old script/configuration to locate existing index evidence. Keep that directory and its contents if any retained script still uses it. After migration, adapt scripts manually and validate them before the first Tape Job.
 
 | Input | Meaning |

@@ -69,8 +69,12 @@ class PhysicalCases(TapeWorkflows):
         self.save(**{key: str(job["id"])})
         return job
 
-    def inspect(self):
+    def inspect(self, allow_unassigned=False):
         reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode))
+        if allow_unassigned and reply.get("identity", "") == "":
+            # Resolve registration for the explicitly assigned FORMAT identity, not a guessed label.
+            reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode),
+                                  "--identity", self.barcode)
         require(reply["identity"] == self.barcode, "Device inspection returned a different barcode.")
         return reply
 
@@ -229,7 +233,7 @@ class PhysicalCases(TapeWorkflows):
         job = self.job("format_job_id")
         if "baseline_started" not in self.state:
             require("media_id" not in self.state, "Baseline has Media without its FORMAT attempt state.")
-            require(not self.inspect().get("media"), "Loaded Tape already exists in the isolated Library.")
+            require(not self.inspect(allow_unassigned=True).get("media"), "Loaded Tape already exists in the isolated Library.")
             self.save(baseline_started=True)
             self.format(job, self.barcode)
         # A failed evidence check may reuse a completed FORMAT, never repeat it.
@@ -254,7 +258,9 @@ class PhysicalCases(TapeWorkflows):
         mapping = format_partition_map(format_log.read_text())
         self.save(partition_map=mapping)
         check_positions(initial, positions, index, self.state["media_id"], mapping)
-        assets = self.test.one("preview", "get", "--location-id", self.source, "--path", "dataset/nested/payload.png")
+        png = next(item for item in initial if item["file"]["target_path"].endswith("/nested/payload.png"))
+        signature = decode_bytes(png["file"]["expected"]["signature"]).hex()
+        assets = self.test.one("preview", "get", "--signature", signature)
         require(assets.get("availability") == "PREVIEW_AVAILABILITY_READY" and assets.get("assets"), "PNG Preview is missing.")
         for asset in assets["assets"]:
             require(asset["url"].startswith("/files/preview?"), "Unexpected Preview URL.")

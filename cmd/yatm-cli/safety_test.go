@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -43,9 +44,8 @@ func TestMutatingCommandsReachTransportWithoutLocalConfirmation(t *testing.T) {
 	}
 }
 
-// TestTapeFormatStillRequiresTheInspectedBarcode keeps the physical-write gate that is not a
-// dry-run decision: FORMAT must match the barcode returned by the inspection.
-func TestTapeFormatStillRequiresTheInspectedBarcode(t *testing.T) {
+// TestTapeFormatStillRequiresBarcodeConfirmation retains explicit authorization for FORMAT.
+func TestTapeFormatStillRequiresBarcodeConfirmation(t *testing.T) {
 	var requests atomic.Int64
 	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
 		registerTestServices(server, &stubService{mediaInspect: func(
@@ -243,4 +243,82 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	require.Len(t, writes, 2)
 	require.Equal(t, 4, recorder.count(entity.MediaService_Inspect_FullMethodName))
 	require.Equal(t, 2, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
+}
+
+func TestTapeFormatWithEmptyElectronicBarcode(t *testing.T) {
+	// FORMAT accepts a supplied identity only after a successful empty physical probe.
+	tests := []struct {
+		name         string
+		barcode      string
+		confirmation string
+		inspected    *entity.InspectMediaResponse
+		inspectError error
+		exit         int
+	}{
+		{name: "supplied barcode", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{}, exit: exitSuccess},
+		{name: "normalized barcode", barcode: " abc123 ", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{}, exit: exitSuccess},
+		{name: "wrong confirmation", barcode: "ABC123", confirmation: "XYZ789", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
+		{name: "invalid barcode", barcode: "ABC/23", confirmation: "ABC/23", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
+		{name: "short barcode", barcode: "ABC12", confirmation: "ABC12", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
+		{name: "mismatched electronic barcode", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{Identity: "XYZ789"}, exit: exitUsage},
+		{name: "probe error", barcode: "ABC123", confirmation: "ABC123", inspectError: errors.New("Tape probe failed"), exit: exitFailure},
+		{name: "registered Media", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{Media: &entity.Media{Id: 7}}, exit: exitUsage},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Inspect through the real CLI transport and capture any attempted mutation.
+			var written *entity.ArchiveTapeTarget
+			var inspectedIdentity string
+			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+				registerTestServices(server, &stubService{mediaInspect: func(
+					_ context.Context, request *entity.InspectMediaRequest,
+				) (*entity.InspectMediaResponse, error) {
+					inspectedIdentity = request.GetIdentity()
+					return test.inspected, test.inspectError
+				}})
+				entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{writeMedia: func(
+					_ context.Context, request *entity.WriteArchiveMediaRequest,
+				) (*entity.WriteArchiveMediaResponse, error) {
+					written = proto.Clone(request.Target.GetTape()).(*entity.ArchiveTapeTarget)
+					return &entity.WriteArchiveMediaResponse{}, nil
+				}})
+			}, nil, nil)
+
+			// Confirmation authorizes one explicit FORMAT; every refusal stops before WriteMedia.
+			exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "31",
+				"--device", "/dev/nst0", "--barcode", test.barcode, "--name", "New Tape", "--confirm-format", test.confirmation)
+			require.Equal(t, test.exit, exit, stderr)
+			if recorder.count(entity.MediaService_Inspect_FullMethodName) > 0 {
+				require.Equal(t, "ABC123", inspectedIdentity)
+			}
+			if test.exit != exitSuccess {
+				require.Nil(t, written)
+				require.Zero(t, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
+				return
+			}
+			require.True(t, proto.Equal(&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC123", Name: "New Tape",
+				Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT}, written))
+			require.Equal(t, 1, recorder.count(entity.MediaService_Inspect_FullMethodName))
+			require.Equal(t, 1, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
+		})
+	}
+}
+
+func TestTapeAppendRejectsEmptyElectronicBarcode(t *testing.T) {
+	// Registered metadata cannot substitute for the physical identity when appending.
+	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		registerTestServices(server, &stubService{mediaInspect: func(
+			_ context.Context, _ *entity.InspectMediaRequest,
+		) (*entity.InspectMediaResponse, error) {
+			return &entity.InspectMediaResponse{Media: &entity.Media{Id: 7,
+				Profile: (&entity.TapeMediaProfile{Format: "ltfs_v1"}).Pack()}}, nil
+		}})
+	}, nil, nil)
+
+	// The existing APPEND command retains its strict inspection gate.
+	exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "append", "31",
+		"--device", "/dev/nst0", "--barcode", "ABC123")
+	require.Equal(t, exitUsage, exit, stderr)
+	require.Equal(t, 1, recorder.count(entity.MediaService_Inspect_FullMethodName))
+	require.Zero(t, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 }

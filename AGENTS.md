@@ -11,6 +11,7 @@
 - Follow the supported operating model in the [architecture overview](docs/architecture/overview.md#supported-operating-model). Defensive behavior for an unsupported situation is not a user-visible capability: remove its code, tests and lower-level documentation when the supporting requirement is absent.
 - Write source, comments, documentation, changelogs, commit messages, and release notes in English.
 - Keep this public repository self-contained; do not reference or depend on private source repositories.
+- Preserve configured Tape scripts wherever possible. They are user-owned adapters for LTFS distributions and hardware; keep their configuration, helpers and execution context. A necessary incompatible change needs explicit developer authorization, an actionable installer upgrade notice and automated checks of the affected boundary. Preserve the full [Tape lifecycle](docs/architecture/media-io.md#tape-lifecycle), including initialization of a new cartridge with a user-supplied barcode. The pre-stable API/data policy does not waive these requirements; the [Tape script contract](docs/architecture/media-io.md#tape-script-compatibility) owns compatibility.
 
 ## Required Reading
 

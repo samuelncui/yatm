@@ -64,7 +64,7 @@ Before File, Media, Job, or Location deletion, `files locate-original`, Library 
 3. Obtain explicit confirmation for that resolved operation, showing the `--dryrun` report when one is available.
 4. Execute one mutation command for that resolved operation.
 
-For Tape FORMAT, run `yatm-cli media inspect tape` immediately before the write. Use the returned `identity` as both the requested barcode and the exact `--confirm-format` value. If the inspected Tape already has Library Media, report it and obtain separate authorization for any metadata deletion before formatting.
+For Tape FORMAT, run `yatm-cli media inspect tape` immediately before the write. Use its nonempty `identity` as both the requested barcode and the exact `--confirm-format` value. A successful inspection with an empty electronic barcode accepts a user-supplied six-character alphanumeric barcode; use its uppercase form for `--barcode` and the exact `--confirm-format` value. Inspect again with `--identity BARCODE` to resolve Library registration before submission. Probe errors and nonempty barcode mismatches block FORMAT. If the inspected Tape already has Library Media, report it and obtain separate authorization for any metadata deletion before formatting. APPEND and Restore still require a valid electronic barcode.
 
 ## Verify
 

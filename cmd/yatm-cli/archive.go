@@ -40,9 +40,9 @@ type archiveWriteTapeAppendCommand struct {
 type archiveWriteTapeFormatCommand struct {
 	runtime       *runtime
 	Device        string     `long:"device" required:"yes" description:"Server-side Tape device"`
-	Barcode       string     `long:"barcode" required:"yes" description:"Expected Tape barcode"`
+	Barcode       string     `long:"barcode" required:"yes" description:"Tape barcode; supplied when the electronic barcode is empty"`
 	Name          string     `long:"name" required:"yes" description:"Library display name"`
-	ConfirmFormat string     `long:"confirm-format" required:"yes" value-name:"BARCODE" description:"Exact inspected barcode confirmation"`
+	ConfirmFormat string     `long:"confirm-format" required:"yes" value-name:"BARCODE" description:"Exact Tape barcode confirmation"`
 	Args          fileIDArgs `positional-args:"yes"`
 }
 
@@ -205,41 +205,58 @@ func (c *archiveWriteTapeAppendCommand) Execute(_ []string) error {
 }
 
 func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
-	// Validate the Job and inspect the actual Tape before evaluating confirmation.
+	// Validate the explicit FORMAT inputs before inspecting the Tape.
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
 		return err
 	}
 	if strings.TrimSpace(c.Name) == "" {
 		return usageError(fmt.Errorf("Tape name is empty"))
 	}
+	barcode := strings.ToUpper(strings.TrimSpace(c.Barcode))
+	if len(barcode) != 6 {
+		return usageError(fmt.Errorf("Tape barcode must contain 6 characters"))
+	}
+	for _, character := range barcode {
+		if (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return usageError(fmt.Errorf("Tape barcode contains an invalid character, barcode=%q", barcode))
+		}
+	}
+
+	// An empty electronic barcode is allowed only after a successful physical probe.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	device := strings.TrimSpace(c.Device)
-	inspected, err := inspectExpectedTape(ctx, c.runtime, device, c.Barcode)
+	inspected, err := inspectTape(ctx, c.runtime, device, &barcode)
 	if err != nil {
 		return err
 	}
-	if c.ConfirmFormat != inspected.Identity {
+	if inspected.Identity != "" && inspected.Identity != barcode {
 		return safetyError(fmt.Errorf(
-			"confirm-format must exactly match the inspected barcode, inspected=%q",
-			inspected.Identity,
+			"Tape barcode does not match the inspected identity, requested=%q inspected=%q",
+			barcode, inspected.Identity,
+		))
+	}
+	if c.ConfirmFormat != barcode {
+		return safetyError(fmt.Errorf(
+			"confirm-format must exactly match the Tape barcode, barcode=%q",
+			barcode,
 		))
 	}
 	if inspected.Media != nil {
 		return safetyError(fmt.Errorf(
 			"Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q",
-			inspected.Identity,
+			barcode,
 		))
 	}
 
-	// Start one format attempt using the exact inspected identity.
+	// Start one FORMAT using the confirmed barcode, including when MAM reports none.
 	return writeArchiveTape(
 		ctx,
 		c.runtime,
 		c.Args.ID,
 		&entity.ArchiveTapeTarget{
 			Device:  device,
-			Barcode: inspected.Identity,
+			Barcode: barcode,
 			Name:    c.Name,
 			Mode:    entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
 		},

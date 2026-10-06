@@ -6,11 +6,16 @@ import path from 'node:path';
 import test from 'node:test';
 
 const repository = path.resolve(import.meta.dirname, '../..');
-const adapters = ['scripts/mount', 'scripts/mount.openltfs', 'e2e/ltfs-file-backend/mount'];
+const adapters = [
+  ['scripts/mount', 'bare'],
+  ['scripts/mount.openltfs', 'directory'],
+  ['e2e/ltfs-file-backend/mount', 'directory'],
+  ['e2e/ltfs-file-backend/mount', 'bare'],
+];
 
-for (const adapter of adapters) {
+for (const [adapter, captureStyle] of adapters) {
   for (const relative of [true, false]) {
-    test(`${adapter} captures the final Index with ${relative ? 'relative' : 'absolute'} Tape work paths`, t => {
+    test(`${adapter} ${captureStyle} capture with ${relative ? 'relative' : 'absolute'} Tape work paths`, t => {
       const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'yatm-ltfs-mount-test-')));
       t.after(() => fs.rmSync(root, { recursive: true, force: true }));
       const caller = path.join(root, 'caller directory');
@@ -25,7 +30,7 @@ for (const adapter of adapters) {
         '-o', `devname=${device}`,
         ...(fileBackend ? [] : ['-o', 'noatime']),
         '-o', 'sync_type=unmount', '-o', `work_directory=${tapeDirectory}`,
-        '-o', adapter === 'scripts/mount' ? 'capture_index' : `capture_index=${tapeDirectory}`,
+        '-o', captureStyle === 'bare' ? 'capture_index' : `capture_index=${tapeDirectory}`,
         ...(fileBackend ? [] : ['-o', 'min_pool_size=256', '-o', 'max_pool_size=1024', '-o', 'eject']),
         '-s', mountPoint,
       ];
@@ -62,6 +67,7 @@ fs.writeFileSync(path.join(work, 'TEST01.schema'), '<ltfsindex/>');
           YATM_TEST_TAPE_DIRECTORY: tapeDirectory,
           YATM_TEST_DEVICE: device,
           YATM_TEST_LTFS_ARGUMENTS: JSON.stringify(expectedArguments),
+          YATM_E2E_LTFS_CAPTURE_INDEX: captureStyle,
         },
         encoding: 'utf8',
         timeout: 10000,

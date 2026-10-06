@@ -107,8 +107,8 @@ the handoff. Match the mount template to that LTFS distribution:
 
 | LTFS distribution | Mount template | Index capture arguments |
 | --- | --- | --- |
-| HPE | `scripts/mount` | `-o work_directory="${TAPE_DIR}" -o capture_index` |
-| openltfs | `scripts/mount.openltfs` | `-o work_directory="${TAPE_DIR}" -o capture_index="${TAPE_DIR}"` |
+| HPE or older capture-enabled builds using the bare option | `scripts/mount` | `-o work_directory="${TAPE_DIR}" -o capture_index` |
+| Current official LTFS using a capture directory | `scripts/mount.openltfs` | `-o work_directory="${TAPE_DIR}" -o capture_index="${TAPE_DIR}"` |
 
 Both templates create `TAPE_DIR` and resolve it to an absolute directory before launching LTFS.
 Normal unmount must finish the LTFS process and leave the final current-cartridge
@@ -178,6 +178,10 @@ Require a passed report for the selected case, with both FORMAT and APPEND parti
    Earlier Positions and Media ID remain unchanged; new Positions match the final Index.
 4. Restore all selected files and compare actual output hashes and sizes with the sources.
    Verify reads every recorded copy and publishes matching findings and healthy observations.
+
+Preview acceptance resolves the PNG through its frozen Archive content signature. An Archive
+selection can have a saved version without a known current Location signature; the saved identity
+is the source of truth for that derivative check.
 
 Review `report.json`, including `case_scope`, `partition_checks`, command exits and the retained
 Job artifacts. A completed copy without the final Index/Position comparison is incomplete
@@ -299,7 +303,7 @@ the other bundle artifacts. The [CLI output contract](../architecture/cli.md) ex
 inspection, not a byte-preserving log archive. Preparation exercises the real packaged Job and
 collector together; parser unit tests alone do not verify that boundary.
 
-The configured `readinfo` script starts every physical operation with `mt -f DEVICE load`. It then spends at most about one minute polling the explicit MAM Barcode field. The script removes an attached media-generation suffix such as `L5`; YATM validates the resulting six-character identity before encryption, formatting, or mounting.
+The configured `readinfo` script starts every physical operation with `mt -f DEVICE load`. It then spends at most about one minute polling the explicit MAM Barcode field. The script removes an attached media-generation suffix such as `L5`. A successful, explicitly empty field allows FORMAT with the assigned scratch barcode; formatting writes that identity. APPEND and Restore require the existing device identity. A failed probe or unreadable field stops the operation. The [Tape contract](../architecture/media-io.md#tape) owns these identity rules.
 
 Normal unmount keeps the Job attempt and device lease until the mount is gone, no process holds the resolved SG device, and `mt -f DEVICE status` reports `DR_OPEN`. This post-unmount wait shares a ten-minute deadline. A successful Job therefore exposes the drive only after eject completion; timeout follows the unmount-failure rules below.
 
@@ -343,12 +347,15 @@ Run the cases in order because they share one cartridge and one isolated YATM in
 
 1. Start YATM with the isolated configuration and load the scratch cartridge.
 2. Inspect the configured Tape device through the packaged CLI.
-3. Compare the returned barcode with the recorded barcode.
+3. Compare a non-empty returned barcode with the assigned scratch barcode. If the electronic barcode
+   is empty, inspect again with `--identity BARCODE` to check Library registration for the explicitly
+   assigned identity before FORMAT.
 
 Expected results:
 
 - Inspection completes without a device-busy or device-discovery error.
-- The barcode is non-empty and matches the cartridge label.
+- A reported electronic barcode matches the assigned scratch barcode. A successfully read empty
+  barcode is accepted only before the initial FORMAT, which writes the assigned identity.
 - The isolated Library has no Tape Media with that barcode.
 - No format, mount, or Library mutation occurs during inspection.
 
@@ -363,6 +370,7 @@ Expected results:
 
 - Hardware encryption is configured before formatting and the key remains in the Tape Media profile.
 - LTFS formatting, mounting, ordered ACP writes, unmounting, and ejecting succeed.
+- Formatting passes the assigned barcode to `mkltfs`; the subsequent reload/inspection must return it.
 - Every non-empty source file has the expected size and SHA-256 in the Archive result.
 - Every Archive item is `SUBMITTED`; the Library contains one `ltfs_v1` Tape Media and one Position per source file.
 - The captured LTFS Index contains valid extents for every non-empty file. Each persisted Position has the same first logical extent encoded as partition, block, and byte offset in its 17-byte storage order.

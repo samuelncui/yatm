@@ -3,24 +3,27 @@ set -euo pipefail
 
 mt -f "${DEVICE}" load
 deadline=$(($(date +%s) + 60))
-barcode=''
 while true; do
     now=$(date +%s)
     if ((now >= deadline)); then
         break
     fi
     remaining=$((deadline - now))
-    info=$(timeout "${remaining}s" ./yatm-lto-info -f "${DEVICE}" || true)
-    barcode=$(awk '$1 == "Barcode" && $2 == ":" {
-        value = $3
-        if (length(value) == 8) {
-            value = substr(value, 1, 6)
-        }
-        print value
-        exit
-    }' <<< "${info}")
-    if [[ -n ${barcode} ]]; then
-        break
+    if info=$(timeout "${remaining}s" ./yatm-lto-info -f "${DEVICE}"); then
+        # A present, empty field is readable MAM without an assigned barcode.
+        # The prefix distinguishes it from a missing field or failed probe.
+        barcode=$(awk '$1 == "Barcode" && $2 == ":" {
+            value = $3
+            if (length(value) == 8) {
+                value = substr(value, 1, 6)
+            }
+            print ":" value
+            exit
+        }' <<< "${info}")
+        if [[ -n ${barcode} ]]; then
+            printf '{"barcode":"%s"}\n' "${barcode#:}" > "${OUT}"
+            exit 0
+        fi
     fi
     now=$(date +%s)
     if ((now >= deadline)); then
@@ -32,8 +35,5 @@ while true; do
     fi
     sleep "${delay}"
 done
-if [[ -z ${barcode} ]]; then
-    echo "Tape barcode is unavailable: ${DEVICE}" >&2
-    exit 1
-fi
-printf '{"barcode":"%s"}\n' "${barcode}" > "${OUT}"
+echo "Tape barcode is unavailable: ${DEVICE}" >&2
+exit 1

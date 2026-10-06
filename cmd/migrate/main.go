@@ -125,7 +125,7 @@ func main() {
 			}
 		}
 	case "prepare":
-		indexRoot := legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, conf.Paths.Work)
+		indexRoot := legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, ".")
 		report, err := legacy.PrepareWithLTFSIndex(context.Background(), db, conf.Paths.Work, indexRoot, conf.Paths.Target)
 		if writeErr := writePhaseReport(report, *reportFile); writeErr != nil {
 			log.Fatal(writeErr)

@@ -55,7 +55,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	secondDevice := filepath.Join(root, "tapes", "FUL002")
 	scripts := executor.Scripts{
 		Encrypt: testScript(t, "encrypt-noop.sh"), Mkfs: testScript(t, "mkfs-file-capacity.sh"),
-		Mount: testScript(t, "mount-file.sh"), Umount: testScript(t, "umount-file.sh"),
+		Mount: testLTFSFileMount(t), Umount: testScript(t, "umount-file.sh"),
 		ReadInfo: testScript(t, "read-info-file.sh"),
 	}
 	exe := executor.New(executorDB, lib, []string{firstDevice, secondDevice}, paths, scripts, nil)

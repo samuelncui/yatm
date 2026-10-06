@@ -18,6 +18,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 		name, failure string
 		read          bool
 		unmountFails  bool
+		unassigned    bool
 	}{
 		{name: "read encryption failure", failure: "encrypt", read: true},
 		{name: "read mount failure", failure: "mount", read: true},
@@ -27,6 +28,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 		{name: "write mounted index failure", failure: "index"},
 		{name: "write mounted index and unmount failure", failure: "index", unmountFails: true},
 		{name: "write success"},
+		{name: "write assigns requested barcode", unassigned: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Only local stand-in scripts touch these fixture paths; no device command runs.
@@ -40,9 +42,13 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 				return 0
 			}
 			exe.scripts.ReadInfo = writeExecutorTestScript(t, "identity", `printf '{"barcode":"ABC001"}' > "$OUT"`)
+			if test.unassigned {
+				exe.scripts.ReadInfo = writeExecutorTestScript(t, "unassigned", `printf '{"barcode":""}' > "$OUT"`)
+			}
 			exe.scripts.Encrypt = writeExecutorTestScript(t, "encrypt", fmt.Sprintf(
 				"printf '%%s' \"$KEY_FILE\" > \"$TAPE_DIR/key-path\"\nexit %d", exit("encrypt")))
-			exe.scripts.Mkfs = writeExecutorTestScript(t, "format", fmt.Sprintf("exit %d", exit("format")))
+			exe.scripts.Mkfs = writeExecutorTestScript(t, "format", fmt.Sprintf(
+				"printf '%%s\\n' \"$TAPE_BARCODE\" \"$TAPE_NAME\" > \"$TAPE_DIR/formatted\"\nexit %d", exit("format")))
 			mount := "printf '%s' \"$MOUNT_POINT\" > \"$TAPE_DIR/mount-path\"\n"
 			if test.failure == "index" {
 				mount += "mkdir \"$TAPE_DIR/ABC001.schema\"\nprintf keep > \"$TAPE_DIR/ABC001.schema/keep\"\n"
@@ -79,7 +85,8 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 				}
 			} else {
 				session, err := backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
-					Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+					Device: "/dev/nst0", Barcode: "ABC001", Name: "Test Tape",
+					Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
 				}).Pack())
 				createErr = err
 				if err == nil {
@@ -99,6 +106,11 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			if test.failure == "" {
 				require.NoError(t, createErr)
 				require.FileExists(t, string(key))
+				if !test.read {
+					formatted, err := os.ReadFile(filepath.Join(tapeDir, "formatted"))
+					require.NoError(t, err)
+					require.Equal(t, "ABC001\nTest Tape\n", string(formatted))
+				}
 				require.NoError(t, finalize())
 			} else {
 				require.Error(t, createErr)

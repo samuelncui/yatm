@@ -102,13 +102,19 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
       setSubmitError("");
       const reply = await inspect({ oneofKind: "tape", tape: { device } }, identity);
       if (!reply) return;
+      if (identity && reply.identity && reply.identity !== identity) {
+        setSubmitError(`Tape barcode does not match the inspected identity: requested ${identity}, inspected ${reply.identity}.`);
+        return;
+      }
       const existingFormat = tapeFormat(reply.media);
+      let mode = reply.identity || identity ? ArchiveTapeWriteMode.FORMAT : ArchiveTapeWriteMode.UNSPECIFIED;
+      if (reply.media) mode = existingFormat === "ltfs_v1" ? ArchiveTapeWriteMode.APPEND : ArchiveTapeWriteMode.UNSPECIFIED;
       setTape((current) => ({
         ...current,
         device,
-        barcode: reply.identity,
+        barcode: reply.identity || identity || "",
         name: reply.media?.name ?? current.name,
-        mode: reply.media ? (existingFormat === "ltfs_v1" ? ArchiveTapeWriteMode.APPEND : ArchiveTapeWriteMode.UNSPECIFIED) : ArchiveTapeWriteMode.FORMAT,
+        mode,
       }));
     },
     [inspect],
@@ -201,9 +207,12 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
 
   const existing = inspected?.media;
   const selectedVolume = volumes.find((volume) => volume.identity === volumeUUID);
+  const barcode = tape.barcode.trim().toUpperCase();
   const canSubmitTape =
     !inspecting &&
-    inspected?.identity === tape.barcode.trim().toUpperCase() &&
+    inspected !== null &&
+    /^[A-Z0-9]{6}$/.test(barcode) &&
+    (inspected.identity === barcode || (tape.mode === ArchiveTapeWriteMode.FORMAT && !existing && !inspected.identity)) &&
     tape.mode !== ArchiveTapeWriteMode.UNSPECIFIED &&
     (tape.mode === ArchiveTapeWriteMode.APPEND || tape.name.trim().length > 0);
   const canSubmit = !submitting && (backend === "volume" ? selectedVolume?.mounted === true : canSubmitTape);
@@ -271,16 +280,16 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                       label="Tape Barcode"
                       fullWidth
                       value={tape.barcode}
-                      onChange={(event) => setTape((current) => ({ ...current, barcode: event.target.value }))}
+                      onChange={(event) => setTape((current) => ({ ...current, barcode: event.target.value, mode: ArchiveTapeWriteMode.UNSPECIFIED }))}
                     />
-                    <Button disabled={tape.barcode.trim().length !== 6} onClick={() => void inspectTape(tape.device, tape.barcode.trim().toUpperCase())}>
+                    <Button disabled={!/^[A-Z0-9]{6}$/.test(barcode)} onClick={() => void inspectTape(tape.device, barcode)}>
                       Check Tape
                     </Button>
                   </Fragment>
                 )}
-                {inspected?.identity && (
+                {inspected && (inspected.identity || tape.mode === ArchiveTapeWriteMode.FORMAT) && (
                   <Fragment>
-                    <TextField margin="normal" label="Tape Barcode" fullWidth value={inspected.identity} disabled />
+                    {inspected.identity && <TextField margin="normal" label="Tape Barcode" fullWidth value={inspected.identity} disabled />}
                     <MediaInspectResult reply={inspected} loading={inspecting} error={inspectError} />
                     {existing ? (
                       <Fragment>
@@ -288,7 +297,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                           <Alert severity="warning">This Tape cannot be appended. Delete its Media metadata before formatting it.</Alert>
                         )}
                       </Fragment>
-                    ) : (
+                    ) : tape.mode === ArchiveTapeWriteMode.FORMAT ? (
                       <Fragment>
                         <Alert severity="info">This barcode is not in the Library. The Tape will be formatted before writing.</Alert>
                         <TextField
@@ -300,10 +309,12 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                           onChange={(event) => setTape((current) => ({ ...current, name: event.target.value }))}
                         />
                       </Fragment>
-                    )}
+                    ) : null}
                   </Fragment>
                 )}
-                {!inspected?.identity && <MediaInspectResult reply={inspected} loading={inspecting} error={inspectError} />}
+                {!inspected?.identity && tape.mode !== ArchiveTapeWriteMode.FORMAT && (
+                  <MediaInspectResult reply={inspected} loading={inspecting} error={inspectError} />
+                )}
               </Fragment>
             )}
             {submitError && <Feedback severity="error">{submitError}</Feedback>}

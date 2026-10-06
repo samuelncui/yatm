@@ -228,7 +228,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	if !filepath.IsAbs(previewRoot) {
 		previewRoot = filepath.Join(conf.Paths.Work, previewRoot)
 	}
-	paths := []string{configPath, dbPath, conf.Paths.Work, previewRoot, legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, conf.Paths.Work)}
+	paths := []string{configPath, dbPath, conf.Paths.Work, previewRoot, legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, ".")}
 	for _, script := range []string{conf.Scripts.Encrypt, conf.Scripts.Mkfs, conf.Scripts.Mount, conf.Scripts.Umount, conf.Scripts.ReadInfo} {
 		if script == "" {
 			continue

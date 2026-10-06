@@ -86,7 +86,7 @@ func migrationBackup(root, backupRoot, configPath string) (legacy.Backup, error)
 			return legacy.Backup{}, err
 		}
 	}
-	index, err := mapPath(legacy.LegacyLTFSIndexRoot(mount, conf.Paths.Work))
+	index, err := mapPath(legacy.LegacyLTFSIndexRoot(mount, root))
 	if err != nil {
 		return legacy.Backup{}, err
 	}

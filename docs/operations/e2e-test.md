@@ -267,6 +267,11 @@ Library, Scan, Archive, API, CLI, and Demo unit tests cover the larger failure/c
 
 The LTFS test treats a directory as a virtual tape. It does not require a physical LTO device, but it runs the real `mkltfs`, LTFS/FUSE mounts, ACP copies and hashes, SCAN Preview outcomes, Job DB checkpoints, Library commits, and CLI business operations. The PNG fixture uses the current typed Preview Settings and real native helper, supplied with `YATM_TEST_PREVIEW_HELPER`.
 
+Select the installed LTFS capture syntax before launching native tests. The shared adapter defaults
+to `capture_index=<directory>`; older capture-enabled builds use
+`YATM_E2E_LTFS_CAPTURE_INDEX=bare`. The
+[file-backend adapter guide](../../e2e/ltfs-file-backend/README.md) owns that test-only choice.
+
 A second test sets the official file backend `capacity_mb` cartridge property to 3072 MiB and writes three 1200 MiB files. LTFS exposes the configured remaining capacity through the mounted filesystem, so ACP's pre-write `statfs` guard stops the first virtual Tape before the next complete file. Acceptance requires the failed Archive Media operation to return the Job to its pre-Media `READY` state with its failure reason/timing and no live phase, continuous-prefix publication, pending item suffix, exact Position set, progress and report totals, completion on a second Media, and Restore across both Media. The prepared manifest and submitted prefix remain for another explicit load-Media operation. Every failure before attempt admission leaves the existing state unchanged; admitted Scan/Index errors or cancellation settle as terminal `FAILED`, while admitted Archive/Restore Media errors or operator cancellation, including while `QUEUED`, return to pre-Media `READY` with successful per-file/Media checkpoints preserved. The [Job lifecycle](../architecture/jobs.md#shared-lifecycle) owns these boundaries.
 
 ### Flow
@@ -298,7 +303,8 @@ ls -l /dev/fuse
 Run this source-based test locally or in an authorized Linux CI harness environment:
 
 ```bash
-YATM_E2E_LTFS=1 go test -tags=e2e -v ./e2e -run 'TestLTFS(ArchiveRestore|FullTapeSpansMediaAndRestores)'
+YATM_E2E_LTFS=1 YATM_TEST_PREVIEW_HELPER="$PREVIEW_HELPER" \
+  go test -tags=e2e -v ./e2e -run 'TestLTFS(ArchiveRestore|FullTapeSpansMediaAndRestores)'
 ```
 
 The command above is not the remote package-acceptance procedure. On the isolated host, replay its public CLI scenarios using [packaged binaries and local orchestration](#remote-packaged-binary-acceptance); retain internal checkpoint/fault assertions in the local/CI tests.

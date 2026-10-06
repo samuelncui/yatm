@@ -190,6 +190,7 @@ func TestRestoreResultsArePersistedByTheSharedWriter(t *testing.T) {
 // TestRestoreWriterFailureStopsTheAttempt pins the mapping for a failed persistence: the error is
 // reported by the writer, which stops the feed, and the candidate stays PENDING.
 func TestRestoreWriterFailureStopsTheAttempt(t *testing.T) {
+	// Prepare one pending copy shared by both failure cases.
 	runner, _, copies := setupVolumeRestore(t, "failure", map[string][]byte{"file.txt": []byte("saved")})
 	copy := copies[0]
 
@@ -201,24 +202,34 @@ func TestRestoreWriterFailureStopsTheAttempt(t *testing.T) {
 		Targets: []acp.TargetResult{{Path: runner.restoreTarget(copy.TargetPath), Err: acp.ErrTargetNoSpace}},
 	}}))
 	require.ErrorIs(t, buffer.Close(), acp.ErrTargetNoSpace)
-
 	var output File
 	require.NoError(t, runner.db.First(&output, copy.ItemID).Error)
 	require.False(t, output.Ready)
 
 	// A failed persistence is the runner's own failure and is reported the same way.
+	persistErr := errors.New("job database is unavailable")
 	require.NoError(t, runner.db.Callback().Update().Before("gorm:update").Register("test:restore-persist", func(tx *gorm.DB) {
 		if tx.Statement.Table == "copies" {
-			tx.AddError(errors.New("job database is unavailable"))
+			tx.AddError(persistErr)
 		}
 	}))
 	t.Cleanup(func() { _ = runner.db.Callback().Update().Remove("test:restore-persist") })
 	buffer = startTestBuffer(t, runner, copy.MediaID, &testReadSession{root: "/media"})
-	require.NoError(t, buffer.onResults([]acp.Result{{
+
+	// The asynchronous write may fail before the callback returns or after it hands over the batch.
+	err := buffer.onResults([]acp.Result{{
 		Job: item, Size: copy.Size, SHA256: copy.Hash,
 		Targets: []acp.TargetResult{{Path: runner.restoreTarget(copy.TargetPath), Size: copy.Size}},
-	}}))
-	require.ErrorContains(t, buffer.Close(), "job database is unavailable")
+	}})
+	require.True(t, err == nil || errors.Is(err, persistErr), "callback reported %v", err)
+
+	// Once recorded, the persistence error stops the feed and survives the drain without staging output.
+	require.Eventually(t, func() bool { return buffer.writer.Failure() != nil }, 5*time.Second, time.Millisecond)
+	require.ErrorIs(t, buffer.onResults(nil), persistErr, "the recorded error stops the feed")
+	require.ErrorIs(t, buffer.Close(), persistErr)
+	var stored Copy
+	require.NoError(t, runner.db.First(&stored, copy.ID).Error)
+	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, stored.Status)
 	require.NoError(t, runner.db.First(&output, copy.ItemID).Error)
 	require.False(t, output.Ready, "a failed persistence stages nothing")
 }

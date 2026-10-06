@@ -52,6 +52,8 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 		return args, nil
 	case *entity.GetFileRequest:
 		return filesGetArguments(r.Reference)
+	case *entity.GetPreviewRequest:
+		return []string{"preview", "get", "--signature", hex.EncodeToString(r.Signature)}, nil
 	case *entity.ListFilesRequest:
 		return filesListArguments(r.Directory, r.Scope, r.Include, "", "", 0, false)
 	case *entity.SearchFilesRequest:
@@ -411,6 +413,25 @@ func selectionArgument(ref *entity.FileOperationRef) ([]string, error) {
 		return []string{"--location", decimal(location.Location.LocationId) + ":" + location.Location.Path}, nil
 	}
 	return nil, fmt.Errorf("unsupported Files metadata reference %T", ref.Target)
+}
+
+func TestCLIPreviewGetArguments(t *testing.T) {
+	// Preserve the content signature as hexadecimal, including zero and high-bit bytes.
+	for _, tc := range []struct {
+		name      string
+		signature []byte
+		encoded   string
+	}{
+		{name: "binary signature", signature: []byte{0x00, 0x01, 0x7f, 0x80, 0xff}, encoded: "00017f80ff"},
+		{name: "zero byte", signature: []byte{0x00}, encoded: "00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args, err := new(cliConnection).arguments(entity.PreviewService_Get_FullMethodName,
+				&entity.GetPreviewRequest{Signature: tc.signature})
+			require.NoError(t, err)
+			require.Equal(t, []string{"preview", "get", "--signature", tc.encoded}, args)
+		})
+	}
 }
 
 func TestCLIEnumArguments(t *testing.T) {

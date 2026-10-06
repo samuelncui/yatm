@@ -423,6 +423,11 @@ inspect_installation() {
 show_migration_guide() {
   echo "Requested installation: $CURRENT_VERSION → $RELEASE_VERSION"
   [[ "$CURRENT_VERSION" != none ]] || return 0
+  if [[ "$RELEASE_VERSION" == v1.* ]]; then
+    echo 'Tape adapter check required before the first Tape Job: v1 needs the completed final Index at TAPE_DIR/<barcode>.schema.'
+    echo 'Custom scripts are retained. Keep legacy captures through migration, then adapt mount output and wait for final Index output and device release in unmount.'
+    echo 'Read the verified release guide: docs/operations/migration.md, Tape Script Adaptation.'
+  fi
   local current_major="${CURRENT_VERSION#v}" target_major="${RELEASE_VERSION#v}"
   [[ "${current_major%%.*}" != "${target_major%%.*}" ]] || return 0
   [[ "$CURRENT_VERSION" =~ ^v0\.1\.[0-9]+$ && "$RELEASE_VERSION" == v1.* ]] || {

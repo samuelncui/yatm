@@ -5,7 +5,14 @@ script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 device=$("${script_dir}/get_device")
 mkdir -p -- "${TAPE_DIR}"
 TAPE_DIR=$(cd -- "${TAPE_DIR}" && pwd -P)
+# Older capture-enabled LTFS builds accept only the bare option. Test setup
+# selects their syntax once; the directory form is the official current default.
+case ${YATM_E2E_LTFS_CAPTURE_INDEX:-directory} in
+    directory) capture_option="capture_index=${TAPE_DIR}" ;;
+    bare) capture_option=capture_index ;;
+    *) echo "Choose directory or bare for YATM_E2E_LTFS_CAPTURE_INDEX" >&2; exit 1 ;;
+esac
 ltfs -o tape_backend=file -o "devname=${device}" -o sync_type=unmount \
-    -o "work_directory=${TAPE_DIR}" -o "capture_index=${TAPE_DIR}" \
+    -o "work_directory=${TAPE_DIR}" -o "${capture_option}" \
     -s "${MOUNT_POINT}" 2>&1 | tee -a "${TAPE_DIR}/ltfs.log"
 mountpoint -q "${MOUNT_POINT}"

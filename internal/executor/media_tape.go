@@ -200,10 +200,10 @@ func (b *mediaBackend) newTapeWriteSession(
 	if err != nil {
 		return nil, err
 	}
-	if deviceBarcode == "" {
+	if deviceBarcode == "" && target.GetMode() != entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT {
 		return nil, fmt.Errorf("archive Tape identity is unavailable")
 	}
-	if deviceBarcode != barcode {
+	if deviceBarcode != "" && deviceBarcode != barcode {
 		return nil, fmt.Errorf("archive Tape changed, requested=%q device=%q", barcode, deviceBarcode)
 	}
 

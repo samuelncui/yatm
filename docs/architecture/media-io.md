@@ -39,6 +39,24 @@ Capabilities derive from immutable [Media profiles](../../entity/media.proto), n
 
 Concurrent random access uses configured ACP concurrency, random access uses a single device thread, and sequential access uses ACP's linear behavior. Read access determines storage-order requirements. An [attempt lease](../../internal/executor/device.go) exclusively reserves a Tape device or Volume UUID; these locks also prevent conflicting YATM operations, not just removable-media swaps. A conflicting Job waits for the holder in arrival order and reports `QUEUED`, so a device in use never fails a Job; an unconfigured Tape device remains an explicit configuration error. Restore acquires the drive before probing its cartridge identity, and Session setup reuses that attempt's lease. The attempt retains the lease through finalization and settlement.
 
+## Tape Script Compatibility
+
+Configured scripts are a long-lived user interface. Preserve previously supported adapters wherever
+possible, including their helpers, input variables, output format, working directory and exit-status
+meaning. LTFS distribution and hardware differences remain inside those adapters. A necessary
+incompatible change requires explicit developer approval, an actionable installer notice before
+upgrade and regression checks of the changed boundary. Installation preserves customized adapters
+and their execution context instead of replacing them automatically. This contract applies
+independently of the pre-stable API/data policy and preserves the [Tape lifecycle](#tape-lifecycle).
+
+Script changes require automated checks of the published interface and representative unchanged
+historical adapters. Physical acceptance checks the selected host adapter separately; it does not
+replace the historical compatibility checks.
+
+Archive requires a completed per-Job captured Index; historical adapters without that output need
+manual adaptation before Tape operations. This required incompatibility is described in the
+[upgrade notice](../operations/migration.md#tape-script-adaptation) displayed by the installer.
+
 ## Tape
 
 Configured scripts are the anti-corruption boundary for environment-specific executable paths, device mapping, vendor options and helper logic. The service supplies operation inputs and validates identity, content and final Index output; it does not absorb those local decisions into configuration switches. The [migration guide](../operations/migration.md#tape-script-adaptation) owns input/output contracts and upgrade examples. Installer preflight never invokes these scripts.
@@ -54,8 +72,9 @@ device and during unmount; an absent or ambiguous mapping fails explicitly.
 
 Bundled mount scripts resolve the Job's Tape artifact directory to an absolute path before passing it to LTFS. LTFS can change its working directory when it runs in the background; captured indexes must still land in the supplied Job directory when `paths.work` is relative.
 
-The official LTFS file-backend adapters use `capture_index=<absolute directory>` and wait for their
-mount's LTFS process to exit after FUSE detaches. FUSE detachment alone can precede the final Index
+The official LTFS file-backend adapters select a supported capture option at setup: an absolute
+directory value, or bare `capture_index` with an absolute work directory for older builds. They wait
+for their mount's LTFS process to exit after FUSE detaches. FUSE detachment alone can precede the final Index
 write; the test adapter therefore supplies the same completed-finalization boundary as physical
 device release.
 
@@ -63,7 +82,25 @@ The bundled encryption script loads the drive and retries `stenc` at most 60 tim
 every attempt fails, it exits nonzero so the Tape Session cannot proceed to formatting or
 mounting. Its `stenc` arguments remain part of the environment-specific script contract.
 
-[Tape Sessions](../../internal/executor/media_tape.go) identify the cartridge, configure encryption, format when requested, mount LTFS, and unmount/finalize. Every FORMAT, APPEND, and Restore Session requires a non-empty valid device barcode before encryption, formatting, or mounting; FORMAT and APPEND also require an exact match with the requested barcode. Device inspection may use its documented read-only manual identity fallback when automatic MAM lookup is unavailable, but a read/write Session never trusts that fallback. FORMAT rejects a barcode already in the Library; explicit metadata deletion is required before creating a new Media identity. APPEND requires compatible `ltfs_v1`, preserves Media ID/key/Positions, and chooses a short base36 timestamp prefix only to avoid path collisions.
+[Tape Sessions](../../internal/executor/media_tape.go) identify the cartridge, configure encryption, format when requested, mount LTFS, and unmount/finalize. FORMAT accepts a successful probe reporting an empty electronic barcode and uses the explicit user-supplied six-character barcode; the format script passes that identity to `mkltfs` to write it during initialization. A non-empty device barcode must match the requested identity, and probe failures stop the Session before encryption or formatting. An empty barcode does not establish that the cartridge contains no data: FORMAT remains an explicit destructive operation. FORMAT rejects a barcode already in the Library; explicit metadata deletion is required before creating a new Media identity.
+
+APPEND and Restore require a non-empty valid device barcode before encryption or mounting; APPEND also requires an exact match with the requested identity. Device inspection may use its documented read-only manual identity fallback when automatic MAM lookup is unavailable, but that fallback does not authorize a write or Restore. APPEND requires compatible `ltfs_v1`, preserves Media ID/key/Positions, and chooses a short base36 timestamp prefix only to avoid path collisions.
+
+### Tape Lifecycle
+
+1. For an uninitialized cartridge, the operator chooses its six-character barcode and explicitly
+   submits FORMAT. The electronic barcode may be empty; the formatting script writes the supplied
+   identity and name while initializing LTFS. An empty barcode does not establish empty content.
+2. Archive writes files, normally unmounts and waits for device release, then validates the final
+   captured Index and publishes Media and Positions. The Library records the Tape's identity and key.
+3. On later loads, APPEND verifies the existing barcode and compatible Library Media, reuses its key
+   and adds files without replacing earlier Positions. Restore verifies the loaded Tape against its
+   recorded identity, uses its key and reads the selected saved content.
+4. Metadata deletion leaves the cartridge's bytes intact. Reinitialization requires explicit FORMAT
+   after deleting the registered Media; formatting erases the old physical contents.
+
+Script and caller changes must keep every step available, including FORMAT before an electronic
+barcode exists. Per-operation identity and finalization rules remain defined above and below.
 
 The final captured LTFS Index is the physical fact source. [LTFS processing](../../internal/media) retains backend extents in the typed storage-metadata envelope and stores opaque binary order from partition/block/offset. `ltfs_v0` is path-order compatibility; `ltfs_v1` has validated LTFS order/extents and supports append. Versioning belongs to the storage format, not a second independent version field.
 

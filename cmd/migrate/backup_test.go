@@ -68,6 +68,20 @@ func TestMigrationBackupPreservesRelativeSymlinkChainAfterExtraction(t *testing.
 	require.Equal(t, "active catalog", string(data))
 }
 
+func TestMigrationBackupResolvesCaptureFromServiceDirectory(t *testing.T) {
+	// The Job work path does not change the configured script's working directory.
+	root, backupRoot := t.TempDir(), t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(backupRoot, "scripts"), 0o700))
+	text := "database:\n  dialect: sqlite\n  dsn: ./tapes.db\npaths:\n  work: ./work\nscripts:\n  mount: ./scripts/mount\n"
+	require.NoError(t, os.WriteFile(filepath.Join(backupRoot, "config.yaml"), []byte(text), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(backupRoot, "scripts", "mount"), []byte(
+		"ltfs -o capture_index=indices /mnt/ltfs\n"), 0o700))
+	backup, err := migrationBackup(root, backupRoot, "config.yaml")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(backupRoot, "work"), backup.WorkRoot)
+	require.Equal(t, filepath.Join(backupRoot, "indices"), backup.IndexRoot)
+}
+
 func TestFreshInspectionUsesFutureInstallationRootWithoutWrites(t *testing.T) {
 	// A supplied configuration may name its future installed paths before the directory exists.
 	root := filepath.Join(t.TempDir(), "install")

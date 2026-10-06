@@ -237,6 +237,94 @@ describe("ArchiveCard Write Media", () => {
     );
   });
 
+  it("formats with a checked user barcode when the electronic barcode is empty", async () => {
+    mediaInspect.mockImplementation((request: { identity?: string }) => call({ identity: request.identity ?? "", fileCount: 0n }));
+    render(<ArchiveCard job={job} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+    const barcode = await screen.findByRole("textbox", { name: "Tape Barcode" });
+    expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
+    await userEvent.type(barcode, "abc001");
+    await userEvent.click(screen.getByRole("button", { name: "Check Tape" }));
+    const name = await screen.findByRole("textbox", { name: "Tape Name" });
+    const checkedBarcode = screen.getByRole("textbox", { name: "Tape Barcode" });
+    expect(checkedBarcode).toHaveValue("ABC001");
+    expect(checkedBarcode).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Check Tape" })).not.toBeInTheDocument();
+    expect(mediaInspect).toHaveBeenLastCalledWith({ target: { oneofKind: "tape", tape: { device: "/dev/nst0" } }, identity: "ABC001" });
+    await userEvent.type(name, "New Tape");
+    expect(writeMedia).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start archive" })).toBeEnabled());
+
+    await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
+    await waitFor(() =>
+      expect(writeMedia).toHaveBeenCalledExactlyOnceWith({
+        id: 20n,
+        target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0", barcode: "ABC001", name: "New Tape", mode: ArchiveTapeWriteMode.FORMAT } } },
+      }),
+    );
+  });
+
+  it.each(["ABC/23", "ABC12", "ABC1234"])("rejects invalid manual barcode %s", async (value) => {
+    mediaInspect.mockReturnValue(call({ identity: "", fileCount: 0n }));
+    render(<ArchiveCard job={job} />);
+    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Tape Barcode" }), value);
+    expect(screen.getByRole("button", { name: "Check Tape" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
+    expect(writeMedia).not.toHaveBeenCalled();
+    expect(mediaInspect).toHaveBeenCalledOnce();
+  });
+
+  it.each(["probe error", "mismatched barcode", "registered Media"])("blocks manual FORMAT after %s", async (result) => {
+    mediaInspect.mockReturnValueOnce(call({ identity: "", fileCount: 0n }));
+    if (result === "probe error") mediaInspect.mockImplementation(() => ({ response: Promise.reject(new Error("Tape probe failed")) }));
+    else if (result === "mismatched barcode") mediaInspect.mockReturnValue(call({ identity: "XYZ789", fileCount: 0n }));
+    else
+      mediaInspect.mockImplementation((request: { identity?: string }) =>
+        call({
+          identity: request.identity ?? "",
+          fileCount: 0n,
+          media: Media.create({
+            id: 7n,
+            kind: MediaKind.TAPE,
+            identity: request.identity,
+            profile: { kind: { oneofKind: "tape", tape: { serialNumber: "", encryption: "", format: "ltfs_v1" } } },
+          }),
+        }),
+      );
+    render(<ArchiveCard job={job} />);
+    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Tape Barcode" }), "ABC001");
+    await userEvent.click(screen.getByRole("button", { name: "Check Tape" }));
+    await waitFor(() => expect(mediaInspect).toHaveBeenCalledTimes(2));
+    expect(mediaInspect).toHaveBeenLastCalledWith({ target: { oneofKind: "tape", tape: { device: "/dev/nst0" } }, identity: "ABC001" });
+    if (result === "probe error") expect(await screen.findByText("Tape probe failed")).toBeInTheDocument();
+    else if (result === "mismatched barcode") expect(await screen.findByText(/Tape barcode does not match/)).toBeInTheDocument();
+    else expect(await screen.findByText("Tape: Unnamed")).toBeInTheDocument();
+    if (result !== "registered Media") expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
+    expect(screen.queryByRole("textbox", { name: "Tape Name" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/The Tape will be formatted before writing/)).not.toBeInTheDocument();
+    expect(writeMedia).not.toHaveBeenCalled();
+    if (result === "registered Media") {
+      expect(screen.getByRole("textbox", { name: "Tape Barcode" })).toHaveValue("ABC001");
+      expect(screen.getByRole("textbox", { name: "Tape Barcode" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
+      await waitFor(() =>
+        expect(writeMedia).toHaveBeenCalledExactlyOnceWith({
+          id: 20n,
+          target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0", barcode: "ABC001", name: "", mode: ArchiveTapeWriteMode.APPEND } } },
+        }),
+      );
+    }
+  });
+
   it("appends to an existing ltfs_v1 Tape", async () => {
     const existing = Media.create({
       id: 7n,

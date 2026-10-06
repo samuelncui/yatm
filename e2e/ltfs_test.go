@@ -75,6 +75,23 @@ type legacyPosition struct {
 	Hash      []byte    `json:"hash,omitempty"`
 }
 
+func testLTFSFileMount(t *testing.T) string {
+	t.Helper()
+
+	// Freeze the host's test selection in the adapter; Executor supplies only operation inputs.
+	style := os.Getenv("YATM_E2E_LTFS_CAPTURE_INDEX")
+	if style == "" {
+		style = "directory"
+	}
+	require.Contains(t, []string{"directory", "bare"}, style)
+	entrypoint := strings.ReplaceAll(testScript(t, "mount-file.sh"), "'", "'\"'\"'")
+	script := filepath.Join(t.TempDir(), "mount")
+	require.NoError(t, os.WriteFile(script, []byte(fmt.Sprintf(
+		"#!/usr/bin/env bash\nexport YATM_E2E_LTFS_CAPTURE_INDEX=%s\nexec '%s'\n", style, entrypoint,
+	)), 0o755))
+	return script
+}
+
 func TestLTFSArchiveRestore(t *testing.T) {
 	// Require the explicitly enabled official LTFS file-backend environment.
 	if os.Getenv("YATM_E2E_LTFS") != "1" {
@@ -104,7 +121,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	scripts := executor.Scripts{
 		Encrypt:  testScript(t, "encrypt-noop.sh"),
 		Mkfs:     testScript(t, "mkfs-file.sh"),
-		Mount:    testScript(t, "mount-file.sh"),
+		Mount:    testLTFSFileMount(t),
 		Umount:   testScript(t, "umount-file-failures.sh"),
 		ReadInfo: testScript(t, "read-info-file.sh"),
 	}
