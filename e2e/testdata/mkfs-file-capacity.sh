@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH=/usr/local/bin:/usr/bin:/bin
 rm -rf -- "${DEVICE}"
 mkdir -p -- "${DEVICE}"
 cat >"${DEVICE}/filedebug_tc_conf.xml" <<EOF

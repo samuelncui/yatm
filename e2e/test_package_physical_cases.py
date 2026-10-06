@@ -50,11 +50,32 @@ class EvidenceTests(unittest.TestCase):
                    {"type": "position", "data": {"media_id": 10, "path": "foreign"}}, {"type": "end"}]
         positions = library_positions("\n".join(map(json.dumps, records)), "9")
         self.assertEqual(positions, self.positions)
-        check_positions([self.item], positions, self.index, "9", {"index": "a", "data": "b"})
+        check_positions([self.item], positions, self.index, "9")
         empty = {"status": "COPY_STATUS_SUBMITTED", "media_id": "9", "size_bytes": "0",
                  "file": {"media_path": "dataset/empty", "expected": {"sha256": encoded(hashlib.sha256(b"").digest())}}}
         positions["dataset/empty"] = {"hash": empty["file"]["expected"]["sha256"]}
         check_positions([empty], positions, self.index, "9")
+
+    def test_size_only_policy_checks_non_text_small_files(self):
+        mapping = {"index": "a", "data": "b"}
+        with self.assertRaisesRegex(RuntimeError, "placement"):
+            check_positions([self.item], self.positions, self.index, "9", mapping)
+        self.position["storage_metadata"]["ltfs"]["extents"][0]["partition"] = "a"
+        self.position["storage_order"] = encoded(b"a" + self.order[1:])
+        self.index["dataset/a.bin"]["extents"][0]["partition"] = "a"
+        check_positions([self.item], self.positions, self.index, "9", mapping)
+
+    def test_size_only_policy_keeps_large_files_on_data(self):
+        size = 2 * 1024**2
+        self.item["size_bytes"] = str(size)
+        self.position["size"] = size
+        self.position["storage_metadata"]["ltfs"]["extents"][0]["byteCount"] = str(size)
+        self.index["dataset/a.bin"]["size"] = size
+        self.index["dataset/a.bin"]["extents"][0]["byte_count"] = size
+        mapping = {"index": "a", "data": "b"}
+        check_positions([self.item], self.positions, self.index, "9", mapping)
+        with self.assertRaisesRegex(RuntimeError, "placement"):
+            check_positions([self.item], self.positions, self.index, "9", {"index": "b", "data": "a"})
 
     def test_partition_roles_come_from_format_log_not_fixture_placement(self):
         log = "LTFS15010I Creating data partition a on SCSI partition 0.\nLTFS15011I Creating index partition b on SCSI partition 1.\n"
@@ -83,7 +104,7 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 check_positions([self.item], changed, self.index, "9")
         with self.assertRaisesRegex(RuntimeError, "placement"):
-            check_positions([self.item], self.positions, self.index, "9", {"index": "b", "data": "a"})
+            check_positions([self.item], self.positions, self.index, "9", {"index": "a", "data": "b"})
         with self.assertRaisesRegex(RuntimeError, "write order"):
             check_positions([self.item, self.item], self.positions, self.index, "9")
         changed = copy.deepcopy(self.positions)

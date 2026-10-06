@@ -25,7 +25,7 @@ for (const adapter of adapters) {
         '-o', `devname=${device}`,
         ...(fileBackend ? [] : ['-o', 'noatime']),
         '-o', 'sync_type=unmount', '-o', `work_directory=${tapeDirectory}`,
-        '-o', adapter === 'scripts/mount.openltfs' ? `capture_index=${tapeDirectory}` : 'capture_index',
+        '-o', adapter === 'scripts/mount' ? 'capture_index' : `capture_index=${tapeDirectory}`,
         ...(fileBackend ? [] : ['-o', 'min_pool_size=256', '-o', 'max_pool_size=1024', '-o', 'eject']),
         '-s', mountPoint,
       ];

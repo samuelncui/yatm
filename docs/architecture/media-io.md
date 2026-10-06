@@ -54,6 +54,11 @@ device and during unmount; an absent or ambiguous mapping fails explicitly.
 
 Bundled mount scripts resolve the Job's Tape artifact directory to an absolute path before passing it to LTFS. LTFS can change its working directory when it runs in the background; captured indexes must still land in the supplied Job directory when `paths.work` is relative.
 
+The official LTFS file-backend adapters use `capture_index=<absolute directory>` and wait for their
+mount's LTFS process to exit after FUSE detaches. FUSE detachment alone can precede the final Index
+write; the test adapter therefore supplies the same completed-finalization boundary as physical
+device release.
+
 The bundled encryption script loads the drive and retries `stenc` at most 60 times. If
 every attempt fails, it exits nonzero so the Tape Session cannot proceed to formatting or
 mounting. Its `stenc` arguments remain part of the environment-specific script contract.

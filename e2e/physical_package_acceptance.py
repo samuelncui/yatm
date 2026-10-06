@@ -106,7 +106,7 @@ class PhysicalAcceptance(Acceptance):
         for name in names:
             data = self.remote(["cat", source + name]).stdout.decode()
             if name == "mkfs":
-                data = adapt_script(data, "mkltfs", self.args.mkltfs, " -r 'size=1M/name=*.txt'")
+                data = adapt_script(data, "mkltfs", self.args.mkltfs, " -r 'size=1M'")
             elif name == "mount.openltfs":
                 data = adapt_script(data, "ltfs", self.args.ltfs_binary)
             self.write(adapters + "/" + name, data.encode())

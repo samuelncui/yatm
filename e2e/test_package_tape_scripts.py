@@ -4,7 +4,9 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 
@@ -76,6 +78,74 @@ esac
                 self.assertEqual(result.returncode, expected, result.stderr.decode())
                 self.assertEqual(result.stdout, b"/dev/sg7\n" if expected == 0 else b"")
                 self.assertFalse(probe.exists(), "Resolving an in-use device must not probe it.")
+
+
+@unittest.skipUnless(sys.platform == "linux", "Virtual LTFS adapters use Linux process state.")
+class VirtualUnmountTests(unittest.TestCase):
+    def test_waits_for_final_index_after_fuse_detaches(self):
+        script = Path(__file__).resolve().parent / "ltfs-file-backend" / "umount"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            device, tape, mount = root / "TST001", root / "Tape artifacts", root / "mount [*]"
+            for directory in (device, tape, mount):
+                directory.mkdir()
+            trigger, ready, index = root / "detached", root / "ready", tape / "TST001.schema"
+            for name, source in {
+                "fusermount": '#!/bin/sh\n: > "$DETACHED"\n',
+                "mountpoint": '#!/bin/sh\ntest ! -e "$DETACHED"\n',
+            }.items():
+                executable = root / name
+                executable.write_text(source)
+                executable.chmod(0o700)
+            code = '''import pathlib,sys,time
+trigger,ready,index = map(pathlib.Path, sys.argv[1:4])
+ready.touch()
+while not trigger.exists(): time.sleep(0.01)
+time.sleep(0.2)
+index.write_text("final Index")
+'''
+            # argv[0] and the final argument identify only this mount's LTFS process.
+            process = subprocess.Popen(["ltfs", "-c", code, str(trigger), str(ready), str(index), str(mount)],
+                                       executable=sys.executable)
+            try:
+                deadline = time.monotonic() + 5
+                while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "The simulated LTFS process did not start.")
+                env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                       "DEVICE": str(device), "TAPE_DIR": str(tape), "MOUNT_POINT": str(mount),
+                       "DETACHED": str(trigger)}
+                result = subprocess.run(["bash", str(script)], env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(index.read_text(), "final Index")
+                process.wait(timeout=5)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+
+    def test_detaches_failed_mount_without_accepting_its_write(self):
+        script = Path(__file__).resolve().parent / "ltfs-file-backend" / "umount"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            device, tape = root / "TST001", root / "Tape artifacts"
+            device.mkdir()
+            tape.mkdir()
+            trigger = root / "detached"
+            for name, source in {
+                "fusermount": '#!/bin/sh\n: > "$DETACHED"\n',
+                "mountpoint": '#!/bin/sh\ntest ! -e "$DETACHED"\n',
+            }.items():
+                executable = root / name
+                executable.write_text(source)
+                executable.chmod(0o700)
+            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                   "DEVICE": str(device), "TAPE_DIR": str(tape), "MOUNT_POINT": str(root / "failed mount"),
+                   "DETACHED": str(trigger)}
+            result = subprocess.run(["bash", str(script)], env=env, capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue(trigger.exists(), "Failed mounting still requires FUSE detachment.")
+            self.assertIn("write result is unusable", result.stderr.decode())
 
 
 if __name__ == "__main__":

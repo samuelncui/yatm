@@ -3,12 +3,44 @@ set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 "${script_dir}/get_device" >/dev/null
-fusermount -u "${MOUNT_POINT}" 2>&1 | tee -a "${TAPE_DIR}/ltfs.log"
-for ((attempt = 0; attempt < 100; attempt++)); do
-    if ! mountpoint -q "${MOUNT_POINT}"; then
+
+# FUSE detaches before LTFS finishes writing its final Index. Own that process
+# boundary as well as the mount boundary, just as the physical adapter does.
+ltfs_process() {
+    local command=$1
+    local -a arguments=()
+    [[ -r ${command} ]] || return 1
+    mapfile -d '' -t arguments < "${command}" || return 1
+    ((${#arguments[@]} > 0)) || return 1
+    [[ ${arguments[0]##*/} == ltfs && ${arguments[-1]} == "${MOUNT_POINT}" ]]
+}
+
+ltfs_pids=()
+for command in /proc/[0-9]*/cmdline; do
+    if ltfs_process "${command}"; then
+        pid=${command#/proc/}
+        ltfs_pids+=("${pid%/cmdline}")
+    fi
+done
+if mountpoint -q "${MOUNT_POINT}"; then
+    fusermount -u "${MOUNT_POINT}" 2>&1 | tee -a "${TAPE_DIR}/ltfs.log"
+fi
+deadline=$(($(date +%s) + 600))
+while (($(date +%s) < deadline)); do
+    running=false
+    for pid in "${ltfs_pids[@]}"; do
+        if ltfs_process "/proc/${pid}/cmdline"; then
+            running=true
+        fi
+    done
+    if [[ ${running} == false ]] && ! mountpoint -q "${MOUNT_POINT}"; then
+        if ((${#ltfs_pids[@]} == 0)); then
+            echo "No LTFS process owned the virtual mount; its write result is unusable: ${MOUNT_POINT}" >&2
+            exit 1
+        fi
         exit 0
     fi
     sleep 0.05
 done
-echo "LTFS mount did not stop: ${MOUNT_POINT}" >&2
+echo "LTFS process did not finish normal unmount: ${MOUNT_POINT}" >&2
 exit 1

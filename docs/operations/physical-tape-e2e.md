@@ -12,9 +12,9 @@ Before starting:
 
 1. Record the expected six-character barcode and confirm it on the physical cartridge.
 2. Use an isolated YATM configuration with empty Executor and Library databases and dedicated work, source, and restore directories.
-3. Confirm that the configured Tape device resolves to its SCSI generic device through Linux sysfs and that `mkltfs`, `ltfs`, `mt`, `stenc`, `umount`, `fuser`, `timeout`, `openssl`, `sqlite3`, `findmnt`, and the packaged `yatm-lto-info` are available.
+3. Confirm that the configured Tape device resolves to its SCSI generic device through Linux sysfs. The host needs Bash, Python 3, Node.js, tmux, systemd, the official LTFS programs, `mt`, `stenc`, `umount`, `fuser`, `timeout`, `openssl`, `sqlite3`, `findmnt`, and the package controller's ordinary installation/xattr tools. The main package supplies `yatm-lto-info`.
 4. Confirm that the drive, cartridge generation, LTFS implementation, and encryption support are compatible.
-5. Use an isolated copy of the configured format script whose `mkltfs` command includes `-r 'size=1M/name=*.txt'`. Do not change the default production policy solely for this test.
+5. Use an isolated copy of the configured format script whose `mkltfs` command includes `-r 'size=1M'`. Keep this acceptance policy in the test adapter copy.
 6. Reserve about 20 GiB for three 4 GiB ordinary boundary source files and up to two restored files, plus headroom for the baseline fixture, databases and evidence. The bulk filler streams directly to Tape and requires no cartridge-sized local file.
 7. Record the YATM commit, ACP commit, LTFS version, drive model and firmware, cartridge generation, native cartridge capacity, barcode, and start time.
 
@@ -22,64 +22,277 @@ Keep the host on stable power and reserve the drive for the complete run. Do not
 
 ## Automated Stages
 
-Run `python3 e2e/physical_package_acceptance.py` against checksum-verified Linux main and matching Preview packages built from the reviewed commit. Local builds use `build/release/build.sh` and `previewworker/build/build.sh`; a completed GitHub run is not required. Choose an SSH host or `--host local` to execute the same controller directly on the authorized hardware host. [Remote Candidate Acceptance](testing.md#remote-candidate-acceptance) owns the transfer boundary.
+### Prepare the Artifacts and Host Context
 
-Prepare creates a fresh owned installation under `--test-parent`, generates the small source files and prepares the Archive/Preview Jobs without loading or operating the Tape. It captures the completed Preview Job through the same evidence path used after physical writes, so collection failures stop before FORMAT. It records identity and resources in `--state`; an existing state file cannot be overwritten. Baseline then starts physical operations. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
+Use checksum-verified Linux amd64 main and matching Preview packages from the reviewed source.
+Local builds use `build/release/build.sh` and `previewworker/build/build.sh`. Reviewed locally
+compiled binaries can begin affected hardware checks once their source and nonphysical checks
+pass, independently of CI's final release-byte gate. This installer-based procedure uses packages
+so that installation and runtime adapters are also exercised. Final release-byte acceptance and
+the evidence comparison in [Check Scope and Reuse](testing.md#check-scope-and-reuse) still apply.
 
-For a delegated run, prepare a written sequence with artifacts, assigned cartridge, pass criteria,
-failure handling and cleanup ownership before handing it over. One executor owns the drive. Stop
-after a failed gate and retain the state and evidence; do not improvise repeated formatting or
-capacity writes. The executor returns its results before the coordinating operator reviews them
-and runs cleanup. Keep evidence outside the installation root so cleanup cannot erase the report.
+On the authorized Linux hardware host, use an authorized root shell outside the agent sandbox.
+Prefer a host-local executor with `--host local`; SSH transfers inputs and retrieves results.
+Read applicable host operator notes first. Allocate an existing spacious, xattr-capable filesystem
+for the isolated installation, fixtures and private `TMPDIR`. Keep controller inputs, `state.json`
+and evidence outside the installation root that cleanup removes.
 
-The handoff must stand on its own: include the authorized scope, exact package and controller
-identities, checksums, host-local paths and commands, completed stages, first unfinished check,
-pass/failure criteria, and result and cleanup owners. A new executor reads that handoff and state;
-it must not reconstruct the procedure from chat history. Recheck live drive ownership and cartridge
-identity before use, since documentation cannot establish their current state.
+Transfer the main archive, Preview helper archive, matching
+`yatm-preview-source-linux-amd64-<version>.tar.gz` and their `.sha256` companions.
+Keep the corresponding-source archive beside the Preview helper; the package validator requires it
+before installation. Transfer the reviewed controller's
+`e2e/physical_package_acceptance.py` and `e2e/package*.py`, and these validators, preserving their
+repository-relative layout under `CONTROLLER_ROOT`:
 
-For remote hardware, prefer a Codex executor on the hardware host, running the controller with
-`--host local`. Run long stages in a named host-local tmux session, with logs and exit status saved
-on that host; tmux also provides the fallback when a local agent is unavailable. SSH is for
-transferring inputs and retrieving status/results. An SSH session, the coordinator's connection,
-or an open agent turn must not keep the test alive. After a disconnect, inspect the existing tmux
-session, exit status and state instead of starting a second run. A failed stage stops the sequence
-and retains its evidence; do not configure automatic restarts of physical writes.
+- `build/release/check-release.mjs`, `archive-members.mjs` and `package-assets.mjs`;
+- `build/release/check-candidate-set.mjs` and `check-preview-sources.mjs`.
 
-Set the variables below to the authorized test host, scratch device/barcode, accepted local archives and full package commit. Run stages separately so Restore checks the same durable installation after a service restart, and full-verify checks the capacity boundary without repeating the write:
+Include the operational dependencies of every selected check, beyond its entrypoint. For the
+Linux virtual-unmount regression, transfer `e2e/test_package_tape_scripts.py` and
+`e2e/ltfs-file-backend/umount` plus `get_device`. Broader Tape-script unit selections additionally
+need `scripts/mkfs` and `scripts/get_device`. Source-based LTFS E2E uses `e2e/testdata` adapters;
+its `umount-file-failures.sh` calls `umount-file.sh`, which delegates to the same
+`e2e/ltfs-file-backend/umount` and `get_device`. Keep those relative paths and executable modes.
+Source-based Go E2E remains a local/CI check under the [E2E guide](e2e-test.md), separate from
+the host's installed-package procedure.
+
+Supply absolute host-local values for `CONTROLLER_ROOT`, `TEST_PARENT`, `EVIDENCE_ROOT`,
+`HOST_TMP`, `MAIN_ARCHIVE`, `PREVIEW_ARCHIVE`, `STATE` and the official LTFS executables.
+Set `STATE` to the new run's `state.json`. `VERSION` and `COMMIT` identify the archives;
+the controller's reviewed source identity is recorded separately. Supply `SCRATCH_DEVICE` and
+`SCRATCH_BARCODE` from the explicit assignment. Keep actual host, device, barcode and local path
+values in the private handoff and evidence.
+
+Run from the absolute controller directory in every new host shell:
 
 ```bash
+set -euo pipefail
+cd -- "$CONTROLLER_ROOT"
+umask 077
+mkdir -p -- "$EVIDENCE_ROOT" "$HOST_TMP"
+export TMPDIR="$HOST_TMP"
+sha256sum -- "$MAIN_ARCHIVE" "$PREVIEW_ARCHIVE" > "$EVIDENCE_ROOT/packages.sha256"
+sha256sum e2e/physical_package_acceptance.py e2e/package*.py \
+  build/release/check-release.mjs build/release/archive-members.mjs \
+  build/release/package-assets.mjs build/release/check-candidate-set.mjs \
+  build/release/check-preview-sources.mjs > "$EVIDENCE_ROOT/controller.sha256"
+uname -a > "$EVIDENCE_ROOT/kernel.txt"
+id > "$EVIDENCE_ROOT/executor.txt"
+findmnt -T "$TEST_PARENT" > "$EVIDENCE_ROOT/filesystem.txt"
+df -Pk "$TEST_PARENT" > "$EVIDENCE_ROOT/space.txt"
+```
+
+Compare these hashes with the reviewed transfer manifest. Record the YATM and ACP source
+identities, any reviewed working-tree changes, toolchains/build flags, extracted program hashes,
+LTFS build/version, adapter hashes and any transferred regression inputs. The private host record
+also identifies drive model/firmware,
+cartridge generation/capacity, assigned identity, resolved Tape/SG mapping, drive reservation,
+start time, and the isolated service/configuration. Package version labels alone do not establish
+the executed bytes. The controller checks archive companions, package members and offline program
+identity before installation.
+
+### Resolve LTFS Before Starting systemd
+
+Resolve the official LTFS installation in the host shell and supply its absolute executable paths:
+
+```bash
+MKLTFS_BIN=$(realpath -- "$(command -v "$MKLTFS_COMMAND")")
+LTFS_BIN=$(realpath -- "$(command -v "$LTFS_COMMAND")")
+test -x "$MKLTFS_BIN"
+test -x "$LTFS_BIN"
+```
+
+`MKLTFS_COMMAND` and `LTFS_COMMAND` are the reviewed executable names or absolute paths from
+the handoff. Match the mount template to that LTFS distribution:
+
+| LTFS distribution | Mount template | Index capture arguments |
+| --- | --- | --- |
+| HPE | `scripts/mount` | `-o work_directory="${TAPE_DIR}" -o capture_index` |
+| openltfs | `scripts/mount.openltfs` | `-o work_directory="${TAPE_DIR}" -o capture_index="${TAPE_DIR}"` |
+
+Both templates create `TAPE_DIR` and resolve it to an absolute directory before launching LTFS.
+Normal unmount must finish the LTFS process and leave the final current-cartridge
+`TAPE_DIR/<barcode>.schema`. The [Tape adapter contract](migration.md#tape-script-adaptation)
+owns these inputs and output.
+
+The physical controller below selects the openltfs template. Supply the corresponding official
+LTFS build; an HPE run requires reviewed controller adapter selection matching the HPE template.
+During `prepare`, `--mkltfs "$MKLTFS_BIN"` and `--ltfs-binary "$LTFS_BIN"` put absolute commands
+into the isolated adapters, and the format adapter adds `-r 'size=1M'`. This happens
+before the installer starts systemd. Inspect and hash the resulting adapter copies before
+`baseline`. A login shell's `PATH` is insufficient evidence of the systemd service's commands.
+
+### Run the Scoped File-Backend Precheck
+
+Before the first physical operation, run the same package/controller pair through the existing
+official LTFS file-backend format/append/Restore/Verify case. Use openltfs with its `file` backend
+and the matching directory-valued capture option. The virtual unmount adapter waits for the
+exact mount-owning LTFS process, identified by its Linux `/proc` command line, to exit as well as
+for FUSE to detach. That boundary makes the final Index available before publication checks.
+
+Choose the exact checks and verify their transferred inputs before a tmux launch. For a changed
+virtual-unmount adapter, the focused Linux regression selector is:
+
+```bash
+cd -- "$CONTROLLER_ROOT"
+python3 -m unittest -v \
+  e2e.test_package_tape_scripts.VirtualUnmountTests.test_waits_for_final_index_after_fuse_detaches
+```
+
+This check uses a simulated LTFS process and ordinary Linux tools. Require an executed pass,
+including its delayed final Index assertion. Record the selector, dependencies and result in
+the handoff. The real file-backend check below selects one exact package case and its declared
+prerequisite; retain that selection in its launch command and report.
+
+Put the resolved executables on the host shell's
+`PATH`; the controller resolves them into its isolated virtual adapters before service installation:
+
+```bash
+cd -- "$CONTROLLER_ROOT"
+export TMPDIR="$HOST_TMP"
+export PATH="$(dirname -- "$MKLTFS_BIN"):$(dirname -- "$LTFS_BIN"):$PATH"
+test "$(realpath -- "$(command -v mkltfs)")" = "$MKLTFS_BIN"
+test "$(realpath -- "$(command -v ltfs)")" = "$LTFS_BIN"
+python3 e2e/package_acceptance.py \
+  --host local --test-parent "$TEST_PARENT" \
+  --archive "$MAIN_ARCHIVE" --preview-archive "$PREVIEW_ARCHIVE" \
+  --version "$VERSION" --commit "$COMMIT" --ltfs \
+  --case ltfs-format-append-restore-verify \
+  --keep-root --out "$PRECHECK_EVIDENCE"
+```
+
+`PRECHECK_EVIDENCE` must be a new directory. The selected case includes its fresh-installation
+prerequisite and creates only owned virtual-cartridge directories. Allow at least the controller's
+16 GiB free-space prerequisite. `--keep-root` retains its stopped installation for review.
+
+Require a passed report for the selected case, with both FORMAT and APPEND partition checks:
+
+1. FORMAT writes a small file and a file larger than 1 MiB; APPEND adds different small content
+   to the same Media. This precheck and the physical fixture use the same size-only 1 MiB
+   placement rule, which remains effective for ACP's temporary write filenames.
+2. After normal unmount, parse each Job's actual final captured `.schema`; obtain partition roles
+   independently from the FORMAT log. Compare exported Library Positions with actual Media paths,
+   sizes, complete extents and 17-byte partition/block/offset storage order. Both partition letters
+   must occur in the fixture.
+3. The final APPEND Index must retain every earlier file and its extents on both partitions.
+   Earlier Positions and Media ID remain unchanged; new Positions match the final Index.
+4. Restore all selected files and compare actual output hashes and sizes with the sources.
+   Verify reads every recorded copy and publishes matching findings and healthy observations.
+
+Review `report.json`, including `case_scope`, `partition_checks`, command exits and the retained
+Job artifacts. A completed copy without the final Index/Position comparison is incomplete
+acceptance. Retain a failure and resolve its first unmet check before advancing to hardware.
+The separate file-backend capacity case remains part of full nonphysical acceptance; this scoped
+precheck provides a quick check of the relevant publication and readback path.
+
+### Launch One Durable Host-Local Stage
+
+Stages share one isolated installation and the controller's existing state:
+
+| Stage | Work and completion boundary |
+| --- | --- |
+| `prepare` | Fresh installation, deterministic sources, prepared Archive/Preview Jobs and byte-preserving Preview evidence; no Tape operation |
+| `baseline` | PT-01..05: inspection, FORMAT, reload, barcode refusal, APPEND and final Index/Position/Preview checks |
+| `restore` | PT-06: start the same stopped installation, restore both Archives, verify bytes and storage order |
+| `full-write` | PT-07: stopped-service prefill and one ordinary Archive write to its durable `no_space` checkpoint |
+| `full-verify` | PT-07: recheck that checkpoint and restore the submitted boundary files |
+| `cleanup` | PT-08: preserve/seal evidence, delete test Jobs, stop/remove the owned installation after coordinator review |
+
+`prepare` requires absent state. Later invocations require that same state, matching package
+hashes, host, device, barcode and LTFS paths, and the completed preceding stage. Each successful
+non-cleanup stage stops its isolated service. Give every invocation a new `--out` directory and
+unique log/exit filenames. Keep `STATE` and the preparation stage's shared physical evidence
+directory for the entire run.
+
+In a host-local Bash shell outside the sandbox, set `STAGE` to the next authorized stage and
+`STAGE_OUT`, `STAGE_LOG`, `STAGE_EXIT` and `SESSION` to new paths/a unique tmux name from the
+handoff. Put the log and exit file in an existing evidence directory. Recheck live drive ownership
+and the assigned cartridge before physical use. Launch one stage, then review its result before
+launching the next:
+
+```bash
+cd -- "$CONTROLLER_ROOT"
+sha256sum -c "$EVIDENCE_ROOT/packages.sha256"
+sha256sum -c "$EVIDENCE_ROOT/controller.sha256"
 common=(
-  --host "$SSH_HOST" --test-parent "$TEST_PARENT"
+  --host local --test-parent "$TEST_PARENT"
   --archive "$MAIN_ARCHIVE" --preview-archive "$PREVIEW_ARCHIVE"
   --version "$VERSION" --commit "$COMMIT"
   --physical-device "$SCRATCH_DEVICE" --physical-barcode "$SCRATCH_BARCODE"
-  --state "$LOCAL_STATE"
+  --mkltfs "$MKLTFS_BIN" --ltfs-binary "$LTFS_BIN" --state "$STATE"
 )
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage prepare --out "$PREPARE_EVIDENCE"
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage baseline --out "$BASELINE_EVIDENCE"
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage restore --out "$RESTORE_EVIDENCE"
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage full-write --out "$FULL_WRITE_EVIDENCE"
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage full-verify --out "$FULL_VERIFY_EVIDENCE"
-python3 e2e/physical_package_acceptance.py "${common[@]}" \
-  --physical-stage cleanup --out "$CLEANUP_EVIDENCE"
+test ! -e "$STAGE_OUT"
+test ! -e "$STAGE_LOG"
+test ! -e "$STAGE_EXIT"
+case "$STAGE" in
+  prepare|baseline|restore|full-write|full-verify|cleanup) ;;
+  *) echo 'Select one documented physical stage' >&2; exit 1 ;;
+esac
+printf -v stage_command '%q ' python3 e2e/physical_package_acceptance.py \
+  "${common[@]}" --physical-stage "$STAGE" --out "$STAGE_OUT"
+printf -v stage_shell \
+  'cd -- %q || exit; export TMPDIR=%q; %s >%q 2>&1; stage_status=$?; printf "%%s\\n" "$stage_status" >%q; exit "$stage_status"' \
+  "$CONTROLLER_ROOT" "$HOST_TMP" "$stage_command" "$STAGE_LOG" "$STAGE_EXIT"
+printf -v tmux_command '%q ' bash -c "$stage_shell"
+tmux new-session -d -s "$SESSION" "$tmux_command"
 ```
 
-`--mkltfs PATH` and `--ltfs-binary PATH` select the host's LTFS executables; their defaults are `mkltfs` and `ltfs`. Supply the same selections on resumed stages. Retain the local state and every stage's evidence until acceptance and explicit cleanup are complete.
+The host's tmux process keeps the stage alive when SSH or an agent turn ends. Read status on
+that host without submitting another operation:
 
-If evidence collection fails after FORMAT completes but before APPEND is created, baseline can
-resume with the preserved state and a new output directory. It requires the existing FORMAT Job
-to have completed normally and rechecks its Media identity, encryption profile and evidence;
-it never submits FORMAT again. Once APPEND is created, baseline refuses automatic replay.
-Retain the failed report. Correct and check the controller before resuming; do not remove state
-flags or recreate the installation to bypass the stage guard. An incomplete or failed FORMAT Job
-still stops baseline. A successful write alone is not a passed stage: the remaining Index,
-Position, partition, Preview and subsequent workflow assertions must pass as well.
+```bash
+if tmux has-session -t "$SESSION"; then
+  tmux display-message -p -t "$SESSION" '#{session_name}: #{pane_current_command}'
+fi
+tail -n 60 -- "$STAGE_LOG"
+test ! -f "$STAGE_EXIT" || cat -- "$STAGE_EXIT"
+test ! -f "$STAGE_OUT/report.json" || \
+  jq '{status, error, phases, cases, cleanup}' "$STAGE_OUT/report.json"
+test ! -f "$STATE" || \
+  jq '{completed_stages, service, install, url, physical_evidence_dir, cleaned}' "$STATE"
+```
+
+An ended session normally makes `tmux has-session` exit nonzero. A stage passes only when its
+exit file is `0`, its report is passed, its expected evidence assertions pass, and state records
+its completed checkpoint. A missing exit file or a running/failed report requires inspection of
+the existing session, service, Job phase and owned mounts. Reconnect to these records after a
+disconnect; the absence of a connection does not imply the stage stopped.
+
+### Resume, Handoff and Review
+
+Advance from completed checkpoints with the same state and a new output directory. Recovery
+of an interrupted invocation uses the controller's existing guards:
+
+- `baseline` can reuse a normally completed FORMAT only while no APPEND Job has been created.
+  It rechecks Media identity, encryption and FORMAT evidence before continuing. A saved APPEND
+  Job or incomplete/failed FORMAT requires operator diagnosis rather than another baseline write.
+- `restore` and boundary Restore can collect/check an already submitted Job after it settles
+  normally; they do not submit that saved Job's Media operation again.
+- `full-write` with an existing Archive Job only validates its complete `no_space` checkpoint.
+  Interrupted prefill, fixture generation or an incomplete checkpoint remains failed work.
+  `full-verify` examines the settled write and performs readback without another Archive write.
+
+For a collection-only failure, retain the failed report, review/check the collector repair,
+record its changed hash and resume only where the guard above permits it. State records remain
+the evidence of what happened. An unresolved extent or Index/Position mismatch remains an
+unmet acceptance check even when the write or unmount completed.
+
+A fresh executor's private handoff includes:
+
+- authorized host/drive/cartridge and destructive scope, drive reservation and operator notes;
+- exact source, package, program, controller and adapter hashes, LTFS selection, tools and host context;
+- absolute controller/input/state/evidence/installation/TMPDIR paths, service name and CLI URL;
+- exact selected checks/stage and their operational dependencies, the variables and complete
+  launch/status commands above, current tmux/log/exit/report locations;
+- completed checkpoints and Job IDs, first unfinished check, pass criteria and failure stop condition;
+- executor, result reviewer and cleanup owner, including the coordinator's decision before cleanup.
+
+One executor owns the drive. The coordinator reviews stage reports and compact evidence before
+authorizing the separate `cleanup` invocation. Cleanup seals and verifies the shared Job evidence
+before deletion, preserves state and stage reports outside the removed installation, and leaves
+the cartridge ejected. After review, remove only the owned precheck/fixture resources and apply
+the agreed evidence retention policy. Failed hardware remains available for diagnosis; cleanup
+does not establish a pass for its failed write.
 
 Evidence collection copies the settled Job's original `job.log` and verifies its checksum, like
 the other bundle artifacts. The [CLI output contract](../architecture/cli.md) exposes text for
@@ -108,14 +321,17 @@ Create deterministic source files and record their size and SHA-256 before start
 | Path | Content | Expected LTFS partition |
 | --- | --- | --- |
 | `dataset/index-small.txt` | 60 KiB | Index |
-| `dataset/data-small.bin` | 64 KiB | Data |
+| `dataset/data-small.bin` | 64 KiB | Index |
 | `dataset/data-large.txt` | 2.15 MiB | Data |
 | `dataset/empty.bin` | Empty | No data extent |
-| `dataset/nested/payload.png` | Small PNG supported by the packaged native Preview helper | Data |
+| `dataset/nested/payload.png` | Small PNG supported by the packaged native Preview helper | Index |
 | `append/index-small.txt` | Different 65 KiB content | Index |
 | `append/data.bin` | 2.34 MiB of non-sparse data | Data |
 
-The placement rule uses AND semantics: a file must be no larger than 1 MiB and match `*.txt` to be placed in the index partition. Resolve the physical partition letters from the LTFS partition map; the usual mapping is index `a` and data `b`.
+The placement rule depends only on size: non-empty files no larger than 1 MiB go to the Index
+partition, and larger files go to Data. It applies to text, binary and PNG content and to ACP's
+temporary write filenames. Empty files have no data extent. Resolve the partition letters from
+the FORMAT log's declared roles and compare them with the captured final Index.
 
 The mandatory full-Media case must reach a real physical capacity boundary with incompressible data and exercise ordinary Archive source files. Retain the path, size and SHA-256 manifest for files selected for Archive and Restore. Sparse files, zero-filled files and repeating byte patterns do not establish physical Tape consumption because filesystem holes and drive compression can reduce the bytes written.
 
@@ -150,7 +366,8 @@ Expected results:
 - Every non-empty source file has the expected size and SHA-256 in the Archive result.
 - Every Archive item is `SUBMITTED`; the Library contains one `ltfs_v1` Tape Media and one Position per source file.
 - The captured LTFS Index contains valid extents for every non-empty file. Each persisted Position has the same first logical extent encoded as partition, block, and byte offset in its 17-byte storage order.
-- `index-small.txt` is on the index partition. `data-small.bin`, `data-large.txt`, and `payload.png` are on the data partition. `empty.bin` has no extent.
+- `index-small.txt`, `data-small.bin` and `payload.png` are on the index partition.
+  `data-large.txt` is on the data partition; `empty.bin` has no extent.
 - The Job Tape directory contains the LTFS log, captured Index, Archive report, and manifest.
 - The Preview bundle and its HTTP asset are readable.
 

@@ -71,7 +71,11 @@ Hardware verification may use locally built binaries after the affected source c
 GitHub availability and completion of the full platform matrix are not prerequisites. Build
 from the reviewed commit with the repository's existing scripts and record the source,
 toolchain, build flags, binary checksums and runtime adapters. Use the release package when
-installation or package layout is part of the check. Source CI and other platform builds can
+installation or package layout is part of the check. Follow the
+[physical Tape execution procedure](physical-tape-e2e.md#automated-stages) for host context,
+absolute LTFS adapter paths, the scoped two-partition file-backend precheck and durable staged
+execution. Hardware work can start independently of CI's final release-byte acceptance;
+that acceptance remains required for release delivery. Source CI and other platform builds can
 run in parallel. Keep the final artifacts' identity, content and affected package smoke checks;
 reuse expensive hardware results, including a full Tape write, when comparison confirms that
 the relevant source, dependencies, build configuration and runtime inputs are unchanged.

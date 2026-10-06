@@ -141,7 +141,7 @@ def check_positions(items, positions, index, media_id, partition_map=None):
                 "Physical write order differs from deterministic Archive order.")
         last_order[partition] = order
         if partition_map:
-            kind = "index" if size <= 1024**2 and path.endswith(".txt") else "data"
+            kind = "index" if size <= 1024**2 else "data"
             require(partition == partition_map[kind], "Format-time partition placement rule was not retained.")
 
 

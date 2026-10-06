@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 import shlex
 
 from package_acceptance import require
+from package_physical_evidence import check_positions, format_partition_map, library_positions, parse_index
 
 
 def prepare_virtual_tapes(test, config):
@@ -24,7 +25,19 @@ def prepare_virtual_tapes(test, config):
 '''
     for device in devices:
         test.write(device + "/filedebug_tc_conf.xml", cartridge)
-    adapters = test.install + "/templates/testing/ltfs-file-backend/"
+    adapters = test.root + "/virtual-tape-scripts/"
+    test.remote(["cp", "-a", test.root + "/package/templates/testing/ltfs-file-backend", adapters.rstrip("/")])
+    for name, command in (("mkfs", "mkltfs"), ("mount", "ltfs")):
+        executable = test.remote(["sh", "-c", 'command -v "$1"', "resolve-ltfs", command]).stdout.decode().strip()
+        require(executable.startswith("/"), "LTFS executable did not resolve to an absolute path.")
+        script = test.remote(["cat", adapters + name]).stdout.decode()
+        marker = "\n" + command + " "
+        require(script.count(marker) == 1, "Packaged virtual LTFS script changed.")
+        test.write(adapters + name, script.replace(marker, "\n" + shlex.quote(executable) + " ", 1).encode())
+    if test.wants_case("ltfs-format-append-restore-verify"):
+        script = test.remote(["cat", adapters + "mkfs"]).stdout.decode()
+        require(script.count(" -f -e file ") == 1, "Packaged virtual format script changed.")
+        test.write(adapters + "mkfs", script.replace(" -f -e file ", " -r 'size=1M' -f -e file ", 1).encode())
     config["tape_devices"] = devices
     config["scripts"] = {"encrypt": adapters + "encrypt", "mkfs": adapters + "mkfs", "mount": adapters + "mount",
                          "umount": adapters + "umount", "read_info": adapters + "readinfo"}
@@ -158,27 +171,50 @@ class TapeWorkflows:
     def format_append_restore(self):
         test = self.test
         directory = test.root + "/fixtures/source/ltfs-small"
-        test.remote(["mkdir", directory])
-        names = ("format.txt", "append.txt")
-        hashes, items = {}, []
-        for index, name in enumerate(names):
-            test.write(directory + "/" + name, (name + "\n").encode() * 4096)
-            hashes[name] = test.remote(["sha256sum", "--", directory + "/" + name]).stdout.decode().split()[0]
-            job = self.archive("ltfs-small/" + name)
-            if index == 0:
+        test.remote(["mkdir", directory, directory + "/format"])
+        sources = {"format/format.txt": b"format.txt\n" * 4096,
+                   "format/data-large.bin": bytes(range(256)) * 8192,
+                   "append.txt": b"append.txt\n" * 4096}
+        hashes, items, previous = {}, [], {}
+        for name, data in sources.items():
+            test.write(directory + "/" + name, data)
+            hashes[PurePosixPath(name).name] = test.remote(["sha256sum", "--", directory + "/" + name]).stdout.decode().split()[0]
+        mapping = None
+        for selection in ("format", "append.txt"):
+            job = self.archive("ltfs-small/" + selection)
+            if selection == "format":
                 self.format(job, "APP001")
             else:
                 test.cli("archive", "write", "tape", "append", job["id"], "--device", self.device("APP001"), "--barcode", "APP001")
             test.wait_job(job, timeout=600)
             current = self.items(job)
-            require(len(current) == 1 and current[0]["status"] == "COPY_STATUS_SUBMITTED",
-                    "Format or append did not publish its completed item.")
-            if index:
-                require(current[0]["file"]["media_path"].endswith("/" + current[0]["file"]["target_path"]),
+            require(len(current) == (2 if selection == "format" else 1)
+                    and all(item["status"] == "COPY_STATUS_SUBMITTED" for item in current),
+                    "Format or append did not publish every selected item.")
+            if selection != "format":
+                require(all(item["file"]["media_path"].endswith("/" + item["file"]["target_path"]) for item in current),
                         "Append did not retain its separate physical path prefix.")
             items.extend(current)
-        media = self.media("APP001")
+            media = self.media("APP001")
+            tape = test.install + "/work/jobs/" + job["id"] + "/tapes/APP001/"
+            log = test.remote(["cat", tape + "ltfs.log"]).stdout.decode()
+            if mapping is None:
+                mapping = format_partition_map(log)
+            index = parse_index(test.remote(["cat", tape + "APP001.schema"]).stdout)
+            exported = test.cli("library", "export", "--output", "-")
+            positions = library_positions("\n".join(json.dumps(row) for row in exported), media["id"])
+            require(len(positions) == len(items) and all(positions.get(path) == value for path, value in previous.items()),
+                    "Append changed an existing Position or published an unexpected file.")
+            check_positions(items, positions, index, media["id"], mapping)
+            partitions = {extent["partition"] for item in items for extent in index[item["file"]["media_path"]]["extents"]}
+            require(partitions == set(mapping.values()), "Archive fixture did not exercise both LTFS partitions.")
+            previous = positions
+            test.report.setdefault("partition_checks", []).append({"job_id": job["id"], "selection": selection,
+                "partition_map": mapping, "partitions": sorted(partitions), "files": len(items), "status": "passed"})
+            test.save()
         require(all(item["media_id"] == media["id"] for item in items), "Append unexpectedly created a different Media.")
+        test.report["ltfs_small_source_sha256"] = hashes
+        test.save()
         self.restore(items, ["APP001"], "ltfs-small", hashes)
         self.verify("APP001", items)
 

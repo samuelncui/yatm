@@ -29,6 +29,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 	previewcore "github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,31 +75,6 @@ type legacyPosition struct {
 	Hash      []byte    `json:"hash,omitempty"`
 }
 
-type previewFixtureGenerator struct{}
-
-type ltfsPreviewFixture struct{ *previewcore.Manager }
-
-func (*ltfsPreviewFixture) CheckGeneration(context.Context) error { return nil }
-
-func (*previewFixtureGenerator) Generate(_ context.Context, _ string, outputDir string) ([]*previewcore.Asset, error) {
-	data, err := base64.StdEncoding.DecodeString(
-		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-	)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(outputDir, "thumbnail.png"), data, 0o644); err != nil {
-		return nil, err
-	}
-	return []*previewcore.Asset{{Name: "thumbnail.png", Role: "thumbnail", MediaType: "image/png"}}, nil
-}
-
-func init() {
-	previewcore.RegisterGenerator("e2e-fixture", func(map[string]any) (previewcore.Generator, error) {
-		return new(previewFixtureGenerator), nil
-	})
-}
-
 func TestLTFSArchiveRestore(t *testing.T) {
 	// Require the explicitly enabled official LTFS file-backend environment.
 	if os.Getenv("YATM_E2E_LTFS") != "1" {
@@ -108,15 +84,23 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		_, err := exec.LookPath(command)
 		require.NoErrorf(t, err, "%s is required", command)
 	}
+	helper := requirePreviewHelper(t)
 
-	// Create isolated Library, Executor, source, target, and virtual-cartridge storage.
+	// Bind isolated Library storage to the current typed Settings defaults.
 	root := t.TempDir()
 	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
 	require.NoError(t, err)
 	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 	require.NoError(t, err)
-	lib := library.New(libraryDB)
+	previewDefinition := settingspkg.PreviewDefinition{
+		Default:  func() (*entity.PreviewSettings, error) { return previewcore.SettingsFromConfig(previewcore.Config{}) },
+		Validate: previewcore.ValidateSettings,
+	}
+	appSettings := settingspkg.New(libraryDB, previewDefinition)
+	lib := library.NewWithSettings(libraryDB, appSettings)
 	require.NoError(t, lib.AutoMigrate())
+
+	// Keep Executor paths and virtual cartridges inside the test's temporary directory.
 	scripts := executor.Scripts{
 		Encrypt:  testScript(t, "encrypt-noop.sh"),
 		Mkfs:     testScript(t, "mkfs-file.sh"),
@@ -130,19 +114,30 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	}
 	failedDevice := filepath.Join(root, "failed-tapes", "ABC001")
 	device := filepath.Join(root, "tapes", "ABC001")
-	previews, err := previewcore.New(previewcore.Config{Generators: []previewcore.GeneratorConfig{{
-		Kind: "e2e-fixture", Extensions: []string{"fixture"},
-	}}}, paths.Work)
+
+	// Enable the real native helper through the same persisted Settings used by Archive and Scan.
+	settings, err := appSettings.Preview.Current(context.Background())
 	require.NoError(t, err)
-	exe := executor.New(executorDB, lib, []string{failedDevice, device}, paths, scripts, &ltfsPreviewFixture{previews})
+	settings.Enabled, settings.Command = true, helper
+	_, err = appSettings.Preview.Save(context.Background(), settings)
+	require.NoError(t, err)
+	previews, err := previewcore.NewWithSettings(context.Background(), "", paths.Work, appSettings.Preview.Current)
+	require.NoError(t, err)
+	exe := executor.New(executorDB, lib, []string{failedDevice, device}, paths, scripts, previews)
 	require.NoError(t, exe.AutoMigrate())
 	require.NoError(t, exe.ReconcileStorage(context.Background()))
+
+	// A real PNG below 512 KiB and larger binary files exercise both LTFS partitions.
 	require.NoError(t, os.MkdirAll(filepath.Join(paths.Source, "dataset"), 0o755))
+	image, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+	)
+	require.NoError(t, err)
 	fixtures := map[string][]byte{
-		"a.bin":         bytes.Repeat([]byte("a"), 700*1024),
-		"image.fixture": []byte("Preview source fixture"),
-		"m.bin":         bytes.Repeat([]byte("middle"), 140*1024),
-		"z.bin":         bytes.Repeat([]byte("z"), 900*1024),
+		"a.bin":     bytes.Repeat([]byte("a"), 700*1024),
+		"image.png": image,
+		"m.bin":     bytes.Repeat([]byte("middle"), 140*1024),
+		"z.bin":     bytes.Repeat([]byte("z"), 900*1024),
 	}
 	for name, content := range fixtures {
 		require.NoError(t, os.WriteFile(filepath.Join(paths.Source, "dataset", name), content, 0o644))
@@ -215,7 +210,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.Eventually(t, func() bool { return !exe.IsRunning(archiveID) }, time.Minute, 100*time.Millisecond)
 	invalidIndexJob, err := jobClient.Get(ctx, &entity.GetJobRequest{Id: archiveID})
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, invalidIndexJob.Job.Status)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, invalidIndexJob.Job.Status)
 	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, invalidIndexJob.Job.Phase)
 	require.NotEmpty(t, invalidIndexJob.Job.Error)
 	invalidIndexItems, err := archiveClient.ListFiles(ctx, &entity.ListArchiveJobFilesRequest{Id: archiveID})
@@ -259,7 +254,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NotNil(t, originalTape)
 	require.Equal(t, library.TapeFormatLTFSV1, originalTape.Profile.GetTape().Format)
 
-	// Verify the format-time placement policy put only the matching small file in the index partition.
+	// Verify size-only placement survives ACP temporary names and puts only the PNG in the index partition.
 	positions, err := lib.ListMediaFilePositions(ctx, originalTape.ID, "", len(fixtures))
 	require.NoError(t, err)
 	positionsByTarget := make(map[string]*library.Position, len(positions))
@@ -268,10 +263,10 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		targetByMediaPath[item.File.MediaPath] = item.File.TargetPath
 	}
 	wantPartitions := map[string]string{
-		"dataset/a.bin":         "b",
-		"dataset/image.fixture": "a",
-		"dataset/m.bin":         "b",
-		"dataset/z.bin":         "b",
+		"dataset/a.bin":     "b",
+		"dataset/image.png": "a",
+		"dataset/m.bin":     "b",
+		"dataset/z.bin":     "b",
 	}
 	require.Len(t, positions, len(wantPartitions))
 	for _, position := range positions {
@@ -323,11 +318,12 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		require.Equal(t, sha256.Sum256(expected), cached.SHA256)
 	}
 	unmountCmd := exec.CommandContext(ctx, testScript(t, "umount-file.sh"))
-	unmountCmd.Env = append(os.Environ(), "MOUNT_POINT="+remountPoint, "TAPE_DIR="+archiveTapeDir)
+	unmountCmd.Env = append(os.Environ(), "DEVICE="+device, "MOUNT_POINT="+remountPoint, "TAPE_DIR="+archiveTapeDir)
 	unmountOutput, err := unmountCmd.CombinedOutput()
 	require.NoErrorf(t, err, "unmount remounted LTFS cartridge:\n%s", unmountOutput)
 	require.NoError(t, os.Remove(remountPoint))
 
+	// Inspect the registered Tape without changing its recorded archive content.
 	inspected, err := mediaClient.Inspect(ctx, (&entity.InspectMediaTapeTarget{Device: device}).Pack())
 	require.NoError(t, err)
 	require.Equal(t, "ABC001", inspected.Identity)
@@ -370,12 +366,15 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.FileExists(t, filepath.Join(archiveTapeDir, "yatm-report.json"))
 	require.FileExists(t, filepath.Join(archiveTapeDir, "ltfs.log"))
 	require.FileExists(t, filepath.Join(archiveTapeDir, "ABC001.schema"))
-	archivedImage, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.fixture")
+
+	// Resolve the archived PNG's observed content identity before requesting its Preview.
+	archivedImage, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.png")
 	require.NoError(t, err)
 	require.NotNil(t, archivedImage)
 	imageDetail, err := filesClient.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: archivedImage.ID}}})
 	require.NoError(t, err)
 	require.NotNil(t, imageDetail.Detail.GetEntry())
+
 	// Preview bytes use the served asset URL, the same path a browser rendering follows.
 	preview, err := previewClient.Get(ctx, &entity.GetPreviewRequest{Signature: imageDetail.Detail.ContentSignature})
 	require.NoError(t, err)
@@ -423,6 +422,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		legacyFiles = append(legacyFiles, legacyFile{ID: file.ID, ParentID: file.ParentID, Name: file.Name,
 			Mode: file.Mode, ModTime: file.ModTime, Hash: file.Hash, Signature: file.Signature, Size: file.Size})
 	}
+
 	// Encode the retired JSON Tape shape from the current Media row for import compatibility.
 	currentMedia, err := lib.GetMedia(ctx, originalTape.ID)
 	require.NoError(t, err)
@@ -439,6 +439,8 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		CreateTime: legacyFixtureTime(currentMedia.CreatedAtNS), DestroyTime: destroyedAt,
 		CapacityBytes: currentMedia.CapacityBytes, WritenBytes: currentMedia.WrittenBytes,
 	}}
+
+	// Retain each physical copy's legacy owner while omitting modern LTFS extent metadata.
 	var physicalPositions []*library.Position
 	require.NoError(t, libraryDB.Where("is_dir = ?", false).Order("id").Find(&physicalPositions).Error)
 	for _, position := range physicalPositions {
@@ -461,9 +463,11 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	}
 	legacyBackup, err := json.Marshal(legacyLibraryBackup{Files: legacyFiles, Tapes: tapes, Positions: legacyPositions})
 	require.NoError(t, err)
+
+	// Import into a separate Library with production Settings definitions and no Preview manager.
 	legacyDB, err := resource.OpenSQLite(filepath.Join(root, "legacy-import.db"))
 	require.NoError(t, err)
-	legacyLibrary := library.New(legacyDB)
+	legacyLibrary := library.NewWithSettings(legacyDB, settingspkg.New(legacyDB, previewDefinition))
 	require.NoError(t, legacyLibrary.AutoMigrate())
 	legacyExecutor := executor.New(legacyDB, legacyLibrary, nil, executor.Paths{Work: filepath.Join(root, "legacy-work")}, executor.Scripts{}, nil)
 	require.NoError(t, legacyExecutor.AutoMigrate())
@@ -583,7 +587,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	replacementStats, err := lib.GetMediaStats(ctx, replacementTape.ID)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), replacementStats.FileCount)
-	oldLogicalFile, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.fixture")
+	oldLogicalFile, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Archive/dataset/image.png")
 	require.NoError(t, err)
 	require.NotNil(t, oldLogicalFile)
 

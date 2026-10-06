@@ -206,9 +206,9 @@ class PhysicalControllerTests(unittest.TestCase):
 
     def test_script_adaptation_preserves_arguments_and_requires_one_command(self):
         source = '#!/bin/sh\nmkltfs -f -d "$SG_DEVICE"\n'
-        result = adapt_script(source, "mkltfs", "/usr/local/bin/mkltfs", " -r 'size=1M/name=*.txt'")
+        result = adapt_script(source, "mkltfs", "/usr/local/bin/mkltfs", " -r 'size=1M'")
         self.assertEqual(shlex.split(result.splitlines()[1]),
-                         ["/usr/local/bin/mkltfs", "-r", "size=1M/name=*.txt", "-f", "-d", "$SG_DEVICE"])
+                         ["/usr/local/bin/mkltfs", "-r", "size=1M", "-f", "-d", "$SG_DEVICE"])
         for changed in ("#!/bin/sh\nother-command\n", source + 'mkltfs -f -d "$SG_DEVICE"\n'):
             with self.subTest(source=changed), self.assertRaisesRegex(RuntimeError, "script changed"):
                 adapt_script(changed, "mkltfs", "/usr/local/bin/mkltfs")

@@ -20,7 +20,9 @@ import (
 	_ "github.com/samuelncui/yatm/internal/executor/archive"
 	_ "github.com/samuelncui/yatm/internal/executor/restore"
 	"github.com/samuelncui/yatm/internal/library"
+	previewcore "github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,7 +41,11 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 	require.NoError(t, err)
 	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 	require.NoError(t, err)
-	lib := library.New(libraryDB)
+	appSettings := settingspkg.New(libraryDB, settingspkg.PreviewDefinition{
+		Default:  func() (*entity.PreviewSettings, error) { return previewcore.SettingsFromConfig(previewcore.Config{}) },
+		Validate: previewcore.ValidateSettings,
+	})
+	lib := library.NewWithSettings(libraryDB, appSettings)
 	require.NoError(t, lib.AutoMigrate())
 	paths := executor.Paths{
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"), Target: filepath.Join(root, "target"),
