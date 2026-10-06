@@ -24,13 +24,27 @@ Keep the host on stable power and reserve the drive for the complete run. Do not
 
 Run `python3 e2e/physical_package_acceptance.py` against checksum-verified Linux main and matching Preview packages built from the reviewed commit. Local builds use `build/release/build.sh` and `previewworker/build/build.sh`; a completed GitHub run is not required. Choose an SSH host or `--host local` to execute the same controller directly on the authorized hardware host. [Remote Candidate Acceptance](testing.md#remote-candidate-acceptance) owns the transfer boundary.
 
-Prepare creates a fresh owned installation under `--test-parent`, generates the small source files and prepares the Archive/Preview Jobs without loading or operating the Tape. It records identity and resources in `--state`; an existing state file cannot be overwritten. Baseline then starts physical operations. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
+Prepare creates a fresh owned installation under `--test-parent`, generates the small source files and prepares the Archive/Preview Jobs without loading or operating the Tape. It captures the completed Preview Job through the same evidence path used after physical writes, so collection failures stop before FORMAT. It records identity and resources in `--state`; an existing state file cannot be overwritten. Baseline then starts physical operations. Later stages reuse that explicit state, with matching host, package identity and physical device/barcode. Each invocation requires a new `--out` evidence directory. Use a dedicated test parent outside the actual production installation; physical stages cannot be combined with virtual LTFS or legacy migration modes.
 
 For a delegated run, prepare a written sequence with artifacts, assigned cartridge, pass criteria,
 failure handling and cleanup ownership before handing it over. One executor owns the drive. Stop
 after a failed gate and retain the state and evidence; do not improvise repeated formatting or
 capacity writes. The executor returns its results before the coordinating operator reviews them
 and runs cleanup. Keep evidence outside the installation root so cleanup cannot erase the report.
+
+The handoff must stand on its own: include the authorized scope, exact package and controller
+identities, checksums, host-local paths and commands, completed stages, first unfinished check,
+pass/failure criteria, and result and cleanup owners. A new executor reads that handoff and state;
+it must not reconstruct the procedure from chat history. Recheck live drive ownership and cartridge
+identity before use, since documentation cannot establish their current state.
+
+For remote hardware, prefer a Codex executor on the hardware host, running the controller with
+`--host local`. Run long stages in a named host-local tmux session, with logs and exit status saved
+on that host; tmux also provides the fallback when a local agent is unavailable. SSH is for
+transferring inputs and retrieving status/results. An SSH session, the coordinator's connection,
+or an open agent turn must not keep the test alive. After a disconnect, inspect the existing tmux
+session, exit status and state instead of starting a second run. A failed stage stops the sequence
+and retains its evidence; do not configure automatic restarts of physical writes.
 
 Set the variables below to the authorized test host, scratch device/barcode, accepted local archives and full package commit. Run stages separately so Restore checks the same durable installation after a service restart, and full-verify checks the capacity boundary without repeating the write:
 
@@ -57,6 +71,20 @@ python3 e2e/physical_package_acceptance.py "${common[@]}" \
 ```
 
 `--mkltfs PATH` and `--ltfs-binary PATH` select the host's LTFS executables; their defaults are `mkltfs` and `ltfs`. Supply the same selections on resumed stages. Retain the local state and every stage's evidence until acceptance and explicit cleanup are complete.
+
+If evidence collection fails after FORMAT completes but before APPEND is created, baseline can
+resume with the preserved state and a new output directory. It requires the existing FORMAT Job
+to have completed normally and rechecks its Media identity, encryption profile and evidence;
+it never submits FORMAT again. Once APPEND is created, baseline refuses automatic replay.
+Retain the failed report. Correct and check the controller before resuming; do not remove state
+flags or recreate the installation to bypass the stage guard. An incomplete or failed FORMAT Job
+still stops baseline. A successful write alone is not a passed stage: the remaining Index,
+Position, partition, Preview and subsequent workflow assertions must pass as well.
+
+Evidence collection copies the settled Job's original `job.log` and verifies its checksum, like
+the other bundle artifacts. The [CLI output contract](../architecture/cli.md) exposes text for
+inspection, not a byte-preserving log archive. Preparation exercises the real packaged Job and
+collector together; parser unit tests alone do not verify that boundary.
 
 The configured `readinfo` script starts every physical operation with `mt -f DEVICE load`. It then spends at most about one minute polling the explicit MAM Barcode field. The script removes an attached media-generation suffix such as `L5`; YATM validates the resulting six-character identity before encryption, formatting, or mounting.
 

@@ -285,17 +285,17 @@ class StageSafetyTests(unittest.TestCase):
         self.test.remote.assert_not_called()
         self.test.cli.assert_not_called()
 
-    def test_resumed_baseline_cannot_inspect_or_format(self):
-        for key in ("baseline_started", "append_job_id", "media_id"):
+    def test_baseline_after_append_cannot_inspect_or_format(self):
+        for key in ("append_job_id", "baseline_complete"):
             with self.subTest(key=key):
                 state = {**self.state, key: "1"}
-                with self.assertRaisesRegex(RuntimeError, "never format"):
+                with self.assertRaisesRegex(RuntimeError, "without replaying writes"):
                     PhysicalCases(self.test, state, self.save).baseline()
         self.test.one.assert_not_called()
         self.test.cli.assert_not_called()
 
     def test_existing_media_and_wrong_barcode_block_before_baseline_mutation(self):
-        self.state["prepare_complete"] = True
+        self.state.update(prepare_complete=True, format_job_id="44")
         for reply in ({"identity": "ABC001", "media": {"id": "8"}}, {"identity": "DEF002"}):
             self.test.one.return_value = reply
             with self.assertRaises(RuntimeError):
@@ -303,6 +303,46 @@ class StageSafetyTests(unittest.TestCase):
         self.test.write.assert_not_called()
         self.test.cli.assert_not_called()
         self.save.assert_not_called()
+
+    def test_resumed_format_failure_never_reloads_or_formats_again(self):
+        self.state.update(prepare_complete=True, format_job_id="44", baseline_started=True)
+        self.cases.settled = Mock(side_effect=RuntimeError("FORMAT did not complete"))
+        self.cases.format = Mock()
+        self.cases.inspect = Mock()
+        with self.assertRaisesRegex(RuntimeError, "FORMAT did not complete"):
+            self.cases.baseline()
+        self.cases.settled.assert_called_once_with({"id": "44"})
+        self.cases.format.assert_not_called()
+        self.cases.inspect.assert_not_called()
+        self.test.cli.assert_not_called()
+
+    def test_completed_format_reaches_evidence_without_repeating_physical_write(self):
+        encryption = "test-key"
+        self.state.update(prepare_complete=True, format_job_id="44", baseline_started=True,
+                          media_id="9", encryption_sha256=hashlib.sha256(encryption.encode()).hexdigest())
+        self.cases.settled = Mock()
+        self.cases.ejected = Mock()
+        self.cases.format = Mock()
+        self.cases.inspect = Mock()
+        self.cases.media = Mock(return_value={"id": "9", "profile": {"tape": {"encryption": encryption}}})
+        self.cases.archive_items = Mock(return_value=[{"id": "1"}])
+        self.cases.check_fixture = Mock()
+        self.cases.export = Mock(return_value={"dataset/a.bin": {}})
+        self.cases.index = Mock(side_effect=RuntimeError("stop at evidence boundary"))
+        with self.assertRaisesRegex(RuntimeError, "stop at evidence boundary"):
+            self.cases.baseline()
+        self.cases.index.assert_called_once_with({"id": "44"})
+        self.cases.settled.assert_called_once_with({"id": "44"})
+        self.cases.ejected.assert_called_once_with()
+        self.cases.format.assert_not_called()
+        self.cases.inspect.assert_not_called()
+        self.test.cli.assert_not_called()
+        self.test.remote.assert_not_called()
+
+        self.state["encryption_sha256"] = "different"
+        with self.assertRaisesRegex(RuntimeError, "different Media or encryption profile"):
+            self.cases.baseline()
+        self.cases.index.assert_called_once()
 
     def test_unprepared_baseline_does_not_touch_device(self):
         with self.assertRaisesRegex(RuntimeError, "nonphysical preparation"):
@@ -331,6 +371,7 @@ class StageSafetyTests(unittest.TestCase):
         self.cases.configure_preview = Mock()
         self.cases.settled = Mock()
         self.cases.check_prepared = Mock()
+        self.cases.capture_job = Mock()
         self.cases.prepare()
         self.assertTrue(self.state["prepare_complete"])
         self.assertEqual(self.state["format_job_id"], "44")
@@ -339,6 +380,7 @@ class StageSafetyTests(unittest.TestCase):
         self.assertNotIn("media_id", self.state)
         self.test.cli.assert_not_called()
         self.cases.check_prepared.assert_called_once_with({"id": "44"}, "dataset")
+        self.cases.capture_job.assert_called_once_with({"id": "45"})
 
     def test_identity_change_and_uninitialized_resume_fail_closed(self):
         self.test.args.physical_stage = "restore"
@@ -355,6 +397,27 @@ class StageSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "already exists"):
             self.cases.created("format_job_id", "archive", "create")
         self.test.one.assert_called_once()
+
+    def test_capture_job_preserves_log_bytes_across_text_page_boundaries(self):
+        # A CLI byte page would split the first UTF-8 character; JSON cannot preserve it.
+        log = b"x" * (4 * 1024**2 - 1) + "归档完成\n".encode() + b"YWJj\n\xff"
+        root = self.test.install + "/work/jobs/44"
+        files = {self.test.root + "/tmp/physical-job-44.db": b"database snapshot",
+                 root + "/job.json": b'{"id":"44"}', root + "/job.log": log}
+
+        def remote(argv):
+            if argv[0] == "sha256sum":
+                return SimpleNamespace(stdout=(hashlib.sha256(files[argv[-1]]).hexdigest() + "  file\n").encode())
+            if argv[0] == "cat":
+                return SimpleNamespace(stdout=files[argv[-1]])
+            self.assertIn(argv[0], ("sqlite3", "find"))
+            return SimpleNamespace(stdout=b"")
+
+        self.test.one.return_value = {"job": {"id": "44", "status": "JOB_STATUS_COMPLETED"}}
+        self.test.remote.side_effect = remote
+        directory = self.cases.capture_job({"id": "44"})
+        self.assertEqual((directory / "job.log").read_bytes(), log)
+        self.test.one.assert_called_once_with("job", "get", "44")
 
     def test_capture_failure_prevents_all_cleanup_deletes(self):
         self.state["full_verify_complete"] = True

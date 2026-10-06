@@ -89,7 +89,13 @@ is File ID ascending; name starts ascending and size starts descending when sele
 Sorting changes member order within each existing group, not group order, and position
 lookups use the requested order. These reads never scan or hash physical files.
 
-`job log` reads a raw bounded byte page. `job log-lines` reads a line page from the tail or a
+`job log` reads a raw bounded byte page and returns JSON with text in `logs`
+and the next byte offset as a decimal string in `offset`. Follow that returned offset, not
+the text's character count; an empty `logs` ends the read. This CLI representation does not
+Base64-encode the log, although the underlying RPC uses a protobuf bytes field. JSON text can
+replace invalid UTF-8, including a character split by a byte-page boundary; preserve the original
+Job bundle's `job.log` when exact bytes are required.
+`job log-lines` reads a line page from the tail or a
 returned byte cursor, toward older or newer content, with optional exact `--level` and
 case-insensitive `--query` filters. The server owns page limits; the CLI supplies no limit.
 An empty filtered page can still advance its cursor, so use the returned `has_older` and

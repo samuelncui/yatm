@@ -111,16 +111,8 @@ class PhysicalCases(TapeWorkflows):
         self.test.remote(["sqlite3", "-readonly", root + "/state.db", ".backup '" + snapshot.replace("'", "''") + "'"])
         self.copy_evidence(snapshot, "jobs/" + identifier + "/state.db")
         self.copy_evidence(root + "/job.json", "jobs/" + identifier + "/job.json")
-        offset, chunks = 0, []
-        while True:
-            page = self.test.one("job", "log", identifier, "--offset", str(offset))
-            data = decode_bytes(page.get("logs"))
-            if not data:
-                break
-            require(int(page["offset"]) > offset, "Job log cursor did not advance.")
-            chunks.append(data)
-            offset = int(page["offset"])
-        self.keep("jobs/" + identifier + "/job.log", b"".join(chunks))
+        # Preserve exact bytes; CLI JSON text can replace UTF-8 split across byte pages.
+        self.copy_evidence(root + "/job.log", "jobs/" + identifier + "/job.log")
         listing = self.test.remote(["find", root, "-type", "f", "-print0"]).stdout
         for raw in listing.split(b"\x00"):
             if not raw:
@@ -227,22 +219,32 @@ class PhysicalCases(TapeWorkflows):
         self.save(preview_job_id=str(progress["preview_job_id"]))
         self.settled(self.job("preview_job_id"))
         self.check_prepared(job, "dataset")
+        self.capture_job(self.job("preview_job_id"))
         self.save(prepare_complete=True)
 
     def baseline(self):
-        require(not any(key in self.state for key in ("baseline_started", "append_job_id", "media_id")),
-                "Baseline has existing state; never format on a resumed baseline.")
+        require("append_job_id" not in self.state and not self.state.get("baseline_complete"),
+                "Baseline APPEND already started; retain its state without replaying writes.")
         require(self.state.get("prepare_complete"), "Baseline requires completed nonphysical preparation.")
-        require(not self.inspect().get("media"), "Loaded Tape already exists in the isolated Library.")
-        self.save(baseline_started=True)
         job = self.job("format_job_id")
-        self.format(job, self.barcode)
+        if "baseline_started" not in self.state:
+            require("media_id" not in self.state, "Baseline has Media without its FORMAT attempt state.")
+            require(not self.inspect().get("media"), "Loaded Tape already exists in the isolated Library.")
+            self.save(baseline_started=True)
+            self.format(job, self.barcode)
+        # A failed evidence check may reuse a completed FORMAT, never repeat it.
         self.settled(job)
         self.ejected()
         media = self.media(self.barcode)
         encryption = media["profile"]["tape"].get("encryption")
         require(encryption, "Tape profile did not retain encryption.")
-        self.save(media_id=str(media["id"]), encryption_sha256=hashlib.sha256(encryption.encode()).hexdigest())
+        encryption_sha256 = hashlib.sha256(encryption.encode()).hexdigest()
+        if "media_id" in self.state:
+            require(str(media["id"]) == self.state["media_id"]
+                    and encryption_sha256 == self.state["encryption_sha256"],
+                    "FORMAT evidence belongs to a different Media or encryption profile.")
+        else:
+            self.save(media_id=str(media["id"]), encryption_sha256=encryption_sha256)
         initial = self.archive_items(job)
         self.check_fixture(initial, "dataset")
         positions = self.export("library-format.jsonl")
