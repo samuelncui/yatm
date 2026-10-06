@@ -389,9 +389,6 @@ class Acceptance:
                   "tape_devices": [], "paths": {"work": self.install + "/work", "volumes": [self.root + "/volumes"],
                                                 "access": [{"root": self.root + "/fixtures"}]},
                   "preview": {"root": self.install + "/work/previews"}}
-        if self.args.ltfs:
-            from package_ltfs_cases import prepare_virtual_tapes
-            prepare_virtual_tapes(self, config)
         self.write(self.root + "/config.yaml", json.dumps(config, indent=2).encode() + b"\n")
         self.report["url"] = self.url
         self.save()
@@ -408,6 +405,18 @@ class Acceptance:
         require(self.remote(["test", "-e", self.install], expected=None).returncode == 1,
                 "Read-only review created an installation.")
         self.installer(fresh=True, body=b"y\n")
+        if self.args.ltfs:
+            from package_ltfs_cases import prepare_virtual_tapes
+            from package_install_cases import wait_for_service
+            self.remote(["systemctl", "stop", self.service])
+            require(self.remote(["systemctl", "show", self.service, "--property", "ActiveState", "--value"]).stdout.strip() == b"inactive",
+                    "Virtual Tape configuration requires a stopped service.")
+            path = self.install + "/config.yaml"
+            config = json.loads(self.remote(["cat", path]).stdout)
+            prepare_virtual_tapes(self, config)
+            self.write(path, json.dumps(config, indent=2).encode() + b"\n")
+            self.remote(["systemctl", "start", self.service])
+            wait_for_service(self)
         self.verify_programs(self.install)
         self.remote(["systemctl", "is-active", "--quiet", self.service])
         self.one("status")

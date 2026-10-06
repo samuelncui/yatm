@@ -267,7 +267,7 @@ Library, Scan, Archive, API, CLI, and Demo unit tests cover the larger failure/c
 
 The LTFS test treats a directory as a virtual tape. It does not require a physical LTO device, but it runs the real `mkltfs`, LTFS/FUSE mounts, ACP copies and hashes, SCAN Preview outcomes, Job DB checkpoints, Library commits, and CLI business operations. The PNG fixture uses the current typed Preview Settings and real native helper, supplied with `YATM_TEST_PREVIEW_HELPER`.
 
-Select the installed LTFS capture syntax before launching native tests. The shared adapter defaults
+Select the installed LTFS capture syntax before launching native tests or the package controller. The shared adapter defaults
 to `capture_index=<directory>`; older capture-enabled builds use
 `YATM_E2E_LTFS_CAPTURE_INDEX=bare`. The
 [file-backend adapter guide](../../e2e/ltfs-file-backend/README.md) owns that test-only choice.

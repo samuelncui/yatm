@@ -10,9 +10,9 @@ Obtain the versioned installer rather than reusing a script from the old install
 
 ```shell
 curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.1/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.1 --check
-sudo bash install-release.sh --version v1.0.0-alpha.1
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.2/install-release.sh
+sudo bash install-release.sh --version v1.0.0-alpha.2 --check
+sudo bash install-release.sh --version v1.0.0-alpha.2
 ```
 
 The default channel remains stable; Alpha requires `--version`. See [installation](install.md#install-or-update) for prerequisites, custom installation/unit paths, and local candidate archives. `--check` downloads and verifies the candidate and reads installation metadata without stopping the service, quiescing Jobs, creating databases, or leaving an upgrade attempt in the installation.

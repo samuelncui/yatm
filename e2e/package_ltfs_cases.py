@@ -2,6 +2,7 @@
 
 import base64
 import json
+import os
 from pathlib import PurePosixPath
 import shlex
 
@@ -25,7 +26,7 @@ def prepare_virtual_tapes(test, config):
 '''
     for device in devices:
         test.write(device + "/filedebug_tc_conf.xml", cartridge)
-    adapters = test.root + "/virtual-tape-scripts/"
+    adapters = test.install + "/scripts/virtual-tape/"
     test.remote(["cp", "-a", test.root + "/package/templates/testing/ltfs-file-backend", adapters.rstrip("/")])
     for name, command in (("mkfs", "mkltfs"), ("mount", "ltfs")):
         executable = test.remote(["sh", "-c", 'command -v "$1"', "resolve-ltfs", command]).stdout.decode().strip()
@@ -33,6 +34,9 @@ def prepare_virtual_tapes(test, config):
         script = test.remote(["cat", adapters + name]).stdout.decode()
         marker = "\n" + command + " "
         require(script.count(marker) == 1, "Packaged virtual LTFS script changed.")
+        if name == "mount":
+            style = os.environ.get("YATM_E2E_LTFS_CAPTURE_INDEX", "directory")
+            script = script.replace("\n", "\nexport YATM_E2E_LTFS_CAPTURE_INDEX=" + shlex.quote(style) + "\n", 1)
         test.write(adapters + name, script.replace(marker, "\n" + shlex.quote(executable) + " ", 1).encode())
     if test.wants_case("ltfs-format-append-restore-verify"):
         script = test.remote(["cat", adapters + "mkfs"]).stdout.decode()

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -12,6 +13,7 @@ from unittest import mock
 
 from package_acceptance import Acceptance, check_arguments, documents
 from package_cases import Workflows, fixture_archives
+from package_ltfs_cases import prepare_virtual_tapes
 
 
 class ControllerTests(unittest.TestCase):
@@ -125,6 +127,102 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(controller.cli("library", "export", "--output", "-", timeout=600), [{}])
         self.assertIn("580s", remote.call_args.args[0])
         self.assertEqual(remote.call_args.kwargs["timeout"], 600)
+
+    def test_ltfs_stage_keeps_fresh_installation_absent_and_unconfigured(self):
+        controller = self.controller()
+        controller.args.ltfs = True
+        template = SimpleNamespace(stdout=b"database:\npaths:\n")
+        listeners = SimpleNamespace(stdout=b"")
+
+        with mock.patch.object(controller, "upload"), mock.patch.object(controller, "remote") as remote, \
+                mock.patch.object(controller, "verify_programs"), \
+                mock.patch.object(controller, "remote_batch", return_value=[template, listeners]), \
+                mock.patch.object(controller, "write") as write, \
+                mock.patch("package_ltfs_cases.prepare_virtual_tapes") as prepare:
+            controller.stage()
+        prepare.assert_not_called()
+        config = json.loads(write.call_args.args[1])
+        self.assertEqual(config["tape_devices"], [])
+        self.assertNotIn("scripts", config)
+        self.assertFalse(any(call.args[0][0] in ("mkdir", "cp") for call in remote.call_args_list))
+
+    def test_fresh_ltfs_setup_waits_for_installation_and_restarts_with_installed_config(self):
+        controller = self.controller()
+        controller.args.ltfs = True
+        controller.url = "http://127.0.0.1:23456"
+        installed = False
+        configured = False
+        config = {"tape_devices": [], "paths": {"work": controller.install + "/work"}}
+
+        def installer(**kwargs):
+            nonlocal installed
+            self.assertFalse(installed)
+            if not kwargs.get("check"):
+                installed = True
+
+        def remote(argv, **kwargs):
+            if argv[:2] == ["test", "-e"]:
+                self.assertFalse(installed)
+                return SimpleNamespace(returncode=1)
+            self.assertTrue(installed)
+            if argv[:2] == ["systemctl", "show"]:
+                return SimpleNamespace(stdout=b"inactive\n")
+            if argv[0] == "cat":
+                self.assertEqual(argv[1], controller.install + "/config.yaml")
+                return SimpleNamespace(stdout=json.dumps(config).encode())
+            return SimpleNamespace(stdout=b"<html></html>")
+
+        def prepare(test, value):
+            self.assertTrue(installed)
+            self.assertEqual(value, config)
+            value["scripts"] = {"encrypt": test.install + "/scripts/virtual-tape/encrypt"}
+
+        def write(path, data):
+            nonlocal configured
+            self.assertEqual(path, controller.install + "/config.yaml")
+            self.assertIn("scripts", json.loads(data))
+            configured = True
+
+        def ready(test):
+            self.assertTrue(configured)
+            self.assertIn(mock.call(["systemctl", "start", test.service]), remote_mock.call_args_list)
+
+        with mock.patch.object(controller, "installer", side_effect=installer), \
+                mock.patch.object(controller, "remote", side_effect=remote) as remote_mock, \
+                mock.patch.object(controller, "verify_programs"), mock.patch.object(controller, "one"), \
+                mock.patch.object(controller, "write", side_effect=write), \
+                mock.patch("package_ltfs_cases.prepare_virtual_tapes", side_effect=prepare), \
+                mock.patch("package_install_cases.wait_for_service", side_effect=ready) as wait:
+            controller.install_fresh()
+        wait.assert_called_once_with(controller)
+        self.assertIn(mock.call(["systemctl", "stop", controller.service]), remote_mock.call_args_list)
+
+    def test_virtual_tape_adapters_are_installed_and_cartridges_remain_outside(self):
+        controller = self.controller()
+        controller.root = str(self.directory / "owned")
+        controller.install = controller.root + "/install"
+        scripts = Path(controller.install) / "scripts"
+        scripts.mkdir(parents=True)
+        template = Path(controller.root) / "package/templates/testing/ltfs-file-backend"
+        shutil.copytree(Path(__file__).parent / "ltfs-file-backend", template)
+
+        def remote(argv, **kwargs):
+            if argv[0] == "sh":
+                return SimpleNamespace(stdout=("/opt/ltfs/bin/" + argv[-1] + "\n").encode())
+            return subprocess.run(argv, capture_output=True, check=True)
+
+        with mock.patch.dict("os.environ", {"YATM_E2E_LTFS_CAPTURE_INDEX": "bare"}), \
+                mock.patch.object(controller, "remote", side_effect=remote), \
+                mock.patch.object(controller, "write", side_effect=lambda path, data: Path(path).write_bytes(data)):
+            config = {}
+            prepare_virtual_tapes(controller, config)
+        for path in config["scripts"].values():
+            self.assertTrue(Path(path).is_file())
+            self.assertEqual(Path(path).parent, scripts / "virtual-tape")
+        self.assertIn("\nexport YATM_E2E_LTFS_CAPTURE_INDEX=bare\n", Path(config["scripts"]["mount"]).read_text())
+        for device in config["tape_devices"]:
+            self.assertEqual(Path(device).parent, Path(controller.root) / "virtual-tapes")
+            self.assertFalse(Path(device).is_relative_to(controller.install))
 
     def test_fixtures_retain_invalid_bytes_and_exact_signed_time(self):
         files, regular, invalid = fixture_archives(self.directory)
