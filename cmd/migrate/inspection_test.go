@@ -87,6 +87,7 @@ func TestInspectionRequiresCompleteCurrentBundles(t *testing.T) {
 func TestInspectionRequiresCompleteBackupScope(t *testing.T) {
 	// Contained deployment resources fit in the complete installation archive.
 	root := t.TempDir()
+	t.Chdir(root)
 	conf := &config.Config{Listen: ":8080"}
 	conf.Database.Dialect = "sqlite"
 	conf.Database.DSN = filepath.Join(root, "catalog.db")
@@ -111,6 +112,7 @@ func TestInspectionRequiresCompleteBackupScope(t *testing.T) {
 func TestBackupScopeRejectsExternalSymlink(t *testing.T) {
 	// Links retain their names in tar, but cannot stand in for required external contents.
 	root := t.TempDir()
+	t.Chdir(root)
 	conf := &config.Config{Listen: ":8080"}
 	conf.Database.Dialect = "sqlite"
 	conf.Database.DSN = filepath.Join(root, "catalog.db")
@@ -123,6 +125,7 @@ func TestBackupScopeRejectsExternalSymlink(t *testing.T) {
 func TestBackupScopeRejectsAbsoluteInternalSymlinkWithoutWrites(t *testing.T) {
 	// An absolute link works in the installation but still points there after backup extraction.
 	root := t.TempDir()
+	t.Chdir(root)
 	conf := &config.Config{Listen: ":8080"}
 	conf.Database.Dialect = "sqlite"
 	conf.Database.DSN = filepath.Join(root, "catalog.db")
@@ -144,6 +147,7 @@ func TestBackupScopeRejectsAbsoluteInternalSymlinkWithoutWrites(t *testing.T) {
 func TestBackupScopeAcceptsRelativeContainedSymlinkChain(t *testing.T) {
 	// Relative links remain inside the installation when its complete archive is relocated.
 	root := t.TempDir()
+	t.Chdir(root)
 	conf := &config.Config{Listen: ":8080"}
 	conf.Database.Dialect = "sqlite"
 	conf.Database.DSN = filepath.Join(root, "catalog.db")
@@ -167,6 +171,7 @@ func TestBackupScopeAcceptsRelativeContainedSymlinkChain(t *testing.T) {
 func TestBackupScopeExcludesOnlyBackupDirectory(t *testing.T) {
 	// Previously retained backups do not enter active-resource checks or recursive backups.
 	root := t.TempDir()
+	t.Chdir(root)
 	conf := &config.Config{Listen: ":8080"}
 	conf.Database.Dialect = "sqlite"
 	conf.Database.DSN = filepath.Join(root, "catalog.db")
