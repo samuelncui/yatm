@@ -564,8 +564,8 @@ The publication job retrieves that complete artifact on GitHub when it needs all
 To deliver those accepted bytes, explicitly create the matching Release and tag first, then dispatch
 with the same `version`, `publish=true` and its successful build `candidate_run_id`. Publishing runs
 no builds or E2E; it downloads that run's immutable artifact by ID. The run must belong to this
-repository and the Release candidate workflow, identify a manual build of that version, and have
-completed successfully. Its accepted artifact must still be available and unexpired. The release
+repository and the Release candidate workflow (by workflow ID and path), identify a manual build of
+that version, and have completed successfully. Its accepted artifact must still be available and unexpired. The release
 tag, including an annotated tag, must resolve to the run's exact commit, and the Release prerelease
 flag must match the version. Candidate identity comes from run metadata and package contents rather
 than the upload checkout. Release tools come from `v1`, pinned to the same commit for preflight and

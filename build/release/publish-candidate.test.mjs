@@ -16,7 +16,7 @@ function metadata() {
     workflow: { id: 7, name: 'Release candidate', path: '.github/workflows/build.yml' },
     run: {
       id: 123, repository: { id: 8, full_name: options.repository }, head_repository: { id: 8, full_name: options.repository },
-      workflow_id: 7, path: '.github/workflows/build.yml@v1', name: 'Release candidate', event: 'workflow_dispatch',
+      workflow_id: 7, path: '.github/workflows/build.yml@v1', name: `Build candidate ${options.version}`, event: 'workflow_dispatch',
       status: 'completed', conclusion: 'success', display_title: `Build candidate ${options.version}`, head_sha: commit,
     },
     artifacts: [{ artifacts: [{
@@ -89,7 +89,6 @@ test('annotated tags resolve to the exact selected run commit', () => {
 const negativeMetadata = [
   ['wrong workflow identity', data => { data.run.workflow_id = 99; }, /workflow/],
   ['wrong workflow path', data => { data.run.path = '.github/workflows/other.yml@v1'; }, /workflow path/],
-  ['wrong workflow name', data => { data.run.name = 'Other'; }, /workflow name/],
   ['wrong workflow owner path', data => { data.workflow.path = '.github/workflows/other.yml'; }, /workflow path/],
   ['wrong workflow owner name', data => { data.workflow.name = 'Other'; }, /workflow name/],
   ['wrong run ID', data => { data.run.id = 999; }, /candidate run/],

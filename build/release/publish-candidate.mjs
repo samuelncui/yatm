@@ -38,11 +38,10 @@ export function inspectCandidate(options, api = githubAPI, now = Date.now()) {
   }
   assert.equal(run.workflow_id, workflow.id, 'Candidate must use the Release candidate workflow');
   assert.equal(run.path.split('@')[0], workflow.path, 'Unexpected candidate workflow path');
-  assert.equal(run.name, workflow.name, 'Unexpected candidate workflow name');
   assert.equal(run.event, 'workflow_dispatch', 'Candidate must be a manual build');
   assert.equal(run.status, 'completed', 'Candidate run must be completed');
   assert.equal(run.conclusion, 'success', 'Candidate run must be successful');
-  // run-name is set by the workflow's build branch, not by candidate file contents.
+  // The workflow ID/path establish identity; run-name carries the build kind and version.
   assert.equal(run.display_title, `Build candidate ${version}`, 'Candidate build kind or version mismatch');
   assert.match(run.head_sha, /^[a-f0-9]{40}$/, 'Invalid candidate commit');
 
