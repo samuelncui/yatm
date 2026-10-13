@@ -483,6 +483,7 @@ func TestArchiveHMSMRVolumeUsesSequentialWriteWithoutStorageOrder(t *testing.T) 
 }
 
 func TestStageCopyResultRecordsPathOnlyAfterSuccess(t *testing.T) {
+	// Prepare one pending file whose target outcomes arrive through the shared writer.
 	ctx := context.Background()
 	exe := setupTestExecutor(t, executor.Scripts{})
 	content := []byte("fixture")
@@ -497,28 +498,66 @@ func TestStageCopyResultRecordsPathOnlyAfterSuccess(t *testing.T) {
 	require.NoError(t, runner.db.First(item).Error)
 	target := &copyItem{runner: runner, item: item, mediaTarget: "target"}
 
-	// A target that produced nothing is a completion whose row stays PENDING, because no durable
-	// result can express it.
-	reporter := startTestReporter(t, runner)
-	failed := acp.Result{
-		Job: target, Size: item.Size, Mode: 0o644,
-		Targets: []acp.TargetResult{{Path: "target", Err: acp.ErrTargetNoSpace}},
+	// Normalization must retain the original write and cleanup causes without staging a result.
+	writeErr := errors.New("write failed")
+	closeErr := errors.New("close failed")
+	removeErr := errors.New("remove failed")
+	joinedErr := fmt.Errorf("copy target failed: %w", errors.Join(
+		fmt.Errorf("write target: %w", errors.Join(acp.ErrTargetNoSpace, writeErr)),
+		fmt.Errorf("close target: %w", closeErr),
+		fmt.Errorf("remove temporary target: %w", removeErr),
+	))
+	for _, test := range []struct {
+		name   string
+		err    error
+		causes []error
+	}{
+		{name: "bare no space", err: acp.ErrTargetNoSpace},
+		{name: "joined write and cleanup failures", err: joinedErr, causes: []error{writeErr, closeErr, removeErr}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Drain the failed completion before checking its retained diagnostics and durable row.
+			reporter := startTestReporter(t, runner)
+			failed := acp.Result{
+				Job: target, Size: item.Size, Mode: 0o644,
+				Targets: []acp.TargetResult{{Path: "target", Err: test.err}},
+			}
+			require.NoError(t, reporter.onResults([]acp.Result{failed}))
+			require.NoError(t, reporter.Close())
+			require.ErrorIs(t, reporter.err(), mediapkg.ErrTargetNoSpace)
+			require.ErrorIs(t, reporter.err(), acp.ErrTargetNoSpace)
+			require.ErrorIs(t, reporter.err(), test.err)
+			for _, cause := range test.causes {
+				require.ErrorIs(t, reporter.err(), cause)
+				require.ErrorContains(t, reporter.err(), cause.Error())
+			}
+			require.NoError(t, runner.db.First(item, item.ID).Error)
+			require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
+			require.Empty(t, item.MediaPath)
+			require.Nil(t, item.MediaID)
+			require.Nil(t, item.Result)
+			flushed, _ := reporter.counters()
+			require.Zero(t, flushed)
+		})
 	}
-	require.NoError(t, reporter.onResults([]acp.Result{failed}))
-	require.NoError(t, reporter.Close())
-	require.NoError(t, runner.db.First(item, item.ID).Error)
-	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
-	require.Empty(t, item.MediaPath)
-	require.ErrorIs(t, reporter.err(), mediapkg.ErrTargetNoSpace)
 
+	// A failed target gives publication no candidates and creates no Media inventory.
+	_, bytes, files, err := runner.commitStagedMedia(ctx, &mediapkg.Descriptor{CreateTime: time.Unix(0, 1)})
+	require.NoError(t, err)
+	require.Zero(t, bytes)
+	require.Zero(t, files)
+	media, err := exe.Lib().ListMedia(ctx, nil)
+	require.NoError(t, err)
+	require.Empty(t, media)
+
+	// A later successful completion is what stages the row, in its own attempt.
 	hash := sha256.Sum256(content)
 	success := acp.Result{
 		Job: target, Size: int64(len(content)), Mode: 0o644,
 		WriteTime: time.Unix(0, 1), SHA256: hash[:],
 		Targets: []acp.TargetResult{{Path: "target", Size: int64(len(content))}},
 	}
-	// A later successful completion is what stages the row, in its own attempt.
-	reporter = startTestReporter(t, runner)
+	reporter := startTestReporter(t, runner)
 	require.NoError(t, reporter.onResults([]acp.Result{success}))
 	require.NoError(t, reporter.Close())
 	require.NoError(t, runner.db.First(item, item.ID).Error)

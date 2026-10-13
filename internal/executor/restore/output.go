@@ -15,7 +15,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames, version *library.FileVersion, desired string) (string, bool, error) {
+func (a *jobRestoreRunner) reserveOutput(
+	ctx context.Context, names *outputNames, version *library.FileVersion, desired string,
+) (string, bool, error) {
 	// An already chosen output survives another attempt and never grows a second suffix.
 	var stored File
 	err := a.db.WithContext(ctx).First(&stored, "item_id = ?", version.ID).Error
@@ -24,7 +26,9 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 			return stored.Path, false, nil
 		}
 		if a.destination.GetLocationId() != 0 {
-			owner, err := a.exe.Lib().GetFileLocationAtPath(ctx, a.destination.LocationId, path.Join(a.destination.Path, stored.Path))
+			owner, err := a.exe.Lib().GetFileLocationAtPath(
+				ctx, a.destination.LocationId, path.Join(a.destination.Path, stored.Path),
+			)
 			if err != nil {
 				return "", false, err
 			}
@@ -50,6 +54,7 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 	ext := path.Ext(restored)
 	stem := restored[:len(restored)-len(ext)]
 	for suffix := 0; ; suffix++ {
+		// Choose the next deterministic candidate without continuing canceled preparation.
 		if err := ctx.Err(); err != nil {
 			return "", false, err
 		}
@@ -60,15 +65,23 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 		if suffix > 1 {
 			candidate = fmt.Sprintf("%s (%d)%s", stem, suffix, ext)
 		}
+
+		// Only nonempty frozen paths reserve outputs; pending empty rows must not enter this lookup.
+		// Match the existing partial index predicate so each candidate avoids a manifest-wide scan.
 		var count int64
-		if err := a.db.WithContext(ctx).Model(&File{}).Where("path = ?", candidate).Count(&count).Error; err != nil {
+		if err := a.db.WithContext(ctx).Model(&File{}).
+			Where("path = ? AND path <> ''", candidate).Count(&count).Error; err != nil {
 			return "", false, err
 		}
 		if count > 0 {
 			continue
 		}
+
+		// Never choose an output already associated with a Library original.
 		if a.destination.GetLocationId() != 0 {
-			owner, err := a.exe.Lib().GetFileLocationAtPath(ctx, a.destination.LocationId, path.Join(a.destination.Path, candidate))
+			owner, err := a.exe.Lib().GetFileLocationAtPath(
+				ctx, a.destination.LocationId, path.Join(a.destination.Path, candidate),
+			)
 			if err != nil {
 				return "", false, err
 			}
@@ -76,6 +89,8 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 				continue
 			}
 		}
+
+		// Reuse matching bytes and preserve unrelated existing content.
 		matched, exists, err := a.outputMatches(ctx, candidate, version.Hash, version.Size)
 		if err != nil {
 			return "", false, err
@@ -83,6 +98,8 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 		if exists && !matched {
 			continue
 		}
+
+		// Claim the native filesystem name before freezing its output reservation.
 		claimed, err := names.claim(ctx, candidate)
 		if err != nil {
 			return "", false, err
@@ -90,7 +107,8 @@ func (a *jobRestoreRunner) reserveOutput(ctx context.Context, names *outputNames
 		if !claimed {
 			continue
 		}
-		if err := a.db.WithContext(ctx).Model(&File{}).Where("item_id = ?", version.ID).Update("path", candidate).Error; err != nil {
+		if err := a.db.WithContext(ctx).Model(&File{}).
+			Where("item_id = ?", version.ID).Update("path", candidate).Error; err != nil {
 			return "", false, err
 		}
 		return candidate, matched, nil

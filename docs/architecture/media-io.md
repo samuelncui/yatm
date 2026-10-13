@@ -119,6 +119,40 @@ through normal unmount. Finalize does not run `readinfo` again: that script load
 which must not occur while LTFS owns it. Successful reads become publishable only after normal
 unmount succeeds; a failed unmount still withholds publication and keeps the device unavailable.
 
+### Tape Capacity
+
+Capacity management must preserve continuous data supply during normal Archive. It must not
+introduce recurring pause/drain/synchronize/resume cycles per file or batch; normal finalization
+when ending use of the current Tape remains necessary. The
+[capacity study](../research/tape-capacity.md#streaming-and-mechanical-wear) explains the mechanical
+wear concern and the limits of the available evidence.
+
+ACP checks a cached available-space estimate immediately before starting each positive-size
+linear target, debiting that target's logical size. One independent worker per filesystem starts
+an observation immediately and refreshes every five seconds, with at most one query in flight.
+Copying does not wait for a query: unknown initial capacity permits a file, while a completed
+query error is returned to subsequent targets until a successful refresh. A refresh deducts
+admissions that overlapped its query; it does not reserve the outstanding bytes of files already
+in progress. Tape target-path resolution can run ahead of copying and does not perform a second
+capacity decision. The estimate can refuse a file before output creation, but cannot guarantee
+that an admitted file will finish or interrupt it when a later observation falls. ACP does not
+credit failed-output cleanup as reclaimed Tape space. Stream shutdown joins outstanding queries.
+
+Capacity observations have three distinct boundaries: bytes accepted by LTFS, bytes accepted by
+the drive, and bytes physically written. A successful file Close does not establish that the
+drive's remaining-capacity counter includes every accepted byte. Reading `statfs` does not itself
+flush either buffer. LTFS can also adjust the reported capacity for its Index and warning state;
+raw drive capacity is not interchangeable with filesystem available space.
+
+Actual write, Close and finalization errors remain authoritative. On exhaustion, retain the
+complete error chain and publish only the verified prefix described above. Removing an LTFS
+temporary file is a namespace cleanup, not proof that its written Tape capacity was reclaimed.
+YATM does not automatically roll back LTFS history, shorten cartridges, configure hardware early
+warning thresholds, or force recurring Index synchronization for capacity management. The public
+[Tape capacity study](../research/tape-capacity.md) owns the supporting hardware/source evidence,
+community reports and unresolved prevention/recovery questions. Authorized experiments follow the
+[physical acceptance procedure](../operations/physical-tape-e2e.md#capacity-measurement).
+
 ## Volume
 
 [Volume Sessions](../../internal/executor/media_volume.go) manage only already-mounted filesystems. [Volume discovery](../../internal/media/volume.go) accepts configured roots or direct children, resolves the immutable `.yatm.json` UUID/profile, and rejects duplicate mounted identities, profile changes, symlink path components, and path escapes. An absent marker is skipped; a present but unreadable/invalid marker fails discovery, including checks separating originals from archive storage. YATM does not mount, unmount, or eject Volumes; current discovery validates the directory/marker rather than requiring an OS mount-point record.
@@ -131,7 +165,15 @@ Volume Finalize returns the already-opened session result and keeps successfully
 
 ## ACP and Integrity
 
-[ACP](https://github.com/samuelncui/acp) streams bounded buffers with backpressure. Bounded concurrent source preparation feeds one writer in original request order for linear targets; preparation failures and skipped requests advance the same ordering cursor. Random-access targets retain completion-order concurrency. Terminal target errors stop new source work while draining and closing bounded prefetched work.
+[ACP](https://github.com/samuelncui/acp) streams bounded shared buffers with backpressure. Source
+reading, hashing, target writing and file completion can overlap. Linear source reads remain ordered
+through EOF; linear targets retain one application Write lane in request order. The next file can
+advance while the preceding file's Close and metadata work finish. Each result still waits for its
+own hash, source/target closure, cache and publication dependencies. Conflicting output paths retain
+their required publication order; independent paths can finish concurrently. Terminal target errors
+stop new source work once observed while draining and closing bounded prefetched work. This
+application ordering does not prescribe physical LTFS extent placement; the final Index remains
+authoritative.
 
 Location configuration selects ACP's source read mode for original content in Archive preparation/copying and Scan content reads; buffered is the default. Archive applies the setting of each item's current Location without reordering the Media write. Scan applies it per Location scope, including indexed original content reads. Media sources and Restore output verification keep their own read behavior. On Linux buffered ACP reads first attempt `O_NOATIME` and fall back to an ordinary open when the filesystem or permissions refuse it; mapped reads use a different open path. Avoiding access-time updates is therefore best effort, not an operation guarantee.
 
@@ -139,15 +181,28 @@ Callers own their items: the runner pages the Job manifest into ACP one bounded 
 
 Archive and Restore always hash real source bytes in ACP. Completed targets are not reread for hashing.
 Ordinary targets, including LTFS files, are written to an exclusively created `.tmp_*` file beside the
-final path. ACP completes metadata and signature-cache work, applies the target's sync policy, closes
-the output, and renames it before reporting success against the final path. Restore transfers retain
-`Overwrite(false)`, so ACP never replaces an existing Restore target. Failed copies clean up only their
+final path. ACP completes metadata, signature-cache work and required closure before renaming and
+reporting success against the final path. Random outputs complete metadata and Sync before Close;
+linear outputs close after their data writing, then finish metadata/cache work on the owned temporary
+path. Archive and Restore retain `Overwrite(false)`, so ACP never replaces an existing destination.
+Archive targets that alias on the Volume filesystem compete through exclusive rename: only the
+completed file is published, and the refused file remains pending for another Media choice. Restore
+reserves distinct native output names during preparation, including case and Unicode aliases.
+Failed copies clean up only their
 owned temporary output and preserve existing destinations; cleanup failures remain alongside the copy
 error without losing no-space error identities. Linear targets skip preallocation and per-file Sync;
 successful LTFS unmount and the final Index still govern Tape publication. Staging adds no filesystem
 transaction or power-loss durability guarantee.
 
-ACP's managed signature xattr is a disposable cache keyed by size and nanosecond mtime, never an immutable identity or transfer-integrity proof. Scan's KNOWN_ONLY uses the cache-only read without hash fallback; FILL_MISSING hashes misses, and FORCE_READ reads every selected file. Verification always reads uncached content against old expected facts. The managed key is excluded from ordinary xattr copying. One descriptor serves an item for its whole lifecycle: the stored hash is read through the descriptor that reads the content, and a refresh is written through that same descriptor before it closes and before the result is delivered, which is why no asynchronous cache writer pool or queue exists. A failed cache write is counted, never a Job failure. Read-only/unsupported xattrs do not fail copying.
+ACP's managed signature xattr is a disposable cache keyed by size and nanosecond mtime, never an
+immutable identity or transfer-integrity proof. Scan's KNOWN_ONLY uses the cache-only read without
+hash fallback; FILL_MISSING hashes misses, and FORCE_READ reads every selected file. Verification
+always reads uncached content against old expected facts. The managed key is excluded from ordinary
+xattr copying. Cache lookup uses the content source's descriptor and indexed facts. Source Close can
+finish before hashing; cache refresh then uses the source path and finishes before result delivery.
+This follows the supported operating model in which selected files remain unchanged during an
+operation. A failed cache write is counted, never a Job failure. Read-only/unsupported xattrs do not
+fail copying.
 
 The Archive runner normalizes ACP and operating-system no-space errors before Finalize, preserving the
 original copy error independently. Finalize performs physical cleanup and identity validation; Archive

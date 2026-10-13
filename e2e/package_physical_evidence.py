@@ -6,7 +6,6 @@ import hashlib
 import json
 from pathlib import PurePosixPath
 import re
-import shlex
 import sqlite3
 import struct
 from urllib.parse import unquote
@@ -143,46 +142,6 @@ def check_positions(items, positions, index, media_id, partition_map=None):
         if partition_map:
             kind = "index" if size <= 1024**2 else "data"
             require(partition == partition_map[kind], "Format-time partition placement rule was not retained.")
-
-
-def submitted_prefix(items, media_id):
-    prefix, pending = [], False
-    for item in items:
-        if item["status"] == "COPY_STATUS_SUBMITTED":
-            require(not pending and str(item.get("media_id")) == str(media_id) and item["file"].get("media_path"),
-                    "Submitted items are not one continuous prefix on the assigned Tape.")
-            prefix.append(item)
-        else:
-            pending = True
-            require(item["status"] == "COPY_STATUS_PENDING" and not item.get("media_id")
-                    and not item["file"].get("media_path"), "Unfinalized suffix was published or remains staged.")
-    require(0 < len(prefix) < len(items), "Physical boundary needs both a submitted prefix and pending suffix.")
-    return prefix
-
-
-def check_checkpoint(log, report, job, items, media_id, progress):
-    require(job["status"] == "JOB_STATUS_READY" and job.get("error")
-            and job.get("phase", "JOB_PHASE_UNSPECIFIED") == "JOB_PHASE_UNSPECIFIED",
-            "Full Archive has not settled at its failed Media boundary.")
-    prefix = submitted_prefix(items, media_id)
-    count, size = len(prefix), sum(int(item["size_bytes"]) for item in prefix)
-    checkpoints = []
-    for line in log.decode().splitlines():
-        if "archive_media_checkpoint" not in line:
-            continue
-        fields = dict(field.split("=", 1) for field in shlex.split(line) if "=" in field)
-        if fields.get("event") == "archive_media_checkpoint":
-            checkpoints.append(fields)
-    expected = {"reason": "no_space", "media_id": str(media_id), "files": str(count), "bytes": str(size)}
-    require(checkpoints and all(checkpoints[-1].get(k) == v for k, v in expected.items())
-            and checkpoints[-1].get("error"), "Missing complete durable no_space checkpoint.")
-    require(str(report["media_id"]) == str(media_id) and int(report["file_count"]) == count
-            and int(report["bytes"]) == size and report.get("termination_error"), "Archive report differs from checkpoint.")
-    require(progress.get("total_known") and int(progress["total_file_count"]) == len(items)
-            and int(progress["total_bytes"]) == sum(int(i["size_bytes"]) for i in items)
-            and int(progress["copied_file_count"]) == count and int(progress["copied_bytes"]) == size,
-            "Archive progress counts an unfinalized suffix.")
-    return prefix
 
 
 def check_restore_database(path, positions, selected_paths, media_id):

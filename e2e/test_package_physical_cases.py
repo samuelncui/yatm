@@ -11,12 +11,12 @@ import struct
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from package_physical_cases import BOUNDARY_CHUNK_BYTES, PhysicalCases, baseline_files, run_stage
-from package_physical_evidence import (check_checkpoint, check_positions, check_restore_database,
+from package_physical_cases import PhysicalCases, baseline_files, run_stage
+from package_physical_evidence import (check_positions, check_restore_database,
                                        check_signature, format_partition_map, library_positions, parse_index, relative_path,
-                                       seal_evidence, submitted_prefix, verify_evidence)
+                                       seal_evidence, verify_evidence)
 
 
 def encoded(data):
@@ -114,24 +114,6 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "gap"):
             check_positions([self.item], changed, index, "9")
 
-    def test_checkpoint_requires_published_prefix_and_complete_diagnostic(self):
-        pending = {"status": "COPY_STATUS_PENDING", "size_bytes": "3", "file": {}}
-        items = [self.item, pending]
-        job = {"status": "JOB_STATUS_READY", "error": "full"}
-        report = {"media_id": 9, "file_count": 1, "bytes": 3, "termination_error": "full"}
-        progress = {"total_known": True, "total_file_count": "2", "total_bytes": "6",
-                    "copied_file_count": "1", "copied_bytes": "3"}
-        line = b'event=archive_media_checkpoint reason=no_space media_id=9 files=1 bytes=3 error="device full"\n'
-        self.assertEqual(check_checkpoint(line, report, job, items, "9", progress), [self.item])
-        with self.assertRaisesRegex(RuntimeError, "complete durable"):
-            check_checkpoint(line.split(b" error=")[0], report, job, items, "9", progress)
-        with self.assertRaisesRegex(RuntimeError, "continuous prefix"):
-            submitted_prefix([pending, self.item], "9")
-        with self.assertRaisesRegex(RuntimeError, "staged"):
-            submitted_prefix([self.item, {**pending, "status": "COPY_STATUS_STAGED"}], "9")
-        with self.assertRaisesRegex(RuntimeError, "unfinalized"):
-            check_checkpoint(line, report, job, items, "9", {**progress, "copied_bytes": "6"})
-
     def test_restore_copy_reads_local_snapshot_without_mutation(self):
         path = self.directory / "state.db"
         with closing(sqlite3.connect(path)) as db:
@@ -164,7 +146,8 @@ class StageSafetyTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.test = Mock()
         self.test.args = SimpleNamespace(physical_stage="baseline", physical_device="/dev/nst0",
-                                         physical_barcode="ABC001", out=Path(self.temporary.name))
+                                         physical_barcode="ABC001", out=Path(self.temporary.name),
+                                         syscall_trace=None, no_syscall_trace=True, require_sg_trace=False)
         self.test.root = "/isolated/run"
         self.test.install = "/isolated/run/install"
         self.state = {"partition_map": {"index": "a", "data": "b"}}
@@ -200,59 +183,21 @@ class StageSafetyTests(unittest.TestCase):
             self.cases.inspect()
         self.test.one.assert_called_once_with("media", "inspect", "tape", "--device", "/dev/nst0")
 
-    def test_existing_full_job_only_validates_checkpoint(self):
-        self.state.update(restore_complete=True, full_archive_job_id="123")
-        self.cases.full_checkpoint = Mock()
-        self.cases.full_write()
-        self.cases.full_checkpoint.assert_called_once_with()
-        self.test.remote.assert_not_called()
-        self.test.cli.assert_not_called()
-        self.save.assert_not_called()
-
-    def test_interrupted_prefill_never_repeats_device_work(self):
-        self.state["prefill_started"] = True
-        with self.assertRaisesRegex(RuntimeError, "already started"):
-            self.cases.prefill(4 * 1024**3)
-        self.test.stop_owned.assert_not_called()
-        self.test.remote.assert_not_called()
-
     def test_completed_restore_never_rereads_or_runs_again(self):
         self.state["restore_complete"] = True
         self.cases.restore_selection("restore_job_id", [], "baseline", "restore_complete")
         self.test.one.assert_not_called()
         self.test.remote.assert_not_called()
 
-    def test_stream_size_above_32_bits_and_filler_has_no_hash_pass(self):
-        size = 2 * 1024**4
-        self.test.remote.side_effect = [SimpleNamespace(stdout=b""), SimpleNamespace(stdout=str(size).encode())]
-        manifest = self.cases.stream_fixture("/isolated/run/prefill-mount/filler.bin", size, 1000000, False)
-        self.assertEqual(manifest, {"size": size, "stream": 1000000})
+    def test_stream_size_above_32_bits_hashes_inline(self):
+        size = 64 * 1024**3
+        self.test.remote.side_effect = [SimpleNamespace(stdout=b"a" * 64 + b"  -\n"), SimpleNamespace(stdout=str(size).encode())]
+        manifest = self.cases.stream_fixture("/isolated/run/fixtures/source/capacity/chunk-000.bin", size, 1000000)
+        self.assertEqual(manifest, {"size": size, "stream": 1000000, "sha256": "a" * 64})
         command = self.test.remote.call_args_list[0].args[0]
         self.assertIn(str(size // 1024**2), command)
-        self.assertNotIn("sha256sum", command[2])
+        self.assertIn("tee -- \"$1\" | sha256sum", command[2])
         self.assertEqual(self.test.remote.call_count, 2)
-
-    def test_prefill_stream_failure_retains_guard_without_restart_or_unmount(self):
-        self.state.update(media_id="9")
-        self.cases.check_media = Mock()
-        self.cases.inspect = Mock(return_value={"media": {"id": "9", "profile": {"tape": {"encryption": "v1:" + "f" * 64}}}})
-        self.cases.tape_script = Mock()
-        self.cases.available = Mock(return_value=100 * 1024**3)
-        self.cases.stream_fixture = Mock(side_effect=RuntimeError("stream failed"))
-        mount = self.test.root + "/prefill-mount"
-        responses = [b"", b'{"barcode":"ABC001"}', b"", b"",
-                     json.dumps({"filesystems": [{"target": mount, "fstype": "fuse.ltfs"}]}).encode()]
-        self.test.remote.side_effect = [SimpleNamespace(stdout=value) for value in responses]
-        self.test.stop_owned.side_effect = lambda: self.assertTrue(self.state["prefill_started"])
-        with self.assertRaisesRegex(RuntimeError, "stream failed"):
-            self.cases.prefill(4 * 1024**3)
-        self.assertTrue(self.state["prefill_started"])
-        self.assertNotIn("prefill_complete", self.state)
-        self.test.start_owned.assert_not_called()
-        self.assertNotIn("umount", [call.args[0] for call in self.cases.tape_script.call_args_list])
-        key_write = self.test.remote.call_args_list[2]
-        self.assertNotIn("f" * 64, repr(key_write.args))
-        self.assertEqual(key_write.kwargs["body"], b"f" * 64)
 
     def test_existing_restore_never_submits_a_second_media_attempt(self):
         self.state.update(restore_job_id="44", restore_job_id_submitted=True)
@@ -453,14 +398,19 @@ class StageSafetyTests(unittest.TestCase):
         log = b"x" * (4 * 1024**2 - 1) + "归档完成\n".encode() + b"YWJj\n\xff"
         root = self.test.install + "/work/jobs/44"
         files = {self.test.root + "/tmp/physical-job-44.db": b"database snapshot",
-                 root + "/job.json": b'{"id":"44"}', root + "/job.log": log}
+                 root + "/job.json": b'{"id":"44"}', root + "/job.log": log,
+                 root + "/tapes/ABC001/sg-trace.jsonl": b'{"event":"init"}\n{"raw":"ff"}\n\xff',
+                 root + "/tapes/ABC001/sg-trace.jsonl.error": b"observer failed\n\xff",
+                 root + "/tapes/ABC001/sg-trace.jsonl.backup": b"not selected"}
 
         def remote(argv):
             if argv[0] == "sha256sum":
                 return SimpleNamespace(stdout=(hashlib.sha256(files[argv[-1]]).hexdigest() + "  file\n").encode())
             if argv[0] == "cat":
                 return SimpleNamespace(stdout=files[argv[-1]])
-            self.assertIn(argv[0], ("sqlite3", "find"))
+            if argv[0] == "find":
+                return SimpleNamespace(stdout=b"\x00".join(path.encode() for path in files if "/tapes/" in path) + b"\x00")
+            self.assertIn(argv[0], ("sqlite3", "test"))
             return SimpleNamespace(stdout=b"")
 
         self.test.one.return_value = {"job": {"id": "44", "status": "JOB_STATUS_COMPLETED"}}
@@ -468,10 +418,21 @@ class StageSafetyTests(unittest.TestCase):
         directory = self.cases.capture_job({"id": "44"})
         self.assertEqual((directory / "job.log").read_bytes(), log)
         self.test.one.assert_called_once_with("job", "get", "44")
+        for name in ("sg-trace.jsonl", "sg-trace.jsonl.error"):
+            self.assertEqual((directory / "tapes/ABC001" / name).read_bytes(), files[root + "/tapes/ABC001/" + name])
+        self.assertFalse((directory / "tapes/ABC001/sg-trace.jsonl.backup").exists())
+        seal_evidence(self.cases.evidence)
+        verify_evidence(self.cases.evidence)
+        self.cases.tape_evidence("44", verify=True)
+        (directory / "tapes/ABC001/sg-trace.jsonl.error").unlink()
+        with self.assertRaisesRegex(RuntimeError, "Live Tape evidence is missing"):
+            self.cases.tape_evidence("44", verify=True)
 
     def test_capture_failure_prevents_all_cleanup_deletes(self):
-        self.state["full_verify_complete"] = True
-        self.test.one.return_value = {"jobs": [{"id": "1"}, {"id": "2"}]}
+        self.state.update(restore_complete=True, completed_stages=["prepare", "baseline", "restore"])
+        self.test.one.side_effect = [{"jobs": [{"id": "1", "status": "JOB_STATUS_COMPLETED"},
+                                               {"id": "2", "status": "JOB_STATUS_READY"}]}, {"devices": ["/dev/nst0"]}]
+        self.cases.ejected = Mock()
         self.cases.export = Mock()
         self.cases.capture_job = Mock(side_effect=RuntimeError("snapshot failed"))
         with self.assertRaisesRegex(RuntimeError, "snapshot failed"):
@@ -479,12 +440,242 @@ class StageSafetyTests(unittest.TestCase):
         self.test.cli.assert_not_called()
         self.assertNotIn("evidence_complete", self.state)
 
+    def cleanup_fixture(self, capacity=False):
+        self.state.update(restore_complete=True, completed_stages=["prepare", "baseline", "restore"])
+        if capacity:
+            self.state.update(performance=True, capacity_write_observed=True, capacity_device_released=True,
+                              capacity_restore_complete=True, capacity_verify_complete=True,
+                              completed_stages=["performance-prepare", "performance-format", "capacity-verify"])
+        jobs = [{"id": "1", "status": "JOB_STATUS_READY", "error": "capacity exhausted"},
+                {"id": "2", "status": "JOB_STATUS_COMPLETED"}]
+        def one(*args):
+            if args[:2] == ("job", "list"):
+                return {"jobs": jobs}
+            if args[:3] == ("tape", "device", "list"):
+                return {"devices": ["/dev/nst0"]}
+            if args[:2] == ("job", "get"):
+                return {"job": next(job for job in jobs if job["id"] == args[2])}
+            self.fail("Unexpected cleanup request: " + repr(args))
+        self.test.one.side_effect = one
+        self.cases.export = Mock(side_effect=lambda name: self.cases.keep(name, b"library backup"))
+        def capture(job):
+            self.cases.keep_json("jobs/" + job["id"] + "/catalog.json", job)
+            self.cases.keep("jobs/" + job["id"] + "/state.db", b"snapshot")
+        self.cases.capture_job = Mock(side_effect=capture)
+        self.cases.ejected = Mock()
+        self.cases.tape_evidence = Mock()
+        self.state.update(commit="a" * 40, version="v1.0.0-alpha.2", remote_root=self.test.root)
+        self.cases.keep("source/packages.sha256", ("b" * 64 + "  main.tar.gz\n").encode())
+        self.cases.keep("source/controller.sha256", ("c" * 64 + "  e2e/physical_package_acceptance.py\n").encode())
+        stages = (["performance-prepare", "performance-format", "capacity-write", "capacity-verify"] if capacity
+                  else ["prepare", "baseline", "restore"])
+        for stage in stages:
+            status = "failed" if stage == "capacity-write" else "passed"
+            self.cases.keep_json("stages/" + stage + "/report.json", {
+                "commit": self.state["commit"], "version": self.state["version"], "remote_root": self.test.root,
+                "archive": {"path": "main.tar.gz", "sha256": "b" * 64}, "duration_seconds": 123.5,
+                "status": status, "cases": [{"name": "physical-" + stage, "status": status}]})
+        return jobs
+
+    def test_cleanup_seals_and_verifies_both_current_sequences(self):
+        for capacity in (False, True):
+            with self.subTest(capacity=capacity):
+                self.state.clear()
+                self.test.reset_mock()
+                jobs = self.cleanup_fixture(capacity)
+                def delete(*args):
+                    self.assertEqual(args[:2], ("job", "delete"))
+                    verify_evidence(self.cases.evidence)
+                    self.assertTrue(self.state["evidence_complete"])
+                self.test.cli.side_effect = delete
+                with patch.object(self.cases, "cleanup_evidence", wraps=self.cases.cleanup_evidence) as prerequisites, \
+                        patch.object(self.cases, "syscall_evidence", wraps=self.cases.syscall_evidence) as observers:
+                    self.cases.cleanup()
+                prerequisites.assert_called_once_with()
+                observers.assert_called_once_with()
+                self.assertTrue(self.state["cleanup_complete"])
+                self.assertEqual(self.state["deleted_job_ids"], [job["id"] for job in jobs])
+                self.assertEqual(self.test.cli.call_count, 2)
+                self.assertTrue(all(call.args[0][:3] == ["test", "!", "-e"]
+                                    for call in self.test.remote.call_args_list))
+                self.test.check_cleanup_paths.assert_called_once()
+                self.cases.ejected.assert_called_once()
+
+    def seal_without_deleting(self):
+        jobs = self.cleanup_fixture(capacity=True)
+        self.test.cli.side_effect = RuntimeError("delete interrupted")
+        with self.assertRaisesRegex(RuntimeError, "delete interrupted"):
+            self.cases.cleanup()
+        self.test.cli.reset_mock(side_effect=True)
+        return jobs
+
+    def test_cleanup_rejects_changed_evidence_and_manifest_before_deletion(self):
+        self.seal_without_deleting()
+        snapshot = self.cases.evidence / "jobs/1/state.db"
+        snapshot.write_bytes(b"changed")
+        with self.assertRaisesRegex(RuntimeError, "checksum"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+        seal_evidence(self.cases.evidence)
+        with self.assertRaisesRegex(RuntimeError, "manifest changed"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+
+    def test_cleanup_rechecks_live_catalog_after_sealing(self):
+        jobs = self.seal_without_deleting()
+        jobs[0]["phase"] = "JOB_PHASE_COPYING_TO_MEDIA"
+        with self.assertRaisesRegex(RuntimeError, "active or uncertain"):
+            self.cases.cleanup()
+        jobs[0].pop("phase")
+        jobs[0]["error"] = "another attempt"
+        with self.assertRaisesRegex(RuntimeError, "changed after evidence"):
+            self.cases.cleanup()
+        jobs.append({"id": "3", "status": "JOB_STATUS_COMPLETED"})
+        with self.assertRaisesRegex(RuntimeError, "catalog changed"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+
+    def test_cleanup_resumes_only_remaining_preserved_jobs(self):
+        jobs = self.seal_without_deleting()
+        jobs.pop(0)
+        self.state["deleted_job_ids"] = ["1"]
+        self.cases.capture_job.reset_mock()
+        self.cases.cleanup()
+        self.test.cli.assert_called_once_with("job", "delete", "2")
+        self.cases.capture_job.assert_not_called()
+
+    def test_cleanup_rejects_incomplete_readback_uncertain_device_and_mounts(self):
+        self.cleanup_fixture(capacity=True)
+        for key in ("capacity_write_observed", "capacity_device_released", "capacity_restore_complete", "capacity_verify_complete"):
+            self.state[key] = False
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, "completed baseline or capacity readback"):
+                self.cases.cleanup()
+            self.state[key] = True
+        self.test.one.assert_not_called()
+        self.cases.ejected = Mock(wraps=PhysicalCases.ejected.__get__(self.cases))
+        self.test.one.side_effect = [{"jobs": []}, {"devices": []}]
+        with self.assertRaisesRegex(RuntimeError, "owner remains uncertain"):
+            self.cases.cleanup()
+        self.cases.ejected.assert_called_once_with()
+        self.test.remote.assert_not_called()
+        self.cleanup_fixture(capacity=True)
+        self.test.check_cleanup_paths.side_effect = RuntimeError("owned mount remains")
+        with self.assertRaisesRegex(RuntimeError, "owned mount remains"):
+            self.cases.cleanup()
+        self.cases.capture_job.assert_not_called()
+        self.test.cli.assert_not_called()
+
+    def syscall_files(self, files, active=False, corrupt=False):
+        self.test.args.no_syscall_trace = False
+        self.test.args.syscall_trace = list(files)
+        def remote(argv, **kwargs):
+            if argv[0] == "fuser":
+                return SimpleNamespace(returncode=0 if active else 1, stdout=b"", stderr=b"")
+            if argv[0] == "sha256sum":
+                return SimpleNamespace(stdout=(hashlib.sha256(files[argv[-1]]).hexdigest() + "  file\n").encode())
+            if argv[0] == "cat":
+                return SimpleNamespace(stdout=b"truncated" if corrupt else files[argv[-1]])
+            self.assertEqual(argv[0], "test")
+            return SimpleNamespace(stdout=b"")
+        self.test.remote.side_effect = remote
+
+    def test_cleanup_preserves_supplied_inside_and_outside_syscall_evidence(self):
+        self.cleanup_fixture(capacity=True)
+        files = {self.test.root + "/syscall.trace": b"write(3, ...) = 10\n\xff",
+                 "/preserved/syscall.trace.123": b"statfs(...) = 0\n"}
+        self.syscall_files(files)
+        self.cases.cleanup()
+        for source, content in files.items():
+            self.assertEqual((self.cases.evidence / "observers/syscall" / Path(source).name).read_bytes(), content)
+        verify_evidence(self.cases.evidence)
+        self.assertEqual(self.test.cli.call_count, 2)
+        self.assertTrue(all(call.args[:2] == ("job", "delete") for call in self.test.cli.call_args_list))
+
+    def test_active_corrupt_or_ambiguous_syscall_evidence_prevents_deletion(self):
+        self.cleanup_fixture(capacity=True)
+        files = {self.test.root + "/syscall.trace": b"exact trace"}
+        for active, corrupt, message in ((True, False, "active or ownership"), (False, True, "checksum mismatch")):
+            self.syscall_files(files, active=active, corrupt=corrupt)
+            with self.subTest(active=active), self.assertRaisesRegex(RuntimeError, message):
+                self.cases.cleanup()
+            self.assertNotIn("evidence_complete", self.state)
+        self.syscall_files({"/first/trace": b"one", "/second/trace": b"two"})
+        with self.assertRaisesRegex(RuntimeError, "duplicate filenames"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+
+    def test_changed_syscall_trace_after_sealing_blocks_resumed_deletion(self):
+        files = {self.test.root + "/syscall.trace": b"original complete trace"}
+        self.syscall_files(files)
+        self.seal_without_deleting()
+        files[self.test.root + "/syscall.trace"] = b"different trace"
+        with self.assertRaisesRegex(RuntimeError, "Syscall evidence differs"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+
+    def test_cleanup_requires_original_source_stage_timings_and_requested_sg(self):
+        self.cleanup_fixture(capacity=True)
+        path = self.cases.evidence / "source/controller.sha256"
+        data = path.read_bytes()
+        path.unlink()
+        with self.assertRaisesRegex(RuntimeError, "source/controller.sha256"):
+            self.cases.cleanup()
+        path.write_bytes(data)
+        path = self.cases.evidence / "stages/capacity-write/report.json"
+        report = json.loads(path.read_text())
+        for update in ({"duration_seconds": None}, {"duration_seconds": float("nan")},
+                       {"remote_root": "/another/run"}, {"cases": []}):
+            path.write_text(json.dumps({**report, **update}))
+            with self.subTest(update=update), self.assertRaises(RuntimeError):
+                self.cases.cleanup()
+        path.write_text(json.dumps(report))
+        self.test.args.require_sg_trace = True
+        self.state.update(capacity_archive_job_id="1", capacity_restore_job_id="2")
+        with self.assertRaisesRegex(RuntimeError, "SG observer source/binary identities"):
+            self.cases.cleanup()
+        with (self.cases.evidence / "source/controller.sha256").open("a") as output:
+            output.write("d" * 64 + "  e2e/physical_sg_trace.c\n" + "e" * 64 + "  physical_sg_trace.so\n")
+        with self.assertRaisesRegex(RuntimeError, "Required capacity SG trace"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+        self.assertNotIn("evidence_complete", self.state)
+        for identifier in ("1", "2"):
+            self.cases.keep("jobs/" + identifier + "/tapes/ABC001/sg-trace.jsonl", b'{"event":"init"}\n')
+        self.cases.keep("jobs/1/tapes/ABC001/sg-trace.jsonl.error", b"observer error retained for review")
+        self.cases.cleanup()
+        verify_evidence(self.cases.evidence)
+
+    def test_old_seal_missing_live_sg_evidence_cannot_delete_jobs(self):
+        self.seal_without_deleting()
+        self.cases.tape_evidence = lambda identifier, verify=False: PhysicalCases.tape_evidence(self.cases, identifier, verify)
+        self.test.remote.side_effect = lambda argv: SimpleNamespace(stdout=(
+            (self.test.install + "/work/jobs/" + argv[1].split("/")[-1] + "/tapes/ABC001/sg-trace.jsonl\x00").encode()
+            if argv[0] == "find" else b""))
+        with self.assertRaisesRegex(RuntimeError, "Live Tape evidence is missing"):
+            self.cases.cleanup()
+        self.test.cli.assert_not_called()
+
+    def test_ejected_checks_lease_once_before_reading_status(self):
+        events = []
+        def one(*args):
+            events.append("lease")
+            return {"devices": ["/dev/nst0"]}
+        def remote(argv):
+            self.assertEqual(events, ["lease"])
+            events.append("status")
+            return SimpleNamespace(stdout=b"DR_OPEN")
+        self.test.one.side_effect = one
+        self.test.remote.side_effect = remote
+        self.cases.ejected()
+        self.assertEqual(events, ["lease", "status"])
+        self.test.one.assert_called_once_with("tape", "device", "list")
+        self.test.remote.assert_called_once_with(["mt", "-f", "/dev/nst0", "status"])
+
     def test_no_giant_source_fixture(self):
         files = baseline_files()
         self.assertLess(sum(map(len, files.values())), 6 * 1024**2)
         self.assertEqual(files["dataset/empty.bin"], b"")
         self.assertTrue(files["dataset/nested/payload.png"].startswith(b"\x89PNG\r\n\x1a\n"))
-        self.assertEqual(BOUNDARY_CHUNK_BYTES, 4294967296)
 
 
 if __name__ == "__main__":

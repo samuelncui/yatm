@@ -90,6 +90,9 @@ One [Media operation](../../internal/executor/archive/media.go) proceeds in this
 
 The [result stream](../../internal/executor/archive/stream.go) validates completed copy facts and hands them to the shared [result writer](../../internal/executor/result_writer.go): the results callback only starts a write of the outcomes a durable row can express, which ACP hands over in batches of up to `write_batch_size` items, and the writer stages them outside the feed. A staging failure is the writer's terminal error and fails the phase; a result no durable row can express, such as a target that refused its file, is a per-item outcome the attempt reports while it keeps the item PENDING. STAGED is a candidate result, not durable archive success. Initialization resets leftover unsubmitted STAGED items and attempt report data to PENDING; resetting also clears Media path and result. Only submitted files count toward durable progress, historical speed, ETA, and reports; verified zero-byte files count too.
 
+ACP target no-space normalization retains the original error chain, including joined write, close
+and temporary-output cleanup failures. The failed item stays PENDING without a staged copy result.
+
 An Archive Media operation ending in an error or operator cancellation settles the runner and returns the Job to its pre-Media `READY` state with its reason and timing. The prepared manifest and successfully submitted items remain; another explicit load-Media operation processes the remaining items.
 
 [Media finalization](media-io.md) defines which candidates survive normal completion, cancellation, target-full conditions, or validation failure. Prefix directories have no batch identity or cleanup ownership.

@@ -7,18 +7,18 @@ and final host cleanup. Partition roles come from the captured mkltfs log.
 import base64
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 
 from package_acceptance import require, sha256
 from package_ltfs_cases import TapeWorkflows
 from package_physical_evidence import (check_positions, check_restore_database, check_signature,
-                                       check_checkpoint, decode_bytes, format_partition_map, library_positions, parse_index, relative_path,
+                                       decode_bytes, format_partition_map, library_positions, parse_index, relative_path,
                                        seal_evidence, verify_evidence)
 
 
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
-BOUNDARY_CHUNK_BYTES = 4 * 1024**3
 
 
 def baseline_files():
@@ -31,6 +31,18 @@ def baseline_files():
             "dataset/empty.bin": b"", "dataset/nested/payload.png": PNG,
             "append/index-small.txt": content("append-index", 65 * 1024),
             "append/data.bin": content("append-data", 2453668)}
+
+
+def check_cleanup_state(state):
+    if state.get("performance"):
+        required = ("performance-prepare", "performance-format", "capacity-verify")
+        complete = (state.get("capacity_write_observed") and state.get("capacity_device_released")
+                    and state.get("capacity_restore_complete") and state.get("capacity_verify_complete"))
+    else:
+        required = ("prepare", "baseline", "restore")
+        complete = state.get("restore_complete")
+    require(complete and all(stage in state.get("completed_stages", []) for stage in required),
+            "Cleanup requires completed baseline or capacity readback; retain incomplete evidence and owned resources.")
 
 
 class PhysicalCases(TapeWorkflows):
@@ -86,10 +98,10 @@ class PhysicalCases(TapeWorkflows):
         return result
 
     def ejected(self):
+        devices = self.test.one("tape", "device", "list").get("devices", [])
+        require(self.device(self.barcode) in devices, "Device owner remains uncertain; no physical status query attempted.")
         status = self.test.remote(["mt", "-f", self.device(self.barcode), "status"]).stdout.decode()
         require(re.search(r"\bDR_OPEN\b", status), "Physical operation completed before cartridge eject.")
-        devices = self.test.one("tape", "device", "list").get("devices", [])
-        require(self.device(self.barcode) in devices, "Device remains unavailable after settlement.")
 
     def archive_items(self, job):
         # Shared assertions handle the deliberately small baseline; no EOM-size assumption here.
@@ -117,7 +129,12 @@ class PhysicalCases(TapeWorkflows):
         self.copy_evidence(root + "/job.json", "jobs/" + identifier + "/job.json")
         # Preserve exact bytes; CLI JSON text can replace UTF-8 split across byte pages.
         self.copy_evidence(root + "/job.log", "jobs/" + identifier + "/job.log")
-        listing = self.test.remote(["find", root, "-type", "f", "-print0"]).stdout
+        self.tape_evidence(identifier)
+        return self.evidence / "jobs" / identifier
+
+    def tape_evidence(self, identifier, verify=False):
+        root = self.test.install + "/work/jobs/" + identifier
+        listing = self.test.remote(["find", root, "(", "-type", "f", "-o", "-type", "l", ")", "-print0"]).stdout
         for raw in listing.split(b"\x00"):
             if not raw:
                 continue
@@ -125,9 +142,17 @@ class PhysicalCases(TapeWorkflows):
             require(path.startswith(root + "/"), "Job artifact escaped its bundle.")
             relative = str(relative_path(path[len(root) + 1:]))
             if relative.startswith("tapes/") and (relative.endswith(".schema") or relative.rsplit("/", 1)[-1] in
-                                                 ("ltfs.log", "yatm-report.json")):
-                self.copy_evidence(path, "jobs/" + identifier + "/" + relative)
-        return self.evidence / "jobs" / identifier
+                                                 ("ltfs.log", "yatm-report.json", "capacity-before-copy.json",
+                                                  "capacity-before-unmount.json", "sg-trace.jsonl", "sg-trace.jsonl.error")):
+                self.test.remote(["test", "!", "-L", path])
+                destination = "jobs/" + identifier + "/" + relative
+                if verify:
+                    preserved = self.evidence / destination
+                    require(preserved.is_file() and sha256(preserved) ==
+                            self.test.remote(["sha256sum", "--", path]).stdout.decode().split()[0],
+                            "Live Tape evidence is missing or differs from its sealed copy; retain all Jobs.")
+                else:
+                    self.copy_evidence(path, destination)
 
     def copy_evidence(self, source, relative):
         expected = self.test.remote(["sha256sum", "--", source]).stdout.decode().split()[0]
@@ -328,11 +353,14 @@ class PhysicalCases(TapeWorkflows):
         require(self.state.get("baseline_complete"), "Restore requires a completed baseline and lifecycle restart.")
         self.restore_selection("restore_job_id", self.state["baseline_items"], "baseline", "restore_complete")
 
-    def restore_selection(self, key, items, directory, completion):
+    def restore_selection(self, key, items, directory, completion, *, observe=None, timeout=14400):
+        from contextlib import nullcontext
+
         if self.state.get(completion):
             return
         self.check_media()
-        if key not in self.state:
+        submit = key not in self.state
+        if submit:
             inspected = self.inspect()
             require(str(inspected["media"]["id"]) == self.state["media_id"], "Restore inspected a different Tape.")
             args = ["restore", "create", "--target-location", self.restored, "--directory", directory]
@@ -340,13 +368,15 @@ class PhysicalCases(TapeWorkflows):
                 args += ["--file-id", str(item["file"]["expected"]["file_id"])]
             job = self.created(key, *args)
             self.settled(job, "JOB_STATUS_READY")
-            self.save(**{key + "_submitted": True})
-            self.test.cli("restore", "run", "tape", job["id"], "--device", self.device(self.barcode))
         else:
             job = self.job(key)
             # Do not turn an interrupted or failed invocation into an implicit second Media attempt.
             require(self.state.get(key + "_submitted"), "Saved Restore was not submitted; explicit operator review is required.")
-        self.settled(job, timeout=14400)
+        with observe(job) if observe else nullcontext():
+            if submit:
+                self.save(**{key + "_submitted": True})
+                self.test.cli("restore", "run", "tape", job["id"], "--device", self.device(self.barcode))
+            self.settled(job, timeout=timeout)
         self.ejected()
         page = self.test.one("restore", "files", job["id"], "--media-id", self.state["media_id"], "--limit", "100")
         restored = page.get("items", [])
@@ -380,21 +410,12 @@ class PhysicalCases(TapeWorkflows):
         self.keep_json(directory + "-restore-storage-order.json", order)
         self.save(**{completion: True})
 
-    def tape_script(self, name, directory, **environment):
-        require(name in ("readinfo", "encrypt", "mount.openltfs", "umount"), "Unexpected physical Tape script.")
-        values = {"DEVICE": self.device(self.barcode), "TAPE_BARCODE": self.barcode,
-                  "TAPE_NAME": "Physical acceptance", "TAPE_DIR": directory, **environment}
-        # readinfo invokes the shipped lto-info by relative path; run from the verified installation.
-        return self.test.remote(["bash", "-c", 'cd "$1"; shift; exec "$@"', "physical-script", self.test.install,
-                                 "env", *[key + "=" + value for key, value in values.items()],
-                                 self.test.root + "/tape-scripts/" + name], timeout=900)
-
     def available(self, path):
         values = self.test.remote(["stat", "-f", "-c", "%a %S", "--", path]).stdout.split()
         require(len(values) == 2, "Filesystem available-space result is incomplete.")
         return int(values[0]) * int(values[1])
 
-    def stream_fixture(self, path, size, stream, hash_content=True):
+    def stream_fixture(self, path, size, stream):
         require(size > 0 and size % (1024**2) == 0, "Fixture size must be a positive whole MiB.")
         require(path.startswith(self.test.root + "/"), "Fixture destination is outside the owned root.")
         relative_path(path[len(self.test.root) + 1:])
@@ -403,176 +424,124 @@ class PhysicalCases(TapeWorkflows):
         command = ('set -euo pipefail; test ! -e "$1"; '
                    'dd if=/dev/zero bs=1M count="$2" status=none | '
                    'openssl enc -aes-256-ctr -K "$3" -iv "$4" -nosalt')
-        command += ' | tee -- "$1" | sha256sum' if hash_content else ' > "$1"'
+        command += ' | tee -- "$1" | sha256sum'
         result = self.test.remote(["bash", "-c", command, "physical-fixture", path,
                                    str(size // 1024**2), seed, f"{stream:032x}"], timeout=43200)
         actual_size = int(self.test.remote(["stat", "-c", "%s", "--", path]).stdout)
         require(actual_size == size, "Fixture stream did not write its complete bounded content.")
-        manifest = {"size": size, "stream": stream}
-        if hash_content:
-            digest = result.stdout.decode().split()[0]
-            require(re.fullmatch(r"[0-9a-f]{64}", digest), "Fixture stream did not complete its SHA-256.")
-            manifest["sha256"] = digest
-        return manifest
+        digest = result.stdout.decode().split()[0]
+        require(re.fullmatch(r"[0-9a-f]{64}", digest), "Fixture stream did not complete its SHA-256.")
+        return {"size": size, "stream": stream, "sha256": digest}
 
-    def prefill(self, chunk):
-        require(not self.state.get("prefill_started"), "Prefill already started; retain partial results for diagnosis.")
-        self.check_media()
-        inspected = self.inspect()
-        require(str(inspected["media"]["id"]) == self.state["media_id"], "Prefill inspected a different Tape.")
-        encryption = inspected["media"]["profile"]["tape"]["encryption"]
-        require(re.fullmatch(r"v1:[0-9a-f]{64}", encryption), "Unsupported scratch Tape key encoding.")
-        directory, mount = self.test.root + "/prefill", self.test.root + "/prefill-mount"
-        key = directory + "/scratch.key"
-        self.save(prefill_started=True, boundary_chunk_bytes=chunk)
-        self.test.stop_owned()
-        self.test.remote(["mkdir", "--", directory, mount])
-        info = directory + "/identity.json"
-        self.tape_script("readinfo", directory, OUT=info)
-        require(json.loads(self.test.remote(["cat", "--", info]).stdout)["barcode"] == self.barcode,
-                "Cartridge changed before stopped-service prefill.")
-        # Do not put the encryption key in arguments, stdout, state or error messages.
-        self.test.remote(["bash", "-c", 'umask 077; set -C; cat > "$1"', "physical-key", key],
-                         body=encryption[3:].encode())
-        try:
-            self.tape_script("encrypt", directory, KEY_FILE=key)
-        finally:
-            self.test.remote(["rm", "--", key])
-        self.tape_script("mount.openltfs", directory, MOUNT_POINT=mount)
-        mounted = self.test.remote(["findmnt", "--json", "--mountpoint", mount, "--output", "TARGET,FSTYPE"]).stdout
-        mounts = json.loads(mounted).get("filesystems", [])
-        require(len(mounts) == 1 and mounts[0]["target"] == mount and mounts[0]["fstype"].startswith("fuse"),
-                "Prefill destination is not the owned LTFS mount.")
-        available = self.available(mount)
-        fill_size = ((available - 2 * chunk) // 1024**2) * 1024**2
-        require(fill_size > 0, "Tape lacks the planned prefill headroom; no filler was written.")
-        filler = "physical-acceptance-filler.bin"
-        manifest = self.stream_fixture(mount + "/" + filler, fill_size, 1000000, hash_content=False)
-        remaining = self.available(mount)
-        require(chunk < remaining < 3 * chunk, "Post-prefill free space cannot support the bounded boundary fixture.")
-        self.save(prefill_manifest={"path": filler, **manifest}, prefill_available_bytes=remaining)
-        self.tape_script("umount", directory, MOUNT_POINT=mount)
-        index_path = self.copy_evidence(directory + "/" + self.barcode + ".schema", "prefill/" + self.barcode + ".schema")
-        self.copy_evidence(directory + "/ltfs.log", "prefill/ltfs.log")
-        index = parse_index(index_path.read_bytes())
-        require(filler in index and index[filler]["size"] == fill_size, "Prefill final Index did not retain the complete filler.")
-        from package_physical_evidence import extent_order
-        extent_order(index[filler]["extents"], fill_size)
-        require(all(e["partition"] == self.state["partition_map"]["data"] for e in index[filler]["extents"]),
-                "Prefill did not consume the data partition.")
-        status = self.test.remote(["mt", "-f", self.device(self.barcode), "status"]).stdout.decode()
-        require(re.search(r"\bDR_OPEN\b", status), "Prefill did not eject normally.")
-        self.keep_json("prefill/manifest.json", self.state["prefill_manifest"])
-        self.save(prefill_complete=True)
-        self.test.start_owned()
+    def cleanup_evidence(self):
+        # Fixed existing artifacts, not a second acceptance record or reconstructed timings.
+        manifests = {}
+        for name in ("packages.sha256", "controller.sha256"):
+            path = self.evidence / "source" / name
+            require(path.is_file() and not path.is_symlink(), "Preserve source/" + name + " before cleanup.")
+            rows = [line.split("  ", 1) for line in path.read_text().splitlines()]
+            require(rows and all(len(row) == 2 and re.fullmatch(r"[0-9a-f]{64}", row[0]) and row[1] for row in rows),
+                    "Source checksum manifest is incomplete: " + name)
+            manifests[name] = {Path(filename).name: digest for digest, filename in rows}
+        require("physical_package_acceptance.py" in manifests["controller.sha256"],
+                "Source manifest lacks the executed physical controller identity.")
+        stages = (("performance-prepare", "performance-format", "capacity-write", "capacity-verify")
+                  if self.state.get("performance") else ("prepare", "baseline", "restore"))
+        for stage in stages:
+            path = self.evidence / "stages" / stage / "report.json"
+            require(path.is_file() and not path.is_symlink(), "Preserve the original stage report before cleanup: " + stage)
+            report = json.loads(path.read_text())
+            require(all(report.get(key) == self.state[key] for key in ("commit", "version", "remote_root")),
+                    "Stage report belongs to a different source or installation: " + stage)
+            duration = report.get("duration_seconds")
+            require(type(duration) in (int, float) and math.isfinite(duration) and duration >= 0
+                    and report.get("status") in (("passed", "failed") if stage == "capacity-write" else ("passed",))
+                    and any(case.get("name") == "physical-" + stage and case.get("status") == report["status"]
+                            for case in report.get("cases", [])), "Stage timing/result is incomplete: " + stage)
+            if stage == stages[0]:
+                archive = report.get("archive", {})
+                require(archive.get("sha256") and manifests["packages.sha256"].get(Path(archive.get("path", "")).name)
+                        == archive["sha256"], "Package source manifest differs from the preparation report.")
+        if self.test.args.require_sg_trace:
+            require(self.state.get("performance"), "Required SG evidence applies to capacity Archive and Restore.")
+            require("physical_sg_trace.c" in manifests["controller.sha256"]
+                    and "physical_sg_trace.so" in manifests["controller.sha256"],
+                    "Source manifest lacks the executed SG observer source/binary identities.")
+            for key in ("capacity_archive_job_id", "capacity_restore_job_id"):
+                path = self.evidence / "jobs" / self.job(key)["id"] / "tapes" / self.barcode / "sg-trace.jsonl"
+                require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+                        "Required capacity SG trace is missing or empty: " + key)
 
-    def full_write(self):
-        require(self.state.get("restore_complete"), "Full boundary requires baseline Restore acceptance.")
-        if "full_archive_job_id" in self.state:
-            self.full_checkpoint()
-            return
-        chunk = BOUNDARY_CHUNK_BYTES
-        require(self.available(self.test.root) > 5 * chunk + 1024**3,
-                "Owned source/Restore filesystem lacks space for three sources and two restored chunks.")
-        if not self.state.get("prefill_complete"):
-            self.prefill(chunk)
-        require(self.state["boundary_chunk_bytes"] == chunk, "Boundary chunk size changed after prefill.")
-        require(not self.state.get("boundary_fixture_started"), "Boundary source generation was interrupted; retain it for diagnosis.")
-        self.save(boundary_fixture_started=True)
-        directory = self.test.root + "/fixtures/source/eom"
-        self.test.remote(["mkdir", "--", directory])
-        manifest = {}
-        for number in range(3):
-            name = f"chunk-{number:03d}.bin"
-            manifest[name] = self.stream_fixture(directory + "/" + name, chunk, number)
-        self.keep_json("boundary-source-manifest.json", manifest)
-        self.save(boundary_manifest=manifest)
-        job = self.created("full_archive_job_id", "archive", "create", "--location", self.source + ":eom")
-        self.settled(job, "JOB_STATUS_READY")
-        self.save(full_write_submitted=True)
-        self.test.cli("archive", "write", "tape", "append", job["id"], "--device", self.device(self.barcode),
-                      "--barcode", self.barcode)
-        self.test.wait_job(job, "JOB_STATUS_READY", timeout=28800)
-        self.ejected()
-        self.full_checkpoint()
-
-    def full_checkpoint(self):
-        job = self.job("full_archive_job_id")
-        current = self.test.one("job", "get", job["id"])["job"]
-        items = self.archive_items(job)
-        manifest = self.state["boundary_manifest"]
-        require(len(items) == len(manifest) == 3, "Full Archive changed the boundary fixture selection.")
-        names = [relative_path(item["file"]["target_path"]).name for item in items]
-        require(names == sorted(manifest), "Full Archive changed the deterministic boundary file order.")
-        for item in items:
-            name = relative_path(item["file"]["target_path"]).name
-            require(name in manifest and int(item["size_bytes"]) == manifest[name]["size"], "Boundary source size differs.")
-            if item["status"] == "COPY_STATUS_SUBMITTED":
-                require(decode_bytes(item["file"]["expected"]["sha256"]).hex() == manifest[name]["sha256"],
-                        "Submitted boundary hash differs from generation manifest.")
-        root = self.capture_job(job)
-        report = json.loads((root / "tapes" / self.barcode / "yatm-report.json").read_bytes())
-        progress = self.test.one("job", "progress", job["id"])["progress"]
-        prefix = check_checkpoint((root / "job.log").read_bytes(), report, current, items, self.state["media_id"], progress)
-        positions = self.export("library-full.jsonl")
-        index = parse_index((root / "tapes" / self.barcode / (self.barcode + ".schema")).read_bytes())
-        check_positions(prefix, positions, index, self.state["media_id"], self.state["partition_map"])
-        baseline = self.state["baseline_items"]
-        expected_paths = {i["file"]["media_path"] for i in baseline + prefix}
-        require(set(positions) == expected_paths, "Filler or unfinalized suffix leaked into Library Positions.")
-        filler = self.state["prefill_manifest"]
-        require(filler["path"] in index and index[filler["path"]]["size"] == filler["size"],
-                "Final Index lost or truncated the physical prefill file.")
-        # The later Index must retain both earlier Archives as well as this attempt's prefix.
-        for key in ("format_job_id", "append_job_id"):
-            earlier = self.archive_items(self.job(key))
-            check_positions(earlier, positions, index, self.state["media_id"], self.state["partition_map"])
-        self.check_media()
-        self.save(full_write_complete=True, full_submitted_items=prefix)
-        return prefix
-
-    def full_verify(self):
-        if self.state.get("full_verify_complete"):
-            return
-        prefix = self.full_checkpoint()
-        selected = [prefix[0]] if len(prefix) == 1 else [prefix[0], prefix[-1]]
-        self.restore_selection("boundary_restore_job_id", selected, "boundary", "full_verify_complete")
+    def syscall_evidence(self):
+        paths = self.test.args.syscall_trace or []
+        require(paths or self.test.args.no_syscall_trace, "Declare syscall evidence before cleanup.")
+        names = [Path(path).name for path in paths]
+        require(len(set(names)) == len(names), "Supplied syscall traces have duplicate filenames.")
+        for source, name in zip(paths, names):
+            relative_path(name)
+            self.test.remote(["test", "-f", source])
+            self.test.remote(["test", "!", "-L", source])
+            users = self.test.remote(["fuser", "--", source], expected=None)
+            require(users.returncode == 1 and not users.stdout.strip() and not users.stderr.strip(),
+                    "Syscall evidence is active or ownership is uncertain; stop the observer before cleanup.")
+            destination = "observers/syscall/" + name
+            if self.state.get("evidence_complete"):
+                preserved = self.evidence / destination
+                require(preserved.is_file() and sha256(preserved) ==
+                        self.test.remote(["sha256sum", "--", source]).stdout.decode().split()[0],
+                        "Syscall evidence differs from its sealed copy; retain owned resources.")
+            else:
+                self.copy_evidence(source, destination)
 
     def cleanup(self):
-        require(self.state.get("full_verify_complete"), "Cleanup requires completed physical full-boundary acceptance.")
+        check_cleanup_state(self.state)
+        jobs, offset = [], 0
+        while True:
+            page = self.test.one("job", "list", "--limit", "100", "--offset", str(offset))
+            batch = page.get("jobs", [])
+            jobs.extend(batch)
+            if not page.get("has_more"):
+                break
+            require(batch, "Job listing did not advance.")
+            offset += len(batch)
+        require(all(job.get("status") in ("JOB_STATUS_READY", "JOB_STATUS_COMPLETED", "JOB_STATUS_FAILED")
+                    and job.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED")
+                    for job in jobs), "Cannot clean active or uncertain Jobs.")
+        self.ejected()
+        self.test.check_cleanup_paths()
         # Capture the entire isolated catalog, including companion Jobs, before any deletion.
         if not self.state.get("evidence_complete"):
-            jobs, offset = [], 0
-            while True:
-                page = self.test.one("job", "list", "--limit", "100", "--offset", str(offset))
-                batch = page.get("jobs", [])
-                jobs.extend(batch)
-                if not page.get("has_more"):
-                    break
-                require(batch, "Job listing did not advance.")
-                offset += len(batch)
             require(jobs, "No physical Jobs remain to preserve.")
             self.export("library-final.jsonl")
             for job in jobs:
                 self.capture_job(job)
+        self.cleanup_evidence()
+        self.syscall_evidence()
+        if not self.state.get("evidence_complete"):
             digest = seal_evidence(self.evidence)
             self.save(evidence_complete=True, evidence_sha256=digest, cleanup_job_ids=[str(j["id"]) for j in jobs])
         verify_evidence(self.evidence)
         require(sha256(self.evidence / "SHA256SUMS") == self.state["evidence_sha256"],
                 "Saved evidence manifest changed; retain all Jobs.")
+        remaining = set(self.state["cleanup_job_ids"]) - set(self.state.get("deleted_job_ids", []))
+        require({str(job["id"]) for job in jobs} == remaining, "Job catalog changed after sealing; retain owned resources.")
+        for job in jobs:
+            saved = json.loads((self.evidence / "jobs" / str(job["id"]) / "catalog.json").read_text())
+            require(self.test.one("job", "get", str(job["id"]))["job"] == saved,
+                    "Job changed after evidence capture; retain owned resources.")
+            self.tape_evidence(str(job["id"]), verify=True)
         for identifier in self.state["cleanup_job_ids"]:
             if identifier in self.state.get("deleted_job_ids", []):
                 continue
             self.test.cli("job", "delete", identifier)
             self.test.remote(["test", "!", "-e", self.test.install + "/work/jobs/" + identifier])
             self.save(deleted_job_ids=self.state.get("deleted_job_ids", []) + [identifier])
-        self.ejected()
         self.save(cleanup_complete=True)
 
 
 def run_stage(test, state, save_state):
     stage = test.args.physical_stage
-    require(stage in ("prepare", "baseline", "restore", "full-write", "full-verify", "cleanup"), "Unknown physical stage.")
+    require(stage in ("prepare", "baseline", "restore", "cleanup"), "Unknown physical stage.")
     device, barcode = test.args.physical_device, test.args.physical_barcode
     require(isinstance(device, str) and device.startswith("/dev/") and ".." not in Path(device).parts,
             "Choose the explicit physical Tape device.")

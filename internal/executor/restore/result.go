@@ -108,14 +108,16 @@ func (a *jobRestoreRunner) checkpointResult(ctx context.Context, copy *copyCandi
 			return fmt.Errorf("Restore item is missing, item_id=%d", copy.ItemID)
 		}
 
-		// Indexing owns its final checkpoint; execution completes when every distinct item is satisfied.
-		var pending int64
-		if err := tx.Model(&Copy{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).Limit(1).Count(&pending).Error; err != nil {
+		// Indexing owns its final checkpoint; only the existence of an unsatisfied item matters.
+		var pending []int64
+		if err := tx.Model(&Copy{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).
+			Limit(1).Pluck("id", &pending).Error; err != nil {
 			return err
 		}
-		if pending != 0 {
+		if len(pending) != 0 {
 			return nil
 		}
+
 		// Completion moves the manifest position with the state: both describe the same Job.
 		return tx.Model(&executor.JobRecord{}).Where("id = ? AND status = ?", 1, entity.JobStatus_JOB_STATUS_READY).
 			Updates(map[string]any{"status": entity.JobStatus_JOB_STATUS_COMPLETED, "checkpoint": entity.JobStatus_JOB_STATUS_COMPLETED}).Error

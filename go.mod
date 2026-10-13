@@ -9,6 +9,7 @@ require (
 	github.com/benmcclelland/sgio v0.0.0-20180629175614-f710aebf64c1
 	github.com/bytedance/go-querystring-parser v0.0.0-20230310053818-dcfffcaee797
 	github.com/davecgh/go-spew v1.1.1
+	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/gin-gonic/gin v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
@@ -19,8 +20,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
-	github.com/samuelncui/acp v0.2.3
-	github.com/schollz/progressbar/v3 v3.13.1
+	github.com/samuelncui/acp v0.2.6
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/image v0.36.0
@@ -42,7 +42,6 @@ require (
 	github.com/bytedance/sonic v1.8.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
-	github.com/deckarep/golang-set/v2 v2.3.1 // indirect
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -71,6 +70,7 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/samuelncui/godf v0.0.0-20231004032257-e436410ad5a0 // indirect
+	github.com/schollz/progressbar/v3 v3.13.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.9 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect

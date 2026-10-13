@@ -357,6 +357,7 @@ func (a *jobArchiveRunner) flushOutcomes(ctx context.Context, batch []itemOutcom
 // acceptCopyResult records one successful ACP transfer result.
 // It returns the row to persist, or the error that leaves the item PENDING.
 func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (itemOutcome, error) {
+	// Reject unwritten targets while retaining their original diagnostic causes.
 	item := c.item
 	outcome := itemOutcome{id: item.ID, source: item.Data.GetSourcePath()}
 	if len(result.Targets) == 0 {
@@ -373,11 +374,14 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 	if target.Err != nil {
 		if errors.Is(target.Err, acp.ErrTargetNoSpace) {
 			return outcome, fmt.Errorf(
-				"archive Media has no space for file, path=%q, %w", item.TargetPath, mediapkg.ErrTargetNoSpace,
+				"archive Media has no space for file, path=%q, %w",
+				item.TargetPath, errors.Join(mediapkg.ErrTargetNoSpace, target.Err),
 			)
 		}
 		return outcome, fmt.Errorf("archive file was not written, path=%q, %w", item.TargetPath, target.Err)
 	}
+
+	// Only complete copy facts can become a staged candidate for Media validation.
 	if target.Path != c.mediaTarget {
 		return outcome, fmt.Errorf("archive copy result path mismatch, target=%q", target.Path)
 	}

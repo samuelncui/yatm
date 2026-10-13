@@ -96,4 +96,4 @@ test-e2e:
 
 .PHONY: test-package-tools
 test-package-tools:
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s e2e -p 'test_package_*.py'
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s e2e -p 'test_*.py'

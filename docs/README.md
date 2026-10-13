@@ -1,6 +1,7 @@
 # Documentation
 
-These documents describe the current YATM v1 development line. Start with
+Architecture and operations describe the current YATM v1 development line; research records
+the evidence and open questions behind further work. Start with
 [installation](operations/install.md), the [v0.1.x upgrade](operations/migration.md),
 [Library and Media workflows](operations/library.md), or [live Locations](operations/locations.md).
 Published versions and their change notes belong to
@@ -51,8 +52,17 @@ published stable upgrade policy.
 ## Release Packages
 
 The release package includes this index and the four operator guides: installation, migration,
-Library/Media workflows and Locations. Architecture and developer validation remain repository
+Library/Media workflows and Locations. Architecture, research and developer validation remain repository
 documentation; release packaging uses an explicit allowlist rather than copying the whole tree.
+
+## Research
+
+- [Tape capacity and safe completion](research/tape-capacity.md)
+
+Research is published with the repository. Each study states its objective, source versions,
+confirmed findings, community observations, unresolved questions and criteria for evaluating
+possible approaches. A study describes the current state of knowledge; it does not establish
+implemented behavior or authorize experiments and production changes.
 
 ## Documentation Ownership
 
@@ -65,6 +75,7 @@ Every maintained fact has one owner. Other documents link to that owner instead 
 | Root `AGENTS.md` | Contributor rules, safety gates, repository layout and required verification | Product or architecture contracts |
 | `docs/architecture/` | Current implemented behavior, module interfaces, invariants and durable constraints | Proposals, implementation plans, acceptance transcripts or superseded behavior |
 | `docs/operations/` | Current setup, migration, use, maintenance and reproducible validation | Domain definitions or another architecture specification |
+| `docs/research/` | Public technical studies, evidence, limitations and evaluation of possible approaches | Product guarantees, implementation backlogs, private incident reports or raw acceptance logs |
 | `.agents/skills/yatm/` | Installed agent operating and safety instructions | Human-facing architecture or change history |
 
 ## Decision Authority
@@ -76,8 +87,8 @@ evidence and implementation detail, but its existence cannot justify complexity 
 decision. When they conflict, update the lower-level documents, code and tests together.
 
 The repository intentionally has no documentation archive, ADR archive, design backlog or redirect
-stubs. Git already retains deleted text and rationale. Future work belongs in an Issue or pull
-request. Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
+stubs. Git already retains deleted text and rationale. Implementation plans belong in an Issue or
+pull request; public research follows the scope above. Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
 measurements, screenshots and host-specific reports belong in CI artifacts rather than Markdown.
 
 ## Update Workflow
@@ -88,9 +99,10 @@ measurements, screenshots and host-specific reports belong in CI artifacts rathe
 2. Update the implementation, semantic tests, owning architecture document and affected operating
    guide together. Describe the final behavior in present tense; remove the replaced text instead of
    marking it historical, implemented or superseded.
-3. Keep unsettled designs out of the maintained documentation tree. A PR or Issue may explain the
-   problem, alternatives, compatibility impact and acceptance plan; after implementation, copy only
-   the durable result into its current owner.
+3. Keep unsettled implementation designs in a PR or Issue. Public studies may evaluate alternatives
+   in `docs/research/`, with evidence, assumptions and remaining proof clearly identified. After
+   implementation, update the current architecture and link to research for supporting evidence.
+   Update or remove invalidated research conclusions instead of accumulating superseded studies.
 4. Keep implementation detail only when callers or maintainers must know it to use the module
    correctly. Function names, CSS placement, one measurement, one candidate checksum and step-by-step
    development history belong in code, tests or verification output.
@@ -101,6 +113,14 @@ measurements, screenshots and host-specific reports belong in CI artifacts rathe
 6. Before delivery, run `make check` or at minimum `node dev/check-documents.mjs` and
    `git diff --check`. The document check enforces the allowed tree, complete index, valid relative
    links and the absence of private/history references.
+
+For research, use official specifications and source code together with relevant original community
+reports and maintainer responses. Record what was observed, what was actually resolved and which
+explanations remain hypotheses; a forum's resolved label alone is not evidence of a verified fix.
+Use stable public citations and concise summaries. Keep credentials, local paths, device identifiers,
+private host details and raw logs out of public studies; include only the technical context needed
+to assess the evidence. Hardware measurements establish the tested configuration's behavior, while
+general guarantees require an applicable specification or other evidence with a defined scope.
 
 Use English Markdown, short topic-based kebab-case filenames and repository-relative links. Current
 architecture filenames are version-independent. Adding a new documentation file requires a distinct
