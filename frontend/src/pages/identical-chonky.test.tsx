@@ -90,15 +90,19 @@ it("shows the page-owned hidden-file control and follows real Chonky keyboard se
   );
   await userEvent.click(screen.getByRole("button", { name: "Find" }));
   const pane = screen.getByRole("region", { name: "Identical file groups" });
-  const selection = await within(pane).findByRole("checkbox", { name: "Select copy-1.txt" });
+  const row = await within(pane).findByRole("listitem", { name: "copy-1.txt" });
   expect(screen.getByRole("switch", { name: "Show hidden files" })).toBeInTheDocument();
   expect(within(pane).queryByRole("button", { name: "Show hidden files" })).not.toBeInTheDocument();
-  selection.focus();
+  expect(within(pane).queryByRole("checkbox")).not.toBeInTheDocument();
+  row.focus();
+  expect(row).toHaveFocus();
   await userEvent.keyboard(" ");
   await waitFor(() => expect(screen.getByRole("complementary", { name: "Inspector" })).toHaveTextContent("copy-1.txt"));
+  expect(within(pane).getByText(/1 selected/)).toBeInTheDocument();
 });
 
 it("keeps real Chonky selection changes while sort positions and pages are loading", async () => {
+  const user = userEvent.setup();
   const group = IdenticalGroup.create({ id: "group", name: "Related", memberCount: 2n });
   const row = (id: bigint, position: bigint) => ({
     position,
@@ -150,14 +154,16 @@ it("keeps real Chonky selection changes while sort positions and pages are loadi
       <IdenticalFiles />
     </MemoryRouter>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Find" }));
+  await user.click(screen.getByRole("button", { name: "Find" }));
   const pane = screen.getByRole("region", { name: "Identical file groups" });
-  await userEvent.click(await within(pane).findByRole("checkbox", { name: "Select copy-1.txt" }));
+  await user.click(await within(pane).findByRole("listitem", { name: "copy-1.txt" }));
   await waitFor(() => expect(screen.getByLabelText("Inspector")).toHaveTextContent("copy-1.txt"));
-  await userEvent.click(screen.getByRole("button", { name: "Options" }));
-  await userEvent.click(screen.getByRole("menuitem", { name: "Sort by size" }));
+  await user.click(screen.getByRole("button", { name: "Options" }));
+  await user.click(screen.getByRole("menuitem", { name: "Sort by size" }));
   await waitFor(() => expect(api.lookup).toHaveBeenCalledTimes(1));
-  await userEvent.click(within(pane).getByRole("checkbox", { name: "Select copy-2.txt" }));
+  await user.keyboard("{Control>}");
+  await user.click(within(pane).getByRole("listitem", { name: "copy-2.txt" }));
+  await user.keyboard("{/Control}");
   finishLookup({
     positions: [{ fileId: 1n, groupId: group.id, allPosition: 1n, visiblePosition: 1n, allGroupHeaderPosition: 0n, visibleGroupHeaderPosition: 0n }],
   });
@@ -169,8 +175,8 @@ it("keeps real Chonky selection changes while sort positions and pages are loadi
   expect(pane.querySelectorAll('[data-chonky-file-id="2"]')).toHaveLength(1);
   expect(screen.getByLabelText("Inspector")).toHaveTextContent("copy-2.txt");
   expect(within(pane).getByText(/2 selected/)).toBeInTheDocument();
-  finishPage({ rows: [header, row(1n, 1n), row(2n, 2n)], totalRowCount: 3n });
-  await within(pane).findAllByTitle("copy-2.txt");
+  await act(async () => finishPage({ rows: [header, row(1n, 1n), row(2n, 2n)], totalRowCount: 3n }));
+  await within(pane).findByRole("listitem", { name: "copy-2.txt" });
   expect(pane.querySelectorAll('[data-chonky-file-id="1"]')).toHaveLength(1);
   expect(screen.getByLabelText("Inspector")).toHaveTextContent("copy-2.txt");
   expect(within(pane).getByText(/2 selected/)).toBeInTheDocument();
@@ -209,11 +215,11 @@ it("keeps the selected file and Inspector when another group collapses", async (
   );
   await userEvent.click(screen.getByRole("button", { name: "Find" }));
   const pane = screen.getByRole("region", { name: "Identical file groups" });
-  await userEvent.click(await within(pane).findByRole("checkbox", { name: "Select selected.txt" }));
+  await userEvent.click(await within(pane).findByRole("listitem", { name: "selected.txt" }));
   expect(screen.getByLabelText("Inspector")).toHaveTextContent("selected.txt");
   await userEvent.click(within(pane).getByRole("button", { name: "Other group" }));
-  await waitFor(() => expect(within(pane).queryByRole("checkbox", { name: "Select other.txt" })).not.toBeInTheDocument());
-  expect(within(pane).getByRole("checkbox", { name: "Select selected.txt" })).toBeChecked();
+  await waitFor(() => expect(within(pane).queryByRole("listitem", { name: "other.txt" })).not.toBeInTheDocument());
+  expect(within(pane).getByRole("listitem", { name: "selected.txt" })).toBeInTheDocument();
   expect(screen.getByLabelText("Inspector")).toHaveTextContent("selected.txt");
   expect(within(pane).getByText(/1 selected/)).toBeInTheDocument();
   expect(api.find).toHaveBeenCalledTimes(1);
@@ -264,10 +270,10 @@ it("sorts an unloaded range globally without replacing the visible rows with pla
   );
   await userEvent.click(screen.getByRole("button", { name: "Find" }));
   const pane = screen.getByRole("region", { name: "Identical file groups" });
-  await within(pane).findByRole("checkbox", { name: "Select copy-665.txt" });
+  await within(pane).findByRole("listitem", { name: "copy-665.txt" });
   expect(api.rows).toHaveBeenCalledWith(expect.objectContaining({ sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.DESC }), expect.anything());
   await userEvent.click(screen.getByRole("button", { name: "Jump to row 240" }));
-  await within(pane).findByRole("checkbox", { name: "Select copy-505.txt" });
+  await within(pane).findByRole("listitem", { name: "copy-505.txt" });
   await userEvent.click(screen.getByRole("button", { name: "Options" }));
   expect(screen.queryByRole("menuitem", { name: "Sort by name" })).not.toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "Sort by date" })).not.toBeInTheDocument();
@@ -278,13 +284,13 @@ it("sorts an unloaded range globally without replacing the visible rows with pla
       expect.anything(),
     ),
   );
-  expect(within(pane).getByRole("checkbox", { name: "Select copy-505.txt" })).toBeInTheDocument();
+  expect(within(pane).getByRole("listitem", { name: "copy-505.txt" })).toBeInTheDocument();
   expect(pane.querySelectorAll("[data-chonky-sparse-placeholder]")).toHaveLength(0);
   finish();
-  await within(pane).findByRole("checkbox", { name: "Select copy-161.txt" });
+  await within(pane).findByRole("listitem", { name: "copy-161.txt" });
   expect(pane.querySelectorAll("[data-chonky-sparse-placeholder]")).toHaveLength(0);
   await userEvent.click(screen.getByRole("button", { name: "Jump to row 740" }));
-  await within(pane).findByRole("checkbox", { name: "Select copy-494.txt" });
+  await within(pane).findByRole("listitem", { name: "copy-494.txt" });
   expect(api.rows).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 700n, sortOrder: IdenticalSortOrder.ASC }), expect.anything());
   expect(api.find).toHaveBeenCalledTimes(1);
 });
@@ -339,7 +345,7 @@ it("reports delayed Find and page reads once, preserving the sparse viewport thr
   expect(within(pane).getByRole("progressbar")).toHaveAccessibleName("Loading files");
   expect(pane.querySelectorAll("[data-chonky-sparse-placeholder]")).toHaveLength(20);
   await act(async () => requests.get(0n)!.resolve({ rows: rows(0n), totalRowCount: 1000n }));
-  await userEvent.click(await within(pane).findByRole("checkbox", { name: "Select file-1.txt" }));
+  await userEvent.click(await within(pane).findByRole("listitem", { name: "file-1.txt" }));
   expect(within(pane).queryByRole("progressbar")).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Jump to row 240" }));
   await waitFor(() => expect(requests.has(200n)).toBe(true));
@@ -358,9 +364,11 @@ it("reports delayed Find and page reads once, preserving the sparse viewport thr
   await userEvent.click(screen.getByRole("button", { name: "Retry rows" }));
   expect(within(pane).getAllByRole("progressbar")).toHaveLength(1);
   await act(async () => requests.get(700n)!.resolve({ rows: rows(700n), totalRowCount: 1000n }));
-  await within(pane).findByRole("checkbox", { name: "Select file-740.txt" });
+  await within(pane).findByRole("listitem", { name: "file-740.txt" });
   expect(within(pane).queryByRole("progressbar")).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Jump to row 0" }));
-  expect(within(pane).getByRole("checkbox", { name: "Select file-1.txt" })).toBeChecked();
+  expect(within(pane).getByRole("listitem", { name: "file-1.txt" })).toBeInTheDocument();
+  expect(within(pane).getByText(/1 selected/)).toBeInTheDocument();
+  expect(screen.getByLabelText("Inspector")).toHaveTextContent("file-1.txt");
   expect(api.rows.mock.calls.filter(([request]) => request.offset === 0n)).toHaveLength(1);
 });

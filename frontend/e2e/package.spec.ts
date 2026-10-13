@@ -72,6 +72,7 @@ test.beforeEach(async ({ page }) => {
 
 test("Identical has a visible scrollbar without extra content padding on first display", async ({ page }) => {
   const pane = await findShared(page);
+  await expect(rows(pane).getByRole("checkbox")).toHaveCount(0);
   for (const width of [1440, 1000]) {
     await page.setViewportSize({ width, height: 1000 });
     await loaded(pane);
@@ -198,7 +199,7 @@ test("Identical sorts whole groups by size without blank rows, retaining selecti
   await hidden.click();
   await expect(hidden).toBeChecked();
   await loaded(pane);
-  await expect(pane.getByRole("checkbox", { name: /Select \.member-/ }).first()).toBeVisible();
+  await expect(pane.getByRole("listitem", { name: /^\.member-/ }).first()).toBeVisible();
   const names = await rowNames(pane);
   expect(names).toEqual([...names].sort());
   await expect(page.getByText(/Could not load some rows|needs a new Find/)).toHaveCount(0);

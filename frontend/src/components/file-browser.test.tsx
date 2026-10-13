@@ -50,6 +50,31 @@ const choose = async (name: string) => {
 };
 beforeEach(() => localStorage.clear());
 
+it.each(["Control", "Meta"])("selects rows with click, %s-click and Space without checkboxes", async (modifier) => {
+  const user = userEvent.setup();
+  render(<Browser />);
+  const first = await screen.findByRole("listitem", { name: "a.txt" });
+  const second = screen.getByRole("listitem", { name: "b.txt" });
+  const folder = screen.getByRole("listitem", { name: "z" });
+  expect(within(screen.getByRole("list")).queryByRole("checkbox")).not.toBeInTheDocument();
+  await user.click(first);
+  expect(screen.getByText("1 selected")).toBeInTheDocument();
+  await user.keyboard(`{${modifier}>}`);
+  await user.click(second);
+  await user.keyboard(`{/${modifier}}`);
+  expect(screen.getByText("2 selected")).toBeInTheDocument();
+  expect(second).toHaveFocus();
+  await user.keyboard(" ");
+  expect(screen.getByText("1 selected")).toBeInTheDocument();
+  await user.keyboard(" ");
+  expect(screen.getByText("2 selected")).toBeInTheDocument();
+  await user.click(folder);
+  expect(screen.getByText("1 selected")).toBeInTheDocument();
+  expect(folder).toHaveFocus();
+  await user.keyboard(" ");
+  expect(screen.queryByText(/\d+ selected/)).not.toBeInTheDocument();
+});
+
 it("initializes actual sort and menu together after a partial listing completes", async () => {
   const view = render(<Browser partial />);
   await waitFor(() => expect(order()).toEqual(["a", "b", "z"]));

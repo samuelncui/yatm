@@ -86,11 +86,14 @@ it.each(["library", "location"])("shows one exact %s count throughout a delayed 
       yield ListFilesResponse.create({ entries: entries.slice(1000) });
     })(),
   });
-  render(
-    <MemoryRouter>
-      <Harness />
-    </MemoryRouter>,
-  );
+  // Settle the first streamed batch and Chonky's controlled props before inspecting it.
+  await act(async () => {
+    render(
+      <MemoryRouter>
+        <Harness />
+      </MemoryRouter>,
+    );
+  });
   await waitFor(() => expect(screen.getByLabelText("visible rows")).toHaveTextContent(/^500$/));
   // Render the installed Chonky toolbar too: a correct custom summary alone can hide a second, moving count.
   expect(screen.queryByText("500 items", { exact: true })).not.toBeInTheDocument();
