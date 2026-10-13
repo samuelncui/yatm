@@ -186,7 +186,8 @@ class PhysicalSGTraceTests(unittest.TestCase):
         stub = cls.root / "stub.c"
         stub.write_text(STUB)
         cc = shlex.split(os.environ.get("CC", "cc"))
-        common = cc + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror"]
+        common = cc + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                       "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=2"]
         observer = Path(__file__).with_name("physical_sg_trace.c")
         for command in (
             common + ["-shared", "-fPIC", str(observer), "-o", str(cls.root / "trace.so"), "-ldl", "-pthread"],

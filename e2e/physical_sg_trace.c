@@ -58,14 +58,16 @@ static void fail_trace(const char *reason)
 {
     int saved = errno;
     if (!atomic_exchange(&failed, true)) {
+        ssize_t ignored;
         int fd = error_path[0] ? open(error_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600) : -1;
         if (fd >= 0) {
             /* Presence alone signals failure, even if this write also fails. */
-            (void)write(fd, reason, strlen(reason));
+            ignored = write(fd, reason, strlen(reason));
             (void)close(fd);
         }
-        (void)write(STDERR_FILENO, "YATM SG trace failure: ", 23);
-        (void)write(STDERR_FILENO, reason, strlen(reason));
+        ignored = write(STDERR_FILENO, "YATM SG trace failure: ", 23);
+        ignored = write(STDERR_FILENO, reason, strlen(reason));
+        (void)ignored; /* Diagnostic text is best effort after marking the capture failed. */
     }
     errno = saved;
 }
