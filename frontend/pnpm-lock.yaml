@@ -36,11 +36,11 @@ importers:
         specifier: ^2.12.0
         version: 2.12.0(react-redux@9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1))(react@19.2.8)
       '@samuelncui/chonky':
-        specifier: ^0.3.8
-        version: 0.3.8(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
+        specifier: ^0.3.9
+        version: 0.3.9(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
       '@samuelncui/chonky-icon-fontawesome':
-        specifier: ^0.3.8
-        version: 0.3.8(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
+        specifier: ^0.3.9
+        version: 0.3.9(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
       filesize:
         specifier: ^11.0.22
         version: 11.0.22
@@ -766,14 +766,14 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@samuelncui/chonky-icon-fontawesome@0.3.8':
-    resolution: {integrity: sha512-/6vEhuqdG5DKrN3es/fCeh6x82JAOdLLUd90U3EiUoA+nUYqkhkIhdtm6CiJH7287/kDBYsdWOe731HZTrtgsw==}
+  '@samuelncui/chonky-icon-fontawesome@0.3.9':
+    resolution: {integrity: sha512-vixWbdZGfC7kaCTyrKnJvA8IlUPMLABuidbygJYqNU8QC95XnXD4vNF2CZUDwfUgblFn9zYV/xikrxex1Yihjg==}
     engines: {node: '>=22.12'}
     peerDependencies:
       react: ^19.2.0
 
-  '@samuelncui/chonky@0.3.8':
-    resolution: {integrity: sha512-I5MXlqEEnuia2Wp5anHOzu4DrPnKt7lQJRme+CEC/UGvDbg6xBz4H2RjqewexXvuPXcddjxIANroQ/9FyQ21ZQ==}
+  '@samuelncui/chonky@0.3.9':
+    resolution: {integrity: sha512-61XgzWC4KRBM9uBU5rFd5EY7EktATYe05LDyIS2MAxJQzb7UlEGzjHjfzH6hL8KAcCwi18g2hxHIp6jJ+5/FFQ==}
     engines: {node: '>=22.12'}
     peerDependencies:
       react: ^19.2.0
@@ -2725,13 +2725,13 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@samuelncui/chonky-icon-fontawesome@0.3.8(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)':
+  '@samuelncui/chonky-icon-fontawesome@0.3.9(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)':
     dependencies:
       '@fortawesome/fontawesome-svg-core': 7.3.1
       '@fortawesome/free-brands-svg-icons': 7.3.1
       '@fortawesome/free-solid-svg-icons': 7.3.1
       '@fortawesome/react-fontawesome': 3.5.0(@fortawesome/fontawesome-svg-core@7.3.1)(react@19.2.8)
-      '@samuelncui/chonky': 0.3.8(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
+      '@samuelncui/chonky': 0.3.9(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)
       react: 19.2.8
     transitivePeerDependencies:
       - '@mui/material-pigment-css'
@@ -2742,7 +2742,7 @@ snapshots:
       - redux
       - supports-color
 
-  '@samuelncui/chonky@0.3.8(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)':
+  '@samuelncui/chonky@0.3.9(@types/hoist-non-react-statics@3.3.7(@types/react@19.2.18))(@types/node@24.13.3)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(redux@5.0.1)':
     dependencies:
       '@emotion/css': 11.13.5
       '@emotion/react': 11.14.0(@types/react@19.2.18)(react@19.2.8)

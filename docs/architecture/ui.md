@@ -100,8 +100,9 @@ modules, including production chunks. Use exported utility classes or slots inst
 inside Chonky slots; Chonky owns its theme and browser appearance. Do not override all Chonky
 buttons from an application stylesheet. The [application FileBrowser](../../frontend/src/components/file-browser.tsx)
 owns its layout element and supplies Chonky's public theme props, so pages need no `.chonky-*`
-stylesheet selectors. Chonky's shared list content reserves scrollbar clearance for ordinary,
-grouped and sparse rows, including floating scrollbars in narrow panes; pages add no separate inset.
+stylesheet selectors. Chonky owns the native scroll container for ordinary, grouped and sparse
+rows. Rows fill its client width; the browser allocates scrollbar space. Fixed content insets
+must not stand in for a scrollbar, including when the list fits without scrolling.
 Component states must work under lazy route loading,
 portals, narrow layouts and nested browsers without depending on import order.
 
@@ -131,7 +132,7 @@ while usable folders and the authorized current destination remain available. A 
 successful row without a reference remains a protocol error. The [API filename boundary](api.md#listing-projection)
 owns literal UTF-8 support and unsupported-byte escaping.
 
-The pane shows the first received batch immediately with the exact directory total. Later displayed prefixes at least double in size and are coalesced into animation frames, limiting repeated full-array copying and Chonky processing. Completion displays every received row immediately. One transport accumulator owns the rows; completed reads reuse its final array. Cancellation, replacement and failure discard pending frames. Failed navigation and Location reads clear rows and expose Retry. A failed Library refresh restores its last complete listing with a visible error and Retry.
+The pane shows the first received batch immediately with the exact directory total. The shared Files controller supplies that count to Chonky's summary, preserving selection and hidden-entry counts; the adjacent size summary does not repeat it. Later displayed prefixes at least double in size and are coalesced into animation frames, limiting repeated full-array copying and Chonky processing. Completion displays every received row immediately. One transport accumulator owns the rows; completed reads reuse its final array. Cancellation, replacement and failure discard pending frames. Failed navigation and Location reads clear rows and expose Retry. A failed Library refresh restores its last complete listing with a visible error and Retry.
 
 Locate ignores metadata responses and failures superseded by navigation or a newer Locate, so an old lookup cannot replace the current directory or reveal an obsolete selection.
 

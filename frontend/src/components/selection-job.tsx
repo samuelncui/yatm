@@ -287,7 +287,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
             }
           >
             <FileNavbar rootContent={browser.selector} />
-            <FileToolbar layout="inline">
+            <FileToolbar layout="inline" {...browser.toolbarProps}>
               {!browser.browserProps.hideToolbarInfo && <ToobarInfo files={browser.files} measurement={browser.measurement} />}
             </FileToolbar>
             <FileList {...browser.listProps} />

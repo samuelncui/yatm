@@ -138,7 +138,7 @@ export const FileSelectionDialog = ({
             onFileAction={onFileAction}
           >
             <FileNavbar rootContent={location ? undefined : browser.selector} />
-            <FileToolbar layout="inline" />
+            <FileToolbar layout="inline" {...browser.toolbarProps} />
             <FileList {...browser.listProps} />
           </FileBrowser>
         </Box>

@@ -1,5 +1,8 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+// Inspect actual scrollbars rather than Chromium's headless hidden-scrollbar mode.
+test.use({ launchOptions: { ignoreDefaultArgs: ["--hide-scrollbars"] } });
+
 const rows = (pane: Locator) => pane.locator("[data-chonky-file-id]");
 const scroller = (pane: Locator) => pane.locator('[data-virtuoso-scroller="true"]');
 const loaded = async (pane: Locator) => {
@@ -67,21 +70,26 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('meta[name="yatm-commit"]')).toHaveAttribute("content", process.env.YATM_BROWSER_COMMIT!);
 });
 
-test("Identical keeps group actions and file rows clear of its scrollbar in the split pane", async ({ page }) => {
+test("Identical has a visible scrollbar without extra content padding on first display", async ({ page }) => {
   const pane = await findShared(page);
   for (const width of [1440, 1000]) {
     await page.setViewportSize({ width, height: 1000 });
     await loaded(pane);
     const geometry = await scroller(pane).evaluate((element) => {
       const bounds = element.getBoundingClientRect();
-      const clearEdge = bounds.right - Math.max(16, (element as HTMLElement).offsetWidth - element.clientWidth);
+      const clearEdge = bounds.left + element.clientLeft + element.clientWidth;
+      const row = element.querySelector("[data-chonky-file-id]")!;
       return {
+        scrollbarWidth: (element as HTMLElement).offsetWidth - element.clientWidth,
+        unusedContentWidth: clearEdge - row.getBoundingClientRect().right,
         horizontalOverflow: element.scrollWidth > element.clientWidth,
         covered: [...element.querySelectorAll("[data-chonky-group-id] button, [data-chonky-file-id]")].filter(
           (child) => child.getBoundingClientRect().right > clearEdge + 1,
         ).length,
       };
     });
+    expect(geometry.scrollbarWidth).toBeGreaterThan(0);
+    expect(Math.abs(geometry.unusedContentWidth)).toBeLessThanOrEqual(1);
     expect(geometry.horizontalOverflow).toBe(false);
     expect(geometry.covered).toBe(0);
   }

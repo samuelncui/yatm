@@ -855,6 +855,8 @@ export const useFileBrowser = (
       doubleClickDelay: 300,
       i18n: chonkyI18n,
     },
+    // An absent server total is unknown, never Chonky's default count of loaded rows.
+    toolbarProps: { totalFileCount: listingTotal === undefined ? null : Number(listingTotal) },
     listProps: {
       onScroll,
       // The initial read publishes its own placeholder instead of the empty list Chonky draws for
@@ -1083,10 +1085,8 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
               <SearchStatus query={leftBrowser.searchState.query} onClose={() => runUIAction(leftBrowser.closeSearch, "Close search failed")} />
             )}
             <FileNavbar rootContent={leftBrowser.selector} />
-            <FileToolbar layout="inline">
-              {!leftBrowser.browserProps.hideToolbarInfo && (
-                <ToobarInfo files={leftBrowser.files} measurement={leftBrowser.measurement} total={leftBrowser.total} />
-              )}
+            <FileToolbar layout="inline" {...leftBrowser.toolbarProps}>
+              {!leftBrowser.browserProps.hideToolbarInfo && <ToobarInfo files={leftBrowser.files} measurement={leftBrowser.measurement} />}
             </FileToolbar>
             {leftBrowser.errorNotice}
             <FileList {...leftBrowser.listProps} />
@@ -1113,10 +1113,8 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
                 <SearchStatus query={rightBrowser.searchState.query} onClose={() => runUIAction(rightBrowser.closeSearch, "Close search failed")} />
               )}
               <FileNavbar rootContent={rightBrowser.selector} />
-              <FileToolbar layout="inline">
-                {!rightBrowser.browserProps.hideToolbarInfo && (
-                  <ToobarInfo files={rightBrowser.files} measurement={rightBrowser.measurement} total={rightBrowser.total} />
-                )}
+              <FileToolbar layout="inline" {...rightBrowser.toolbarProps}>
+                {!rightBrowser.browserProps.hideToolbarInfo && <ToobarInfo files={rightBrowser.files} measurement={rightBrowser.measurement} />}
               </FileToolbar>
               {rightBrowser.errorNotice}
               <FileList {...rightBrowser.listProps} />

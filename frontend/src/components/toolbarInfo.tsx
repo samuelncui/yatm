@@ -9,11 +9,9 @@ import type { MeasurementState } from "./use-files-measure";
 export interface ToobarInfoProps {
   files?: FileArray;
   measurement?: MeasurementState;
-  /** The settled number of entries the listing found, absent for a partial result set. */
-  total?: bigint;
 }
 
-export const ToobarInfo: React.FC<ToobarInfoProps> = memo(({ files, measurement, total }) => {
+export const ToobarInfo: React.FC<ToobarInfoProps> = memo(({ files, measurement }) => {
   const [size, notFinished] = useMemo(() => {
     let size = 0;
     let notFinished = false;
@@ -38,13 +36,9 @@ export const ToobarInfo: React.FC<ToobarInfoProps> = memo(({ files, measurement,
     ? "Calculating data usage"
     : (measurement?.error ??
       (summary ? (summary.complete ? "Data usage for all matching items" : `Known data usage · ${summary.error}`) : "Loaded items size"));
-  // The count answers "how many entries are here" as soon as a listing arrives; a query
-  // result set is partial, so it states no total.
-  const count = total === undefined ? undefined : `${total} ${total === 1n ? "entry" : "entries"}`;
   return (
     <Tooltip title={label}>
       <Typography variant="body1" className="chonky-infoText" aria-label={label} role="status">
-        {count && <span className="chonky-infoCount">{count} · </span>}
         {measurement?.running ? (
           "Calculating…"
         ) : measurement?.error ? (
