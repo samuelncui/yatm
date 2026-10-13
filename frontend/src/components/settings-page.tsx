@@ -1,5 +1,5 @@
 import { Feedback } from "@/components/feedback";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, Suspense, useId, useState } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardHeader from "@mui/material/CardHeader";
@@ -96,6 +96,27 @@ export const SettingsActions = ({
   </ActionRow>
 );
 
+/** One loading indicator for Settings editors and the configured Location list. */
+export const SettingsLoading = ({ label, loading }: { label: string; loading: boolean }) =>
+  loading ? <LinearProgress aria-label={`Loading ${label} settings`} /> : null;
+
+/** Keep the page frame in place while its editor code and then its values load. */
+export const SettingsEditorPage = ({
+  title,
+  description,
+  label = title,
+  children,
+}: {
+  title: string;
+  description: string;
+  label?: string;
+  children: ReactNode;
+}) => (
+  <SettingsPage title={title} description={description}>
+    <Suspense fallback={<SettingsLoading label={label} loading />}>{children}</Suspense>
+  </SettingsPage>
+);
+
 /** Shared feedback for loading and saving one Settings group. */
 export const SettingsEditorFeedback = ({
   label,
@@ -117,7 +138,7 @@ export const SettingsEditorFeedback = ({
   onReload: () => void;
 }) => (
   <>
-    {loading && <LinearProgress aria-label={`Loading ${label} settings`} />}
+    <SettingsLoading label={label} loading={loading} />
     {error && (
       <Feedback
         severity="error"

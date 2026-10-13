@@ -15,6 +15,8 @@ type identicalGroupIndex struct {
 	Count        int64
 	VisibleCount int64
 	Fingerprint  string
+	Size         *int64
+	VisibleSize  *int64
 }
 
 type identicalRowIndex struct {
@@ -28,6 +30,7 @@ type identicalRowIndex struct {
 	Component        int64 `gorm:"index"`
 	FileID           int64 `gorm:"index:idx_identical_file"`
 	HeaderPosition   int64
+	PathRank         int64
 	DisplayCount     int64
 }
 
@@ -50,7 +53,7 @@ type IdenticalPosition struct {
 	VisibleHeaderPosition *int64
 }
 
-// materializeRows indexes complete group metadata and title-ordered dense row positions on disposable disk.
+// materializeRows indexes complete group metadata and all dense row orders on disposable disk.
 func (s *IdenticalSnapshot) materializeRows() error {
 	// Store group summaries by component without retaining their complete membership in memory.
 	if err := s.db.AutoMigrate(&identicalGroupIndex{}, &identicalRowIndex{}); err != nil {
@@ -60,7 +63,7 @@ func (s *IdenticalSnapshot) materializeRows() error {
 	for {
 		var groups []identicalGroupIndex
 		err := s.db.Model(&identicalNode{}).
-			Select("component, MIN(name) AS name, COALESCE(MIN(CASE WHEN substr(name,1,1) != '.' THEN name END), '') AS visible_name, COUNT(*) AS count, SUM(CASE WHEN substr(name,1,1) = '.' THEN 0 ELSE 1 END) AS visible_count").
+			Select("component, MIN(name) AS name, COALESCE(MIN(CASE WHEN substr(name,1,1) != '.' THEN name END), '') AS visible_name, COUNT(*) AS count, SUM(CASE WHEN substr(name,1,1) = '.' THEN 0 ELSE 1 END) AS visible_count, MAX(size) AS size, MAX(CASE WHEN substr(name,1,1) <> '.' THEN size END) AS visible_size").
 			Where("component > ?", after).
 			Group("component").Having("COUNT(*) > 1").Order("component").Limit(64).Scan(&groups).Error
 		if err != nil {
@@ -89,15 +92,13 @@ func (s *IdenticalSnapshot) materializeRows() error {
 		}
 	}
 
-	// Assign the four metadata orders once, then index all five alternate positions for direct page seeks.
+	// Assign member-name orders once, then index all alternate positions for direct page seeks.
 	for _, order := range []struct {
 		column string
 		by     string
 	}{
 		{"name_asc_position", "node.name COLLATE NOCASE ASC, node.name COLLATE BINARY ASC, row.file_id ASC"},
 		{"name_desc_position", "node.name COLLATE NOCASE DESC, node.name COLLATE BINARY DESC, row.file_id ASC"},
-		{"size_asc_position", "node.size IS NULL ASC, node.size ASC, row.file_id ASC"},
-		{"size_desc_position", "node.size IS NULL ASC, node.size DESC, row.file_id ASC"},
 	} {
 		query := `UPDATE identical_row_indices AS target SET ` + order.column + ` = ranked.sorted_position
 			FROM (SELECT row.projection, row.position,
@@ -119,12 +120,12 @@ func (s *IdenticalSnapshot) materializeRows() error {
 }
 
 func (s *IdenticalSnapshot) indexProjectionRows(includeHidden bool) error {
-	// Only the displayed title, membership filter and count vary between the two retained projections.
-	projection, title, count, groups, members := 0, "visible_name", "visible_count", "visible_count > 0",
+	// Titles, group sizes and counts use only the members shown by each retained projection.
+	projection, title, count, size, groups, members := 0, "visible_name", "visible_count", "visible_size", "visible_count > 0",
 		"substr(node.name,1,1) <> '.'"
 	total := &s.VisibleRows
 	if includeHidden {
-		projection, title, count, groups, members, total = 1, "name", "count", "1=1", "1=1", &s.AllRows
+		projection, title, count, size, groups, members, total = 1, "name", "count", "size", "1=1", "1=1", &s.AllRows
 	}
 
 	// Prefix sums place headers; member ranks fill the following dense range without per-group traversal.
@@ -132,22 +133,28 @@ func (s *IdenticalSnapshot) indexProjectionRows(includeHidden bool) error {
 	query := `WITH headers AS (
 		SELECT component, ` + count + ` AS display_count,
 			COALESCE(SUM(` + count + ` + 1) OVER (ORDER BY ` + title + `, component
-				ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS header_position
+				ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS header_position,
+			COALESCE(SUM(` + count + ` + 1) OVER (ORDER BY ` + size + ` IS NULL, ` + size + ` ASC, component
+				ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS size_asc_header,
+			COALESCE(SUM(` + count + ` + 1) OVER (ORDER BY ` + size + ` IS NULL, ` + size + ` DESC, component
+				ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS size_desc_header
 		FROM identical_group_indices WHERE ` + groups + `
 	), members AS (
-		SELECT header.component, header.header_position, header.display_count, node.file_id,
-			ROW_NUMBER() OVER (PARTITION BY node.component ORDER BY node.file_id) AS member_position
+		SELECT header.*, node.file_id,
+			ROW_NUMBER() OVER (PARTITION BY node.component ORDER BY node.file_id) AS member_position,
+			ROW_NUMBER() OVER (PARTITION BY node.component
+				ORDER BY node.path COLLATE NOCASE, node.path COLLATE BINARY, node.file_id) AS path_rank
 		FROM headers AS header JOIN identical_nodes AS node ON node.component = header.component
 		WHERE ` + members + `
 	)
 	INSERT INTO identical_row_indices (projection, position, file_desc_position,
 		name_asc_position, name_desc_position, size_asc_position, size_desc_position,
-		component, file_id, header_position, display_count)
-	SELECT ?, header_position AS position, header_position, header_position, header_position, header_position, header_position,
-		component, 0, header_position, display_count FROM headers
+		component, file_id, header_position, display_count, path_rank)
+	SELECT ?, header_position AS position, header_position, header_position, header_position, size_asc_header, size_desc_header,
+		component, 0, header_position, display_count, 0 FROM headers
 	UNION ALL
 	SELECT ?, header_position + member_position, header_position + display_count + 1 - member_position,
-		0, 0, 0, 0, component, file_id, header_position, display_count FROM members
+		0, 0, size_asc_header + path_rank, size_desc_header + path_rank, component, file_id, header_position, display_count, path_rank FROM members
 	ORDER BY position`
 	if err := s.db.Exec(query, projection, projection).Error; err != nil {
 		return fmt.Errorf("index identical projection %d failed, %w", projection, err)
@@ -166,7 +173,7 @@ func (s *IdenticalSnapshot) Rows(offset int64, limit int, includeHidden bool) ([
 		entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 }
 
-// SortedRows reads a bounded page in the requested per-group order.
+// SortedRows reads a bounded page in the requested retained order.
 func (s *IdenticalSnapshot) SortedRows(offset int64, limit int, includeHidden bool, key entity.IdenticalSortKey, order entity.IdenticalSortOrder) ([]IdenticalIndexedRow, int64, error) {
 	// Validate the range and select the indexed position column before any read.
 	if offset < 0 || limit < 1 || limit > 200 {
@@ -197,7 +204,7 @@ func (s *IdenticalSnapshot) SortedRows(offset int64, limit int, includeHidden bo
 		components = append(components, row.Component)
 	}
 	var groups []identicalGroupIndex
-	if err := s.db.Where("component IN ?", components).Find(&groups).Error; err != nil {
+	if err := s.db.Select("component, name, visible_name, count, fingerprint").Where("component IN ?", components).Find(&groups).Error; err != nil {
 		return nil, 0, err
 	}
 	byID := make(map[int64]identicalGroupIndex, len(groups))
@@ -214,7 +221,7 @@ func (s *IdenticalSnapshot) SortedRows(offset int64, limit int, includeHidden bo
 		if includeHidden {
 			name = group.Name
 		}
-		result = append(result, IdenticalIndexedRow{Position: identicalRowPosition(row, column), HeaderPosition: row.HeaderPosition,
+		result = append(result, IdenticalIndexedRow{Position: identicalRowPosition(row, column), HeaderPosition: identicalRowHeaderPosition(row, column),
 			DisplayCount: row.DisplayCount, FileID: row.FileID,
 			Group: IdenticalGroup{ID: strconv.FormatInt(group.Component, 10), Name: name, Count: group.Count, Fingerprint: group.Fingerprint}})
 	}
@@ -271,6 +278,14 @@ func identicalRowPosition(row identicalRowIndex, column string) int64 {
 	}
 }
 
+// Size projections move whole groups; the path rank is relative to their header.
+func identicalRowHeaderPosition(row identicalRowIndex, column string) int64 {
+	if column == "size_asc_position" || column == "size_desc_position" {
+		return identicalRowPosition(row, column) - row.PathRank
+	}
+	return row.HeaderPosition
+}
+
 // LookupPositions finds selected members without scanning either projection.
 func (s *IdenticalSnapshot) LookupPositions(ids []int64) ([]IdenticalPosition, error) {
 	return s.LookupSortedPositions(ids, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID,
@@ -314,9 +329,9 @@ func (s *IdenticalSnapshot) LookupSortedPositions(ids []int64, key entity.Identi
 			byID[row.FileID] = position
 		}
 		if row.Projection == 1 {
-			position.AllPosition, position.AllHeaderPosition = identicalRowPosition(row, column), row.HeaderPosition
+			position.AllPosition, position.AllHeaderPosition = identicalRowPosition(row, column), identicalRowHeaderPosition(row, column)
 		} else {
-			visiblePosition, header := identicalRowPosition(row, column), row.HeaderPosition
+			visiblePosition, header := identicalRowPosition(row, column), identicalRowHeaderPosition(row, column)
 			position.VisiblePosition, position.VisibleHeaderPosition = &visiblePosition, &header
 		}
 	}

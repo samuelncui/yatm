@@ -7,11 +7,37 @@ import { errorMessage } from "@/tools";
 import { displayedCount, mergeIntervals, toDisplayPosition, toSnapshotPosition, type Interval } from "./identical-positions";
 
 export type IdenticalResult = { id: string; allCount: number; visibleCount: number };
-export type ProjectionIntervals = { all?: Interval; visible?: Interval };
+export type ProjectionIntervals = { fileId: bigint; all?: Interval; visible?: Interval };
+type CollapsedGroup = Interval & { fileId?: bigint };
 export type SparseGroup = { id: string; name: string; memberCount: number; description?: string; actionIds?: string[]; expanded?: boolean };
 export type SparseRow = { index: number; kind: "group"; group: SparseGroup } | { index: number; kind: "file"; group: SparseGroup; fileId: string };
 const pageSize = 100;
 const maxPages = 10;
+type PinnedRows = Map<string, { row: IdenticalRow; file: FileData }>;
+type Projection = {
+  pins: PinnedRows;
+  pages?: Map<number, IdenticalRow[]>;
+  collapsed?: Map<string, CollapsedGroup>;
+  removedGroups?: Map<string, ProjectionIntervals>;
+  range?: [number, number];
+};
+
+function rowFileID(row: IdenticalRow | undefined) {
+  const entry = row?.member?.entry;
+  return entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
+}
+
+function moveInterval(interval: Interval | undefined, start: bigint | undefined): Interval | undefined {
+  if (!interval) return undefined;
+  if (start === undefined) throw new Error("Could not locate a group in this result. Find again.");
+  return { start: Number(start), end: Number(start) + interval.end - interval.start };
+}
+
+function pageNumbers(start: number, end: number, total: number, exclusions: Interval[]) {
+  const pages = new Set<number>();
+  for (let index = Math.max(0, start); index <= Math.min(total - 1, end); index++) pages.add(Math.floor(toSnapshotPosition(index, exclusions) / pageSize));
+  return pages;
+}
 
 export function useIdenticalSparse(
   result: IdenticalResult | undefined,
@@ -31,14 +57,15 @@ export function useIdenticalSparse(
   const [pages, setPages] = useState<Map<number, IdenticalRow[]>>(new Map());
   const [errors, setErrors] = useState<Map<number, string>>(new Map());
   const [unavailable, setUnavailable] = useState(false);
-  const [collapsed, setCollapsed] = useState<Map<string, Interval>>(new Map());
+  const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState<Map<string, CollapsedGroup>>(new Map());
   const [pinned, setPinned] = useState<Map<string, { row: IdenticalRow; file: FileData }>>(new Map());
   const pending = useRef(new Map<number, AbortController>());
   const epoch = useRef(0);
   const range = useRef<[number, number]>([0, 40]);
   const previousResult = useRef<string | undefined>(undefined);
-  const previousHidden = useRef(includeHidden);
   const pinnedRef = useRef(pinned);
+  const collapsedRef = useRef(collapsed);
   const resultId = result?.id;
   useEffect(() => {
     pinnedRef.current = pinned;
@@ -52,35 +79,84 @@ export function useIdenticalSparse(
     pendingRequests.clear();
     setPages(new Map());
     setErrors(new Map());
-    if (previousResult.current !== resultId || previousHidden.current !== includeHidden) setCollapsed(new Map());
+    setLoading(false);
+    if (previousResult.current !== resultId) {
+      collapsedRef.current = new Map();
+      setCollapsed(collapsedRef.current);
+    }
     if (previousResult.current !== resultId) {
       pinnedRef.current = new Map();
       setPinned(pinnedRef.current);
       setUnavailable(false);
     }
     previousResult.current = resultId;
-    previousHidden.current = includeHidden;
     range.current = [0, 40];
     return () => {
       epochRef.current++;
       for (const controller of pendingRequests.values()) controller.abort();
       pendingRequests.clear();
     };
-  }, [resultId, includeHidden, sortKey, descending]);
+  }, [resultId]);
+
+  const projectionExclusions = useCallback(
+    (positions: Map<string, IdenticalPosition>, collapsedGroups = collapsed, groupIntervals = removedGroupIntervals, showHidden = includeHidden) => {
+      const intervals: Interval[] = [...collapsedGroups.values()];
+      for (const position of positions.values()) {
+        const value = showHidden ? position.allPosition : position.visiblePosition;
+        if (value !== undefined && value >= 0n) intervals.push({ start: Number(value), end: Number(value) });
+      }
+      for (const groupId of removedGroups) {
+        const span = groupIntervals.get(groupId);
+        const interval = showHidden ? span?.all : span?.visible;
+        if (interval) intervals.push(interval);
+      }
+      return mergeIntervals(intervals);
+    },
+    [collapsed, includeHidden, removedGroupIntervals, removedGroups],
+  );
+  const exclusions = useMemo(() => projectionExclusions(removed), [projectionExclusions, removed]);
 
   const prepareProjection = useCallback(
-    async (showHidden: boolean, nextSortKey: IdenticalSortKey, nextDescending: boolean) => {
+    async (showHidden: boolean, nextSortKey: IdenticalSortKey, nextDescending: boolean, nextRemoved = removed): Promise<Projection> => {
+      const resort = nextSortKey !== sortKey || nextDescending !== descending;
+      const changeHidden = showHidden !== includeHidden;
+      const nextPages = resort || changeHidden ? new Map<number, IdenticalRow[]>() : undefined;
+      const request = epoch.current;
       const positions = new Map<string, IdenticalPosition>();
+      const groupAnchors = new Map<string, bigint>();
       // Selection can change while a position lookup is pending. Query only new IDs,
       // then remap the latest selection before replacing its pages and pins together.
       for (;;) {
+        // Keep the current viewport until its server-ordered replacement is ready.
+        const viewport = range.current;
         const selected = pinnedRef.current;
-        if (!resultId || !selected.size) return new Map(selected);
-        const ids = [...selected.values()].flatMap(({ row }) => {
-          const entry = row.member?.entry;
-          const id = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
-          return id === undefined || positions.has(String(id)) ? [] : [id];
-        });
+        const collapsedGroups = collapsedRef.current;
+        if (!resultId) return { pins: new Map(selected), pages: nextPages };
+        if (resort) {
+          for (const [id, interval] of collapsedGroups) {
+            if (groupAnchors.has(id)) continue;
+            let fileId = interval.fileId;
+            if (fileId === undefined) {
+              // A header can be collapsed before any of its members have loaded.
+              const reply = await filesCli.listIdenticalRows({
+                resultId,
+                offset: BigInt(interval.start),
+                limit: 1,
+                includeHidden,
+                sortKey,
+                sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+              }).response;
+              if (request !== epoch.current) throw new Error("The result changed. Find again.");
+              fileId = rowFileID(reply.rows[0]);
+            }
+            if (fileId === undefined) throw new Error("Could not locate a collapsed group. Find again.");
+            groupAnchors.set(id, fileId);
+          }
+          for (const [id, interval] of removedGroupIntervals) groupAnchors.set(id, interval.fileId);
+        }
+        const ids = [...new Set([...selected.values()].map(({ row }) => rowFileID(row)).concat([...groupAnchors.values()]))].filter(
+          (id): id is bigint => id !== undefined && !positions.has(String(id)),
+        );
         for (let offset = 0; offset < ids.length; offset += pageSize) {
           const reply = await filesCli.lookupIdenticalPositions({
             resultId,
@@ -88,28 +164,96 @@ export function useIdenticalSparse(
             sortKey: nextSortKey,
             sortOrder: nextDescending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
           }).response;
+          if (request !== epoch.current) throw new Error("The result changed. Find again.");
           for (const position of reply.positions) positions.set(String(position.fileId), position);
         }
         if (ids.some((id) => !positions.has(String(id)))) throw new Error("Could not locate selected files in this result. Find again.");
-        if (selected !== pinnedRef.current) continue;
+        if (
+          selected !== pinnedRef.current ||
+          collapsedGroups !== collapsedRef.current ||
+          (nextPages && (viewport[0] !== range.current[0] || viewport[1] !== range.current[1]))
+        )
+          continue;
         const next = new Map<string, { row: IdenticalRow; file: FileData }>();
         for (const [fileId, value] of selected) {
-          const entry = value.row.member?.entry;
-          const id = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
+          const id = rowFileID(value.row);
           const found = id === undefined ? undefined : positions.get(String(id));
           const position = showHidden ? found?.allPosition : found?.visiblePosition;
           const header = showHidden ? found?.allGroupHeaderPosition : found?.visibleGroupHeaderPosition;
           if (position !== undefined && header !== undefined) next.set(fileId, { ...value, row: { ...value.row, position, groupHeaderPosition: header } });
         }
-        return next;
+        const nextCollapsed = changeHidden ? new Map<string, CollapsedGroup>() : new Map(collapsedGroups);
+        const nextGroups = new Map(removedGroupIntervals);
+        if (resort) {
+          for (const [id, interval] of collapsedGroups) {
+            const fileId = groupAnchors.get(id)!;
+            const found = positions.get(String(fileId));
+            const header = showHidden ? found?.allGroupHeaderPosition : found?.visibleGroupHeaderPosition;
+            nextCollapsed.set(id, { ...moveInterval(interval, header === undefined ? undefined : header + 1n)!, fileId });
+          }
+          for (const [id, interval] of removedGroupIntervals) {
+            const found = positions.get(String(interval.fileId));
+            nextGroups.set(id, {
+              fileId: interval.fileId,
+              all: moveInterval(interval.all, found?.allGroupHeaderPosition),
+              visible: moveInterval(interval.visible, found?.visibleGroupHeaderPosition),
+            });
+          }
+        }
+        const nextExclusions = projectionExclusions(nextRemoved, nextCollapsed, nextGroups, showHidden);
+        const total = displayedCount(result ? (showHidden ? result.allCount : result.visibleCount) : 0, nextExclusions);
+        const start = Math.min(viewport[0], Math.max(0, total - (viewport[1] - viewport[0] + 1)));
+        const nextRange: [number, number] = [start, Math.min(total - 1, start + viewport[1] - viewport[0])];
+        if (nextPages) {
+          for (const page of pageNumbers(...nextRange, total, nextExclusions)) {
+            if (nextPages.has(page)) continue;
+            const reply = await filesCli.listIdenticalRows(
+              {
+                resultId,
+                offset: BigInt(page * pageSize),
+                limit: pageSize,
+                includeHidden: showHidden,
+                sortKey: nextSortKey,
+                sortOrder: nextDescending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+              },
+              {},
+            ).response;
+            if (request !== epoch.current) throw new Error("The result changed. Find again.");
+            nextPages.set(page, reply.rows);
+            while (nextPages.size > maxPages) nextPages.delete(nextPages.keys().next().value!);
+          }
+        }
+        if (
+          selected !== pinnedRef.current ||
+          collapsedGroups !== collapsedRef.current ||
+          (nextPages && (viewport[0] !== range.current[0] || viewport[1] !== range.current[1]))
+        )
+          continue;
+        return {
+          pins: next,
+          pages: nextPages,
+          collapsed: resort || changeHidden ? nextCollapsed : undefined,
+          removedGroups: resort ? nextGroups : undefined,
+          range: nextRange,
+        };
       }
     },
-    [resultId],
+    [resultId, result, sortKey, descending, includeHidden, removed, removedGroupIntervals, projectionExclusions],
   );
-  const useProjection = useCallback((next: Map<string, { row: IdenticalRow; file: FileData }>) => {
-    setPages(new Map());
-    pinnedRef.current = next;
-    setPinned(next);
+  const useProjection = useCallback((next: Projection) => {
+    epoch.current++;
+    for (const controller of pending.current.values()) controller.abort();
+    pending.current.clear();
+    setLoading(false);
+    if (next.range) range.current = next.range;
+    setPages(next.pages ?? new Map());
+    setErrors(new Map());
+    pinnedRef.current = next.pins;
+    setPinned(next.pins);
+    if (next.collapsed) {
+      collapsedRef.current = next.collapsed;
+      setCollapsed(next.collapsed);
+    }
   }, []);
   const invalidate = useCallback(() => setUnavailable(true), []);
 
@@ -133,19 +277,6 @@ export function useIdenticalSparse(
     return files;
   }, [allRows, memberFile]);
 
-  const exclusions = useMemo(() => {
-    const intervals: Interval[] = [...collapsed.values()];
-    for (const position of removed.values()) {
-      const value = includeHidden ? position.allPosition : position.visiblePosition;
-      if (value !== undefined && value >= 0n) intervals.push({ start: Number(value), end: Number(value) });
-    }
-    for (const groupId of removedGroups) {
-      const span = removedGroupIntervals.get(groupId);
-      const interval = includeHidden ? span?.all : span?.visible;
-      if (interval) intervals.push(interval);
-    }
-    return mergeIntervals(intervals);
-  }, [collapsed, includeHidden, removed, removedGroupIntervals, removedGroups]);
   const snapshotCount = result ? (includeHidden ? result.allCount : result.visibleCount) : 0;
   const totalCount = displayedCount(snapshotCount, exclusions);
 
@@ -153,9 +284,7 @@ export function useIdenticalSparse(
     (startIndex: number, endIndex: number, retry = false) => {
       if (!result || unavailable || totalCount === 0) return;
       range.current = [startIndex, endIndex];
-      const wanted = new Set<number>();
-      for (let index = Math.max(0, startIndex); index <= Math.min(totalCount - 1, endIndex); index++)
-        wanted.add(Math.floor(toSnapshotPosition(index, exclusions) / pageSize));
+      const wanted = pageNumbers(startIndex, endIndex, totalCount, exclusions);
       for (const [page, controller] of pending.current)
         if (!wanted.has(page)) {
           controller.abort();
@@ -206,9 +335,12 @@ export function useIdenticalSparse(
               });
           })
           .finally(() => {
-            if (pending.current.get(page) === controller) pending.current.delete(page);
+            if (pending.current.get(page) !== controller) return;
+            pending.current.delete(page);
+            setLoading(pending.current.size > 0);
           });
       }
+      setLoading(pending.current.size > 0);
     },
     [errors, exclusions, includeHidden, sortKey, descending, pages, result, totalCount, unavailable],
   );
@@ -223,17 +355,17 @@ export function useIdenticalSparse(
     (groupId: string) => {
       const row = groupRows.get(groupId);
       if (!row) return;
-      setCollapsed((current) => {
-        const next = new Map(current);
-        if (next.has(groupId)) next.delete(groupId);
-        else {
-          const start = Number(row.groupHeaderPosition) + 1;
-          next.set(groupId, { start, end: start + Number(row.displayMemberCount) - 1 });
-        }
-        return next;
-      });
+      const next = new Map(collapsedRef.current);
+      if (next.has(groupId)) next.delete(groupId);
+      else {
+        const start = Number(row.groupHeaderPosition) + 1;
+        const member = allRows.find((item) => item.group?.id === groupId && rowFileID(item) !== undefined);
+        next.set(groupId, { start, end: start + Number(row.displayMemberCount) - 1, fileId: rowFileID(member) });
+      }
+      collapsedRef.current = next;
+      setCollapsed(next);
     },
-    [groupRows],
+    [allRows, groupRows],
   );
   const pinSelection = useCallback(
     (files: FileData[]) => {
@@ -305,6 +437,7 @@ export function useIdenticalSparse(
       sparse: { totalCount: unavailable ? 0 : totalCount, rows: unavailable ? [] : sparseRows, onRangeChanged: requestRange, onToggleGroup: toggleGroup },
     },
     errors,
+    loading: !unavailable && loading,
     unavailable,
     invalidate,
     retry,

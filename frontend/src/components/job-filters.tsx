@@ -2,10 +2,11 @@ import { Feedback } from "@/components/feedback";
 import { useState } from "react";
 import { Button, MenuItem, TextField } from "@mui/material";
 import { useSearchParams } from "react-router";
-import { mediaCli, locationCli } from "@/api";
-import { JobKind, type JobFilter, type Location, type Media } from "@/entity";
+import { mediaCli } from "@/api";
+import { JobKind, type JobFilter, type Media } from "@/entity";
 import { jobLabel } from "@/components/job-card";
 import { errorMessage } from "@/tools";
+import { useLocationChoices } from "./use-location-choices";
 
 export const jobKinds = [JobKind.ARCHIVE, JobKind.RESTORE, JobKind.SCAN];
 export function jobFilterFromParams(params: URLSearchParams): JobFilter {
@@ -21,31 +22,22 @@ export function jobFilterFromParams(params: URLSearchParams): JobFilter {
 export const JobFilters = () => {
   const [params, setParams] = useSearchParams();
   const filter = jobFilterFromParams(params);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [open, setOpen] = useState(false);
+  const choices = useLocationChoices({ enabled: open });
+  const { locations } = choices;
   const [media, setMedia] = useState<Media[]>([]);
-  const [moreLocations, setMoreLocations] = useState(false);
   const [moreMedia, setMoreMedia] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const loadResources = async (more = false) => {
+  const loadMedia = async (more = false) => {
     if (loading) return;
     setLoading(true);
     try {
-      const [locationPage, mediaPage] = await Promise.all([
-        !more || moreLocations ? locationCli.list({ limit: 50, afterId: more ? (locations.at(-1)?.id ?? 0n) : 0n, query: "" }).response : undefined,
-        !more || moreMedia
-          ? mediaCli.list({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: more ? BigInt(media.length) : 0n, query: "" } } }).response
-          : undefined,
-      ]);
-      if (locationPage) {
-        setLocations((current) => (more ? [...current, ...locationPage.locations] : locationPage.locations));
-        setMoreLocations(locationPage.hasMore);
-      }
-      if (mediaPage) {
-        setMedia((current) => (more ? [...current, ...mediaPage.media] : mediaPage.media));
-        setMoreMedia(mediaPage.hasMore);
-      }
+      const page = await mediaCli.list({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: more ? BigInt(media.length) : 0n, query: "" } } })
+        .response;
+      setMedia((current) => (more ? [...current, ...page.media] : page.media));
+      setMoreMedia(page.hasMore);
       setLoaded(true);
       setError("");
     } catch (error) {
@@ -91,13 +83,15 @@ export const JobFilters = () => {
           select: {
             displayEmpty: true,
             onOpen: () => {
-              if (!loaded) void loadResources();
+              setOpen(true);
+              if (!loaded && !error) void loadMedia();
             },
+            onClose: () => setOpen(false),
           },
         }}
         onChange={(event) => {
           if (event.target.value === "more") {
-            void loadResources(true);
+            void loadMedia(true);
             return;
           }
           const next = new URLSearchParams(params);
@@ -120,16 +114,30 @@ export const JobFilters = () => {
             Media · {value.name}
           </MenuItem>
         ))}
-        {(moreLocations || moreMedia) && (
+        {(loading || choices.loading) && <MenuItem disabled>Loading resources…</MenuItem>}
+        {moreMedia && (
           <MenuItem value="more" disabled={loading}>
             Load more resources…
           </MenuItem>
         )}
       </TextField>
       {(filter.kind !== undefined || resource) && <Button onClick={() => setParams({})}>Clear</Button>}
-      {error && (
-        <Feedback severity="error" action={<Button onClick={() => void loadResources()}>Retry</Button>}>
-          {error}
+      {(error || choices.error) && (
+        <Feedback
+          severity="error"
+          action={
+            <Button
+              disabled={loading || choices.loading}
+              onClick={() => {
+                if (choices.error) choices.retry();
+                if (error) void loadMedia(loaded);
+              }}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {[choices.error, error].filter(Boolean).join(" ")}
         </Feedback>
       )}
     </div>

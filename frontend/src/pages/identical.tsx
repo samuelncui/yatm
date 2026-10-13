@@ -1,4 +1,5 @@
-import { FileBrowser } from "@/components/file-browser";
+import { FileBrowser, useFileListPreferences } from "@/components/file-browser";
+import type { FileListPreferences } from "@/state/file-lists";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, FormControlLabel, Grid, MenuItem, Switch, TextField, Typography } from "@mui/material";
@@ -7,6 +8,7 @@ import { toast } from "react-toastify";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 import {
   ChonkyActions,
+  CustomVisibilityState,
   ChonkyIconName,
   FileContextMenu,
   FileList,
@@ -54,11 +56,10 @@ import { chonkyI18n, errorMessage, formatFilesize, runUIAction } from "@/tools";
 
 const keepID = "identical-keep";
 const mergeID = "identical-merge";
-const sortNameID = "identical-sort-name";
-const sortSizeID = "identical-sort-size";
+const sortSizeID = ChonkyActions.SortFilesBySize.id;
 const removeID = ChonkyActions.DeleteFiles.id;
 type IdenticalSort = { key: IdenticalSortKey; descending: boolean };
-const initialSort: IdenticalSort = { key: IdenticalSortKey.FILE_ID, descending: false };
+const initialPreferences: FileListPreferences = { sort: "size", descending: true, foldersFirst: false };
 const staleGroup = (error: unknown) => error instanceof RpcError && error.code === "ABORTED";
 
 function memberFile(member: IdenticalMember): FileData {
@@ -89,7 +90,8 @@ export const IdenticalFiles = () => {
   );
   const [result, setResult] = useState<IdenticalResult>();
   const [includeHidden, setIncludeHidden] = useState(false);
-  const [sort, setSort] = useState<IdenticalSort>(initialSort);
+  const [preferences, setPreferences] = useFileListPreferences("identical", initialPreferences);
+  const sort = useMemo<IdenticalSort>(() => ({ key: IdenticalSortKey.SIZE, descending: preferences.descending }), [preferences.descending]);
   const [removed, setRemoved] = useState<Map<string, IdenticalPosition>>(new Map());
   const [suppressedIds, setSuppressedIds] = useState<Set<string>>(new Set());
   const [removedGroups, setRemovedGroups] = useState<Set<string>>(new Set());
@@ -383,15 +385,16 @@ export const IdenticalFiles = () => {
       const snapshotId = resultRef.current?.id;
       setSwitchingHidden(true);
       try {
-        const pins = await sparse.prepareProjection(next, sort.key, sort.descending);
+        const projection = await sparse.prepareProjection(next, sort.key, sort.descending);
+        const { pins } = projection;
         if (request !== hiddenRequest.current || resultRef.current?.id !== snapshotId) return;
-        if (snapshotId) sparse.useProjection(pins);
+        if (snapshotId) sparse.useProjection(projection);
         setSelected((current) => (current && !pins.has(current.id) ? [...pins.values()].at(-1)?.file : current));
         setIncludeHidden(next);
       } catch (failure) {
         if (request !== hiddenRequest.current || resultRef.current?.id !== snapshotId) return;
-        if (snapshotId) sparse.invalidate();
-        toast.error(errorMessage(failure, "Could not switch hidden files") + " Find again.");
+        if (snapshotId && failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") sparse.invalidate();
+        toast.error(errorMessage(failure, "Could not switch hidden files"));
       } finally {
         if (request === hiddenRequest.current) setSwitchingHidden(false);
       }
@@ -399,52 +402,51 @@ export const IdenticalFiles = () => {
     [sort, sparse, switchingHidden],
   );
 
-  const switchSort = useCallback(
-    async (key: IdenticalSortKey) => {
-      const snapshot = resultRef.current;
-      if (!snapshot) return;
-      if (sorting.current || switchingHidden || mergeActive.current || busyGroupRef.current.size || reconciliation.current?.running) {
-        toast.error("Wait for the current operation to finish before sorting.");
-        return;
+  const switchSort = useCallback(async () => {
+    const snapshot = resultRef.current;
+    if (!snapshot) return;
+    if (sorting.current || switchingHidden || mergeActive.current || busyGroupRef.current.size || reconciliation.current?.running) {
+      toast.error("Wait for the current operation to finish before sorting.");
+      return;
+    }
+    const next: IdenticalSort = { key: IdenticalSortKey.SIZE, descending: !sort.descending };
+    const request = ++hiddenRequest.current;
+    sorting.current = true;
+    setSwitchingSort(true);
+    try {
+      const positions = new Map<string, IdenticalPosition>();
+      const ids = [...removed.keys()].map(BigInt);
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        const reply = await filesCli.lookupIdenticalPositions({
+          resultId: snapshot.id,
+          fileIds: batch,
+          sortKey: next.key,
+          sortOrder: next.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+        }).response;
+        for (const position of reply.positions) positions.set(String(position.fileId), position);
       }
-      const next: IdenticalSort = { key, descending: sort.key === key ? !sort.descending : key === IdenticalSortKey.SIZE };
-      const request = ++hiddenRequest.current;
-      sorting.current = true;
-      setSwitchingSort(true);
-      try {
-        const positions = new Map<string, IdenticalPosition>();
-        const ids = [...removed.keys()].map(BigInt);
-        for (let offset = 0; offset < ids.length; offset += 100) {
-          const batch = ids.slice(offset, offset + 100);
-          const reply = await filesCli.lookupIdenticalPositions({
-            resultId: snapshot.id,
-            fileIds: batch,
-            sortKey: next.key,
-            sortOrder: next.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-          }).response;
-          for (const position of reply.positions) positions.set(String(position.fileId), position);
-        }
-        if (positions.size !== ids.length) throw new Error("Could not locate updated files in this result. Find again.");
-        const pins = await sparse.prepareProjection(includeHidden, next.key, next.descending);
-        if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
-        sparse.useProjection(pins);
-        setSelected((current) => (current && !pins.has(current.id) ? [...pins.values()].at(-1)?.file : current));
-        setRemoved(positions);
-        sortRef.current = next;
-        setSort(next);
-      } catch (failure) {
-        if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
-        if (failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") sparse.invalidate();
-        toast.error(errorMessage(failure, "Could not sort identical files"));
-      } finally {
-        if (request === hiddenRequest.current) {
-          sorting.current = false;
-          setSwitchingSort(false);
-        }
+      if (positions.size !== ids.length) throw new Error("Could not locate updated files in this result. Find again.");
+      const projection = await sparse.prepareProjection(includeHidden, next.key, next.descending, positions);
+      const { pins } = projection;
+      if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
+      sparse.useProjection(projection);
+      setSelected((current) => (current && !pins.has(current.id) ? [...pins.values()].at(-1)?.file : current));
+      setRemoved(positions);
+      if (projection.removedGroups) setRemovedGroupIntervals(projection.removedGroups);
+      sortRef.current = next;
+      setPreferences({ ...initialPreferences, descending: next.descending });
+    } catch (failure) {
+      if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
+      if (failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") sparse.invalidate();
+      toast.error(errorMessage(failure, "Could not sort identical files"));
+    } finally {
+      if (request === hiddenRequest.current) {
+        sorting.current = false;
+        setSwitchingSort(false);
       }
-    },
-    [includeHidden, removed, sort, sparse, switchingHidden],
-  );
+    }
+  }, [includeHidden, removed, sort, sparse, switchingHidden, setPreferences]);
 
   const stream = useCallback(
     async (
@@ -675,14 +677,11 @@ export const IdenticalFiles = () => {
       ...(result && !sparse.unavailable
         ? [
             defineFileAction({
-              id: sortNameID,
-              button: { name: `Sort by name${sort.key === IdenticalSortKey.NAME ? (sort.descending ? " ↓" : " ↑") : ""}`, toolbar: true, group: "Options" },
-              customVisibility: () => (sortAvailable ? 2 : 1),
-            }),
-            defineFileAction({
-              id: sortSizeID,
-              button: { name: `Sort by size${sort.key === IdenticalSortKey.SIZE ? (sort.descending ? " ↓" : " ↑") : ""}`, toolbar: true, group: "Options" },
-              customVisibility: () => (sortAvailable ? 2 : 1),
+              ...ChonkyActions.SortFilesBySize,
+              // Sparse rows are ordered by the server, including unloaded members.
+              sortKeySelector: undefined,
+              button: { ...ChonkyActions.SortFilesBySize.button, icon: sort.descending ? ChonkyIconName.sortDesc : ChonkyIconName.sortAsc },
+              customVisibility: () => (sortAvailable ? CustomVisibilityState.Active : CustomVisibilityState.Disabled),
             }),
           ]
         : []),
@@ -718,8 +717,8 @@ export const IdenticalFiles = () => {
   const onFileAction: GenericFileActionHandler<FileAction> = (data) => {
     const selectedFiles: FileData[] = data.state.selectedFilesForAction;
     if (sparse.unavailable && data.id !== ChonkyActions.ChangeSelection.id) return;
-    if (data.id === sortNameID || data.id === sortSizeID) {
-      void switchSort(data.id === sortNameID ? IdenticalSortKey.NAME : IdenticalSortKey.SIZE);
+    if (data.id === sortSizeID) {
+      void switchSort();
       return;
     }
     if (data.id === ChonkyActions.ChangeSelection.id) {
@@ -836,8 +835,8 @@ export const IdenticalFiles = () => {
             }
             const start = Number(row.groupHeaderPosition);
             const spans: ProjectionIntervals = includeHidden
-              ? { all: { start, end: start + Number(row.displayMemberCount) }, visible: otherInterval }
-              : { visible: { start, end: start + Number(row.displayMemberCount) }, all: otherInterval };
+              ? { fileId: reference.fileId, all: { start, end: start + Number(row.displayMemberCount) }, visible: otherInterval }
+              : { fileId: reference.fileId, visible: { start, end: start + Number(row.displayMemberCount) }, all: otherInterval };
             setRemovedGroupIntervals((current) => new Map(current).set(group.id, spans));
             setRemovedGroups((current) => new Set(current).add(group.id));
             setRevision((value) => value + 1);
@@ -929,12 +928,13 @@ export const IdenticalFiles = () => {
       )}
       {!sparse.unavailable && sparse.errors.size > 0 && (
         <Feedback severity="warning" action={<Button onClick={sparse.retry}>Retry rows</Button>}>
-          Could not load some rows.
+          Could not load some rows. {[...new Set(sparse.errors.values())].join("; ")}
         </Feedback>
       )}
       <Grid className="browser-container" container columnSpacing={1.5}>
         <Grid className="browser" size={7} component="section" aria-label="Identical file groups">
           <FileBrowser
+            instanceId="identical"
             ref={browser}
             files={sparse.files}
             folderChain={[{ id: "identical", name: "Identical files", isDir: true, openable: false }]}
@@ -957,9 +957,13 @@ export const IdenticalFiles = () => {
             <FileNavbar />
             <FileToolbar layout="inline" />
             <FileList
+              loading={switchingSort || switchingHidden || sparse.loading ? "refreshing" : undefined}
+              loadingLabel={switchingSort ? "Sorting files" : switchingHidden ? "Updating hidden files" : "Loading files"}
               emptyPlaceholder={
                 loading ? (
                   <ListPlaceholder loading label="Reading…" />
+                ) : error ? (
+                  <ListPlaceholder label="Could not find identical files" />
                 ) : source === IdenticalSource.LOCATIONS && !roots.length ? (
                   <ListPlaceholder label="Choose Locations to search" />
                 ) : sparse.unavailable ? (

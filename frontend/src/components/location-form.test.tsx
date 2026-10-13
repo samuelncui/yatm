@@ -133,3 +133,18 @@ it("preserves Advanced draft values across keyboard expansion and saves them whi
     }),
   );
 });
+
+it("unlocks all Location fields after a failed Save and retains the submitted draft", async () => {
+  let fail!: (error: Error) => void;
+  update.mockReturnValueOnce({ response: new Promise((_, reject) => (fail = reject)) });
+  show(source);
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Edited name" } });
+  await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  for (const input of [...screen.getAllByRole("textbox"), ...screen.getAllByRole("checkbox")]) expect(input).toBeDisabled();
+  await act(async () => fail(new Error("Save unavailable")));
+  expect(screen.getByText("Save unavailable")).toBeVisible();
+  for (const input of [...screen.getAllByRole("textbox"), ...screen.getAllByRole("checkbox")]) expect(input).toBeEnabled();
+  expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Edited name");
+  expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+});

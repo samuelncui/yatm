@@ -12,7 +12,8 @@ import Tab from "@mui/material/Tab";
 
 import { archiveJobCli, restoreJobCli, scanJobCli } from "@/api";
 import { PageTabs } from "@/components/page-navigation";
-import { FileRowPlaceholder } from "@/components/job-file-list-item";
+import { FileRowPlaceholder, jobResultRowHeight } from "@/components/job-file-list-item";
+import { firstUncovered, loadedAt, mergeWindow, planAnchor, resultPageSize as pageSize, type ResultWindow } from "./job-result-window";
 import { JobResultOrder } from "@/entity";
 import { errorMessage } from "@/tools";
 
@@ -49,119 +50,38 @@ export type JobItemView<T = any> = {
 
 export type JobItemViews = JobItemView[];
 
-const pageSize = 200;
-
-const listingLoaders: Record<JobItemListing, (jobId: bigint, page: JobItemPageRequest) => Promise<JobItemPage>> = {
-  "scan-entries": async (jobId, page) => {
-    const reply = await scanJobCli.listEntries({ id: jobId, ...page }).response;
+const listingLoaders: Record<JobItemListing, (jobId: bigint, page: JobItemPageRequest, abort: AbortSignal) => Promise<JobItemPage>> = {
+  "scan-entries": async (jobId, page, abort) => {
+    const reply = await scanJobCli.listEntries({ id: jobId, ...page }, { abort }).response;
     return { rows: reply.entries, hasMore: reply.hasMore, total: reply.totalEntryCount };
   },
-  "archive-files": async (jobId, page) => {
-    const reply = await archiveJobCli.listFiles({ id: jobId, filterStatus: [], ...page }).response;
+  "archive-files": async (jobId, page, abort) => {
+    const reply = await archiveJobCli.listFiles({ id: jobId, filterStatus: [], ...page }, { abort }).response;
     return { rows: reply.items, hasMore: reply.hasMore, total: reply.totalFileCount };
   },
-  "restore-files": async (jobId, page) => {
-    const reply = await restoreJobCli.listFiles({ id: jobId, filterStatus: [], ...page }).response;
+  "restore-files": async (jobId, page, abort) => {
+    const reply = await restoreJobCli.listFiles({ id: jobId, filterStatus: [], ...page }, { abort }).response;
     return { rows: reply.items, hasMore: reply.hasMore, total: reply.totalFileCount };
   },
-};
-
-type LoadedWindow = { start: number; rows: unknown[] };
-
-const windowEnd = (window: LoadedWindow) => window.start + window.rows.length;
-
-const loadedAt = (windows: LoadedWindow[], index: number): unknown => {
-  for (const window of windows) {
-    if (index >= window.start && index < windowEnd(window)) return window.rows[index - window.start];
-  }
-  return undefined;
-};
-
-const isCovered = (windows: LoadedWindow[], start: number, end: number) => {
-  for (let index = start; index <= end; index++) {
-    if (loadedAt(windows, index) === undefined) return false;
-  }
-  return true;
-};
-
-const firstUncovered = (windows: LoadedWindow[], start: number, end: number) => {
-  for (let index = start; index <= end; index++) {
-    if (loadedAt(windows, index) === undefined) return index;
-  }
-  return end + 1;
-};
-
-/** Overlapping windows repeat the same manifest rows, so only new trailing rows are kept. */
-const mergeWindow = (windows: LoadedWindow[], incoming: LoadedWindow): LoadedWindow[] => {
-  const merged: LoadedWindow[] = [];
-  for (const window of [...windows, incoming].sort((left, right) => left.start - right.start)) {
-    const last = merged.at(-1);
-    if (last && window.start <= windowEnd(last)) {
-      last.rows = [...last.rows, ...window.rows.slice(Math.max(0, windowEnd(last) - window.start))];
-      continue;
-    }
-    merged.push({ start: window.start, rows: [...window.rows] });
-  }
-  return merged;
-};
-
-type JobItemAnchor =
-  | { kind: "head"; limit: number }
-  | { kind: "offset"; offset: number; limit: number }
-  | { kind: "after"; cursor: string; limit: number }
-  | { kind: "before"; cursor: string; limit: number };
-
-/**
- * A visible position next to a loaded window continues from that window's edge;
- * any other position needs an offset anchor, which is the only way to locate it.
- */
-const planAnchor = (view: JobItemView, windows: LoadedWindow[], index: number): { anchor: JobItemAnchor; start: (rows: number) => number } => {
-  const after = windows.find((window) => windowEnd(window) === index);
-  if (after) {
-    return {
-      anchor: { kind: "after", cursor: view.cursorOf(loadedAt(windows, windowEnd(after) - 1)), limit: pageSize },
-      start: () => windowEnd(after),
-    };
-  }
-  const before = windows.find((window) => window.start === index + 1);
-  if (before) {
-    return {
-      anchor: { kind: "before", cursor: view.cursorOf(loadedAt(windows, before.start)), limit: pageSize },
-      start: (rows) => Math.max(0, before.start - rows),
-    };
-  }
-  if (windows.length === 0 && index === 0) return { anchor: { kind: "head", limit: pageSize }, start: () => 0 };
-  return { anchor: { kind: "offset", offset: index, limit: pageSize }, start: () => index };
-};
-
-const requestFor = (anchor: JobItemAnchor, includeTotal: boolean): JobItemPageRequest => {
-  switch (anchor.kind) {
-    case "head":
-      return { limit: anchor.limit, cursor: "", order: JobResultOrder.ASCENDING, includeTotal };
-    case "offset":
-      return { limit: anchor.limit, cursor: "", order: JobResultOrder.ASCENDING, offset: BigInt(anchor.offset), includeTotal };
-    case "after":
-      return { limit: anchor.limit, cursor: anchor.cursor, order: JobResultOrder.ASCENDING, includeTotal };
-    case "before":
-      return { limit: anchor.limit, cursor: anchor.cursor, order: JobResultOrder.DESCENDING, includeTotal };
-  }
 };
 
 export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title: string; views: JobItemViews }) => {
   const [open, setOpen] = useState(false);
   const [viewIndex, setViewIndex] = useState(0);
   const [total, setTotal] = useState(0);
-  const [windows, setWindows] = useState<LoadedWindow[]>([]);
+  const [windows, setWindows] = useState<ResultWindow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const viewsRef = useRef(views);
-  const windowsRef = useRef<LoadedWindow[]>([]);
+  const windowsRef = useRef<ResultWindow[]>([]);
   const totalRef = useRef(0);
   const pendingRange = useRef<{ start: number; end: number; includeTotal: boolean } | null>(null);
   const visibleRange = useRef({ start: 0, end: pageSize - 1 });
   const generation = useRef(0);
   const busy = useRef(false);
+  const failed = useRef(false);
+  const controller = useRef<AbortController | null>(null);
 
   useEffect(() => {
     viewsRef.current = views;
@@ -170,11 +90,12 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
   useEffect(
     () => () => {
       generation.current++;
+      controller.current?.abort();
     },
     [],
   );
 
-  const publish = (next: LoadedWindow[]) => {
+  const publish = (next: ResultWindow[]) => {
     windowsRef.current = next;
     setWindows(next);
   };
@@ -183,29 +104,53 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
     const view = viewsRef.current[index];
     if (!view) return;
     const run = generation.current;
+    const viewport = visibleRange.current;
     // Each pass loads one window; a bounded number keeps one scroll burst responsive.
     for (let pass = 0; pass < 4; pass++) {
       const current = windowsRef.current;
       // A requested range may reach past the result set; only real rows are fetched.
       const last = totalRef.current > 0 ? Math.min(end, totalRef.current - 1) : end;
-      if (last < start || isCovered(current, start, last)) return;
       const target = firstUncovered(current, start, last);
-      const plan = planAnchor(view, current, target);
-      const page = await listingLoaders[view.listing](jobId, requestFor(plan.anchor, includeTotal && current.length === 0));
+      if (target > last) return;
+      const plan = planAnchor(view.cursorOf, current, target);
+      let page: JobItemPage;
+      try {
+        page = await listingLoaders[view.listing](
+          jobId,
+          {
+            limit: pageSize,
+            cursor: plan.cursor,
+            offset: plan.offset,
+            order: plan.backwards ? JobResultOrder.DESCENDING : JobResultOrder.ASCENDING,
+            includeTotal: includeTotal && current.length === 0,
+          },
+          controller.current!.signal,
+        );
+      } catch (reason) {
+        if (viewport !== visibleRange.current) return;
+        throw reason;
+      }
       if (run !== generation.current) return;
       if (page.total !== undefined) {
         totalRef.current = Number(page.total);
         setTotal(totalRef.current);
       }
-      if (page.rows.length === 0) return;
-      const rows = plan.anchor.kind === "before" ? [...page.rows].reverse() : page.rows;
-      publish(mergeWindow(windowsRef.current, { start: plan.start(page.rows.length), rows }));
+      if (page.rows.length === 0) {
+        if (viewport !== visibleRange.current) return;
+        if (target < totalRef.current) throw new Error("Could not load this window of Job results");
+        return;
+      }
+      const rows = plan.backwards ? [...page.rows].reverse() : page.rows;
+      publish(mergeWindow(windowsRef.current, { start: plan.start(page.rows.length), rows }, visibleRange.current.start));
+      // A new viewport takes priority over filling the one the user has left.
+      if (viewport !== visibleRange.current) return;
     }
   };
 
   const drain = async (index: number) => {
     if (busy.current) return;
     busy.current = true;
+    controller.current = new AbortController();
     const run = generation.current;
     setLoading(true);
     // A retry starts from a clean error state; loaded windows stay untouched.
@@ -219,7 +164,10 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
         if (wanted.includeTotal && windowsRef.current.length === 0) return;
       }
     } catch (reason) {
-      if (run === generation.current) setError(errorMessage(reason, "Could not load Job results"));
+      if (run === generation.current) {
+        failed.current = true;
+        setError(errorMessage(reason, "Could not load Job results"));
+      }
     } finally {
       if (run === generation.current) {
         busy.current = false;
@@ -230,14 +178,24 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
 
   const schedule = (index: number, range: ListRange, includeTotal = false) => {
     const wanted = { start: Math.max(0, range.startIndex), end: range.endIndex };
-    visibleRange.current = wanted;
+    if (wanted.start !== visibleRange.current.start || wanted.end !== visibleRange.current.end) visibleRange.current = wanted;
+    if (failed.current) return;
+    const end = Math.min(wanted.end, totalRef.current - 1);
+    if (!includeTotal && firstUncovered(windowsRef.current, wanted.start, end) > end) {
+      pendingRange.current = null;
+      setLoading(false);
+      return;
+    }
     pendingRange.current = { ...wanted, includeTotal };
+    setLoading(true);
     void drain(index);
   };
 
   const reset = (index: number) => {
     generation.current++;
+    controller.current?.abort();
     busy.current = false;
+    failed.current = false;
     pendingRange.current = null;
     publish([]);
     totalRef.current = 0;
@@ -253,6 +211,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
   };
   const close = () => {
     generation.current++;
+    controller.current?.abort();
     busy.current = false;
     pendingRange.current = null;
     setLoading(false);
@@ -291,9 +250,11 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
                   severity="error"
                   action={
                     <Button
-                      onClick={() =>
-                        schedule(viewIndex, { startIndex: visibleRange.current.start, endIndex: visibleRange.current.end }, totalRef.current === 0)
-                      }
+                      onClick={() => {
+                        failed.current = false;
+                        setError("");
+                        schedule(viewIndex, { startIndex: visibleRange.current.start, endIndex: visibleRange.current.end }, totalRef.current === 0);
+                      }}
                     >
                       Retry
                     </Button>
@@ -304,11 +265,11 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
               )}
               {total > 0 && (
                 <Virtuoso
-                  style={{ width: "100%", height: "100%" }}
+                  style={{ width: "100%", flex: "1 1 auto", minHeight: 0 }}
                   totalCount={total}
-                  defaultItemHeight={54}
+                  fixedItemHeight={jobResultRowHeight}
+                  increaseViewportBy={jobResultRowHeight * 10}
                   rangeChanged={(range) => schedule(viewIndex, range)}
-                  scrollSeekConfiguration={{ enter: (velocity) => velocity > 1000, exit: (velocity) => velocity < 100 }}
                   itemContent={(index) => {
                     const row = loadedAt(windows, index);
                     return row === undefined ? <FileRowPlaceholder /> : view.render(row);

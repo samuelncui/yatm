@@ -150,7 +150,10 @@ describe("RestoreCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     expect(await screen.findByText("saved/file.txt")).toBeInTheDocument();
     // One composite sequence spans every Media, so the view needs no Media argument.
-    expect(listFiles).toHaveBeenCalledWith({ id: 20n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true, filterStatus: [] });
+    expect(listFiles).toHaveBeenCalledWith(
+      { id: 20n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true, filterStatus: [] },
+      { abort: expect.any(AbortSignal) },
+    );
 
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Restore results" })).not.toBeInTheDocument();

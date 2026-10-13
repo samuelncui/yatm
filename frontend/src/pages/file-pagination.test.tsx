@@ -1,4 +1,4 @@
-import { PreviewSettings } from "@/entity";
+import { Location, PreviewSettings } from "@/entity";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
@@ -61,10 +61,7 @@ vi.mock("@/api", async (original) => {
       ...api.locationCli,
       list: () =>
         call({
-          locations: [
-            { id: 4n, name: "Photos" },
-            { id: 5n, name: "Documents" },
-          ],
+          locations: [Location.create({ id: 4n, name: "Photos" }), Location.create({ id: 5n, name: "Documents" })],
           hasMore: false,
         }),
       get: ({ id }: { id: bigint }) => call(GetLocationResponse.create({ location: { id, name: id === 4n ? "Photos" : "Documents" } })),

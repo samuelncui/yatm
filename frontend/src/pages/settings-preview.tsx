@@ -18,7 +18,7 @@ import {
 } from "@mui/material";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsField, SettingsNumberField } from "@/components/settings-field";
-import { SettingsActions, SettingsEditorFeedback, SettingsPage, SettingsSection } from "@/components/settings-page";
+import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { PreviewSettings, type PreviewGeneratorSettings, SettingsGroup } from "@/entity";
 import { usePreviewGeneration } from "@/components/preview-policy-select";
 
@@ -39,7 +39,7 @@ export const PreviewSettingsBrowser = () => {
   };
   const activeSelected = draft ? Math.min(selected, Math.max(0, draft.generators.length - 1)) : 0;
   return (
-    <SettingsPage title="Preview" description="Runtime controls apply to the next file; routes and output choices apply to new Jobs.">
+    <>
       <SettingsEditorFeedback
         label="Preview"
         loading={loading}
@@ -173,7 +173,7 @@ export const PreviewSettingsBrowser = () => {
           <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
         </Stack>
       )}
-    </SettingsPage>
+    </>
   );
 };
 

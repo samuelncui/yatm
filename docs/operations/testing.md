@@ -166,7 +166,10 @@ a release run. Use `migration` separately when its reconciliation changes. Large
 checks remain separate from timing and run once. Frontend changes also use the relevant list
 interaction and virtualization tests described in [Local Checks](#local-checks), and the
 [frontend benchmark](../../frontend/README.md#frontend-benchmarks) uses Vitest's native comparison
-with one invocation per source. Browser tests cover actual rendering and interaction.
+with one invocation per source. Browser tests cover actual rendering and interaction. Shared loading or virtual-list changes
+include a cold route, deliberately delayed code/data responses, an error and explicit Retry,
+and forward/reverse/distant scrolling with long rows. Verify request counts, selected menus
+and real scroll geometry: a mocked virtualizer cannot establish those layout properties.
 
 List/Search fixtures associate half the entries with catalog Files and request attributes,
 status, operations and navigation. They cover random/reverse names, 16 directory levels,
@@ -183,6 +186,12 @@ completion, first-result-page and total latency, plus allocations. Scan intentio
 `-benchtime=1x -count=1`: it modifies catalog state, so a second operation on that same catalog
 would measure a different workload. Catalog setup and Job deletion remain outside the timer.
 The million-entry Scan check verifies completion and all result pages once on the candidate.
+
+Result browsing uses `go test ./internal/executor/scan -run '^$' -bench '^BenchmarkScanListEntries$'
+-benchmem -count=1`: a retained 100,000-entry manifest, first-page counts, forward/reverse
+cursors and far offsets, with warm or reopened runners and Preview presence checks. Fixture
+creation is outside timing. This isolates the public handler from Scan execution, RPC transport
+and browser rendering. Keep its small fixture correctness check in the regular Go suite.
 
 Legacy migration changes use the same collector with `--tier migration`; it runs
 `BenchmarkPrepareArchivedVersions` once on each source with `-benchtime=1x`, records identities
@@ -266,6 +275,13 @@ flags; do not repeat the whole release tier for a change to one component. The f
 preflight and acceptance of the exact release archives remain required.
 
 ## Large Identical Results
+
+Use the native benchmark for before/after Find and retained-page costs with the same 10,000-
+and 100,000-File fixtures. Fixture creation is outside the measured operations:
+
+```shell
+go test ./internal/library -run '^$' -bench '^BenchmarkIdenticalRetainedResult$' -benchmem -count=1
+```
 
 The opt-in performance fixture builds isolated 10,000- and 100,000-File catalogs with many pairs,
 a large group, a long transitive chain, saved versions, hidden names and unknown sizes. It measures

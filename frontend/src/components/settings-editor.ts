@@ -53,31 +53,36 @@ const updateSettingsGroup = async <G extends keyof SettingsByGroup>(group: G, va
   return updated;
 };
 
-// Only committed groups shared by independent application surfaces are retained.
-const shared = (group: SettingsGroup): boolean => group === SettingsGroup.LIBRARY || group === SettingsGroup.PREVIEW;
+const readCommittedSettings = <G extends keyof SettingsByGroup>(store: AppStore, group: G): SettingsByGroup[G] | undefined => {
+  const value = store.getState().settings[group]?.value;
+  return value ? groupValue(SettingsValue.fromJsonString(value), group) : undefined;
+};
+
 const pending = new WeakMap<AppStore, Map<SettingsGroup, Promise<unknown>>>();
 export async function loadCommittedSettings<G extends keyof SettingsByGroup>(store: AppStore, group: G, reload = false): Promise<SettingsByGroup[G]> {
-  if (!shared(group)) return getSettingsGroup(group);
-  const read = () => {
-    const value = store.getState().settings[group]?.value;
-    return value ? groupValue(SettingsValue.fromJsonString(value), group) : undefined;
-  };
+  const read = () => readCommittedSettings(store, group);
   const current = read();
   if (!reload && current) return current;
   const requests = pending.get(store) ?? new Map<SettingsGroup, Promise<unknown>>();
   pending.set(store, requests);
   const existing = requests.get(group);
   if (!reload && existing) return existing as Promise<SettingsByGroup[G]>;
+  const error = store.getState().settings[group]?.error;
+  if (!reload && error) throw new Error(error);
   store.dispatch(settingsActions.requested(group));
   const request = store.getState().settings[group]!.request;
-  const load = getSettingsGroup(group)
+  const followCurrent = (): Promise<SettingsByGroup[G]> => {
+    const next = requests.get(group);
+    return next && next !== load ? (next as Promise<SettingsByGroup[G]>) : loadCommittedSettings(store, group);
+  };
+  const load: Promise<SettingsByGroup[G]> = getSettingsGroup(group)
     .then((value) => {
+      if (store.getState().settings[group]?.request !== request) return followCurrent();
       store.dispatch(settingsActions.received({ group, request, value: SettingsValue.toJsonString(settingsValue(group, value)) }));
       return read() ?? value;
     })
     .catch((failure: unknown) => {
-      const latest = read();
-      if (store.getState().settings[group]?.request !== request && latest) return latest;
+      if (store.getState().settings[group]?.request !== request) return followCurrent();
       store.dispatch(settingsActions.failed({ group, request, error: errorMessage(failure, "Could not load settings") }));
       throw failure;
     })
@@ -104,22 +109,35 @@ export function useCommittedSettings<G extends keyof SettingsByGroup>(group: G, 
 export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, message: SettingsMessage<SettingsByGroup[G]>, label: string) => {
   type T = SettingsByGroup[G];
   const store = useAppStore();
-  const [settings, setSettings] = useState<T>();
-  const [draft, setDraft] = useState<T>();
+  const selector = useMemo(() => makeSelectSettings(group), [group]);
+  const committed = useAppSelector(selector);
+  const [settings, setSettings] = useState<T | undefined>(() => {
+    const value = readCommittedSettings(store, group);
+    return value && message.clone(value);
+  });
+  const [draft, setDraft] = useState<T | undefined>(() => settings && message.clone(settings));
   const [attempt, setAttempt] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!settings && !store.getState().settings[group]?.error);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(store.getState().settings[group]?.error ?? "");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    const value = committed && groupValue(committed, group);
+    if (!value || message.equals(value, settings)) return;
+    // Saves can finish after navigation. Adopt them without replacing private edits.
+    setDraft((current) => (!current || message.equals(current, settings) ? message.clone(value) : current));
+    setSettings(message.clone(value));
+  }, [committed, group, message, settings]);
+
+  useEffect(() => {
     let active = true;
-    setLoading(true);
+    setLoading(attempt > 0 || (!readCommittedSettings(store, group) && !store.getState().settings[group]?.error));
     void loadCommittedSettings(store, group, attempt > 0)
       .then((value) => {
         if (!active) return;
         setSettings(message.clone(value));
-        setDraft(message.clone(value));
+        setDraft((current) => (attempt > 0 || !current ? message.clone(value) : current));
         setError("");
       })
       .catch((failure) => {
@@ -149,7 +167,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     setSaved(false);
     try {
       const value = await updateSettingsGroup(group, draft);
-      if (shared(group)) store.dispatch(settingsActions.saved({ group, value: SettingsValue.toJsonString(settingsValue(group, value)) }));
+      store.dispatch(settingsActions.saved({ group, value: SettingsValue.toJsonString(settingsValue(group, value)) }));
       setSettings(message.clone(value));
       setDraft(message.clone(value));
       setError("");

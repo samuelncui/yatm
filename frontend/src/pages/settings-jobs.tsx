@@ -1,7 +1,7 @@
 import { Grid, Stack } from "@mui/material";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsNumberField } from "@/components/settings-field";
-import { SettingsActions, SettingsEditorFeedback, SettingsPage, SettingsSection } from "@/components/settings-page";
+import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { JobExecutionSettings, JobSettings, SettingsGroup } from "@/entity";
 
 /** The Executor's pipeline limits: what an attempt batches, buffers and flushes while it runs. */
@@ -22,7 +22,7 @@ export const JobSettingsBrowser = () => {
   };
 
   return (
-    <SettingsPage title="Jobs" description="These limits are captured when the next attempt starts. Running attempts keep their current limits.">
+    <>
       <SettingsEditorFeedback label="Job" loading={loading} saving={saving} error={error} saved={saved} dirty={dirty} hasDraft={!!draft} onReload={reload} />
       {execution && (
         <Stack
@@ -89,7 +89,7 @@ export const JobSettingsBrowser = () => {
           <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
         </Stack>
       )}
-    </SettingsPage>
+    </>
   );
 };
 

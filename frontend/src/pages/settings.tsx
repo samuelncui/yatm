@@ -13,16 +13,12 @@ import DialogTitle from "@mui/material/DialogTitle";
 import { fileBase } from "@/api";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsField } from "@/components/settings-field";
-import { SettingsActions, SettingsEditorFeedback, SettingsPage, SettingsSection } from "@/components/settings-page";
+import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { LibrarySettings, SettingsGroup } from "@/entity";
+import { loadLocations } from "@/state/locations";
+import { useAppStore } from "@/state/react";
 
-export const SettingsBrowser = () => (
-  <SettingsPage title="Library" description="What Library shows, how it removes items, and where its data can go.">
-    <LibraryDisplaySettings />
-  </SettingsPage>
-);
-
-const LibraryDisplaySettings = () => {
+export const SettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library");
   const { cancel, dirty, draft, error, loading, reload, save, saved, saving, setDraft } = editor;
   return (
@@ -47,32 +43,36 @@ const LibraryDisplaySettings = () => {
           void save();
         }}
       >
-        <SettingsSection title="File visibility">
-          <SettingsField
-            label="Include unbacked files"
-            description="When off, Library shows files with saved versions. Locations are unaffected."
-            control={
-              <Checkbox
-                checked={draft?.includeUnbackedFiles ?? false}
-                disabled={!draft || loading || saving}
-                onChange={(_, includeUnbackedFiles) => setDraft((value) => (value ? { ...value, includeUnbackedFiles } : value))}
+        {draft && (
+          <>
+            <SettingsSection title="File visibility">
+              <SettingsField
+                label="Include unbacked files"
+                description="When off, Library shows files with saved versions. Locations are unaffected."
+                control={
+                  <Checkbox
+                    checked={draft.includeUnbackedFiles}
+                    disabled={loading || saving}
+                    onChange={(_, includeUnbackedFiles) => setDraft((value) => (value ? { ...value, includeUnbackedFiles } : value))}
+                  />
+                }
               />
-            }
-          />
-        </SettingsSection>
-        <SettingsSection title="File operations">
-          <SettingsField
-            label="Confirm Delete"
-            description={draft && !draft.confirmRemove ? "Delete moves selected items to Trash immediately." : undefined}
-            control={
-              <Checkbox
-                checked={draft?.confirmRemove ?? false}
-                disabled={!draft || loading || saving}
-                onChange={(_, confirmRemove) => setDraft((value) => (value ? { ...value, confirmRemove } : value))}
+            </SettingsSection>
+            <SettingsSection title="File operations">
+              <SettingsField
+                label="Confirm Delete"
+                description={!draft.confirmRemove ? "Delete moves selected items to Trash immediately." : undefined}
+                control={
+                  <Checkbox
+                    checked={draft.confirmRemove}
+                    disabled={loading || saving}
+                    onChange={(_, confirmRemove) => setDraft((value) => (value ? { ...value, confirmRemove } : value))}
+                  />
+                }
               />
-            }
-          />
-        </SettingsSection>
+            </SettingsSection>
+          </>
+        )}
         <SettingsSection title="Library data">
           <Typography variant="body2" color="text.secondary">
             Export writes the whole Library; import replaces it from that backup. Settings are not exported or changed.
@@ -96,6 +96,7 @@ const LibraryDataActions = () => (
 );
 
 const ImportLibraryButton = () => {
+  const store = useAppStore();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
@@ -118,6 +119,7 @@ const ImportLibraryButton = () => {
     try {
       const response = await fetch(fileBase + "/library/_import", { body: file, method: "POST" });
       if (!response.ok) throw new Error((await response.text()) || `Import failed (${response.status})`);
+      void loadLocations(store, true);
       setStatus("success");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not import the Library backup");

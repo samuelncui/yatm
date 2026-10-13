@@ -32,7 +32,8 @@ export const PaneSourceSelector = ({
   onNavigateRoot: () => void;
 }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const { locations, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: !!anchor });
+  const { locations, loading, error, retry } = useLocationChoices({ enabled: true });
+  const sourceName = source.kind === "library" ? "Library" : (locations.find((location) => String(location.id) === source.id)?.name ?? source.name);
   const close = () => setAnchor(null);
   const select = (value: PaneSource) => {
     close();
@@ -45,11 +46,11 @@ export const PaneSourceSelector = ({
           size="small"
           color="inherit"
           onClick={onNavigateRoot}
-          aria-label={`Go to ${source.kind === "library" ? "Library" : source.name} root`}
+          aria-label={`Go to ${sourceName} root`}
           sx={{ textTransform: "none", fontSize: 13, fontWeight: 650, minWidth: 0, maxWidth: 200, height: 28, px: 0.25 }}
         >
           <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {source.kind === "library" ? "Library" : source.name}
+            {sourceName}
           </Box>
         </Button>
         <IconButton
@@ -78,11 +79,6 @@ export const PaneSourceSelector = ({
             {location.name}
           </MenuItem>
         ))}
-        {more && !error && (
-          <MenuItem disabled={loading} onClick={loadMore}>
-            Load more…
-          </MenuItem>
-        )}
         {error && (
           <Box component="li" role="presentation" sx={{ px: 1 }}>
             <Feedback severity="error">{error}</Feedback>

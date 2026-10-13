@@ -6,16 +6,16 @@ import { MemoryRouter, Routes, Route, Link, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 
-import { Job, JobKind, JobPhase, JobStatus } from "@/entity";
+import { Job, JobKind, JobPhase, JobStatus, Location, Media } from "@/entity";
 import type { ListJobsResponse, ListJobsRequest } from "@/entity";
 import { jobListPath } from "@/pages/routes";
 
 // The navigation strip owns the way back to the list; this stands in for it.
 const ListReturn = () => <Link to={jobListPath(useLocation().state?.returnTo)}>All jobs</Link>;
 
-const { listJobs, getJob } = vi.hoisted(() => ({ listJobs: vi.fn(), getJob: vi.fn() }));
+const { listJobs, getJob, listLocations, listMedia } = vi.hoisted(() => ({ listJobs: vi.fn(), getJob: vi.fn(), listLocations: vi.fn(), listMedia: vi.fn() }));
 
-vi.mock("@/api", () => ({ jobCli: { list: listJobs, get: getJob } }));
+vi.mock("@/api", () => ({ jobCli: { list: listJobs, get: getJob }, locationCli: { list: listLocations }, mediaCli: { list: listMedia } }));
 vi.mock("@/components/job-card", () => ({
   jobLabel: () => "Archive",
   JobCard: ({ job }: { job: Job }) => <div data-testid="job-card">{`job-${job.id}-${job.revision}-${job.status}`}</div>,
@@ -87,6 +87,8 @@ const job = (id: bigint, createdAtNs: bigint, revision: bigint, status = JobStat
 beforeEach(() => {
   listJobs.mockReset();
   getJob.mockReset();
+  listLocations.mockReset().mockReturnValue({ response: Promise.resolve({ locations: [Location.create({ id: 4n, name: "Photos" })], hasMore: false }) });
+  listMedia.mockReset().mockReturnValue({ response: Promise.resolve({ media: [Media.create({ id: 7n, name: "Archive" })], hasMore: false }) });
   IntersectionObserverStub.instances = [];
   globalThis.IntersectionObserver = IntersectionObserverStub;
 });
@@ -410,4 +412,25 @@ describe("JobsBrowser", () => {
     expect((listJobs.mock.calls[1][0] as ListJobsRequest).filter?.changedAfterRevision).toBe(10n);
     expect((listJobs.mock.calls[2][0] as ListJobsRequest).filter?.changedAfterRevision).toBe(12n);
   });
+});
+
+it("retains loaded resource choices across Job filter changes", async () => {
+  listJobs.mockReturnValue(call({ jobs: [], revision: 1n, hasMore: false }));
+  render(
+    <MemoryRouter initialEntries={["/jobs"]}>
+      <JobsBrowser />
+    </MemoryRouter>,
+  );
+  const input = screen.getByRole("combobox", { name: "Resource" });
+  await userEvent.click(input);
+  await userEvent.click(await screen.findByRole("option", { name: "Location · Photos" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Resource" }));
+  await userEvent.click(await screen.findByRole("option", { name: "Media · Archive" }));
+  expect(screen.getByRole("combobox", { name: "Resource" })).toHaveTextContent("Media · Archive");
+  await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Resource" }));
+  expect(screen.getByRole("option", { name: "Location · Photos" })).toBeVisible();
+  expect(screen.getByRole("option", { name: "Media · Archive" })).toBeVisible();
+  expect(listLocations).toHaveBeenCalledOnce();
+  expect(listMedia).toHaveBeenCalledOnce();
 });

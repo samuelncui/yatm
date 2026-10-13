@@ -6,17 +6,30 @@ import ListItem, { type ListItemProps } from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import ListItemButton from "@mui/material/ListItemButton";
 import Skeleton from "@mui/material/Skeleton";
+import Typography from "@mui/material/Typography";
 
 import { CopyStatus } from "@/entity";
 import { formatFilesize } from "@/tools";
 
+export const jobResultRowHeight = 54;
 export const JobResultRow = styled(ListItem)<ListItemProps>({
   boxSizing: "border-box",
-  minHeight: 54,
+  height: jobResultRowHeight,
+  minHeight: jobResultRowHeight,
   padding: "0 16px",
   borderBottom: "1px solid rgba(15, 23, 42, 0.08)",
 });
-export const JobResultText = styled(ListItemText)({ padding: 0, margin: "4px 0" });
+const ResultText = styled(ListItemText)({ padding: 0, margin: "4px 0" });
+export const JobResultText = ({ primary, secondary }: { primary: string; secondary: string }) => (
+  <ResultText
+    primary={primary}
+    secondary={secondary}
+    slotProps={{
+      primary: { noWrap: true, title: primary },
+      secondary: { noWrap: true, title: secondary },
+    }}
+  />
+);
 const FileListItemButton = styled(ListItemButton)({ padding: 0 });
 
 export interface FileState {
@@ -36,31 +49,17 @@ export const FileListItem = memo(({ src, onClick, className }: { src?: FileState
   const text = (
     <JobResultText
       primary={src.path}
-      secondary={
-        <>
-          {formatFilesize(src.size)} · {src.resultLabel || CopyStatus[src.status]}
-          {src.resultMessage ? ` · ${src.resultMessage}` : ""}
-          {src.resultFileID ? (
-            <>
-              {" "}
-              · <Link to={`/file?file=${src.resultFileID}`}>View file</Link>
-            </>
-          ) : null}
-        </>
-      }
+      secondary={`${formatFilesize(src.size)} · ${src.resultLabel || CopyStatus[src.status]}${src.resultMessage ? ` · ${src.resultMessage}` : ""}`}
     />
   );
-  if (!onClick) {
-    return (
-      <JobResultRow component="div" className={className} disablePadding>
-        {text}
-      </JobResultRow>
-    );
-  }
-
   return (
     <JobResultRow component="div" className={className} disablePadding>
-      <FileListItemButton onClick={onClick}>{text}</FileListItemButton>
+      {onClick ? <FileListItemButton onClick={onClick}>{text}</FileListItemButton> : text}
+      {src.resultFileID ? (
+        <Typography component={Link} to={`/file?file=${src.resultFileID}`} variant="body2" noWrap sx={{ ml: 2, flexShrink: 0 }}>
+          View file
+        </Typography>
+      ) : null}
     </JobResultRow>
   );
 });
@@ -68,7 +67,7 @@ export const FileListItem = memo(({ src, onClick, className }: { src?: FileState
 export const FileRow = FileListItem;
 
 export const FileRowPlaceholder = memo(() => (
-  <JobResultRow component="div" disablePadding>
-    <Skeleton variant="text" width="80%" height={24} animation="wave" />
+  <JobResultRow component="div" disablePadding aria-hidden>
+    <Skeleton variant="text" width="80%" height={24} animation={false} />
   </JobResultRow>
 ));

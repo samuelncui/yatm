@@ -32,7 +32,7 @@ export type JobActivity = "waiting" | "active" | "terminal";
 
 export type StageView = {
   phase: JobPhase;
-  /** Percentage for a determinate bar; absent when the stage has no denominator. */
+  /** Percentage for a determinate bar; completed Jobs show 100 even without a stage denominator. */
   percentage?: number;
   /** Counter wording the frame uses: "Found", "Copied", "Processed", "Compared", "Generated". */
   counterLabel: string;
@@ -242,32 +242,33 @@ const counterLabel = (job: Job, phase: JobPhase): string => {
 };
 
 // The single place that decides percentage presence, counter wording and ETA text. The
-// server decides whether a stage owns a denominator, so a phase without one never shows a bar value.
+// server owns live stage denominators; an idle completed Job always shows a full bar.
 export function stageView(job: Job, progress: Progress | null): StageView {
   const stage = progress?.stage;
   const phase = stage?.phase ?? job.phase;
   const total = stage?.total;
+  const activity = jobActivity(job);
   const eta =
     stage?.estimateState === EstimateState.ESTIMATED && stage.remainingSeconds !== undefined
       ? `About ${format(Number(stage.remainingSeconds) * 1000)}`
       : stage?.estimateState === EstimateState.ESTIMATING
         ? "Estimating…"
         : "--";
-  const percentage =
-    total !== undefined
-      ? total > 0n
-        ? Math.min(100, Math.max(0, (Number(stage!.completed) / Number(total)) * 100))
-        : phase === JobPhase.COMPLETED
-          ? 100
-          : undefined
-      : undefined;
+  let percentage: number | undefined;
+  if (job.status === JobStatus.COMPLETED && activity === "terminal") {
+    percentage = 100;
+  } else if (total !== undefined && total > 0n) {
+    percentage = Math.min(100, Math.max(0, (Number(stage!.completed) / Number(total)) * 100));
+  } else if (total === 0n && phase === JobPhase.COMPLETED) {
+    percentage = 100;
+  }
   return {
     phase,
     percentage,
     counterLabel: counterLabel(job, phase),
     eta,
     unit: stage?.unit ?? ProgressUnit.ITEMS,
-    activity: jobActivity(job),
+    activity,
     loading: progress === null,
   };
 }

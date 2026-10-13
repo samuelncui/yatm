@@ -71,3 +71,17 @@ describe("Job creation navigation", () => {
     expect(await screen.findByText("Library files page")).toBeInTheDocument();
   });
 });
+
+it("returns from a Location detail through the already-selected Locations tab", async () => {
+  render(
+    <MemoryRouter initialEntries={["/settings/locations/42"]}>
+      <App />
+      <CurrentRoute />
+    </MemoryRouter>,
+  );
+  await screen.findByText("Locations page");
+  const tab = screen.getByRole("tab", { name: "Locations" });
+  expect(tab).toHaveAttribute("aria-selected", "true");
+  await userEvent.click(tab);
+  expect(screen.getByLabelText("Current route")).toHaveTextContent(/^\/settings\/locations$/);
+});

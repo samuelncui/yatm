@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 import { MemoryRouter, useLocation } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
-import { ChonkyActions, DefaultFileActions, type FileBrowserProps, type FileData } from "@samuelncui/chonky";
+import { ChonkyActions, DefaultFileActions, ChonkyIconName, type FileBrowserProps, type FileData } from "@samuelncui/chonky";
 import {
   EntryKind,
   FileOperationKind,
@@ -108,6 +108,21 @@ const fileRow = (id: bigint, position: bigint, location = false, item = group, h
   displayMemberCount: item.memberCount,
   member: member(id, location),
 });
+const sizeGroups = (order: IdenticalSortOrder, location = false): Array<ReturnType<typeof header> & { member?: IdenticalMember }> => {
+  const groups = order === IdenticalSortOrder.DESC ? [3n, 1n] : [1n, 3n];
+  return groups.flatMap((first, index) => {
+    const item = IdenticalGroup.create({ id: first === 1n ? group.id : "large", name: first === 1n ? "Small" : "Large", memberCount: 2n });
+    const start = BigInt(index * 3);
+    return [
+      header(start, 2n, item),
+      ...[first, first + 1n].map((id, offset) => {
+        const row = fileRow(id, start + BigInt(offset + 1), location, item, start);
+        row.member.entry!.sizeBytes = first === 3n ? 100n : 10n;
+        return row;
+      }),
+    ];
+  });
+};
 const sparse = () =>
   state.props!.grouping as unknown as {
     mode: string;
@@ -187,8 +202,8 @@ it.each(["sort", "hidden"] as const)("keeps a newer selection while a %s positio
   const lookup = deferred<{ positions: ReturnType<typeof position>[] }>();
   const page = deferred<{ rows: ReturnType<typeof fileRow>[]; totalRowCount: bigint }>();
   state.lookup.mockReturnValueOnce({ response: lookup.promise });
-  state.rows.mockImplementation(({ sortKey, includeHidden }: { sortKey: IdenticalSortKey; includeHidden: boolean }) =>
-    sortKey !== IdenticalSortKey.FILE_ID || includeHidden
+  state.rows.mockImplementation(({ sortOrder, includeHidden }: { sortOrder: IdenticalSortOrder; includeHidden: boolean }) =>
+    sortOrder === IdenticalSortOrder.ASC || includeHidden
       ? { response: page.promise }
       : reply({ rows: [header(), fileRow(1n, 1n), fileRow(2n, 2n)], totalRowCount: 502n }),
   );
@@ -197,16 +212,16 @@ it.each(["sort", "hidden"] as const)("keeps a newer selection while a %s positio
   await screen.findByText("copy-2.txt");
   const files = state.props!.files.filter(Boolean) as FileData[];
   act(() => dispatch(ChonkyActions.ChangeSelection.id, [files[0]]));
-  if (change === "sort") act(() => dispatch("identical-sort-size", []));
+  if (change === "sort") act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
   else await toggleHidden();
   await waitFor(() => expect(state.lookup).toHaveBeenCalledTimes(1));
   act(() => dispatch(ChonkyActions.ChangeSelection.id, [files[1]]));
   await act(async () => lookup.resolve({ positions: [position(1n, 2n)] }));
   await waitFor(() => expect(state.rows).toHaveBeenCalledTimes(2));
   expect(state.props!.files.map((file) => file?.id)).toContain(files[1].id);
-  expect(state.props!.files.map((file) => file?.id)).not.toContain(files[0].id);
-  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [2n] }));
+
   await act(async () => page.resolve({ rows: [fileRow(2n, 2n)], totalRowCount: 502n }));
+  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [2n] }));
 });
 
 it.each(["delete", "keep", "merge"] as const)("rejects a pending %s confirmation until sorting finishes", async (operation) => {
@@ -223,7 +238,7 @@ it.each(["delete", "keep", "merge"] as const)("rejects a pending %s confirmation
   const action = operation === "delete" ? ChonkyActions.DeleteFiles.id : `identical-${operation}`;
   act(() => dispatch(action, files));
   await screen.findByRole("button", { name: operation === "merge" ? "Merge" : "Delete" });
-  act(() => dispatch("identical-sort-size", []));
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
   await waitFor(() => expect(state.lookup).toHaveBeenCalledTimes(1));
   await userEvent.click(screen.getByRole("button", { name: operation === "merge" ? "Merge" : "Delete" }));
   expect(state.remove).not.toHaveBeenCalled();
@@ -236,6 +251,7 @@ it.each(["delete", "keep", "merge"] as const)("rejects a pending %s confirmation
 });
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   state.props = undefined;
   state.confirmRemove = false;
@@ -316,16 +332,13 @@ it("jumps to an arbitrary page and switches to the all-row server projection", a
   act(() => sparse().sparse.onRangeChanged(245, 250));
   await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: 200n, includeHidden: false }), expect.anything()));
   await toggleHidden();
-  await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: 0n, includeHidden: true }), expect.anything()));
+  await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: 200n, includeHidden: true }), expect.anything()));
   expect(state.find).toHaveBeenCalledTimes(1);
 });
 
-it("sorts complete groups through the retained result without running Find again", async () => {
-  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 4n, visibleRowCount: 4n, groupCount: 1n }));
-  state.rows.mockImplementation(({ sortKey, sortOrder }: { sortKey: IdenticalSortKey; sortOrder: IdenticalSortOrder }) => {
-    const ids = sortKey !== IdenticalSortKey.FILE_ID && sortOrder === IdenticalSortOrder.DESC ? [3n, 2n, 1n] : [1n, 2n, 3n];
-    return reply({ rows: [header(0n, 3n), ...ids.map((id, index) => fileRow(id, BigInt(index + 1)))], totalRowCount: 4n });
-  });
+it("offers only the shared size control, initially descending, and toggles the retained result", async () => {
+  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 6n, visibleRowCount: 6n, groupCount: 2n }));
+  state.rows.mockImplementation(({ sortOrder }: { sortOrder: IdenticalSortOrder }) => reply({ rows: sizeGroups(sortOrder), totalRowCount: 6n }));
   mount();
   await find();
   await screen.findByText("copy-1.txt");
@@ -333,35 +346,24 @@ it("sorts complete groups through the retained result without running Find again
     sparse()
       .sparse.rows.filter((row) => row.kind === "file")
       .map((row) => row.fileId);
-  expect(ordered()).toEqual(["1", "2", "3"]);
-  expect(state.props!.fileActions!.map((action) => action.button?.name)).toContain("Sort by size");
+  expect(ordered()).toEqual(["3", "4", "1", "2"]);
+  const size = state.props!.fileActions!.find((action) => action.id === ChonkyActions.SortFilesBySize.id)!;
+  expect(size.button).toMatchObject(ChonkyActions.SortFilesBySize.button);
+  expect(size.sortKeySelector).toBeUndefined();
+  expect(state.props!.fileActions!.filter((action) => action.button?.name?.startsWith("Sort by")).map((action) => action.id)).toEqual([size.id]);
 
-  act(() => dispatch("identical-sort-size", []));
-  await waitFor(() =>
-    expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.DESC }), expect.anything()),
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() => expect(ordered()).toEqual(["1", "2", "3", "4"]));
+  expect(state.rows).toHaveBeenLastCalledWith(
+    expect.objectContaining({ sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.ASC }),
+    expect.anything(),
   );
-  await waitFor(() => expect(ordered()).toEqual(["3", "2", "1"]));
-  expect(state.props!.fileActions!.map((action) => action.button?.name)).toContain("Sort by size ↓");
-  expect(state.find).toHaveBeenCalledTimes(1);
-
-  act(() => dispatch("identical-sort-size", []));
-  await waitFor(() =>
-    expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.ASC }), expect.anything()),
-  );
-  await waitFor(() => expect(ordered()).toEqual(["1", "2", "3"]));
-  act(() => dispatch("identical-sort-name", []));
-  await waitFor(() =>
-    expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ sortKey: IdenticalSortKey.NAME, sortOrder: IdenticalSortOrder.ASC }), expect.anything()),
-  );
-  act(() => dispatch("identical-sort-name", []));
-  await waitFor(() =>
-    expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ sortKey: IdenticalSortKey.NAME, sortOrder: IdenticalSortOrder.DESC }), expect.anything()),
-  );
-  await waitFor(() => expect(ordered()).toEqual(["3", "2", "1"]));
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() => expect(ordered()).toEqual(["3", "4", "1", "2"]));
   await toggleHidden();
   await waitFor(() =>
-    expect(state.rows).toHaveBeenCalledWith(
-      expect.objectContaining({ includeHidden: true, sortKey: IdenticalSortKey.NAME, sortOrder: IdenticalSortOrder.DESC }),
+    expect(state.rows).toHaveBeenLastCalledWith(
+      expect.objectContaining({ includeHidden: true, sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.DESC }),
       expect.anything(),
     ),
   );
@@ -369,38 +371,46 @@ it("sorts complete groups through the retained result without running Find again
 });
 
 it("repositions removed and selected members when sorting the retained result", async () => {
-  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 4n, visibleRowCount: 4n, groupCount: 1n }));
-  state.rows.mockImplementation(({ sortKey, sortOrder }: { sortKey: IdenticalSortKey; sortOrder: IdenticalSortOrder }) => {
-    const ids = sortKey === IdenticalSortKey.SIZE && sortOrder === IdenticalSortOrder.DESC ? [3n, 2n, 1n] : [1n, 2n, 3n];
-    return reply({ rows: [header(0n, 3n), ...ids.map((id, index) => fileRow(id, BigInt(index + 1), true))], totalRowCount: 4n });
-  });
-  state.lookup.mockImplementation(({ fileIds, sortKey, sortOrder }: { fileIds: bigint[]; sortKey: IdenticalSortKey; sortOrder: IdenticalSortOrder }) =>
-    reply({ positions: fileIds.map((id) => position(id, sortKey === IdenticalSortKey.SIZE && sortOrder === IdenticalSortOrder.DESC ? 4n - id : id)) }),
+  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 6n, visibleRowCount: 6n, groupCount: 2n }));
+  state.rows.mockImplementation(({ sortOrder }: { sortOrder: IdenticalSortOrder }) => reply({ rows: sizeGroups(sortOrder, true), totalRowCount: 6n }));
+  state.lookup.mockImplementation(({ fileIds, sortOrder }: { fileIds: bigint[]; sortOrder: IdenticalSortOrder }) =>
+    reply({
+      positions: fileIds.map((id) => {
+        const row = sizeGroups(sortOrder, true).find((row) => row.member?.entry?.associatedFileId === id)!;
+        return {
+          ...position(id, row.position),
+          groupId: row.group.id,
+          allGroupHeaderPosition: row.groupHeaderPosition,
+          visibleGroupHeaderPosition: row.groupHeaderPosition,
+        };
+      }),
+    }),
   );
   mount("/tools/identical?source=locations&location=1");
   await find();
   await screen.findByText("copy-3.txt");
   const files = state.props!.files.filter(Boolean) as FileData[];
-  act(() => dispatch(ChonkyActions.ChangeSelection.id, [files[1]]));
-  act(() => dispatch(ChonkyActions.DeleteFiles.id, [files[0]]));
+  act(() => dispatch(ChonkyActions.ChangeSelection.id, [files.find((file) => file.name === "copy-2.txt")!]));
+  act(() => dispatch(ChonkyActions.DeleteFiles.id, [files.find((file) => file.name === "copy-1.txt")!]));
   await waitFor(() => expect(screen.queryByText("copy-1.txt")).not.toBeInTheDocument());
-  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [1n], sortKey: IdenticalSortKey.FILE_ID })));
+  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [1n], sortKey: IdenticalSortKey.SIZE })));
 
-  act(() => dispatch("identical-sort-size", []));
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
   await waitFor(() =>
-    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [1n], sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.DESC })),
+    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ fileIds: [1n], sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.ASC })),
   );
   await waitFor(() =>
     expect(
       sparse()
         .sparse.rows.filter((row) => row.kind === "file")
         .map((row) => row.fileId),
-    ).toEqual(["location-file:1:copy-3.txt", "location-file:1:copy-2.txt"]),
+    ).toEqual(["location-file:1:copy-2.txt", "location-file:1:copy-3.txt", "location-file:1:copy-4.txt"]),
   );
-  expect(sparse().sparse.totalCount).toBe(3);
+  expect(sparse().sparse.totalCount).toBe(5);
   expect(state.props!.files.some((file) => file?.id === files[1].id)).toBe(true);
   expect(state.find).toHaveBeenCalledTimes(1);
 });
+
 it("asks for an explicit Find when the retained result expires", async () => {
   state.rows.mockImplementation(() => ({ response: Promise.reject(new RpcError("result expired", "FAILED_PRECONDITION")) }));
   mount();
@@ -478,7 +488,7 @@ it("does not retain a selected dot file in the visible projection", async () => 
   expect(sparse().sparse.rows.some((row) => row.kind === "file" && row.fileId === file.id)).toBe(false);
   expect(state.find).toHaveBeenCalledTimes(1);
 });
-it("asks for Find when selected-file positions cannot be remapped on a hidden toggle", async () => {
+it("retains the current view when selected-file positions cannot be remapped on a hidden toggle", async () => {
   state.lookup.mockImplementation(() => ({ response: Promise.reject(new Error("lookup offline")) }));
   mount();
   await find();
@@ -486,9 +496,10 @@ it("asks for Find when selected-file positions cannot be remapped on a hidden to
   const file = state.props!.files[0]!;
   act(() => dispatch(ChonkyActions.ChangeSelection.id, [file]));
   await toggleHidden();
-  expect(await screen.findByRole("button", { name: "Find again" })).toBeInTheDocument();
-  expect(state.props!.files).toHaveLength(0);
-  expect(state.error).toHaveBeenCalledWith(expect.stringContaining("lookup offline"));
+  await waitFor(() => expect(state.error).toHaveBeenCalledWith(expect.stringContaining("lookup offline")));
+  expect(screen.queryByRole("button", { name: "Find again" })).not.toBeInTheDocument();
+  expect(state.props!.files).toHaveLength(2);
+  expect(screen.getByRole("switch", { name: "Show hidden files" })).not.toBeChecked();
   expect(state.find).toHaveBeenCalledTimes(1);
 });
 it("leaves unavailable member data as a sparse placeholder", async () => {
@@ -774,6 +785,15 @@ it("invalidates a partially changed Keep result when outcome positions cannot be
 });
 it("retains a selected file after its page leaves the bounded cache", async () => {
   state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 1500n, visibleRowCount: 1500n, groupCount: 1n }));
+  state.rows.mockImplementation(({ offset }: { offset: bigint }) =>
+    reply({
+      rows: Array.from({ length: 100 }, (_, index) => {
+        const position = offset + BigInt(index);
+        return position === 0n ? header(0n, 1499n) : fileRow(position, position);
+      }),
+      totalRowCount: 1500n,
+    }),
+  );
   mount();
   await find();
   await screen.findByText("copy-1.txt");
@@ -781,7 +801,11 @@ it("retains a selected file after its page leaves the bounded cache", async () =
   act(() => dispatch(ChonkyActions.ChangeSelection.id, [file]));
   for (let page = 1; page <= 11; page++) {
     act(() => sparse().sparse.onRangeChanged(page * 100, page * 100));
-    await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: BigInt(page * 100) }), expect.anything()));
+    await screen.findByText(`copy-${page * 100}.txt`);
+    expect(sparse().sparse.totalCount).toBe(1500);
+    expect(sparse().sparse.rows.length).toBeLessThanOrEqual(1001);
+    expect(state.props!.files.length).toBeLessThanOrEqual(1001);
+    expect(new Set(sparse().sparse.rows.map((row) => row.index)).size).toBe(sparse().sparse.rows.length);
   }
   expect(state.props!.files.some((item) => item?.id === file.id)).toBe(true);
   expect(sparse().sparse.rows.some((row) => row.kind === "file" && row.fileId === file.id)).toBe(true);
@@ -850,7 +874,7 @@ it("allows another Find during an active Remove", async () => {
   await screen.findByText("copy-2.txt");
   await act(async () => release());
   await waitFor(() => expect(state.close).toHaveBeenCalledWith({ resultId: "old" }));
-  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [1n], sortKey: IdenticalSortKey.FILE_ID }));
+  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [1n], sortKey: IdenticalSortKey.SIZE }));
   expect(screen.queryByText("copy-1.txt")).not.toBeInTheDocument();
   expect(state.find).toHaveBeenCalledTimes(2);
 });
@@ -896,9 +920,7 @@ it("reconciles a removal completed while Find is pending, then accepts a later F
   await act(async () => nextFind.resolve({ resultId: "new", allRowCount: 502n, visibleRowCount: 502n }));
   await screen.findByText("copy-2.txt");
   expect(screen.queryByText("copy-1.txt")).not.toBeInTheDocument();
-  await waitFor(() =>
-    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [1n], sortKey: IdenticalSortKey.FILE_ID })),
-  );
+  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [1n], sortKey: IdenticalSortKey.SIZE })));
   await find();
   await screen.findByText("copy-1.txt");
   expect(state.lookup).not.toHaveBeenCalledWith({ resultId: "latest", fileIds: [1n] });
@@ -931,7 +953,7 @@ it("keeps Find available during Keep and carries its completed members into the 
   ).toBe(1);
   await act(async () => finishKeep.resolve());
   await waitFor(() => expect(screen.queryByText("copy-2.txt")).not.toBeInTheDocument());
-  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [2n], sortKey: IdenticalSortKey.FILE_ID }));
+  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [2n], sortKey: IdenticalSortKey.SIZE }));
   expect(state.find).toHaveBeenCalledTimes(2);
 });
 it("clears Keep diagnostics on Find and ignores old in-flight Keep diagnostics while reconciling success", async () => {
@@ -972,7 +994,7 @@ it("clears Keep diagnostics on Find and ignores old in-flight Keep diagnostics w
   await screen.findByText("copy-4.txt");
   await act(async () => finishKeep.resolve());
   await waitFor(() =>
-    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "latest", fileIds: [2n], sortKey: IdenticalSortKey.FILE_ID })),
+    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "latest", fileIds: [2n], sortKey: IdenticalSortKey.SIZE })),
   );
   await waitFor(() => expect(state.props!.files.some((file) => file?.name === "copy-2.txt")).toBe(false));
   expect(state.props!.files.find((file) => file?.name === "copy-3.txt")?.details).not.toContain("Keep failed: late old failure");
@@ -989,9 +1011,7 @@ it("ignores a hidden-file lookup reply from a result replaced by Find", async ()
   await screen.findByText("copy-1.txt");
   act(() => dispatch(ChonkyActions.ChangeSelection.id, [state.props!.files[0]!]));
   await toggleHidden();
-  await waitFor(() =>
-    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [1n], sortKey: IdenticalSortKey.FILE_ID })),
-  );
+  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [1n], sortKey: IdenticalSortKey.SIZE })));
   await find();
   await screen.findByText("copy-1.txt");
   await act(async () => oldLookup.resolve({ positions: [position(1n, 1n)] }));
@@ -1115,5 +1135,197 @@ it("keeps a merged group excluded after its header page is evicted", async () =>
     await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: BigInt(page * 100), limit: 100 }), expect.anything()));
   }
   expect(sparse().sparse.totalCount).toBe(998);
+  expect(state.find).toHaveBeenCalledTimes(1);
+});
+
+it("keeps rows, selection and the saved direction when sorting fails, then retries the same direction", async () => {
+  const request = deferred<{ rows: ReturnType<typeof fileRow>[]; totalRowCount: bigint }>();
+  state.rows.mockReturnValueOnce(reply({ rows: [header(), fileRow(1n, 1n), fileRow(2n, 2n)], totalRowCount: 502n }));
+  state.rows.mockImplementationOnce(() => ({ response: Promise.reject(new Error("row read failed")) }));
+  state.rows.mockReturnValue({ response: request.promise });
+  mount();
+  await find();
+  await screen.findByText("copy-1.txt");
+  act(() => dispatch(ChonkyActions.ChangeSelection.id, [state.props!.files[0]!]));
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() => expect(state.error).toHaveBeenCalledWith("row read failed"));
+  expect(state.props!.files.map((file) => file?.id)).toEqual(["1", "2"]);
+  expect(screen.getByLabelText("Inspector")).toHaveTextContent("copy-1.txt");
+  expect(state.props!.fileActions!.find((action) => action.id === ChonkyActions.SortFilesBySize.id)!.button!.icon).toBe(ChonkyIconName.sortDesc);
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() => expect(state.rows).toHaveBeenCalledTimes(3));
+  expect(state.rows).toHaveBeenLastCalledWith(expect.objectContaining({ sortOrder: IdenticalSortOrder.ASC }), expect.anything());
+  await act(async () => request.resolve({ rows: [fileRow(1n, 1n), fileRow(2n, 2n)], totalRowCount: 502n }));
+  expect(state.props!.fileActions!.find((action) => action.id === ChonkyActions.SortFilesBySize.id)!.button!.icon).toBe(ChonkyIconName.sortAsc);
+});
+
+it("restores only the size direction when Identical remounts", async () => {
+  const view = mount();
+  await find();
+  await screen.findByText("copy-1.txt");
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() =>
+    expect(state.props!.fileActions!.find((action) => action.id === ChonkyActions.SortFilesBySize.id)!.button!.icon).toBe(ChonkyIconName.sortAsc),
+  );
+  view.unmount();
+  state.rows.mockClear();
+  mount();
+  await find();
+  await screen.findByText("copy-1.txt");
+  expect(state.rows).toHaveBeenLastCalledWith(
+    expect.objectContaining({ sortKey: IdenticalSortKey.SIZE, sortOrder: IdenticalSortOrder.ASC }),
+    expect.anything(),
+  );
+});
+
+it.each(["collapse", "collapse-header", "merge"] as const)("remaps a %s interval and selection when size sorting moves whole groups", async (operation) => {
+  const collapse = operation !== "merge";
+  const large = IdenticalGroup.create({ id: group.id, name: "Large", memberCount: 3n, fingerprint: "large" });
+  const small = IdenticalGroup.create({ id: "small", name: "Small", memberCount: 2n, fingerprint: "small" });
+  const projection = (hidden: boolean, order: IdenticalSortOrder) => {
+    const groups = order === IdenticalSortOrder.DESC ? [large, small] : [small, large];
+    let start = 0n;
+    return groups.flatMap((item) => {
+      const ids = item === large ? (hidden ? [1n, 2n, 3n] : [1n, 2n]) : [4n, 5n];
+      const rows: Array<ReturnType<typeof header> & { member?: IdenticalMember }> = [
+        header(start, BigInt(ids.length), item),
+        ...ids.map((id, index) => {
+          const row = fileRow(id, start + BigInt(index + 1), false, item, start);
+          row.displayMemberCount = BigInt(ids.length);
+          row.member.entry!.sizeBytes = item === large ? 100n : 10n;
+          return row;
+        }),
+      ];
+      start += BigInt(rows.length);
+      return rows;
+    });
+  };
+  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 7n, visibleRowCount: 6n, groupCount: 2n }));
+  state.rows.mockImplementation(
+    ({ offset, limit, includeHidden, sortOrder }: { offset: bigint; limit: number; includeHidden: boolean; sortOrder: IdenticalSortOrder }) =>
+      reply({
+        rows: projection(includeHidden, sortOrder)
+          .slice(Number(offset), Number(offset) + limit)
+          .filter((row) => operation !== "collapse-header" || sortOrder !== IdenticalSortOrder.DESC || limit === 1 || !row.member || row.group.id !== large.id),
+        totalRowCount: includeHidden ? 7n : 6n,
+      }),
+  );
+  state.lookup.mockImplementation(({ fileIds, sortOrder }: { fileIds: bigint[]; sortOrder: IdenticalSortOrder }) =>
+    reply({
+      positions: fileIds.map((id) => {
+        const all = projection(true, sortOrder).find((row) => row.member?.entry!.associatedFileId === id)!;
+        const visible = projection(false, sortOrder).find((row) => row.member?.entry!.associatedFileId === id);
+        return {
+          fileId: id,
+          groupId: all.group.id,
+          allPosition: all.position,
+          allGroupHeaderPosition: all.groupHeaderPosition,
+          visiblePosition: visible?.position,
+          visibleGroupHeaderPosition: visible?.groupHeaderPosition,
+        };
+      }),
+    }),
+  );
+  mount();
+  await find();
+  await screen.findByText("copy-4.txt");
+  const target = state.props!.files.find((file) => file?.id === "1")!;
+  const selected = state.props!.files.find((file) => file?.id === "4")!;
+  act(() => dispatch(ChonkyActions.ChangeSelection.id, [selected]));
+  if (collapse) act(() => sparse().sparse.onToggleGroup(large.id));
+  else {
+    act(() => dispatch("identical-merge", [target]));
+    await userEvent.click(await screen.findByRole("button", { name: "Merge" }));
+  }
+  await waitFor(() => expect(sparse().sparse.totalCount).toBe(collapse ? 4 : 3));
+  act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
+  await waitFor(() => expect(sparse().sparse.rows[0]?.group.id).toBe(small.id));
+  expect(
+    sparse()
+      .sparse.rows.filter((row) => row.kind === "file")
+      .map((row) => [row.fileId, row.index]),
+  ).toEqual([
+    ["4", 1],
+    ["5", 2],
+  ]);
+  expect(screen.getByLabelText("Inspector")).toHaveTextContent("copy-4.txt");
+  expect(sparse().sparse.totalCount).toBe(collapse ? 4 : 3);
+  if (collapse) {
+    expect(sparse().sparse.rows.at(-1)).toMatchObject({ index: 3, kind: "group", group: { id: large.id } });
+    act(() => sparse().sparse.onToggleGroup(large.id));
+    await waitFor(() => expect(sparse().sparse.totalCount).toBe(6));
+    expect(
+      sparse()
+        .sparse.rows.filter((row) => row.kind === "file")
+        .map((row) => row.fileId),
+    ).toEqual(["4", "5", "1", "2"]);
+  } else {
+    await toggleHidden();
+    await waitFor(() =>
+      expect(state.rows).toHaveBeenLastCalledWith(expect.objectContaining({ includeHidden: true, sortOrder: IdenticalSortOrder.ASC }), expect.anything()),
+    );
+    expect(sparse().sparse.totalCount).toBe(3);
+    await waitFor(() =>
+      expect(
+        sparse()
+          .sparse.rows.filter((row) => row.kind === "file")
+          .map((row) => row.fileId),
+      ).toEqual(["4", "5"]),
+    );
+  }
+  if (operation === "collapse-header")
+    expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ offset: 1n, limit: 1, sortOrder: IdenticalSortOrder.DESC }));
+  expect(state.find).toHaveBeenCalledTimes(1);
+});
+
+it("retains a collapsed projection until hidden rows arrive, then installs rows and geometry together", async () => {
+  const hidden = deferred<unknown>();
+  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 4n, visibleRowCount: 3n }));
+  state.rows.mockImplementation(({ includeHidden }: { includeHidden: boolean }) =>
+    includeHidden ? { response: hidden.promise } : reply({ rows: [header(0n, 2n), fileRow(1n, 1n), fileRow(2n, 2n)], totalRowCount: 3n }),
+  );
+  mount();
+  await find();
+  await screen.findByText("copy-1.txt");
+  const file = state.props!.files[0]!;
+  act(() => dispatch(ChonkyActions.ChangeSelection.id, [file]));
+  act(() => sparse().sparse.onToggleGroup("group"));
+  expect(sparse().sparse.totalCount).toBe(1);
+  await toggleHidden();
+  await waitFor(() => expect(state.rows).toHaveBeenCalledWith(expect.objectContaining({ includeHidden: true }), expect.anything()));
+  expect(sparse().sparse.totalCount).toBe(1);
+  expect(screen.getByRole("switch", { name: "Show hidden files" })).not.toBeChecked();
+  expect(screen.getByRole("switch", { name: "Show hidden files" })).toBeDisabled();
+  expect(state.props!.files.some((row) => row?.id === file.id)).toBe(true);
+  await act(async () => hidden.resolve({ rows: [header(0n, 3n), fileRow(1n, 1n), fileRow(2n, 2n), fileRow(3n, 3n)], totalRowCount: 4n }));
+  await waitFor(() => expect(sparse().sparse.totalCount).toBe(4));
+  expect(sparse().sparse.rows).toHaveLength(4);
+  expect(screen.getByRole("switch", { name: "Show hidden files" })).toBeChecked();
+  expect(state.rows.mock.calls.filter(([request]) => request.includeHidden)).toHaveLength(1);
+  expect(state.find).toHaveBeenCalledTimes(1);
+});
+
+it("loads the clamped viewport before switching to a shorter hidden-file projection", async () => {
+  const visible = deferred<unknown>();
+  state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 1000n, visibleRowCount: 3n }));
+  state.rows.mockImplementation(({ offset, includeHidden }: { offset: bigint; includeHidden: boolean }) =>
+    reply({
+      rows: offset === 0n ? [header(0n, includeHidden ? 999n : 2n), fileRow(1n, 1n), fileRow(2n, 2n)] : [fileRow(offset, offset)],
+      totalRowCount: includeHidden ? 1000n : 3n,
+    }),
+  );
+  mount();
+  await find();
+  await toggleHidden();
+  await waitFor(() => expect(sparse().sparse.totalCount).toBe(1000));
+  act(() => sparse().sparse.onRangeChanged(940, 960));
+  await screen.findByText("copy-900.txt");
+  state.rows.mockReturnValue({ response: visible.promise });
+  await toggleHidden();
+  await waitFor(() => expect(state.rows).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0n, includeHidden: false }), expect.anything()));
+  expect(sparse().sparse.totalCount).toBe(1000);
+  await act(async () => visible.resolve({ rows: [header(0n, 2n), fileRow(1n, 1n), fileRow(2n, 2n)], totalRowCount: 3n }));
+  await waitFor(() => expect(sparse().sparse.totalCount).toBe(3));
+  expect(sparse().sparse.rows.map((row) => row.index)).toEqual([0, 1, 2]);
   expect(state.find).toHaveBeenCalledTimes(1);
 });

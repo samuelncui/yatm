@@ -25,6 +25,7 @@ import (
 type identicalPerfMember struct {
 	id   int64
 	name string
+	path string
 	size int64
 }
 
@@ -129,7 +130,7 @@ func TestIdenticalLargeCatalogPerformance(t *testing.T) {
 	}
 }
 
-func newIdenticalPerfCatalog(t *testing.T, count int) (*Library, []identicalPerfGroup) {
+func newIdenticalPerfCatalog(t testing.TB, count int) (*Library, []identicalPerfGroup) {
 	t.Helper()
 	// Use normal catalog models and hooks, with no query-only synthetic staging tables.
 	root := t.TempDir()
@@ -252,7 +253,7 @@ func newIdenticalPerfCatalog(t *testing.T, count int) (*Library, []identicalPerf
 			if groups[group].id == "" {
 				groups[group].id = strconv.FormatInt(id, 10)
 			}
-			groups[group].members = append(groups[group].members, identicalPerfMember{id: id, name: name, size: size})
+			groups[group].members = append(groups[group].members, identicalPerfMember{id: id, name: name, path: fmt.Sprintf("folder-%02d/%s", i%32, name), size: size})
 		}
 	}
 
@@ -271,7 +272,7 @@ func newIdenticalPerfCatalog(t *testing.T, count int) (*Library, []identicalPerf
 	return lib, groups
 }
 
-func identicalPerfContent(t *testing.T, label string) ([]byte, []byte, int64) {
+func identicalPerfContent(t testing.TB, label string) ([]byte, []byte, int64) {
 	t.Helper()
 	hash := sha256.Sum256([]byte(label))
 	size := int64(binary.BigEndian.Uint32(hash[:4])%65)*1024*1024 + int64(hash[4])*4096
@@ -286,6 +287,7 @@ func identicalPerfOracle(groups []identicalPerfGroup, includeHidden bool,
 	type shownGroup struct {
 		identicalPerfGroup
 		title string
+		size  int64
 	}
 	shown := make([]shownGroup, 0, len(groups))
 	for _, group := range groups {
@@ -318,15 +320,33 @@ func identicalPerfOracle(groups []identicalPerfGroup, includeHidden bool,
 					return (left.name < right.name) != desc
 				}
 			case entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE:
-				if left.size != right.size {
-					return (left.size < right.size) != desc
+				if a, b := strings.ToLower(left.path), strings.ToLower(right.path); a != b {
+					return a < b
+				}
+				if left.path != right.path {
+					return left.path < right.path
 				}
 			}
 			return left.id < right.id
 		})
-		shown = append(shown, shownGroup{identicalPerfGroup{group.id, members}, title})
+		var size int64
+		for _, member := range members {
+			size = max(size, member.size)
+		}
+		shown = append(shown, shownGroup{identicalPerfGroup{group.id, members}, title, size})
 	}
-	sort.Slice(shown, func(i, j int) bool { return shown[i].title < shown[j].title })
+	sort.Slice(shown, func(i, j int) bool {
+		if key == entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE {
+			if shown[i].size != shown[j].size {
+				return (shown[i].size < shown[j].size) != (order != entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_ASC)
+			}
+		} else if shown[i].title != shown[j].title {
+			return shown[i].title < shown[j].title
+		}
+		left, _ := strconv.ParseInt(shown[i].id, 10, 64)
+		right, _ := strconv.ParseInt(shown[j].id, 10, 64)
+		return left < right
+	})
 
 	// Retain original group counts when a dot filter leaves only one visible member.
 	counts := make(map[string]int64, len(groups))
@@ -478,7 +498,7 @@ func measureIdenticalPerfPositions(t *testing.T, snapshot *IdenticalSnapshot, co
 		(after.Mallocs-before.Mallocs)/uint64(len(samples)))
 }
 
-func identicalPerfDBBytes(t *testing.T, root string) int64 {
+func identicalPerfDBBytes(t testing.TB, root string) int64 {
 	t.Helper()
 	// Count SQLite files and any journal/WAL sidecars, rather than only logical row payloads.
 	var bytes int64
@@ -497,4 +517,34 @@ func identicalPerfDBBytes(t *testing.T, root string) int64 {
 		return nil
 	}))
 	return bytes
+}
+
+// BenchmarkIdenticalRetainedResult measures Find and indexed reads against the same catalog.
+func BenchmarkIdenticalRetainedResult(b *testing.B) {
+	for _, count := range []int{10_000, 100_000} {
+		b.Run(fmt.Sprintf("files-%d", count), func(b *testing.B) {
+			lib, _ := newIdenticalPerfCatalog(b, count)
+			b.Run("Find", func(b *testing.B) {
+				b.ReportAllocs()
+				for range b.N {
+					snapshot, err := lib.OpenIdenticalSnapshot(context.Background(), IdenticalScope{Source: IdenticalLibrary})
+					require.NoError(b, err)
+					require.NoError(b, snapshot.Close())
+				}
+			})
+
+			// Retained reads must not repeat any catalog collection or component construction.
+			snapshot, err := lib.OpenIdenticalSnapshot(context.Background(), IdenticalScope{Source: IdenticalLibrary})
+			require.NoError(b, err)
+			defer snapshot.Close()
+			b.Run("Rows", func(b *testing.B) {
+				b.ReportAllocs()
+				for i := range b.N {
+					_, _, err := snapshot.SortedRows(int64(i*7919)%snapshot.AllRows, 100, true,
+						entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_DESC)
+					require.NoError(b, err)
+				}
+			})
+		})
+	}
 }

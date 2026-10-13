@@ -1,9 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChonkyActions, FileToolbar, type ChonkyIconProps } from "@samuelncui/chonky";
 import { describe, expect, it } from "vitest";
 import "@/init";
 import { GetDataUsageAction, RefreshListAction } from "@/actions";
+import { render } from "@/state/test-render";
 import { FileBrowser } from "./file-browser";
 
 const Icon = ({ icon }: ChonkyIconProps) => <span data-testid={`icon-${icon}`} />;

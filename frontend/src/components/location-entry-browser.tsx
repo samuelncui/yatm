@@ -135,7 +135,7 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
     <>
       <Box sx={fill ? { flex: 1, minHeight: 0 } : { height: 440, minHeight: 260 }}>
         <FileBrowser
-          instanceId={`location:${source.id}`}
+          instanceId={onChoose ? "relocate-original" : "location-entries"}
           files={files}
           folderChain={chain}
           onFileAction={action}

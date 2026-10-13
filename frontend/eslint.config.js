@@ -23,6 +23,32 @@ const feedbackRules = [
   },
 ];
 
+// Each shared read has one owner. A new caller reuses that owner instead of
+// introducing a parallel cache, loading state or pagination implementation.
+const readOwners = [
+  {
+    file: "src/components/job-results-dialog.tsx",
+    selector:
+      "MemberExpression:matches([object.name='scanJobCli'][property.name='listEntries'], [object.name='archiveJobCli'][property.name='listFiles'], [object.name='restoreJobCli'][property.name='listFiles'])",
+    message: "Job item listings page through JobResultsDialog; add a view instead of reading the listing here.",
+  },
+  {
+    file: "src/state/locations.ts",
+    selector: "MemberExpression[object.name='locationCli'][property.name='list']",
+    message: "Configured Location choices use useLocationChoices and the shared Locations catalog.",
+  },
+  {
+    file: "src/components/settings-editor.ts",
+    selector: "MemberExpression[object.name='settingsCli'][property.name=/^(get|update)$/]",
+    message: "Committed Settings use the shared Settings editor/cache so reads, saves and stale responses have one owner.",
+  },
+];
+const syntaxRules = (owner) => [
+  "error",
+  ...(owner === "src/components/feedback.tsx" ? [] : feedbackRules),
+  ...readOwners.filter(({ file }) => file !== owner).map(({ selector, message }) => ({ selector, message })),
+];
+
 export default [
   {
     ignores: ["dist/**/*", "node_modules/**/*", "src/entity/*.go", "src/entity/*.ts", "src/api/*.ts"],
@@ -37,7 +63,7 @@ export default [
     },
     rules: {
       "no-alert": "error",
-      "no-restricted-syntax": ["error", ...feedbackRules],
+      "no-restricted-syntax": syntaxRules(),
       "@typescript-eslint/no-explicit-any": "off",
       "react-hooks/set-state-in-effect": "off",
       "no-unused-vars": "off",
@@ -55,32 +81,8 @@ export default [
       ],
     },
   },
-  {
-    // Every Job item list pages through the shared results module, which owns the
-    // window cache, the result-set total and the anchor/continuation requests.
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/components/job-results-dialog.tsx"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...feedbackRules,
-        {
-          selector: "MemberExpression[object.name='scanJobCli'][property.name='listEntries']",
-          message: "Job item listings page through JobResultsDialog; add a view instead of reading the listing here.",
-        },
-        {
-          selector: "MemberExpression[object.name='archiveJobCli'][property.name='listFiles']",
-          message: "Job item listings page through JobResultsDialog; add a view instead of reading the listing here.",
-        },
-        {
-          selector: "MemberExpression[object.name='restoreJobCli'][property.name='listFiles']",
-          message: "Job item listings page through JobResultsDialog; add a view instead of reading the listing here.",
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/components/feedback.tsx"],
-    rules: { "no-restricted-syntax": "off" },
-  },
+  ...[...readOwners.map(({ file }) => file), "src/components/feedback.tsx"].map((file) => ({
+    files: [file],
+    rules: { "no-restricted-syntax": syntaxRules(file) },
+  })),
 ];

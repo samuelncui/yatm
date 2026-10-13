@@ -63,7 +63,7 @@ export const LibraryFilters = ({
   const [tag, setTag] = useState("");
   const [note, setNote] = useState("");
   const showLocations = open && (!locationScope || duplicates);
-  const { locations, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: showLocations });
+  const { locations, loading, error, retry } = useLocationChoices({ enabled: showLocations });
   const options = location && !locations.some((item) => item.id === location.id) ? [location, ...locations] : locations;
   const titleID = useId();
   const submit = (query: string) => {
@@ -153,6 +153,7 @@ export const LibraryFilters = ({
             <TextField
               select
               label="Location"
+              helperText={showLocations && loading ? "Loading locations…" : undefined}
               value={locationScope && !duplicates ? "current" : String(location?.id ?? "all")}
               disabled={!!locationScope && !duplicates}
               onChange={(event) => setLocation(options.find((item) => String(item.id) === event.target.value))}
@@ -165,11 +166,6 @@ export const LibraryFilters = ({
                 </MenuItem>
               ))}
             </TextField>
-            {showLocations && (more || loading) && !error && (
-              <Button disabled={loading} onClick={loadMore}>
-                {loading ? "Loading locations…" : "More locations"}
-              </Button>
-            )}
             <TextField select label="Archived content" value={status} onChange={(event) => setStatus(event.target.value)}>
               {archiveFilters.map((item) => (
                 <MenuItem key={item.value} value={item.value}>

@@ -13,9 +13,9 @@ jsdom. Component tests and benchmarks retain jsdom; tests default to two workers
 ## Shared file browser
 
 YATM consumes the published `@samuelncui/chonky` and
-`@samuelncui/chonky-icon-fontawesome` 0.3.6 packages. The lockfile resolves the
+`@samuelncui/chonky-icon-fontawesome` 0.3.7 packages. The lockfile resolves the
 registry artifacts directly; no local checkout or dependency patch is required.
-See the [Chonky component documentation](https://github.com/samuelncui/Chonky/tree/v0.3.6/packages/chonky).
+See the [Chonky component documentation](https://github.com/samuelncui/Chonky/tree/v0.3.7/packages/chonky).
 
 Shared row presentation, grouping, selection, keyboard handling, drag/drop,
 breadcrumbs and browser footers belong in Chonky. YATM supplies queries,
@@ -35,7 +35,10 @@ Install the browser once with `pnpm exec playwright install chromium`. Set
 embedded identity, exercise both file panes and Identical sorting, random scrolling,
 hidden files, collapse and selection, and delete two disposable Demo files while
 holding the first response. They assert that these interactions do not start another
-global Find. Do not point this mutating suite at a normal installation.
+global Find. Cold Settings checks delay code and data independently; Job results checks use
+a 100,000-row synthetic RPC response to exercise the real virtualizer, long paths and delayed
+page completion without creating 100,000 physical files. Do not point this mutating suite at
+a normal installation.
 
 The [E2E guide](../docs/operations/e2e-test.md#packaged-browser-acceptance) owns fixture
 and server setup. Traces and failure screenshots go to `output/browser-results`.
@@ -98,6 +101,11 @@ tests separately without installing dependencies or measuring performance:
 ```sh
 node --test frontend/scripts/compare-performance.test.mjs
 ```
+
+The Job result cache also has a native `job-result-window.bench.ts` case, included in
+`pnpm bench`: append 100,000 rows in 200-row windows. Its correctness tests separately verify
+a million visited rows keep a bounded cache. These are cache costs; the real browser regression
+checks the scrollbar and cursor requests, and the Scan Go benchmark measures the handler.
 
 ## Inline feedback
 

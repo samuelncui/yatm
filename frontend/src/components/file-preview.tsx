@@ -89,7 +89,7 @@ export const PreviewMedia = ({ assets }: { assets: PreviewResource[] }) => {
           onMouseMove={showTimeline}
         />
         <output>
-          {formatPreviewTime(previewTime)} / {formatPreviewTime(duration)}
+          {formatPreviewTime(previewTime, duration)} / {formatPreviewTime(duration, duration)}
         </output>
       </div>
     </div>
@@ -106,10 +106,12 @@ const timelineFrameStyle = (timeline: PreviewResource, cue: TimelineCue) => {
   };
 };
 
-const formatPreviewTime = (value: number) => {
+const formatPreviewTime = (value: number, duration: number) => {
   const seconds = Math.max(0, Math.floor(value));
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  const parts = [Math.floor(seconds / 60) % 60, seconds % 60];
+  if (duration >= 3600) parts.unshift(Math.floor(seconds / 3600) % 24);
+  if (duration >= 86400) parts.unshift(Math.floor(seconds / 86400));
+  return parts.map((part, index) => (index === 0 ? String(part) : String(part).padStart(2, "0"))).join(":");
 };
 
 const parseTimeline = (value: string): TimelineCue[] => {

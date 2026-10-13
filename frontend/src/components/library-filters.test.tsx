@@ -1,11 +1,12 @@
 import { MemoryRouter } from "react-router";
-import type { ReactNode } from "react";
-import { render as testingRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { act, screen, waitFor } from "@testing-library/react";
+import { render as testingRender } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LibraryFilters, buildLibraryQuery } from "./library-filters";
 import { Location } from "@/entity";
-const render = (ui: ReactNode) => testingRender(ui, { wrapper: MemoryRouter });
+const render = (ui: ReactElement) => testingRender(ui, { wrapper: MemoryRouter });
 const { list } = vi.hoisted(() => ({ list: vi.fn() }));
 vi.mock("@/api", () => ({ locationCli: { list } }));
 beforeEach(() => {
@@ -83,31 +84,32 @@ describe("Files query bar", () => {
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(onSearch).toHaveBeenCalledWith('tag:"travel"', false);
   });
-  it("cancels a closed dialog's read and ignores its response after reopening", async () => {
+  it("shares an unfinished catalog read across closing and reopening", async () => {
     let resolve!: (value: { locations: Location[]; hasMore: boolean }) => void;
     list.mockReturnValueOnce({ response: new Promise((done) => (resolve = done)) });
     render(<LibraryFilters onSearch={vi.fn()} onClear={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "More filters" }));
-    const signal = list.mock.calls[0][1]?.abort as AbortSignal | undefined;
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "More filters" }));
-    resolve({ locations: [Location.create({ id: 1n, name: "Stale directory" })], hasMore: false });
+    await act(async () => resolve({ locations: [Location.create({ id: 9n, name: "Photos" })], hasMore: false }));
     await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
     expect(await screen.findByRole("option", { name: "Photos" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Stale directory" })).not.toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledOnce();
   });
-  it("retries the next Location page and retains its selected draft after reopening", async () => {
+  it("retries an incomplete catalog and retains its selected draft after reopening", async () => {
     const onSearch = vi.fn();
     list
       .mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 9n, name: "Photos" })], hasMore: true }) })
       .mockImplementationOnce(() => ({ response: Promise.reject(new Error("Next page unavailable")) }))
-      .mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 12n, name: "Documents" })], hasMore: false }) });
+      .mockReturnValueOnce({
+        response: Promise.resolve({
+          locations: [Location.create({ id: 9n, name: "Photos" }), Location.create({ id: 12n, name: "Documents" })],
+          hasMore: false,
+        }),
+      });
     render(<LibraryFilters onSearch={onSearch} onClear={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "More filters" }));
-    await userEvent.click(await screen.findByRole("button", { name: "More locations" }));
     expect(await screen.findByText("Next page unavailable")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
@@ -116,12 +118,12 @@ describe("Files query bar", () => {
     expect(list.mock.calls.map(([request]) => request)).toEqual([
       { afterId: 0n, limit: 50, query: "" },
       { afterId: 9n, limit: 50, query: "" },
-      { afterId: 9n, limit: 50, query: "" },
+      { afterId: 0n, limit: 50, query: "" },
     ]);
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "More filters" }));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(4));
+    expect(list).toHaveBeenCalledTimes(3);
     expect(screen.getByRole("combobox", { name: "Location" })).toHaveTextContent("Documents");
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(onSearch).toHaveBeenCalledWith("location:12", false);

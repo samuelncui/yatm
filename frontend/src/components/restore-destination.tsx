@@ -117,7 +117,7 @@ const RestoreDestinationDialog = ({
   onChoose: (target: RestoreTarget) => void;
   onClose: () => void;
 }) => {
-  const { locations, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: true, restoreTarget: true });
+  const { locations, loading, error, retry } = useLocationChoices({ enabled: true, restoreTarget: true });
   const [location, setLocation] = useState<Location>();
   const [directory, setDirectory] = useState(initial?.path ?? "");
   const action = useActionDialog();
@@ -190,11 +190,6 @@ const RestoreDestinationDialog = ({
               </MenuItem>
             ))}
           </TextField>
-          {more && !error && (
-            <Button disabled={loading} onClick={loadMore}>
-              More locations
-            </Button>
-          )}
         </div>
         {error && (
           <Feedback

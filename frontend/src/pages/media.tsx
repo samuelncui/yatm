@@ -696,7 +696,7 @@ export const MediaBrowser = () => {
       <Box className="browser-box">
         <Grid className="browser-container" container columnSpacing={1.5}>
           <Grid component="section" aria-label="Media browser" className="browser" size={7}>
-            <FileBrowser {...browserProps} clearSelectionOnOutsideClick={false}>
+            <FileBrowser instanceId="media" {...browserProps} clearSelectionOnOutsideClick={false}>
               <FileNavbar />
               <FileToolbar />
               <FileList {...listProps} />

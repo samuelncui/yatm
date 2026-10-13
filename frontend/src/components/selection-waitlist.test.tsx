@@ -1,5 +1,6 @@
+import { render } from "@/state/test-render";
 import { type ReactNode, useState } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTheme, ThemeProvider, useTheme } from "@mui/material/styles";

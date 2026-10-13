@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { Location, type IdenticalRoot } from "@/entity";
@@ -92,7 +93,6 @@ it("allows selection beyond 50 Locations and preserves the selected label across
   expect(list).not.toHaveBeenCalled();
   const input = screen.getByRole("combobox", { name: "Locations" });
   await userEvent.click(input);
-  await userEvent.click(await screen.findByRole("button", { name: "More Locations" }));
   expect(await screen.findByRole("option", { name: "Beyond first page" })).toBeInTheDocument();
   expect(screen.getAllByRole("option", { name: "Registered 50" })).toHaveLength(1);
   expect(list.mock.calls[1][0]).toEqual({ afterId: 50n, limit: 50, query: "" });
@@ -100,9 +100,7 @@ it("allows selection beyond 50 Locations and preserves the selected label across
   expect(screen.getByRole("status", { name: "Selected Locations" })).toHaveTextContent("51");
   expect(get).not.toHaveBeenCalled();
   await userEvent.type(input, "missing");
-  await waitFor(() =>
-    expect(list).toHaveBeenLastCalledWith({ afterId: 0n, limit: 50, query: "missing" }, expect.objectContaining({ abort: expect.any(AbortSignal) })),
-  );
+  expect(list).toHaveBeenCalledTimes(2);
   expect(input).toHaveValue("missing");
   expect(screen.getByRole("option", { name: "Beyond first page" })).toBeInTheDocument();
   expect(screen.queryByText("Location 51")).not.toBeInTheDocument();
@@ -111,35 +109,33 @@ it("allows selection beyond 50 Locations and preserves the selected label across
   expect(screen.getByRole("status", { name: "Selected Locations" })).toHaveTextContent("51");
 });
 
-it("keeps loaded choices through a page failure and supports keyboard Retry and Escape in the footer", async () => {
-  list.mockReturnValueOnce(call([Location.create({ id: 4n, name: "First" })], true));
+it("retries an incomplete catalog through the keyboard footer without selecting a Location", async () => {
+  const first = Location.create({ id: 4n, name: "First" });
+  const next = Location.create({ id: 5n, name: "Next" });
+  list.mockReturnValueOnce(call([first], true));
   list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Next page unavailable")) }));
-  list.mockReturnValueOnce(call([Location.create({ id: 5n, name: "Next" })], true));
+  list.mockReturnValueOnce(call([first, next]));
   render(<Picker />);
   const input = screen.getByRole("combobox", { name: "Locations" });
   await userEvent.click(input);
-  await screen.findByRole("option", { name: "First" });
-  await userEvent.tab();
-  expect(screen.getByRole("button", { name: "More Locations" })).toHaveFocus();
-  await userEvent.tab({ shift: true });
-  expect(input).toHaveFocus();
-  await userEvent.tab();
-  await userEvent.keyboard("{Enter}");
   expect(await screen.findByRole("alert")).toHaveTextContent("Next page unavailable");
-  expect(screen.getByRole("option", { name: "First" })).toBeInTheDocument();
-  expect(input).toHaveFocus();
+  expect(screen.queryByRole("button", { name: "More Locations" })).not.toBeInTheDocument();
   await userEvent.tab();
   expect(screen.getByRole("button", { name: "Retry Locations" })).toHaveFocus();
-  await userEvent.keyboard("{Enter}");
-  expect(await screen.findByRole("option", { name: "Next" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "First" })).toBeInTheDocument();
-  expect(list.mock.calls[2][0]).toEqual(list.mock.calls[1][0]);
-  expect(list.mock.calls[2][0].afterId).toBe(4n);
-  expect(screen.getByRole("status", { name: "Selected Locations" })).toHaveTextContent("None");
+  await userEvent.tab({ shift: true });
+  expect(input).toHaveFocus();
   await userEvent.tab();
   await userEvent.keyboard("{Escape}");
   expect(input).toHaveFocus();
   expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  await userEvent.click(input);
+  await userEvent.tab();
+  await userEvent.keyboard("{Enter}");
+  expect(await screen.findByRole("option", { name: "Next" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "First" })).toBeInTheDocument();
+  expect(list.mock.calls[2][0]).toEqual({ afterId: 0n, limit: 50, query: "" });
+  expect(screen.getByRole("status", { name: "Selected Locations" })).toHaveTextContent("None");
+  expect(input).toHaveFocus();
   expect(report).not.toHaveBeenCalled();
 });
 
@@ -156,35 +152,27 @@ it("shows an initial empty error inline and retries without selecting a Location
   expect(report).not.toHaveBeenCalled();
 });
 
-it.each([false, true])("aborts an old query and discards its success or error (failure: %s)", async (failed) => {
+it("applies the current search to a shared catalog response without issuing another request", async () => {
   let resolve!: (reply: unknown) => void;
-  let reject!: (error: Error) => void;
   list.mockReturnValueOnce({
-    response: new Promise((complete, fail) => {
+    response: new Promise((complete) => {
       resolve = complete;
-      reject = fail;
     }),
   });
-  list.mockReturnValue(call([Location.create({ id: 2n, name: "Current" })]));
   render(<Picker />);
   const input = screen.getByRole("combobox", { name: "Locations" });
   await userEvent.click(input);
-  const signal = list.mock.calls[0][1].abort as AbortSignal;
   await userEvent.type(input, "new");
-  expect(signal.aborted).toBe(true);
-  await screen.findByRole("option", { name: "Current" });
-  await act(async () => {
-    if (failed) reject(new Error("Obsolete query failed"));
-    else resolve({ locations: [Location.create({ id: 1n, name: "Obsolete" })], hasMore: true });
-  });
-  expect(screen.getByRole("option", { name: "Current" })).toBeInTheDocument();
-  expect(screen.queryByRole("option", { name: "Obsolete" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "More Locations" })).not.toBeInTheDocument();
+  expect(list).toHaveBeenCalledOnce();
+  await act(async () =>
+    resolve({ locations: [Location.create({ id: 1n, name: "Other" }), Location.create({ id: 2n, name: "New directory" })], hasMore: false }),
+  );
+  expect(screen.getByRole("option", { name: "New directory" })).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: "Other" })).not.toBeInTheDocument();
   expect(report).not.toHaveBeenCalled();
 });
 
-it.each(["close", "disable", "unmount"] as const)("cancels pending Location reads on %s without reporting obsolete errors", async (action) => {
+it.each(["close", "disable", "unmount"] as const)("keeps a shared catalog failure out of a closed chooser after %s", async (action) => {
   let reject!: (error: Error) => void;
   list.mockReturnValueOnce({
     response: new Promise((_, fail) => {
@@ -193,11 +181,9 @@ it.each(["close", "disable", "unmount"] as const)("cancels pending Location read
   });
   const view = render(<Picker />);
   await userEvent.click(screen.getByRole("combobox", { name: "Locations" }));
-  const signal = list.mock.calls[0][1].abort as AbortSignal;
   if (action === "close") await userEvent.keyboard("{Escape}");
   else if (action === "disable") view.rerender(<Picker disabled />);
   else view.unmount();
-  expect(signal.aborted).toBe(true);
   await act(async () => reject(new Error("Closed query failed")));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(report).not.toHaveBeenCalled();

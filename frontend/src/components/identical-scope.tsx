@@ -26,7 +26,7 @@ export const IdenticalScopePicker = ({
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const paper = useRef<HTMLDivElement>(null);
-  const { locations: found, more, loading, error, loadMore, retry } = useLocationChoices({ enabled: open && !disabled, query });
+  const { locations: found, loading, error, retry } = useLocationChoices({ enabled: open && !disabled, query });
   useEffect(() => {
     if (found.length) setKnown((current) => new Map([...current, ...found.map((location) => [String(location.id), location.name] as const)]));
   }, [found]);
@@ -86,16 +86,6 @@ export const IdenticalScopePicker = ({
     >
       {error}
     </Feedback>
-  ) : more ? (
-    <Button
-      disabled={loading}
-      onClick={() => {
-        input.current?.focus();
-        loadMore();
-      }}
-    >
-      More Locations
-    </Button>
   ) : undefined;
   const paperProps: SearchPaperProps = {
     ref: paper,

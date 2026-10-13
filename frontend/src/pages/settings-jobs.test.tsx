@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +20,26 @@ beforeEach(() => {
 });
 
 describe("Job Settings", () => {
+  it("uses shared loading feedback only until settings arrive and keeps saved values on revisit", async () => {
+    let finish!: (reply: { value: SettingsValue }) => void;
+    get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
+    const page = render(<JobSettingsBrowser />);
+    expect(screen.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    await act(async () => finish({ value: value() }));
+    const batch = screen.getByRole("spinbutton", { name: "Read batch" });
+    await userEvent.clear(batch);
+    await userEvent.type(batch, "128");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Job settings saved.");
+    page.rerender(<></>);
+    page.rerender(<JobSettingsBrowser />);
+    expect(screen.getByRole("spinbutton", { name: "Read batch" })).toHaveValue(128);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    await act(async () => {});
+    expect(get).toHaveBeenCalledOnce();
+  });
+
   it("saves pipeline limits through the shared typed Settings API", async () => {
     render(<JobSettingsBrowser />);
     const batch = await screen.findByRole("spinbutton", { name: "Read batch" });
@@ -33,7 +53,6 @@ describe("Job Settings", () => {
     });
     await waitFor(() => expect(batch).toHaveValue(128));
     expect(screen.getByText("Job settings saved.")).toBeInTheDocument();
-    expect(screen.getByText(/next attempt starts/)).toBeVisible();
   });
 
   it("refuses a write batch larger than its buffer before asking the service", async () => {
@@ -93,4 +112,37 @@ describe("Job Settings", () => {
     expect(batch).toHaveValue(128);
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
+});
+
+it("retries a failed initial read without defaults and keeps its form while explicitly reloading", async () => {
+  get.mockReturnValueOnce({ response: Promise.reject(new Error("Read unavailable")) });
+  render(<JobSettingsBrowser />);
+  expect(await screen.findByText("Read unavailable")).toBeVisible();
+  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  let finish!: (reply: { value: SettingsValue }) => void;
+  get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+  expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+  await act(async () => finish({ value: value() }));
+  const batch = screen.getByRole("spinbutton", { name: "Read batch" });
+  await userEvent.clear(batch);
+  await userEvent.type(batch, "128");
+  update.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Save unavailable")) }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Save unavailable");
+  get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
+  await userEvent.click(screen.getByRole("button", { name: "Reload saved settings" }));
+  expect(batch).toHaveValue(128);
+  expect(batch).toBeDisabled();
+  expect(screen.getAllByRole("progressbar")).toHaveLength(1);
+  await act(async () => finish({ value: value(512) }));
+  expect(batch).toHaveValue(512);
+  expect(batch).toBeEnabled();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  expect(get).toHaveBeenCalledTimes(3);
 });

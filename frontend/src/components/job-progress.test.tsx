@@ -14,7 +14,7 @@ const progress = (value: Parameters<typeof Progress.create>[0]) => Progress.crea
 describe("Job card phase rules", () => {
   // One row per phase × kind the card contract covers: it names the phase, whether the bar may be
   // determinate, the counter wording and the ETA text. A phase without a denominator never has a
-  // percentage, whatever business total the Job knows.
+  // percentage, whatever business total the Job knows, unless the Job has completed.
   const cases: Array<{
     name: string;
     job: ReturnType<typeof job>;
@@ -253,6 +253,18 @@ describe("Job card phase rules", () => {
     expect(rows).toContainEqual({ name: `${label} Files`, value: 3 });
     expect(rows).toContainEqual({ name: `${label} Bytes`, value: "512 B" });
     expect(view.activity).toBe("terminal");
+    render(<JobProgressFrame view={view} rows={rows} />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+  });
+
+  it.each([
+    { name: "before progress loads", snapshot: null },
+    { name: "with an empty workload", snapshot: progress({ totalKnown: true, stage: stage({ phase: JobPhase.UNSPECIFIED }) }) },
+    { name: "with the previous stage snapshot", snapshot: progress({ stage: stage({ phase: JobPhase.PROCESSING_CONTENT, completed: 1n, total: 4n }) }) },
+  ])("shows a completed Job at 100% $name", ({ snapshot }) => {
+    const view = stageView(job({ kind: JobKind.SCAN, status: JobStatus.COMPLETED, phase: JobPhase.UNSPECIFIED }), snapshot);
+    render(<JobProgressFrame view={view} rows={counterRows(view, snapshot)} />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   });
 
   it("classifies an idle ready Job separately from a running Job", () => {
@@ -274,12 +286,15 @@ describe("Job card phase rules", () => {
     // A failed Job is terminal, names its reason and offers no Cancel.
     const failed = job({ kind: JobKind.SCAN, status: JobStatus.FAILED, phase: JobPhase.UNSPECIFIED, error: "injected failure" });
     expect(stageView(failed, null).activity).toBe("terminal");
+    expect(stageView(failed, null).percentage).toBeUndefined();
     expect(jobStatusLabel(failed)).toBe("Failed");
   });
 
   it.each([JobStatus.COMPLETED, JobStatus.FAILED])("keeps live cleanup active after durable status %s until the runner becomes idle", (status) => {
     const cleanup = job({ kind: JobKind.ARCHIVE, status, phase: JobPhase.FINALIZING_MEDIA });
-    expect(stageView(cleanup, progress({ stage: stage({ phase: JobPhase.FINALIZING_MEDIA }) })).activity).toBe("active");
+    const view = stageView(cleanup, progress({ stage: stage({ phase: JobPhase.FINALIZING_MEDIA }) }));
+    expect(view.activity).toBe("active");
+    expect(view.percentage).toBeUndefined();
     expect(isJobRunning(cleanup)).toBe(true);
     expect(jobStatusLabel(cleanup)).toBe("finalizing media");
 

@@ -1241,7 +1241,9 @@ export enum IdenticalSource {
     LOCATIONS = 2
 }
 /**
- * FILE_ID keeps the retained result's existing member order.
+ * FILE_ID and NAME sort members within title-ordered groups.
+ * SIZE orders groups by their largest visible recorded size (unknown last),
+ * with members in ascending path order in either direction. SIZE defaults to DESC.
  *
  * @generated from protobuf enum yatm.v1.IdenticalSortKey
  */

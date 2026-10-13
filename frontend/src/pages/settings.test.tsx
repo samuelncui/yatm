@@ -1,12 +1,15 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
-import { LibrarySettings, SettingsValue } from "@/entity";
+import { LibrarySettings, Location, SettingsValue } from "@/entity";
+import { createAppStore } from "@/state/store";
+import { loadLocations, selectLocations } from "@/state/locations";
+import { useLocationChoices } from "@/components/use-location-choices";
 
-const { get, update } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
-vi.mock("@/api", () => ({ fileBase: "/files", settingsCli: { get, update } }));
+const { get, update, list } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), list: vi.fn() }));
+vi.mock("@/api", () => ({ fileBase: "/files", settingsCli: { get, update }, locationCli: { list } }));
 import { SettingsBrowser } from "./settings";
 
 const initial = LibrarySettings.create({ includeUnbackedFiles: true, confirmRemove: true });
@@ -19,6 +22,7 @@ const open = () =>
   );
 
 beforeEach(() => {
+  list.mockReset().mockReturnValue({ response: Promise.resolve({ locations: [], hasMore: false }) });
   get.mockReset().mockReturnValue({ response: Promise.resolve({ value: value() }) });
   update
     .mockReset()
@@ -29,7 +33,7 @@ beforeEach(() => {
 describe("Library Settings", () => {
   it("edits locally and saves the whole typed group", async () => {
     open();
-    const toggle = screen.getByRole("checkbox", { name: "Include unbacked files" });
+    const toggle = await screen.findByRole("checkbox", { name: "Include unbacked files" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     expect(update).not.toHaveBeenCalled();
@@ -45,7 +49,7 @@ describe("Library Settings", () => {
 
   it("cancels unsaved Trash confirmation changes", async () => {
     open();
-    const toggle = screen.getByRole("checkbox", { name: "Confirm Delete" });
+    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     expect(toggle).not.toBeChecked();
@@ -59,7 +63,7 @@ describe("Library Settings", () => {
     let reject!: (error: Error) => void;
     update.mockImplementation(() => ({ response: new Promise((_, fail) => (reject = fail)) }));
     open();
-    const toggle = screen.getByRole("checkbox", { name: "Confirm Delete" });
+    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -81,23 +85,79 @@ describe("Library Settings", () => {
   it("does not invent defaults while the server value is loading", () => {
     get.mockReturnValue({ response: new Promise(() => undefined) });
     open();
-    expect(screen.getByRole("checkbox", { name: "Include unbacked files" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Include unbacked files" })).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: "Confirm Delete" })).not.toBeChecked();
+    expect(screen.getByRole("progressbar", { name: "Loading Library settings" })).toBeVisible();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("keeps Import and Export available after the Settings read fails", async () => {
+    get.mockReturnValue({ response: Promise.reject(new Error("Settings unavailable")) });
+    open();
+    expect(await screen.findByText("Settings unavailable")).toBeVisible();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(screen.getByRole("dialog", { name: "Import Library Backup" })).toBeVisible();
   });
 
   it("reports Library import success and keeps Settings explicitly out of the operation", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetch);
     open();
-    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(screen.getByText("Import replaces Library data. Your Settings stay unchanged.")).toBeVisible();
     const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     await userEvent.upload(input!, new File(["backup"], "library.jsonl", { type: "application/x-ndjson" }));
-    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(await screen.findByText("Library imported. Settings were not changed.")).toBeVisible();
     expect(fetch).toHaveBeenCalledWith("/files/library/_import", expect.objectContaining({ method: "POST" }));
+    expect(list).toHaveBeenCalledExactlyOnceWith({ afterId: 0n, limit: 50, query: "" });
+  });
+
+  it.each([false, true])("replaces a pending pre-import catalog and updates mounted choices (cached=%s)", async (cached) => {
+    const before = Location.create({ id: 1n, name: "Before import" });
+    const after = Location.create({ id: 2n, name: "After import" });
+    const store = createAppStore();
+    if (cached) {
+      list.mockReturnValueOnce({ response: Promise.resolve({ locations: [before], hasMore: false }) });
+      await loadLocations(store);
+    }
+    let finishOld!: (page: { locations: Location[]; hasMore: boolean }) => void;
+    list.mockReturnValueOnce({ response: new Promise((resolve) => (finishOld = resolve)) });
+    const oldRead = loadLocations(store, true);
+    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [after], hasMore: false }) });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
+    // Import remains usable even if the unrelated Settings request never completes.
+    get.mockReturnValue({ response: new Promise(() => {}) });
+    const Choices = () => {
+      const { locations } = useLocationChoices({ enabled: true });
+      return <output aria-label="Configured choices">{locations.map((location) => location.name).join(",")}</output>;
+    };
+    render(
+      <>
+        <SettingsBrowser />
+        <Choices />
+      </>,
+      { store },
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.upload(
+      document.querySelector<HTMLInputElement>('input[type="file"]')!,
+      new File(["backup"], "library.jsonl", { type: "application/x-ndjson" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(await screen.findByText("Library imported. Settings were not changed.")).toBeVisible();
+    expect(screen.getByLabelText("Configured choices")).toHaveTextContent("After import");
+    await act(async () => {
+      finishOld({ locations: [before], hasMore: false });
+      await oldRead;
+    });
+    expect(selectLocations(store.getState())).toEqual([after]);
+    expect(screen.getByLabelText("Configured choices")).toHaveTextContent("After import");
+    expect(list).toHaveBeenCalledTimes(cached ? 3 : 2);
   });
 
   it("keeps the import dialog open while pending and reports a failure", async () => {
@@ -111,14 +171,15 @@ describe("Library Settings", () => {
       ),
     );
     open();
-    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Import" }));
     const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     await userEvent.upload(input!, new File(["backup"], "library.jsonl", { type: "application/x-ndjson" }));
-    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Import" }));
     expect(screen.getByRole("progressbar", { name: "Importing Library backup" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     reject(new Error("Import unavailable"));
     expect(await screen.findByText("Import unavailable")).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(list).not.toHaveBeenCalled();
   });
 });

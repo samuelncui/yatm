@@ -149,8 +149,7 @@ func TestIdenticalSortedRowsLargeGroup(t *testing.T) {
 	type expectedMember struct {
 		id     int64
 		name   string
-		size   int64
-		known  bool
+		path   string
 		hidden bool
 	}
 	want := make([]expectedMember, 0, count)
@@ -173,16 +172,14 @@ func TestIdenticalSortedRowsLargeGroup(t *testing.T) {
 				Path: fmt.Sprintf("dir/%03d", i), Signature: []byte("shared"), Size: size}).Error)
 		}
 		versions = append(versions, FileVersion{FileID: file.ID, Signature: []byte("shared"), Size: int64(i % 7)})
-		want = append(want, expectedMember{id: file.ID, name: file.Name, size: size, known: true,
+		want = append(want, expectedMember{id: file.ID, name: file.Name, path: parents[i/23].Name + "/" + file.Name,
 			hidden: strings.HasPrefix(file.Name, ".")})
 	}
 	require.NoError(t, db.CreateInBatches(&versions, identicalBatch).Error)
 	require.NoError(t, db.Exec("UPDATE file_versions SET size = NULL WHERE file_id = ?", files[2].ID).Error)
-	want[2].known = false
 	recent := int64(123)
 	require.NoError(t, db.Create(&FileVersion{FileID: files[0].ID, Signature: []byte("extra-original"), Size: 888, LastArchivedAtNS: &recent}).Error)
 	require.NoError(t, db.Create(&FileVersion{FileID: files[1].ID, Signature: []byte("extra-saved"), Size: 999, LastArchivedAtNS: &recent}).Error)
-	want[1].size = 999
 
 	// Every projection and direction has dense positions independent of page offsets.
 	snapshot, err := lib.OpenIdenticalSnapshot(context.Background(), IdenticalScope{Source: IdenticalLibrary})
@@ -229,11 +226,11 @@ func TestIdenticalSortedRowsLargeGroup(t *testing.T) {
 						return (left.name < right.name) != order.descending
 					}
 				case entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE:
-					if left.known != right.known {
-						return left.known
+					if a, b := strings.ToLower(left.path), strings.ToLower(right.path); a != b {
+						return a < b
 					}
-					if left.size != right.size {
-						return (left.size < right.size) != order.descending
+					if left.path != right.path {
+						return left.path < right.path
 					}
 				case entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID:
 					return (left.id < right.id) != order.descending
@@ -327,9 +324,9 @@ func TestIdenticalVisibleRowsUseVisibleGroupTitleAndOrder(t *testing.T) {
 	sorted, _, err := snapshot.SortedRows(0, 5, false, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE,
 		entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
-	require.Equal(t, []string{"Beta", "Zulu"}, []string{sorted[0].Group.Name, sorted[3].Group.Name})
+	require.Equal(t, []string{"Zulu", "Beta"}, []string{sorted[0].Group.Name, sorted[2].Group.Name})
 	require.Zero(t, sorted[0].FileID)
-	require.Zero(t, sorted[3].FileID)
+	require.Zero(t, sorted[2].FileID)
 }
 
 func TestIdenticalRowsTitleOrderingCrossesMetadataBatch(t *testing.T) {
@@ -449,5 +446,74 @@ func TestIdenticalRowIndexBuildBatchesSmallGroups(t *testing.T) {
 		fingerprint, err := snapshot.Fingerprint(strconv.FormatInt(group.Component, 10))
 		require.NoError(t, err)
 		require.Equal(t, fingerprint, group.Fingerprint)
+	}
+}
+
+func TestIdenticalSizeOrdersGroupsAndKeepsMemberPaths(t *testing.T) {
+	// Names and File IDs oppose path order; a hidden maximum changes only its projection.
+	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "rows.sqlite"))
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	defer sqlDB.Close()
+	require.NoError(t, db.AutoMigrate(&identicalNode{}, &identicalEdge{}))
+	size := func(value int64) *int64 { return &value }
+	nodes := []identicalNode{
+		{FileID: 1, Component: 1, Name: "a", Path: "z/a", Size: size(100)},
+		{FileID: 2, Component: 1, Name: "z", Path: "a/z", Size: size(20)},
+		{FileID: 3, Component: 3, Name: "c", Path: "y/c", Size: size(500)},
+		{FileID: 4, Component: 3, Name: "d", Path: "a/d", Size: size(500)},
+		{FileID: 5, Component: 5, Name: ".large", Path: "a/.large", Size: size(900)},
+		{FileID: 6, Component: 5, Name: "b", Path: "b/b", Size: size(200)},
+		{FileID: 7, Component: 7, Name: "e", Path: "a/e"},
+		{FileID: 8, Component: 7, Name: "f", Path: "b/f"},
+		{FileID: 9, Component: 9, Name: "h", Path: "b/h", Size: size(500)},
+		{FileID: 10, Component: 9, Name: "g", Path: "a/g", Size: size(500)},
+	}
+	require.NoError(t, db.Create(&nodes).Error)
+	for _, node := range nodes {
+		require.NoError(t, db.Create(&identicalEdge{FileID: node.FileID, Signature: []byte(fmt.Sprint(node.Component))}).Error)
+	}
+	snapshot := &IdenticalSnapshot{db: db}
+	require.NoError(t, snapshot.materializeRows())
+
+	// Every random-access page and lookup uses the same dense header/member positions.
+	for _, test := range []struct {
+		hidden bool
+		order  entity.IdenticalSortOrder
+		ids    []int64
+	}{
+		{true, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_DESC, []int64{0, 5, 6, 0, 4, 3, 0, 10, 9, 0, 2, 1, 0, 7, 8}},
+		{true, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED, []int64{0, 5, 6, 0, 4, 3, 0, 10, 9, 0, 2, 1, 0, 7, 8}},
+		{false, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_DESC, []int64{0, 4, 3, 0, 10, 9, 0, 6, 0, 2, 1, 0, 7, 8}},
+		{true, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_ASC, []int64{0, 2, 1, 0, 4, 3, 0, 10, 9, 0, 5, 6, 0, 7, 8}},
+		{false, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_ASC, []int64{0, 2, 1, 0, 6, 0, 4, 3, 0, 10, 9, 0, 7, 8}},
+	} {
+		var header int64
+		for offset, id := range test.ids {
+			if id == 0 {
+				header = int64(offset)
+			}
+			rows, total, err := snapshot.SortedRows(int64(offset), 1, test.hidden, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, test.order)
+			require.NoError(t, err)
+			require.Equal(t, int64(len(test.ids)), total)
+			require.Len(t, rows, 1)
+			require.Equal(t, id, rows[0].FileID, "hidden=%t order=%v offset=%d row=%+v", test.hidden, test.order, offset, rows[0])
+			require.Equal(t, int64(offset), rows[0].Position)
+			require.Equal(t, header, rows[0].HeaderPosition)
+			if id == 0 {
+				continue
+			}
+			positions, err := snapshot.LookupSortedPositions([]int64{id}, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, test.order)
+			require.NoError(t, err)
+			require.Len(t, positions, 1)
+			if test.hidden {
+				require.Equal(t, int64(offset), positions[0].AllPosition)
+				require.Equal(t, header, positions[0].AllHeaderPosition)
+			} else {
+				require.Equal(t, int64(offset), *positions[0].VisiblePosition)
+				require.Equal(t, header, *positions[0].VisibleHeaderPosition)
+			}
+		}
 	}
 }

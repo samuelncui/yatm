@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileBrowser, FileNavbar, FileToolbar, FileList } from "@samuelncui/chonky";
 import { Location } from "@/entity";
+import { createAppStore } from "@/state/store";
+import { loadLocations, saveLocation } from "@/state/locations";
 const { list, reportError } = vi.hoisted(() => ({ list: vi.fn(), reportError: vi.fn() }));
 vi.mock("@/api", () => ({ locationCli: { list } }));
 vi.mock("react-toastify", () => ({ toast: { error: reportError } }));
@@ -58,7 +61,7 @@ describe("Shared root selector", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Photos" }));
     expect(screen.getByRole("button", { name: "Go to Photos root" })).toHaveTextContent("Photos");
     expect(screen.getByRole("button", { name: "Trips" })).toBeInTheDocument();
-    expect(list).toHaveBeenCalledWith({ afterId: 0n, limit: 50, query: "" }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
+    expect(list).toHaveBeenCalledWith({ afterId: 0n, limit: 50, query: "" });
     expect(errors.mock.calls.flat().join(" ")).not.toContain("Breadcrumbs component doesn't accept a Fragment");
   });
   it("offers separate root navigation and folded ancestor navigation", async () => {
@@ -150,141 +153,56 @@ describe("Pane source preferences", () => {
   });
 });
 
-describe("Location menu requests", () => {
-  const show = () => render(<PaneSourceSelector source={librarySource} onChange={vi.fn()} onNavigateRoot={vi.fn()} />);
-  const open = async () => userEvent.click(screen.getByRole("button", { name: "Choose file source" }));
-  const close = async () => {
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-  };
+it("loads before opening, keeps choices immediately on reopening and navigates independently", async () => {
+  list.mockReturnValue({ response: Promise.resolve({ locations: [Location.create({ id: 7n, name: "Photos" })], hasMore: false }) });
+  const onChange = vi.fn();
+  const onNavigateRoot = vi.fn();
+  render(<PaneSourceSelector source={librarySource} onChange={onChange} onNavigateRoot={onNavigateRoot} />);
+  await act(async () => {});
+  expect(list).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole("button", { name: "Choose file source" }));
+  expect(screen.getByRole("menuitem", { name: "Photos" })).toBeVisible();
+  expect(screen.queryByText("Loading Locations…")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("menuitem", { name: "Photos" }));
+  expect(onChange).toHaveBeenCalledWith({ kind: "location", id: "7", name: "Photos" });
+  await userEvent.click(screen.getByRole("button", { name: "Choose file source" }));
+  expect(screen.getByRole("menuitem", { name: "Photos" })).toBeVisible();
+  expect(screen.queryByText("Loading Locations…")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("menuitem", { name: "Library" }));
+  await userEvent.click(screen.getByRole("button", { name: "Go to Library root" }));
+  expect(onNavigateRoot).toHaveBeenCalledOnce();
+  expect(list).toHaveBeenCalledOnce();
+});
 
-  it.each([false, true])("ignores a closed opening's reply after reopening (failure: %s)", async (failed) => {
-    let complete!: (reply: unknown) => void;
-    let reject!: (error: Error) => void;
-    list.mockReturnValueOnce({
-      response: new Promise((resolve, fail) => {
-        complete = resolve;
-        reject = fail;
-      }),
-    });
-    const view = show();
-    expect(list).not.toHaveBeenCalled();
-    await open();
-    const signal = list.mock.calls[0][1].abort as AbortSignal;
-    await close();
-    expect(signal.aborted).toBe(true);
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 9n, name: "Current" })], hasMore: false }) });
-    await open();
-    await screen.findByRole("menuitem", { name: "Current" });
-    await act(async () => {
-      if (failed) reject(new Error("Obsolete failure"));
-      else complete({ locations: [Location.create({ id: 1n, name: "Obsolete" })], hasMore: true });
-    });
-    expect(screen.queryByRole("menuitem", { name: "Obsolete" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Load more…" })).not.toBeInTheDocument();
-    expect(reportError).not.toHaveBeenCalled();
-    expect(list).toHaveBeenCalledTimes(2);
-    view.unmount();
+it("distinguishes initial loading, failed reads and a confirmed empty catalog", async () => {
+  let reject!: (reason: Error) => void;
+  list.mockReturnValueOnce({
+    response: new Promise((_, fail) => {
+      reject = fail;
+    }),
   });
+  render(<PaneSourceSelector source={librarySource} onChange={vi.fn()} onNavigateRoot={vi.fn()} />);
+  await userEvent.click(screen.getByRole("button", { name: "Choose file source" }));
+  expect(screen.getByText("Loading Locations…")).toBeVisible();
+  expect(screen.queryByText("No locations")).not.toBeInTheDocument();
+  await act(async () => reject(new Error("Offline")));
+  expect(screen.getByText("Offline")).toBeVisible();
+  expect(screen.queryByText("No locations")).not.toBeInTheDocument();
+  list.mockReturnValueOnce({ response: Promise.resolve({ locations: [], hasMore: false }) });
+  await userEvent.click(screen.getByRole("menuitem", { name: "Retry locations" }));
+  await waitFor(() => expect(screen.getByText("No locations")).toBeVisible());
+  expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+});
 
-  it("serializes load-more clicks and deduplicates overlapping Location IDs", async () => {
-    const first = Location.create({ id: 1n, name: "First" });
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [first], hasMore: true }) });
-    show();
-    await open();
-    const more = await screen.findByRole("menuitem", { name: "Load more…" });
-    let complete!: (reply: unknown) => void;
-    list.mockReturnValueOnce({
-      response: new Promise((resolve) => {
-        complete = resolve;
-      }),
-    });
-    await userEvent.dblClick(more);
-    expect(list).toHaveBeenCalledTimes(2);
-    expect(list.mock.calls[1][0]).toEqual({ afterId: 1n, limit: 50, query: "" });
-    expect(more).toHaveAttribute("aria-disabled", "true");
-    await act(async () => complete({ locations: [first, Location.create({ id: 2n, name: "Second" })], hasMore: false }));
-    expect(screen.getAllByRole("menuitem", { name: "First" })).toHaveLength(1);
-    expect(screen.getByRole("menuitem", { name: "Second" })).toBeInTheDocument();
-  });
-
-  it("does not let a late page settle or append to a reopened menu", async () => {
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 1n, name: "First" })], hasMore: true }) });
-    show();
-    await open();
-    let completePage!: (reply: unknown) => void;
-    list.mockReturnValueOnce({
-      response: new Promise((resolve) => {
-        completePage = resolve;
-      }),
-    });
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Load more…" }));
-    const signal = list.mock.calls[1][1].abort as AbortSignal;
-    await close();
-    expect(signal.aborted).toBe(true);
-    let completeOpening!: (reply: unknown) => void;
-    list.mockReturnValueOnce({
-      response: new Promise((resolve) => {
-        completeOpening = resolve;
-      }),
-    });
-    await open();
-    await act(async () => completePage({ locations: [Location.create({ id: 2n, name: "Stale page" })], hasMore: true }));
-    expect(screen.getByRole("menuitem", { name: "Loading Locations…" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.queryByRole("menuitem", { name: "Load more…" })).not.toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(3);
-    expect(list.mock.calls[2][0]).toEqual({ afterId: 0n, limit: 50, query: "" });
-    expect(screen.queryByRole("menuitem", { name: "Stale page" })).not.toBeInTheDocument();
-    await act(async () => completeOpening({ locations: [Location.create({ id: 9n, name: "Current" })], hasMore: false }));
-    expect(screen.getByRole("menuitem", { name: "Current" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "First" })).not.toBeInTheDocument();
-  });
-
-  it("keeps loaded Locations and retries a failed page inline", async () => {
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 1n, name: "First" })], hasMore: true }) });
-    show();
-    await open();
-    list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Locations offline")) }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Load more…" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Locations offline");
-    expect(reportError).not.toHaveBeenCalled();
-    expect(screen.getByRole("menuitem", { name: "First" })).toBeInTheDocument();
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 2n, name: "Second" })], hasMore: false }) });
-    await userEvent.click(screen.getByRole("menuitem", { name: "Retry locations" }));
-    await screen.findByRole("menuitem", { name: "Second" });
-    expect(list.mock.calls[2][0]).toEqual({ afterId: 1n, limit: 50, query: "" });
-  });
-
-  it("keeps Library navigation available and retries an initial Location failure", async () => {
-    list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Locations offline")) }));
-    show();
-    await open();
-    await screen.findByRole("alert");
-    expect(screen.getByRole("menuitem", { name: "Library" })).not.toHaveAttribute("aria-disabled", "true");
-    expect(screen.queryByRole("menuitem", { name: "No locations" })).not.toBeInTheDocument();
-    list.mockReturnValueOnce({ response: Promise.resolve({ locations: [Location.create({ id: 2n, name: "Available" })], hasMore: false }) });
-    await userEvent.keyboard("{End}");
-    expect(screen.getByRole("menuitem", { name: "Retry locations" })).toHaveFocus();
-    await userEvent.keyboard("{Enter}");
-    await screen.findByRole("menuitem", { name: "Available" });
-    expect(list.mock.calls[1][0]).toEqual({ afterId: 0n, limit: 50, query: "" });
-  });
-
-  it.each(["selection", "unmount"] as const)("cancels pending menu work on %s", async (action) => {
-    let reject!: (error: Error) => void;
-    list.mockReturnValueOnce({
-      response: new Promise((_, fail) => {
-        reject = fail;
-      }),
-    });
-    const view = show();
-    await open();
-    const signal = list.mock.calls[0][1].abort as AbortSignal;
-    if (action === "selection") await userEvent.click(screen.getByRole("menuitem", { name: "Library" }));
-    else view.unmount();
-    expect(signal.aborted).toBe(true);
-    await act(async () => reject(new Error("Cancelled read failed")));
-    expect(reportError).not.toHaveBeenCalled();
-    expect(list).toHaveBeenCalledOnce();
-  });
+it("reflects a saved Location name in the selected root and menu without another request", async () => {
+  const source = Location.create({ id: 7n, name: "Photos" });
+  list.mockReturnValue({ response: Promise.resolve({ locations: [source], hasMore: false }) });
+  const store = createAppStore();
+  await loadLocations(store);
+  render(<PaneSourceSelector source={{ kind: "location", id: "7", name: "Photos" }} onChange={vi.fn()} onNavigateRoot={vi.fn()} />, { store });
+  act(() => saveLocation(store, Location.create({ ...source, name: "Pictures" })));
+  expect(screen.getByRole("button", { name: "Go to Pictures root" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Choose file source" }));
+  expect(screen.getByRole("menuitem", { name: "Pictures" })).toHaveClass("Mui-selected");
+  expect(list).toHaveBeenCalledOnce();
 });

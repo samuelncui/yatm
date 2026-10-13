@@ -46,7 +46,12 @@ export const JobsBrowser = () => {
   if (/^[1-9]\d*$/.test(id)) return <FocusedJob key={id} id={BigInt(id)} />;
   const filter = jobFilterFromParams(params);
   const filterKey = JSON.stringify(filter, (_, value) => (typeof value === "bigint" ? value.toString() : value));
-  return <AllJobsBrowser key={filterKey} filter={filter} filterKey={filterKey} />;
+  return (
+    <Box className="browser-box jobs-page">
+      <JobFilters />
+      <AllJobsBrowser key={filterKey} filter={filter} filterKey={filterKey} />
+    </Box>
+  );
 };
 
 const FocusedJob = ({ id }: { id: bigint }) => {
@@ -241,35 +246,32 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
 
   return (
     <RefreshContext.Provider value={updateCatalog}>
-      <Box className="browser-box jobs-page">
-        <JobFilters />
-        <div
-          className="job-list"
-          aria-label="Jobs"
-          ref={listRef}
-          onScroll={(event) => {
-            const scrollTop = event.currentTarget.scrollTop;
-            scroll(scrollTop);
-          }}
-        >
-          {catalogError && (
-            <Feedback severity="error" action={<Button onClick={() => void updateCatalog()}>Retry</Button>}>
-              {catalogError}
-            </Feedback>
+      <div
+        className="job-list"
+        aria-label="Jobs"
+        ref={listRef}
+        onScroll={(event) => {
+          const scrollTop = event.currentTarget.scrollTop;
+          scroll(scrollTop);
+        }}
+      >
+        {catalogError && (
+          <Feedback severity="error" action={<Button onClick={() => void updateCatalog()}>Retry</Button>}>
+            {catalogError}
+          </Feedback>
+        )}
+        {jobs
+          ? jobs.filter((job) => job.deletedAtNs === 0n).map((job) => <GetJobCard job={job} key={job.id.toString()} />)
+          : !catalogError && <LinearProgress />}
+        <div className="job-list-end" ref={endRef}>
+          {loadingMore && <LinearProgress />}
+          {loadMoreFailed && (
+            <Button size="small" onClick={() => void loadMore()}>
+              Retry loading more jobs
+            </Button>
           )}
-          {jobs
-            ? jobs.filter((job) => job.deletedAtNs === 0n).map((job) => <GetJobCard job={job} key={job.id.toString()} />)
-            : !catalogError && <LinearProgress />}
-          <div className="job-list-end" ref={endRef}>
-            {loadingMore && <LinearProgress />}
-            {loadMoreFailed && (
-              <Button size="small" onClick={() => void loadMore()}>
-                Retry loading more jobs
-              </Button>
-            )}
-          </div>
         </div>
-      </Box>
+      </div>
     </RefreshContext.Provider>
   );
 };

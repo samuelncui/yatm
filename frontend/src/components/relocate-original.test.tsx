@@ -1,4 +1,7 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/state/test-render";
+import { createAppStore } from "@/state/store";
+import { loadLocations } from "@/state/locations";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { File, Location, LocationEntryRef } from "@/entity";
@@ -74,10 +77,10 @@ it("retains the reviewed selection when the server refuses an occupied path", as
   expect(relocateOriginal).toHaveBeenCalledOnce();
 });
 
-it("serializes Location pages and retains the reviewed original while retrying the failed page", async () => {
+it("retains the reviewed original while the shared catalog refresh fails and retries", async () => {
   const first = Location.create({ id: 4n, name: "Pictures" });
-  list.mockReturnValueOnce({ response: Promise.resolve({ locations: [first], hasMore: true }) });
-  render(<RelocateOriginalDialog file={File.create({ id: 8n, name: "organized.jpg" })} onSaved={vi.fn()} onClose={vi.fn()} />);
+  const store = createAppStore();
+  render(<RelocateOriginalDialog file={File.create({ id: 8n, name: "organized.jpg" })} onSaved={vi.fn()} onClose={vi.fn()} />, { store });
   await choose();
   let reject!: (error: Error) => void;
   list.mockReturnValueOnce({
@@ -85,10 +88,10 @@ it("serializes Location pages and retains the reviewed original while retrying t
       reject = fail;
     }),
   });
-  const more = screen.getByRole("button", { name: "More Locations" });
-  await userEvent.dblClick(more);
+  act(() => {
+    void loadLocations(store, true);
+  });
   expect(list).toHaveBeenCalledTimes(2);
-  expect(more).toBeDisabled();
   await act(async () => reject(new Error("Next Locations unavailable")));
   expect(await screen.findByText("Next Locations unavailable")).toBeInTheDocument();
   expect(screen.getByText(/This replaces its original reference/)).toHaveTextContent("Pictures/new/path.jpg");
@@ -96,7 +99,7 @@ it("serializes Location pages and retains the reviewed original while retrying t
   list.mockReturnValueOnce({ response: Promise.resolve({ locations: [first, Location.create({ id: 5n, name: "Other" })], hasMore: false }) });
   await userEvent.click(screen.getByRole("button", { name: "Retry Locations" }));
   await waitFor(() => expect(screen.queryByText("Next Locations unavailable")).not.toBeInTheDocument());
-  expect(list.mock.calls[1][0]).toEqual({ afterId: 4n, limit: 50, query: "" });
+  expect(list.mock.calls[1][0]).toEqual({ afterId: 0n, limit: 50, query: "" });
   expect(list.mock.calls[2][0]).toEqual(list.mock.calls[1][0]);
   await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
   expect(screen.getAllByRole("option", { name: "Pictures" })).toHaveLength(1);
@@ -104,7 +107,7 @@ it("serializes Location pages and retains the reviewed original while retrying t
   expect(relocateOriginal).not.toHaveBeenCalled();
 });
 
-it.each(["cancel", "unmount"] as const)("aborts Location reads and ignores late errors on %s", async (action) => {
+it.each(["cancel", "unmount"] as const)("does not report shared catalog failures as action errors after %s", async (action) => {
   let reject!: (error: Error) => void;
   list.mockReturnValueOnce({
     response: new Promise((_, fail) => {
@@ -114,10 +117,8 @@ it.each(["cancel", "unmount"] as const)("aborts Location reads and ignores late 
   const onClose = vi.fn();
   const view = render(<RelocateOriginalDialog file={File.create({ id: 8n, name: "organized.jpg" })} onSaved={vi.fn()} onClose={onClose} />);
   onClose.mockImplementation(view.unmount);
-  const signal = list.mock.calls[0][1].abort as AbortSignal;
   if (action === "cancel") await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   else view.unmount();
-  expect(signal.aborted).toBe(true);
   await act(async () => reject(new Error("Closed Location request failed")));
   expect(report).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

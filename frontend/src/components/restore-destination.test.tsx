@@ -1,6 +1,7 @@
 import { operationResponse, streamListing } from "@/test/files-fixture";
 import { useState } from "react";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -131,10 +132,7 @@ it("uses a compact Location selector above the directory browser in a preferred-
   expect(list).not.toHaveBeenCalled();
   await open();
   await select();
-  expect(list).toHaveBeenCalledExactlyOnceWith(
-    { afterId: 0n, limit: 50, restoreTarget: true, query: "" },
-    expect.objectContaining({ abort: expect.any(AbortSignal) }),
-  );
+  expect(list).toHaveBeenCalledExactlyOnceWith({ afterId: 0n, limit: 50, query: "" });
   expect(screen.queryByRole("navigation", { name: "Preferred Locations" })).not.toBeInTheDocument();
   expect(screen.getByRole("combobox", { name: "Location" })).toHaveTextContent("Recovered files");
   const content = screen.getByRole("dialog", { name: "Choose restore target" }).querySelector(".restore-target-dialog")!;
@@ -148,15 +146,12 @@ it("uses a compact Location selector above the directory browser in a preferred-
 });
 
 it("does not fall back to all Locations when there are no preferred targets", async () => {
-  list.mockReturnValue(call({ locations: [], hasMore: false }));
+  list.mockReturnValue(call({ locations: [Location.create({ id: 8n, name: "Not preferred" })], hasMore: false }));
   show();
   await open();
   expect(await screen.findByText(/No preferred Locations/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Set a restore destination in Settings" })).toHaveAttribute("href", "/settings/locations");
-  expect(list).toHaveBeenCalledExactlyOnceWith(
-    { afterId: 0n, limit: 50, restoreTarget: true, query: "" },
-    expect.objectContaining({ abort: expect.any(AbortSignal) }),
-  );
+  expect(list).toHaveBeenCalledExactlyOnceWith({ afterId: 0n, limit: 50, query: "" });
   expect(screen.queryByRole("button", { name: "Choose" })).not.toBeInTheDocument();
 });
 
@@ -174,14 +169,11 @@ it("serializes pages, deduplicates IDs, and supports preferred targets beyond th
   });
   show();
   await open();
-  const more = await screen.findByRole("button", { name: "More locations" });
-  await userEvent.dblClick(more);
-  expect(more).toBeDisabled();
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole("combobox", { name: "Location" })).toHaveAttribute("aria-disabled", "true");
+  expect(screen.queryByRole("button", { name: "More locations" })).not.toBeInTheDocument();
   expect(list).toHaveBeenCalledTimes(2);
-  expect(list).toHaveBeenLastCalledWith(
-    { afterId: 51n, limit: 50, restoreTarget: true, query: "" },
-    expect.objectContaining({ abort: expect.any(AbortSignal) }),
-  );
+  expect(list).toHaveBeenLastCalledWith({ afterId: 51n, limit: 50, query: "" });
   await act(async () => resolveMore({ locations: [first, next], hasMore: false }));
   await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
   expect(screen.getAllByRole("option", { name: /First preferred|Next preferred/ })).toHaveLength(2);
@@ -215,28 +207,26 @@ it("remembers the preferred target and subdirectory across page reloads", async 
   expect(screen.getByText("Recovered files / photos")).toBeInTheDocument();
 });
 
-it("retains successful preferred pages and retries exactly the failed cursor", async () => {
+it("retries an incomplete catalog without presenting it as a complete target list", async () => {
   list.mockReturnValueOnce(call({ locations: [preferred(51n, "First preferred")], hasMore: true }));
   list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Next destinations unavailable")) }));
   show();
   await open();
-  await userEvent.click(await screen.findByRole("button", { name: "More locations" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Next destinations unavailable");
-  await select("First preferred");
-  expect(screen.getByRole("combobox", { name: "Location" })).toHaveTextContent("First preferred");
-  list.mockReturnValueOnce(call({ locations: [preferred(52n, "Next preferred")], hasMore: false }));
+  expect(screen.queryByText(/No preferred Locations/)).not.toBeInTheDocument();
+  list.mockReturnValueOnce(call({ locations: [preferred(51n, "First preferred"), preferred(52n, "Next preferred")], hasMore: false }));
   await userEvent.click(screen.getByRole("button", { name: "Retry destinations" }));
   await select("Next preferred");
-  expect(list.mock.calls[1][0]).toEqual({ afterId: 51n, limit: 50, restoreTarget: true, query: "" });
-  expect(list.mock.calls[2][0]).toEqual(list.mock.calls[1][0]);
+  expect(list.mock.calls[1][0]).toEqual({ afterId: 51n, limit: 50, query: "" });
+  expect(list.mock.calls[2][0]).toEqual({ afterId: 0n, limit: 50, query: "" });
   await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
   expect(screen.getByRole("option", { name: "First preferred" })).toBeInTheDocument();
 });
 
-it("revalidates an initial target independently when it is beyond the first preferred page", async () => {
+it("revalidates an initial target independently of the configured catalog", async () => {
   const target = { location: preferred(99n, "Remembered target"), path: "photos" };
   get.mockReturnValue(call({ location: target.location }));
-  list.mockReturnValue(call({ locations: [preferred(1n, "First preferred")], hasMore: true }));
+  list.mockReturnValue(call({ locations: [preferred(1n, "First preferred")], hasMore: false }));
   render(
     <MemoryRouter>
       <RestoreDestinationPicker value={target} onChange={vi.fn()} disabled={false} />
@@ -365,23 +355,21 @@ it("discards a late saved-directory validation after a new target is chosen", as
   expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("New target");
 });
 
-it("discards a late page after closing and reopening the modal", async () => {
-  let resolveOld!: (value: unknown) => void;
+it("reuses an in-flight catalog after closing and reopening the modal", async () => {
+  let resolve!: (value: unknown) => void;
   list.mockReturnValueOnce({
-    response: new Promise((resolve) => {
-      resolveOld = resolve;
+    response: new Promise((complete) => {
+      resolve = complete;
     }),
   });
   show();
   await open();
-  const signal = list.mock.calls[0][1].abort as AbortSignal;
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(signal.aborted).toBe(true);
   await open();
-  await act(async () => resolveOld({ locations: [preferred(6n, "Stale")], hasMore: true }));
+  expect(list).toHaveBeenCalledOnce();
+  await act(async () => resolve({ locations: [preferred()], hasMore: false }));
   await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
-  expect(screen.queryByRole("option", { name: "Stale" })).not.toBeInTheDocument();
-  expect(await screen.findByRole("option", { name: "Recovered files" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Recovered files" })).toBeInTheDocument();
 });
 
 it("offers an imported preferred target for selection without a confirmation step", async () => {
@@ -411,12 +399,15 @@ it("changes Location without carrying the previous directory or changing the con
 });
 
 it("allows retrying a preferred-list error without widening the filter", async () => {
+  list.mockReturnValue(call({ locations: [preferred(), Location.create({ id: 8n, name: "Not preferred" })], hasMore: false }));
   list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Unavailable")) }));
   show();
   await open();
   await userEvent.click(await screen.findByRole("button", { name: "Retry destinations" }));
   await select();
-  expect(list.mock.calls.every(([request]) => request.restoreTarget === true)).toBe(true);
+  expect(list).toHaveBeenCalledTimes(2);
+  await userEvent.click(screen.getByRole("combobox", { name: "Location" }));
+  expect(screen.queryByRole("option", { name: "Not preferred" })).not.toBeInTheDocument();
 });
 
 it("keeps a confirmed target when its preference write fails", async () => {

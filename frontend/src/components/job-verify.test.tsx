@@ -67,7 +67,10 @@ describe("Integrity check Job", () => {
     expect(await screen.findAllByText("Missing")).toHaveLength(2);
     // The list spans its whole result set from the first load and reports its size.
     expect(entries).toHaveBeenCalledTimes(1);
-    expect(entries).toHaveBeenLastCalledWith({ id: 4n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true });
+    expect(entries).toHaveBeenLastCalledWith(
+      { id: 4n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true },
+      { abort: expect.any(AbortSignal) },
+    );
   });
   it("uses the shared cancellation action during verification", async () => {
     render(<ScanCard job={Job.create({ id: 4n, kind: JobKind.SCAN, phase: JobPhase.VERIFYING_MEDIA, status: JobStatus.READY })} />);

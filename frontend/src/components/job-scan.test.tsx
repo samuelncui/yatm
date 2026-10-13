@@ -121,7 +121,10 @@ describe("Automatic Media Scan", () => {
     expect(await screen.findByText("added.txt")).toBeInTheDocument();
     expect(screen.getByText((text) => text.includes(new Date("2023-11-14T22:13:20.123Z").toLocaleString()))).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Coverage" })).not.toBeInTheDocument();
-    expect(listEntries).toHaveBeenCalledWith({ id: 30n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true });
+    expect(listEntries).toHaveBeenCalledWith(
+      { id: 30n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true },
+      { abort: expect.any(AbortSignal) },
+    );
   });
   it("can close a loading results dialog and rejects late results on reopening", async () => {
     let finish!: (value: unknown) => void;

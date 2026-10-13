@@ -96,13 +96,21 @@ export const LocationForm = ({
         <SettingsSection title="Location">
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 4 }}>
-              <TextField required fullWidth label="Name" value={value.name} onChange={(event) => setValue({ ...value, name: event.target.value })} />
+              <TextField
+                required
+                fullWidth
+                disabled={busy}
+                label="Name"
+                value={value.name}
+                onChange={(event) => setValue({ ...value, name: event.target.value })}
+              />
             </Grid>
             <Grid size={{ xs: 12, lg: 8 }}>
               <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { xs: "stretch", sm: "flex-start" }, gap: 1 }}>
                 <TextField
                   required
                   fullWidth
+                  disabled={busy}
                   label="Directory"
                   value={value.rootPath}
                   onChange={(event) => setValue({ ...value, rootPath: event.target.value })}
@@ -116,12 +124,13 @@ export const LocationForm = ({
             <Grid size={12}>
               <SettingsField
                 label="Preferred restore destination"
-                control={<Checkbox checked={value.restoreTarget} onChange={(_, restoreTarget) => setValue({ ...value, restoreTarget })} />}
+                control={<Checkbox disabled={busy} checked={value.restoreTarget} onChange={(_, restoreTarget) => setValue({ ...value, restoreTarget })} />}
               />
             </Grid>
             <Grid size={12}>
               <TextField
                 fullWidth
+                disabled={busy}
                 label="Ignore"
                 multiline
                 minRows={5}
@@ -138,7 +147,7 @@ export const LocationForm = ({
           <SettingsField
             label="Use mmap for content reads"
             description="Use memory mapping when Archive and Scan read original file content. Off by default."
-            control={<Checkbox checked={value.useMmap} onChange={(_, useMmap) => setValue({ ...value, useMmap })} />}
+            control={<Checkbox disabled={busy} checked={value.useMmap} onChange={(_, useMmap) => setValue({ ...value, useMmap })} />}
           />
         </SettingsSection>
         {source && dirty && (

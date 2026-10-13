@@ -1,12 +1,16 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { StrictMode, type PropsWithChildren } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { Location } from "@/entity";
+import { AppStateProvider } from "@/state/react";
+import { createAppStore } from "@/state/store";
+import { loadLocations, removeLocation, saveLocation, selectLocations } from "@/state/locations";
 import { useLocationChoices } from "./use-location-choices";
 
 const { list } = vi.hoisted(() => ({ list: vi.fn() }));
 vi.mock("@/api", () => ({ locationCli: { list } }));
-const first = Location.create({ id: 1n, name: "First" });
-const second = Location.create({ id: 2n, name: "Second" });
+const first = Location.create({ id: 1n, name: "First", rootPath: "/photos", restoreTarget: true });
+const second = Location.create({ id: 2n, name: "Second", rootPath: "/other" });
 const call = (locations: Location[], hasMore = false) => ({ response: Promise.resolve({ locations, hasMore }) });
 const pendingPage = () => {
   let resolve!: (page: { locations: Location[]; hasMore: boolean }) => void;
@@ -17,127 +21,190 @@ const pendingPage = () => {
   });
   return { response, resolve, reject };
 };
+const fixture = () => {
+  const store = createAppStore();
+  const wrapper = ({ children }: PropsWithChildren) => <AppStateProvider store={store}>{children}</AppStateProvider>;
+  return { store, wrapper };
+};
+beforeEach(() => list.mockReset().mockReturnValue(call([])));
 
-beforeEach(() => {
-  list.mockReset().mockReturnValue(call([]));
-});
-
-it("serializes append requests, retains a failed page's rows and cursor, and deduplicates its retry", async () => {
-  list.mockReturnValueOnce(call([first], true));
-  const { result } = renderHook(() => useLocationChoices({ enabled: true, query: "First", restoreTarget: true }));
-  await waitFor(() => expect(result.current.locations).toEqual([first]));
-  const next = pendingPage();
-  list.mockReturnValueOnce(next);
-  act(() => {
-    result.current.loadMore();
-    result.current.loadMore();
-  });
-  expect(list).toHaveBeenCalledTimes(2);
-  expect(list.mock.calls[1][0]).toEqual({ afterId: 1n, limit: 50, query: "First", restoreTarget: true });
-  await act(async () => next.reject(new Error("Page unavailable")));
-  expect(result.current.locations).toEqual([first]);
-  expect(result.current.error).toBe("Page unavailable");
-  act(() => result.current.loadMore());
-  expect(list).toHaveBeenCalledTimes(2);
-
-  const renamed = Location.create({ ...first, name: "Updated first" });
-  list.mockReturnValueOnce(call([renamed, second]));
-  act(() => {
-    result.current.retry();
-    result.current.retry();
-  });
-  await waitFor(() => expect(result.current.locations).toEqual([renamed, second]));
-  expect(list).toHaveBeenCalledTimes(3);
-  expect(list.mock.calls[2][0]).toEqual(list.mock.calls[1][0]);
-  expect(result.current.error).toBe("");
-  expect(result.current.more).toBe(false);
-  expect(result.current.loading).toBe(false);
-});
-
-it("retries an initial failure from the first page", async () => {
-  list.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Offline")) }));
-  const { result } = renderHook(() => useLocationChoices({ enabled: true }));
-  await waitFor(() => expect(result.current.error).toBe("Offline"));
-  list.mockReturnValueOnce(call([first]));
-  act(() => result.current.retry());
-  await waitFor(() => expect(result.current.locations).toEqual([first]));
+it("reuses the proactively loaded complete catalog across opening, closing and simultaneous choosers", async () => {
+  const rows = Array.from({ length: 51 }, (_, index) => Location.create({ id: BigInt(index + 1), name: `Location ${index + 1}` }));
+  list.mockReturnValueOnce(call(rows.slice(0, 50), true)).mockReturnValueOnce(call(rows.slice(50)));
+  const { store, wrapper } = fixture();
+  await loadLocations(store);
+  const one = renderHook(({ enabled }) => useLocationChoices({ enabled }), { wrapper, initialProps: { enabled: false } });
+  expect(one.result.current.locations).toEqual(rows);
+  one.rerender({ enabled: true });
+  expect(one.result.current.loading).toBe(false);
+  expect(one.result.current.locations).toHaveLength(51);
+  one.rerender({ enabled: false });
+  one.rerender({ enabled: true });
+  const two = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  expect(two.result.current.locations).toEqual(rows);
   expect(list.mock.calls.map(([request]) => request)).toEqual([
     { afterId: 0n, limit: 50, query: "" },
-    { afterId: 0n, limit: 50, query: "" },
+    { afterId: 50n, limit: 50, query: "" },
   ]);
 });
 
-it.each([false, true])("aborts a replaced query and cannot settle its successor with a late reply (failure: %s)", async (failed) => {
-  const old = pendingPage();
-  const current = pendingPage();
-  list.mockReturnValueOnce(old).mockReturnValueOnce(current);
-  const { result, rerender } = renderHook(({ query }) => useLocationChoices({ enabled: true, query }), { initialProps: { query: "old" } });
-  const oldSignal = list.mock.calls[0][1].abort as AbortSignal;
-  rerender({ query: "current" });
-  expect(oldSignal.aborted).toBe(true);
-  await act(async () => {
-    if (failed) old.reject(new Error("Obsolete error"));
-    else old.resolve({ locations: [first], hasMore: true });
+it("shares initial loading across StrictMode and consumers without cancellation on close or unmount", async () => {
+  const pending = pendingPage();
+  list.mockReturnValueOnce(pending);
+  const { store, wrapper } = fixture();
+  const one = renderHook(({ enabled }) => useLocationChoices({ enabled }), {
+    wrapper: ({ children }) => <StrictMode>{wrapper({ children })}</StrictMode>,
+    initialProps: { enabled: true },
   });
-  expect(result.current.locations).toEqual([]);
-  expect(result.current.error).toBe("");
-  expect(result.current.loading).toBe(true);
-  await act(async () => current.resolve({ locations: [second], hasMore: false }));
+  const two = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  expect(one.result.current.loading).toBe(true);
+  one.rerender({ enabled: false });
+  one.unmount();
+  expect(list).toHaveBeenCalledOnce();
+  await act(async () => pending.resolve({ locations: [first], hasMore: false }));
+  expect(two.result.current.locations).toEqual([first]);
+  expect(selectLocations(store.getState())).toEqual([first]);
+});
+
+it("filters names, paths and both Restore preferences locally without replacing the catalog", async () => {
+  const literal = Location.create({ id: 3n, name: "100%_archive", rootPath: "/CaseSensitive" });
+  list.mockReturnValueOnce(call([first, second, literal]));
+  const { wrapper } = fixture();
+  const { result, rerender } = renderHook(
+    ({ query, restoreTarget }: { query: string; restoreTarget?: boolean }) => useLocationChoices({ enabled: true, query, restoreTarget }),
+    { wrapper, initialProps: { query: "  PHOTOS  ", restoreTarget: true as boolean | undefined } },
+  );
+  await waitFor(() => expect(result.current.locations).toEqual([first]));
+  rerender({ query: "second", restoreTarget: false });
   expect(result.current.locations).toEqual([second]);
-  expect(result.current.loading).toBe(false);
-  expect(list.mock.calls[1][0]).toEqual({ afterId: 0n, limit: 50, query: "current" });
-});
-
-it("starts a separate first page when the preferred filter changes", async () => {
-  const old = pendingPage();
-  list.mockReturnValueOnce(old).mockReturnValueOnce(call([second]));
-  const { result, rerender } = renderHook(({ restoreTarget }) => useLocationChoices({ enabled: true, restoreTarget }), {
-    initialProps: { restoreTarget: false },
-  });
-  const signal = list.mock.calls[0][1].abort as AbortSignal;
-  rerender({ restoreTarget: true });
-  expect(signal.aborted).toBe(true);
-  await waitFor(() => expect(result.current.locations).toEqual([second]));
-  await act(async () => old.reject(new Error("Old filter failed")));
-  expect(result.current.error).toBe("");
-  expect(list.mock.calls[1][0]).toEqual({ afterId: 0n, limit: 50, query: "", restoreTarget: true });
-});
-
-it("stays idle when closed, starts afresh on reopening and cancels again on unmount", async () => {
-  const old = pendingPage();
-  const current = pendingPage();
-  list.mockReturnValueOnce(old).mockReturnValueOnce(current);
-  const { result, rerender, unmount } = renderHook(({ enabled }) => useLocationChoices({ enabled }), { initialProps: { enabled: false } });
-  expect(list).not.toHaveBeenCalled();
-  rerender({ enabled: true });
-  const oldSignal = list.mock.calls[0][1].abort as AbortSignal;
-  rerender({ enabled: false });
-  expect(oldSignal.aborted).toBe(true);
-  rerender({ enabled: true });
-  await act(async () => old.resolve({ locations: [first], hasMore: true }));
+  rerender({ query: "SECOND", restoreTarget: true });
   expect(result.current.locations).toEqual([]);
-  expect(result.current.loading).toBe(true);
-  const currentSignal = list.mock.calls[1][1].abort as AbortSignal;
-  unmount();
-  expect(currentSignal.aborted).toBe(true);
-  await act(async () => current.reject(new Error("Closed request failed")));
+  rerender({ query: "%_", restoreTarget: undefined });
+  expect(result.current.locations).toEqual([literal]);
+  rerender({ query: "", restoreTarget: undefined });
+  expect(result.current.locations).toEqual([first, second, literal]);
+  expect(list).toHaveBeenCalledOnce();
+});
+
+it("keeps an initial failure unknown through reopening and retries explicitly", async () => {
+  list.mockReturnValueOnce({ response: Promise.reject(new Error("Offline")) });
+  const { wrapper } = fixture();
+  const { result, rerender } = renderHook(({ enabled }) => useLocationChoices({ enabled }), { wrapper, initialProps: { enabled: true } });
+  await waitFor(() => expect(result.current.error).toBe("Offline"));
+  expect(result.current.locations).toEqual([]);
+  expect(result.current.loading).toBe(false);
+  rerender({ enabled: false });
+  rerender({ enabled: true });
+  expect(result.current.error).toBe("Offline");
+  expect(list).toHaveBeenCalledOnce();
+  list.mockReturnValueOnce(call([first]));
+  act(() => {
+    result.current.retry();
+    result.current.retry();
+  });
+  await waitFor(() => expect(result.current.locations).toEqual([first]));
+  expect(result.current.error).toBe("");
   expect(list).toHaveBeenCalledTimes(2);
 });
 
-it("keeps simultaneous chooser requests independent", async () => {
-  const firstRead = pendingPage();
-  const secondRead = pendingPage();
-  list.mockReturnValueOnce(firstRead).mockReturnValueOnce(secondRead);
-  const one = renderHook(() => useLocationChoices({ enabled: true }));
-  const two = renderHook(() => useLocationChoices({ enabled: true }));
-  const [firstSignal, secondSignal] = list.mock.calls.map(([, options]) => options.abort as AbortSignal);
-  one.unmount();
-  expect(firstSignal.aborted).toBe(true);
-  expect(secondSignal.aborted).toBe(false);
-  await act(async () => {
-    firstRead.reject(new Error("Closed chooser failed"));
-    secondRead.resolve({ locations: [second], hasMore: false });
+it("retains the complete known list during refresh and a later-page failure", async () => {
+  const { store, wrapper } = fixture();
+  list.mockReturnValueOnce(call([first]));
+  await loadLocations(store);
+  const { result } = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  const pending = pendingPage();
+  list.mockReturnValueOnce(call([second], true)).mockReturnValueOnce(pending);
+  act(() => result.current.refresh());
+  await waitFor(() => expect(list).toHaveBeenCalledTimes(3));
+  expect(result.current.locations).toEqual([first]);
+  await act(async () => pending.reject(new Error("Next page failed")));
+  expect(result.current.locations).toEqual([first]);
+  expect(result.current.error).toBe("Next page failed");
+  list.mockReturnValueOnce(call([first], true)).mockReturnValueOnce(call([second]));
+  act(() => result.current.retry());
+  await waitFor(() => expect(result.current.locations).toEqual([first, second]));
+});
+
+it.each(["reply", "failure"])("ignores an older catalog %s after an explicit replacement refresh", async (outcome) => {
+  const { store, wrapper } = fixture();
+  list.mockReturnValueOnce(call([first]));
+  await loadLocations(store);
+  const { result } = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  const old = pendingPage();
+  const replacement = pendingPage();
+  list.mockReturnValueOnce(old).mockReturnValueOnce(replacement);
+  act(() => result.current.refresh());
+  let refresh!: Promise<void>;
+  act(() => {
+    refresh = loadLocations(store, true);
   });
-  expect(two.result.current.locations).toEqual([second]);
-  expect(two.result.current.error).toBe("");
+  expect(result.current.locations).toEqual([first]);
+  expect(result.current.loading).toBe(true);
+  await act(async () => {
+    if (outcome === "reply") old.resolve({ locations: [first], hasMore: true });
+    else old.reject(new Error("Stale failure"));
+  });
+  expect(result.current.loading).toBe(true);
+  expect(result.current.error).toBe("");
+  await act(async () => {
+    replacement.resolve({ locations: [second], hasMore: false });
+    await refresh;
+  });
+  expect(result.current.locations).toEqual([second]);
+  expect(result.current.loading).toBe(false);
+  expect(list).toHaveBeenCalledTimes(3);
+});
+
+it.each(["save", "remove"])("does not overwrite a confirmed %s with an older catalog reply", async (operation) => {
+  const { store, wrapper } = fixture();
+  list.mockReturnValueOnce(call([first]));
+  await loadLocations(store);
+  const { result } = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  const pending = pendingPage();
+  list.mockReturnValueOnce(pending);
+  act(() => result.current.refresh());
+  const updated = Location.create({ ...first, name: "Changed", restoreTarget: false });
+  act(() => {
+    if (operation === "save") saveLocation(store, updated);
+    else removeLocation(store, first.id);
+  });
+  await act(async () => pending.resolve({ locations: [first], hasMore: false }));
+  expect(result.current.locations).toEqual(operation === "save" ? [updated] : []);
+  expect(result.current.loading).toBe(false);
+});
+
+it("keeps stores isolated and retains exact protobuf IDs and serializable state", async () => {
+  const location = Location.create({ id: 9007199254740993n, revision: 9007199254740994n, name: "Exact" });
+  list.mockReturnValueOnce(call([location]));
+  const one = createAppStore();
+  const two = createAppStore();
+  await loadLocations(one);
+  expect(selectLocations(one.getState())).toEqual([location]);
+  expect(selectLocations(two.getState())).toEqual([]);
+  expect(() => JSON.stringify(one.getState())).not.toThrow();
+});
+
+it.each(["save", "remove"])("finishes the full initial catalog after an overlapping %s", async (operation) => {
+  const initial = pendingPage();
+  const replacement = pendingPage();
+  list.mockReturnValueOnce(initial).mockReturnValueOnce(replacement);
+  const { store, wrapper } = fixture();
+  const { result } = renderHook(() => useLocationChoices({ enabled: true }), { wrapper });
+  const updated = Location.create({ ...first, name: "Saved name", restoreTarget: false });
+  act(() => {
+    if (operation === "save") saveLocation(store, updated);
+    else removeLocation(store, first.id);
+  });
+  expect(list).toHaveBeenCalledTimes(2);
+  expect(store.getState().locations.loaded).toBe(false);
+  expect(result.current.loading).toBe(true);
+  await act(async () => initial.resolve({ locations: [first], hasMore: true }));
+  expect(result.current.locations).toEqual(operation === "save" ? [updated] : []);
+  expect(result.current.loading).toBe(true);
+  const complete = operation === "save" ? [updated, second] : [second];
+  await act(async () => replacement.resolve({ locations: complete, hasMore: false }));
+  expect(result.current.locations).toEqual(complete);
+  expect(result.current.loading).toBe(false);
+  expect(store.getState().locations.loaded).toBe(true);
+  expect(list).toHaveBeenCalledTimes(2);
 });

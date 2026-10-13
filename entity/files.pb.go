@@ -335,7 +335,9 @@ func (IdenticalSource) EnumDescriptor() ([]byte, []int) {
 	return file_files_proto_rawDescGZIP(), []int{5}
 }
 
-// FILE_ID keeps the retained result's existing member order.
+// FILE_ID and NAME sort members within title-ordered groups.
+// SIZE orders groups by their largest visible recorded size (unknown last),
+// with members in ascending path order in either direction. SIZE defaults to DESC.
 type IdenticalSortKey int32
 
 const (

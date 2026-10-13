@@ -8,7 +8,7 @@ import { errorMessage, runUIAction } from "@/tools";
 import { useLocationChoices } from "./use-location-choices";
 
 export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<File, "id" | "name">; onClose: () => void; onSaved: () => Promise<void> }) => {
-  const { locations, more, loading, error: locationError, loadMore, retry } = useLocationChoices({ enabled: true });
+  const { locations, loading, error: locationError, retry } = useLocationChoices({ enabled: true });
   const [location, setLocation] = useState<Location>();
   const [reference, setReference] = useState<LocationEntryRef>();
   const [error, setError] = useState("");
@@ -50,11 +50,6 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
               </MenuItem>
             ))}
           </TextField>
-          {more && !locationError && (
-            <Button disabled={busy || loading} onClick={loadMore}>
-              More Locations
-            </Button>
-          )}
           {locationError && (
             <Feedback
               severity="error"

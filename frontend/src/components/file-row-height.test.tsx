@@ -1,7 +1,8 @@
 import { type ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FileList, type FileArray } from "@samuelncui/chonky";
+import { render } from "@/state/test-render";
 import { FileBrowser } from "./file-browser";
 import { EntryKind, FilesEntry } from "@/entity";
 import { filesEntryData } from "./files-browser";

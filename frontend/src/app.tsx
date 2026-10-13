@@ -1,6 +1,7 @@
 import { readStored, writeStored, stringCodec } from "@/state/storage";
 import { lazy, Suspense, SyntheticEvent, useCallback, useEffect, useState } from "react";
 import { LibraryLayoutToggle, PageNavigation, PageNavigationDivider, PageTabs, SidebarTabs } from "@/components/page-navigation";
+import { SettingsEditorPage } from "@/components/settings-page";
 import { Routes, Route, useNavigate, Navigate, useLocation, Link } from "react-router";
 
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
@@ -98,17 +99,14 @@ const ModuleNavigation = ({
     );
 
   if (page === SettingsType) {
+    const path = location.pathname.replace(/\/+$/, "");
     return (
       <PageNavigation label="Settings views">
-        <PageTabs
-          placement="module"
-          value={["/settings/library", "/settings/preview", "/settings/jobs"].includes(location.pathname) ? location.pathname.slice(1) : LocationsType}
-          onChange={openPage}
-        >
-          <Tab label="Locations" value={LocationsType} />
-          <Tab label="Library" value="settings/library" />
-          <Tab label="Preview" value="settings/preview" />
-          <Tab label="Jobs" value="settings/jobs" />
+        <PageTabs placement="module" value={["/settings/library", "/settings/preview", "/settings/jobs"].includes(path) ? path.slice(1) : LocationsType}>
+          <Tab component={Link} to={"/" + LocationsType} label="Locations" value={LocationsType} />
+          <Tab component={Link} to="/settings/library" label="Library" value="settings/library" />
+          <Tab component={Link} to="/settings/preview" label="Preview" value="settings/preview" />
+          <Tab component={Link} to="/settings/jobs" label="Jobs" value="settings/jobs" />
         </PageTabs>
       </PageNavigation>
     );
@@ -249,9 +247,39 @@ const App = () => {
                   <Route path={JobsType} element={<JobsBrowser />} />
                   <Route path={JobsType + "/:id"} element={<JobsBrowser />} />
                   <Route path={SettingsType} element={<Navigate to={"/" + LocationsType} replace />} />
-                  <Route path="settings/library" element={<SettingsBrowser />} />
-                  <Route path="settings/preview" element={<PreviewSettingsBrowser />} />
-                  <Route path="settings/jobs" element={<JobSettingsBrowser />} />
+                  <Route
+                    path="settings/library"
+                    element={
+                      <SettingsEditorPage key="library" title="Library" description="What Library shows, how it removes items, and where its data can go.">
+                        <SettingsBrowser />
+                      </SettingsEditorPage>
+                    }
+                  />
+                  <Route
+                    path="settings/preview"
+                    element={
+                      <SettingsEditorPage
+                        key="preview"
+                        title="Preview"
+                        description="Runtime controls apply to the next file; routes and output choices apply to new Jobs."
+                      >
+                        <PreviewSettingsBrowser />
+                      </SettingsEditorPage>
+                    }
+                  />
+                  <Route
+                    path="settings/jobs"
+                    element={
+                      <SettingsEditorPage
+                        key="jobs"
+                        title="Jobs"
+                        label="Job"
+                        description="These limits are captured when the next attempt starts. Running attempts keep their current limits."
+                      >
+                        <JobSettingsBrowser />
+                      </SettingsEditorPage>
+                    }
+                  />
                   <Route path="*" element={<Navigate to={"/" + FileBrowserType} replace />} />
                 </Route>
               </Routes>

@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { render } from "@/state/test-render";
+import { createAppStore } from "@/state/store";
+import { loadLocations, saveLocation } from "@/state/locations";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Location, Media, MediaKind } from "@/entity";
@@ -37,12 +40,12 @@ const LocationPicker = () => {
   );
 };
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mediaList.mockReturnValue(call({ media: [media(1)], hasMore: false }));
   locations.mockReturnValue(call({ locations: [], hasMore: false }));
 });
 
-describe("Server-backed catalog selection", () => {
+describe("Catalog selection", () => {
   it("waits until open and debounces queries without filtering the server result locally", async () => {
     mediaList.mockReturnValue(call({ media: [media(12, "Server match")], hasMore: false }));
     render(<MediaPicker followingControl />);
@@ -86,6 +89,12 @@ describe("Server-backed catalog selection", () => {
       expect.objectContaining({ param: expect.objectContaining({ list: expect.objectContaining({ afterId: 30n }) }) }),
       expect.anything(),
     );
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(input);
+    expect(screen.queryByRole("progressbar", { name: "Searching Media" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Archive 80/ })).toBeInTheDocument();
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+    expect(mediaList).toHaveBeenCalledTimes(2);
     await userEvent.click(screen.getByRole("button", { name: "Previous" }));
     await waitFor(() =>
       expect(mediaList).toHaveBeenLastCalledWith(
@@ -93,6 +102,43 @@ describe("Server-backed catalog selection", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it.each([false, true])("retains a successful Media query across reopening, including empty=%s, until unmount", async (empty) => {
+    vi.useFakeTimers();
+    try {
+      mediaList.mockReturnValue(call({ media: empty ? [] : [media(12, "Server match")], hasMore: false }));
+      const view = render(<MediaPicker />);
+      const input = screen.getByRole("combobox", { name: "Media" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.change(input, { target: { value: "archive" } });
+      await act(async () => vi.advanceTimersByTimeAsync(250));
+      expect(mediaList).toHaveBeenCalledOnce();
+      expect(empty ? screen.getByText("No matching Media") : screen.getByRole("option", { name: /Server match/ })).toBeInTheDocument();
+      fireEvent.keyDown(input, { key: "Escape" });
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      expect(screen.queryByRole("progressbar", { name: "Searching Media" })).not.toBeInTheDocument();
+      expect(empty ? screen.getByText("No matching Media") : screen.getByRole("option", { name: /Server match/ })).toBeInTheDocument();
+      await act(async () => vi.advanceTimersByTimeAsync(250));
+      expect(mediaList).toHaveBeenCalledOnce();
+
+      fireEvent.change(input, { target: { value: "changed" } });
+      await act(async () => vi.advanceTimersByTimeAsync(250));
+      expect(mediaList).toHaveBeenCalledTimes(2);
+      expect(mediaList).toHaveBeenLastCalledWith(
+        expect.objectContaining({ param: expect.objectContaining({ list: expect.objectContaining({ query: "changed", afterId: 0n }) }) }),
+        expect.anything(),
+      );
+      view.unmount();
+      render(<MediaPicker />);
+      const nextInput = screen.getByRole("combobox", { name: "Media" });
+      fireEvent.keyDown(nextInput, { key: "ArrowDown" });
+      fireEvent.change(nextInput, { target: { value: "changed" } });
+      await act(async () => vi.advanceTimersByTimeAsync(250));
+      expect(mediaList).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not allow stale searches to replace the current query or reopen a closed popup", async () => {
@@ -121,6 +167,10 @@ describe("Server-backed catalog selection", () => {
     const input = screen.getByRole("combobox", { name: "Media" });
     await userEvent.click(input);
     expect(await screen.findByRole("alert")).toHaveTextContent("Search failed");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(input);
+    expect(screen.getByRole("alert")).toHaveTextContent("Search failed");
+    expect(mediaList).toHaveBeenCalledOnce();
     await userEvent.tab();
     expect(screen.getByRole("button", { name: "Retry" })).toHaveFocus();
     await userEvent.tab({ shift: true });
@@ -128,6 +178,7 @@ describe("Server-backed catalog selection", () => {
     await userEvent.tab();
     await userEvent.keyboard("{Enter}");
     expect(await screen.findByText("No matching Media")).toBeInTheDocument();
+    expect(mediaList).toHaveBeenCalledTimes(2);
     expect(input).toHaveFocus();
     expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("None");
   });
@@ -193,7 +244,7 @@ describe("Server-backed catalog selection", () => {
     expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("None");
   });
 
-  it("uses the same paged search for Location paths and offers every root", async () => {
+  it("filters the shared Location catalog by name or path without reading it again", async () => {
     locations.mockReturnValue(
       call({
         locations: [
@@ -203,14 +254,65 @@ describe("Server-backed catalog selection", () => {
         hasMore: false,
       }),
     );
-    render(<LocationPicker />);
-    await userEvent.type(screen.getByRole("combobox", { name: "Location" }), "/data");
+    const store = createAppStore();
+    await loadLocations(store);
+    render(<LocationPicker />, { store });
+    const input = screen.getByRole("combobox", { name: "Location" });
+    await userEvent.type(input, "/data");
     const imported = await screen.findByRole("option", { name: /Imported/ });
     // A registered Location is immediately usable; no confirmation state gates it.
     expect(imported).not.toHaveAttribute("aria-disabled", "true");
     expect(imported).toHaveTextContent("/data/imported");
-    expect(locations).toHaveBeenCalledWith({ query: "/data", afterId: 0n, limit: 30 }, { abort: expect.any(AbortSignal) });
+    expect(locations).toHaveBeenCalledExactlyOnceWith({ query: "", afterId: 0n, limit: 50 });
+    await userEvent.clear(input);
+    await userEvent.type(input, "PHOTOS");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+    expect(screen.queryByRole("option", { name: /Imported/ })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(input);
+    expect(screen.getByRole("option", { name: /Photos/ })).toBeInTheDocument();
+    expect(locations).toHaveBeenCalledOnce();
     await userEvent.click(screen.getByRole("option", { name: /Photos/ }));
     expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("4");
+  });
+
+  it("keeps a failed Location catalog read until explicit Retry across reopening and queries", async () => {
+    locations.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Catalog unavailable")) }));
+    const store = createAppStore();
+    await loadLocations(store);
+    render(<LocationPicker />, { store });
+    const input = screen.getByRole("combobox", { name: "Location" });
+    await userEvent.click(input);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Catalog unavailable");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.type(input, "photos");
+    expect(screen.getByRole("alert")).toHaveTextContent("Catalog unavailable");
+    expect(locations).toHaveBeenCalledOnce();
+    const read = pending();
+    locations.mockReturnValueOnce(read);
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(screen.getByRole("progressbar", { name: "Searching Location" })).toBeVisible();
+    await act(async () => read.resolve({ locations: [Location.create({ id: 4n, name: "Photos", rootPath: "/photos" })], hasMore: false }));
+    expect(await screen.findByRole("option", { name: /Photos/ })).toBeVisible();
+    expect(locations).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates a selected Location label from the cached catalog without another read", async () => {
+    const location = Location.create({ id: 4n, name: "Photos", rootPath: "/photos" });
+    locations.mockReturnValue(call({ locations: [location], hasMore: false }));
+    const store = createAppStore();
+    await loadLocations(store);
+    render(<LocationPicker />, { store });
+    const input = screen.getByRole("combobox", { name: "Location" });
+    await userEvent.click(input);
+    await userEvent.click(screen.getByRole("option", { name: /Photos/ }));
+    expect(input).toHaveValue("Photos · /photos");
+
+    act(() => saveLocation(store, Location.create({ ...location, name: "Pictures", rootPath: "/pictures" })));
+    expect(input).toHaveValue("Pictures · /pictures");
+    expect(screen.getByRole("status", { name: "Selection" })).toHaveTextContent("4");
+    await userEvent.click(input);
+    expect(screen.getByRole("option", { name: "Pictures /pictures" })).toHaveAttribute("aria-selected", "true");
+    expect(locations).toHaveBeenCalledOnce();
   });
 });

@@ -217,7 +217,9 @@ message IdenticalRow {
   int64 display_member_count = 4;
   IdenticalMember member = 5;
 }
-// FILE_ID keeps the retained result's existing member order.
+// FILE_ID and NAME sort members within title-ordered groups.
+// SIZE orders groups by their largest visible recorded size (unknown last),
+// with members in ascending path order in either direction. SIZE defaults to DESC.
 enum IdenticalSortKey {
   option allow_alias = true;
   IDENTICAL_SORT_KEY_UNSPECIFIED = 0;

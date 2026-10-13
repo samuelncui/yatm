@@ -188,7 +188,10 @@ describe("ArchiveCard Write Media", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Results" }));
     expect(await screen.findByText("Library/file.txt")).toBeInTheDocument();
-    expect(listFiles).toHaveBeenCalledWith({ id: 20n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true, filterStatus: [] });
+    expect(listFiles).toHaveBeenCalledWith(
+      { id: 20n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true, filterStatus: [] },
+      { abort: expect.any(AbortSignal) },
+    );
   });
 
   it("shows the companion Preview Job or its preparation failure independently of archive progress", async () => {
