@@ -1,3 +1,5 @@
+//go:build ignore
+
 /* Test-only Linux SG v3 observer. Build on the LTFS host:
  * cc -std=c11 -O2 -Wall -Wextra -Werror -shared -fPIC -o physical_sg_trace.so \
  *    physical_sg_trace.c -ldl -pthread
