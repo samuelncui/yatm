@@ -67,6 +67,26 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('meta[name="yatm-commit"]')).toHaveAttribute("content", process.env.YATM_BROWSER_COMMIT!);
 });
 
+test("Identical keeps group actions and file rows clear of its scrollbar in the split pane", async ({ page }) => {
+  const pane = await findShared(page);
+  for (const width of [1440, 1000]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await loaded(pane);
+    const geometry = await scroller(pane).evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const clearEdge = bounds.right - Math.max(16, (element as HTMLElement).offsetWidth - element.clientWidth);
+      return {
+        horizontalOverflow: element.scrollWidth > element.clientWidth,
+        covered: [...element.querySelectorAll("[data-chonky-group-id] button, [data-chonky-file-id]")].filter(
+          (child) => child.getBoundingClientRect().right > clearEdge + 1,
+        ).length,
+      };
+    });
+    expect(geometry.horizontalOverflow).toBe(false);
+    expect(geometry.covered).toBe(0);
+  }
+});
+
 test("Identical sorts whole groups by size without blank rows, retaining selection, paging and collapse", async ({ page }) => {
   let finds = 0;
   page.on("request", (request) => {

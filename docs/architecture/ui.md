@@ -100,7 +100,9 @@ modules, including production chunks. Use exported utility classes or slots inst
 inside Chonky slots; Chonky owns its theme and browser appearance. Do not override all Chonky
 buttons from an application stylesheet. The [application FileBrowser](../../frontend/src/components/file-browser.tsx)
 owns its layout element and supplies Chonky's public theme props, so pages need no `.chonky-*`
-stylesheet selectors. Component states must work under lazy route loading,
+stylesheet selectors. Chonky's shared list content reserves scrollbar clearance for ordinary,
+grouped and sparse rows, including floating scrollbars in narrow panes; pages add no separate inset.
+Component states must work under lazy route loading,
 portals, narrow layouts and nested browsers without depending on import order.
 
 `pnpm styles:check` and ESLint reject known boundary violations. Direct configured-Location

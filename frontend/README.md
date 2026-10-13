@@ -13,14 +13,16 @@ jsdom. Component tests and benchmarks retain jsdom; tests default to two workers
 ## Shared file browser
 
 YATM consumes the published `@samuelncui/chonky` and
-`@samuelncui/chonky-icon-fontawesome` 0.3.7 packages. The lockfile resolves the
+`@samuelncui/chonky-icon-fontawesome` 0.3.8 packages. The lockfile resolves the
 registry artifacts directly; no local checkout or dependency patch is required.
-See the [Chonky component documentation](https://github.com/samuelncui/Chonky/tree/v0.3.7/packages/chonky).
+See the [Chonky component documentation](https://github.com/samuelncui/Chonky/tree/v0.3.8/packages/chonky).
 
 Shared row presentation, grouping, selection, keyboard handling, drag/drop,
 breadcrumbs and browser footers belong in Chonky. YATM supplies queries,
 pagination, metadata, operation capabilities and action handlers through its
 supported interfaces. Group layout actions belong to the caller's Options menu.
+Chonky also owns scrollbar clearance for ordinary, grouped and sparse rows;
+application pages do not add separate scrollbar padding.
 
 Consumer regression tests cover file status, measured rows, loading/navigation,
 drag/drop, selection waitlists and the independent identical-file tool. Keep
