@@ -86,8 +86,8 @@ run Find again if it is unavailable. Row pages default to 100 and accept at most
 rows; group and member CLI pages default to 20. `identical rows` and `identical positions`
 accept the same `--sort-key file-id|name|size` and `--order asc|desc`. The default
 is File ID ascending; name starts ascending and size starts descending when selected.
-Sorting changes member order within each existing group, not group order, and position
-lookups use the requested order. These reads never scan or hash physical files.
+Row pages and position lookups use the same requested order under the
+[Library sorting contract](library.md#identical-file-tools). These reads never scan or hash physical files.
 
 `job log` reads a raw bounded byte page and returns JSON with text in `logs`
 and the next byte offset as a decimal string in `offset`. Follow that returned offset, not

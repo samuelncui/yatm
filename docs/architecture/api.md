@@ -15,7 +15,7 @@ methods, and [Interface contracts](contracts.md) owns the rules shared across su
 | [JobService](../../entity/job.proto) | Common catalog, get/list, delete/cancel and logs |
 | [ArchiveJobService](../../entity/job_archive.proto) | Estimate, Create, GetCreation, WriteMedia, progress, manifest pages |
 | [RestoreJobService](../../entity/job_restore.proto) | Estimate, Create, GetCreation, RestoreMedia, progress, Media/candidate pages |
-| [FilesService](../../entity/files.proto) | Projected List, explicit Measure, basic Get, annotations, Mkdir/Move/Remove, versions, copies, single-signature duplicates, retained identical Find results with bounded rows, per-group member sorting and group/member pages, Keep/Merge, inventory admission and original relocation |
+| [FilesService](../../entity/files.proto) | Projected List, explicit Measure, basic Get, annotations, Mkdir/Move/Remove, versions, copies, single-signature duplicates, retained identical Find results with bounded rows, [Library-defined sorting](library.md#identical-file-tools) and group/member pages, Keep/Merge, inventory admission and original relocation |
 | [ScanJobService](../../entity/job_scan.proto) | Configurable source/content/result policies, GetCreation, ReadMedia, progress and paged entries |
 | [LocationService](../../entity/location.proto) | Register/list/get/update/delete, access summary and administrator discovery of unregistered paths |
 | [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation and Job pipeline limits |

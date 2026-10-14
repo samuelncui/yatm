@@ -37,6 +37,49 @@ parse_options --version v1.0.0-alpha.1
 	require.NoError(t, err, output)
 }
 
+func TestInstallerPrereleasePatchVersions(t *testing.T) {
+	for _, test := range []struct {
+		current, target, wantError string
+	}{
+		{"", "v1.0.0-alpha.2.1", ""},
+		{"v0.1.21", "v1.0.0-alpha.2.1", ""},
+		{"v1.0.0-alpha.2", "v1.0.0-alpha.2.1", ""},
+		{"v1.0.0-alpha.2.1", "v1.0.0-alpha.2.1", ""},
+		{"v1.0.0-alpha.2.1", "v1.0.0-alpha.2.10", ""},
+		{"v1.0.0-alpha.2.10", "v1.0.0-alpha.3", ""},
+		{"v1.0.0-alpha.2.1", "v1.0.0-beta.1", ""},
+		{"v1.0.0-beta.1.1", "v1.0.0-rc.1", ""},
+		{"v1.0.0-rc.1.1", "v1.0.0", ""},
+		{"v1.0.0-alpha.2.1", "v1.0.0-alpha.2", "Refusing downgrade"},
+		{"v1.0.0-alpha.2.10", "v1.0.0-alpha.2.2", "Refusing downgrade"},
+		{"v1.0.0", "v1.0.0-alpha.2.1", "Refusing downgrade"},
+		{"", "v1.0.0-alpha.2.", "Unsupported version"},
+		{"", "v1.0.0-alpha.2..1", "Unsupported version"},
+		{"", "v1.0.0-alpha.2.x", "Unsupported version"},
+	} {
+		t.Run(test.current+"-to-"+test.target, func(t *testing.T) {
+			// Keep version admission independent of downloads and service mutations.
+			root := t.TempDir()
+			if test.current != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, "VERSION"), []byte(test.current), 0o600))
+			}
+
+			// Exercise the actual upgrade decision, including numeric patch ordering.
+			output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+RELEASE_VERSION="$2"
+resolve_version
+`, "", root, test.target)
+			if test.wantError != "" {
+				require.Error(t, err, output)
+				require.Contains(t, output, test.wantError)
+				return
+			}
+			require.NoError(t, err, output)
+		})
+	}
+}
+
 func TestInstallerOptionValues(t *testing.T) {
 	for _, option := range []string{"--version", "--archive", "--checksum", "--install-dir", "--service", "--config"} {
 		for _, extra := range []string{"", "--check"} {

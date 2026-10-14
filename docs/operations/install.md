@@ -1,6 +1,6 @@
 # Installation and Service Configuration
 
-This guide describes the current installer. The examples select the published Alpha 1 release; the same installer accepts an explicitly supplied, checksum-verified local candidate. Existing installations follow the [migration guide](migration.md).
+This guide describes the current installer. The examples select `v1.0.0-alpha.2.1`; the same installer accepts an explicitly supplied, checksum-verified local candidate. Existing installations follow the [migration guide](migration.md).
 
 ## Requirements
 
@@ -15,24 +15,24 @@ The [release installer](../../install-release.sh) supports Linux amd64 with syst
 
 ```shell
 curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.1/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.1 --check
-sudo bash install-release.sh --version v1.0.0-alpha.1
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.2.1/install-release.sh
+sudo bash install-release.sh --version v1.0.0-alpha.2.1 --check
+sudo bash install-release.sh --version v1.0.0-alpha.2.1
 ```
 
 For an extracted local candidate, supply its archive and companion checksum; it follows the same installation path:
 
 ```shell
-sudo bash install-release.sh --version v1.0.0-alpha.1 \
-  --archive ./yatm-linux-amd64-v1.0.0-alpha.1.tar.gz \
-  --checksum ./yatm-linux-amd64-v1.0.0-alpha.1.tar.gz.sha256 --check
+sudo bash install-release.sh --version v1.0.0-alpha.2.1 \
+  --archive ./yatm-linux-amd64-v1.0.0-alpha.2.1.tar.gz \
+  --checksum ./yatm-linux-amd64-v1.0.0-alpha.2.1.tar.gz.sha256 --check
 ```
 
 `--check` validates the candidate and performs read-only installation checks. Remove it to proceed to the confirmation prompts. `--install-dir` and `--service` select a dedicated installation and unit; `--config` supplies a reviewed configuration for a fresh installation. Otherwise fresh installation opens the configuration template in `$EDITOR` (default `vi`). Review the listener, database and access roots. Volume-only users leave `tape_devices: []`; no fictitious Tape device or script execution is needed to install.
 
 A noninteractive fresh installation requires `--config /path/to/reviewed-config.yaml`. Existing-installation updates preserve their configuration and reject `--config`.
 
-v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official `v0.1.x` releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Lower-version installation is rejected; rollback restores a matching complete backup.
+v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official `v0.1.x` releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Alpha, Beta and RC versions accept dot-separated numeric revisions, such as `alpha.2.1`; revisions compare numerically and a patch follows its parent. Lower-version installation is rejected; rollback restores a matching complete backup.
 
 For existing installations, the [upgrade guide](migration.md) owns preflight, consent, configuration conversion and recovery. Every mutating update keeps a whole-directory archive under `.backup/<datetime>/`; configuration and Settings changes are reviewed before stop. The installer displays the verified package's guide before crossing a major version. Scripts, helpers, permissions, service unit and unrelated configuration remain in place; upgrades do not adopt default script/unit templates. Script checks report manual requirements, not physical Tape compatibility.
 

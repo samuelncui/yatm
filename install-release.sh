@@ -146,12 +146,15 @@ prepare_preview() {
 }
 
 version_key() {
-  local version="$1" rank=3 sequence=0
-  [[ "$version" =~ ^v([0-9]{1,5})\.([0-9]{1,5})\.([0-9]{1,5})(-(alpha|beta|rc)\.([0-9]{1,5}))?$ ]] || return 1
+  local version="$1" rank=3 sequence=0 number
+  [[ "$version" =~ ^v([0-9]{1,5})\.([0-9]{1,5})\.([0-9]{1,5})(-(alpha|beta|rc)\.([0-9]{1,5}(\.[0-9]{1,5})*))?$ ]] || return 1
   local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}" pre="${BASH_REMATCH[5]:-}"
   sequence="${BASH_REMATCH[6]:-0}"
   case "$pre" in alpha) rank=0 ;; beta) rank=1 ;; rc) rank=2 ;; esac
-  printf '%05d.%05d.%05d.%d.%05d' "$((10#$major))" "$((10#$minor))" "$((10#$patch))" "$rank" "$((10#$sequence))"
+  printf '%05d.%05d.%05d.%d' "$((10#$major))" "$((10#$minor))" "$((10#$patch))" "$rank"
+  local -a numbers
+  IFS=. read -r -a numbers <<< "$sequence"
+  for number in "${numbers[@]}"; do printf '.%05d' "$((10#$number))"; done
 }
 
 fetch() {

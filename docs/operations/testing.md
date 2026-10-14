@@ -367,8 +367,9 @@ active Jobs before closing the catalog. Large setup duration and disk use depend
 count and host; it has no fixed 20-second Scan deadline or maximum fixture count.
 
 For each size, use explicit Find with Library and with Locations selecting Shared files. Review
-far scrolling within the large group and across the pairs, collapse/expand, name/size sorting in
-both directions, hidden files, and independent Delete/Keep in the disposable Location. Repeat Find
+far scrolling within the large group and across the pairs, collapse/expand, size sorting in
+both directions under the [Library sorting contract](../architecture/library.md#identical-file-tools),
+hidden files, and independent Delete/Keep in the disposable Location. Repeat Find
 after mutations. The small saved-history example still exercises transitive Library grouping.
 
 Use an explicit Find for either identical source; Locations uses current records rather than
