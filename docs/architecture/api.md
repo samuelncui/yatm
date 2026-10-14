@@ -55,6 +55,20 @@ the caller continues until the corresponding `has_older` or `has_newer` flag is 
 
 Files.Get supplies organization, original navigation and applicable content references for explicit workflows without opening file bytes in the browser. User Ignore hides an entry from browsing, measurement and Location selection but does not prevent explicit admission. Physical mutations accept typed relative references, never shell commands or unrestricted absolute paths.
 
+## Browser Endpoint Addresses
+
+`listen` selects the bound service address. `domain` independently selects the browser's
+API base as `<domain>/services`, and the frontend derives Library import/export URLs as
+`<domain>/files`. An explicit value is the public URL, including scheme and external port,
+without a trailing slash. An empty or omitted value yields `/services` and `/files`, using
+the page's current origin. Preview resource URLs are always root-relative `/files/preview`
+URLs; CLI consumers select their own server address.
+
+The service does not infer this address from Host or forwarded headers, enforce a canonical
+hostname, or terminate TLS based on `domain`. Deployment is at the origin root: frontend
+assets, navigation and resource URLs do not support an arbitrary path prefix. The
+[reverse-proxy guide](../operations/install.md#reverse-proxy) shows the existing configuration.
+
 ## Listing projection
 
 Each visible Files panel requests one complete directory through Files.List. Fixed include

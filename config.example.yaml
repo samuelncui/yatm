@@ -1,6 +1,7 @@
-# domain used by user interface
+# Browser-facing public URL, independent of listen; no trailing slash.
+# Use "" for browser requests on the current page's origin.
 domain: http://127.0.0.1:8080
-# http service binding
+# Local HTTP service binding; TLS may terminate at a reverse proxy.
 listen: 127.0.0.1:8080
 # debug port binding
 debug_listen: 127.0.0.1:8081

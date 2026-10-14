@@ -73,6 +73,7 @@ Every maintained fact has one owner. Other documents link to that owner instead 
 | Root `README.md` | Released product introduction, quick start and documentation entry points | Development status, architecture detail or repeated runbooks |
 | Root `CONTEXT.md` | Domain vocabulary and core domain invariants | Schemas, algorithms, task notes or UI layout |
 | Root `AGENTS.md` | Contributor rules, safety gates, repository layout and required verification | Product or architecture contracts |
+| Root `TODO.md` | Concise confirmed pending work with source Issue links | Detailed designs, implemented behavior or completed-work history |
 | `docs/architecture/` | Current implemented behavior, module interfaces, invariants and durable constraints | Proposals, implementation plans, acceptance transcripts or superseded behavior |
 | `docs/operations/` | Current setup, migration, use, maintenance and reproducible validation | Domain definitions or another architecture specification |
 | `docs/research/` | Public technical studies, evidence, limitations and evaluation of possible approaches | Product guarantees, implementation backlogs, private incident reports or raw acceptance logs |
@@ -86,9 +87,11 @@ architecture, operations guides, and finally implementation and tests. A lower l
 evidence and implementation detail, but its existence cannot justify complexity or override a broader
 decision. When they conflict, update the lower-level documents, code and tests together.
 
-The repository intentionally has no documentation archive, ADR archive, design backlog or redirect
-stubs. Git already retains deleted text and rationale. Implementation plans belong in an Issue or
-pull request; public research follows the scope above. Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
+The repository intentionally has no documentation archive, ADR archive or redirect stubs.
+Git already retains deleted text and rationale. Root `TODO.md` records concise confirmed pending
+work; detailed implementation plans belong in an Issue or pull request. Remove completed TODO
+items instead of retaining a work history. Public research follows the scope above.
+Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
 measurements, screenshots and host-specific reports belong in CI artifacts rather than Markdown.
 
 ## Update Workflow

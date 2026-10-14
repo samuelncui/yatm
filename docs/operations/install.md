@@ -6,6 +6,7 @@ This guide describes the current installer. The examples select `v1.0.0-alpha.2.
 
 - Tape workflows require an LTFS-capable LTO drive (LTO-5 or later), its SCSI generic mapping, and compatible LTFS software. Volume-only workflows do not require a Tape drive.
 - Linux amd64 is the primary deployment target; the existing deployment scripts have been exercised on Debian 11/12. Other release architectures are experimental, and Windows is unsupported by the Unix-oriented mount workflow.
+- Historical CPUs such as Pentium III are outside the maintained runtime targets. Source ports to these systems are user-maintained; a Linux 386 experimental archive does not establish support for every 32-bit x86 CPU.
 - Place required tools in PATH or adapt the configured scripts: LTFS formatting/mounting, `mt`, device inspection, and [Stenc](https://github.com/scsitape/stenc) for hardware encryption. The repository's Tape scripts target HPE LTFS conventions; other LTFS implementations may require script changes.
 - The optional Image/Video Preview helper ships its own private native libraries; a system ffmpeg/ffprobe installation is not required. The main service and existing Preview reads work without this helper. See [native build targets](../../previewworker/build/README.md) for the helper's separate platform requirements.
 
@@ -69,7 +70,7 @@ option off restores DELETE journal mode on startup; an unsuccessful switch preve
 
 `paths.access` defines administrator-approved directory roots and optional ordered gitignore exclusions. Daily original/Restore directory choices live in **Settings → Locations**, not YAML. `paths.work` owns execution artifacts and is relative to the service working directory when not absolute. A relative `preview.root` resolves under it, defaulting to `previews`; an absolute Preview root is used directly. `paths.volumes` contains already-mounted archive Volume discovery roots. Restore destinations are not archive Media. See [Location configuration and migration](#location-configuration-and-migration).
 
-Scripts isolate environment-specific LTFS and device behavior from the service. Review the [script contract and adaptation sequence](migration.md#tape-script-adaptation) before Tape use. The default unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Retain unexpected LTFS/index diagnostics for investigation.
+Scripts isolate environment-specific LTFS and device behavior from the service. Operators may edit configured scripts and helpers for local tool versions, platforms and hardware; bundled commands are starting points. Review the [script contract and adaptation sequence](migration.md#tape-script-adaptation) before Tape use. The default unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Retain unexpected LTFS/index diagnostics for investigation.
 
 ## Location Configuration and Migration
 
@@ -104,6 +105,22 @@ Installing the helper does not enable generation. In **Settings → Preview**, e
 The installer previews legacy generator import when no saved preferences exist, preserves saved Settings, and removes `preview.generators` from YAML. Startup does not import these options; manual upgrades must run the explicit configuration conversion. The asset storage root remains deployment configuration. See the [Preview contract](../architecture/preview.md#generation) for task snapshots, enablement and resource limits.
 
 ## Reverse Proxy
+
+`listen` is the service's local binding; `domain` is the browser-facing URL used for API
+and Library import/export requests. They are already independent. An explicit public URL
+includes the scheme and external port when non-default, with no trailing slash:
+
+```yaml
+listen: 127.0.0.1:8080
+domain: https://example.com
+```
+
+Alternatively, `domain: ""` uses root-relative `/services` and `/files` URLs, so browser
+requests follow the page's current origin. CLI clients select their address independently
+with `--server`. `domain` does not configure TLS, bind a socket or restrict incoming Host
+values. YATM is served at the origin root; adding a path such as `/yatm` to `domain`
+does not provide subpath deployment support. The [API address contract](../architecture/api.md#browser-endpoint-addresses)
+owns these rules.
 
 YATM serves its control API and frontend through the configured HTTP endpoint with gRPC support. The existing Nginx deployment example below uses TLS and basic authentication; adapt its certificates, authentication file, host, and upstream to the installation:
 

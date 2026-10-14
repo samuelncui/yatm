@@ -8,6 +8,8 @@ mt -f "${DEVICE}" load
 sleep 5
 
 for i in {1..60}; do
+    # stenc 2.0.0: put TAPE_BARCODE on line 2 of KEY_FILE, then use this command without -kd:
+    # stenc -f "${DEVICE}" -e on -k "${KEY_FILE}" -a 1 --ckod
     if stenc -f "${DEVICE}" -e on -k "${KEY_FILE}" -kd "${TAPE_BARCODE}" -a 1 --ckod; then
         sleep 3
         exit 0

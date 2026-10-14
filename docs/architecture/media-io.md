@@ -61,6 +61,10 @@ manual adaptation before Tape operations. This required incompatibility is descr
 
 Configured scripts are the anti-corruption boundary for environment-specific executable paths, device mapping, vendor options and helper logic. The service supplies operation inputs and validates identity, content and final Index output; it does not absorb those local decisions into configuration switches. The [migration guide](../operations/migration.md#tape-script-adaptation) owns input/output contracts and upgrade examples. Installer preflight never invokes these scripts.
 
+Operators may edit configured scripts and their helpers to match local software versions,
+platforms and hardware. Bundled commands are starting points; local changes retain the
+published inputs, outputs, exit-status meaning and physical finalization requirements.
+
 The format script passes the resolved device, barcode and complete Tape name as separate literal
 arguments to `mkltfs`; spaces and shell pattern characters in the name do not split or expand it.
 Regression checks execute the shipped script with a stub LTFS command, while physical acceptance
@@ -81,6 +85,9 @@ device release.
 The bundled encryption script loads the drive and retries `stenc` at most 60 times. If
 every attempt fails, it exits nonzero so the Tape Session cannot proceed to formatting or
 mounting. Its `stenc` arguments remain part of the environment-specific script contract.
+The script includes a commented stenc 2.0.0 command, which reads the barcode descriptor
+from the key file's second line instead of accepting `-kd`; operators select the form
+supported by their local tool.
 
 [Tape Sessions](../../internal/executor/media_tape.go) identify the cartridge, configure encryption, format when requested, mount LTFS, and unmount/finalize. FORMAT accepts a successful probe reporting an empty electronic barcode and uses the explicit user-supplied six-character barcode; the format script passes that identity to `mkltfs` to write it during initialization. A non-empty device barcode must match the requested identity, and probe failures stop the Session before encryption or formatting. An empty barcode does not establish that the cartridge contains no data: FORMAT remains an explicit destructive operation. FORMAT rejects a barcode already in the Library; explicit metadata deletion is required before creating a new Media identity.
 

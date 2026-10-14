@@ -17,7 +17,7 @@
 
 Read [CONTEXT](CONTEXT.md), the [documentation convention](docs/README.md), and the current architecture document that owns the area you are changing before you change it. Record confirmed terminology, constraints and behavior in that owning document during the task, not only in the final response; the convention owns the document workflow and the delivery checks.
 
-Architecture and operations documentation describe current behavior. Public research belongs in `docs/research/` under the [documentation convention](docs/README.md): distinguish sourced findings, community observations, hypotheses and unresolved questions, and identify the versions studied. Research does not authorize implementation or define a product guarantee. Keep implementation plans in an Issue or pull request; after implementation, update the current owner and delete replaced text instead of adding history, superseded-design or redirect documents. Published change notes belong to GitHub Releases, and raw verification evidence belongs to CI artifacts. Repository documentation must be self-contained: repository-relative references resolve to files committed in the same repository, while external references use stable public URLs.
+Architecture and operations documentation describe current behavior. Public research belongs in `docs/research/` under the [documentation convention](docs/README.md): distinguish sourced findings, community observations, hypotheses and unresolved questions, and identify the versions studied. Research does not authorize implementation or define a product guarantee. Keep concise confirmed pending work in [TODO](TODO.md) and detailed implementation plans in an Issue or pull request; after implementation, remove the TODO item, update the current owner and delete replaced text instead of adding history, superseded-design or redirect documents. Published change notes belong to GitHub Releases, and raw verification evidence belongs to CI artifacts. Repository documentation must be self-contained: repository-relative references resolve to files committed in the same repository, while external references use stable public URLs.
 
 ## Repository Layout
 
@@ -25,7 +25,7 @@ Choose a file's owner before adding it. Use the following locations; the [develo
 
 | Location | Owns |
 | --- | --- |
-| Repository root | Project metadata, root Go module, Makefile, configuration example and public installer entrypoint |
+| Repository root | Project metadata, concise confirmed pending work in `TODO.md`, root Go module, Makefile, configuration example and public installer entrypoint |
 | `cmd/` | Go program entrypoints |
 | `internal/` | Go implementation packages and their tests; preserve business-domain boundaries |
 | `entity/` | Current protobuf sources, generated Go code, protocol helpers and their generator; TypeScript outputs stay in `frontend/src/entity/` |
