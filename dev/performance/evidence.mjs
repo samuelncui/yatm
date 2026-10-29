@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readQuality } from "./read-quality.mjs";
 
 export const metrics = ["sec/op", "B/op", "allocs/op"];
 export const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -41,11 +42,13 @@ export function readSamples(text) {
 
 export function validateInventory(result, suites) {
   const expected = suites.flatMap((suite) => suite.benchmarks.map((name) => JSON.stringify([suite.importPath, name]))).sort();
-  const actual = [...result.samples.keys()].map((key) => {
+  const actual = [...result.samples.keys()].sort();
+  const withoutCPU = actual.map((key) => {
     const [pkg, name] = JSON.parse(key);
     return JSON.stringify([pkg, name.replace(/-\d+$/, "")]);
   }).sort();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("Benchmark inventory differs from the required suite");
+  // Go omits the CPU suffix at GOMAXPROCS=1; a numeric fixture name is then part of its identity.
+  if (JSON.stringify(actual) !== JSON.stringify(expected) && JSON.stringify(withoutCPU) !== JSON.stringify(expected)) throw new Error("Benchmark inventory differs from the required suite");
   for (const [key, rows] of result.samples) {
     if (rows.length !== 1) throw new Error(`${key}: expected one benchmark result, got ${rows.length}`);
     const [pkg] = JSON.parse(key), suite = suites.find((value) => value.importPath === pkg);
@@ -73,6 +76,8 @@ export function validatePair(directory) {
       || record.fullReleaseComparison !== (record.tier === "release" && scope.fullTier)) throw new Error("Recorded package scope differs from executed comparison");
     const checks = (record.structural ?? []).map(({ package: pkg, tests }) => ({ package: pkg, tests }));
     if (JSON.stringify(scope.structural) !== JSON.stringify(checks)) throw new Error("Required selected structural checks did not finish");
+    const quality = (record.quality ?? []).map(({ package: pkg, tests, env }) => ({ package: pkg, tests, profile: env?.YATM_READ_QUALITY_PROFILE }));
+    if ((scope.quality || quality.length) && JSON.stringify(scope.quality) !== JSON.stringify(quality)) throw new Error("Required selected read quality checks did not finish");
   }
   for (const side of ["baseline", "candidate"]) {
     if (!/^[a-f0-9]{40,64}$/.test(record.sources?.[side]?.commit ?? "") || !/^[a-f0-9]{64}$/.test(record.sources[side].sha256 ?? "")) throw new Error(`Missing recorded ${side} source identity`);
@@ -87,6 +92,16 @@ export function validatePair(directory) {
     if (!check.passed || !check.outputs || !check.tests?.length) throw new Error("Required structural checks did not finish");
     if (check.scope !== "candidate" || JSON.stringify(Object.keys(check.outputs)) !== '["candidate"]') throw new Error("Structural evidence must explicitly cover only candidate correctness");
     if (digest(readFileSync(resolve(directory, check.outputs.candidate.file))) !== check.outputs.candidate.sha256) throw new Error("Structural evidence changed");
+  }
+  for (const check of record.quality ?? []) {
+    if (!check.complete || !check.tests?.length || JSON.stringify(Object.keys(check.outputs ?? {}).sort()) !== '["baseline","candidate"]') throw new Error("Read quality evidence must cover both sources");
+    for (const side of ["baseline", "candidate"]) {
+      const output = check.outputs[side];
+      if (digest(readFileSync(resolve(directory, output.file))) !== output.sha256
+        || digest(readFileSync(resolve(directory, output.log))) !== output.logSHA256) throw new Error("Read quality evidence changed");
+      const report = readQuality(directory, output.file);
+      if (report.profile !== check.env?.YATM_READ_QUALITY_PROFILE || report.cases.length !== output.cases) throw new Error("Read quality scope differs from collected evidence");
+    }
   }
   if (record.tier === "release" && record.scope?.fullTier !== false && !record.structural?.length) throw new Error("Release evidence requires the 1m structural checks");
   return record;

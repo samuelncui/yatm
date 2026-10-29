@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { fileURLToPath } from "node:url";
 import { resolveGo } from "./toolchain.mjs";
 import { digest, readSamples, validateInventory, validateSamples } from "./evidence.mjs";
+import { readQuality } from "./read-quality.mjs";
 
 export function options(args) {
   const result = { tier: "fast", cpu: 2, benchtime: "1s", cgo: "1", packages: [] };
@@ -48,11 +49,16 @@ export function validateTier(tier) {
     if (suite.benchtime !== undefined && suite.benchtime !== "1x") throw new Error("Suite benchtime override must be 1x for a fresh operation");
     packages.add(suite.package);
   }
-  for (const env of [tier.env, ...(tier.structural ?? []).map((check) => check.env)]) {
+  for (const env of [tier.env, ...(tier.structural ?? []).map((check) => check.env), ...(tier.quality ?? []).map((check) => check.env)]) {
     for (const [key, value] of Object.entries(env ?? {})) if (!/^YATM_[A-Z0-9_]+$/.test(key) || typeof value !== "string") throw new Error("Only explicit YATM fixture environment variables belong in the tier");
   }
   for (const check of tier.structural ?? []) if (check.scope !== "candidate" || !packages.has(check.package) || !check.run?.startsWith("^") || !check.run.endsWith("$") || !check.tests?.length) throw new Error("Structural checks must explicitly scope candidate correctness, use the common harness and list required tests");
+  for (const check of tier.quality ?? []) if (!packages.has(check.package) || !check.run?.startsWith("^") || !check.run.endsWith("$")
+    || !check.tests?.length || !["development", "acceptance", "all", "regressions"].includes(check.env?.YATM_READ_QUALITY_PROFILE)
+    || check.env.YATM_READ_QUALITY_OUTPUT !== undefined) throw new Error("Read quality checks require a paired common harness, explicit profile and collector-owned output");
   for (const name of tier.harness) {
+    // The shared physical/forecast corpus lives with E2E rather than duplicating its population.
+    if (packages.has("./internal/media") && ["e2e/fixtures/restore-1p5tb-v1/manifest.json", "e2e/fixtures/restore-1p5tb-v1/selection.txt"].includes(name)) continue;
     if (![...packages].some((pkg) => name.startsWith(localPath(pkg) + "/")) || !(name.endsWith("_test.go") || name.includes("/testdata/"))) throw new Error("Harness may replace only selected package test files and testdata");
   }
   return tier;
@@ -92,8 +98,10 @@ export function collect(config, run = command, checkIdle = idle) {
   for (const pkg of requested) if (!fullTier.suites.some((suite) => suite.package === pkg)) throw new Error(`Package is not in the ${config.tier} tier: ${pkg}`);
   const suites = fullTier.suites.filter((suite) => !requested.length || requested.includes(suite.package));
   const packages = suites.map((suite) => suite.package);
-  const tier = { ...fullTier, suites, harness: fullTier.harness.filter((name) => packages.some((pkg) => name.startsWith(localPath(pkg) + "/"))),
-    structural: (fullTier.structural ?? []).filter((check) => packages.includes(check.package)) };
+  const tier = { ...fullTier, suites, harness: fullTier.harness.filter((name) => packages.some((pkg) => name.startsWith(localPath(pkg) + "/"))
+    || packages.includes("./internal/media") && name.startsWith("e2e/fixtures/restore-1p5tb-v1/")),
+    structural: (fullTier.structural ?? []).filter((check) => packages.includes(check.package)),
+    quality: (fullTier.quality ?? []).filter((check) => packages.includes(check.package)) };
   const output = physicalPath(config.out), harnessRoot = realpathSync(config.harness ?? config.candidate);
   if (existsSync(output)) throw new Error("Output must be a new directory; existing evidence is never overwritten");
   for (const root of [config.baseline, config.candidate, harnessRoot]) {
@@ -108,6 +116,11 @@ export function collect(config, run = command, checkIdle = idle) {
       skippedPackages: fullTier.suites.map((suite) => suite.package).filter((pkg) => !packages.includes(pkg)),
       structural: tier.structural.map(({ package: pkg, tests }) => ({ package: pkg, tests })),
       skippedStructural: (fullTier.structural ?? []).filter((check) => !packages.includes(check.package)).map(({ package: pkg, tests }) => ({ package: pkg, tests })) } };
+  if (fullTier.quality?.length) {
+    record.quality = [];
+    record.scope.quality = tier.quality.map(({ package: pkg, tests, env }) => ({ package: pkg, tests, profile: env.YATM_READ_QUALITY_PROFILE }));
+    record.scope.skippedQuality = fullTier.quality.filter((check) => !packages.includes(check.package)).map(({ package: pkg, tests, env }) => ({ package: pkg, tests, profile: env.YATM_READ_QUALITY_PROFILE }));
+  }
   record.scope.fullTier = record.scope.skippedPackages.length === 0;
   const save = () => writeFileSync(join(output, "pair.json"), JSON.stringify(record, null, 2) + "\n");
   try {
@@ -183,6 +196,40 @@ export function collect(config, run = command, checkIdle = idle) {
       if (/--- SKIP:/.test(stdout) || !/^PASS\s*$/m.test(stdout)) throw new Error("Candidate structural checks skipped or did not pass");
       result.outputs.candidate = { file, sha256: digest(stdout) };
       result.passed = true; save();
+    }
+    // Quality uses every fixed case in its profile, separately from the representative timed subset.
+    for (const [index, check] of tier.quality.entries()) {
+      const suiteIndex = tier.suites.findIndex((suite) => suite.package === check.package);
+      const result = { ...check, complete: false, outputs: {} }; record.quality.push(result); save();
+      for (const side of ["baseline", "candidate"]) {
+        const file = `quality-${index}-${side}.json`, log = `quality-${index}-${side}.log`;
+        const binary = join(workspace, `${side}-${suiteIndex}.test`);
+        const settings = { cwd: join(workspace, side, localPath(check.package)), env: { ...fixtureEnvs[side], ...check.env,
+          YATM_READ_QUALITY_OUTPUT: join(output, file) } };
+        const listed = run(binary, [`-test.list=${check.run}`], settings).trim().split(/\r?\n/).sort();
+        if (JSON.stringify(listed) !== JSON.stringify([...check.tests].sort())) throw new Error("Required read quality tests are absent");
+        let stdout;
+        try {
+          stdout = run(binary, [`-test.run=${check.run}`, "-test.count=1", "-test.v", "-test.timeout=60m"], settings);
+        } catch (error) {
+          const failure = [error.stdout, error.stderr, error.message].filter(Boolean).join("\n");
+          writeFileSync(join(output, log), failure);
+          if (existsSync(join(output, file))) {
+            const report = readQuality(output, file, { allowIncomplete: true });
+            result.outputs[side] = { file, sha256: digest(readFileSync(join(output, file))), log, logSHA256: digest(failure), cases: report.cases.length };
+            save();
+          }
+          throw error;
+        }
+        writeFileSync(join(output, log), stdout);
+        if (/--- SKIP:/.test(stdout) || !/^PASS\s*$/m.test(stdout)) throw new Error("Read quality checks skipped or did not pass");
+        const report = readQuality(output, file);
+        if (report.profile !== check.env.YATM_READ_QUALITY_PROFILE) throw new Error("Read quality profile differs from the requested profile");
+        result.outputs[side] = { file, sha256: digest(readFileSync(join(output, file))), log, logSHA256: digest(stdout), cases: report.cases.length };
+        save();
+        if (report.cases.some((row) => row.status === "failed")) throw new Error("Read quality cases failed");
+      }
+      result.complete = true; save();
     }
     validateSamples(readSamples(readFileSync(join(output, "baseline.bench"), "utf8")), readSamples(readFileSync(join(output, "candidate.bench"), "utf8")), record.suites);
     record.outputs = Object.fromEntries(["baseline", "candidate"].map((side) => [side, digest(readFileSync(join(output, `${side}.bench`)))]));

@@ -1,13 +1,249 @@
 {
   "tiers": {
+    "read-fast": {
+      "structural": [
+        {
+          "package": "./internal/media",
+          "scope": "candidate",
+          "run": "^TestReadSequenceScenarioPlanningBudget$",
+          "tests": [
+            "TestReadSequenceScenarioPlanningBudget"
+          ]
+        }
+      ],
+      "harness": [
+        "internal/media/read_sequence_scenarios_fixture_test.go",
+        "internal/media/read_sequence_scenarios_oracle_test.go",
+        "internal/media/read_sequence_scenarios_test.go",
+        "internal/media/read_sequence_scenarios_benchmark_test.go",
+        "internal/media/read_sequence_workload_benchmark_test.go",
+        "internal/media/read_sequence_rss_unix_test.go",
+        "internal/media/read_sequence_rss_other_test.go",
+        "internal/media/testdata/restore/ltfs308-v1.json",
+        "e2e/fixtures/restore-1p5tb-v1/manifest.json",
+        "e2e/fixtures/restore-1p5tb-v1/selection.txt"
+      ],
+      "suites": [
+        {
+          "package": "./internal/media",
+          "bench": "^BenchmarkReadSequenceScenarios$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkReadSequenceScenarios/tar-clusters31",
+            "BenchmarkReadSequenceScenarios/tar-clusters32",
+            "BenchmarkReadSequenceScenarios/tar-clusters33",
+            "BenchmarkReadSequenceScenarios/tar-uniform20",
+            "BenchmarkReadSequenceScenarios/tar-1p5TB",
+            "BenchmarkReadSequenceScenarios/tar-sizes-equal-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-small-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-bimodal-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-long-tail-select20",
+            "BenchmarkReadSequenceScenarios/tar-gaps-alternating",
+            "BenchmarkReadSequenceScenarios/tar-layout-partial-tail",
+            "BenchmarkReadSequenceScenarios/tar-files-shared-record",
+            "BenchmarkReadSequenceScenarios/tar-files-append",
+            "BenchmarkReadSequenceScenarios/tar-cost-reading",
+            "BenchmarkReadSequenceScenarios/tar-difficult-uneven-groups",
+            "BenchmarkReadSequenceScenarios/tar-difficult-uncertain",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters31",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters32",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters33",
+            "BenchmarkReadSequenceScenarios/ltfs-uniform20",
+            "BenchmarkReadSequenceScenarios/ltfs-1p5TB",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-equal-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-small-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-bimodal-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-long-tail-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-gaps-alternating",
+            "BenchmarkReadSequenceScenarios/ltfs-layout-partial-tail",
+            "BenchmarkReadSequenceScenarios/ltfs-files-shared-record",
+            "BenchmarkReadSequenceScenarios/ltfs-files-append",
+            "BenchmarkReadSequenceScenarios/ltfs-cost-reading",
+            "BenchmarkReadSequenceScenarios/ltfs-difficult-uneven-groups",
+            "BenchmarkReadSequenceScenarios/ltfs-difficult-uncertain",
+            "BenchmarkReadSequenceScenarios/ltfs-files-multi-extent",
+            "BenchmarkReadSequenceScenarios/ltfs-308"
+          ],
+          "metrics": [
+            "plan-sec/op",
+            "index-sec/op",
+            "search-score-sec/op",
+            "full-score-sec/op",
+            "evaluations/op",
+            "temporary-B",
+            "logical-model-s/op",
+            "retained-model-s/op",
+            "model-plus-plan-s/op",
+            "process-highwater-RSS-B"
+          ],
+          "optionalMetrics": [
+            "total-evaluations/op",
+            "lower-bound-model-s/op"
+          ]
+        }
+      ],
+      "quality": [
+        {
+          "package": "./internal/media",
+          "run": "^TestReadSequenceScenarioQuality$",
+          "tests": [
+            "TestReadSequenceScenarioQuality"
+          ],
+          "env": {
+            "YATM_READ_QUALITY_PROFILE": "development"
+          }
+        }
+      ]
+    },
+    "read": {
+      "structural": [
+        {
+          "package": "./internal/media",
+          "scope": "candidate",
+          "run": "^TestReadSequenceScenarioPlanningBudget$",
+          "tests": [
+            "TestReadSequenceScenarioPlanningBudget"
+          ]
+        }
+      ],
+      "harness": [
+        "internal/media/read_sequence_scenarios_fixture_test.go",
+        "internal/media/read_sequence_scenarios_oracle_test.go",
+        "internal/media/read_sequence_scenarios_test.go",
+        "internal/media/read_sequence_scenarios_benchmark_test.go",
+        "internal/media/read_sequence_workload_benchmark_test.go",
+        "internal/media/read_sequence_rss_unix_test.go",
+        "internal/media/read_sequence_rss_other_test.go",
+        "internal/media/testdata/restore/ltfs308-v1.json",
+        "e2e/fixtures/restore-1p5tb-v1/manifest.json",
+        "e2e/fixtures/restore-1p5tb-v1/selection.txt"
+      ],
+      "suites": [
+        {
+          "package": "./internal/media",
+          "bench": "^BenchmarkReadSequenceScenarios$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkReadSequenceScenarios/tar-clusters31",
+            "BenchmarkReadSequenceScenarios/tar-clusters32",
+            "BenchmarkReadSequenceScenarios/tar-clusters33",
+            "BenchmarkReadSequenceScenarios/tar-uniform20",
+            "BenchmarkReadSequenceScenarios/tar-1p5TB",
+            "BenchmarkReadSequenceScenarios/tar-sizes-equal-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-small-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-bimodal-select20",
+            "BenchmarkReadSequenceScenarios/tar-sizes-long-tail-select20",
+            "BenchmarkReadSequenceScenarios/tar-gaps-alternating",
+            "BenchmarkReadSequenceScenarios/tar-layout-partial-tail",
+            "BenchmarkReadSequenceScenarios/tar-files-shared-record",
+            "BenchmarkReadSequenceScenarios/tar-files-append",
+            "BenchmarkReadSequenceScenarios/tar-cost-reading",
+            "BenchmarkReadSequenceScenarios/tar-difficult-uneven-groups",
+            "BenchmarkReadSequenceScenarios/tar-difficult-uncertain",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters31",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters32",
+            "BenchmarkReadSequenceScenarios/ltfs-clusters33",
+            "BenchmarkReadSequenceScenarios/ltfs-uniform20",
+            "BenchmarkReadSequenceScenarios/ltfs-1p5TB",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-equal-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-small-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-bimodal-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-sizes-long-tail-select20",
+            "BenchmarkReadSequenceScenarios/ltfs-gaps-alternating",
+            "BenchmarkReadSequenceScenarios/ltfs-layout-partial-tail",
+            "BenchmarkReadSequenceScenarios/ltfs-files-shared-record",
+            "BenchmarkReadSequenceScenarios/ltfs-files-append",
+            "BenchmarkReadSequenceScenarios/ltfs-cost-reading",
+            "BenchmarkReadSequenceScenarios/ltfs-difficult-uneven-groups",
+            "BenchmarkReadSequenceScenarios/ltfs-difficult-uncertain",
+            "BenchmarkReadSequenceScenarios/ltfs-files-multi-extent",
+            "BenchmarkReadSequenceScenarios/ltfs-308"
+          ],
+          "metrics": [
+            "plan-sec/op",
+            "index-sec/op",
+            "search-score-sec/op",
+            "full-score-sec/op",
+            "evaluations/op",
+            "temporary-B",
+            "logical-model-s/op",
+            "retained-model-s/op",
+            "model-plus-plan-s/op",
+            "process-highwater-RSS-B"
+          ],
+          "optionalMetrics": [
+            "total-evaluations/op",
+            "lower-bound-model-s/op"
+          ]
+        }
+      ],
+      "quality": [
+        {
+          "package": "./internal/media",
+          "run": "^TestReadSequenceScenarioQuality$",
+          "tests": [
+            "TestReadSequenceScenarioQuality"
+          ],
+          "env": {
+            "YATM_READ_QUALITY_PROFILE": "all"
+          }
+        }
+      ]
+    },
+    "read-resources": {
+      "harness": [
+        "internal/media/read_cost_test.go",
+        "internal/media/read_greedy_reference_test.go",
+        "internal/media/read_order_test.go",
+        "internal/media/read_sequence_benchmark_test.go",
+        "internal/media/read_sequence_fallback_test.go",
+        "internal/media/read_sequence_resource_benchmark_test.go",
+        "internal/media/read_sequence_rss_other_test.go",
+        "internal/media/read_sequence_rss_unix_test.go",
+        "internal/media/read_sequence_test.go",
+        "internal/media/tar_read_cost_test.go",
+        "internal/media/tar_read_order_test.go",
+        "internal/media/tar_read_position_test.go",
+        "internal/media/tar_test.go"
+      ],
+      "suites": [
+        {
+          "package": "./internal/media",
+          "bench": "^BenchmarkReadSequence(BudgetResources|CancellationResources|IndexedCancellationResources|TarEvaluator1000|TarEvaluator10000)$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkReadSequenceBudgetResources/Items100000Budget20s",
+            "BenchmarkReadSequenceBudgetResources/Items1000000Budget20s",
+            "BenchmarkReadSequenceCancellationResources",
+            "BenchmarkReadSequenceIndexedCancellationResources/Items100000",
+            "BenchmarkReadSequenceIndexedCancellationResources/Items1000000",
+            "BenchmarkReadSequenceTarEvaluator1000",
+            "BenchmarkReadSequenceTarEvaluator10000"
+          ],
+          "metrics": [
+            "plan-sec/op",
+            "consume-cleanup-sec/op",
+            "evaluations/op",
+            "sampled-peak-temp-bytes",
+            "process-highwater-RSS-B"
+          ]
+        }
+      ]
+    },
     "migration": {
-      "harness": ["internal/migrate/legacy/versions_test.go"],
-      "suites": [{
-        "package": "./internal/migrate/legacy",
-        "bench": "^BenchmarkPrepareArchivedVersions$",
-        "benchtime": "1x",
-        "benchmarks": ["BenchmarkPrepareArchivedVersions"]
-      }]
+      "harness": [
+        "internal/migrate/legacy/versions_test.go"
+      ],
+      "suites": [
+        {
+          "package": "./internal/migrate/legacy",
+          "bench": "^BenchmarkPrepareArchivedVersions$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkPrepareArchivedVersions"
+          ]
+        }
+      ]
     },
     "fast": {
       "harness": [
@@ -15,32 +251,60 @@
         "internal/apis/files_performance_fixture_test.go",
         "internal/apis/files_list_test_helpers_test.go",
         "internal/executor/scan/input_fixture_test.go",
-        "internal/executor/scan/input_performance_test.go"
+        "internal/executor/scan/input_performance_test.go",
+        "internal/executor/archive/query_benchmark_test.go"
       ],
-      "suites": [{
-        "package": "./internal/apis",
-        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^10000$",
-        "benchmarks": [
-          "BenchmarkFilesListComplete/mixed/random/10000",
-          "BenchmarkFilesListComplete/mixed/reverse/10000",
-          "BenchmarkFilesListRules/deep/random/10000",
-          "BenchmarkFilesSearchPage/first/random/10000",
-          "BenchmarkFilesSearchPage/next/random/10000"
-        ],
-        "metrics": ["first-sec/op"]
-      }, {
-        "package": "./internal/executor/scan",
-        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^10000$",
-        "benchtime": "1x",
-        "benchmarks": [
-          "BenchmarkScanInputManifest/logical/1/10000",
-          "BenchmarkScanInputManifest/logical/3/10000",
-          "BenchmarkScanInputManifest/logical/9/10000",
-          "BenchmarkScanInputManifest/partial/1/10000",
-          "BenchmarkScanInputManifest/relocation/3/10000"
-        ],
-        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
-      }]
+      "suites": [
+        {
+          "package": "./internal/apis",
+          "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^10000$",
+          "benchmarks": [
+            "BenchmarkFilesListComplete/mixed/random/10000",
+            "BenchmarkFilesListComplete/mixed/reverse/10000",
+            "BenchmarkFilesListRules/deep/random/10000",
+            "BenchmarkFilesSearchPage/first/random/10000",
+            "BenchmarkFilesSearchPage/next/random/10000"
+          ],
+          "metrics": [
+            "first-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/scan",
+          "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^10000$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkScanInputManifest/logical/1/10000",
+            "BenchmarkScanInputManifest/logical/3/10000",
+            "BenchmarkScanInputManifest/logical/9/10000",
+            "BenchmarkScanInputManifest/partial/1/10000",
+            "BenchmarkScanInputManifest/relocation/3/10000"
+          ],
+          "metrics": [
+            "create-sec/op",
+            "complete-sec/op",
+            "page-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/archive",
+          "bench": "^BenchmarkArchiveManifestPages$/^(1000|10000)$/^(first_total|forward_cursor|reverse_cursor|far_offset)$",
+          "benchmarks": [
+            "BenchmarkArchiveManifestPages/1000/first_total",
+            "BenchmarkArchiveManifestPages/1000/forward_cursor",
+            "BenchmarkArchiveManifestPages/1000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/1000/far_offset",
+            "BenchmarkArchiveManifestPages/10000/first_total",
+            "BenchmarkArchiveManifestPages/10000/forward_cursor",
+            "BenchmarkArchiveManifestPages/10000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/10000/far_offset"
+          ],
+          "metrics": [
+            "rows/op",
+            "protobuf-B/op"
+          ]
+        }
+      ]
     },
     "critical": {
       "harness": [
@@ -48,32 +312,56 @@
         "internal/apis/files_performance_fixture_test.go",
         "internal/apis/files_list_test_helpers_test.go",
         "internal/executor/scan/input_fixture_test.go",
-        "internal/executor/scan/input_performance_test.go"
+        "internal/executor/scan/input_performance_test.go",
+        "internal/executor/archive/query_benchmark_test.go"
       ],
-      "suites": [{
-        "package": "./internal/apis",
-        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
-        "benchmarks": [
-          "BenchmarkFilesListComplete/mixed/random/100000",
-          "BenchmarkFilesListComplete/mixed/reverse/100000",
-          "BenchmarkFilesListRules/deep/random/100000",
-          "BenchmarkFilesSearchPage/first/random/100000",
-          "BenchmarkFilesSearchPage/next/random/100000"
-        ],
-        "metrics": ["first-sec/op"]
-      }, {
-        "package": "./internal/executor/scan",
-        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
-        "benchtime": "1x",
-        "benchmarks": [
-          "BenchmarkScanInputManifest/logical/1/100000",
-          "BenchmarkScanInputManifest/logical/3/100000",
-          "BenchmarkScanInputManifest/logical/9/100000",
-          "BenchmarkScanInputManifest/partial/1/100000",
-          "BenchmarkScanInputManifest/relocation/3/100000"
-        ],
-        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
-      }]
+      "suites": [
+        {
+          "package": "./internal/apis",
+          "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
+          "benchmarks": [
+            "BenchmarkFilesListComplete/mixed/random/100000",
+            "BenchmarkFilesListComplete/mixed/reverse/100000",
+            "BenchmarkFilesListRules/deep/random/100000",
+            "BenchmarkFilesSearchPage/first/random/100000",
+            "BenchmarkFilesSearchPage/next/random/100000"
+          ],
+          "metrics": [
+            "first-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/scan",
+          "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkScanInputManifest/logical/1/100000",
+            "BenchmarkScanInputManifest/logical/3/100000",
+            "BenchmarkScanInputManifest/logical/9/100000",
+            "BenchmarkScanInputManifest/partial/1/100000",
+            "BenchmarkScanInputManifest/relocation/3/100000"
+          ],
+          "metrics": [
+            "create-sec/op",
+            "complete-sec/op",
+            "page-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/archive",
+          "bench": "^BenchmarkArchiveManifestPages$/^(100000)$/^(first_total|forward_cursor|reverse_cursor|far_offset)$",
+          "benchmarks": [
+            "BenchmarkArchiveManifestPages/100000/first_total",
+            "BenchmarkArchiveManifestPages/100000/forward_cursor",
+            "BenchmarkArchiveManifestPages/100000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/100000/far_offset"
+          ],
+          "metrics": [
+            "rows/op",
+            "protobuf-B/op"
+          ]
+        }
+      ]
     },
     "release": {
       "harness": [
@@ -81,45 +369,92 @@
         "internal/apis/files_performance_fixture_test.go",
         "internal/apis/files_list_test_helpers_test.go",
         "internal/executor/scan/input_fixture_test.go",
-        "internal/executor/scan/input_performance_test.go"
+        "internal/executor/scan/input_performance_test.go",
+        "internal/executor/archive/query_benchmark_test.go"
       ],
-      "suites": [{
-        "package": "./internal/apis",
-        "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
-        "benchmarks": [
-          "BenchmarkFilesListComplete/mixed/random/100000",
-          "BenchmarkFilesListComplete/mixed/reverse/100000",
-          "BenchmarkFilesListRules/deep/random/100000",
-          "BenchmarkFilesSearchPage/first/random/100000",
-          "BenchmarkFilesSearchPage/next/random/100000"
-        ],
-        "metrics": ["first-sec/op"]
-      }, {
-        "package": "./internal/executor/scan",
-        "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
-        "benchtime": "1x",
-        "benchmarks": [
-          "BenchmarkScanInputManifest/logical/1/100000",
-          "BenchmarkScanInputManifest/logical/3/100000",
-          "BenchmarkScanInputManifest/logical/9/100000",
-          "BenchmarkScanInputManifest/partial/1/100000",
-          "BenchmarkScanInputManifest/relocation/3/100000"
-        ],
-        "metrics": ["create-sec/op", "complete-sec/op", "page-sec/op"]
-      }],
-      "structural": [{
-        "scope": "candidate",
-        "package": "./internal/apis",
-        "run": "^TestFilesListMillionStructural$",
-        "tests": ["TestFilesListMillionStructural"],
-        "env": {"YATM_PERF_MILLION": "1"}
-      }, {
-        "scope": "candidate",
-        "package": "./internal/executor/scan",
-        "run": "^TestScanInputMillionStructural$",
-        "tests": ["TestScanInputMillionStructural"],
-        "env": {"YATM_SCAN_PERF_MILLION": "1"}
-      }]
+      "suites": [
+        {
+          "package": "./internal/apis",
+          "bench": "^(BenchmarkFilesListComplete|BenchmarkFilesListRules|BenchmarkFilesSearchPage)$/^(mixed|deep|first|next)$/^(random|reverse)$/^100000$",
+          "benchmarks": [
+            "BenchmarkFilesListComplete/mixed/random/100000",
+            "BenchmarkFilesListComplete/mixed/reverse/100000",
+            "BenchmarkFilesListRules/deep/random/100000",
+            "BenchmarkFilesSearchPage/first/random/100000",
+            "BenchmarkFilesSearchPage/next/random/100000"
+          ],
+          "metrics": [
+            "first-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/scan",
+          "bench": "^BenchmarkScanInputManifest$/^(logical|partial|relocation)$/^(1|3|9)$/^100000$",
+          "benchtime": "1x",
+          "benchmarks": [
+            "BenchmarkScanInputManifest/logical/1/100000",
+            "BenchmarkScanInputManifest/logical/3/100000",
+            "BenchmarkScanInputManifest/logical/9/100000",
+            "BenchmarkScanInputManifest/partial/1/100000",
+            "BenchmarkScanInputManifest/relocation/3/100000"
+          ],
+          "metrics": [
+            "create-sec/op",
+            "complete-sec/op",
+            "page-sec/op"
+          ]
+        },
+        {
+          "package": "./internal/executor/archive",
+          "bench": "^BenchmarkArchiveManifestPages$/^(1000|10000|100000|1000000)$/^(first_total|forward_cursor|reverse_cursor|far_offset)$",
+          "benchmarks": [
+            "BenchmarkArchiveManifestPages/1000/first_total",
+            "BenchmarkArchiveManifestPages/1000/forward_cursor",
+            "BenchmarkArchiveManifestPages/1000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/1000/far_offset",
+            "BenchmarkArchiveManifestPages/10000/first_total",
+            "BenchmarkArchiveManifestPages/10000/forward_cursor",
+            "BenchmarkArchiveManifestPages/10000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/10000/far_offset",
+            "BenchmarkArchiveManifestPages/100000/first_total",
+            "BenchmarkArchiveManifestPages/100000/forward_cursor",
+            "BenchmarkArchiveManifestPages/100000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/100000/far_offset",
+            "BenchmarkArchiveManifestPages/1000000/first_total",
+            "BenchmarkArchiveManifestPages/1000000/forward_cursor",
+            "BenchmarkArchiveManifestPages/1000000/reverse_cursor",
+            "BenchmarkArchiveManifestPages/1000000/far_offset"
+          ],
+          "metrics": [
+            "rows/op",
+            "protobuf-B/op"
+          ]
+        }
+      ],
+      "structural": [
+        {
+          "scope": "candidate",
+          "package": "./internal/apis",
+          "run": "^TestFilesListMillionStructural$",
+          "tests": [
+            "TestFilesListMillionStructural"
+          ],
+          "env": {
+            "YATM_PERF_MILLION": "1"
+          }
+        },
+        {
+          "scope": "candidate",
+          "package": "./internal/executor/scan",
+          "run": "^TestScanInputMillionStructural$",
+          "tests": [
+            "TestScanInputMillionStructural"
+          ],
+          "env": {
+            "YATM_SCAN_PERF_MILLION": "1"
+          }
+        }
+      ]
     }
   }
 }

@@ -9,6 +9,17 @@ import { collect, options, validateTier } from "./collect.mjs";
 import { digest, readSamples, validateInventory, validatePair, validateSamples } from "./evidence.mjs";
 import { comparePair } from "../check-performance.mjs";
 
+test("benchmark inventory preserves numeric fixture names with and without a CPU suffix", () => {
+  const names = ["BenchmarkRead/ltfs", "BenchmarkRead/ltfs-2", "BenchmarkRead/ltfs-308"];
+  const suites = [{ importPath: "example.test/read", benchmarks: names }];
+  const header = "pkg: example.test/read\ngoos: linux\ngoarch: amd64\ncpu: synthetic test CPU\n";
+  for (const suffix of ["", "-2"]) {
+    const rows = names.map((name) => `${name}${suffix} 1 100 ns/op 0 B/op 0 allocs/op\n`);
+    assert.doesNotThrow(() => validateInventory(readSamples(header + rows.join("")), suites));
+    assert.throws(() => validateInventory(readSamples(header + rows.slice(1).join("")), suites), /inventory/);
+  }
+});
+
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "yatm-performance-tools-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -169,8 +180,8 @@ test("suite overrides accept only one fresh operation and reject invalid policie
   assert.throws(() => options(["--baseline", "a", "--candidate", "b", "--out", "c", "--environment", "d", "--idle", "--benchtime", "1x"]), /duration benchtime/);
 });
 
-test("missing Scan create, complete or page metrics cannot produce completed evidence on either side", async (t) => {
-  const metrics = ["create-sec/op", "complete-sec/op", "page-sec/op"];
+test("missing required Scan or Archive metrics cannot produce completed evidence on either side", async (t) => {
+  for (const metrics of [["create-sec/op", "complete-sec/op", "page-sec/op"], ["rows/op", "protobuf-B/op"]])
   for (const side of ["baseline", "candidate"]) for (const missing of metrics) {
     await t.test(`${side}/${missing}`, (t) => {
       const f = fixture(t);
@@ -191,17 +202,17 @@ test("missing Scan create, complete or page metrics cannot produce completed evi
   }
 });
 
-test("every tier requires the complete List/Search and Scan inventories with the exact common harness", () => {
+test("every tier requires complete List/Search, Scan and Archive inventories with the exact common harness", () => {
   const tiers = JSON.parse(readFileSync(new URL("./suites.json", import.meta.url), "utf8")).tiers;
   for (const [name, count] of [["fast", 10000], ["critical", 100000], ["release", 100000]]) {
     const tier = validateTier(tiers[name]);
     assert.deepEqual(tier.harness, [
       "internal/apis/files_performance_test.go", "internal/apis/files_performance_fixture_test.go",
       "internal/apis/files_list_test_helpers_test.go", "internal/executor/scan/input_fixture_test.go",
-      "internal/executor/scan/input_performance_test.go",
+      "internal/executor/scan/input_performance_test.go", "internal/executor/archive/query_benchmark_test.go",
     ]);
-    assert.deepEqual(tier.suites.map((suite) => suite.package), ["./internal/apis", "./internal/executor/scan"]);
-    const [files, scan] = tier.suites;
+    assert.deepEqual(tier.suites.map((suite) => suite.package), ["./internal/apis", "./internal/executor/scan", "./internal/executor/archive"]);
+    const [files, scan, archive] = tier.suites;
     assert.equal(files.benchtime, undefined);
     assert.deepEqual(files.metrics, ["first-sec/op"]);
     assert.deepEqual(files.benchmarks, ["BenchmarkFilesListComplete/mixed/random", "BenchmarkFilesListComplete/mixed/reverse",
@@ -211,6 +222,11 @@ test("every tier requires the complete List/Search and Scan inventories with the
     assert.deepEqual(scan.metrics, ["create-sec/op", "complete-sec/op", "page-sec/op"]);
     assert.deepEqual(scan.benchmarks, ["logical/1", "logical/3", "logical/9", "partial/1", "relocation/3"]
       .map((workload) => `BenchmarkScanInputManifest/${workload}/${count}`));
+    const archiveCounts = name === "fast" ? [1000, 10000] : name === "critical" ? [100000] : [1000, 10000, 100000, 1000000];
+    assert.equal(archive.benchtime, undefined);
+    assert.deepEqual(archive.metrics, ["rows/op", "protobuf-B/op"]);
+    assert.deepEqual(archive.benchmarks, archiveCounts.flatMap((size) =>
+      ["first_total", "forward_cursor", "reverse_cursor", "far_offset"].map((workload) => `BenchmarkArchiveManifestPages/${size}/${workload}`)));
 
     // Match the Go selector's slash-separated components and fail if any required result is absent.
     for (const suite of tier.suites) {
@@ -218,15 +234,20 @@ test("every tier requires the complete List/Search and Scan inventories with the
         const parts = suite.bench.split("/").map((part) => new RegExp(part));
         assert.equal(parts.length, benchmark.split("/").length);
         assert.ok(benchmark.split("/").every((part, index) => parts[index].test(part)));
-        assert.equal(parts.at(-1).test(String(count === 10000 ? 100000 : 10000)), false);
+        if (suite === archive) {
+          for (const size of [1000, 10000, 100000, 1000000, 252101]) assert.equal(parts[1].test(String(size)), archiveCounts.includes(size));
+        } else assert.equal(parts.at(-1).test(String(count === 10000 ? 100000 : 10000)), false);
       }
     }
-    const rows = scan.benchmarks.map((benchmark) => `${benchmark}-2 1 100 ns/op 0 B/op 0 allocs/op 20 create-ns/op 70 complete-ns/op 10 page-ns/op\n`);
-    const header = "pkg: example.test/scan\ngoos: linux\ngoarch: amd64\ncpu: synthetic test CPU\n";
-    const suites = [{ ...scan, importPath: "example.test/scan" }];
-    assert.doesNotThrow(() => validateInventory(readSamples(header + rows.join("")), suites));
-    for (let missing = 0; missing < rows.length; missing++) {
-      assert.throws(() => validateInventory(readSamples(header + rows.filter((_, index) => index !== missing).join("")), suites), /inventory/);
+    for (const suite of [scan, archive]) {
+      const rows = suite.benchmarks.map((benchmark) => `${benchmark}-2 1 100 ns/op 0 B/op 0 allocs/op` +
+        suite.metrics.map((metric) => ` 20 ${metric.replace("sec/op", "ns/op")}`).join("") + "\n");
+      const header = "pkg: example.test/performance\ngoos: linux\ngoarch: amd64\ncpu: synthetic test CPU\n";
+      const suites = [{ ...suite, importPath: "example.test/performance" }];
+      assert.doesNotThrow(() => validateInventory(readSamples(header + rows.join("")), suites));
+      for (let missing = 0; missing < rows.length; missing++) {
+        assert.throws(() => validateInventory(readSamples(header + rows.filter((_, index) => index !== missing).join("")), suites), /inventory/);
+      }
     }
     assert.equal(tier.structural?.length ?? 0, name === "release" ? 2 : 0);
   }
@@ -462,8 +483,8 @@ test("unknown or incomplete package requests fail before source or fixture setup
   assert.equal(f.calls.length, 0);
   assert.equal(existsSync(f.config.out), false);
   const args = ["--baseline", "a", "--candidate", "b", "--out", "c", "--environment", "d", "--idle"];
-  assert.deepEqual(options([...args, "--package", "./internal/apis", "--package", "./internal/executor/scan"]).packages,
-    ["./internal/apis", "./internal/executor/scan"]);
+  assert.deepEqual(options([...args, "--package", "./internal/apis", "--package", "./internal/executor/scan", "--package", "./internal/executor/archive"]).packages,
+    ["./internal/apis", "./internal/executor/scan", "./internal/executor/archive"]);
   assert.throws(() => options([...args, "--package"]), /incomplete option --package/);
 });
 
@@ -482,4 +503,171 @@ test("collection records attempted package scope on failure and hashes the consu
   assert.equal(record.complete, false);
   assert.equal(record.fullReleaseComparison, false);
   assert.equal(readdirSync(f.root).some((name) => name.startsWith(".yatm-performance-")), false);
+});
+
+function qualityFixture(t) {
+  const f = fixture(t);
+  f.tier.quality = [{ package: "./internal/example", run: "^TestReadQuality$", tests: ["TestReadQuality"], env: { YATM_READ_QUALITY_PROFILE: "all" } }];
+  writeFileSync(f.config.manifest, JSON.stringify({ tiers: { fast: f.tier } }));
+  const report = { format: 1, complete: true, generatorVersion: "fixture-v1", profile: "all", inventory: ["case"], cases: [{
+    id: "case", family: "groups", backend: "tar", split: "development", seed: 1,
+    input: { fixture: "case" },
+    inputSHA256: "a".repeat(64), modelSHA256: "b".repeat(64), status: "complete",
+    baseline: { estimateNS: 100, uncertaintyNS: 1 }, retained: { estimateNS: 50, uncertaintyNS: 1 }, best: { estimateNS: 50, uncertaintyNS: 1 },
+    plannedNS: 10, route: [1], logicalRoute: [1], termination: "bounded local minimum", selectedFiles: 1, selectedBytes: 10,
+    populationFiles: 1, populationBytes: 10,
+    sensitivity: ["locate", "longitudinal", "read"].flatMap((factor) => [0.5, 1, 2].map((multiplier) => ({ factor, multiplier, baselineNS: 100, retainedNS: 50 }))),
+  }] };
+  const run = (file, args, settings) => {
+    if (args.includes("-test.list=^TestReadQuality$")) return "TestReadQuality\n";
+    if (args.includes("-test.run=^TestReadQuality$")) {
+      f.calls.push({ file, args, settings });
+      assert.equal(f.calls.filter((call) => call.args.includes("-test.run=^$")).length, 2, "paired timings finish before quality checks");
+      assert.equal(settings.env.YATM_READ_QUALITY_PROFILE, "all");
+      writeFileSync(settings.env.YATM_READ_QUALITY_OUTPUT, JSON.stringify(report));
+      return "--- PASS: TestReadQuality (0.01s)\nPASS\n";
+    }
+    return f.run(file, args, settings);
+  };
+  return { ...f, qualityRun: run, report };
+}
+
+test("read quality uses the common harness on both sources and seals full-case evidence", (t) => {
+  const f = qualityFixture(t), record = collect(f.config, f.qualityRun, () => {});
+  assert.equal(record.complete, true);
+  assert.deepEqual(Object.keys(record.quality[0].outputs), ["baseline", "candidate"]);
+  assert.deepEqual(record.scope.quality, [{ package: "./internal/example", tests: ["TestReadQuality"], profile: "all" }]);
+  assert.equal(validatePair(f.config.out).quality[0].complete, true);
+  const comparison = comparePair(f.config.out);
+  assert.deepEqual(comparison.rawRouteRegressions, []);
+  assert.equal(comparison.quality[0].families[0].unchanged, 1);
+  writeFileSync(join(f.config.out, record.quality[0].outputs.candidate.file), "changed quality");
+  assert.throws(() => validatePair(f.config.out), /quality evidence changed/);
+});
+
+test("read quality cost increases remain reported without failing the comparison", (t) => {
+  const f = qualityFixture(t);
+  collect(f.config, (file, args, settings) => {
+    const stdout = f.qualityRun(file, args, settings);
+    if (args.includes("-test.run=^TestReadQuality$") && basename(file) === "candidate-0.test") {
+      const report = structuredClone(f.report); report.cases[0].retained.estimateNS++;
+      writeFileSync(settings.env.YATM_READ_QUALITY_OUTPUT, JSON.stringify(report));
+    }
+    return stdout;
+  }, () => {});
+  const result = comparePair(f.config.out);
+  assert.equal(result.flagged, false);
+  assert.deepEqual(result.rawRouteRegressions, ["case"]);
+  const cli = spawnSync(process.execPath, [fileURLToPath(new URL("../check-performance.mjs", import.meta.url)), f.config.out], { encoding: "utf8" });
+  assert.equal(cli.status, 0);
+  assert.match(cli.stdout, /Higher modeled route costs for review/);
+});
+
+test("absent, skipped, incomplete or mismatched quality checks cannot complete evidence", async (t) => {
+  for (const mode of ["absent", "skipped", "missing-case", "wrong-profile"]) await t.test(mode, (t) => {
+    const f = qualityFixture(t);
+    assert.throws(() => collect(f.config, (file, args, settings) => {
+      if (mode === "absent" && args.includes("-test.list=^TestReadQuality$")) return "";
+      const stdout = f.qualityRun(file, args, settings);
+      if (!args.includes("-test.run=^TestReadQuality$")) return stdout;
+      if (mode === "skipped") return "--- SKIP: TestReadQuality (0.00s)\nPASS\n";
+      const report = structuredClone(f.report);
+      if (mode === "missing-case") report.cases = [];
+      if (mode === "wrong-profile") report.profile = "development";
+      writeFileSync(settings.env.YATM_READ_QUALITY_OUTPUT, JSON.stringify(report));
+      return stdout;
+    }, () => {}), /quality/i);
+    assert.equal(JSON.parse(readFileSync(join(f.config.out, "pair.json"))).complete, false);
+    assert.equal(readdirSync(f.root).some((name) => name.startsWith(".yatm-performance-")), false);
+  });
+});
+
+test("a failed quality subprocess preserves and seals reconstructable incomplete evidence", (t) => {
+  const f = qualityFixture(t);
+  assert.throws(() => collect(f.config, (file, args, settings) => {
+    if (args.includes("-test.run=^TestReadQuality$")) {
+      const report = structuredClone(f.report);
+      report.complete = false;
+      Object.assign(report.cases[0], { status: "failed", termination: "", route: [], retained: null, sensitivity: [] });
+      writeFileSync(settings.env.YATM_READ_QUALITY_OUTPUT, JSON.stringify(report));
+      const error = new Error("quality fixture failed");
+      error.stdout = "--- FAIL: TestReadQuality\nFAIL\n";
+      throw error;
+    }
+    return f.qualityRun(file, args, settings);
+  }, () => {}), /quality fixture failed/);
+  const record = JSON.parse(readFileSync(join(f.config.out, "pair.json")));
+  assert.equal(record.complete, false);
+  const output = record.quality[0].outputs.baseline;
+  assert.equal(output.sha256, digest(readFileSync(join(f.config.out, output.file))));
+  assert.equal(JSON.parse(readFileSync(join(f.config.out, output.file))).cases[0].input.fixture, "case");
+  assert.match(readFileSync(join(f.config.out, output.log), "utf8"), /FAIL: TestReadQuality/);
+  assert.throws(() => validatePair(f.config.out), /completed/);
+});
+
+test("read profiles separate common representative timing, full seed quality and streamed resources", () => {
+  const { tiers } = JSON.parse(readFileSync(new URL("./suites.json", import.meta.url)));
+  for (const name of ["read-fast", "read", "read-resources"]) validateTier(tiers[name]);
+  assert.deepEqual(tiers.read.harness, tiers["read-fast"].harness);
+  assert.deepEqual(tiers.read.suites, tiers["read-fast"].suites);
+  for (const name of ["manifest.json", "selection.txt"]) assert.ok(tiers.read.harness.includes(`e2e/fixtures/restore-1p5tb-v1/${name}`));
+  for (const name of ["e2e/fixtures/restore-1p5tb-v1/source.go", "e2e/other.json"]) {
+    assert.throws(() => validateTier({ ...tiers.read, harness: [...tiers.read.harness, name] }), /Harness may replace/);
+  }
+  assert.equal(tiers.read.quality[0].env.YATM_READ_QUALITY_PROFILE, "all");
+  assert.equal(tiers["read-fast"].quality[0].env.YATM_READ_QUALITY_PROFILE, "development");
+  const suite = tiers.read.suites[0];
+  assert.equal(suite.benchtime, "1x");
+  assert.deepEqual(suite.optionalMetrics, ["total-evaluations/op", "lower-bound-model-s/op"]);
+  assert.equal(suite.metrics.includes("total-evaluations/op"), false);
+  assert.equal(suite.benchmarks.length, 34);
+  for (const backend of ["tar", "ltfs"]) for (const groups of [31, 32, 33]) {
+    assert.ok(suite.benchmarks.includes(`BenchmarkReadSequenceScenarios/${backend}-clusters${groups}`));
+  }
+  for (const metric of ["plan-sec/op", "index-sec/op", "search-score-sec/op", "full-score-sec/op", "evaluations/op", "temporary-B", "process-highwater-RSS-B", "model-plus-plan-s/op"]) {
+    assert.ok(suite.metrics.includes(metric));
+  }
+  const resources = tiers["read-resources"].suites[0];
+  assert.equal(resources.benchtime, "1x");
+  for (const count of [100000, 1000000]) {
+    assert.ok(resources.benchmarks.includes(`BenchmarkReadSequenceBudgetResources/Items${count}Budget20s`));
+    assert.ok(resources.benchmarks.includes(`BenchmarkReadSequenceIndexedCancellationResources/Items${count}`));
+  }
+  assert.ok(resources.benchmarks.includes("BenchmarkReadSequenceCancellationResources"));
+});
+
+test("the comparison CLI reports mixed parameter changes and reference gaps without selecting a winner", async (t) => {
+  for (const losesVariant of [false, true]) await t.test(losesVariant ? "one variant loses" : "all six variants nonworsening", (t) => {
+    const f = qualityFixture(t);
+    collect(f.config, (file, args, settings) => {
+      const stdout = f.qualityRun(file, args, settings);
+      if (args.includes("-test.run=^TestReadQuality$")) {
+        const report = structuredClone(f.report), row = report.cases[0];
+        row.referenceNS = 50;
+        if (basename(file) === "candidate-0.test") {
+          row.admissionPolicy = "experimental-search"; row.planned = true;
+          row.retained.estimateNS = 51; row.best.estimateNS = 51;
+          for (const sample of row.sensitivity) sample.retainedNS = sample.multiplier === 1 ? 51 : 50;
+          row.sensitivity[0].retainedNS = 49;
+          if (losesVariant) row.sensitivity.at(-1).retainedNS = 51;
+        }
+        writeFileSync(settings.env.YATM_READ_QUALITY_OUTPUT, JSON.stringify(report));
+      }
+      return stdout;
+    }, () => {});
+    const result = comparePair(f.config.out);
+    assert.deepEqual(result.rawRouteRegressions, ["case"]);
+    assert.deepEqual(result.routeReferenceGaps, ["case"]);
+    assert.equal(result.quality[0].results[0].referenceDeltaNS, 1);
+    const cli = spawnSync(process.execPath, [fileURLToPath(new URL("../check-performance.mjs", import.meta.url)), f.config.out], { encoding: "utf8" });
+    assert.equal(cli.status, 0);
+    assert.match(cli.stdout, /Higher modeled route costs for review/);
+    assert.match(cli.stdout, /Modeled costs above fixed references for review/);
+  });
+});
+
+test("an explicitly selected focused regression profile is a valid collector scope", (t) => {
+  const f = qualityFixture(t);
+  f.tier.quality[0].env.YATM_READ_QUALITY_PROFILE = "regressions";
+  assert.doesNotThrow(() => validateTier(f.tier));
 });

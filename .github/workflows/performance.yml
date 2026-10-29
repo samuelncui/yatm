@@ -9,7 +9,7 @@ on:
         required: true
         type: string
       tier:
-        description: Critical or release comparison with the accepted source baseline
+        description: Performance profile compared with the accepted source baseline
         default: release
         type: string
   workflow_dispatch:
@@ -26,6 +26,9 @@ on:
         options:
           - critical
           - release
+          - read-fast
+          - read
+          - read-resources
 
 permissions:
   contents: read
@@ -49,6 +52,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: tools/frontend/package.json
       - id: sources
         name: Resolve immutable comparison sources
         working-directory: tools
@@ -77,7 +83,12 @@ jobs:
             candidate/go.sum
       - name: Check collection and gate tooling
         working-directory: tools
-        run: node --test dev/check-performance.test.mjs dev/performance/*.test.mjs
+        run: make test-performance-tools
+      - id: read-scope
+        name: Check whether Restore planning inputs changed
+        if: ${{ github.event_name == 'pull_request' }}
+        working-directory: tools
+        run: node dev/performance/ci.mjs read-affected "$GITHUB_WORKSPACE/baseline" "$GITHUB_WORKSPACE/candidate"
       - name: Collect paired measurements
         working-directory: tools
         env:
@@ -94,11 +105,39 @@ jobs:
       - name: Compare benchmark values and flag regressions
         working-directory: tools
         run: node dev/check-performance.mjs "$RUNNER_TEMP/performance-pair"
+      - name: Collect affected Restore planning comparison
+        if: ${{ steps.read-scope.outputs.read == 'true' }}
+        working-directory: tools
+        run: >-
+          node dev/performance/collect.mjs
+          --baseline "$GITHUB_WORKSPACE/baseline"
+          --candidate "$GITHUB_WORKSPACE/candidate"
+          --harness "$GITHUB_WORKSPACE/tools"
+          --out "$RUNNER_TEMP/read-performance-pair"
+          --tier read-fast
+          --environment "github-ubuntu-24.04"
+          --idle
+      - name: Compare affected Restore routes and resources
+        if: ${{ steps.read-scope.outputs.read == 'true' }}
+        working-directory: tools
+        run: node dev/check-performance.mjs "$RUNNER_TEMP/read-performance-pair"
+      - name: Compare frontend directory and Job result benchmarks
+        if: ${{ !startsWith(steps.sources.outputs.tier, 'read') }}
+        working-directory: tools
+        run: >-
+          node frontend/scripts/compare-performance.mjs
+          --baseline "$GITHUB_WORKSPACE/baseline"
+          --candidate "$GITHUB_WORKSPACE/candidate"
+          --harness "$GITHUB_WORKSPACE/tools"
+          --out "$RUNNER_TEMP/frontend-performance-pair"
       - name: Retain measurements and comparability evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: performance-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/performance-pair/
+          path: |
+            ${{ runner.temp }}/performance-pair/
+            ${{ runner.temp }}/frontend-performance-pair/
+            ${{ runner.temp }}/read-performance-pair/
           if-no-files-found: warn
           retention-days: 30

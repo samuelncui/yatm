@@ -42,3 +42,16 @@ test("missing, repeated, mismatched or invalid results are not comparisons", () 
   assert.throws(() => check(output(), output().replace("100 ns/op", "NaN ns/op")), /Invalid/);
   assert.throws(() => check(output(), "PASS\n"), /No benchmark/);
 });
+
+
+test("optional diagnostic metrics preserve unavailable counts and compare only measured pairs", () => {
+  const optionalSuites = [{ ...suites[0], optionalMetrics: ["total-evaluations/op"] }];
+  const measured = (count) => output().replace(" first-ns/op", ` first-ns/op ${count} total-evaluations/op`);
+  const compare = (before, after) => evaluateComparison(readSamples(before), readSamples(after), optionalSuites);
+  const missing = compare(output(), measured(20));
+  assert.equal(missing.flagged, false);
+  assert.deepEqual(missing.results.at(-1), { package: "example/list", benchmark: "BenchmarkList-2", unit: "total-evaluations/op", baseline: null, candidate: 20, change: null, status: "unavailable" });
+  assert.equal(compare(measured(20), output()).results.at(-1).candidate, null);
+  assert.equal(compare(measured(0), measured(0)).results.at(-1).status, "pass");
+  assert.equal(compare(measured(20), measured(24)).results.at(-1).status, "investigate");
+});
