@@ -1,5 +1,45 @@
 package entity
 
+type OneofDeviceConfig interface {
+	isOneofDeviceConfig()
+}
+
+func (x *TapeDeviceSettings) isOneofDeviceConfig() {}
+
+func (x *DeviceConfig) Unpack() OneofDeviceConfig {
+	switch param := x.Options.(type) {
+	case *DeviceConfig_Tape:
+		return param.Tape
+	default:
+		return nil
+	}
+}
+
+func PackDeviceConfig(param OneofDeviceConfig) *DeviceConfig {
+	switch param := param.(type) {
+	case *TapeDeviceSettings:
+		return &DeviceConfig{
+			Options: &DeviceConfig_Tape{
+				Tape: param,
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+func (p *TapeDeviceSettings) Pack() *DeviceConfig {
+	return &DeviceConfig{
+		Options: &DeviceConfig_Tape{
+			Tape: p,
+		},
+	}
+}
+
+func (p *TapeDeviceSettings) ToOneof() OneofDeviceConfig {
+	return p
+}
+
 type OneofPreviewGeneratorSettings interface {
 	isOneofPreviewGeneratorSettings()
 }
@@ -66,6 +106,8 @@ type OneofSettingsValue interface {
 	isOneofSettingsValue()
 }
 
+func (x *DeviceSettings) isOneofSettingsValue() {}
+
 func (x *JobSettings) isOneofSettingsValue() {}
 
 func (x *LibrarySettings) isOneofSettingsValue() {}
@@ -74,6 +116,8 @@ func (x *PreviewSettings) isOneofSettingsValue() {}
 
 func (x *SettingsValue) Unpack() OneofSettingsValue {
 	switch param := x.Value.(type) {
+	case *SettingsValue_Device:
+		return param.Device
 	case *SettingsValue_Job:
 		return param.Job
 	case *SettingsValue_Library:
@@ -87,6 +131,12 @@ func (x *SettingsValue) Unpack() OneofSettingsValue {
 
 func PackSettingsValue(param OneofSettingsValue) *SettingsValue {
 	switch param := param.(type) {
+	case *DeviceSettings:
+		return &SettingsValue{
+			Value: &SettingsValue_Device{
+				Device: param,
+			},
+		}
 	case *JobSettings:
 		return &SettingsValue{
 			Value: &SettingsValue_Job{
@@ -108,6 +158,18 @@ func PackSettingsValue(param OneofSettingsValue) *SettingsValue {
 	default:
 		return nil
 	}
+}
+
+func (p *DeviceSettings) Pack() *SettingsValue {
+	return &SettingsValue{
+		Value: &SettingsValue_Device{
+			Device: p,
+		},
+	}
+}
+
+func (p *DeviceSettings) ToOneof() OneofSettingsValue {
+	return p
 }
 
 func (p *JobSettings) Pack() *SettingsValue {

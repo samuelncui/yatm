@@ -3,13 +3,16 @@
 import {
 	StorageMetadata,
 	LtfsMetadata,
+	TarMetadata,
 } from ".";
 
-export function unpackStorageMetadata(wrapper: StorageMetadata): LtfsMetadata | undefined {
+export function unpackStorageMetadata(wrapper: StorageMetadata): LtfsMetadata | TarMetadata | undefined {
 	if (!wrapper.backend) return undefined;
 	switch (wrapper.backend.oneofKind) {
 		case "ltfs":
 			return wrapper.backend.ltfs;
+		case "tar":
+			return wrapper.backend.tar;
 		default:
 			return undefined;
 	}
@@ -20,6 +23,15 @@ export function packLtfsMetadata(param: LtfsMetadata): StorageMetadata {
 		backend: {
 			oneofKind: "ltfs",
 			ltfs: param,
+		}
+	});
+}
+
+export function packTarMetadata(param: TarMetadata): StorageMetadata {
+	return StorageMetadata.create({
+		backend: {
+			oneofKind: "tar",
+			tar: param,
 		}
 	});
 }

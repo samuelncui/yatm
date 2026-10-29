@@ -44,12 +44,36 @@ Archive storage identified as Tape or Volume. Removability and accessibility do 
 _Avoid_: original Location, Job
 
 **Tape**:
-An LTFS archive medium identified by its barcode and immutable storage profile.
+An archive medium identified by its barcode and immutable storage profile, using LTFS or tar.
 _Avoid_: drive, mount point
 
 **Volume**:
 An already-mounted archive filesystem registered with an immutable YATM marker. It may remain mounted permanently.
 _Avoid_: any visible directory, original Location
+
+**Device settings**:
+User-owned settings for one configured Tape device: write defaults, read order, capacity polling, manual read parameters, passive read learning and read planning budget. They never grant device access, and each Media operation freezes them when admitted.
+_Avoid_: device preferences, drive profile, cartridge settings, device registry
+
+**Position map**:
+Spatial facts about a Tape's recorded layout, with their source, binding and uncertainty. It belongs to the Media, is derived from observations and is retained only while its binding still matches.
+_Avoid_: cartridge position table, index, physical guarantee
+
+**Read order**:
+The Device setting that orders a Tape read. Logical keeps recorded order; Auto adopts a planned order only when its inputs apply and its predicted cost is lowest, otherwise it keeps Logical.
+_Avoid_: route (outside planner internals), read plan, speedup guarantee
+
+**Passive read learning**:
+The Device setting that records observations of ordinary completed tar I/O in each Job without issuing additional commands, then refits learned read parameters after the Job.
+_Avoid_: calibration, benchmark, active measurement
+
+**Learned read parameters**:
+Tape read parameters refitted after each Job from the observations of ordinary completed I/O on one device that existing Jobs retain, with each Job weighted equally. They are server-owned, apply only to their exact observed conditions and yield to manual read parameters.
+_Avoid_: learned model, calibration, manual read parameters, drive speed guarantee
+
+**Prepared read**:
+The record of a Job's most recently prepared Tape read on a device: requested and prepared order, parameter and position sources, applicability and coverage. It describes preparation, not the loaded cartridge or the order finally executed.
+_Avoid_: read optimization, execution plan, ETA, current cartridge report
 
 **Analyze**:
 A Scan configured to observe Location ranges and optionally publish original associations. Basic collection uses known-only content facts. Ordinary browsing does not require analysis.

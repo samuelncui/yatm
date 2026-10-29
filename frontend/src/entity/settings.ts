@@ -11,6 +11,288 @@ import { UnknownFieldHandler } from "@protobuf-ts/runtime";
 import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
+import { TapeRecordMode } from "./media";
+import { TarWriteOptions } from "./media";
+/**
+ * Device settings attach to deployment-configured names and do not authorize device access.
+ *
+ * @generated from protobuf message yatm.v1.DeviceSettings
+ */
+export interface DeviceSettings {
+    /**
+     * @generated from protobuf field: repeated yatm.v1.DeviceConfig devices = 1
+     */
+    devices: DeviceConfig[];
+    /**
+     * Read-only results of passive read learning. Update ignores client-supplied values.
+     *
+     * @generated from protobuf field: repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters = 2
+     */
+    learnedReadParameters: TapeLearnedReadParameters[];
+}
+/**
+ * @generated from protobuf message yatm.v1.DeviceConfig
+ */
+export interface DeviceConfig {
+    /**
+     * @generated from protobuf field: string device = 1
+     */
+    device: string;
+    /**
+     * @generated from protobuf oneof: options
+     */
+    options: {
+        oneofKind: "tape";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeDeviceSettings tape = 2
+         */
+        tape: TapeDeviceSettings;
+    } | {
+        oneofKind: undefined;
+    };
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeDeviceSettings
+ */
+export interface TapeDeviceSettings {
+    /**
+     * @generated from protobuf field: optional string default_format = 1
+     */
+    defaultFormat?: string;
+    /**
+     * @generated from protobuf field: optional yatm.v1.TarWriteOptions tar_write_options = 2
+     */
+    tarWriteOptions?: TarWriteOptions;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadOrder read_order = 3
+     */
+    readOrder: TapeReadOrder;
+    /**
+     * Absent uses five seconds; explicit zero disables capacity polling; enabled intervals are at least five seconds.
+     *
+     * @generated from protobuf field: optional uint32 capacity_poll_interval_seconds = 4
+     */
+    capacityPollIntervalSeconds?: number;
+    /**
+     * Optional manual read parameters. Missing fields stay unknown; saving does not establish their applicability.
+     *
+     * @generated from protobuf field: optional yatm.v1.TapeReadParameters read_parameters = 5
+     */
+    readParameters?: TapeReadParameters;
+    /**
+     * Absent enables observation of ordinary completed I/O; never issues additional measurement commands.
+     *
+     * @generated from protobuf field: optional bool passive_read_learning = 6
+     */
+    passiveReadLearning?: boolean;
+    /**
+     * Absent allows 300 seconds. Explicit values must be positive; no 600-second upper limit.
+     *
+     * @generated from protobuf field: optional uint32 read_planning_seconds = 7
+     */
+    readPlanningSeconds?: number;
+}
+/**
+ * The latest refit for an exact observed device/configuration. Its raw observations live in each
+ * Job bundle as read-observations.jsonl and are not part of this message.
+ *
+ * @generated from protobuf message yatm.v1.TapeLearnedReadParameters
+ */
+export interface TapeLearnedReadParameters {
+    /**
+     * @generated from protobuf field: string device = 1
+     */
+    device: string;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadParameters parameters = 2
+     */
+    parameters?: TapeReadParameters;
+    /**
+     * @generated from protobuf field: string fit_version = 3
+     */
+    fitVersion: string;
+    /**
+     * Retained observations for this device/configuration when the parameters were fitted.
+     *
+     * @generated from protobuf field: uint32 training_observations = 4
+     */
+    trainingObservations: number;
+    /**
+     * Unweighted residuals of the fitted parameters over those observations.
+     *
+     * @generated from protobuf field: double mae_seconds = 6
+     */
+    maeSeconds: number;
+    /**
+     * @generated from protobuf field: double max_error_seconds = 7
+     */
+    maxErrorSeconds: number;
+    /**
+     * @generated from protobuf field: int64 updated_at_ns = 8
+     */
+    updatedAtNs: bigint;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeReadParameters
+ */
+export interface TapeReadParameters {
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadApplicability applies_to = 1
+     */
+    appliesTo?: TapeReadApplicability;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadGeometry geometry = 2
+     */
+    geometry?: TapeReadGeometry;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadPositioning positioning = 3
+     */
+    positioning?: TapeReadPositioning;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadTiming reading = 4
+     */
+    reading?: TapeReadTiming;
+    /**
+     * Descriptive provenance and measurement conditions, not a qualification switch.
+     *
+     * @generated from protobuf field: string source_reference = 5
+     */
+    sourceReference: string;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeReadCompletion completion = 6
+     */
+    completion?: TapeReadCompletion;
+}
+/**
+ * Native synchronous unload timing is independent of the LOCATE regression. Full span means
+ * one physical longitudinal tape length, not the complete serpentine logical address space.
+ *
+ * @generated from protobuf message yatm.v1.TapeReadCompletion
+ */
+export interface TapeReadCompletion {
+    /**
+     * @generated from protobuf field: optional double full_span_seconds = 1
+     */
+    fullSpanSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double fixed_seconds = 2
+     */
+    fixedSeconds?: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeReadApplicability
+ */
+export interface TapeReadApplicability {
+    /**
+     * @generated from protobuf field: optional string drive_serial = 1
+     */
+    driveSerial?: string;
+    /**
+     * @generated from protobuf field: optional string firmware = 2
+     */
+    firmware?: string;
+    /**
+     * @generated from protobuf field: optional uint32 density_code = 3
+     */
+    densityCode?: number;
+    /**
+     * @generated from protobuf field: optional yatm.v1.TapeRecordMode record_mode = 4
+     */
+    recordMode?: TapeRecordMode;
+    /**
+     * @generated from protobuf field: optional uint32 record_bytes = 5
+     */
+    recordBytes?: number;
+    /**
+     * @generated from protobuf field: optional bool hardware_compression = 6
+     */
+    hardwareCompression?: boolean;
+    /**
+     * Explicit empty means plaintext; absent means unknown. Never contains a key.
+     *
+     * @generated from protobuf field: optional string encryption_algorithm = 7
+     */
+    encryptionAlgorithm?: string;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeReadGeometry
+ */
+export interface TapeReadGeometry {
+    /**
+     * @generated from protobuf field: optional uint32 nominal_wraps = 1
+     */
+    nominalWraps?: number;
+    /**
+     * @generated from protobuf field: optional uint64 min_lpos = 2
+     */
+    minLpos?: bigint;
+    /**
+     * @generated from protobuf field: optional uint64 max_lpos = 3
+     */
+    maxLpos?: bigint;
+}
+/**
+ * The seven CERN positioning terms use seconds and seconds per LPOS, including signed terms.
+ *
+ * @generated from protobuf message yatm.v1.TapeReadPositioning
+ */
+export interface TapeReadPositioning {
+    /**
+     * @generated from protobuf field: optional double base_seconds = 1
+     */
+    baseSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double wrap_change_seconds = 2
+     */
+    wrapChangeSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double band_change_seconds = 3
+     */
+    bandChangeSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double landing_zone_change_seconds = 4
+     */
+    landingZoneChangeSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double direction_change_seconds = 5
+     */
+    directionChangeSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double step_back_seconds = 6
+     */
+    stepBackSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double longitudinal_seconds_per_lpos = 7
+     */
+    longitudinalSecondsPerLpos?: number;
+    /**
+     * Seconds for one complete longitudinal span, not transfer time. Exclusive with seconds per LPOS.
+     *
+     * @generated from protobuf field: optional double longitudinal_seconds_per_wrap = 9
+     */
+    longitudinalSecondsPerWrap?: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeReadTiming
+ */
+export interface TapeReadTiming {
+    /**
+     * @generated from protobuf field: optional double bytes_per_second = 1
+     */
+    bytesPerSecond?: number;
+    /**
+     * Additional first nonempty READ latency after settled LOCATE, excluding transferred bytes/rate.
+     *
+     * @generated from protobuf field: optional double post_locate_read_overhead_seconds = 2
+     */
+    postLocateReadOverheadSeconds?: number;
+    /**
+     * Additional latency per crossed filemark and following READ; absent leaves that action unpriced.
+     *
+     * @generated from protobuf field: optional double filemark_overhead_seconds = 3
+     */
+    filemarkOverheadSeconds?: number;
+}
 /**
  * Library preferences: what the Library shows and how it confirms removal.
  *
@@ -238,6 +520,12 @@ export interface SettingsValue {
          */
         job: JobSettings;
     } | {
+        oneofKind: "device";
+        /**
+         * @generated from protobuf field: yatm.v1.DeviceSettings device = 4
+         */
+        device: DeviceSettings;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -296,8 +584,765 @@ export enum SettingsGroup {
     /**
      * @generated from protobuf enum value: SETTINGS_GROUP_JOB = 3;
      */
-    JOB = 3
+    JOB = 3,
+    /**
+     * @generated from protobuf enum value: SETTINGS_GROUP_DEVICE = 4;
+     */
+    DEVICE = 4
 }
+/**
+ * Device setting; an unspecified value resolves to LOGICAL for each read attempt.
+ *
+ * @generated from protobuf enum yatm.v1.TapeReadOrder
+ */
+export enum TapeReadOrder {
+    /**
+     * @generated from protobuf enum value: TAPE_READ_ORDER_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: TAPE_READ_ORDER_LOGICAL = 1;
+     */
+    LOGICAL = 1,
+    /**
+     * @generated from protobuf enum value: TAPE_READ_ORDER_AUTO = 2;
+     */
+    AUTO = 2
+}
+// @generated message type with reflection information, may provide speed optimized methods
+class DeviceSettings$Type extends MessageType<DeviceSettings> {
+    constructor() {
+        super("yatm.v1.DeviceSettings", [
+            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceConfig },
+            { no: 2, name: "learned_read_parameters", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapeLearnedReadParameters }
+        ]);
+    }
+    create(value?: PartialMessage<DeviceSettings>): DeviceSettings {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.devices = [];
+        message.learnedReadParameters = [];
+        if (value !== undefined)
+            reflectionMergePartial<DeviceSettings>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DeviceSettings): DeviceSettings {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated yatm.v1.DeviceConfig devices */ 1:
+                    message.devices.push(DeviceConfig.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters */ 2:
+                    message.learnedReadParameters.push(TapeLearnedReadParameters.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DeviceSettings, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated yatm.v1.DeviceConfig devices = 1; */
+        for (let i = 0; i < message.devices.length; i++)
+            DeviceConfig.internalBinaryWrite(message.devices[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters = 2; */
+        for (let i = 0; i < message.learnedReadParameters.length; i++)
+            TapeLearnedReadParameters.internalBinaryWrite(message.learnedReadParameters[i], writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.DeviceSettings
+ */
+export const DeviceSettings = new DeviceSettings$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DeviceConfig$Type extends MessageType<DeviceConfig> {
+    constructor() {
+        super("yatm.v1.DeviceConfig", [
+            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "tape", kind: "message", oneof: "options", T: () => TapeDeviceSettings }
+        ]);
+    }
+    create(value?: PartialMessage<DeviceConfig>): DeviceConfig {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.device = "";
+        message.options = { oneofKind: undefined };
+        if (value !== undefined)
+            reflectionMergePartial<DeviceConfig>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DeviceConfig): DeviceConfig {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string device */ 1:
+                    message.device = reader.string();
+                    break;
+                case /* yatm.v1.TapeDeviceSettings tape */ 2:
+                    message.options = {
+                        oneofKind: "tape",
+                        tape: TapeDeviceSettings.internalBinaryRead(reader, reader.uint32(), options, (message.options as any).tape)
+                    };
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DeviceConfig, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string device = 1; */
+        if (message.device !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.device);
+        /* yatm.v1.TapeDeviceSettings tape = 2; */
+        if (message.options.oneofKind === "tape")
+            TapeDeviceSettings.internalBinaryWrite(message.options.tape, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.DeviceConfig
+ */
+export const DeviceConfig = new DeviceConfig$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeDeviceSettings$Type extends MessageType<TapeDeviceSettings> {
+    constructor() {
+        super("yatm.v1.TapeDeviceSettings", [
+            { no: 1, name: "default_format", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "tar_write_options", kind: "message", T: () => TarWriteOptions },
+            { no: 3, name: "read_order", kind: "enum", T: () => ["yatm.v1.TapeReadOrder", TapeReadOrder, "TAPE_READ_ORDER_"] },
+            { no: 4, name: "capacity_poll_interval_seconds", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 5, name: "read_parameters", kind: "message", T: () => TapeReadParameters },
+            { no: 6, name: "passive_read_learning", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 7, name: "read_planning_seconds", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeDeviceSettings>): TapeDeviceSettings {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.readOrder = 0;
+        if (value !== undefined)
+            reflectionMergePartial<TapeDeviceSettings>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeDeviceSettings): TapeDeviceSettings {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional string default_format */ 1:
+                    message.defaultFormat = reader.string();
+                    break;
+                case /* optional yatm.v1.TarWriteOptions tar_write_options */ 2:
+                    message.tarWriteOptions = TarWriteOptions.internalBinaryRead(reader, reader.uint32(), options, message.tarWriteOptions);
+                    break;
+                case /* yatm.v1.TapeReadOrder read_order */ 3:
+                    message.readOrder = reader.int32();
+                    break;
+                case /* optional uint32 capacity_poll_interval_seconds */ 4:
+                    message.capacityPollIntervalSeconds = reader.uint32();
+                    break;
+                case /* optional yatm.v1.TapeReadParameters read_parameters */ 5:
+                    message.readParameters = TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options, message.readParameters);
+                    break;
+                case /* optional bool passive_read_learning */ 6:
+                    message.passiveReadLearning = reader.bool();
+                    break;
+                case /* optional uint32 read_planning_seconds */ 7:
+                    message.readPlanningSeconds = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeDeviceSettings, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional string default_format = 1; */
+        if (message.defaultFormat !== undefined)
+            writer.tag(1, WireType.LengthDelimited).string(message.defaultFormat);
+        /* optional yatm.v1.TarWriteOptions tar_write_options = 2; */
+        if (message.tarWriteOptions)
+            TarWriteOptions.internalBinaryWrite(message.tarWriteOptions, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeReadOrder read_order = 3; */
+        if (message.readOrder !== 0)
+            writer.tag(3, WireType.Varint).int32(message.readOrder);
+        /* optional uint32 capacity_poll_interval_seconds = 4; */
+        if (message.capacityPollIntervalSeconds !== undefined)
+            writer.tag(4, WireType.Varint).uint32(message.capacityPollIntervalSeconds);
+        /* optional yatm.v1.TapeReadParameters read_parameters = 5; */
+        if (message.readParameters)
+            TapeReadParameters.internalBinaryWrite(message.readParameters, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
+        /* optional bool passive_read_learning = 6; */
+        if (message.passiveReadLearning !== undefined)
+            writer.tag(6, WireType.Varint).bool(message.passiveReadLearning);
+        /* optional uint32 read_planning_seconds = 7; */
+        if (message.readPlanningSeconds !== undefined)
+            writer.tag(7, WireType.Varint).uint32(message.readPlanningSeconds);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeDeviceSettings
+ */
+export const TapeDeviceSettings = new TapeDeviceSettings$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeLearnedReadParameters$Type extends MessageType<TapeLearnedReadParameters> {
+    constructor() {
+        super("yatm.v1.TapeLearnedReadParameters", [
+            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "parameters", kind: "message", T: () => TapeReadParameters },
+            { no: 3, name: "fit_version", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "training_observations", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
+            { no: 6, name: "mae_seconds", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 7, name: "max_error_seconds", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 8, name: "updated_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeLearnedReadParameters>): TapeLearnedReadParameters {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.device = "";
+        message.fitVersion = "";
+        message.trainingObservations = 0;
+        message.maeSeconds = 0;
+        message.maxErrorSeconds = 0;
+        message.updatedAtNs = 0n;
+        if (value !== undefined)
+            reflectionMergePartial<TapeLearnedReadParameters>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeLearnedReadParameters): TapeLearnedReadParameters {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string device */ 1:
+                    message.device = reader.string();
+                    break;
+                case /* yatm.v1.TapeReadParameters parameters */ 2:
+                    message.parameters = TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options, message.parameters);
+                    break;
+                case /* string fit_version */ 3:
+                    message.fitVersion = reader.string();
+                    break;
+                case /* uint32 training_observations */ 4:
+                    message.trainingObservations = reader.uint32();
+                    break;
+                case /* double mae_seconds */ 6:
+                    message.maeSeconds = reader.double();
+                    break;
+                case /* double max_error_seconds */ 7:
+                    message.maxErrorSeconds = reader.double();
+                    break;
+                case /* int64 updated_at_ns */ 8:
+                    message.updatedAtNs = reader.int64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeLearnedReadParameters, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string device = 1; */
+        if (message.device !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.device);
+        /* yatm.v1.TapeReadParameters parameters = 2; */
+        if (message.parameters)
+            TapeReadParameters.internalBinaryWrite(message.parameters, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* string fit_version = 3; */
+        if (message.fitVersion !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.fitVersion);
+        /* uint32 training_observations = 4; */
+        if (message.trainingObservations !== 0)
+            writer.tag(4, WireType.Varint).uint32(message.trainingObservations);
+        /* double mae_seconds = 6; */
+        if (message.maeSeconds !== 0)
+            writer.tag(6, WireType.Bit64).double(message.maeSeconds);
+        /* double max_error_seconds = 7; */
+        if (message.maxErrorSeconds !== 0)
+            writer.tag(7, WireType.Bit64).double(message.maxErrorSeconds);
+        /* int64 updated_at_ns = 8; */
+        if (message.updatedAtNs !== 0n)
+            writer.tag(8, WireType.Varint).int64(message.updatedAtNs);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeLearnedReadParameters
+ */
+export const TapeLearnedReadParameters = new TapeLearnedReadParameters$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadParameters$Type extends MessageType<TapeReadParameters> {
+    constructor() {
+        super("yatm.v1.TapeReadParameters", [
+            { no: 1, name: "applies_to", kind: "message", T: () => TapeReadApplicability },
+            { no: 2, name: "geometry", kind: "message", T: () => TapeReadGeometry },
+            { no: 3, name: "positioning", kind: "message", T: () => TapeReadPositioning },
+            { no: 4, name: "reading", kind: "message", T: () => TapeReadTiming },
+            { no: 5, name: "source_reference", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "completion", kind: "message", T: () => TapeReadCompletion }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadParameters>): TapeReadParameters {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.sourceReference = "";
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadParameters>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadParameters): TapeReadParameters {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* yatm.v1.TapeReadApplicability applies_to */ 1:
+                    message.appliesTo = TapeReadApplicability.internalBinaryRead(reader, reader.uint32(), options, message.appliesTo);
+                    break;
+                case /* yatm.v1.TapeReadGeometry geometry */ 2:
+                    message.geometry = TapeReadGeometry.internalBinaryRead(reader, reader.uint32(), options, message.geometry);
+                    break;
+                case /* yatm.v1.TapeReadPositioning positioning */ 3:
+                    message.positioning = TapeReadPositioning.internalBinaryRead(reader, reader.uint32(), options, message.positioning);
+                    break;
+                case /* yatm.v1.TapeReadTiming reading */ 4:
+                    message.reading = TapeReadTiming.internalBinaryRead(reader, reader.uint32(), options, message.reading);
+                    break;
+                case /* string source_reference */ 5:
+                    message.sourceReference = reader.string();
+                    break;
+                case /* yatm.v1.TapeReadCompletion completion */ 6:
+                    message.completion = TapeReadCompletion.internalBinaryRead(reader, reader.uint32(), options, message.completion);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadParameters, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* yatm.v1.TapeReadApplicability applies_to = 1; */
+        if (message.appliesTo)
+            TapeReadApplicability.internalBinaryWrite(message.appliesTo, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeReadGeometry geometry = 2; */
+        if (message.geometry)
+            TapeReadGeometry.internalBinaryWrite(message.geometry, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeReadPositioning positioning = 3; */
+        if (message.positioning)
+            TapeReadPositioning.internalBinaryWrite(message.positioning, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeReadTiming reading = 4; */
+        if (message.reading)
+            TapeReadTiming.internalBinaryWrite(message.reading, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* string source_reference = 5; */
+        if (message.sourceReference !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.sourceReference);
+        /* yatm.v1.TapeReadCompletion completion = 6; */
+        if (message.completion)
+            TapeReadCompletion.internalBinaryWrite(message.completion, writer.tag(6, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadParameters
+ */
+export const TapeReadParameters = new TapeReadParameters$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadCompletion$Type extends MessageType<TapeReadCompletion> {
+    constructor() {
+        super("yatm.v1.TapeReadCompletion", [
+            { no: 1, name: "full_span_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 2, name: "fixed_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadCompletion>): TapeReadCompletion {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadCompletion>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadCompletion): TapeReadCompletion {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional double full_span_seconds */ 1:
+                    message.fullSpanSeconds = reader.double();
+                    break;
+                case /* optional double fixed_seconds */ 2:
+                    message.fixedSeconds = reader.double();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadCompletion, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional double full_span_seconds = 1; */
+        if (message.fullSpanSeconds !== undefined)
+            writer.tag(1, WireType.Bit64).double(message.fullSpanSeconds);
+        /* optional double fixed_seconds = 2; */
+        if (message.fixedSeconds !== undefined)
+            writer.tag(2, WireType.Bit64).double(message.fixedSeconds);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadCompletion
+ */
+export const TapeReadCompletion = new TapeReadCompletion$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadApplicability$Type extends MessageType<TapeReadApplicability> {
+    constructor() {
+        super("yatm.v1.TapeReadApplicability", [
+            { no: 1, name: "drive_serial", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "firmware", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "density_code", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 4, name: "record_mode", kind: "enum", opt: true, T: () => ["yatm.v1.TapeRecordMode", TapeRecordMode, "TAPE_RECORD_MODE_"] },
+            { no: 5, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 6, name: "hardware_compression", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 7, name: "encryption_algorithm", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadApplicability>): TapeReadApplicability {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadApplicability>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadApplicability): TapeReadApplicability {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional string drive_serial */ 1:
+                    message.driveSerial = reader.string();
+                    break;
+                case /* optional string firmware */ 2:
+                    message.firmware = reader.string();
+                    break;
+                case /* optional uint32 density_code */ 3:
+                    message.densityCode = reader.uint32();
+                    break;
+                case /* optional yatm.v1.TapeRecordMode record_mode */ 4:
+                    message.recordMode = reader.int32();
+                    break;
+                case /* optional uint32 record_bytes */ 5:
+                    message.recordBytes = reader.uint32();
+                    break;
+                case /* optional bool hardware_compression */ 6:
+                    message.hardwareCompression = reader.bool();
+                    break;
+                case /* optional string encryption_algorithm */ 7:
+                    message.encryptionAlgorithm = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadApplicability, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional string drive_serial = 1; */
+        if (message.driveSerial !== undefined)
+            writer.tag(1, WireType.LengthDelimited).string(message.driveSerial);
+        /* optional string firmware = 2; */
+        if (message.firmware !== undefined)
+            writer.tag(2, WireType.LengthDelimited).string(message.firmware);
+        /* optional uint32 density_code = 3; */
+        if (message.densityCode !== undefined)
+            writer.tag(3, WireType.Varint).uint32(message.densityCode);
+        /* optional yatm.v1.TapeRecordMode record_mode = 4; */
+        if (message.recordMode !== undefined)
+            writer.tag(4, WireType.Varint).int32(message.recordMode);
+        /* optional uint32 record_bytes = 5; */
+        if (message.recordBytes !== undefined)
+            writer.tag(5, WireType.Varint).uint32(message.recordBytes);
+        /* optional bool hardware_compression = 6; */
+        if (message.hardwareCompression !== undefined)
+            writer.tag(6, WireType.Varint).bool(message.hardwareCompression);
+        /* optional string encryption_algorithm = 7; */
+        if (message.encryptionAlgorithm !== undefined)
+            writer.tag(7, WireType.LengthDelimited).string(message.encryptionAlgorithm);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadApplicability
+ */
+export const TapeReadApplicability = new TapeReadApplicability$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadGeometry$Type extends MessageType<TapeReadGeometry> {
+    constructor() {
+        super("yatm.v1.TapeReadGeometry", [
+            { no: 1, name: "nominal_wraps", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 2, name: "min_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "max_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadGeometry>): TapeReadGeometry {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadGeometry>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadGeometry): TapeReadGeometry {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional uint32 nominal_wraps */ 1:
+                    message.nominalWraps = reader.uint32();
+                    break;
+                case /* optional uint64 min_lpos */ 2:
+                    message.minLpos = reader.uint64().toBigInt();
+                    break;
+                case /* optional uint64 max_lpos */ 3:
+                    message.maxLpos = reader.uint64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadGeometry, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional uint32 nominal_wraps = 1; */
+        if (message.nominalWraps !== undefined)
+            writer.tag(1, WireType.Varint).uint32(message.nominalWraps);
+        /* optional uint64 min_lpos = 2; */
+        if (message.minLpos !== undefined)
+            writer.tag(2, WireType.Varint).uint64(message.minLpos);
+        /* optional uint64 max_lpos = 3; */
+        if (message.maxLpos !== undefined)
+            writer.tag(3, WireType.Varint).uint64(message.maxLpos);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadGeometry
+ */
+export const TapeReadGeometry = new TapeReadGeometry$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
+    constructor() {
+        super("yatm.v1.TapeReadPositioning", [
+            { no: 1, name: "base_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 2, name: "wrap_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 3, name: "band_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 4, name: "landing_zone_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 5, name: "direction_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 6, name: "step_back_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 7, name: "longitudinal_seconds_per_lpos", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 9, name: "longitudinal_seconds_per_wrap", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadPositioning>): TapeReadPositioning {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadPositioning>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadPositioning): TapeReadPositioning {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional double base_seconds */ 1:
+                    message.baseSeconds = reader.double();
+                    break;
+                case /* optional double wrap_change_seconds */ 2:
+                    message.wrapChangeSeconds = reader.double();
+                    break;
+                case /* optional double band_change_seconds */ 3:
+                    message.bandChangeSeconds = reader.double();
+                    break;
+                case /* optional double landing_zone_change_seconds */ 4:
+                    message.landingZoneChangeSeconds = reader.double();
+                    break;
+                case /* optional double direction_change_seconds */ 5:
+                    message.directionChangeSeconds = reader.double();
+                    break;
+                case /* optional double step_back_seconds */ 6:
+                    message.stepBackSeconds = reader.double();
+                    break;
+                case /* optional double longitudinal_seconds_per_lpos */ 7:
+                    message.longitudinalSecondsPerLpos = reader.double();
+                    break;
+                case /* optional double longitudinal_seconds_per_wrap */ 9:
+                    message.longitudinalSecondsPerWrap = reader.double();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadPositioning, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional double base_seconds = 1; */
+        if (message.baseSeconds !== undefined)
+            writer.tag(1, WireType.Bit64).double(message.baseSeconds);
+        /* optional double wrap_change_seconds = 2; */
+        if (message.wrapChangeSeconds !== undefined)
+            writer.tag(2, WireType.Bit64).double(message.wrapChangeSeconds);
+        /* optional double band_change_seconds = 3; */
+        if (message.bandChangeSeconds !== undefined)
+            writer.tag(3, WireType.Bit64).double(message.bandChangeSeconds);
+        /* optional double landing_zone_change_seconds = 4; */
+        if (message.landingZoneChangeSeconds !== undefined)
+            writer.tag(4, WireType.Bit64).double(message.landingZoneChangeSeconds);
+        /* optional double direction_change_seconds = 5; */
+        if (message.directionChangeSeconds !== undefined)
+            writer.tag(5, WireType.Bit64).double(message.directionChangeSeconds);
+        /* optional double step_back_seconds = 6; */
+        if (message.stepBackSeconds !== undefined)
+            writer.tag(6, WireType.Bit64).double(message.stepBackSeconds);
+        /* optional double longitudinal_seconds_per_lpos = 7; */
+        if (message.longitudinalSecondsPerLpos !== undefined)
+            writer.tag(7, WireType.Bit64).double(message.longitudinalSecondsPerLpos);
+        /* optional double longitudinal_seconds_per_wrap = 9; */
+        if (message.longitudinalSecondsPerWrap !== undefined)
+            writer.tag(9, WireType.Bit64).double(message.longitudinalSecondsPerWrap);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadPositioning
+ */
+export const TapeReadPositioning = new TapeReadPositioning$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeReadTiming$Type extends MessageType<TapeReadTiming> {
+    constructor() {
+        super("yatm.v1.TapeReadTiming", [
+            { no: 1, name: "bytes_per_second", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 2, name: "post_locate_read_overhead_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 3, name: "filemark_overhead_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeReadTiming>): TapeReadTiming {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeReadTiming>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeReadTiming): TapeReadTiming {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional double bytes_per_second */ 1:
+                    message.bytesPerSecond = reader.double();
+                    break;
+                case /* optional double post_locate_read_overhead_seconds */ 2:
+                    message.postLocateReadOverheadSeconds = reader.double();
+                    break;
+                case /* optional double filemark_overhead_seconds */ 3:
+                    message.filemarkOverheadSeconds = reader.double();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeReadTiming, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional double bytes_per_second = 1; */
+        if (message.bytesPerSecond !== undefined)
+            writer.tag(1, WireType.Bit64).double(message.bytesPerSecond);
+        /* optional double post_locate_read_overhead_seconds = 2; */
+        if (message.postLocateReadOverheadSeconds !== undefined)
+            writer.tag(2, WireType.Bit64).double(message.postLocateReadOverheadSeconds);
+        /* optional double filemark_overhead_seconds = 3; */
+        if (message.filemarkOverheadSeconds !== undefined)
+            writer.tag(3, WireType.Bit64).double(message.filemarkOverheadSeconds);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeReadTiming
+ */
+export const TapeReadTiming = new TapeReadTiming$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class LibrarySettings$Type extends MessageType<LibrarySettings> {
     constructor() {
@@ -923,7 +1968,8 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
         super("yatm.v1.SettingsValue", [
             { no: 1, name: "library", kind: "message", oneof: "value", T: () => LibrarySettings },
             { no: 2, name: "preview", kind: "message", oneof: "value", T: () => PreviewSettings },
-            { no: 3, name: "job", kind: "message", oneof: "value", T: () => JobSettings }
+            { no: 3, name: "job", kind: "message", oneof: "value", T: () => JobSettings },
+            { no: 4, name: "device", kind: "message", oneof: "value", T: () => DeviceSettings }
         ]);
     }
     create(value?: PartialMessage<SettingsValue>): SettingsValue {
@@ -956,6 +2002,12 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
                         job: JobSettings.internalBinaryRead(reader, reader.uint32(), options, (message.value as any).job)
                     };
                     break;
+                case /* yatm.v1.DeviceSettings device */ 4:
+                    message.value = {
+                        oneofKind: "device",
+                        device: DeviceSettings.internalBinaryRead(reader, reader.uint32(), options, (message.value as any).device)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -977,6 +2029,9 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
         /* yatm.v1.JobSettings job = 3; */
         if (message.value.oneofKind === "job")
             JobSettings.internalBinaryWrite(message.value.job, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.DeviceSettings device = 4; */
+        if (message.value.oneofKind === "device")
+            DeviceSettings.internalBinaryWrite(message.value.device, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

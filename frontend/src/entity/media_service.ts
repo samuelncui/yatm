@@ -11,6 +11,7 @@ import { UnknownFieldHandler } from "@protobuf-ts/runtime";
 import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
+import { TarWriteOptions } from "./media";
 import { VolumeMediaProfile } from "./media";
 import { Position } from "./position";
 import { Media } from "./media";
@@ -321,6 +322,431 @@ export interface ListDevicesResponse {
     devices: string[];
 }
 /**
+ * Listing uses configuration and lease state; it never sends SCSI commands.
+ *
+ * @generated from protobuf message yatm.v1.DeviceSummary
+ */
+export interface DeviceSummary {
+    /**
+     * Configured spelling, retained in operation targets and user-owned scripts.
+     *
+     * @generated from protobuf field: string device = 1
+     */
+    device: string;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceKind kind = 2
+     */
+    kind: DeviceKind;
+    /**
+     * @generated from protobuf field: bool busy = 3
+     */
+    busy: boolean;
+    /**
+     * @generated from protobuf field: string detail = 4
+     */
+    detail: string;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapePreparedRead
+ */
+export interface TapePreparedRead {
+    /**
+     * @generated from protobuf field: int64 prepared_at_ns = 1
+     */
+    preparedAtNs: bigint;
+    /**
+     * @generated from protobuf field: int64 job_id = 2
+     */
+    jobId: bigint;
+    /**
+     * @generated from protobuf field: int64 media_id = 3
+     */
+    mediaId: bigint;
+    /**
+     * @generated from protobuf field: string identity = 4
+     */
+    identity: string;
+    /**
+     * @generated from protobuf field: string requested_order = 5
+     */
+    requestedOrder: string;
+    /**
+     * @generated from protobuf field: string effective_order = 6
+     */
+    effectiveOrder: string;
+    /**
+     * @generated from protobuf field: string parameters_source = 7
+     */
+    parametersSource: string;
+    /**
+     * @generated from protobuf field: string parameters_reference = 8
+     */
+    parametersReference: string;
+    /**
+     * @generated from protobuf field: string applicability_reason = 9
+     */
+    applicabilityReason: string;
+    /**
+     * @generated from protobuf field: string position_source = 10
+     */
+    positionSource: string;
+    /**
+     * @generated from protobuf field: string coverage_detail = 11
+     */
+    coverageDetail: string;
+    /**
+     * Residuals of the selected learned read parameters over their retained observations.
+     *
+     * @generated from protobuf field: optional double learned_mae_seconds = 12
+     */
+    learnedMaeSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double learned_max_error_seconds = 13
+     */
+    learnedMaxErrorSeconds?: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.DeviceFeatureScope
+ */
+export interface DeviceFeatureScope {
+    /**
+     * @generated from protobuf field: optional string model = 1
+     */
+    model?: string;
+    /**
+     * @generated from protobuf field: optional string firmware = 2
+     */
+    firmware?: string;
+    /**
+     * @generated from protobuf field: optional string transport = 3
+     */
+    transport?: string;
+    /**
+     * @generated from protobuf field: optional uint32 density_code = 4
+     */
+    densityCode?: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.DeviceFeature
+ */
+export interface DeviceFeature {
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureKind feature = 1
+     */
+    feature: DeviceFeatureKind;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureSupport support = 2
+     */
+    support: DeviceFeatureSupport;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureAvailability availability = 3
+     */
+    availability: DeviceFeatureAvailability;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureValidation validation = 4
+     */
+    validation: DeviceFeatureValidation;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceReason reason = 5
+     */
+    reason: DeviceReason;
+    /**
+     * @generated from protobuf field: string detail = 6
+     */
+    detail: string;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureEvidence evidence = 7
+     */
+    evidence: DeviceFeatureEvidence;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceFeatureScope scope = 8
+     */
+    scope?: DeviceFeatureScope;
+    /**
+     * @generated from protobuf oneof: limits
+     */
+    limits: {
+        oneofKind: "records";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeRecordLimits records = 17
+         */
+        records: TapeRecordLimits;
+    } | {
+        oneofKind: "navigation";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeNavigationLimits navigation = 18
+         */
+        navigation: TapeNavigationLimits;
+    } | {
+        oneofKind: "capacity";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeCapacityLimits capacity = 19
+         */
+        capacity: TapeCapacityLimits;
+    } | {
+        oneofKind: "compression";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeCompressionLimits compression = 20
+         */
+        compression: TapeCompressionLimits;
+    } | {
+        oneofKind: "encryption";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeEncryptionLimits encryption = 21
+         */
+        encryption: TapeEncryptionLimits;
+    } | {
+        oneofKind: "geometry";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeGeometryLimits geometry = 22
+         */
+        geometry: TapeGeometryLimits;
+    } | {
+        oneofKind: undefined;
+    };
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeRecordLimits
+ */
+export interface TapeRecordLimits {
+    /**
+     * @generated from protobuf field: optional uint32 minimum_bytes = 1
+     */
+    minimumBytes?: number;
+    /**
+     * @generated from protobuf field: optional uint32 maximum_bytes = 2
+     */
+    maximumBytes?: number;
+    /**
+     * @generated from protobuf field: optional uint32 alignment_bytes = 3
+     */
+    alignmentBytes?: number;
+    /**
+     * @generated from protobuf field: optional bool fixed = 4
+     */
+    fixed?: boolean;
+    /**
+     * @generated from protobuf field: optional bool variable = 5
+     */
+    variable?: boolean;
+    /**
+     * @generated from protobuf field: optional uint32 transport_maximum_bytes = 6
+     */
+    transportMaximumBytes?: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeNavigationLimits
+ */
+export interface TapeNavigationLimits {
+    /**
+     * @generated from protobuf field: optional bool read_position_short = 1
+     */
+    readPositionShort?: boolean;
+    /**
+     * @generated from protobuf field: optional bool read_position_long = 2
+     */
+    readPositionLong?: boolean;
+    /**
+     * @generated from protobuf field: optional uint32 address_bits = 3
+     */
+    addressBits?: number;
+}
+/**
+ * Current hardware algorithm observation and changeability of DCE or DDE, respectively.
+ * An algorithm identifier is not a supported-algorithm list or physical qualification.
+ *
+ * @generated from protobuf message yatm.v1.TapeCompressionLimits
+ */
+export interface TapeCompressionLimits {
+    /**
+     * @generated from protobuf field: optional uint32 current_algorithm = 1
+     */
+    currentAlgorithm?: number;
+    /**
+     * @generated from protobuf field: optional bool enable_changeable = 2
+     */
+    enableChangeable?: boolean;
+}
+/**
+ * Public algorithm identity and the current reader's device-local binding, never key material.
+ *
+ * @generated from protobuf message yatm.v1.TapeEncryptionAlgorithm
+ */
+export interface TapeEncryptionAlgorithm {
+    /**
+     * @generated from protobuf field: string name = 1
+     */
+    name: string;
+    /**
+     * @generated from protobuf field: uint32 index = 2
+     */
+    index: number;
+    /**
+     * @generated from protobuf field: uint32 key_bytes = 3
+     */
+    keyBytes: number;
+}
+/**
+ * Non-secret current protocol facts; a key counter is not key-presence evidence.
+ *
+ * @generated from protobuf message yatm.v1.TapeEncryptionLimits
+ */
+export interface TapeEncryptionLimits {
+    /**
+     * @generated from protobuf field: repeated yatm.v1.TapeEncryptionAlgorithm algorithms = 1
+     */
+    algorithms: TapeEncryptionAlgorithm[];
+    /**
+     * @generated from protobuf field: optional uint32 current_algorithm_index = 2
+     */
+    currentAlgorithmIndex?: number;
+    /**
+     * @generated from protobuf field: optional uint32 encryption_mode = 3
+     */
+    encryptionMode?: number;
+    /**
+     * @generated from protobuf field: optional uint32 decryption_mode = 4
+     */
+    decryptionMode?: number;
+    /**
+     * @generated from protobuf field: optional uint32 i_t_nexus_scope = 5
+     */
+    iTNexusScope?: number;
+    /**
+     * @generated from protobuf field: optional uint32 key_scope = 6
+     */
+    keyScope?: number;
+    /**
+     * @generated from protobuf field: optional uint32 parameters_control = 7
+     */
+    parametersControl?: number;
+    /**
+     * @generated from protobuf field: optional uint32 key_instance_counter = 8
+     */
+    keyInstanceCounter?: number;
+}
+/**
+ * Observed reporting form/count; neither establishes full-wrap coverage or freshness.
+ *
+ * @generated from protobuf message yatm.v1.TapeGeometryLimits
+ */
+export interface TapeGeometryLimits {
+    /**
+     * @generated from protobuf field: optional bool all_wraps = 1
+     */
+    allWraps?: boolean;
+    /**
+     * @generated from protobuf field: optional uint32 reported_wraps = 2
+     */
+    reportedWraps?: number;
+    /**
+     * @generated from protobuf field: optional bool fresh = 3
+     */
+    fresh?: boolean;
+    /**
+     * @generated from protobuf field: optional string source = 4
+     */
+    source?: string;
+}
+/**
+ * Transient native-space observation before EW, independent of logical seek.
+ *
+ * @generated from protobuf message yatm.v1.TapeCapacityLimits
+ */
+export interface TapeCapacityLimits {
+    /**
+     * @generated from protobuf field: optional uint32 partition = 1
+     */
+    partition?: number;
+    /**
+     * @generated from protobuf field: optional uint64 remaining_bytes = 2
+     */
+    remainingBytes?: bigint;
+    /**
+     * @generated from protobuf field: yatm.v1.TapeCapacityQuality quality = 3
+     */
+    quality: TapeCapacityQuality;
+    /**
+     * @generated from protobuf field: optional int64 issued_at_ns = 4
+     */
+    issuedAtNs?: bigint;
+    /**
+     * @generated from protobuf field: optional int64 completed_at_ns = 5
+     */
+    completedAtNs?: bigint;
+    /**
+     * Absent allowances are unknown, not zero and not a complete-file-fit guarantee.
+     *
+     * @generated from protobuf field: optional uint64 observation_error_bytes = 6
+     */
+    observationErrorBytes?: bigint;
+    /**
+     * @generated from protobuf field: optional uint64 unreflected_bytes = 7
+     */
+    unreflectedBytes?: bigint;
+}
+/**
+ * @generated from protobuf message yatm.v1.TapeDeviceReport
+ */
+export interface TapeDeviceReport {
+    /**
+     * @generated from protobuf field: optional bool medium_present = 1
+     */
+    mediumPresent?: boolean;
+    /**
+     * @generated from protobuf field: optional bool write_protected = 2
+     */
+    writeProtected?: boolean;
+    /**
+     * @generated from protobuf field: optional uint32 density_code = 3
+     */
+    densityCode?: number;
+    /**
+     * @generated from protobuf field: optional uint32 partition_count = 4
+     */
+    partitionCount?: number;
+    /**
+     * @generated from protobuf field: optional uint32 record_bytes = 5
+     */
+    recordBytes?: number;
+    /**
+     * @generated from protobuf field: optional bool fixed_records = 6
+     */
+    fixedRecords?: boolean;
+    /**
+     * @generated from protobuf field: optional bool buffered_writes = 7
+     */
+    bufferedWrites?: boolean;
+    /**
+     * @generated from protobuf field: optional bool compression_enabled = 8
+     */
+    compressionEnabled?: boolean;
+    /**
+     * @generated from protobuf field: optional bool decompression_enabled = 9
+     */
+    decompressionEnabled?: boolean;
+    /**
+     * Current write encryption state; absent means it was not established.
+     *
+     * @generated from protobuf field: optional bool encryption_enabled = 10
+     */
+    encryptionEnabled?: boolean;
+    /**
+     * @generated from protobuf field: repeated yatm.v1.DeviceFeature features = 17
+     */
+    features: DeviceFeature[];
+    /**
+     * Suggested FORMAT values only when applicable qualification establishes them.
+     *
+     * @generated from protobuf field: optional yatm.v1.TarWriteOptions recommended_write_options = 18
+     */
+    recommendedWriteOptions?: TarWriteOptions;
+    /**
+     * @generated from protobuf field: string recommendation_detail = 19
+     */
+    recommendationDetail: string;
+}
+/**
  * Volume candidate states select the applicable mounted-Volume operation.
  *
  * @generated from protobuf enum yatm.v1.VolumeCandidateState
@@ -358,6 +784,252 @@ export enum VolumeCandidateState {
      * @generated from protobuf enum value: VOLUME_CANDIDATE_STATE_INVALID = 5;
      */
     INVALID = 5
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceKind
+ */
+export enum DeviceKind {
+    /**
+     * @generated from protobuf enum value: DEVICE_KIND_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_KIND_TAPE = 1;
+     */
+    TAPE = 1
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceFeatureKind
+ */
+export enum DeviceFeatureKind {
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_INITIALIZE = 1;
+     */
+    INITIALIZE = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_SEQUENTIAL_READ = 2;
+     */
+    SEQUENTIAL_READ = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_SEQUENTIAL_WRITE = 3;
+     */
+    SEQUENTIAL_WRITE = 3,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_FILEMARKS = 4;
+     */
+    FILEMARKS = 4,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_NAVIGATION = 5;
+     */
+    NAVIGATION = 5,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_LOCATE = 6;
+     */
+    LOCATE = 6,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_READ_POSITION = 7;
+     */
+    READ_POSITION = 7,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_EARLY_WARNING = 8;
+     */
+    EARLY_WARNING = 8,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION = 9;
+     */
+    HARDWARE_COMPRESSION = 9,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION = 10;
+     */
+    HARDWARE_DECOMPRESSION = 10,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION = 11;
+     */
+    HARDWARE_ENCRYPTION = 11,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION = 12;
+     */
+    END_OF_WRAP_POSITION = 12,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING = 13;
+     */
+    CAPACITY_TO_WARNING = 13,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_NON_EJECTING_RELOAD = 14;
+     */
+    NON_EJECTING_RELOAD = 14,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER = 15;
+     */
+    SOFTWARE_READ_ORDER = 15
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceFeatureSupport
+ */
+export enum DeviceFeatureSupport {
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_SUPPORT_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_SUPPORT_UNKNOWN = 1;
+     */
+    UNKNOWN = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_SUPPORT_UNSUPPORTED = 2;
+     */
+    UNSUPPORTED = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_SUPPORT_PARTIAL = 3;
+     */
+    PARTIAL = 3,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_SUPPORT_SUPPORTED = 4;
+     */
+    SUPPORTED = 4
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceFeatureAvailability
+ */
+export enum DeviceFeatureAvailability {
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_AVAILABILITY_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_AVAILABILITY_UNKNOWN = 1;
+     */
+    UNKNOWN = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_AVAILABILITY_UNAVAILABLE = 2;
+     */
+    UNAVAILABLE = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_AVAILABILITY_READY = 3;
+     */
+    READY = 3
+}
+/**
+ * Passive inspection never establishes write/seek/recovery qualification.
+ *
+ * @generated from protobuf enum yatm.v1.DeviceFeatureValidation
+ */
+export enum DeviceFeatureValidation {
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_UNVALIDATED = 1;
+     */
+    UNVALIDATED = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_VALIDATED = 2;
+     */
+    VALIDATED = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_FAILED = 3;
+     */
+    FAILED = 3
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceReason
+ */
+export enum DeviceReason {
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_BUSY = 1;
+     */
+    BUSY = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_NO_MEDIUM = 2;
+     */
+    NO_MEDIUM = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_PERMISSION = 3;
+     */
+    PERMISSION = 3,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_TRANSPORT_UNAVAILABLE = 4;
+     */
+    TRANSPORT_UNAVAILABLE = 4,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_UNSUPPORTED = 5;
+     */
+    UNSUPPORTED = 5,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_MALFORMED_RESPONSE = 6;
+     */
+    MALFORMED_RESPONSE = 6,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_TRANSPORT_ERROR = 7;
+     */
+    TRANSPORT_ERROR = 7,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_OWNERSHIP_UNCERTAIN = 8;
+     */
+    OWNERSHIP_UNCERTAIN = 8,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_NOT_IMPLEMENTED = 9;
+     */
+    NOT_IMPLEMENTED = 9,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_NOT_READY = 10;
+     */
+    NOT_READY = 10,
+    /**
+     * @generated from protobuf enum value: DEVICE_REASON_MISSING_TOOL = 11;
+     */
+    MISSING_TOOL = 11
+}
+/**
+ * @generated from protobuf enum yatm.v1.DeviceFeatureEvidence
+ */
+export enum DeviceFeatureEvidence {
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_PROTOCOL = 1;
+     */
+    PROTOCOL = 1,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_REPORTED = 2;
+     */
+    REPORTED = 2,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_OBSERVED = 3;
+     */
+    OBSERVED = 3,
+    /**
+     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_TESTED_PROVIDER = 4;
+     */
+    TESTED_PROVIDER = 4
+}
+/**
+ * @generated from protobuf enum yatm.v1.TapeCapacityQuality
+ */
+export enum TapeCapacityQuality {
+    /**
+     * @generated from protobuf enum value: TAPE_CAPACITY_QUALITY_UNSPECIFIED = 0;
+     */
+    UNSPECIFIED = 0,
+    /**
+     * @generated from protobuf enum value: TAPE_CAPACITY_QUALITY_ESTIMATE = 1;
+     */
+    ESTIMATE = 1,
+    /**
+     * @generated from protobuf enum value: TAPE_CAPACITY_QUALITY_LOWER_BOUND = 2;
+     */
+    LOWER_BOUND = 2
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ListMediaRequest$Type extends MessageType<ListMediaRequest> {
@@ -1488,6 +2160,1089 @@ class ListDevicesResponse$Type extends MessageType<ListDevicesResponse> {
  * @generated MessageType for protobuf message yatm.v1.ListDevicesResponse
  */
 export const ListDevicesResponse = new ListDevicesResponse$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DeviceSummary$Type extends MessageType<DeviceSummary> {
+    constructor() {
+        super("yatm.v1.DeviceSummary", [
+            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "kind", kind: "enum", T: () => ["yatm.v1.DeviceKind", DeviceKind, "DEVICE_KIND_"] },
+            { no: 3, name: "busy", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 4, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<DeviceSummary>): DeviceSummary {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.device = "";
+        message.kind = 0;
+        message.busy = false;
+        message.detail = "";
+        if (value !== undefined)
+            reflectionMergePartial<DeviceSummary>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DeviceSummary): DeviceSummary {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string device */ 1:
+                    message.device = reader.string();
+                    break;
+                case /* yatm.v1.DeviceKind kind */ 2:
+                    message.kind = reader.int32();
+                    break;
+                case /* bool busy */ 3:
+                    message.busy = reader.bool();
+                    break;
+                case /* string detail */ 4:
+                    message.detail = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DeviceSummary, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string device = 1; */
+        if (message.device !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.device);
+        /* yatm.v1.DeviceKind kind = 2; */
+        if (message.kind !== 0)
+            writer.tag(2, WireType.Varint).int32(message.kind);
+        /* bool busy = 3; */
+        if (message.busy !== false)
+            writer.tag(3, WireType.Varint).bool(message.busy);
+        /* string detail = 4; */
+        if (message.detail !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.detail);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.DeviceSummary
+ */
+export const DeviceSummary = new DeviceSummary$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapePreparedRead$Type extends MessageType<TapePreparedRead> {
+    constructor() {
+        super("yatm.v1.TapePreparedRead", [
+            { no: 1, name: "prepared_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "job_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "media_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 4, name: "identity", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "requested_order", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "effective_order", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "parameters_source", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 8, name: "parameters_reference", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 9, name: "applicability_reason", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 10, name: "position_source", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 11, name: "coverage_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 12, name: "learned_mae_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 13, name: "learned_max_error_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapePreparedRead>): TapePreparedRead {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.preparedAtNs = 0n;
+        message.jobId = 0n;
+        message.mediaId = 0n;
+        message.identity = "";
+        message.requestedOrder = "";
+        message.effectiveOrder = "";
+        message.parametersSource = "";
+        message.parametersReference = "";
+        message.applicabilityReason = "";
+        message.positionSource = "";
+        message.coverageDetail = "";
+        if (value !== undefined)
+            reflectionMergePartial<TapePreparedRead>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapePreparedRead): TapePreparedRead {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* int64 prepared_at_ns */ 1:
+                    message.preparedAtNs = reader.int64().toBigInt();
+                    break;
+                case /* int64 job_id */ 2:
+                    message.jobId = reader.int64().toBigInt();
+                    break;
+                case /* int64 media_id */ 3:
+                    message.mediaId = reader.int64().toBigInt();
+                    break;
+                case /* string identity */ 4:
+                    message.identity = reader.string();
+                    break;
+                case /* string requested_order */ 5:
+                    message.requestedOrder = reader.string();
+                    break;
+                case /* string effective_order */ 6:
+                    message.effectiveOrder = reader.string();
+                    break;
+                case /* string parameters_source */ 7:
+                    message.parametersSource = reader.string();
+                    break;
+                case /* string parameters_reference */ 8:
+                    message.parametersReference = reader.string();
+                    break;
+                case /* string applicability_reason */ 9:
+                    message.applicabilityReason = reader.string();
+                    break;
+                case /* string position_source */ 10:
+                    message.positionSource = reader.string();
+                    break;
+                case /* string coverage_detail */ 11:
+                    message.coverageDetail = reader.string();
+                    break;
+                case /* optional double learned_mae_seconds */ 12:
+                    message.learnedMaeSeconds = reader.double();
+                    break;
+                case /* optional double learned_max_error_seconds */ 13:
+                    message.learnedMaxErrorSeconds = reader.double();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapePreparedRead, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* int64 prepared_at_ns = 1; */
+        if (message.preparedAtNs !== 0n)
+            writer.tag(1, WireType.Varint).int64(message.preparedAtNs);
+        /* int64 job_id = 2; */
+        if (message.jobId !== 0n)
+            writer.tag(2, WireType.Varint).int64(message.jobId);
+        /* int64 media_id = 3; */
+        if (message.mediaId !== 0n)
+            writer.tag(3, WireType.Varint).int64(message.mediaId);
+        /* string identity = 4; */
+        if (message.identity !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.identity);
+        /* string requested_order = 5; */
+        if (message.requestedOrder !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.requestedOrder);
+        /* string effective_order = 6; */
+        if (message.effectiveOrder !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.effectiveOrder);
+        /* string parameters_source = 7; */
+        if (message.parametersSource !== "")
+            writer.tag(7, WireType.LengthDelimited).string(message.parametersSource);
+        /* string parameters_reference = 8; */
+        if (message.parametersReference !== "")
+            writer.tag(8, WireType.LengthDelimited).string(message.parametersReference);
+        /* string applicability_reason = 9; */
+        if (message.applicabilityReason !== "")
+            writer.tag(9, WireType.LengthDelimited).string(message.applicabilityReason);
+        /* string position_source = 10; */
+        if (message.positionSource !== "")
+            writer.tag(10, WireType.LengthDelimited).string(message.positionSource);
+        /* string coverage_detail = 11; */
+        if (message.coverageDetail !== "")
+            writer.tag(11, WireType.LengthDelimited).string(message.coverageDetail);
+        /* optional double learned_mae_seconds = 12; */
+        if (message.learnedMaeSeconds !== undefined)
+            writer.tag(12, WireType.Bit64).double(message.learnedMaeSeconds);
+        /* optional double learned_max_error_seconds = 13; */
+        if (message.learnedMaxErrorSeconds !== undefined)
+            writer.tag(13, WireType.Bit64).double(message.learnedMaxErrorSeconds);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapePreparedRead
+ */
+export const TapePreparedRead = new TapePreparedRead$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DeviceFeatureScope$Type extends MessageType<DeviceFeatureScope> {
+    constructor() {
+        super("yatm.v1.DeviceFeatureScope", [
+            { no: 1, name: "model", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "firmware", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "transport", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "density_code", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<DeviceFeatureScope>): DeviceFeatureScope {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<DeviceFeatureScope>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DeviceFeatureScope): DeviceFeatureScope {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional string model */ 1:
+                    message.model = reader.string();
+                    break;
+                case /* optional string firmware */ 2:
+                    message.firmware = reader.string();
+                    break;
+                case /* optional string transport */ 3:
+                    message.transport = reader.string();
+                    break;
+                case /* optional uint32 density_code */ 4:
+                    message.densityCode = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DeviceFeatureScope, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional string model = 1; */
+        if (message.model !== undefined)
+            writer.tag(1, WireType.LengthDelimited).string(message.model);
+        /* optional string firmware = 2; */
+        if (message.firmware !== undefined)
+            writer.tag(2, WireType.LengthDelimited).string(message.firmware);
+        /* optional string transport = 3; */
+        if (message.transport !== undefined)
+            writer.tag(3, WireType.LengthDelimited).string(message.transport);
+        /* optional uint32 density_code = 4; */
+        if (message.densityCode !== undefined)
+            writer.tag(4, WireType.Varint).uint32(message.densityCode);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.DeviceFeatureScope
+ */
+export const DeviceFeatureScope = new DeviceFeatureScope$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DeviceFeature$Type extends MessageType<DeviceFeature> {
+    constructor() {
+        super("yatm.v1.DeviceFeature", [
+            { no: 1, name: "feature", kind: "enum", T: () => ["yatm.v1.DeviceFeatureKind", DeviceFeatureKind, "DEVICE_FEATURE_KIND_"] },
+            { no: 2, name: "support", kind: "enum", T: () => ["yatm.v1.DeviceFeatureSupport", DeviceFeatureSupport, "DEVICE_FEATURE_SUPPORT_"] },
+            { no: 3, name: "availability", kind: "enum", T: () => ["yatm.v1.DeviceFeatureAvailability", DeviceFeatureAvailability, "DEVICE_FEATURE_AVAILABILITY_"] },
+            { no: 4, name: "validation", kind: "enum", T: () => ["yatm.v1.DeviceFeatureValidation", DeviceFeatureValidation, "DEVICE_FEATURE_VALIDATION_"] },
+            { no: 5, name: "reason", kind: "enum", T: () => ["yatm.v1.DeviceReason", DeviceReason, "DEVICE_REASON_"] },
+            { no: 6, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "evidence", kind: "enum", T: () => ["yatm.v1.DeviceFeatureEvidence", DeviceFeatureEvidence, "DEVICE_FEATURE_EVIDENCE_"] },
+            { no: 8, name: "scope", kind: "message", T: () => DeviceFeatureScope },
+            { no: 17, name: "records", kind: "message", oneof: "limits", T: () => TapeRecordLimits },
+            { no: 18, name: "navigation", kind: "message", oneof: "limits", T: () => TapeNavigationLimits },
+            { no: 19, name: "capacity", kind: "message", oneof: "limits", T: () => TapeCapacityLimits },
+            { no: 20, name: "compression", kind: "message", oneof: "limits", T: () => TapeCompressionLimits },
+            { no: 21, name: "encryption", kind: "message", oneof: "limits", T: () => TapeEncryptionLimits },
+            { no: 22, name: "geometry", kind: "message", oneof: "limits", T: () => TapeGeometryLimits }
+        ]);
+    }
+    create(value?: PartialMessage<DeviceFeature>): DeviceFeature {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.feature = 0;
+        message.support = 0;
+        message.availability = 0;
+        message.validation = 0;
+        message.reason = 0;
+        message.detail = "";
+        message.evidence = 0;
+        message.limits = { oneofKind: undefined };
+        if (value !== undefined)
+            reflectionMergePartial<DeviceFeature>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DeviceFeature): DeviceFeature {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* yatm.v1.DeviceFeatureKind feature */ 1:
+                    message.feature = reader.int32();
+                    break;
+                case /* yatm.v1.DeviceFeatureSupport support */ 2:
+                    message.support = reader.int32();
+                    break;
+                case /* yatm.v1.DeviceFeatureAvailability availability */ 3:
+                    message.availability = reader.int32();
+                    break;
+                case /* yatm.v1.DeviceFeatureValidation validation */ 4:
+                    message.validation = reader.int32();
+                    break;
+                case /* yatm.v1.DeviceReason reason */ 5:
+                    message.reason = reader.int32();
+                    break;
+                case /* string detail */ 6:
+                    message.detail = reader.string();
+                    break;
+                case /* yatm.v1.DeviceFeatureEvidence evidence */ 7:
+                    message.evidence = reader.int32();
+                    break;
+                case /* yatm.v1.DeviceFeatureScope scope */ 8:
+                    message.scope = DeviceFeatureScope.internalBinaryRead(reader, reader.uint32(), options, message.scope);
+                    break;
+                case /* yatm.v1.TapeRecordLimits records */ 17:
+                    message.limits = {
+                        oneofKind: "records",
+                        records: TapeRecordLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).records)
+                    };
+                    break;
+                case /* yatm.v1.TapeNavigationLimits navigation */ 18:
+                    message.limits = {
+                        oneofKind: "navigation",
+                        navigation: TapeNavigationLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).navigation)
+                    };
+                    break;
+                case /* yatm.v1.TapeCapacityLimits capacity */ 19:
+                    message.limits = {
+                        oneofKind: "capacity",
+                        capacity: TapeCapacityLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).capacity)
+                    };
+                    break;
+                case /* yatm.v1.TapeCompressionLimits compression */ 20:
+                    message.limits = {
+                        oneofKind: "compression",
+                        compression: TapeCompressionLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).compression)
+                    };
+                    break;
+                case /* yatm.v1.TapeEncryptionLimits encryption */ 21:
+                    message.limits = {
+                        oneofKind: "encryption",
+                        encryption: TapeEncryptionLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).encryption)
+                    };
+                    break;
+                case /* yatm.v1.TapeGeometryLimits geometry */ 22:
+                    message.limits = {
+                        oneofKind: "geometry",
+                        geometry: TapeGeometryLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).geometry)
+                    };
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DeviceFeature, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* yatm.v1.DeviceFeatureKind feature = 1; */
+        if (message.feature !== 0)
+            writer.tag(1, WireType.Varint).int32(message.feature);
+        /* yatm.v1.DeviceFeatureSupport support = 2; */
+        if (message.support !== 0)
+            writer.tag(2, WireType.Varint).int32(message.support);
+        /* yatm.v1.DeviceFeatureAvailability availability = 3; */
+        if (message.availability !== 0)
+            writer.tag(3, WireType.Varint).int32(message.availability);
+        /* yatm.v1.DeviceFeatureValidation validation = 4; */
+        if (message.validation !== 0)
+            writer.tag(4, WireType.Varint).int32(message.validation);
+        /* yatm.v1.DeviceReason reason = 5; */
+        if (message.reason !== 0)
+            writer.tag(5, WireType.Varint).int32(message.reason);
+        /* string detail = 6; */
+        if (message.detail !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.detail);
+        /* yatm.v1.DeviceFeatureEvidence evidence = 7; */
+        if (message.evidence !== 0)
+            writer.tag(7, WireType.Varint).int32(message.evidence);
+        /* yatm.v1.DeviceFeatureScope scope = 8; */
+        if (message.scope)
+            DeviceFeatureScope.internalBinaryWrite(message.scope, writer.tag(8, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeRecordLimits records = 17; */
+        if (message.limits.oneofKind === "records")
+            TapeRecordLimits.internalBinaryWrite(message.limits.records, writer.tag(17, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeNavigationLimits navigation = 18; */
+        if (message.limits.oneofKind === "navigation")
+            TapeNavigationLimits.internalBinaryWrite(message.limits.navigation, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeCapacityLimits capacity = 19; */
+        if (message.limits.oneofKind === "capacity")
+            TapeCapacityLimits.internalBinaryWrite(message.limits.capacity, writer.tag(19, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeCompressionLimits compression = 20; */
+        if (message.limits.oneofKind === "compression")
+            TapeCompressionLimits.internalBinaryWrite(message.limits.compression, writer.tag(20, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeEncryptionLimits encryption = 21; */
+        if (message.limits.oneofKind === "encryption")
+            TapeEncryptionLimits.internalBinaryWrite(message.limits.encryption, writer.tag(21, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TapeGeometryLimits geometry = 22; */
+        if (message.limits.oneofKind === "geometry")
+            TapeGeometryLimits.internalBinaryWrite(message.limits.geometry, writer.tag(22, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.DeviceFeature
+ */
+export const DeviceFeature = new DeviceFeature$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeRecordLimits$Type extends MessageType<TapeRecordLimits> {
+    constructor() {
+        super("yatm.v1.TapeRecordLimits", [
+            { no: 1, name: "minimum_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 2, name: "maximum_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 3, name: "alignment_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 4, name: "fixed", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 5, name: "variable", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 6, name: "transport_maximum_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeRecordLimits>): TapeRecordLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeRecordLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeRecordLimits): TapeRecordLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional uint32 minimum_bytes */ 1:
+                    message.minimumBytes = reader.uint32();
+                    break;
+                case /* optional uint32 maximum_bytes */ 2:
+                    message.maximumBytes = reader.uint32();
+                    break;
+                case /* optional uint32 alignment_bytes */ 3:
+                    message.alignmentBytes = reader.uint32();
+                    break;
+                case /* optional bool fixed */ 4:
+                    message.fixed = reader.bool();
+                    break;
+                case /* optional bool variable */ 5:
+                    message.variable = reader.bool();
+                    break;
+                case /* optional uint32 transport_maximum_bytes */ 6:
+                    message.transportMaximumBytes = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeRecordLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional uint32 minimum_bytes = 1; */
+        if (message.minimumBytes !== undefined)
+            writer.tag(1, WireType.Varint).uint32(message.minimumBytes);
+        /* optional uint32 maximum_bytes = 2; */
+        if (message.maximumBytes !== undefined)
+            writer.tag(2, WireType.Varint).uint32(message.maximumBytes);
+        /* optional uint32 alignment_bytes = 3; */
+        if (message.alignmentBytes !== undefined)
+            writer.tag(3, WireType.Varint).uint32(message.alignmentBytes);
+        /* optional bool fixed = 4; */
+        if (message.fixed !== undefined)
+            writer.tag(4, WireType.Varint).bool(message.fixed);
+        /* optional bool variable = 5; */
+        if (message.variable !== undefined)
+            writer.tag(5, WireType.Varint).bool(message.variable);
+        /* optional uint32 transport_maximum_bytes = 6; */
+        if (message.transportMaximumBytes !== undefined)
+            writer.tag(6, WireType.Varint).uint32(message.transportMaximumBytes);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeRecordLimits
+ */
+export const TapeRecordLimits = new TapeRecordLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeNavigationLimits$Type extends MessageType<TapeNavigationLimits> {
+    constructor() {
+        super("yatm.v1.TapeNavigationLimits", [
+            { no: 1, name: "read_position_short", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 2, name: "read_position_long", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 3, name: "address_bits", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeNavigationLimits>): TapeNavigationLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeNavigationLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeNavigationLimits): TapeNavigationLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional bool read_position_short */ 1:
+                    message.readPositionShort = reader.bool();
+                    break;
+                case /* optional bool read_position_long */ 2:
+                    message.readPositionLong = reader.bool();
+                    break;
+                case /* optional uint32 address_bits */ 3:
+                    message.addressBits = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeNavigationLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional bool read_position_short = 1; */
+        if (message.readPositionShort !== undefined)
+            writer.tag(1, WireType.Varint).bool(message.readPositionShort);
+        /* optional bool read_position_long = 2; */
+        if (message.readPositionLong !== undefined)
+            writer.tag(2, WireType.Varint).bool(message.readPositionLong);
+        /* optional uint32 address_bits = 3; */
+        if (message.addressBits !== undefined)
+            writer.tag(3, WireType.Varint).uint32(message.addressBits);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeNavigationLimits
+ */
+export const TapeNavigationLimits = new TapeNavigationLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeCompressionLimits$Type extends MessageType<TapeCompressionLimits> {
+    constructor() {
+        super("yatm.v1.TapeCompressionLimits", [
+            { no: 1, name: "current_algorithm", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 2, name: "enable_changeable", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeCompressionLimits>): TapeCompressionLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeCompressionLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeCompressionLimits): TapeCompressionLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional uint32 current_algorithm */ 1:
+                    message.currentAlgorithm = reader.uint32();
+                    break;
+                case /* optional bool enable_changeable */ 2:
+                    message.enableChangeable = reader.bool();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeCompressionLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional uint32 current_algorithm = 1; */
+        if (message.currentAlgorithm !== undefined)
+            writer.tag(1, WireType.Varint).uint32(message.currentAlgorithm);
+        /* optional bool enable_changeable = 2; */
+        if (message.enableChangeable !== undefined)
+            writer.tag(2, WireType.Varint).bool(message.enableChangeable);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeCompressionLimits
+ */
+export const TapeCompressionLimits = new TapeCompressionLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeEncryptionAlgorithm$Type extends MessageType<TapeEncryptionAlgorithm> {
+    constructor() {
+        super("yatm.v1.TapeEncryptionAlgorithm", [
+            { no: 1, name: "name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "index", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
+            { no: 3, name: "key_bytes", kind: "scalar", T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeEncryptionAlgorithm>): TapeEncryptionAlgorithm {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.name = "";
+        message.index = 0;
+        message.keyBytes = 0;
+        if (value !== undefined)
+            reflectionMergePartial<TapeEncryptionAlgorithm>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeEncryptionAlgorithm): TapeEncryptionAlgorithm {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string name */ 1:
+                    message.name = reader.string();
+                    break;
+                case /* uint32 index */ 2:
+                    message.index = reader.uint32();
+                    break;
+                case /* uint32 key_bytes */ 3:
+                    message.keyBytes = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeEncryptionAlgorithm, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string name = 1; */
+        if (message.name !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.name);
+        /* uint32 index = 2; */
+        if (message.index !== 0)
+            writer.tag(2, WireType.Varint).uint32(message.index);
+        /* uint32 key_bytes = 3; */
+        if (message.keyBytes !== 0)
+            writer.tag(3, WireType.Varint).uint32(message.keyBytes);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeEncryptionAlgorithm
+ */
+export const TapeEncryptionAlgorithm = new TapeEncryptionAlgorithm$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeEncryptionLimits$Type extends MessageType<TapeEncryptionLimits> {
+    constructor() {
+        super("yatm.v1.TapeEncryptionLimits", [
+            { no: 1, name: "algorithms", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapeEncryptionAlgorithm },
+            { no: 2, name: "current_algorithm_index", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 3, name: "encryption_mode", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 4, name: "decryption_mode", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 5, name: "i_t_nexus_scope", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 6, name: "key_scope", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 7, name: "parameters_control", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 8, name: "key_instance_counter", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeEncryptionLimits>): TapeEncryptionLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.algorithms = [];
+        if (value !== undefined)
+            reflectionMergePartial<TapeEncryptionLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeEncryptionLimits): TapeEncryptionLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* repeated yatm.v1.TapeEncryptionAlgorithm algorithms */ 1:
+                    message.algorithms.push(TapeEncryptionAlgorithm.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* optional uint32 current_algorithm_index */ 2:
+                    message.currentAlgorithmIndex = reader.uint32();
+                    break;
+                case /* optional uint32 encryption_mode */ 3:
+                    message.encryptionMode = reader.uint32();
+                    break;
+                case /* optional uint32 decryption_mode */ 4:
+                    message.decryptionMode = reader.uint32();
+                    break;
+                case /* optional uint32 i_t_nexus_scope */ 5:
+                    message.iTNexusScope = reader.uint32();
+                    break;
+                case /* optional uint32 key_scope */ 6:
+                    message.keyScope = reader.uint32();
+                    break;
+                case /* optional uint32 parameters_control */ 7:
+                    message.parametersControl = reader.uint32();
+                    break;
+                case /* optional uint32 key_instance_counter */ 8:
+                    message.keyInstanceCounter = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeEncryptionLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* repeated yatm.v1.TapeEncryptionAlgorithm algorithms = 1; */
+        for (let i = 0; i < message.algorithms.length; i++)
+            TapeEncryptionAlgorithm.internalBinaryWrite(message.algorithms[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* optional uint32 current_algorithm_index = 2; */
+        if (message.currentAlgorithmIndex !== undefined)
+            writer.tag(2, WireType.Varint).uint32(message.currentAlgorithmIndex);
+        /* optional uint32 encryption_mode = 3; */
+        if (message.encryptionMode !== undefined)
+            writer.tag(3, WireType.Varint).uint32(message.encryptionMode);
+        /* optional uint32 decryption_mode = 4; */
+        if (message.decryptionMode !== undefined)
+            writer.tag(4, WireType.Varint).uint32(message.decryptionMode);
+        /* optional uint32 i_t_nexus_scope = 5; */
+        if (message.iTNexusScope !== undefined)
+            writer.tag(5, WireType.Varint).uint32(message.iTNexusScope);
+        /* optional uint32 key_scope = 6; */
+        if (message.keyScope !== undefined)
+            writer.tag(6, WireType.Varint).uint32(message.keyScope);
+        /* optional uint32 parameters_control = 7; */
+        if (message.parametersControl !== undefined)
+            writer.tag(7, WireType.Varint).uint32(message.parametersControl);
+        /* optional uint32 key_instance_counter = 8; */
+        if (message.keyInstanceCounter !== undefined)
+            writer.tag(8, WireType.Varint).uint32(message.keyInstanceCounter);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeEncryptionLimits
+ */
+export const TapeEncryptionLimits = new TapeEncryptionLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeGeometryLimits$Type extends MessageType<TapeGeometryLimits> {
+    constructor() {
+        super("yatm.v1.TapeGeometryLimits", [
+            { no: 1, name: "all_wraps", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 2, name: "reported_wraps", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 3, name: "fresh", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 4, name: "source", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeGeometryLimits>): TapeGeometryLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<TapeGeometryLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeGeometryLimits): TapeGeometryLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional bool all_wraps */ 1:
+                    message.allWraps = reader.bool();
+                    break;
+                case /* optional uint32 reported_wraps */ 2:
+                    message.reportedWraps = reader.uint32();
+                    break;
+                case /* optional bool fresh */ 3:
+                    message.fresh = reader.bool();
+                    break;
+                case /* optional string source */ 4:
+                    message.source = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeGeometryLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional bool all_wraps = 1; */
+        if (message.allWraps !== undefined)
+            writer.tag(1, WireType.Varint).bool(message.allWraps);
+        /* optional uint32 reported_wraps = 2; */
+        if (message.reportedWraps !== undefined)
+            writer.tag(2, WireType.Varint).uint32(message.reportedWraps);
+        /* optional bool fresh = 3; */
+        if (message.fresh !== undefined)
+            writer.tag(3, WireType.Varint).bool(message.fresh);
+        /* optional string source = 4; */
+        if (message.source !== undefined)
+            writer.tag(4, WireType.LengthDelimited).string(message.source);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeGeometryLimits
+ */
+export const TapeGeometryLimits = new TapeGeometryLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeCapacityLimits$Type extends MessageType<TapeCapacityLimits> {
+    constructor() {
+        super("yatm.v1.TapeCapacityLimits", [
+            { no: 1, name: "partition", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 2, name: "remaining_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "quality", kind: "enum", T: () => ["yatm.v1.TapeCapacityQuality", TapeCapacityQuality, "TAPE_CAPACITY_QUALITY_"] },
+            { no: 4, name: "issued_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 5, name: "completed_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 6, name: "observation_error_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 7, name: "unreflected_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeCapacityLimits>): TapeCapacityLimits {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.quality = 0;
+        if (value !== undefined)
+            reflectionMergePartial<TapeCapacityLimits>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeCapacityLimits): TapeCapacityLimits {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional uint32 partition */ 1:
+                    message.partition = reader.uint32();
+                    break;
+                case /* optional uint64 remaining_bytes */ 2:
+                    message.remainingBytes = reader.uint64().toBigInt();
+                    break;
+                case /* yatm.v1.TapeCapacityQuality quality */ 3:
+                    message.quality = reader.int32();
+                    break;
+                case /* optional int64 issued_at_ns */ 4:
+                    message.issuedAtNs = reader.int64().toBigInt();
+                    break;
+                case /* optional int64 completed_at_ns */ 5:
+                    message.completedAtNs = reader.int64().toBigInt();
+                    break;
+                case /* optional uint64 observation_error_bytes */ 6:
+                    message.observationErrorBytes = reader.uint64().toBigInt();
+                    break;
+                case /* optional uint64 unreflected_bytes */ 7:
+                    message.unreflectedBytes = reader.uint64().toBigInt();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeCapacityLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional uint32 partition = 1; */
+        if (message.partition !== undefined)
+            writer.tag(1, WireType.Varint).uint32(message.partition);
+        /* optional uint64 remaining_bytes = 2; */
+        if (message.remainingBytes !== undefined)
+            writer.tag(2, WireType.Varint).uint64(message.remainingBytes);
+        /* yatm.v1.TapeCapacityQuality quality = 3; */
+        if (message.quality !== 0)
+            writer.tag(3, WireType.Varint).int32(message.quality);
+        /* optional int64 issued_at_ns = 4; */
+        if (message.issuedAtNs !== undefined)
+            writer.tag(4, WireType.Varint).int64(message.issuedAtNs);
+        /* optional int64 completed_at_ns = 5; */
+        if (message.completedAtNs !== undefined)
+            writer.tag(5, WireType.Varint).int64(message.completedAtNs);
+        /* optional uint64 observation_error_bytes = 6; */
+        if (message.observationErrorBytes !== undefined)
+            writer.tag(6, WireType.Varint).uint64(message.observationErrorBytes);
+        /* optional uint64 unreflected_bytes = 7; */
+        if (message.unreflectedBytes !== undefined)
+            writer.tag(7, WireType.Varint).uint64(message.unreflectedBytes);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeCapacityLimits
+ */
+export const TapeCapacityLimits = new TapeCapacityLimits$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
+    constructor() {
+        super("yatm.v1.TapeDeviceReport", [
+            { no: 1, name: "medium_present", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 2, name: "write_protected", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 3, name: "density_code", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 4, name: "partition_count", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 5, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
+            { no: 6, name: "fixed_records", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 7, name: "buffered_writes", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 8, name: "compression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 9, name: "decompression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 10, name: "encryption_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 17, name: "features", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceFeature },
+            { no: 18, name: "recommended_write_options", kind: "message", T: () => TarWriteOptions },
+            { no: 19, name: "recommendation_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeDeviceReport>): TapeDeviceReport {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.features = [];
+        message.recommendationDetail = "";
+        if (value !== undefined)
+            reflectionMergePartial<TapeDeviceReport>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeDeviceReport): TapeDeviceReport {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* optional bool medium_present */ 1:
+                    message.mediumPresent = reader.bool();
+                    break;
+                case /* optional bool write_protected */ 2:
+                    message.writeProtected = reader.bool();
+                    break;
+                case /* optional uint32 density_code */ 3:
+                    message.densityCode = reader.uint32();
+                    break;
+                case /* optional uint32 partition_count */ 4:
+                    message.partitionCount = reader.uint32();
+                    break;
+                case /* optional uint32 record_bytes */ 5:
+                    message.recordBytes = reader.uint32();
+                    break;
+                case /* optional bool fixed_records */ 6:
+                    message.fixedRecords = reader.bool();
+                    break;
+                case /* optional bool buffered_writes */ 7:
+                    message.bufferedWrites = reader.bool();
+                    break;
+                case /* optional bool compression_enabled */ 8:
+                    message.compressionEnabled = reader.bool();
+                    break;
+                case /* optional bool decompression_enabled */ 9:
+                    message.decompressionEnabled = reader.bool();
+                    break;
+                case /* optional bool encryption_enabled */ 10:
+                    message.encryptionEnabled = reader.bool();
+                    break;
+                case /* repeated yatm.v1.DeviceFeature features */ 17:
+                    message.features.push(DeviceFeature.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* optional yatm.v1.TarWriteOptions recommended_write_options */ 18:
+                    message.recommendedWriteOptions = TarWriteOptions.internalBinaryRead(reader, reader.uint32(), options, message.recommendedWriteOptions);
+                    break;
+                case /* string recommendation_detail */ 19:
+                    message.recommendationDetail = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeDeviceReport, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* optional bool medium_present = 1; */
+        if (message.mediumPresent !== undefined)
+            writer.tag(1, WireType.Varint).bool(message.mediumPresent);
+        /* optional bool write_protected = 2; */
+        if (message.writeProtected !== undefined)
+            writer.tag(2, WireType.Varint).bool(message.writeProtected);
+        /* optional uint32 density_code = 3; */
+        if (message.densityCode !== undefined)
+            writer.tag(3, WireType.Varint).uint32(message.densityCode);
+        /* optional uint32 partition_count = 4; */
+        if (message.partitionCount !== undefined)
+            writer.tag(4, WireType.Varint).uint32(message.partitionCount);
+        /* optional uint32 record_bytes = 5; */
+        if (message.recordBytes !== undefined)
+            writer.tag(5, WireType.Varint).uint32(message.recordBytes);
+        /* optional bool fixed_records = 6; */
+        if (message.fixedRecords !== undefined)
+            writer.tag(6, WireType.Varint).bool(message.fixedRecords);
+        /* optional bool buffered_writes = 7; */
+        if (message.bufferedWrites !== undefined)
+            writer.tag(7, WireType.Varint).bool(message.bufferedWrites);
+        /* optional bool compression_enabled = 8; */
+        if (message.compressionEnabled !== undefined)
+            writer.tag(8, WireType.Varint).bool(message.compressionEnabled);
+        /* optional bool decompression_enabled = 9; */
+        if (message.decompressionEnabled !== undefined)
+            writer.tag(9, WireType.Varint).bool(message.decompressionEnabled);
+        /* optional bool encryption_enabled = 10; */
+        if (message.encryptionEnabled !== undefined)
+            writer.tag(10, WireType.Varint).bool(message.encryptionEnabled);
+        /* repeated yatm.v1.DeviceFeature features = 17; */
+        for (let i = 0; i < message.features.length; i++)
+            DeviceFeature.internalBinaryWrite(message.features[i], writer.tag(17, WireType.LengthDelimited).fork(), options).join();
+        /* optional yatm.v1.TarWriteOptions recommended_write_options = 18; */
+        if (message.recommendedWriteOptions)
+            TarWriteOptions.internalBinaryWrite(message.recommendedWriteOptions, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        /* string recommendation_detail = 19; */
+        if (message.recommendationDetail !== "")
+            writer.tag(19, WireType.LengthDelimited).string(message.recommendationDetail);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeDeviceReport
+ */
+export const TapeDeviceReport = new TapeDeviceReport$Type();
 /**
  * @generated ServiceType for protobuf service yatm.v1.MediaService
  */

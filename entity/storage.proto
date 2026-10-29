@@ -16,9 +16,25 @@ message LtfsMetadata {
   repeated LtfsExtent extents = 1;
 }
 
+// Addressing uses a device logical object plus its byte offset, never a tar block number.
+message TapeBytePosition {
+  uint32 partition = 1;
+  uint64 logical_object = 2;
+  uint32 offset_bytes = 3;
+}
+
+message TarMetadata {
+  uint64 tape_file = 1;
+  uint64 header_offset_bytes = 2;
+  // Exact, reload-stable anchors are present together only when established by the provider.
+  optional TapeBytePosition header = 3;
+  optional TapeBytePosition end = 4;
+}
+
 message StorageMetadata {
   oneof backend {
     LtfsMetadata ltfs = 1;
+    TarMetadata tar = 2;
   }
 }
 

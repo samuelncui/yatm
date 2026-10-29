@@ -45,6 +45,48 @@ export interface LtfsMetadata {
     extents: LtfsExtent[];
 }
 /**
+ * Addressing uses a device logical object plus its byte offset, never a tar block number.
+ *
+ * @generated from protobuf message yatm.v1.TapeBytePosition
+ */
+export interface TapeBytePosition {
+    /**
+     * @generated from protobuf field: uint32 partition = 1
+     */
+    partition: number;
+    /**
+     * @generated from protobuf field: uint64 logical_object = 2
+     */
+    logicalObject: bigint;
+    /**
+     * @generated from protobuf field: uint32 offset_bytes = 3
+     */
+    offsetBytes: number;
+}
+/**
+ * @generated from protobuf message yatm.v1.TarMetadata
+ */
+export interface TarMetadata {
+    /**
+     * @generated from protobuf field: uint64 tape_file = 1
+     */
+    tapeFile: bigint;
+    /**
+     * @generated from protobuf field: uint64 header_offset_bytes = 2
+     */
+    headerOffsetBytes: bigint;
+    /**
+     * Exact, reload-stable anchors are present together only when established by the provider.
+     *
+     * @generated from protobuf field: optional yatm.v1.TapeBytePosition header = 3
+     */
+    header?: TapeBytePosition;
+    /**
+     * @generated from protobuf field: optional yatm.v1.TapeBytePosition end = 4
+     */
+    end?: TapeBytePosition;
+}
+/**
  * @generated from protobuf message yatm.v1.StorageMetadata
  */
 export interface StorageMetadata {
@@ -57,6 +99,12 @@ export interface StorageMetadata {
          * @generated from protobuf field: yatm.v1.LtfsMetadata ltfs = 1
          */
         ltfs: LtfsMetadata;
+    } | {
+        oneofKind: "tar";
+        /**
+         * @generated from protobuf field: yatm.v1.TarMetadata tar = 2
+         */
+        tar: TarMetadata;
     } | {
         oneofKind: undefined;
     };
@@ -201,10 +249,143 @@ class LtfsMetadata$Type extends MessageType<LtfsMetadata> {
  */
 export const LtfsMetadata = new LtfsMetadata$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class TapeBytePosition$Type extends MessageType<TapeBytePosition> {
+    constructor() {
+        super("yatm.v1.TapeBytePosition", [
+            { no: 1, name: "partition", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
+            { no: 2, name: "logical_object", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "offset_bytes", kind: "scalar", T: 13 /*ScalarType.UINT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TapeBytePosition>): TapeBytePosition {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.partition = 0;
+        message.logicalObject = 0n;
+        message.offsetBytes = 0;
+        if (value !== undefined)
+            reflectionMergePartial<TapeBytePosition>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeBytePosition): TapeBytePosition {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* uint32 partition */ 1:
+                    message.partition = reader.uint32();
+                    break;
+                case /* uint64 logical_object */ 2:
+                    message.logicalObject = reader.uint64().toBigInt();
+                    break;
+                case /* uint32 offset_bytes */ 3:
+                    message.offsetBytes = reader.uint32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TapeBytePosition, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* uint32 partition = 1; */
+        if (message.partition !== 0)
+            writer.tag(1, WireType.Varint).uint32(message.partition);
+        /* uint64 logical_object = 2; */
+        if (message.logicalObject !== 0n)
+            writer.tag(2, WireType.Varint).uint64(message.logicalObject);
+        /* uint32 offset_bytes = 3; */
+        if (message.offsetBytes !== 0)
+            writer.tag(3, WireType.Varint).uint32(message.offsetBytes);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TapeBytePosition
+ */
+export const TapeBytePosition = new TapeBytePosition$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TarMetadata$Type extends MessageType<TarMetadata> {
+    constructor() {
+        super("yatm.v1.TarMetadata", [
+            { no: 1, name: "tape_file", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "header_offset_bytes", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "header", kind: "message", T: () => TapeBytePosition },
+            { no: 4, name: "end", kind: "message", T: () => TapeBytePosition }
+        ]);
+    }
+    create(value?: PartialMessage<TarMetadata>): TarMetadata {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.tapeFile = 0n;
+        message.headerOffsetBytes = 0n;
+        if (value !== undefined)
+            reflectionMergePartial<TarMetadata>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TarMetadata): TarMetadata {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* uint64 tape_file */ 1:
+                    message.tapeFile = reader.uint64().toBigInt();
+                    break;
+                case /* uint64 header_offset_bytes */ 2:
+                    message.headerOffsetBytes = reader.uint64().toBigInt();
+                    break;
+                case /* optional yatm.v1.TapeBytePosition header */ 3:
+                    message.header = TapeBytePosition.internalBinaryRead(reader, reader.uint32(), options, message.header);
+                    break;
+                case /* optional yatm.v1.TapeBytePosition end */ 4:
+                    message.end = TapeBytePosition.internalBinaryRead(reader, reader.uint32(), options, message.end);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TarMetadata, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* uint64 tape_file = 1; */
+        if (message.tapeFile !== 0n)
+            writer.tag(1, WireType.Varint).uint64(message.tapeFile);
+        /* uint64 header_offset_bytes = 2; */
+        if (message.headerOffsetBytes !== 0n)
+            writer.tag(2, WireType.Varint).uint64(message.headerOffsetBytes);
+        /* optional yatm.v1.TapeBytePosition header = 3; */
+        if (message.header)
+            TapeBytePosition.internalBinaryWrite(message.header, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+        /* optional yatm.v1.TapeBytePosition end = 4; */
+        if (message.end)
+            TapeBytePosition.internalBinaryWrite(message.end, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.TarMetadata
+ */
+export const TarMetadata = new TarMetadata$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class StorageMetadata$Type extends MessageType<StorageMetadata> {
     constructor() {
         super("yatm.v1.StorageMetadata", [
-            { no: 1, name: "ltfs", kind: "message", oneof: "backend", T: () => LtfsMetadata }
+            { no: 1, name: "ltfs", kind: "message", oneof: "backend", T: () => LtfsMetadata },
+            { no: 2, name: "tar", kind: "message", oneof: "backend", T: () => TarMetadata }
         ]);
     }
     create(value?: PartialMessage<StorageMetadata>): StorageMetadata {
@@ -225,6 +406,12 @@ class StorageMetadata$Type extends MessageType<StorageMetadata> {
                         ltfs: LtfsMetadata.internalBinaryRead(reader, reader.uint32(), options, (message.backend as any).ltfs)
                     };
                     break;
+                case /* yatm.v1.TarMetadata tar */ 2:
+                    message.backend = {
+                        oneofKind: "tar",
+                        tar: TarMetadata.internalBinaryRead(reader, reader.uint32(), options, (message.backend as any).tar)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -240,6 +427,9 @@ class StorageMetadata$Type extends MessageType<StorageMetadata> {
         /* yatm.v1.LtfsMetadata ltfs = 1; */
         if (message.backend.oneofKind === "ltfs")
             LtfsMetadata.internalBinaryWrite(message.backend.ltfs, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.TarMetadata tar = 2; */
+        if (message.backend.oneofKind === "tar")
+            TarMetadata.internalBinaryWrite(message.backend.tar, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

@@ -53,7 +53,7 @@ describe("Job-bound Media selection", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Start reading" })).toBeEnabled());
     await userEvent.click(screen.getByRole("button", { name: "Start reading" }));
     expect(onRead).toHaveBeenCalledWith(
-      expect.objectContaining({ backend: { oneofKind: "tape", tape: { device: "demo-drive" } }, expectedMediaId: 4n, expectedIdentity: tape.identity }),
+      expect.objectContaining({ backend: { oneofKind: "tape", tape: { device: "demo-drive", refreshPositionMap: false } }, expectedMediaId: 4n, expectedIdentity: tape.identity }),
     );
   });
 

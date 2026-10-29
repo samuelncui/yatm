@@ -146,6 +146,142 @@ func (x *LtfsMetadata) GetExtents() []*LtfsExtent {
 	return nil
 }
 
+// Addressing uses a device logical object plus its byte offset, never a tar block number.
+type TapeBytePosition struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Partition     uint32 `protobuf:"varint,1,opt,name=partition,proto3" json:"partition,omitempty"`
+	LogicalObject uint64 `protobuf:"varint,2,opt,name=logical_object,json=logicalObject,proto3" json:"logical_object,omitempty"`
+	OffsetBytes   uint32 `protobuf:"varint,3,opt,name=offset_bytes,json=offsetBytes,proto3" json:"offset_bytes,omitempty"`
+}
+
+func (x *TapeBytePosition) Reset() {
+	*x = TapeBytePosition{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TapeBytePosition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TapeBytePosition) ProtoMessage() {}
+
+func (x *TapeBytePosition) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TapeBytePosition.ProtoReflect.Descriptor instead.
+func (*TapeBytePosition) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TapeBytePosition) GetPartition() uint32 {
+	if x != nil {
+		return x.Partition
+	}
+	return 0
+}
+
+func (x *TapeBytePosition) GetLogicalObject() uint64 {
+	if x != nil {
+		return x.LogicalObject
+	}
+	return 0
+}
+
+func (x *TapeBytePosition) GetOffsetBytes() uint32 {
+	if x != nil {
+		return x.OffsetBytes
+	}
+	return 0
+}
+
+type TarMetadata struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	TapeFile          uint64 `protobuf:"varint,1,opt,name=tape_file,json=tapeFile,proto3" json:"tape_file,omitempty"`
+	HeaderOffsetBytes uint64 `protobuf:"varint,2,opt,name=header_offset_bytes,json=headerOffsetBytes,proto3" json:"header_offset_bytes,omitempty"`
+	// Exact, reload-stable anchors are present together only when established by the provider.
+	Header *TapeBytePosition `protobuf:"bytes,3,opt,name=header,proto3,oneof" json:"header,omitempty"`
+	End    *TapeBytePosition `protobuf:"bytes,4,opt,name=end,proto3,oneof" json:"end,omitempty"`
+}
+
+func (x *TarMetadata) Reset() {
+	*x = TarMetadata{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_storage_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TarMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TarMetadata) ProtoMessage() {}
+
+func (x *TarMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TarMetadata.ProtoReflect.Descriptor instead.
+func (*TarMetadata) Descriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TarMetadata) GetTapeFile() uint64 {
+	if x != nil {
+		return x.TapeFile
+	}
+	return 0
+}
+
+func (x *TarMetadata) GetHeaderOffsetBytes() uint64 {
+	if x != nil {
+		return x.HeaderOffsetBytes
+	}
+	return 0
+}
+
+func (x *TarMetadata) GetHeader() *TapeBytePosition {
+	if x != nil {
+		return x.Header
+	}
+	return nil
+}
+
+func (x *TarMetadata) GetEnd() *TapeBytePosition {
+	if x != nil {
+		return x.End
+	}
+	return nil
+}
+
 type StorageMetadata struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -154,13 +290,14 @@ type StorageMetadata struct {
 	// Types that are assignable to Backend:
 	//
 	//	*StorageMetadata_Ltfs
+	//	*StorageMetadata_Tar
 	Backend isStorageMetadata_Backend `protobuf_oneof:"backend"`
 }
 
 func (x *StorageMetadata) Reset() {
 	*x = StorageMetadata{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_storage_proto_msgTypes[2]
+		mi := &file_storage_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -173,7 +310,7 @@ func (x *StorageMetadata) String() string {
 func (*StorageMetadata) ProtoMessage() {}
 
 func (x *StorageMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_proto_msgTypes[2]
+	mi := &file_storage_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -186,7 +323,7 @@ func (x *StorageMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageMetadata.ProtoReflect.Descriptor instead.
 func (*StorageMetadata) Descriptor() ([]byte, []int) {
-	return file_storage_proto_rawDescGZIP(), []int{2}
+	return file_storage_proto_rawDescGZIP(), []int{4}
 }
 
 func (m *StorageMetadata) GetBackend() isStorageMetadata_Backend {
@@ -203,6 +340,13 @@ func (x *StorageMetadata) GetLtfs() *LtfsMetadata {
 	return nil
 }
 
+func (x *StorageMetadata) GetTar() *TarMetadata {
+	if x, ok := x.GetBackend().(*StorageMetadata_Tar); ok {
+		return x.Tar
+	}
+	return nil
+}
+
 type isStorageMetadata_Backend interface {
 	isStorageMetadata_Backend()
 }
@@ -211,7 +355,13 @@ type StorageMetadata_Ltfs struct {
 	Ltfs *LtfsMetadata `protobuf:"bytes,1,opt,name=ltfs,proto3,oneof"`
 }
 
+type StorageMetadata_Tar struct {
+	Tar *TarMetadata `protobuf:"bytes,2,opt,name=tar,proto3,oneof"`
+}
+
 func (*StorageMetadata_Ltfs) isStorageMetadata_Backend() {}
+
+func (*StorageMetadata_Tar) isStorageMetadata_Backend() {}
 
 type StoragePosition struct {
 	state         protoimpl.MessageState
@@ -225,7 +375,7 @@ type StoragePosition struct {
 func (x *StoragePosition) Reset() {
 	*x = StoragePosition{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_storage_proto_msgTypes[3]
+		mi := &file_storage_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -238,7 +388,7 @@ func (x *StoragePosition) String() string {
 func (*StoragePosition) ProtoMessage() {}
 
 func (x *StoragePosition) ProtoReflect() protoreflect.Message {
-	mi := &file_storage_proto_msgTypes[3]
+	mi := &file_storage_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -251,7 +401,7 @@ func (x *StoragePosition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoragePosition.ProtoReflect.Descriptor instead.
 func (*StoragePosition) Descriptor() ([]byte, []int) {
-	return file_storage_proto_rawDescGZIP(), []int{3}
+	return file_storage_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StoragePosition) GetOrder() []byte {
@@ -288,11 +438,35 @@ var file_storage_proto_rawDesc = []byte{
 	0x74, 0x61, 0x12, 0x2d, 0x0a, 0x07, 0x65, 0x78, 0x74, 0x65, 0x6e, 0x74, 0x73, 0x18, 0x01, 0x20,
 	0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x79, 0x61, 0x74, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x74,
 	0x66, 0x73, 0x45, 0x78, 0x74, 0x65, 0x6e, 0x74, 0x52, 0x07, 0x65, 0x78, 0x74, 0x65, 0x6e, 0x74,
-	0x73, 0x22, 0x49, 0x0a, 0x0f, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x4d, 0x65, 0x74, 0x61,
-	0x64, 0x61, 0x74, 0x61, 0x12, 0x2b, 0x0a, 0x04, 0x6c, 0x74, 0x66, 0x73, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x15, 0x2e, 0x79, 0x61, 0x74, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x4c, 0x74, 0x66,
-	0x73, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x48, 0x00, 0x52, 0x04, 0x6c, 0x74, 0x66,
-	0x73, 0x42, 0x09, 0x0a, 0x07, 0x62, 0x61, 0x63, 0x6b, 0x65, 0x6e, 0x64, 0x22, 0x5d, 0x0a, 0x0f,
+	0x73, 0x22, 0x7a, 0x0a, 0x10, 0x54, 0x61, 0x70, 0x65, 0x42, 0x79, 0x74, 0x65, 0x50, 0x6f, 0x73,
+	0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1c, 0x0a, 0x09, 0x70, 0x61, 0x72, 0x74, 0x69, 0x74, 0x69,
+	0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x09, 0x70, 0x61, 0x72, 0x74, 0x69, 0x74,
+	0x69, 0x6f, 0x6e, 0x12, 0x25, 0x0a, 0x0e, 0x6c, 0x6f, 0x67, 0x69, 0x63, 0x61, 0x6c, 0x5f, 0x6f,
+	0x62, 0x6a, 0x65, 0x63, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x6c, 0x6f, 0x67,
+	0x69, 0x63, 0x61, 0x6c, 0x4f, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x6f, 0x66,
+	0x66, 0x73, 0x65, 0x74, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x0b, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x42, 0x79, 0x74, 0x65, 0x73, 0x22, 0xd7, 0x01,
+	0x0a, 0x0b, 0x54, 0x61, 0x72, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x1b, 0x0a,
+	0x09, 0x74, 0x61, 0x70, 0x65, 0x5f, 0x66, 0x69, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04,
+	0x52, 0x08, 0x74, 0x61, 0x70, 0x65, 0x46, 0x69, 0x6c, 0x65, 0x12, 0x2e, 0x0a, 0x13, 0x68, 0x65,
+	0x61, 0x64, 0x65, 0x72, 0x5f, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x5f, 0x62, 0x79, 0x74, 0x65,
+	0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x11, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x4f,
+	0x66, 0x66, 0x73, 0x65, 0x74, 0x42, 0x79, 0x74, 0x65, 0x73, 0x12, 0x36, 0x0a, 0x06, 0x68, 0x65,
+	0x61, 0x64, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x79, 0x61, 0x74,
+	0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x61, 0x70, 0x65, 0x42, 0x79, 0x74, 0x65, 0x50, 0x6f, 0x73,
+	0x69, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x00, 0x52, 0x06, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x88,
+	0x01, 0x01, 0x12, 0x30, 0x0a, 0x03, 0x65, 0x6e, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x19, 0x2e, 0x79, 0x61, 0x74, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x61, 0x70, 0x65, 0x42, 0x79,
+	0x74, 0x65, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x48, 0x01, 0x52, 0x03, 0x65, 0x6e,
+	0x64, 0x88, 0x01, 0x01, 0x42, 0x09, 0x0a, 0x07, 0x5f, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x42,
+	0x06, 0x0a, 0x04, 0x5f, 0x65, 0x6e, 0x64, 0x22, 0x73, 0x0a, 0x0f, 0x53, 0x74, 0x6f, 0x72, 0x61,
+	0x67, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x2b, 0x0a, 0x04, 0x6c, 0x74,
+	0x66, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x79, 0x61, 0x74, 0x6d, 0x2e,
+	0x76, 0x31, 0x2e, 0x4c, 0x74, 0x66, 0x73, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x48,
+	0x00, 0x52, 0x04, 0x6c, 0x74, 0x66, 0x73, 0x12, 0x28, 0x0a, 0x03, 0x74, 0x61, 0x72, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x79, 0x61, 0x74, 0x6d, 0x2e, 0x76, 0x31, 0x2e, 0x54,
+	0x61, 0x72, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x48, 0x00, 0x52, 0x03, 0x74, 0x61,
+	0x72, 0x42, 0x09, 0x0a, 0x07, 0x62, 0x61, 0x63, 0x6b, 0x65, 0x6e, 0x64, 0x22, 0x5d, 0x0a, 0x0f,
 	0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x50, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12,
 	0x14, 0x0a, 0x05, 0x6f, 0x72, 0x64, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x05,
 	0x6f, 0x72, 0x64, 0x65, 0x72, 0x12, 0x34, 0x0a, 0x08, 0x6d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
@@ -316,22 +490,27 @@ func file_storage_proto_rawDescGZIP() []byte {
 	return file_storage_proto_rawDescData
 }
 
-var file_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_storage_proto_goTypes = []interface{}{
-	(*LtfsExtent)(nil),      // 0: yatm.v1.LtfsExtent
-	(*LtfsMetadata)(nil),    // 1: yatm.v1.LtfsMetadata
-	(*StorageMetadata)(nil), // 2: yatm.v1.StorageMetadata
-	(*StoragePosition)(nil), // 3: yatm.v1.StoragePosition
+	(*LtfsExtent)(nil),       // 0: yatm.v1.LtfsExtent
+	(*LtfsMetadata)(nil),     // 1: yatm.v1.LtfsMetadata
+	(*TapeBytePosition)(nil), // 2: yatm.v1.TapeBytePosition
+	(*TarMetadata)(nil),      // 3: yatm.v1.TarMetadata
+	(*StorageMetadata)(nil),  // 4: yatm.v1.StorageMetadata
+	(*StoragePosition)(nil),  // 5: yatm.v1.StoragePosition
 }
 var file_storage_proto_depIdxs = []int32{
 	0, // 0: yatm.v1.LtfsMetadata.extents:type_name -> yatm.v1.LtfsExtent
-	1, // 1: yatm.v1.StorageMetadata.ltfs:type_name -> yatm.v1.LtfsMetadata
-	2, // 2: yatm.v1.StoragePosition.metadata:type_name -> yatm.v1.StorageMetadata
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2, // 1: yatm.v1.TarMetadata.header:type_name -> yatm.v1.TapeBytePosition
+	2, // 2: yatm.v1.TarMetadata.end:type_name -> yatm.v1.TapeBytePosition
+	1, // 3: yatm.v1.StorageMetadata.ltfs:type_name -> yatm.v1.LtfsMetadata
+	3, // 4: yatm.v1.StorageMetadata.tar:type_name -> yatm.v1.TarMetadata
+	4, // 5: yatm.v1.StoragePosition.metadata:type_name -> yatm.v1.StorageMetadata
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_storage_proto_init() }
@@ -365,7 +544,7 @@ func file_storage_proto_init() {
 			}
 		}
 		file_storage_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*StorageMetadata); i {
+			switch v := v.(*TapeBytePosition); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -377,6 +556,30 @@ func file_storage_proto_init() {
 			}
 		}
 		file_storage_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*TarMetadata); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*StorageMetadata); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_storage_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StoragePosition); i {
 			case 0:
 				return &v.state
@@ -389,8 +592,10 @@ func file_storage_proto_init() {
 			}
 		}
 	}
-	file_storage_proto_msgTypes[2].OneofWrappers = []interface{}{
+	file_storage_proto_msgTypes[3].OneofWrappers = []interface{}{}
+	file_storage_proto_msgTypes[4].OneofWrappers = []interface{}{
 		(*StorageMetadata_Ltfs)(nil),
+		(*StorageMetadata_Tar)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -398,7 +603,7 @@ func file_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_storage_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

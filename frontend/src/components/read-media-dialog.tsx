@@ -86,7 +86,7 @@ export const ReadMediaDialog = ({
       const target =
         backend === "volume"
           ? { backend: { oneofKind: "volume" as const, volume: { uuid: volumeUUID } } }
-          : { backend: { oneofKind: "tape" as const, tape: { device } } };
+          : { backend: { oneofKind: "tape" as const, tape: { device, refreshPositionMap: false } } };
       const selected = backend === "volume" ? selectedVolume : inspection.reply?.media;
       if (!selected) throw new Error("Select matching Media before starting.");
       await onRead(ReadMediaTarget.create({ ...target, expectedMediaId: selected.id, expectedIdentity: selected.identity }));

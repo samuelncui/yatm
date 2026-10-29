@@ -37,6 +37,30 @@ message TapeMediaProfile {
     string serial_number = 1;
     string encryption = 2;
     string format = 3;
+    optional TarMediaProfile tar = 4;
+}
+
+enum TapeRecordMode {
+    TAPE_RECORD_MODE_UNSPECIFIED = 0;
+    TAPE_RECORD_MODE_FIXED = 1;
+    TAPE_RECORD_MODE_VARIABLE = 2;
+}
+
+// FORMAT freezes the record policy and hardware choices for one tar cartridge initialization.
+message TarMediaProfile {
+    string initialization_id = 1;
+    TapeRecordMode record_mode = 2;
+    uint32 record_bytes = 3;
+    bool hardware_compression = 4;
+    // Optional observed public algorithm; the separately retained key controls script preparation.
+    optional string encryption_algorithm = 5;
+}
+
+// Presence distinguishes an omitted default from an explicit false hardware choice.
+message TarWriteOptions {
+    optional TapeRecordMode record_mode = 1;
+    optional uint32 record_bytes = 2;
+    optional bool hardware_compression = 3;
 }
 
 message VolumeMediaProfile {
@@ -49,6 +73,53 @@ message MediaProfile {
         TapeMediaProfile tape = 1;
         VolumeMediaProfile volume = 2;
     }
+}
+
+enum TapePositionDirection {
+    TAPE_POSITION_DIRECTION_UNSPECIFIED = 0;
+    TAPE_POSITION_DIRECTION_FORWARD = 1;
+    TAPE_POSITION_DIRECTION_REVERSE = 2;
+}
+
+enum TapePositionEndpointConvention {
+    TAPE_POSITION_ENDPOINT_CONVENTION_UNSPECIFIED = 0;
+    TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE = 1;
+    TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE = 2;
+}
+
+// Logical coverage is partition-scoped; absent EOD remains unknown.
+message TapePositionPartition {
+    uint32 partition = 1;
+    uint64 bot = 2;
+    optional uint64 eod = 3;
+}
+
+// Wraps retain declared traversal order and missing endpoints rather than filling gaps.
+message TapePositionWrap {
+    uint32 partition = 1;
+    uint32 wrap = 2;
+    uint32 band = 3;
+    TapePositionDirection direction = 4;
+    bool full = 5;
+    optional uint64 endpoint = 6;
+    // A partial wrap keeps its actual EOD; this is only its interpolation denominator.
+    optional uint64 estimated_span_objects = 7;
+    optional uint64 endpoint_uncertainty_objects = 8;
+}
+
+// Mutable derived geometry belongs to Media, independently of its immutable profile.
+// Exactly one initialization binding is present: tar initialization_id, or LTFS UUID/index.
+message TapePositionMap {
+    string initialization_id = 1;
+    string ltfs_uuid = 2;
+    optional uint64 ltfs_index_generation = 3;
+    repeated TapePositionPartition partitions = 4;
+    repeated TapePositionWrap wraps = 5;
+    TapePositionEndpointConvention endpoint_convention = 6;
+    string source = 7;
+    optional uint64 min_lpos = 8;
+    optional uint64 max_lpos = 9;
+    int64 observed_at_ns = 10;
 }
 
 message Media {
@@ -66,6 +137,9 @@ message Media {
     int64 written_bytes = 20;
     optional bool mounted = 21;
     optional int64 filesystem_available_bytes = 22;
+    optional TapePositionMap tape_position_map = 23;
+    // Responses omit profile.tape.encryption; this reports whether the Library retains that key.
+    bool encryption_key_saved = 24;
 }
 
 message MediaFilter {
@@ -83,6 +157,8 @@ message ArchiveTapeTarget {
     string barcode = 2;
     string name = 3;
     ArchiveTapeWriteMode mode = 4;
+    optional string format = 5;
+    optional TarWriteOptions tar_options = 6;
 }
 
 message ArchiveVolumeTarget {
@@ -98,6 +174,10 @@ message ArchiveMediaTarget {
 
 message ReadTapeTarget {
     string device = 1;
+    // Optional selection from the Job's frozen candidates; the Session still proves identity.
+    optional int64 media_id = 2;
+    // Explicit qualified preparation for tar Restore and VERIFY_COPIES only.
+    bool refresh_position_map = 3;
 }
 
 message ReadVolumeTarget {

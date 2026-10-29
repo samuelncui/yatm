@@ -2,8 +2,10 @@ syntax = "proto3";
 package yatm.v1;
 option go_package = "github.com/samuelncui/yatm/entity;entity";
 
-// Every Settings group uses the same read and replacement path. Values remain typed so adding a
-// group extends this contract without exposing storage keys or unvalidated JSON.
+import "media.proto";
+
+// Settings groups use typed reads and updates. Device updates replace user-owned Device settings while
+// retaining server-owned learned read parameters from the latest stored value.
 service SettingsService {
   rpc Get(GetSettingsRequest) returns (GetSettingsResponse) {}
   rpc Update(UpdateSettingsRequest) returns (UpdateSettingsResponse) {}
@@ -14,6 +16,101 @@ enum SettingsGroup {
   SETTINGS_GROUP_LIBRARY = 1;
   SETTINGS_GROUP_PREVIEW = 2;
   SETTINGS_GROUP_JOB = 3;
+  SETTINGS_GROUP_DEVICE = 4;
+}
+
+// Device settings attach to deployment-configured names and do not authorize device access.
+message DeviceSettings {
+  repeated DeviceConfig devices = 1;
+  // Read-only results of passive read learning. Update ignores client-supplied values.
+  repeated TapeLearnedReadParameters learned_read_parameters = 2;
+}
+message DeviceConfig {
+  string device = 1;
+  oneof options { TapeDeviceSettings tape = 2; }
+}
+message TapeDeviceSettings {
+  optional string default_format = 1;
+  optional TarWriteOptions tar_write_options = 2;
+  TapeReadOrder read_order = 3;
+  // Absent uses five seconds; explicit zero disables capacity polling; enabled intervals are at least five seconds.
+  optional uint32 capacity_poll_interval_seconds = 4;
+  // Optional manual read parameters. Missing fields stay unknown; saving does not establish their applicability.
+  optional TapeReadParameters read_parameters = 5;
+  // Absent enables observation of ordinary completed I/O; never issues additional measurement commands.
+  optional bool passive_read_learning = 6;
+  // Absent allows 300 seconds. Explicit values must be positive; no 600-second upper limit.
+  optional uint32 read_planning_seconds = 7;
+}
+
+// The latest refit for an exact observed device/configuration. Its raw observations live in each
+// Job bundle as read-observations.jsonl and are not part of this message.
+message TapeLearnedReadParameters {
+  string device = 1;
+  TapeReadParameters parameters = 2;
+  string fit_version = 3;
+  // Retained observations for this device/configuration when the parameters were fitted.
+  uint32 training_observations = 4;
+  // Unweighted residuals of the fitted parameters over those observations.
+  double mae_seconds = 6;
+  double max_error_seconds = 7;
+  int64 updated_at_ns = 8;
+}
+
+message TapeReadParameters {
+  TapeReadApplicability applies_to = 1;
+  TapeReadGeometry geometry = 2;
+  TapeReadPositioning positioning = 3;
+  TapeReadTiming reading = 4;
+  // Descriptive provenance and measurement conditions, not a qualification switch.
+  string source_reference = 5;
+  TapeReadCompletion completion = 6;
+}
+// Native synchronous unload timing is independent of the LOCATE regression. Full span means
+// one physical longitudinal tape length, not the complete serpentine logical address space.
+message TapeReadCompletion {
+  optional double full_span_seconds = 1;
+  optional double fixed_seconds = 2;
+}
+message TapeReadApplicability {
+  optional string drive_serial = 1;
+  optional string firmware = 2;
+  optional uint32 density_code = 3;
+  optional TapeRecordMode record_mode = 4;
+  optional uint32 record_bytes = 5;
+  optional bool hardware_compression = 6;
+  // Explicit empty means plaintext; absent means unknown. Never contains a key.
+  optional string encryption_algorithm = 7;
+}
+message TapeReadGeometry {
+  optional uint32 nominal_wraps = 1;
+  optional uint64 min_lpos = 2;
+  optional uint64 max_lpos = 3;
+}
+// The seven CERN positioning terms use seconds and seconds per LPOS, including signed terms.
+message TapeReadPositioning {
+  optional double base_seconds = 1;
+  optional double wrap_change_seconds = 2;
+  optional double band_change_seconds = 3;
+  optional double landing_zone_change_seconds = 4;
+  optional double direction_change_seconds = 5;
+  optional double step_back_seconds = 6;
+  optional double longitudinal_seconds_per_lpos = 7;
+  // Seconds for one complete longitudinal span, not transfer time. Exclusive with seconds per LPOS.
+  optional double longitudinal_seconds_per_wrap = 9;
+}
+message TapeReadTiming {
+  optional double bytes_per_second = 1;
+  // Additional first nonempty READ latency after settled LOCATE, excluding transferred bytes/rate.
+  optional double post_locate_read_overhead_seconds = 2;
+  // Additional latency per crossed filemark and following READ; absent leaves that action unpriced.
+  optional double filemark_overhead_seconds = 3;
+}
+// Device setting; an unspecified value resolves to LOGICAL for each read attempt.
+enum TapeReadOrder {
+  TAPE_READ_ORDER_UNSPECIFIED = 0;
+  TAPE_READ_ORDER_LOGICAL = 1;
+  TAPE_READ_ORDER_AUTO = 2;
 }
 
 // Library preferences: what the Library shows and how it confirms removal.
@@ -83,6 +180,7 @@ message SettingsValue {
     LibrarySettings library = 1;
     PreviewSettings preview = 2;
     JobSettings job = 3;
+    DeviceSettings device = 4;
   }
 }
 message GetSettingsRequest { SettingsGroup group = 1; }
