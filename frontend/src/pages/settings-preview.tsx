@@ -6,7 +6,6 @@ import {
   Checkbox,
   Chip,
   createFilterOptions,
-  Divider,
   FormControl,
   Grid,
   LinearProgress,
@@ -14,7 +13,6 @@ import {
   Stack,
   Switch,
   TextField,
-  Typography,
 } from "@mui/material";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsField, SettingsNumberField } from "@/components/settings-field";
@@ -24,9 +22,10 @@ import { usePreviewGeneration } from "@/components/preview-policy-select";
 
 export const PreviewSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.PREVIEW, PreviewSettings, "Preview");
-  const { cancel, dirty, draft, error, loading, reload, save: saveDraft, saved, saving, setDraft, setError } = editor;
+  const { cancel, dirty, draft, error, loading, reload, save: saveDraft, saved, saving, setDraft, setError, settings } = editor;
   const [selected, setSelected] = useState(0);
   const generation = usePreviewGeneration(!!draft, draft);
+  const commandChanged = !!draft && draft.command !== settings?.command;
   const save = async () => {
     if (!draft || saving || loading) return;
     const validation = validatePreview(draft);
@@ -61,56 +60,25 @@ export const PreviewSettingsBrowser = () => {
             void save();
           }}
         >
-          <SettingsSection title="Generation" description="Enablement changes apply when the next file starts.">
+          <SettingsSection title="Generation" description="Enablement changes apply when the next file starts. Existing Preview assets remain available.">
             <SettingsField
               label="Enable generation"
               control={<Switch checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
             />
             {!generation.loading && (generation.error || !generation.capabilities?.available) && (
-              <Feedback severity="warning">{generation.error || generation.capabilities?.reason || generation.reason}</Feedback>
+              <Feedback
+                severity="warning"
+                action={
+                  generation.error ? (
+                    <Button disabled={generation.loading || loading || saving || commandChanged} onClick={generation.reload}>
+                      Retry
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {generation.error || generation.capabilities?.reason || generation.reason}
+              </Feedback>
             )}
-          </SettingsSection>
-          <SettingsSection title="Runtime" description="Command and resource limits apply when the next file starts.">
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, lg: 8 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Executable"
-                  helperText="Leave empty to use yatm-preview beside the server."
-                  value={draft.command}
-                  disabled={loading || saving}
-                  onChange={(event) => setDraft({ ...draft, command: event.target.value })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Concurrency"
-                  value={draft.concurrency}
-                  max={16}
-                  disabled={loading || saving}
-                  onChange={(concurrency) => setDraft({ ...draft, concurrency })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Timeout (seconds)"
-                  value={draft.timeoutSeconds}
-                  max={86400}
-                  disabled={loading || saving}
-                  onChange={(timeoutSeconds) => setDraft({ ...draft, timeoutSeconds })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Maximum input pixels"
-                  value={Number(draft.maxInputPixels)}
-                  max={64000000}
-                  disabled={loading || saving}
-                  onChange={(value) => setDraft({ ...draft, maxInputPixels: BigInt(Number.isFinite(value) ? Math.trunc(value) : 0) })}
-                />
-              </Grid>
-            </Grid>
           </SettingsSection>
           {draft.generators.length === 0 && <Alert severity="info">No Preview generators are configured.</Alert>}
           {draft.generators.length > 0 && (
@@ -137,6 +105,7 @@ export const PreviewSettingsBrowser = () => {
                     label={generatorLabel(draft, activeSelected)}
                     supportedExtensions={generation.capabilities?.inputExtensionsByKind?.[draft.generators[activeSelected].options.oneofKind ?? ""]?.extensions}
                     disabled={loading || saving}
+                    hasError={validateGenerators(draft)?.index === activeSelected}
                     onChange={(value) => {
                       setDraft({ ...draft, generators: draft.generators.map((existing, item) => (item === activeSelected ? value : existing)) });
                     }}
@@ -145,7 +114,61 @@ export const PreviewSettingsBrowser = () => {
               </Stack>
             </SettingsSection>
           )}
-          <SettingsSection title="Supported formats" description="Capabilities reported by the current Preview helper.">
+          <SettingsSection
+            title="Advanced runtime"
+            collapsible
+            hasError={!!validateRuntime(draft)}
+            description={`Concurrency ${draft.concurrency} · timeout ${draft.timeoutSeconds} seconds · maximum input ${draft.maxInputPixels} pixels`}
+          >
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, lg: 8 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Executable"
+                  helperText={
+                    commandChanged
+                      ? "Save to check this executable. Current capability results describe the saved executable."
+                      : "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+                  }
+                  value={draft.command}
+                  disabled={loading || saving}
+                  onChange={(event) => setDraft({ ...draft, command: event.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                <SettingsNumberField
+                  label="Concurrency"
+                  helperText="Maximum files generating Previews at the same time. Higher values use more memory."
+                  value={draft.concurrency}
+                  max={16}
+                  disabled={loading || saving}
+                  onChange={(concurrency) => setDraft({ ...draft, concurrency })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                <SettingsNumberField
+                  label="Timeout (seconds)"
+                  helperText="Maximum generation time per file, after it acquires a slot."
+                  value={draft.timeoutSeconds}
+                  max={86400}
+                  disabled={loading || saving}
+                  onChange={(timeoutSeconds) => setDraft({ ...draft, timeoutSeconds })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                <SettingsNumberField
+                  label="Maximum input pixels"
+                  helperText="Larger inputs are rejected before decoding; this is not the output size."
+                  value={Number(draft.maxInputPixels)}
+                  max={64000000}
+                  disabled={loading || saving}
+                  onChange={(value) => setDraft({ ...draft, maxInputPixels: BigInt(Number.isFinite(value) ? Math.trunc(value) : 0) })}
+                />
+              </Grid>
+            </Grid>
+          </SettingsSection>
+          <SettingsSection title="Supported formats" collapsible hasError={!!generation.error} description="Capabilities of the saved Preview executable.">
             <Stack useFlexGap spacing={1}>
               {generation.capabilities && (
                 <>
@@ -165,8 +188,13 @@ export const PreviewSettingsBrowser = () => {
                 </>
               )}
               {generation.loading && <LinearProgress aria-label="Checking Preview helper" />}
-              <Button type="button" sx={{ alignSelf: "flex-start" }} disabled={loading || saving || generation.loading} onClick={generation.reload}>
-                Check again
+              <Button
+                type="button"
+                sx={{ alignSelf: "flex-start" }}
+                disabled={loading || saving || generation.loading || commandChanged}
+                onClick={generation.reload}
+              >
+                Check saved executable again
               </Button>
             </Stack>
           </SettingsSection>
@@ -182,12 +210,14 @@ const GeneratorForm = ({
   label,
   supportedExtensions,
   disabled,
+  hasError,
   onChange,
 }: {
   generator: PreviewGeneratorSettings;
   label: string;
   supportedExtensions?: string[];
   disabled: boolean;
+  hasError: boolean;
   onChange: (value: PreviewGeneratorSettings) => void;
 }) => {
   const { options } = generator;
@@ -225,28 +255,6 @@ const GeneratorForm = ({
               <SettingsNumberField label={label + " (px)"} value={value} max={8192} disabled={disabled} onChange={(next) => change(field, next)} />
             </Grid>
           ))}
-          {options.oneofKind === "video" && (
-            <>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <SettingsNumberField
-                  label="Sampling interval (seconds)"
-                  value={options.video.timelineIntervalSeconds}
-                  max={2147483647}
-                  disabled={disabled}
-                  onChange={(next) => change("timelineIntervalSeconds", next)}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                <SettingsNumberField
-                  label="Maximum frames"
-                  value={options.video.timelineMaxFrames}
-                  max={1000}
-                  disabled={disabled}
-                  onChange={(next) => change("timelineMaxFrames", next)}
-                />
-              </Grid>
-            </>
-          )}
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
             <TextField
               select
@@ -264,62 +272,96 @@ const GeneratorForm = ({
             </TextField>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-            <SettingsNumberField label="Quality" value={value.quality} max={100} disabled={disabled} onChange={(next) => change("quality", next)} />
+            <SettingsNumberField
+              label="Quality"
+              value={value.quality}
+              max={100}
+              disabled={disabled || value.format === "png"}
+              helperText={value.format === "png" ? "PNG is lossless; quality does not apply." : undefined}
+              onChange={(next) => change("quality", next)}
+            />
           </Grid>
         </Grid>
-        <Divider />
-        <Typography variant="subtitle2">File routing</Typography>
-        <Autocomplete
-          multiple
-          freeSolo
-          clearOnBlur
-          disableCloseOnSelect
-          size="small"
-          disabled={disabled}
-          options={[...new Set([...(supportedExtensions ?? []), ...generator.extensions.map((entry) => entry.name)])]}
-          value={generator.extensions.filter((entry) => entry.enabled).map((entry) => entry.name)}
-          onChange={(_, names, reason) => {
-            const selected = new Set(names.map((name) => name.trim().toLowerCase().replace(/^\./, "")).filter(Boolean));
-            const existing = new Set(generator.extensions.map((entry) => entry.name));
-            onChange({
-              ...generator,
-              extensions: [
-                ...generator.extensions
-                  .filter((entry) => reason !== "clear" || !entry.enabled)
-                  .map((entry) => ({ ...entry, enabled: selected.has(entry.name) })),
-                ...[...selected].filter((name) => !existing.has(name)).map((name) => ({ name, enabled: true })),
-              ],
-            });
-          }}
-          renderOption={(props, option, { selected }) => (
-            <li {...props} key={option}>
-              <Checkbox checked={selected} tabIndex={-1} disableRipple />
-              {option}
-              {supportedExtensions?.includes(option) ? "" : " · unconfirmed"}
-            </li>
+        <SettingsSection title="Advanced output" collapsible hasError={hasError} description="File extensions and video sampling.">
+          {options.oneofKind === "video" && (
+            <Alert severity="info">
+              Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples.
+            </Alert>
           )}
-          renderValue={(values, getItemProps) =>
-            values.map((value, index) => {
-              const { key, ...props } = getItemProps({ index });
-              return (
-                <Chip
-                  key={key}
-                  {...props}
-                  aria-disabled={disabled || undefined}
-                  onDelete={disabled ? undefined : () => onChange({ ...generator, extensions: generator.extensions.filter((entry) => entry.name !== value) })}
-                  onKeyDown={(event) => {
-                    // Let Chip own deletion instead of Autocomplete turning it into an uncheck.
-                    if (event.key === "Backspace" || event.key === "Delete") event.stopPropagation();
-                  }}
-                  size="small"
-                  label={value}
-                  color={supportedExtensions?.includes(value) ? "default" : "warning"}
+          {options.oneofKind === "video" && (
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                <SettingsNumberField
+                  label="Minimum sampling interval (seconds)"
+                  value={options.video.timelineIntervalSeconds}
+                  max={2147483647}
+                  disabled={disabled}
+                  onChange={(next) => change("timelineIntervalSeconds", next)}
                 />
-              );
-            })
-          }
-          renderInput={(params) => <TextField {...params} label="File extensions" />}
-        />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                <SettingsNumberField
+                  label="Maximum timeline frames"
+                  value={options.video.timelineMaxFrames}
+                  max={1000}
+                  disabled={disabled}
+                  onChange={(next) => change("timelineMaxFrames", next)}
+                />
+              </Grid>
+            </Grid>
+          )}
+          <Autocomplete
+            multiple
+            freeSolo
+            clearOnBlur
+            disableCloseOnSelect
+            size="small"
+            disabled={disabled}
+            options={[...new Set([...(supportedExtensions ?? []), ...generator.extensions.map((entry) => entry.name)])]}
+            value={generator.extensions.filter((entry) => entry.enabled).map((entry) => entry.name)}
+            onChange={(_, names, reason) => {
+              const selected = new Set(names.map((name) => name.trim().toLowerCase().replace(/^\./, "")).filter(Boolean));
+              const existing = new Set(generator.extensions.map((entry) => entry.name));
+              onChange({
+                ...generator,
+                extensions: [
+                  ...generator.extensions
+                    .filter((entry) => reason !== "clear" || !entry.enabled)
+                    .map((entry) => ({ ...entry, enabled: selected.has(entry.name) })),
+                  ...[...selected].filter((name) => !existing.has(name)).map((name) => ({ name, enabled: true })),
+                ],
+              });
+            }}
+            renderOption={(props, option, { selected }) => (
+              <li {...props} key={option}>
+                <Checkbox checked={selected} tabIndex={-1} disableRipple />
+                {option}
+                {supportedExtensions?.includes(option) ? "" : " · unconfirmed"}
+              </li>
+            )}
+            renderValue={(values, getItemProps) =>
+              values.map((value, index) => {
+                const { key, ...props } = getItemProps({ index });
+                return (
+                  <Chip
+                    key={key}
+                    {...props}
+                    aria-disabled={disabled || undefined}
+                    onDelete={disabled ? undefined : () => onChange({ ...generator, extensions: generator.extensions.filter((entry) => entry.name !== value) })}
+                    onKeyDown={(event) => {
+                      // Let Chip own deletion instead of Autocomplete turning it into an uncheck.
+                      if (event.key === "Backspace" || event.key === "Delete") event.stopPropagation();
+                    }}
+                    size="small"
+                    label={value}
+                    color={supportedExtensions?.includes(value) ? "default" : "warning"}
+                  />
+                );
+              })
+            }
+            renderInput={(params) => <TextField {...params} label="File extensions" />}
+          />
+        </SettingsSection>
       </Stack>
     </FormControl>
   );
@@ -335,11 +377,20 @@ const generatorLabel = (settings: PreviewSettings, index: number): string => {
 };
 
 const validatePreview = (settings: PreviewSettings): { index: number; message: string } | undefined => {
-  if (!Number.isInteger(settings.concurrency) || settings.concurrency < 1 || settings.concurrency > 16)
-    return { index: 0, message: "Concurrency must be between 1 and 16." };
+  const runtime = validateRuntime(settings);
+  return runtime ? { index: 0, message: runtime } : validateGenerators(settings);
+};
+
+// Runtime limits are validated separately so only their own section reports an error.
+const validateRuntime = (settings: PreviewSettings): string => {
+  if (!Number.isInteger(settings.concurrency) || settings.concurrency < 1 || settings.concurrency > 16) return "Concurrency must be between 1 and 16.";
   if (!Number.isInteger(settings.timeoutSeconds) || settings.timeoutSeconds < 1 || settings.timeoutSeconds > 86400)
-    return { index: 0, message: "Timeout must be between 1 and 86400 seconds." };
-  if (settings.maxInputPixels < 1n || settings.maxInputPixels > 64000000n) return { index: 0, message: "Maximum input pixels must be between 1 and 64000000." };
+    return "Timeout must be between 1 and 86400 seconds.";
+  if (settings.maxInputPixels < 1n || settings.maxInputPixels > 64000000n) return "Maximum input pixels must be between 1 and 64000000.";
+  return "";
+};
+
+const validateGenerators = (settings: PreviewSettings): { index: number; message: string } | undefined => {
   const extensions = new Set<string>();
   for (const [index, generator] of settings.generators.entries()) {
     const invalid = (message: string) => ({ index, message: `${generatorLabel(settings, index)}: ${message}` });

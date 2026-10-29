@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 
 import { settingsCli } from "@/api";
-import { type JobSettings, type LibrarySettings, type PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
+import { type DeviceSettings, type JobSettings, type LibrarySettings, type PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
 import { useAppSelector, useAppStore } from "@/state/react";
 import type { AppStore } from "@/state/store";
 import { makeSelectSettings, settingsActions } from "@/state/settings";
@@ -16,6 +16,7 @@ type SettingsByGroup = {
   [SettingsGroup.LIBRARY]: LibrarySettings;
   [SettingsGroup.PREVIEW]: PreviewSettings;
   [SettingsGroup.JOB]: JobSettings;
+  [SettingsGroup.DEVICE]: DeviceSettings;
 };
 
 const groupValue = <G extends keyof SettingsByGroup>(settings: SettingsValue, group: G): SettingsByGroup[G] | undefined => {
@@ -23,6 +24,7 @@ const groupValue = <G extends keyof SettingsByGroup>(settings: SettingsValue, gr
   if (group === SettingsGroup.LIBRARY && value?.oneofKind === "library") return value.library as SettingsByGroup[G];
   if (group === SettingsGroup.PREVIEW && value?.oneofKind === "preview") return value.preview as SettingsByGroup[G];
   if (group === SettingsGroup.JOB && value?.oneofKind === "job") return value.job as SettingsByGroup[G];
+  if (group === SettingsGroup.DEVICE && value?.oneofKind === "device") return value.device as SettingsByGroup[G];
   return undefined;
 };
 
@@ -34,6 +36,8 @@ const settingsValue = <G extends keyof SettingsByGroup>(group: G, value: Setting
       return { value: { oneofKind: "preview", preview: value as PreviewSettings } };
     case SettingsGroup.JOB:
       return { value: { oneofKind: "job", job: value as JobSettings } };
+    case SettingsGroup.DEVICE:
+      return { value: { oneofKind: "device", device: value as DeviceSettings } };
     default:
       throw new Error("Unsupported Settings group");
   }
@@ -191,6 +195,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     save,
     saved,
     saving,
+    settings,
     setDraft: setDraft as Dispatch<SetStateAction<T | undefined>>,
     setError,
   };

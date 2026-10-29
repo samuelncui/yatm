@@ -149,7 +149,8 @@ it("opens Archive without submitting and preserves roots, scope, Preview, force 
   await screen.findByText("File 7");
   expect(mocks.archiveCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Archive…" }));
-  expect(screen.getByRole("checkbox", { name: "Force rehash" })).toBeChecked();
+  await userEvent.click(screen.getByRole("button", { name: /^Advanced Preview/ }));
+  expect(screen.getByRole("checkbox", { name: "Recheck source hashes for previews" })).toBeChecked();
   await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
   expect(mocks.archiveEstimate.mock.calls[0][0].selections).toEqual(request.spec!.selections);
   await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
@@ -178,6 +179,7 @@ it.each([1700000000789123456n, -1n, 0n, minUnixNs, maxUnixNs])(
     expect(mocks.restoreCreate).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Restore…" }));
     await screen.findByText("Location 5 / chosen");
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     expect(screen.getByRole("checkbox", { name: "Allow damaged copies" })).toBeChecked();
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
     expect(mocks.location.mock.calls.map(([arg]) => arg.id)).toEqual([5n]);
@@ -289,7 +291,8 @@ it("recreates Scan selected roots and all options through the normal explicit St
   show("/scan?recreate=1");
   await screen.findByText("2 selected roots");
   expect(mocks.scanCreate).not.toHaveBeenCalled();
-  expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).toBeChecked();
+  await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+  expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).toBeChecked();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   expect(mocks.scanCreate).toHaveBeenCalledExactlyOnceWith(request);
 });

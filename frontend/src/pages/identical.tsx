@@ -787,7 +787,12 @@ export const IdenticalFiles = () => {
       ask({
         title: "Merge into " + target.name + "?",
         confirmLabel: "Merge",
-        children: <p>Merge all {String(group.memberCount)} Library files and their saved versions into this file. Original disk files are kept.</p>,
+        children: (
+          <p>
+            Merge all {String(group.memberCount)} Library files and their saved versions into this file. The selected File keeps its original link. Other Files
+            move to Library Trash and lose their original links. Disk files are kept.
+          </p>
+        ),
         onConfirm: async () => {
           if (sorting.current) throw new Error("Wait for sorting to finish before merging files.");
           if (!snapshot || resultRef.current?.id !== snapshot.id || unavailableRef.current || changedGroupRef.current.has(group.id))

@@ -54,7 +54,7 @@ beforeEach(() => {
   get.mockReturnValue({ response: Promise.resolve({ location: source }) });
   create.mockReturnValue({ response: Promise.resolve({ job: { id: 43n } }) });
   capabilities.mockReturnValue({ response: Promise.resolve({ available: true }) });
-  settings.mockReturnValue({ response: Promise.resolve({ value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } }) });
+  settings.mockReturnValue({ response: Promise.resolve({ value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } } }) });
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -91,12 +91,13 @@ it("keeps the form's draft and does not write preferences after failed creation"
   show();
   const start = screen.getByRole("button", { name: "Start scan" });
   await waitFor(() => expect(start).toBeEnabled());
-  await userEvent.click(screen.getByRole("checkbox", { name: "Find matching Library content" }));
+  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+  await userEvent.click(screen.getByRole("checkbox", { name: "Count matching archived copies" }));
   const write = vi.spyOn(Storage.prototype, "setItem");
   await userEvent.click(start);
   await screen.findByText("Creation offline");
   expect(write).not.toHaveBeenCalled();
-  expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).toBeChecked();
   expect(start).toBeEnabled();
 });
 
@@ -116,4 +117,55 @@ it("does not resolve old shortcut paths or overwrite a manually chosen Location 
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   await screen.findByText("Created Job 43");
   expect(create.mock.calls[0][0].spec.selections[0].target).toEqual({ oneofKind: "location", location: { locationId: 2n, path: "" } });
+});
+
+it("keeps signature and comparison tuning folded with an effective summary", async () => {
+  show();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  expect(screen.getByRole("combobox", { name: "Results" })).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Previews" })).toBeVisible();
+  expect(screen.queryByRole("combobox", { name: "Signatures" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Reuse known signatures only · No archived copy comparison");
+  expect(screen.getByText(/Selected reads and Preview generation still run/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({ spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: false }) }),
+  );
+});
+it("explains known-only Preview skips and changes policy only on request", async () => {
+  const input = initial();
+  input.options.previewPolicy = PreviewPolicy.MISSING_ONLY;
+  show(input);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  expect(screen.getByText(/Preview generation skips files whose signatures are unknown/)).toBeVisible();
+  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Reuse known signatures only");
+  await userEvent.click(screen.getByRole("button", { name: "Read new and changed files" }));
+  expect(screen.queryByText(/Preview generation skips files whose signatures are unknown/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.FILL_MISSING, previewPolicy: PreviewPolicy.MISSING_ONLY }),
+    }),
+  );
+});
+it("retries a failed Preview lookup in place without changing the Scan selection", async () => {
+  const input = initial();
+  input.options.previewPolicy = PreviewPolicy.REGENERATE_ALL;
+  capabilities.mockReturnValueOnce({ response: Promise.reject(new Error("Temporary Preview failure")) });
+  show(input);
+  await screen.findByText(/Temporary Preview failure/);
+  expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Regenerate all");
+  await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      spec: expect.objectContaining({
+        selections: [expect.objectContaining({ target: { oneofKind: "location", location: { locationId: 1n, path: "" } } })],
+        previewPolicy: PreviewPolicy.REGENERATE_ALL,
+      }),
+    }),
+  );
 });

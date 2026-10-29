@@ -148,3 +148,37 @@ it("unlocks all Location fields after a failed Save and retains the submitted dr
   expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Edited name");
   expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
 });
+
+it("explains registration defaults without copying rules into the request", async () => {
+  show();
+  expect(screen.getByRole("textbox", { name: "Ignore" })).toHaveValue("");
+  expect(screen.getByText(/Leave blank to use the server's default rules/)).toBeVisible();
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "New location" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Directory" }), { target: { value: "/new" } });
+  await userEvent.click(screen.getByRole("button", { name: "Add location" }));
+  expect(create).toHaveBeenCalledWith({
+    location: expect.objectContaining({ config: expect.objectContaining({ ignore: { format: "gitignore", text: "" } }) }),
+  });
+});
+
+it("shows the retained-history notice only while directory or Ignore differs", async () => {
+  show(source);
+  const warning = () => screen.queryByText(/Recorded history is kept/);
+  expect(warning()).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Renamed" } });
+  await userEvent.click(screen.getByRole("checkbox", { name: "Preferred restore destination" }));
+  await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+  await userEvent.click(screen.getByRole("checkbox", { name: "Use mmap for content reads" }));
+  expect(warning()).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Directory" }), { target: { value: "/different" } });
+  expect(warning()).toBeVisible();
+  expect(warning()).toHaveTextContent("existing Jobs keep their original selections and paths");
+  fireEvent.change(screen.getByRole("textbox", { name: "Directory" }), { target: { value: source.rootPath } });
+  expect(warning()).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "Ignore" }), { target: { value: "*.tmp" } });
+  expect(warning()).toBeVisible();
+  fireEvent.change(screen.getByRole("textbox", { name: "Ignore" }), { target: { value: "" } });
+  expect(warning()).not.toBeInTheDocument();
+  expect(screen.queryByText(/Leave blank to use the server's default rules/)).not.toBeInTheDocument();
+  expect(update).not.toHaveBeenCalled();
+});

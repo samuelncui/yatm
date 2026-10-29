@@ -49,14 +49,20 @@ large-data checks; they do not replace physical Media acceptance.
 
 ## Frontend benchmarks
 
-Run `pnpm bench` separately from other builds and tests. The single case in
-[`files-browser.bench.ts`](src/components/files-browser.bench.ts) measures production
-directory projection/accumulation for 10,000 entries in 500-row streamed batches.
+Run `pnpm bench` separately from other builds and tests. The maintained cases are:
 
-It uses Vitest's iteration loop with a 50 ms warmup and 250 ms measurement
+- [`files-browser.bench.ts`](src/components/files-browser.bench.ts): production directory
+  projection/accumulation for 10,000 entries in 500-row streamed batches.
+- [`job-result-window.bench.ts`](src/components/job-result-window.bench.ts): the shared Job
+  result cache visiting 1,000, 10,000, 100,000 and 1,000,000 rows in 200-row pages. Each
+  operation starts with an empty cache and retains only nearby pages. Native task teardown
+  checks the final retained row order, range and cache bound outside timing.
+
+Both use Vitest's iteration loop with a 50 ms warmup and 250 ms measurement
 budget, completing at least one operation per phase. Fixture construction is outside
-measurement; mock replies and final-result assertions are inside. This is a CPU-oriented
-elapsed timing in Node/jsdom with immediate mocked RPC replies. It does not measure
+measurement. Directory mock replies and final-result assertions are inside its timing.
+These are CPU-oriented elapsed timings in Node/jsdom; directory RPC replies are immediate
+mocks, while the cache cases make no RPC calls. They do not measure
 network/server work, full Files-pane stream publication, Identical updates, Chonky
 rendering, browser paint, frame rate or scrolling latency. Existing Identical structural
 and UI tests, and Chonky browser checks, retain their correctness and layout coverage.
@@ -64,7 +70,7 @@ and UI tests, and Chonky browser checks, retain their correctness and layout cov
 For comparison, run the [comparison runner](scripts/compare-performance.mjs) from the
 repository root, separately from other builds, tests and measurements. Supply three Git
 checkout roots and a new output directory outside all three checkouts; its parent must
-already exist. The harness checkout supplies the common benchmark file above. Use the
+already exist. The harness checkout supplies both common benchmark files above. Use the
 current Node.js >=24 and pnpm on one machine:
 
 ```sh
@@ -77,14 +83,14 @@ The runner copies current tracked `frontend/` files, including tracked edits and
 deletions, into disposable directories. It excludes untracked/ignored files, existing
 dependencies and Git metadata, and rejects symlinks and tracked private environment or
 registry configuration. Stage new source files before comparing. Both copies receive the
-same tracked benchmark file; each retains its own implementation, test helpers, Vitest
+same two tracked benchmark files; each retains its own implementation, test helpers, Vitest
 configuration and dependency lockfile. Supplied checkouts remain unchanged.
 
 Both copies finish `pnpm install --frozen-lockfile` using the public npm registry before
 measurement, with disposable home, configuration, cache and store directories. Both sides
 use one recorded pnpm version; project package-manager switching is disabled. The runner checks
 that both copies use its Node executable and that their lockfiles remain unchanged. Each
-then runs `pnpm exec vitest bench --run --maxWorkers=1` for this case exactly once: baseline
+then runs `pnpm exec vitest bench --run --maxWorkers=1` for all five cases exactly once: baseline
 with `--outputJson`, then candidate with `--compare` and `--outputJson`. No `bench` package
 script is required in either source.
 
@@ -93,7 +99,9 @@ hashes, runner/tool identities, environment facts, commands and completion statu
 hashes describe the files before the common harness overlay. Any native `baseline.json` and
 `candidate.json` results and install/benchmark logs produced before a failure are retained;
 disposable copies are removed when the runner exits normally or reports an error. Missing,
-invalid or unmatched measurements fail the command and leave `complete: false`.
+invalid, failed, duplicate, unexpected or unmatched measurements fail the command and leave
+`complete: false`. Both native reports must contain the exact two files and five maintained
+cases with positive sample counts, means and rates, and matching identities.
 
 Vitest reports the comparison without a custom sampling loop or regression gate. A single
 short run can be noisy; its timing report complements semantic tests and is not browser
@@ -104,10 +112,10 @@ tests separately without installing dependencies or measuring performance:
 node --test frontend/scripts/compare-performance.test.mjs
 ```
 
-The Job result cache also has a native `job-result-window.bench.ts` case, included in
-`pnpm bench`: append 100,000 rows in 200-row windows. Its correctness tests separately verify
-a million visited rows keep a bounded cache. These are cache costs; the real browser regression
-checks the scrollbar and cursor requests, and the Scan Go benchmark measures the handler.
+The cache correctness tests separately verify that a million visited rows keep a bounded
+cache. Cache timings exclude RPC and DOM rendering; the real browser regression checks
+scroll geometry and cursor requests. The [Go result benchmarks](../docs/operations/testing.md#performance-acceptance)
+measure backend paging separately.
 
 ## Inline feedback
 

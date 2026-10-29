@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	TapeBarcode  = "RVW001"
-	defaultPerm  = 0o755
-	databaseName = "yatm.db"
+	TapeBarcode    = "RVW001"
+	TarTapeBarcode = "RVW002"
+	defaultPerm    = 0o755
+	databaseName   = "yatm.db"
 )
 
 // Options controls one isolated Demo environment.

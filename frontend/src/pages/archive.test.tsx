@@ -325,10 +325,12 @@ describe("Unified Archive selection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
-    expect(screen.queryByRole("checkbox", { name: "Force rehash" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Recheck source hashes for previews" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
     await userEvent.click(screen.getByRole("option", { name: "Regenerate all" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Force rehash" }));
+    await userEvent.click(screen.getByRole("button", { name: "Advanced Preview" }));
+    expect(screen.getByText(/Reads source files again to identify previews before copying/)).toBeVisible();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Recheck source hashes for previews" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Previews" }));
     await userEvent.click(screen.getByRole("option", { name: "Don’t generate" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());

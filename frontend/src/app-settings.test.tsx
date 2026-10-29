@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
 import { render } from "@/state/test-render";
 import { JobSettings, LibrarySettings, SettingsGroup, SettingsValue } from "@/entity";
@@ -31,12 +31,7 @@ const jobValue = (readBatch = 256) =>
     },
   });
 const jobsTab = () => within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Jobs" });
-const open = (path = "/settings/jobs") =>
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
-  );
+const open = (path = "/settings/jobs") => render(<RouterProvider router={createMemoryRouter([{ path: "*", element: <App /> }], { initialEntries: [path] })} />);
 
 beforeEach(() => {
   get.mockReset().mockImplementation(({ group }: { group: SettingsGroup }) => ({
@@ -67,19 +62,28 @@ it("keeps one Settings shell from the cold route chunk through the first Setting
   expect(screen.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   await act(async () => finishRead({ value: jobValue() }));
-  expect(screen.getByRole("spinbutton", { name: "Read batch" })).toHaveValue(256);
+  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+  expect(screen.getByRole("spinbutton", { name: "Manifest batch (items)" })).toHaveValue(256);
   expect(screen.getByRole("heading", { name: "Jobs" })).toBe(heading);
   expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 });
 
-it("reuses committed Settings across tabs and discards only the page's unsaved draft", async () => {
+it("protects unsaved Settings across tabs and discards only after confirmation", async () => {
   finishChunk();
   open();
-  const batch = await screen.findByRole("spinbutton", { name: "Read batch" });
+  await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+  const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
   await userEvent.clear(batch);
   await userEvent.type(batch, "128");
   const library = within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" });
   await userEvent.click(library);
+  let prompt = within(await screen.findByRole("dialog", { name: "Discard unsaved changes?" }));
+  await userEvent.click(prompt.getByRole("button", { name: "Keep editing" }));
+  expect(batch).toHaveValue(128);
+  expect(get).toHaveBeenCalledOnce();
+  await userEvent.click(library);
+  prompt = within(await screen.findByRole("dialog", { name: "Discard unsaved changes?" }));
+  await userEvent.click(prompt.getByRole("button", { name: "Discard" }));
   expect(library).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("heading", { name: "Library" })).toBeVisible();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
@@ -89,7 +93,8 @@ it("reuses committed Settings across tabs and discards only the page's unsaved d
   await screen.findByRole("checkbox", { name: "Confirm Delete" });
   expect(library).toHaveAttribute("aria-selected", "true");
   await userEvent.click(jobsTab());
-  expect(await screen.findByRole("spinbutton", { name: "Read batch" })).toHaveValue(256);
+  await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+  expect(await screen.findByRole("spinbutton", { name: "Manifest batch (items)" })).toHaveValue(256);
   expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   expect(get).toHaveBeenCalledTimes(2);
@@ -99,6 +104,35 @@ it("reuses committed Settings across tabs and discards only the page's unsaved d
 it("keeps the matching Settings tab selected for a trailing-slash route", async () => {
   finishChunk();
   open("/settings/jobs/");
-  await screen.findByRole("spinbutton", { name: "Read batch" });
+  await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+  await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
   expect(jobsTab()).toHaveAttribute("aria-selected", "true");
+});
+
+it("warns on page unload only while Settings have unsaved edits", async () => {
+  finishChunk();
+  open();
+  await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+  const batch = screen.getByRole("spinbutton", { name: "Manifest batch (items)" });
+  await userEvent.clear(batch);
+  await userEvent.type(batch, "128");
+  const dirtyUnload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(dirtyUnload);
+  expect(dirtyUnload.defaultPrevented).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(batch).toHaveValue(256);
+  const cleanUnload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(cleanUnload);
+  expect(cleanUnload.defaultPrevented).toBe(false);
+  await userEvent.clear(batch);
+  await userEvent.type(batch, "128");
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Job settings saved.");
+  const savedUnload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(savedUnload);
+  expect(savedUnload.defaultPrevented).toBe(false);
+  const library = within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" });
+  await userEvent.click(library);
+  await screen.findByRole("heading", { name: "Library" });
+  expect(screen.queryByRole("dialog", { name: "Discard unsaved changes?" })).not.toBeInTheDocument();
 });

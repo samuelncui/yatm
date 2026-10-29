@@ -114,6 +114,9 @@ describe("Job confirmations", () => {
       </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole("button", { name: "Delete Job" }));
+    expect(screen.getByRole("dialog", { name: "Delete Job 9?" })).toHaveTextContent(
+      "Job attachments will be removed, including recovery files left by older versions.",
+    );
     expect(screen.getByRole("dialog", { name: "Delete Job 9?" })).toHaveTextContent("Library files and archive copies are kept.");
     expect(deleteJob).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));

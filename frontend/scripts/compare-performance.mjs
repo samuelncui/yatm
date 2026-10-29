@@ -8,8 +8,10 @@ import { fileURLToPath, URL } from "node:url";
 import { parseArgs } from "node:util";
 import { digest } from "../../dev/performance/evidence.mjs";
 
-const benchmark = "src/components/files-browser.bench.ts";
-const harnessPath = `frontend/${benchmark}`;
+const benchmarks = new Map([
+  ["src/components/files-browser.bench.ts", ["stream and accumulate 10k directory rows in 500-row batches"]],
+  ["src/components/job-result-window.bench.ts", [1_000, 10_000, 100_000, 1_000_000].map((size) => `append ${size} Job result rows in 200-row windows`)],
+]);
 const sides = ["baseline", "candidate"];
 const usage = "Usage: node frontend/scripts/compare-performance.mjs --baseline SOURCE --candidate SOURCE --harness SOURCE --out NEW_DIRECTORY";
 
@@ -52,29 +54,51 @@ function sourceFile(root, name) {
   return { bytes: readFileSync(path), mode: info.mode & 0o777 };
 }
 
-// The current harness has exactly one benchmark. A zero-exit empty/skipped run is not evidence.
+// Every expected operation must finish; a zero-exit empty/skipped run is not evidence.
 function measurement(path, frontend) {
   const report = JSON.parse(readFileSync(path, "utf8"));
   const files = report.files ?? [];
-  const results = files.flatMap((file) => (file.groups ?? []).flatMap((group) => group.benchmarks ?? []));
-  const result = results[0];
-  if (
-    files.length !== 1 ||
-    resolve(frontend, files[0].filepath) !== join(frontend, benchmark) ||
-    results.length !== 1 ||
-    !result.id ||
-    !result.name ||
-    result.error ||
-    !Number.isInteger(result.sampleCount) ||
-    result.sampleCount < 1 ||
-    !Number.isFinite(result.mean) ||
-    result.mean <= 0 ||
-    !Number.isFinite(result.hz) ||
-    result.hz <= 0
-  ) {
+  const identities = [];
+  const fileNames = new Set();
+  const ids = new Set();
+  const invalid = () => {
     throw new Error("Missing or invalid frontend benchmark measurement");
+  };
+  if (files.length !== benchmarks.size) invalid();
+  for (const file of files) {
+    if (typeof file.filepath !== "string") invalid();
+    const name = relative(frontend, resolve(frontend, file.filepath)).split(sep).join("/");
+    const expected = benchmarks.get(name);
+    if (!expected || fileNames.has(name) || file.error) invalid();
+    fileNames.add(name);
+    const results = (file.groups ?? []).flatMap((group) => {
+      if (group.error) invalid();
+      return group.benchmarks ?? [];
+    });
+    const names = new Set();
+    if (results.length !== expected.length) invalid();
+    for (const result of results) {
+      if (
+        typeof result.id !== "string" ||
+        !result.id ||
+        ids.has(result.id) ||
+        !expected.includes(result.name) ||
+        names.has(result.name) ||
+        result.error ||
+        !Number.isInteger(result.sampleCount) ||
+        result.sampleCount < 1 ||
+        !Number.isFinite(result.mean) ||
+        result.mean <= 0 ||
+        !Number.isFinite(result.hz) ||
+        result.hz <= 0
+      )
+        invalid();
+      ids.add(result.id);
+      names.add(result.name);
+      identities.push({ file: name, id: result.id, name: result.name });
+    }
   }
-  return { id: result.id, name: result.name };
+  return { cases: identities.sort((left, right) => left.file.localeCompare(right.file) || left.name.localeCompare(right.name)) };
 }
 
 export function collect(config, spawn = spawnSync) {
@@ -157,10 +181,16 @@ export function collect(config, spawn = spawnSync) {
       if (realpathSync(git(root, "rev-parse", "--show-toplevel")) !== root) throw new Error(`${side} must be a Git checkout root`);
       commits[side] = git(root, "rev-parse", "HEAD");
     }
-    git(roots.harness, "ls-files", "--error-unmatch", "--", harnessPath);
-    const harness = sourceFile(roots.harness, harnessPath);
-    if (!harness) throw new Error(`Missing tracked harness: ${harnessPath}`);
-    record.harness = { commit: commits.harness, path: harnessPath, sha256: digest(harness.bytes) };
+    const harness = [];
+    for (const benchmark of benchmarks.keys()) {
+      const path = `frontend/${benchmark}`;
+      git(roots.harness, "ls-files", "--error-unmatch", "--", path);
+      const file = sourceFile(roots.harness, path);
+      if (!file) throw new Error(`Missing tracked harness: ${path}`);
+      harness.push({ path, ...file });
+    }
+    const harnessFiles = harness.map((file) => [file.path, file.mode, digest(file.bytes)]);
+    record.harness = { commit: commits.harness, files: harnessFiles, sha256: digest(JSON.stringify(harnessFiles)) };
     record.runner = {
       sha256: digest(readFileSync(fileURLToPath(import.meta.url))),
       helperSHA256: digest(readFileSync(new URL("../../dev/performance/evidence.mjs", import.meta.url))),
@@ -182,8 +212,10 @@ export function collect(config, spawn = spawnSync) {
       const frontend = join(destination, "frontend");
       const lockfileSHA256 = digest(readFileSync(join(frontend, "pnpm-lock.yaml")));
       record.sources[side] = { commit: commits[side], sha256: digest(JSON.stringify(files)), files, lockfileSHA256 };
-      mkdirSync(dirname(join(destination, harnessPath)), { recursive: true });
-      writeFileSync(join(destination, harnessPath), harness.bytes);
+      for (const file of harness) {
+        mkdirSync(dirname(join(destination, file.path)), { recursive: true });
+        writeFileSync(join(destination, file.path), file.bytes, { mode: file.mode });
+      }
       save();
     }
     // Finish both installs before either measurement. Never use a source checkout's dependencies.
@@ -206,7 +238,7 @@ export function collect(config, spawn = spawnSync) {
     for (const side of sides) {
       const frontend = join(workspace, side, "frontend"),
         json = join(output, `${side}.json`);
-      const args = ["exec", "vitest", "bench", "--run", "--maxWorkers=1", benchmark, `--outputJson=${json}`];
+      const args = ["exec", "vitest", "bench", "--run", "--maxWorkers=1", ...benchmarks.keys(), `--outputJson=${json}`];
       if (side === "candidate") args.push(`--compare=${join(output, "baseline.json")}`);
       record.environment[`${side}LoadAverage`] = loadavg();
       run("pnpm", args, frontend, `${side}.log`);

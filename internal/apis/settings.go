@@ -37,6 +37,12 @@ func (s *settingsService) Get(ctx context.Context, req *entity.GetSettingsReques
 			return nil, apiError(err)
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: value}}}, nil
+	case entity.SettingsGroup_SETTINGS_GROUP_DEVICE:
+		value, err := s.api.lib.Settings().Device.Current(ctx)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}}, nil
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Settings group is missing")
 	}
@@ -66,6 +72,12 @@ func (s *settingsService) Update(ctx context.Context, req *entity.UpdateSettings
 			return nil, apiError(err)
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: saved}}}, nil
+	case *entity.SettingsValue_Device:
+		saved, err := s.api.lib.Settings().Device.Save(ctx, value.Device)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: saved}}}, nil
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Settings value is missing")
 	}

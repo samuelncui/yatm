@@ -397,6 +397,10 @@ test("real Vite serves HMR and proxies both Demo backend routes on a custom port
     (await fetch(`http://localhost:${port}/@vite/client`)).status,
     200,
   );
+  await until(
+    async () => (await demo.commands()).some((row) => row.kind === "backend-ready"),
+    "Demo backend started",
+  );
   for (const route of ["/services/probe", "/files/probe"]) {
     assert.equal(
       await (await fetch(`http://localhost:${port}${route}`)).text(),
@@ -419,8 +423,10 @@ test("an occupied frontend port fails instead of moving and stops the backend", 
   });
   assert.deepEqual(await demo.exited(), { code: 1, signal: null });
   assert.match(demo.output(), new RegExp(`Port ${port} is already in use`));
-  const backend = (await demo.commands()).find((row) => row.kind === "backend");
-  assert.equal(alive(backend.pid), false);
+  await until(
+    () => !alive(-demo.child.pid),
+    "Demo children stopped after frontend port failure",
+  );
   await assert.rejects(fetch(`http://127.0.0.1:${demo.backendPort}/`));
 });
 

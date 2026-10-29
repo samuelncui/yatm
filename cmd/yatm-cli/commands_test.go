@@ -218,7 +218,7 @@ func TestListPaginationRequests(t *testing.T) {
 }
 
 func TestVolumeAndTapeDeviceCommands(t *testing.T) {
-	// Capture both Volume mutations and serve one available Tape device.
+	// Capture both Volume mutations and retain configured Tape devices regardless of availability.
 	var initialized *entity.InitializeVolumeRequest
 	var registered *entity.RegisterVolumeRequest
 	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
@@ -241,7 +241,10 @@ func TestVolumeAndTapeDeviceCommands(t *testing.T) {
 				context.Context,
 				*entity.ListDevicesRequest,
 			) (*entity.ListDevicesResponse, error) {
-				return &entity.ListDevicesResponse{Devices: []string{"/dev/nst0"}}, nil
+				return &entity.ListDevicesResponse{Devices: []*entity.DeviceSummary{
+					{Device: "/dev/nst0", Kind: entity.DeviceKind_DEVICE_KIND_TAPE},
+					{Device: "/dev/nst1", Kind: entity.DeviceKind_DEVICE_KIND_TAPE, Busy: true, Detail: "Archive owns the device"},
+				}}, nil
 			},
 		})
 	}, nil, nil)
@@ -269,10 +272,13 @@ func TestVolumeAndTapeDeviceCommands(t *testing.T) {
 	require.Equal(t, "/srv/volumes/disk-a", registered.MountPoint)
 	require.Equal(t, "Disk A", registered.Name)
 
-	// Return configured, currently available Tape devices as ProtoJSON.
+	// Return configured Tape devices and their independent availability as ProtoJSON.
 	exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "list")
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.JSONEq(t, `{"devices":["/dev/nst0"]}`, stdout)
+	require.JSONEq(t, `{"devices":[
+		{"device":"/dev/nst0","kind":"DEVICE_KIND_TAPE"},
+		{"device":"/dev/nst1","kind":"DEVICE_KIND_TAPE","busy":true,"detail":"Archive owns the device"}
+	]}`, stdout)
 }
 
 func TestRPCErrorUsesConnectCode(t *testing.T) {

@@ -75,7 +75,8 @@ export const SettingsBrowser = () => {
         )}
         <SettingsSection title="Library data">
           <Typography variant="body2" color="text.secondary">
-            Export writes the whole Library; import replaces it from that backup. Settings are not exported or changed.
+            Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are
+            not restored.
           </Typography>
         </SettingsSection>
         <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel}>
@@ -137,9 +138,12 @@ const ImportLibraryButton = () => {
           <DialogTitle>Import Library Backup</DialogTitle>
           <DialogContent>
             <Stack useFlexGap spacing={2}>
-              <Alert severity="info">Import replaces Library data. Your Settings stay unchanged.</Alert>
+              <Alert severity="info">
+                Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not
+                restored.
+              </Alert>
               {status === "pending" && <LinearProgress aria-label="Importing Library backup" />}
-              {status === "success" && <Alert severity="success">Library imported. Settings were not changed.</Alert>}
+              {status === "success" && <Alert severity="success">Library, Locations and original links imported. Global preferences were not changed.</Alert>}
               {status === "error" && <Feedback severity="error">{error}</Feedback>}
               <Button variant="outlined" component="label" startIcon={<UploadRoundedIcon />} disabled={status === "pending"}>
                 Select backup

@@ -48,6 +48,8 @@ const SettingsBrowser = lazy(async () => ({ default: (await import("@/pages/sett
 const PreviewSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-preview")).PreviewSettingsBrowser }));
 const JobSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-jobs")).JobSettingsBrowser }));
 
+const DeviceSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-devices")).DeviceSettingsBrowser }));
+
 const NewJobType = "new-job";
 const libraryLayoutStorageKey = "library:file-layout";
 
@@ -102,11 +104,15 @@ const ModuleNavigation = ({
     const path = location.pathname.replace(/\/+$/, "");
     return (
       <PageNavigation label="Settings views">
-        <PageTabs placement="module" value={["/settings/library", "/settings/preview", "/settings/jobs"].includes(path) ? path.slice(1) : LocationsType}>
+        <PageTabs
+          placement="module"
+          value={["/settings/library", "/settings/preview", "/settings/jobs", "/settings/devices"].includes(path) ? path.slice(1) : LocationsType}
+        >
           <Tab component={Link} to={"/" + LocationsType} label="Locations" value={LocationsType} />
           <Tab component={Link} to="/settings/library" label="Library" value="settings/library" />
           <Tab component={Link} to="/settings/preview" label="Preview" value="settings/preview" />
           <Tab component={Link} to="/settings/jobs" label="Jobs" value="settings/jobs" />
+          <Tab component={Link} to="/settings/devices" label="Devices" value="settings/devices" />
         </PageTabs>
       </PageNavigation>
     );
@@ -277,6 +283,18 @@ const App = () => {
                         description="These limits are captured when the next attempt starts. Running attempts keep their current limits."
                       >
                         <JobSettingsBrowser />
+                      </SettingsEditorPage>
+                    }
+                  />
+                  <Route
+                    path="settings/devices"
+                    element={
+                      <SettingsEditorPage
+                        key="devices"
+                        title="Devices"
+                        description="Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device."
+                      >
+                        <DeviceSettingsBrowser />
                       </SettingsEditorPage>
                     }
                   />

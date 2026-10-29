@@ -1,6 +1,6 @@
 import { Alert } from "@mui/material";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
-import { MediaKind, PositionHealth, VolumeType, type Media, type Position } from "@/entity";
+import { MediaKind, PositionHealth, VolumeType, TapeRecordMode, type Media, type Position } from "@/entity";
 import { ContentCopies, ContentPreview, copyHealthLabel } from "@/components/file-content";
 import { contentHex, contentTime } from "@/components/content-status";
 import { accessLabel, isArchivePosition, isMediaFile, mediaAvailabilityLabel, type MediaFileData, type MediaPositionFileData } from "@/api";
@@ -45,9 +45,21 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
   );
 };
 
+/** One encryption value for every Tape surface; responses report key presence, never the key. */
+export const tapeEncryption = (media: Media) => {
+  const tape = media.profile?.kind.oneofKind === "tape" ? media.profile.kind.tape : undefined;
+  if (!tape) return undefined;
+  if (!media.encryptionKeySaved) return "Off";
+  return tape.tar?.encryptionAlgorithm || "Configured · algorithm not recorded";
+};
+
+// Users see the storage format; the stored profile identifier stays in Technical details.
+const tapeFormatLabel = (format: string) => (format === "ltfs_v0" || format === "ltfs_v1" ? "LTFS" : format === "tar_pax_v1" ? "Tar" : format || "Unknown");
+
 const MediaContent = ({ media }: { media: Media }) => {
   const profile = media.profile?.kind;
   const serial = profile?.oneofKind === "tape" ? profile.tape.serialNumber : profile?.oneofKind === "volume" ? profile.volume.serialNumber : "";
+  const tape = profile?.oneofKind === "tape" ? profile.tape : undefined;
   const volumeType = profile?.oneofKind === "volume" ? (profile.volume.type === VolumeType.HM_SMR ? "HM-SMR" : "HDD") : "";
   return (
     <div className="detail-surface-content">
@@ -55,6 +67,24 @@ const MediaContent = ({ media }: { media: Media }) => {
         <dl className="file-detail-summary">
           <dt>Type</dt>
           <dd>{media.kind === MediaKind.TAPE ? "Tape" : "Volume"}</dd>
+          {tape && (
+            <>
+              <dt>Format</dt>
+              <dd>{tapeFormatLabel(tape.format)}</dd>
+              <dt>Encryption</dt>
+              <dd>{tapeEncryption(media)}</dd>
+            </>
+          )}
+          {tape?.tar && (
+            <>
+              <dt>Record mode</dt>
+              <dd>{tape.tar.recordMode === TapeRecordMode.FIXED ? "Fixed" : tape.tar.recordMode === TapeRecordMode.VARIABLE ? "Variable" : "Unknown"}</dd>
+              <dt>Record size</dt>
+              <dd>{tape.tar.recordBytes} bytes</dd>
+              <dt>Hardware compression</dt>
+              <dd>{tape.tar.hardwareCompression ? "On" : "Off"}</dd>
+            </>
+          )}
           <dt>Capacity</dt>
           <dd>{formatFilesize(media.capacityBytes)}</dd>
           <dt>Written</dt>
@@ -66,12 +96,35 @@ const MediaContent = ({ media }: { media: Media }) => {
             </>
           )}
         </dl>
+        {tape && (
+          <p>
+            <a href="/settings/devices">Device settings</a>
+            {tape.format === "tar_pax_v1" && (
+              <>
+                {" "}
+                · <a href="https://github.com/samuelncui/yatm/blob/v1/docs/operations/tar-tape-recovery.md">Tar recovery guide</a>
+              </>
+            )}
+          </p>
+        )}
       </section>
       <details className="technical-details file-detail-technical">
         <summary>Technical details</summary>
         <dl className="file-detail-summary">
           <dt>Identity</dt>
           <dd className="file-detail-path">{media.identity || "—"}</dd>
+          {tape?.format && (
+            <>
+              <dt>Format ID</dt>
+              <dd>{tape.format}</dd>
+            </>
+          )}
+          {tape?.tar && (
+            <>
+              <dt>Initialization ID</dt>
+              <dd>{tape.tar.initializationId}</dd>
+            </>
+          )}
           {serial && (
             <>
               <dt>Serial number</dt>
@@ -115,10 +168,10 @@ const PositionContent = ({ position, media }: { position: Position; media?: Medi
           <dt>Written</dt>
           <dd>{contentTime(position.writtenAtNs || undefined)}</dd>
         </dl>
-        {(position.checkedAtNs || position.healthJobId) && (
+        {(position.checkedAtNs > 0n || position.healthJobId > 0n) && (
           <p className="product-muted">
             {position.checkedAtNs ? `Checked ${contentTime(position.checkedAtNs)}` : "Not checked"}
-            {position.healthJobId && (
+            {position.healthJobId > 0n && (
               <>
                 {" "}
                 · <a href={`/jobs/${position.healthJobId}`}>Check results</a>

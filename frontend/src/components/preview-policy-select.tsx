@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, MenuItem, TextField } from "@mui/material";
+import { Button, Link, MenuItem, TextField } from "@mui/material";
 import { previewCli } from "@/api";
 import { PreviewPolicy, SettingsGroup, type GetPreviewCapabilitiesResponse, type PreviewSettings } from "@/entity";
 import { errorMessage } from "@/tools";
@@ -75,7 +75,14 @@ export const PreviewPolicySelect = ({
       helperText ||
       (generation?.reason && (
         <>
-          {generation.reason} <Link href="/settings/preview">Settings</Link>
+          {generation.reason}{" "}
+          {generation.error ? (
+            <Button size="small" disabled={disabled || generation.loading} onClick={generation.reload}>
+              Retry
+            </Button>
+          ) : !generation.loading ? (
+            <Link href="/settings/preview">Settings</Link>
+          ) : null}
         </>
       ))
     }

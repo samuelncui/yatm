@@ -317,9 +317,9 @@ export interface ListDevicesRequest {
  */
 export interface ListDevicesResponse {
     /**
-     * @generated from protobuf field: repeated string devices = 1
+     * @generated from protobuf field: repeated yatm.v1.DeviceSummary devices = 1
      */
-    devices: string[];
+    devices: DeviceSummary[];
 }
 /**
  * Listing uses configuration and lease state; it never sends SCSI commands.
@@ -2193,7 +2193,7 @@ export const ListDevicesRequest = new ListDevicesRequest$Type();
 class ListDevicesResponse$Type extends MessageType<ListDevicesResponse> {
     constructor() {
         super("yatm.v1.ListDevicesResponse", [
-            { no: 1, name: "devices", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceSummary }
         ]);
     }
     create(value?: PartialMessage<ListDevicesResponse>): ListDevicesResponse {
@@ -2208,8 +2208,8 @@ class ListDevicesResponse$Type extends MessageType<ListDevicesResponse> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* repeated string devices */ 1:
-                    message.devices.push(reader.string());
+                case /* repeated yatm.v1.DeviceSummary devices */ 1:
+                    message.devices.push(DeviceSummary.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -2223,9 +2223,9 @@ class ListDevicesResponse$Type extends MessageType<ListDevicesResponse> {
         return message;
     }
     internalBinaryWrite(message: ListDevicesResponse, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* repeated string devices = 1; */
+        /* repeated yatm.v1.DeviceSummary devices = 1; */
         for (let i = 0; i < message.devices.length; i++)
-            writer.tag(1, WireType.LengthDelimited).string(message.devices[i]);
+            DeviceSummary.internalBinaryWrite(message.devices[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

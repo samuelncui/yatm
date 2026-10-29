@@ -60,7 +60,7 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	// Verify annotations and the large result set used for search pagination.
 	db, err := resource.OpenSQLite(filepath.Join(root, databaseName))
 	require.NoError(t, err)
-	requireTableCount(t, db, library.ModelMedia, 4)
+	requireTableCount(t, db, library.ModelMedia, 5)
 	requireTableCount(t, db, library.ModelFile, 363)
 	requireTableCount(t, db, library.ModelFileTag, 345)
 	requireTableCount(t, db, executor.ModelJob, 13)
@@ -82,6 +82,19 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	tags, err := lib.MGetFileTags(context.Background(), budget.ID)
 	require.NoError(t, err)
 	require.Equal(t, []string{"confidential", "finance", "project"}, tags[budget.ID])
+
+	// The tar Tape keeps its profile and member locators while its inventory awaits Add.
+	tarTape, err := lib.GetMediaByIdentity(context.Background(), entity.MediaKind_MEDIA_KIND_TAPE, TarTapeBarcode)
+	require.NoError(t, err)
+	require.Equal(t, library.TapeFormatTarPAXV1, tarTape.Profile.GetTape().Format)
+	require.Equal(t, entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, tarTape.Profile.GetTape().GetTar().RecordMode)
+	tarPositions, err := lib.ListMediaFilePositions(context.Background(), tarTape.ID, "", 3)
+	require.NoError(t, err)
+	require.Len(t, tarPositions, 2)
+	require.EqualValues(t, 1024, tarPositions[1].StorageMetadata.GetTar().HeaderOffsetBytes)
+	tarDirectory, err := lib.GetByPath(context.Background(), library.Root.ID, "Unforged/"+TarTapeBarcode)
+	require.NoError(t, err)
+	require.Nil(t, tarDirectory)
 
 	// Saved image revisions and the video expose the standard Preview roles.
 	previewFile, err := lib.GetByPath(context.Background(), library.Root.ID, "Photos/archive-room.png")

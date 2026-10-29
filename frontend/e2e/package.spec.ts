@@ -312,7 +312,8 @@ test("Settings reuses committed groups when switching tabs", async ({ page }) =>
     if (request.url().endsWith("/yatm.v1.SettingsService/Get")) reads++;
   });
   await page.goto("/settings/jobs");
-  await expect(page.getByRole("spinbutton", { name: "Read batch" })).toBeEnabled();
+  await page.getByRole("button", { name: /^Advanced/ }).click();
+  await expect(page.getByRole("spinbutton", { name: "Manifest batch (items)" })).toBeEnabled();
   for (const name of ["Library", "Preview"]) {
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name, exact: true }).click();
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
@@ -359,7 +360,8 @@ test("a cold Job Settings route keeps one loading indicator through code and dat
     await expect(page.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
     expect(await heading.boundingBox()).toEqual(before);
     releaseData();
-    await expect(page.getByRole("spinbutton", { name: "Read batch" })).toBeEnabled();
+    await page.getByRole("button", { name: /^Advanced/ }).click();
+    await expect(page.getByRole("spinbutton", { name: "Manifest batch (items)" })).toBeEnabled();
     await expect(page.getByRole("progressbar")).toHaveCount(0);
   } finally {
     releaseCode?.();

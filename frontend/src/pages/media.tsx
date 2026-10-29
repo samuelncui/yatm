@@ -30,6 +30,8 @@ import {
   VerifyMediaAction,
   MediaJobsAction,
 } from "@/actions";
+import { TapeDeviceChoice, soleAvailableDevice } from "@/components/tape-device-choice";
+import type { DeviceSummary } from "@/entity";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { MediaKind, VolumeCandidateState, VolumeType, type VolumeCandidate } from "@/entity";
 import { chonkyI18n, errorMessage, runUIAction } from "@/tools";
@@ -39,6 +41,7 @@ import { DetailDialog, DetailSurface } from "@/components/detail-surface";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { RelatedJobs } from "@/components/related-jobs";
 import { useActionDialog } from "@/components/action-dialog";
+import { admissionToast } from "@/components/import-positions-dialog";
 
 const isArchiveInventoryEntry = (file: FileData | null | undefined): file is MediaPositionFileData => !!file && typeof file.position?.id === "bigint";
 
@@ -182,7 +185,10 @@ export const useMediaBrowser = (
             children: (
               <>
                 <p>{media.map((value) => value.name).join(", ")}</p>
-                <p>Archive files are kept. Their inventory records will be removed.</p>
+                <p>Archive files are kept. Their inventory records and Media profiles will be removed.</p>
+                {media.some((value) => value.media.encryptionKeySaved) && (
+                  <p>Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM.</p>
+                )}
               </>
             ),
             onConfirm: async () => {
@@ -248,13 +254,7 @@ export const useMediaBrowser = (
             ),
             onConfirm: async () => {
               const reply = await filesCli.importPositions({ positionIds: selected.map((file) => file.position.id), dryrun: false }).response;
-              if (reply.fileCount === 0n) {
-                toast.info(reply.existingCount > 0n ? "These records are already in Library." : "The selected folders contain no files to add.");
-                return;
-              }
-              const existing = reply.existingCount > 0n ? `; skipped ${reply.existingCount} already in Library` : "";
-              const unsigned = reply.skippedFileCount > 0n ? `; skipped ${reply.skippedFileCount} without signatures` : "";
-              toast.success(`Added ${reply.fileCount} Files to Library${existing}${unsigned}`);
+              admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
             },
           });
           return;
@@ -617,36 +617,66 @@ const volumeStateLabel = (candidate: VolumeCandidate): string => {
 };
 
 export const InspectMediaDialog = ({ media, onClose }: { media: MediaFileData; onClose: () => void }) => {
-  const { reply, loading, error, inspect } = useMediaInspect();
-  const [devices, setDevices] = useState<string[] | null>(null);
+  const { reply, loading, error, inspect, reset } = useMediaInspect();
+  const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState("");
   const [device, setDevice] = useState("");
   const titleId = useId();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+  const deviceRequest = useRef(0);
 
   useEffect(() => {
+    const pending = deviceRequest;
+    const sequence = ++pending.current;
+    setDevices(null);
+    setDevice("");
+    setDevicesError("");
+    reset();
     if (media.media.kind === MediaKind.VOLUME) {
       runUIAction(() => inspect({ oneofKind: "volume", volume: { uuid: media.media.identity ?? "" } }), "Inspect Volume failed");
       return;
     }
     let active = true;
-    runUIAction(async () => {
-      const reply = await mediaCli.listDevices({}).response;
-      if (!active) return;
-      setDevices(reply.devices);
-      if (reply.devices.length === 1) {
-        setDevice(reply.devices[0]);
-        await inspect({ oneofKind: "tape", tape: { device: reply.devices[0] } });
+    setDevicesLoading(true);
+    void (async () => {
+      try {
+        const reply = await mediaCli.listDevices({}).response;
+        if (!active || sequence !== pending.current) return;
+        setDevices(reply.devices);
+        const available = soleAvailableDevice(reply.devices);
+        if (available) {
+          setDevice(available);
+          await inspect({ oneofKind: "tape", tape: { device: available } });
+        }
+      } catch (error) {
+        if (active && sequence === pending.current) setDevicesError(errorMessage(error, "Could not load Tape devices"));
+      } finally {
+        if (active && sequence === pending.current) setDevicesLoading(false);
       }
-    }, "Load Tape devices failed");
+    })();
     return () => {
       active = false;
+      pending.current++;
     };
-  }, [inspect, media.media]);
+  }, [inspect, reset, media.media]);
 
+  const refreshDevices = async () => {
+    const sequence = ++deviceRequest.current;
+    const result = await mediaCli.listDevices({}).response;
+    if (sequence !== deviceRequest.current) return;
+    setDevices(result.devices);
+    setDevicesError("");
+    if (!result.devices.some((value) => value.device === device && !value.busy)) {
+      setDevice("");
+      reset();
+    }
+  };
   const selectDevice = (value: string) => {
     setDevice(value);
-    runUIAction(() => inspect({ oneofKind: "tape", tape: { device: value } }), "Inspect Tape failed");
+    reset();
+    if (value) runUIAction(() => inspect({ oneofKind: "tape", tape: { device: value } }), "Inspect Tape failed");
   };
 
   return (
@@ -655,14 +685,8 @@ export const InspectMediaDialog = ({ media, onClose }: { media: MediaFileData; o
         {media.media.kind === MediaKind.TAPE && (
           <>
             <DialogContentText>Load the Tape into a drive to verify its physical identity.</DialogContentText>
-            <TextField select required margin="normal" label="Drive Device" fullWidth value={device} onChange={(event) => selectDevice(event.target.value)}>
-              {(devices ?? []).map((value) => (
-                <MenuItem key={value} value={value}>
-                  {value}
-                </MenuItem>
-              ))}
-            </TextField>
-            {devices?.length === 0 && <Alert severity="warning">No Tape drive is configured.</Alert>}
+            <TapeDeviceChoice devices={devices} loading={devicesLoading} value={device} onChange={selectDevice} onRefresh={refreshDevices} />
+            {devicesError && <Feedback severity="error">{devicesError}</Feedback>}
           </>
         )}
         <MediaInspectResult reply={reply} loading={loading} error={error} />

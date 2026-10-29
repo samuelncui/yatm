@@ -3,8 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GetScanJobProgressResponse, Job, JobKind, JobPhase, JobResultOrder, JobStatus, ScanEntry, ScanFinding } from "@/entity";
-const { progress, entries, cancel } = vi.hoisted(() => ({ progress: vi.fn(), entries: vi.fn(), cancel: vi.fn() }));
-vi.mock("@/api", () => ({ scanJobCli: { getProgress: progress, listEntries: entries }, jobCli: { cancel } }));
+const { progress, entries, cancel, creation } = vi.hoisted(() => ({ progress: vi.fn(), entries: vi.fn(), cancel: vi.fn(), creation: vi.fn() }));
+vi.mock("@/api", () => ({ scanJobCli: { getProgress: progress, listEntries: entries, getCreation: creation }, jobCli: { cancel } }));
 vi.mock("react-virtuoso", () => ({
   Virtuoso: ({ totalCount = 0, itemContent }: { totalCount?: number; itemContent: (index: number) => ReactNode }) => (
     <div>
@@ -56,6 +56,7 @@ beforeEach(() => {
     }),
   );
   cancel.mockReturnValue(call({}));
+  creation.mockReturnValue(call({ request: { spec: { compareLibrary: false } } }));
 });
 describe("Integrity check Job", () => {
   it("reports unhealthy observations without implying a repair, with a complete result list", async () => {
@@ -64,9 +65,12 @@ describe("Integrity check Job", () => {
     expect(screen.queryByText(/Expected content records have not been changed/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     expect(await screen.findByText("damaged.jpg")).toBeInTheDocument();
-    expect(await screen.findAllByText("Missing")).toHaveLength(2);
+    expect(await screen.findByText("missing.jpg")).toBeInTheDocument();
+    expect(screen.getByText("Missing")).toBeInTheDocument();
+    expect(screen.getByText("Missing · Archived copy comparison not requested")).toBeInTheDocument();
     // The list spans its whole result set from the first load and reports its size.
     expect(entries).toHaveBeenCalledTimes(1);
+    expect(creation).toHaveBeenCalledExactlyOnceWith({ id: 4n });
     expect(entries).toHaveBeenLastCalledWith(
       { id: 4n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true },
       { abort: expect.any(AbortSignal) },

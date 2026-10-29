@@ -115,7 +115,7 @@ const showReenter = (state: unknown, next: unknown) =>
 
 beforeEach(() => {
   capabilities.mockReturnValue(call({ available: true }));
-  previewSettings.mockReturnValue(call({ value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } }));
+  previewSettings.mockReturnValue(call({ value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } } }));
   vi.clearAllMocks();
   localStorage.clear();
   get.mockReturnValue(call({ location: source }));
@@ -129,12 +129,14 @@ describe("Scan form", () => {
   it.each(["disabled", "missing helper", "failed check"])(
     "blocks a requested Preview when generation is %s without silently changing policy",
     async (state) => {
-      if (state === "disabled") previewSettings.mockReturnValue(call({ value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } }));
+      if (state === "disabled")
+        previewSettings.mockReturnValue(call({ value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } } }));
       if (state === "missing helper") capabilities.mockReturnValue(call({ available: false, reason: "Helper not installed" }));
       if (state === "failed check") capabilities.mockImplementation(() => ({ response: Promise.reject(new Error("Capability check failed")) }));
       const input = filesState();
       show({ pathname: "/scan", state: { scan: { ...input.scan, options: { previewPolicy: PreviewPolicy.REGENERATE_ALL } } } });
-      await screen.findByRole("link", { name: "Settings" });
+      if (state === "failed check") await screen.findByRole("button", { name: "Retry" });
+      else await screen.findByRole("link", { name: "Settings" });
       await waitFor(() => expect(screen.queryByText("Checking Preview generation…")).not.toBeInTheDocument());
       expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Regenerate all");
       expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
@@ -154,6 +156,7 @@ describe("Scan form", () => {
     expect(screen.getByRole("option", { name: "Files" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Media" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Results" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Previews" })).toBeInTheDocument();
@@ -206,13 +209,14 @@ describe("Scan form", () => {
   it("keeps editable policies while changing source", async () => {
     show({ pathname: "/scan", state: filesState() });
     await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
     await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Find matching Library content" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Count matching archived copies" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
     await userEvent.click(screen.getByRole("option", { name: "Media" }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
-    expect(screen.getByRole("checkbox", { name: "Find matching Library content" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).not.toBeChecked();
     await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
     await userEvent.click(screen.getByRole("option", { name: "Location" }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
@@ -230,6 +234,7 @@ describe("Scan form", () => {
     localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
     show({ pathname: "/scan", state: filesState() });
     await screen.findByText("Projects");
+    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
     await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
@@ -289,6 +294,7 @@ describe("Scan form", () => {
     mediaList.mockReturnValue(call({ media: [tape], hasMore: false }));
     show("/scan?media=4&result=verify");
     await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("combobox", { name: "Previews" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("Not supported on Tape")).toBeInTheDocument();
@@ -363,14 +369,14 @@ describe("Scan form", () => {
 
   it("counts a Media inventory admission before writing and remembers that the count is not needed", async () => {
     show("/scan?media=3");
-    const add = await screen.findByRole("button", { name: "Add to Library" });
+    const add = await screen.findByRole("button", { name: "Add existing inventory to Library" });
     await userEvent.click(add);
-    expect(await screen.findByRole("dialog")).toHaveTextContent("Add to Library");
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Add existing inventory to Library");
     expect(await screen.findByText("12 files from Archive disk will be added as independent Library files.")).toBeInTheDocument();
     expect(screen.getByText("3 folder entries · 1 already in Library · 2 without signatures")).toBeInTheDocument();
     expect(importPositions).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: true }), expect.anything());
 
-    await userEvent.click(screen.getByRole("checkbox", { name: "Don't show this next time" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Skip this confirmation for all Media in this browser" }));
     await userEvent.click(screen.getByRole("button", { name: "Add to Library" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(importPositions).toHaveBeenLastCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
@@ -378,8 +384,14 @@ describe("Scan form", () => {
     // The remembered preference imports directly instead of asking for the count again.
     await waitFor(() => expect(document.querySelector(".MuiBackdrop-root")).not.toBeInTheDocument());
     importPositions.mockClear();
-    await userEvent.click(screen.getByRole("button", { name: "Add to Library" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add existing inventory to Library" }));
     await waitFor(() => expect(importPositions).toHaveBeenCalledOnce());
     expect(importPositions).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
+    expect(scan).not.toHaveBeenCalled();
+    importPositions.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "Review what will be added" }));
+    await screen.findByRole("dialog");
+    expect(importPositions).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ mediaId: 3n, dryrun: true }), expect.anything());
+    expect(scan).not.toHaveBeenCalled();
   });
 });

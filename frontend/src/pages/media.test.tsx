@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChonkyActions, type ChonkyFileActionData, type FileData } from "@samuelncui/chonky";
 
 import { DeleteMediaAction, InspectMediaAction, LoadMoreAction, ScanMediaAction, VerifyMediaAction, ImportPositionsAction, TrimLibraryAction } from "@/actions";
-import { Media, MediaAccess, MediaKind, Position, VolumeCandidateState, VolumeType } from "@/entity";
+import { Media, MediaAccess, MediaKind, Position, TapeMediaProfile, VolumeCandidateState, VolumeType } from "@/entity";
 
 const {
   deviceList,
@@ -131,11 +131,11 @@ beforeEach(() => {
   volumeCandidates.mockReturnValue(call({ discoveryRoots: [], candidates: [] }));
   volumeInitialize.mockReturnValue(call({}));
   volumeRegister.mockReturnValue(call({}));
-  deviceList.mockReturnValue(call({ devices: ["/dev/nst0"] }));
+  deviceList.mockReturnValue(call({ devices: [{ device: "/dev/nst0", busy: false, detail: "", kind: 1 }] }));
   mediaInspect.mockReturnValue(call({ identity: "" }));
   mediaDelete.mockReturnValue(call({}));
   libraryTrim.mockReturnValue(call({}));
-  importPositions.mockReturnValue(call({ fileIds: [8n], importedFiles: 1n, skippedFileCount: 0n }));
+  importPositions.mockReturnValue(call({ fileIds: [8n], fileCount: 1n, directoryCount: 0n, existingCount: 0n, skippedFileCount: 0n }));
   createScan.mockReturnValue(call({ job: { id: 20n } }));
 });
 
@@ -338,7 +338,18 @@ describe("Media page", () => {
     [TrimLibraryAction, "Clean up Library?", "Clean up", libraryTrim],
     [ImportPositionsAction, "Add to Library?", "Add files", importPositions],
   ] as const)("requires application confirmation for $0.id", async (operation, title, label, rpc) => {
-    const selected = { id: "7", name: "Archive", isMedia: true, position: { id: 7n, signature: new Uint8Array([1]) } };
+    const selected = {
+      id: "7",
+      name: "Archive",
+      isMedia: true,
+      position: { id: 7n, signature: new Uint8Array([1]) },
+      media: Media.create({
+        id: 7n,
+        kind: MediaKind.TAPE,
+        encryptionKeySaved: true,
+        profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create() } },
+      }),
+    };
     mediaList.mockReturnValue(call({ media: [], hasMore: false }));
     const Harness = () => {
       const browser = useMediaBrowser(
@@ -365,6 +376,10 @@ describe("Media page", () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "Request" }));
     expect(rpc).not.toHaveBeenCalled();
+    if (operation === DeleteMediaAction) {
+      expect(screen.getByRole("dialog", { name: title })).toHaveTextContent("Keys stored in Tape profiles will also be removed.");
+      expect(screen.getByRole("dialog", { name: title })).toHaveTextContent("Reading encrypted Tape will depend on a key copy you keep outside YATM.");
+    }
     await userEvent.click(within(screen.getByRole("dialog", { name: title })).getByRole("button", { name: "Cancel" }));
     expect(rpc).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Request" }));
@@ -494,6 +509,41 @@ describe("Media page", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Serial Number" })).toHaveValue("");
     expect(screen.getByRole("button", { name: "Initialize" })).toBeDisabled();
+  });
+
+  it("shows initial device loading and distinguishes an empty configured list", async () => {
+    let finish!: (value: unknown) => void;
+    deviceList.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
+    render(
+      <InspectMediaDialog
+        media={{ id: "7", name: "Tape", isDir: true, isMedia: true, media: Media.create({ id: 7n, kind: MediaKind.TAPE }) }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent("Loading devices");
+    expect(screen.queryByText("No Tape drive is configured.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh devices" })).toBeDisabled();
+    await act(async () => finish({ devices: [] }));
+    expect(await screen.findByText("No Tape drive is configured.")).toBeInTheDocument();
+    expect(mediaInspect).not.toHaveBeenCalled();
+  });
+
+  it("recovers an unknown failed device list with a passive refresh", async () => {
+    deviceList.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Device list offline")) }));
+    render(
+      <InspectMediaDialog
+        media={{ id: "7", name: "Tape", isDir: true, isMedia: true, media: Media.create({ id: 7n, kind: MediaKind.TAPE }) }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText("Device list offline")).toBeInTheDocument();
+    expect(screen.queryByText("No Tape drive is configured.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Refresh devices" }));
+    await waitFor(() => expect(screen.queryByText("Device list offline")).not.toBeInTheDocument());
+    expect(mediaInspect).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("combobox", { name: "Tape device" }));
+    await userEvent.click(screen.getByRole("option", { name: "/dev/nst0" }));
+    await waitFor(() => expect(mediaInspect).toHaveBeenCalledOnce());
   });
 
   it("does not substitute the selected Library identity for an unreadable Tape barcode", async () => {

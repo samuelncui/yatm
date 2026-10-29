@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ import {
   JobStatus,
   Media,
   MediaKind,
+  TapeMediaProfile,
   Progress,
   RestoreCandidate,
   RestoreItem,
@@ -79,7 +80,7 @@ beforeEach(() => {
   getProgress.mockReset();
   listMedia.mockReset();
   listFiles.mockReset();
-  deviceList.mockReturnValue(call({ devices: ["/dev/nst0"] }));
+  deviceList.mockReturnValue(call({ devices: [{ device: "/dev/nst0", busy: false, detail: "", kind: 1 }] }));
   mediaListAPI.mockReturnValue(call({ media: [] }));
   restoreMedia.mockReturnValue(call({}));
 });
@@ -159,9 +160,49 @@ describe("RestoreCard", () => {
     expect(screen.queryByRole("dialog", { name: "Restore results" })).not.toBeInTheDocument();
   });
 
+  it("waits for known Restore candidates before allowing the Media chooser", async () => {
+    const pending = RestoreMedia.create({ mediaId: 9n, identity: "BPP875", fileCount: 1n, status: CopyStatus.PENDING });
+    const tape = Media.create({
+      id: 9n,
+      kind: MediaKind.TAPE,
+      identity: "BPP875",
+      name: "Required Tape",
+      profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create({ format: "ltfs_v0" }) } },
+    });
+    let finish!: (value: { media: RestoreMedia[]; hasMore: boolean }) => void;
+    getProgress.mockReturnValue(call({ progress: Progress.create({ totalFileCount: 1n, totalBytes: 10n }) }));
+    listMedia.mockReturnValue({ response: new Promise((resolve) => (finish = resolve)) });
+    mediaListAPI.mockReturnValue(call({ media: [tape] }));
+    mediaInspect.mockReturnValue(call({ identity: "BPP875", media: tape, fileCount: 1n }));
+    render(<RestoreCard job={Job.create({ id: 20n, kind: JobKind.RESTORE, status: JobStatus.READY })} />);
+    await waitFor(() => expect(listMedia).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("button", { name: "Choose archive storage to read" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText("This Job has no pending Media.")).not.toBeInTheDocument();
+    expect(mediaListAPI).not.toHaveBeenCalled();
+    await act(async () => finish({ media: [pending], hasMore: false }));
+    const chooser = await screen.findByRole("button", { name: "Choose archive storage to read" });
+    expect(chooser).toBeEnabled();
+    await userEvent.click(chooser);
+    const submit = await screen.findByRole("button", { name: "Start restore" });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await userEvent.click(submit);
+    expect(mediaInspect).toHaveBeenCalledOnce();
+    expect(restoreMedia).toHaveBeenCalledWith({
+      id: 20n,
+      target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0", refreshPositionMap: false } }, expectedMediaId: 9n, expectedIdentity: "BPP875" },
+    });
+  });
+
   it("submits only after the inserted Tape matches a pending Media", async () => {
     const pending = RestoreMedia.create({ mediaId: 9n, identity: "BPP875", fileCount: 1n, status: CopyStatus.PENDING });
-    const tape = Media.create({ id: 9n, kind: MediaKind.TAPE, identity: "BPP875", name: "Required Tape" });
+    const tape = Media.create({
+      id: 9n,
+      kind: MediaKind.TAPE,
+      identity: "BPP875",
+      name: "Required Tape",
+      profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create({ format: "ltfs_v0" }) } },
+    });
     getProgress.mockReturnValue(call({ progress: Progress.create({ totalFileCount: 1n, totalBytes: 10n }) }));
     listMedia.mockReturnValue(call({ media: [pending], hasMore: false }));
     mediaListAPI.mockReturnValue(call({ media: [tape] }));
@@ -176,7 +217,7 @@ describe("RestoreCard", () => {
     render(<RestoreCard job={value} />);
     await screen.findByText("Required Tape: pending");
     await userEvent.click(screen.getByRole("button", { name: "Choose archive storage to read" }));
-    await screen.findByRole("combobox", { name: "Drive Device" });
+    await screen.findByRole("combobox", { name: "Tape device" });
     expect(screen.queryByRole("combobox", { name: "Storage type" })).not.toBeInTheDocument();
     const submit = await screen.findByRole("button", { name: "Start restore" });
     await waitFor(() => expect(submit).toBeEnabled());

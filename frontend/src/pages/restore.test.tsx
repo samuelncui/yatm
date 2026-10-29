@@ -351,7 +351,7 @@ describe("Version Restore selection", () => {
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Skip 1 item" }));
     await screen.findByText("1 item skipped.");
-    await userEvent.click(screen.getByText("Advanced recovery"));
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Allow damaged copies" }));
     await screen.findByText("1 item has no usable archived copy.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
@@ -418,9 +418,11 @@ describe("Version Restore selection", () => {
     await target();
     await screen.findByText("1 item has no usable archived copy.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
-    await userEvent.click(screen.getByText("Advanced recovery"));
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Allow damaged copies" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+    expect(screen.getByText(/Complete damaged output may be retained/)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ allowDamagedCopies: true }) }));
   });

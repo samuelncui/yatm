@@ -128,7 +128,7 @@ message ListVolumeCandidatesResponse {
 }
 
 message ListDevicesRequest {}
-message ListDevicesResponse { repeated string devices = 1; }
+message ListDevicesResponse { repeated DeviceSummary devices = 1; }
 
 enum DeviceKind {
   DEVICE_KIND_UNSPECIFIED = 0;

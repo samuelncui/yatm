@@ -35,14 +35,18 @@ export const JobSettingsBrowser = () => {
             void save();
           }}
         >
+          <p>Pipeline limits for running Archive, Restore and Scan Jobs.</p>
           <SettingsSection
-            title="Job execution"
-            description="Read batch is the manifest page; the buffers and the flush interval belong to the transfer engine."
+            title="Advanced"
+            collapsible
+            hasError={!!validateExecution(execution)}
+            description={`Manifest batch ${execution.readBatch} items · queued reads ${execution.readBufferMax} · queued results ${execution.writeBufferMax} · ${execution.writeBatchSize} results/update · flush ${execution.flushIntervalMs} ms`}
           >
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Read batch"
+                  label="Manifest batch (items)"
+                  helperText="Items per manifest page. Does not change the full selection used for Tape planning."
                   value={execution.readBatch}
                   disabled={loading || saving}
                   onChange={(readBatch) => changeExecution({ readBatch })}
@@ -50,7 +54,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Read buffer"
+                  label="Queued read items"
+                  helperText="Maximum queued reads. Larger queues can use more memory."
                   disabled={loading || saving}
                   value={execution.readBufferMax}
                   max={1000000}
@@ -59,7 +64,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Write buffer"
+                  label="Queued results"
+                  helperText="Maximum completed results waiting to be recorded; this is not a Tape byte buffer."
                   disabled={loading || saving}
                   value={execution.writeBufferMax}
                   max={1000000}
@@ -68,7 +74,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Write batch"
+                  label="Results per update"
+                  helperText="Maximum results in one update. Larger batches can delay progress reporting."
                   disabled={loading || saving}
                   value={execution.writeBatchSize}
                   max={execution.writeBufferMax}
@@ -77,7 +84,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Flush interval (ms)"
+                  label="Result flush interval (ms)"
+                  helperText="Maximum wait before a result update, in milliseconds."
                   disabled={loading || saving}
                   value={execution.flushIntervalMs}
                   min={100}
@@ -95,13 +103,13 @@ export const JobSettingsBrowser = () => {
 
 // The service validates the same limits; this keeps a typo from becoming a round trip.
 const validateExecution = (settings: JobExecutionSettings): string => {
-  if (!Number.isInteger(settings.readBatch) || settings.readBatch < 1) return "Read batch must be at least 1.";
+  if (!Number.isInteger(settings.readBatch) || settings.readBatch < 1) return "Manifest batch (items) must be at least 1.";
   if (!Number.isInteger(settings.readBufferMax) || settings.readBufferMax < 1 || settings.readBufferMax > 1000000)
-    return "Read buffer must be between 1 and 1000000.";
+    return "Queued read items must be between 1 and 1000000.";
   if (!Number.isInteger(settings.writeBufferMax) || settings.writeBufferMax < 1 || settings.writeBufferMax > 1000000)
-    return "Write buffer must be between 1 and 1000000.";
-  if (!Number.isInteger(settings.writeBatchSize) || settings.writeBatchSize < 1) return "Write batch must be at least 1.";
-  if (settings.writeBatchSize > settings.writeBufferMax) return "Write batch must not exceed the write buffer.";
-  if (!Number.isInteger(settings.flushIntervalMs) || settings.flushIntervalMs < 100) return "Flush interval must be at least 100 milliseconds.";
+    return "Queued results must be between 1 and 1000000.";
+  if (!Number.isInteger(settings.writeBatchSize) || settings.writeBatchSize < 1) return "Results per update must be at least 1.";
+  if (settings.writeBatchSize > settings.writeBufferMax) return "Results per update must not exceed the queued results limit.";
+  if (!Number.isInteger(settings.flushIntervalMs) || settings.flushIntervalMs < 100) return "Result flush interval must be at least 100 milliseconds.";
   return "";
 };

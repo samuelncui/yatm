@@ -238,6 +238,10 @@ it.each(["delete", "keep", "merge"] as const)("rejects a pending %s confirmation
   const action = operation === "delete" ? ChonkyActions.DeleteFiles.id : `identical-${operation}`;
   act(() => dispatch(action, files));
   await screen.findByRole("button", { name: operation === "merge" ? "Merge" : "Delete" });
+  if (operation === "merge") {
+    expect(screen.getByRole("dialog")).toHaveTextContent("The selected File keeps its original link.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Other Files move to Library Trash and lose their original links. Disk files are kept.");
+  }
   act(() => dispatch(ChonkyActions.SortFilesBySize.id, []));
   await waitFor(() => expect(state.lookup).toHaveBeenCalledTimes(1));
   await userEvent.click(screen.getByRole("button", { name: operation === "merge" ? "Merge" : "Delete" }));

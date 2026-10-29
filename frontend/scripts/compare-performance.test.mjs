@@ -7,8 +7,12 @@ import test from "node:test";
 import { collect, options } from "./compare-performance.mjs";
 import { digest } from "../../dev/performance/evidence.mjs";
 
-const benchmark = "src/components/files-browser.bench.ts";
-const tracked = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/source.ts", `frontend/${benchmark}`];
+const benchmarks = ["src/components/files-browser.bench.ts", "src/components/job-result-window.bench.ts"];
+const caseNames = [
+  ["stream and accumulate 10k directory rows in 500-row batches"],
+  [1_000, 10_000, 100_000, 1_000_000].map((size) => `append ${size} Job result rows in 200-row windows`),
+];
+const tracked = ["frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/source.ts", ...benchmarks.map((name) => `frontend/${name}`)];
 
 function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "yatm-frontend-tools-")));
@@ -41,7 +45,7 @@ function fixture(t) {
     if (file === "git") {
       if (args.includes("--show-toplevel")) return ok(args[1]);
       if (args.includes("rev-parse")) return ok("a".repeat(40));
-      if (args.includes("--error-unmatch")) return ok(`frontend/${benchmark}`);
+      if (args.includes("--error-unmatch")) return ok(args.at(-1));
       assert.ok(args.includes("--cached"));
       assert.ok(!args.includes("--others"));
       return ok(tracked.join("\0") + "\0");
@@ -54,7 +58,7 @@ function fixture(t) {
     writeSync(settings.stdio[2], `${side} stderr\n`);
     if (args[0] === "install") {
       assert.ok(args.includes("--frozen-lockfile"));
-      assert.equal(readFileSync(join(settings.cwd, benchmark), "utf8"), `harness frontend/${benchmark}\n`);
+      for (const benchmark of benchmarks) assert.equal(readFileSync(join(settings.cwd, benchmark), "utf8"), `harness frontend/${benchmark}\n`);
       assert.equal(readFileSync(join(settings.cwd, "src/source.ts"), "utf8"), `${side} frontend/src/source.ts\n`);
       for (const path of ["../.git", ".npmrc", ".env.local", "untracked.ts", "node_modules"]) assert.equal(existsSync(join(settings.cwd, path)), false);
       assert.notEqual(settings.env.HOME, process.env.HOME);
@@ -66,12 +70,21 @@ function fixture(t) {
     assert.equal(args[1], "vitest");
     assert.equal(calls.filter((call) => call.args[0] === "install").length, 2, "both installs finish before measuring");
     const report = {
-      files: [
-        {
-          filepath: join(settings.cwd, benchmark),
-          groups: [{ fullName: benchmark, benchmarks: [{ id: "case-0", name: "directory listing", sampleCount: 1, mean: 1, hz: 1000 }] }],
-        },
-      ],
+      files: benchmarks.map((benchmark, fileIndex) => ({
+        filepath: join(settings.cwd, benchmark),
+        groups: [
+          {
+            fullName: benchmark,
+            benchmarks: caseNames[fileIndex].map((name, caseIndex) => ({
+              id: `file-${fileIndex}-case-${caseIndex}`,
+              name,
+              sampleCount: 1,
+              mean: 1,
+              hz: 1000,
+            })),
+          },
+        ],
+      })),
     };
     writeFileSync(args.find((arg) => arg.startsWith("--outputJson=")).slice("--outputJson=".length), JSON.stringify(report));
     return ok();
@@ -89,7 +102,15 @@ test("preserves supplied source and private files while comparing the common har
     benches.map((call) => basename(join(call.settings.cwd, ".."))),
     ["baseline", "candidate"],
   );
-  assert.deepEqual(benches[0].args, ["exec", "vitest", "bench", "--run", "--maxWorkers=1", benchmark, `--outputJson=${join(f.config.out, "baseline.json")}`]);
+  assert.deepEqual(benches[0].args, [
+    "exec",
+    "vitest",
+    "bench",
+    "--run",
+    "--maxWorkers=1",
+    ...benchmarks,
+    `--outputJson=${join(f.config.out, "baseline.json")}`,
+  ]);
   assert.deepEqual(benches[1].args, [
     ...benches[0].args.slice(0, -1),
     `--outputJson=${join(f.config.out, "candidate.json")}`,
@@ -103,7 +124,13 @@ test("preserves supplied source and private files while comparing the common har
     assert.equal(readFileSync(join(f.config[side], "frontend/.env.local"), "utf8"), "private environment\n");
   }
   assert.notEqual(record.sources.baseline.sha256, record.sources.candidate.sha256);
-  assert.equal(record.harness.sha256, digest(readFileSync(join(f.config.harness, `frontend/${benchmark}`))));
+  assert.deepEqual(
+    record.harness.files.map(([name, , hash]) => [name, hash]),
+    benchmarks.map((name) => [`frontend/${name}`, digest(readFileSync(join(f.config.harness, `frontend/${name}`)))]),
+  );
+  assert.equal(record.harness.sha256, digest(JSON.stringify(record.harness.files)));
+  assert.equal(record.outputs.baseline.cases.length, 5);
+  assert.deepEqual(record.outputs.baseline.cases, record.outputs.candidate.cases);
   assert.equal(
     readdirSync(f.config.out).some((name) => name.startsWith(".work-")),
     false,
@@ -179,27 +206,76 @@ test("failed install or benchmark retains raw output and incomplete evidence, an
     });
 });
 
-test("missing, empty, skipped or mismatched results cannot mark a comparison complete", async (t) => {
-  for (const outcome of ["missing", "empty", "skipped", "mismatched"])
+test("missing, invalid, failed, duplicate or mismatched cases cannot complete a comparison", async (t) => {
+  const mutations = {
+    missing: (_report, json) => rmSync(json),
+    empty: (report) => {
+      report.files = [];
+    },
+    "missing file": (report) => {
+      report.files.pop();
+    },
+    "unexpected file": (report) => {
+      report.files[1].filepath = "src/other.bench.ts";
+    },
+    "duplicate file": (report) => {
+      report.files[1] = report.files[0];
+    },
+    "missing case": (report) => {
+      report.files[1].groups[0].benchmarks.pop();
+    },
+    "extra case": (report) => {
+      report.files[1].groups[0].benchmarks.push({ id: "extra", name: "extra" });
+    },
+    "duplicate name": (report) => {
+      report.files[1].groups[0].benchmarks[1].name = report.files[1].groups[0].benchmarks[0].name;
+    },
+    "duplicate id": (report) => {
+      report.files[1].groups[0].benchmarks[0].id = report.files[0].groups[0].benchmarks[0].id;
+    },
+    "unexpected case": (report) => {
+      report.files[1].groups[0].benchmarks[0].name = "unmaintained workload";
+    },
+    "failed file": (report) => {
+      report.files[1].error = "collection failure";
+    },
+    "failed group": (report) => {
+      report.files[1].groups[0].error = "hook failure";
+    },
+    "failed case": (report) => {
+      report.files[1].groups[0].benchmarks[0].error = "assertion failure";
+    },
+    skipped: (report) => {
+      report.files[1].groups[0].benchmarks[0].sampleCount = 0;
+    },
+    "invalid samples": (report) => {
+      report.files[1].groups[0].benchmarks[0].sampleCount = 1.5;
+    },
+    "invalid mean": (report) => {
+      report.files[1].groups[0].benchmarks[0].mean = null;
+    },
+    "invalid rate": (report) => {
+      report.files[1].groups[0].benchmarks[0].hz = 0;
+    },
+    "missing id": (report) => {
+      delete report.files[1].groups[0].benchmarks[0].id;
+    },
+    mismatched: (report) => {
+      report.files[1].groups[0].benchmarks[0].id = "unmatched-case";
+    },
+  };
+  for (const [outcome, mutate] of Object.entries(mutations))
     await t.test(outcome, (t) => {
       const f = fixture(t);
       assert.throws(
         () =>
           collect(f.config, (file, args, settings) => {
             const result = f.spawn(file, args, settings);
-            if (args[1] !== "vitest") return result;
+            if (args[1] !== "vitest" || (outcome === "mismatched" && !args.some((arg) => arg.startsWith("--compare=")))) return result;
             const json = args.find((arg) => arg.startsWith("--outputJson=")).slice("--outputJson=".length);
             const report = JSON.parse(readFileSync(json, "utf8"));
-            if (outcome === "missing") rmSync(json);
-            if (outcome === "empty") writeFileSync(json, '{"files":[]}');
-            if (outcome === "skipped") {
-              report.files[0].groups[0].benchmarks[0].sampleCount = 0;
-              writeFileSync(json, JSON.stringify(report));
-            }
-            if (outcome === "mismatched" && args.some((arg) => arg.startsWith("--compare="))) {
-              report.files[0].groups[0].benchmarks[0].id = "unmatched-case";
-              writeFileSync(json, JSON.stringify(report));
-            }
+            mutate(report, json);
+            if (outcome !== "missing") writeFileSync(json, JSON.stringify(report));
             return result;
           }),
         /ENOENT|Missing or invalid|identities differ/,
@@ -211,4 +287,32 @@ test("missing, empty, skipped or mismatched results cannot mark a comparison com
       );
       assert.equal(f.calls.filter((call) => call.args[1] === "vitest").length, outcome === "mismatched" ? 2 : 1);
     });
+});
+
+test("compares identities independent of native file and case report order", (t) => {
+  const f = fixture(t);
+  const record = collect(f.config, (file, args, settings) => {
+    const result = f.spawn(file, args, settings);
+    if (args.some((arg) => arg.startsWith("--compare="))) {
+      const json = args.find((arg) => arg.startsWith("--outputJson=")).slice("--outputJson=".length);
+      const report = JSON.parse(readFileSync(json, "utf8"));
+      report.files.reverse();
+      for (const file of report.files) file.groups[0].benchmarks.reverse();
+      writeFileSync(json, JSON.stringify(report));
+    }
+    return result;
+  });
+  assert.equal(record.complete, true);
+  assert.deepEqual(record.outputs.baseline.cases, record.outputs.candidate.cases);
+});
+
+test("requires both tracked harness files before installing dependencies", (t) => {
+  const f = fixture(t);
+  rmSync(join(f.config.harness, `frontend/${benchmarks[1]}`));
+  assert.throws(() => collect(f.config, f.spawn), /Missing tracked harness/);
+  assert.equal(
+    f.calls.some((call) => call.args[0] === "install"),
+    false,
+  );
+  assert.equal(JSON.parse(readFileSync(join(f.config.out, "pair.json"), "utf8")).complete, false);
 });

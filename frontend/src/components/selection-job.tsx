@@ -1,4 +1,5 @@
 import { FileBrowser } from "@/components/file-browser";
+import { SettingsSection } from "@/components/settings-page";
 import { Feedback } from "@/components/feedback";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -366,25 +367,30 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                 )}
                 <RestoreDestinationPicker value={destination} onChange={chooseDestination} disabled={busy} usePreference={!initial} />
                 {destinationError && <Feedback severity="error">{destinationError}</Feedback>}
-                <details>
-                  <summary>Advanced recovery</summary>
-                  <Stack spacing={2}>
-                    <FormControlLabel
-                      control={<Checkbox checked={allowDamagedCopies} disabled={busy} onChange={(_, checked) => setAllowDamagedCopies(checked)} />}
-                      label="Allow damaged copies"
-                    />
-                    {allowDamagedCopies && (
-                      <Alert severity="warning">Complete damaged output may be retained for recovery. It is not a verified saved version.</Alert>
-                    )}
-                  </Stack>
-                </details>
+                <SettingsSection title="Advanced" collapsible description={allowDamagedCopies ? "Damaged copies allowed" : undefined}>
+                  <FormControlLabel
+                    control={<Checkbox checked={allowDamagedCopies} disabled={busy} onChange={(_, checked) => setAllowDamagedCopies(checked)} />}
+                    label="Allow damaged copies"
+                  />
+                </SettingsSection>
+                {allowDamagedCopies && (
+                  <Alert severity="warning">
+                    Damaged copies allowed. Complete damaged output may be retained for recovery. It is not a verified saved version.
+                  </Alert>
+                )}
               </>
             ) : (
               <Stack spacing={2}>
                 <PreviewPolicySelect generation={generation} value={previewPolicy} onChange={setPreviewPolicy} disabled={busy} />
                 {!validPreview && <Feedback severity="warning">Choose a Preview option before preparing.</Feedback>}
                 {previewPolicy !== PreviewPolicy.NONE && (
-                  <FormControlLabel control={<Checkbox checked={force} disabled={busy} onChange={(_, checked) => setForce(checked)} />} label="Force rehash" />
+                  <SettingsSection title="Advanced Preview" collapsible description={force ? "Source hashes will be rechecked" : undefined}>
+                    <FormControlLabel
+                      control={<Checkbox checked={force} disabled={busy} onChange={(_, checked) => setForce(checked)} />}
+                      label="Recheck source hashes for previews"
+                    />
+                    <span>Reads source files again to identify previews before copying. The Archive copy hashes content independently.</span>
+                  </SettingsSection>
                 )}
               </Stack>
             )}

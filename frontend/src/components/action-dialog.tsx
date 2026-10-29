@@ -29,6 +29,7 @@ export const ActionDialog = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submitting = useRef(false);
+  const cancelButton = useRef<HTMLButtonElement>(null);
   const valid = !input || value.length > 0;
   const close = () => {
     if (!submitting.current) onClose();
@@ -56,10 +57,16 @@ export const ActionDialog = ({
       maxWidth="sm"
       fullWidth
       slotProps={{
+        transition: {
+          onEntered: () => {
+            if (!input) cancelButton.current?.focus();
+          },
+        },
         paper: {
           component: "form",
           onSubmit: (event: FormEvent) => {
             event.preventDefault();
+            event.stopPropagation();
             void submit();
           },
         },
@@ -94,7 +101,7 @@ export const ActionDialog = ({
         <Button type="submit" variant="contained" color={danger ? "error" : "primary"} disabled={busy || !valid}>
           {busy ? "Working…" : confirmLabel}
         </Button>
-        <Button type="button" autoFocus={!input} disabled={busy} onClick={close}>
+        <Button ref={cancelButton} type="button" autoFocus={!input} disabled={busy} onClick={close}>
           {cancelLabel}
         </Button>
       </DialogActions>

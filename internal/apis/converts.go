@@ -63,17 +63,29 @@ func convertMedia(value *library.Media) (*entity.Media, error) {
 		return nil, fmt.Errorf("convert Media capabilities failed, media_id=%d, %w", value.ID, err)
 	}
 
-	// Preserve optional timestamps as absent or exact ns, including an explicitly known epoch zero.
+	// Preserve optional timestamps and give the response its own mutable geometry.
 	var destroyedAt *int64
 	if value.DestroyedAtNS != nil {
 		destroyedAt = proto.Int64(*value.DestroyedAtNS)
+	}
+	var positionMap *entity.TapePositionMap
+	if value.TapePositionMap != nil {
+		positionMap = proto.Clone(value.TapePositionMap).(*entity.TapePositionMap)
+	}
+
+	// The saved key never leaves the Library through the API; only its presence is reported.
+	profile := proto.Clone(value.Profile).(*entity.MediaProfile)
+	keySaved := false
+	if tape := profile.GetTape(); tape != nil {
+		keySaved, tape.Encryption = tape.Encryption != "", ""
 	}
 	return &entity.Media{
 		Id: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name,
 		Capabilities: &entity.Capabilities{
 			Read: mediapkg.AccessToEntity(capabilities.Read), Write: mediapkg.AccessToEntity(capabilities.Write),
 		},
-		Profile: proto.Clone(value.Profile).(*entity.MediaProfile), CreatedAtNs: value.CreatedAtNS,
+		Profile: profile, CreatedAtNs: value.CreatedAtNS,
+		TapePositionMap: positionMap, EncryptionKeySaved: keySaved,
 		DestroyedAtNs: destroyedAt, CapacityBytes: value.CapacityBytes,
 		WrittenBytes: value.WrittenBytes,
 	}, nil

@@ -23,6 +23,19 @@ describe("Application action dialog", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it("keeps a portal confirmation submission out of its parent form", async () => {
+    const onConfirm = vi.fn();
+    const parentSubmit = vi.fn((event) => event.preventDefault());
+    render(
+      <form onSubmit={parentSubmit}>
+        <ActionDialog title="Discard changes?" confirmLabel="Discard" onConfirm={onConfirm} onClose={vi.fn()} />
+      </form>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(parentSubmit).not.toHaveBeenCalled();
+  });
+
   it("validates input without trimming valid names and supports keyboard submission", async () => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();

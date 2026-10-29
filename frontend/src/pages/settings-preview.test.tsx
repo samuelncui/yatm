@@ -58,6 +58,8 @@ const videoForm = () => within(screen.getByRole("group", { name: "Video" }));
 const choose = async (name: string) => {
   await userEvent.click(screen.getByRole("combobox", { name: "Type" }));
   await userEvent.click(screen.getByRole("option", { name }));
+  const advanced = screen.getByRole("button", { name: /Advanced output/ });
+  if (advanced.getAttribute("aria-expanded") === "false") await userEvent.click(advanced);
 };
 beforeEach(() => {
   capabilities.mockReset().mockReturnValue({
@@ -81,6 +83,8 @@ beforeEach(() => {
 const open = async () => {
   render(<PreviewSettingsBrowser />);
   await screen.findByRole("group", { name: "Image · jpg, png" });
+  await userEvent.click(screen.getByRole("button", { name: /Advanced output/ }));
+  await userEvent.click(screen.getByRole("button", { name: /Supported formats/ }));
 };
 describe("Preview settings", () => {
   it("uses consistent sections and places all page actions after the capability details", async () => {
@@ -92,7 +96,7 @@ describe("Preview settings", () => {
     const actions = screen.getByRole("button", { name: "Save" }).parentElement;
     expect(Array.from(actions!.children, (action) => action.textContent?.trim())).toEqual(["Save", "Cancel"]);
     expect(await screen.findByText(/LibRaw 0.22.2/)).toBeVisible();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Check again" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Check saved executable again" })).toBeEnabled());
     expect(screen.getByText("Image: jpg, png, heic, cr3")).toBeVisible();
   });
 
@@ -125,7 +129,7 @@ describe("Preview settings", () => {
     let reject!: (error: Error) => void;
     capabilities.mockReturnValueOnce({ response: new Promise((_, fail) => (reject = fail)) });
 
-    const checkAgain = screen.getByRole("button", { name: "Check again" });
+    const checkAgain = screen.getByRole("button", { name: "Check saved executable again" });
     await userEvent.click(checkAgain);
     expect(capabilities).toHaveBeenCalledTimes(2);
     expect(screen.getByText(/LibRaw 0.22.2/)).toBeVisible();
@@ -201,6 +205,7 @@ describe("Preview settings", () => {
   it("edits and validates common runtime limits without per-type executable fields", async () => {
     await open();
     expect(screen.queryByLabelText("Image executable")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Advanced runtime/ }));
     fireEvent.change(screen.getByRole("spinbutton", { name: "Concurrency" }), { target: { value: "17" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Concurrency must be between 1 and 16.");
@@ -242,7 +247,7 @@ describe("Preview settings", () => {
   it("saves video sampling, output and advanced routing settings", async () => {
     await open();
     await choose("Video");
-    fireEvent.change(videoForm().getByRole("spinbutton", { name: "Sampling interval (seconds)" }), { target: { value: "20" } });
+    fireEvent.change(videoForm().getByRole("spinbutton", { name: "Minimum sampling interval (seconds)" }), { target: { value: "20" } });
     fireEvent.change(videoForm().getByRole("spinbutton", { name: "Timeline tile width (px)" }), { target: { value: "201" } });
     await userEvent.click(videoForm().getByRole("combobox", { name: "Output format" }));
     await userEvent.click(screen.getByRole("option", { name: "PNG" }));
@@ -261,7 +266,7 @@ describe("Preview settings", () => {
   it("validates ranges, duplicate routes and the combined timeline size before saving", async () => {
     await open();
     await choose("Video");
-    const frames = videoForm().getByRole("spinbutton", { name: "Maximum frames" });
+    const frames = videoForm().getByRole("spinbutton", { name: "Maximum timeline frames" });
     fireEvent.change(frames, { target: { value: "1001" } });
     expect(frames).toBeInvalid();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -312,7 +317,7 @@ describe("Preview settings", () => {
     expect(chip).toHaveAttribute("aria-disabled", "true");
     fireEvent.keyUp(chip, { key: "Delete" });
     expect(imageForm().getByText("jpg")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Check again" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Check saved executable again" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
     reject(new Error("Preview Settings unavailable"));
     expect(await screen.findByText("Preview Settings unavailable")).toBeVisible();
@@ -348,7 +353,7 @@ describe("Preview settings", () => {
     expect(screen.getByRole("group", { name: "Image · heic" })).toBeInTheDocument();
     expect(screen.getAllByRole("group", { name: /^(Image|Video)( ·|$)/ })).toHaveLength(1);
     await choose("Video");
-    fireEvent.change(videoForm().getByRole("spinbutton", { name: "Sampling interval (seconds)" }), { target: { value: "20" } });
+    fireEvent.change(videoForm().getByRole("spinbutton", { name: "Minimum sampling interval (seconds)" }), { target: { value: "20" } });
     await choose("Image · jpg, png");
     expect(imageForm().getByRole("spinbutton", { name: "Maximum width (px)" })).toHaveValue(768);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -384,4 +389,42 @@ describe("Preview settings", () => {
       maxInputPixels: 64000000n,
     });
   });
+});
+
+it("keeps optional output, runtime and capability details folded while primary output stays visible", async () => {
+  render(<PreviewSettingsBrowser />);
+  await screen.findByRole("group", { name: "Image · jpg, png" });
+  expect(screen.getByRole("spinbutton", { name: "Maximum width (px)" })).toBeVisible();
+  expect(screen.queryByRole("combobox", { name: "File extensions" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Executable" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Check saved executable again" })).not.toBeInTheDocument();
+});
+it("retains quality while PNG disables it and restores editing for JPEG", async () => {
+  await open();
+  const quality = imageForm().getByRole("spinbutton", { name: "Quality" });
+  await userEvent.click(imageForm().getByRole("combobox", { name: "Output format" }));
+  await userEvent.click(screen.getByRole("option", { name: "PNG" }));
+  expect(quality).toBeDisabled();
+  expect(quality).toHaveValue(80);
+  expect(screen.getByText("PNG is lossless; quality does not apply.")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Preview settings saved.");
+  expect(updated().generators[0].options).toMatchObject({ image: { format: "png", quality: 80 } });
+  await userEvent.click(imageForm().getByRole("combobox", { name: "Output format" }));
+  await userEvent.click(screen.getByRole("option", { name: "JPEG" }));
+  expect(quality).toBeEnabled();
+  expect(quality).toHaveValue(80);
+});
+it("does not check an unsaved executable and reloads the saved helper after Save", async () => {
+  await open();
+  await userEvent.click(screen.getByRole("button", { name: /Advanced runtime/ }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Executable" }), { target: { value: "/new/helper" } });
+  expect(screen.getByText(/Save to check this executable/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Check saved executable again" })).toBeDisabled();
+  expect(capabilities).toHaveBeenCalledOnce();
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Preview settings saved.");
+  await waitFor(() => expect(capabilities).toHaveBeenCalledTimes(2));
+  expect(updated().command).toBe("/new/helper");
+  expect(screen.queryByText(/Save to check this executable/)).not.toBeInTheDocument();
 });

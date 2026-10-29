@@ -1,5 +1,5 @@
 import { Feedback } from "@/components/feedback";
-import { type ReactNode, Suspense, useId, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useContext, useId, useRef, useState } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardHeader from "@mui/material/CardHeader";
@@ -11,6 +11,8 @@ import Stack from "@mui/material/Stack";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { ActionRow } from "@/components/action-row";
 import { PageHeading } from "@/components/page-heading";
+import { ActionDialog } from "@/components/action-dialog";
+import { UNSAFE_DataRouterContext, useBeforeUnload, useBlocker } from "react-router";
 
 /**
  * A whole Settings surface: its heading and the settings it holds across the available width.
@@ -32,15 +34,17 @@ export const SettingsSection = ({
   description,
   children,
   collapsible = false,
+  hasError = false,
 }: {
   title?: string;
   description?: ReactNode;
   children?: ReactNode;
   collapsible?: boolean;
+  hasError?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const contentID = useId();
-  const visible = !collapsible || expanded;
+  const visible = !collapsible || expanded || hasError;
   return (
     <Card sx={{ overflow: "hidden" }}>
       {title && (
@@ -49,9 +53,9 @@ export const SettingsSection = ({
           title={title}
           subheader={description}
           onClick={collapsible ? () => setExpanded((current) => !current) : undefined}
-          aria-expanded={collapsible ? expanded : undefined}
+          aria-expanded={collapsible ? visible : undefined}
           aria-controls={collapsible ? contentID : undefined}
-          action={collapsible && <ExpandMoreRoundedIcon sx={{ transform: expanded ? "rotate(180deg)" : "none" }} />}
+          action={collapsible && <ExpandMoreRoundedIcon sx={{ transform: visible ? "rotate(180deg)" : "none" }} />}
           slotProps={{
             title: { variant: "subtitle1", fontWeight: 650 },
             subheader: { variant: "body2" },
@@ -138,6 +142,7 @@ export const SettingsEditorFeedback = ({
   onReload: () => void;
 }) => (
   <>
+    <SettingsNavigationGuard dirty={dirty} label={label} />
     <SettingsLoading label={label} loading={loading} />
     {error && (
       <Feedback
@@ -154,3 +159,43 @@ export const SettingsEditorFeedback = ({
     {saved && !dirty && <Alert severity="success">{label} settings saved.</Alert>}
   </>
 );
+
+/** The application uses a data router; isolated editor consumers need no route blocker. */
+const SettingsNavigationGuard = ({ dirty, label }: { dirty: boolean; label: string }) => {
+  const router = useContext(UNSAFE_DataRouterContext);
+  return router ? <SettingsLeavePrompt dirty={dirty} label={label} /> : null;
+};
+
+const SettingsLeavePrompt = ({ dirty, label }: { dirty: boolean; label: string }) => {
+  const blocker = useBlocker(dirty);
+  const confirmed = useRef(false);
+  useBeforeUnload(
+    useCallback(
+      (event: BeforeUnloadEvent) => {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      },
+      [dirty],
+    ),
+  );
+  if (blocker.state !== "blocked") return null;
+  return (
+    <ActionDialog
+      title="Discard unsaved changes?"
+      confirmLabel="Discard"
+      cancelLabel="Keep editing"
+      danger
+      onConfirm={() => {
+        confirmed.current = true;
+        blocker.proceed?.();
+      }}
+      onClose={() => {
+        if (!confirmed.current) blocker.reset?.();
+        confirmed.current = false;
+      }}
+    >
+      Your {label} settings have not been saved.
+    </ActionDialog>
+  );
+};

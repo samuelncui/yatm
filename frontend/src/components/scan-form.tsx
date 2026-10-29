@@ -29,6 +29,7 @@ import { ScanSelectionDialog } from "./scan-selection-dialog";
 import { scanSelectionEntry, scanSelectionKey, type ScanSelectionEntry } from "./scan-selection";
 import { filesEntryData, locationDirectoryReference } from "./files-browser";
 import { ActionRow } from "./action-row";
+import { SettingsSection } from "./settings-page";
 
 type ScanTarget =
   | { kind: "location"; location: Location | null; partial: boolean; entries: ScanSelectionEntry[] }
@@ -274,18 +275,12 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
           )}
           <TextField
             select
-            label="Signatures"
-            value={verifying ? ScanSignaturePolicy.FORCE_READ : options.signaturePolicy}
-            disabled={busy || verifying}
-            onChange={(event) => update({ signaturePolicy: Number(event.target.value) })}
-          >
-            <MenuItem value={ScanSignaturePolicy.KNOWN_ONLY}>Reuse known signatures only</MenuItem>
-            <MenuItem value={ScanSignaturePolicy.FILL_MISSING}>Read new and changed files</MenuItem>
-            <MenuItem value={ScanSignaturePolicy.FORCE_READ}>Read every file</MenuItem>
-          </TextField>
-          <TextField
-            select
             label="Results"
+            helperText={
+              options.resultPolicy === ScanResultPolicy.REPORT_ONLY
+                ? "Does not publish Library or inventory changes. Selected reads and Preview generation still run."
+                : undefined
+            }
             disabled={busy}
             value={options.resultPolicy}
             onChange={(event) => update({ resultPolicy: Number(event.target.value) })}
@@ -304,10 +299,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
               <MenuItem value={ScanResultPolicy.PUBLISH_ORIGINALS}>Update Library originals</MenuItem>
             )}
           </TextField>
-          <FormControlLabel
-            control={<Checkbox disabled={busy} checked={options.compare} onChange={(_, compare) => update({ compare })} />}
-            label="Find matching Library content"
-          />
           <PreviewPolicySelect
             generation={generation}
             value={options.previewPolicy}
@@ -321,6 +312,43 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
                 : undefined
             }
           />
+          <SettingsSection
+            title="Advanced"
+            collapsible
+            hasError={!!error}
+            description={`${verifying || options.signaturePolicy === ScanSignaturePolicy.FORCE_READ ? "Read every file" : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING ? "Read new and changed files" : "Reuse known signatures only"} · ${options.compare ? "Count matching archived copies" : "No archived copy comparison"}`}
+          >
+            <TextField
+              select
+              label="Signatures"
+              value={verifying ? ScanSignaturePolicy.FORCE_READ : options.signaturePolicy}
+              disabled={busy || verifying}
+              onChange={(event) => update({ signaturePolicy: Number(event.target.value) })}
+            >
+              <MenuItem value={ScanSignaturePolicy.KNOWN_ONLY}>Reuse known signatures only</MenuItem>
+              <MenuItem value={ScanSignaturePolicy.FILL_MISSING}>Read new and changed files</MenuItem>
+              <MenuItem value={ScanSignaturePolicy.FORCE_READ}>Read every file</MenuItem>
+            </TextField>
+            <FormControlLabel
+              control={<Checkbox disabled={busy} checked={options.compare} onChange={(_, compare) => update({ compare })} />}
+              label="Count matching archived copies"
+            />
+            <Typography variant="body2" color="text.secondary">
+              Counts recorded copies with the same signature; it does not check their current readability.
+            </Typography>
+          </SettingsSection>
+          {!verifying && options.signaturePolicy === ScanSignaturePolicy.KNOWN_ONLY && options.previewPolicy !== PreviewPolicy.NONE && (
+            <Feedback
+              severity="info"
+              action={
+                <Button disabled={busy} onClick={() => update({ signaturePolicy: ScanSignaturePolicy.FILL_MISSING })}>
+                  Read new and changed files
+                </Button>
+              }
+            >
+              Preview generation skips files whose signatures are unknown. Read new and changed files to include them.
+            </Feedback>
+          )}
           {!canPreview && options.previewPolicy !== PreviewPolicy.NONE && (
             <Feedback severity="error">The selected Media cannot generate Previews. Choose different Media or turn Previews off.</Feedback>
           )}
@@ -333,9 +361,14 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
               {busy ? "Creating…" : "Start scan"}
             </Button>
             {target.kind === "media" && options.resultPolicy === ScanResultPolicy.PUBLISH_INVENTORY && (
-              <Button disabled={busy || !target.media} onClick={admission.ask}>
-                Add to Library
-              </Button>
+              <>
+                <Button disabled={busy || !target.media || admission.busy || admission.calculating} onClick={admission.ask}>
+                  Add existing inventory to Library
+                </Button>
+                <Button disabled={busy || !target.media || admission.busy || admission.calculating} onClick={admission.review}>
+                  Review what will be added
+                </Button>
+              </>
             )}
           </ActionRow>
           <ImportPositionsDialog admission={admission} name={target.kind === "media" ? target.media?.name : undefined} />

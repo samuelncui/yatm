@@ -102,17 +102,21 @@ describe("Library Settings", () => {
     expect(screen.getByRole("dialog", { name: "Import Library Backup" })).toBeVisible();
   });
 
-  it("reports Library import success and keeps Settings explicitly out of the operation", async () => {
+  it("reports Library import scope and preserves global preferences", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetch);
     open();
     await userEvent.click(await screen.findByRole("button", { name: "Import" }));
-    expect(screen.getByText("Import replaces Library data. Your Settings stay unchanged.")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not restored.",
+      ),
+    ).toBeVisible();
     const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     await userEvent.upload(input!, new File(["backup"], "library.jsonl", { type: "application/x-ndjson" }));
     await userEvent.click(await screen.findByRole("button", { name: "Import" }));
-    expect(await screen.findByText("Library imported. Settings were not changed.")).toBeVisible();
+    expect(await screen.findByText("Library, Locations and original links imported. Global preferences were not changed.")).toBeVisible();
     expect(fetch).toHaveBeenCalledWith("/files/library/_import", expect.objectContaining({ method: "POST" }));
     expect(list).toHaveBeenCalledExactlyOnceWith({ afterId: 0n, limit: 50, query: "" });
   });
@@ -149,7 +153,7 @@ describe("Library Settings", () => {
       new File(["backup"], "library.jsonl", { type: "application/x-ndjson" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Import" }));
-    expect(await screen.findByText("Library imported. Settings were not changed.")).toBeVisible();
+    expect(await screen.findByText("Library, Locations and original links imported. Global preferences were not changed.")).toBeVisible();
     expect(screen.getByLabelText("Configured choices")).toHaveTextContent("After import");
     await act(async () => {
       finishOld({ locations: [before], hasMore: false });

@@ -4,7 +4,7 @@ import { contentTime } from "./content-status";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
-import { Media, MediaAccess, MediaKind, Position, PositionHealth, PreviewAvailability, VolumeType } from "@/entity";
+import { Media, MediaAccess, MediaKind, Position, PositionHealth, PreviewAvailability, VolumeType, TapeRecordMode } from "@/entity";
 import { formatFilesize } from "@/tools";
 import { MediaInspector } from "./media-inspector";
 
@@ -114,6 +114,13 @@ it("preserves zero sentinels for unrecorded Position times", () => {
   expect(screen.getAllByText("Date unknown")).toHaveLength(2);
 });
 
+it("renders no stray zero for a never-checked Position", () => {
+  const never = Position.create({ ...position, checkedAtNs: 0n, healthJobId: 0n });
+  const { container } = render(<MediaInspector selection={{ ...positionRow, position: never }} media={mediaRow} />, { wrapper: MemoryRouter });
+  expect(container.querySelector(".file-detail-summary + p")).toBeNull();
+  expect(screen.queryByText("0")).toBeNull();
+});
+
 it("asks for nothing when nothing is selected", () => {
   render(<MediaInspector />, { wrapper: MemoryRouter });
   expect(screen.getByText("Select a Media or Position")).toBeInTheDocument();
@@ -127,4 +134,48 @@ it("states that a Position without a Signature cannot match its copies", () => {
   expect(screen.getByText(/records no Signature/)).toBeInTheDocument();
   expect(preview).not.toHaveBeenCalled();
   expect(copies).not.toHaveBeenCalled();
+});
+
+it.each([
+  { saved: false, encryptionAlgorithm: undefined, label: "Off" },
+  { saved: true, encryptionAlgorithm: "AES-256-GCM-128", label: "AES-256-GCM-128" },
+  { saved: true, encryptionAlgorithm: undefined, label: "Configured · algorithm not recorded" },
+])("shows stored Tape encryption as $label without extra reads", ({ saved, encryptionAlgorithm, label }) => {
+  const selected = Media.create({
+    id: 8n,
+    encryptionKeySaved: saved,
+    kind: MediaKind.TAPE,
+    identity: "ABC123",
+    name: "Tar Tape",
+    profile: {
+      kind: {
+        oneofKind: "tape",
+        tape: {
+          format: "tar_pax_v1",
+          encryption: "",
+          serialNumber: "",
+          tar: {
+            initializationId: "initialized-cartridge",
+            recordMode: TapeRecordMode.VARIABLE,
+            recordBytes: 262144,
+            hardwareCompression: false,
+            encryptionAlgorithm,
+          },
+        },
+      },
+    },
+  });
+  render(<MediaInspector selection={{ id: "8", name: "Tar Tape", isDir: true, isMedia: true, media: selected }} />);
+  expect(screen.getByText("Format").nextElementSibling).toHaveTextContent(/^Tar$/);
+  expect(screen.getByText("Format ID").nextElementSibling).toHaveTextContent("tar_pax_v1");
+  expect(screen.getByText("Variable")).toBeVisible();
+  expect(screen.getByText("262144 bytes")).toBeVisible();
+  expect(screen.getAllByText("Off")).toHaveLength(saved ? 1 : 2);
+  expect(screen.getByText("Encryption").nextElementSibling).toHaveTextContent(label);
+  expect(screen.getByRole("link", { name: "Device settings" })).toHaveAttribute("href", "/settings/devices");
+  expect(screen.getByRole("link", { name: "Tar recovery guide" })).toHaveAttribute(
+    "href",
+    "https://github.com/samuelncui/yatm/blob/v1/docs/operations/tar-tape-recovery.md",
+  );
+  expect(mediaList).not.toHaveBeenCalled();
 });

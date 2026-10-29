@@ -116,7 +116,12 @@ export const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
             title: `Delete Job ${jobID}?`,
             confirmLabel: "Delete",
             danger: true,
-            children: <p>Execution history and resume data will be removed. Library files and archive copies are kept.</p>,
+            children: (
+              <p>
+                Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are
+                kept.
+              </p>
+            ),
             onConfirm: async () => {
               await jobCli.delete(DeleteJobsRequest.create({ ids: [jobID], dryrun: false })).response;
               runUIAction(refresh, "Job deleted, but the list could not refresh");

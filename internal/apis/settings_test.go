@@ -28,7 +28,7 @@ func TestSettingsBrowseEnforcesAdministratorRulesBeforePagination(t *testing.T) 
 	ctx := context.Background()
 	api, _, root := setupLocationAPI(t)
 	api.exe = executor.New(nil, api.lib, nil, executor.Paths{
-		Work: filepath.Join(root, "work"), Access: []executor.AccessRange{{Root: root, Ignore: "a*/\n!a-allowed/\nsecret/\n!secret/visible/\n"}},
+		Work: api.exe.Paths().Work, Access: []executor.AccessRange{{Root: root, Ignore: "a*/\n!a-allowed/\nsecret/\n!secret/visible/\n"}},
 	}, executor.Scripts{}, nil)
 	service := &locationService{api: api}
 	for index := 0; index < 110; index++ {
@@ -64,7 +64,7 @@ func TestLocationIgnoreCannotExpandAccessAndRestoreNeedsNoScanOrRecommendation(t
 	ctx := context.Background()
 	api, locations, root := setupLocationAPI(t)
 	api.exe = executor.New(nil, api.lib, nil, executor.Paths{
-		Work: filepath.Join(root, "work"), Access: []executor.AccessRange{{Root: root, Ignore: "secret/\n"}},
+		Work: api.exe.Paths().Work, Access: []executor.AccessRange{{Root: root, Ignore: "secret/\n"}},
 	}, executor.Scripts{}, nil)
 	created, err := locations.Create(ctx, &entity.CreateLocationRequest{Location: &entity.Location{
 		Name: "Restore", RootPath: root,
@@ -223,4 +223,28 @@ func TestLocationRecommendationFiltersBeforePagination(t *testing.T) {
 	all, err := service.List(ctx, &entity.ListLocationsRequest{Limit: 100})
 	require.NoError(t, err)
 	require.Len(t, all.Locations, 55)
+}
+
+func TestSettingsDeviceUsesExistingTypedReplacement(t *testing.T) {
+	// Device defaults are an independent empty group until explicitly saved.
+	ctx := context.Background()
+	api, _, _ := setupLocationAPI(t)
+	service := &settingsService{api: api}
+	before, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_DEVICE})
+	require.NoError(t, err)
+	require.Empty(t, before.GetValue().GetDevice().Devices)
+	tape := &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1"), TarWriteOptions: &entity.TarWriteOptions{HardwareCompression: proto.Bool(false)}}
+	value := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/removed", Options: &entity.DeviceConfig_Tape{Tape: tape}}}}
+	saved, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}})
+	require.NoError(t, err)
+	require.True(t, proto.Equal(value, saved.GetValue().GetDevice()))
+
+	// Saving a preference cannot authorize a removed device and malformed edits cannot replace it.
+	value.Devices[0].Device = ""
+	_, err = service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}})
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+	after, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_DEVICE})
+	require.NoError(t, err)
+	require.True(t, proto.Equal(saved.GetValue().GetDevice(), after.GetValue().GetDevice()))
+	require.NotNil(t, after.GetValue().GetDevice().Devices[0].GetTape().TarWriteOptions.HardwareCompression)
 }

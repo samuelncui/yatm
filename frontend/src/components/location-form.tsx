@@ -38,6 +38,7 @@ export const LocationForm = ({
   const leave = useRef(false);
   const discardConfirmed = useRef(false);
   const dirty = JSON.stringify(value) !== JSON.stringify(initial);
+  const scopeChanged = value.rootPath !== initial.rootPath || value.ignore !== initial.ignore;
   useEffect(() => {
     onDirtyChange?.(dirty);
     return () => onDirtyChange?.(false);
@@ -138,7 +139,12 @@ export const LocationForm = ({
                 onChange={(event) => setValue({ ...value, ignore: event.target.value })}
                 placeholder={"# Gitignore rules\n*.tmp\ndownloads/"}
                 slotProps={{ htmlInput: { style: { fontFamily: "ui-monospace, monospace" } } }}
-                helperText="Gitignore syntax. Rules apply in order; folder .gitignore files are not loaded."
+                helperText={
+                  <>
+                    Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded.
+                    {!source && " Leave blank to use the server's default rules. Custom text replaces those defaults."}
+                  </>
+                }
               />
             </Grid>
           </Grid>
@@ -150,8 +156,10 @@ export const LocationForm = ({
             control={<Checkbox disabled={busy} checked={value.useMmap} onChange={(_, useMmap) => setValue({ ...value, useMmap })} />}
           />
         </SettingsSection>
-        {source && dirty && (
-          <Alert severity="info">Changing the directory or Ignore invalidates old file observations. Existing Jobs cannot be redirected.</Alert>
+        {source && scopeChanged && (
+          <Alert severity="info">
+            Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths.
+          </Alert>
         )}
         {error && <Feedback severity="error">{error}</Feedback>}
         <ActionRow>

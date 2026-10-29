@@ -81,6 +81,9 @@ func seed(
 	if err := seedTape(ctx, lib); err != nil {
 		return err
 	}
+	if err := seedTarTape(ctx, lib); err != nil {
+		return err
+	}
 
 	// Materialize logical Files, annotations, and review-friendly top-level directories.
 	if _, err := lib.Trim(ctx, true, true, false); err != nil {
@@ -409,6 +412,46 @@ func seedTape(ctx context.Context, lib *library.Library) error {
 		"The mock Tape supports metadata inspection only."
 	if err := lib.EditFileMetadata(ctx, imported, library.FileMetadataEdit{Note: &note}); err != nil {
 		return fmt.Errorf("annotate Demo legacy archive failed, %w", err)
+	}
+	return nil
+}
+
+func seedTarTape(ctx context.Context, lib *library.Library) error {
+	// Register tar profile and member locators only; inventory stays outside the Library for Add review.
+	when := time.Date(2026, time.March, 3, 9, 0, 0, 0, time.UTC)
+	createdAtNS, err := dataformat.Nanoseconds(when)
+	if err != nil {
+		return fmt.Errorf("convert Demo tar Tape creation time failed, %w", err)
+	}
+	// Names are listed in Media path order, which matches their write order here.
+	contents := [][]byte{[]byte("Survey field notes\n"), []byte("Survey photos manifest\n")}
+	names := []string{"survey/field-notes.txt", "survey/manifest.txt"}
+	physical := make([]*library.MediaFile, 0, len(contents))
+	for index, content := range contents {
+		// Each small member occupies one header block and one data block in the first record.
+		offset := uint64(index) * 1024
+		locator := &entity.TarMetadata{TapeFile: 1, HeaderOffsetBytes: offset,
+			Header: &entity.TapeBytePosition{OffsetBytes: uint32(offset)},
+			End:    &entity.TapeBytePosition{OffsetBytes: uint32(offset + 1024)}}
+		digest := sha256.Sum256(content)
+		physical = append(physical, &library.MediaFile{
+			Path: "archives/0000000000000001/" + names[index], Size: int64(len(content)), Mode: fs.FileMode(0o644),
+			ModTime: when, WriteTime: when, Hash: append([]byte(nil), digest[:]...),
+			StorageOrder: entity.TarStorageOrder(locator), StorageMetadata: locator.Pack(),
+		})
+	}
+	if _, err := lib.CommitMedia(ctx, &library.Media{
+		Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: TarTapeBarcode, Name: "Survey LTO-5 tar (mock)",
+		Profile: (&entity.TapeMediaProfile{
+			SerialNumber: "MOCK-LTO5-002", Encryption: "review-only", Format: library.TapeFormatTarPAXV1,
+			Tar: &entity.TarMediaProfile{
+				InitializationId: "5e3f2c1a-7b4d-4e8f-9a6b-2c1d0e9f8a7b",
+				RecordMode:       entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 524288,
+			},
+		}).Pack(),
+		CreatedAtNS: createdAtNS, CapacityBytes: 1_500_000_000_000,
+	}, mediaFileSource(physical)); err != nil {
+		return fmt.Errorf("register Demo tar Tape failed, %w", err)
 	}
 	return nil
 }

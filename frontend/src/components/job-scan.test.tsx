@@ -2,13 +2,37 @@ import type { ReactNode } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Job, JobKind, JobPhase, JobResultOrder, JobStatus, Progress, ScanChange, ScanEntry, ScanFinding, ScanPreviewOutcome } from "@/entity";
-const { getProgress, listEntries, cancel } = vi.hoisted(() => ({
+import {
+  ScanResultPolicy,
+  Media,
+  MediaKind,
+  TapeMediaProfile,
+  InspectDeviceResponse,
+  Job,
+  JobKind,
+  JobPhase,
+  JobResultOrder,
+  JobStatus,
+  Progress,
+  ScanChange,
+  ScanEntry,
+  ScanFinding,
+  ScanPreviewOutcome,
+} from "@/entity";
+const { getProgress, listEntries, cancel, getCreation, mediaList, deviceList, deviceInspect } = vi.hoisted(() => ({
   getProgress: vi.fn(),
   listEntries: vi.fn(),
   cancel: vi.fn(),
+  getCreation: vi.fn(),
+  mediaList: vi.fn(),
+  deviceList: vi.fn(),
+  deviceInspect: vi.fn(),
 }));
-vi.mock("@/api", () => ({ scanJobCli: { getProgress, listEntries }, jobCli: { cancel } }));
+vi.mock("@/api", () => ({
+  scanJobCli: { getProgress, listEntries, getCreation },
+  mediaCli: { list: mediaList, listDevices: deviceList, inspectDevice: deviceInspect },
+  jobCli: { cancel },
+}));
 vi.mock("react-virtuoso", () => ({
   Virtuoso: ({ totalCount = 0, itemContent }: { totalCount?: number; itemContent: (index: number) => ReactNode }) => (
     <div>
@@ -55,6 +79,7 @@ beforeEach(() => {
     call({ entries: [ScanEntry.create({ id: 1n, path: "added.txt", change: ScanChange.ADDED, sizeBytes: 7n })], hasMore: false, totalEntryCount: 1n }),
   );
   cancel.mockReturnValue(call({}));
+  getCreation.mockReturnValue(call({ request: { spec: { compareLibrary: false } } }));
 });
 afterEach(() => vi.useRealTimers());
 describe("Automatic Media Scan", () => {
@@ -188,4 +213,97 @@ describe("Automatic Media Scan", () => {
     await userEvent.click(screen.getByRole("button", { name: "Stop job" }));
     expect(cancel).toHaveBeenCalledWith({ id: 31n });
   });
+});
+
+it.each([ScanResultPolicy.VERIFY_COPIES, ScanResultPolicy.PUBLISH_INVENTORY])(
+  "uses the frozen Scan creation policy %s once per chooser admission",
+  async (policy) => {
+    getCreation.mockReturnValue(call({ request: { spec: { resultPolicy: policy } } }));
+    mediaList.mockReturnValue(
+      call({
+        media: [
+          Media.create({ id: 9n, kind: MediaKind.TAPE, profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create({ format: "tar_pax_v1" }) } } }),
+        ],
+      }),
+    );
+    deviceList.mockReturnValue(call({ devices: [{ device: "drive", kind: 1, busy: false }] }));
+    deviceInspect.mockReturnValue(call(InspectDeviceResponse.create()));
+    render(<ScanCard job={Job.create({ id: 30n, mediaId: 9n, kind: JobKind.SCAN, status: JobStatus.READY })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Choose Media to read" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start reading" })).toBeEnabled());
+    expect(getCreation).toHaveBeenCalledExactlyOnceWith({ id: 30n });
+    if (policy === ScanResultPolicy.VERIFY_COPIES) await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+    const refresh = screen.queryByRole("checkbox", { name: "Refresh position map before reading" });
+    if (policy === ScanResultPolicy.VERIFY_COPIES) expect(refresh).toBeDisabled();
+    else expect(refresh).not.toBeInTheDocument();
+  },
+);
+
+it.each([
+  [JobStatus.COMPLETED, true, new Uint8Array([1]), 0n, "Matching archived copies: 0"],
+  [JobStatus.COMPLETED, true, new Uint8Array([1]), 3n, "Matching archived copies: 3"],
+  [JobStatus.COMPLETED, true, new Uint8Array(), 0n, "Archived copies unknown (no signature)"],
+  [JobStatus.COMPLETED, false, new Uint8Array([1]), 0n, "Archived copy comparison not requested"],
+  [JobStatus.FAILED, true, new Uint8Array([1]), 0n, "Archived copy comparison incomplete"],
+])("distinguishes completed counts from unknown or incomplete comparison (%s/%s)", async (status, compareLibrary, signature, matchingCopies, message) => {
+  getCreation.mockReturnValue(call({ request: { spec: { compareLibrary } } }));
+  listEntries.mockReturnValue(
+    call({
+      entries: [ScanEntry.create({ id: 1n, path: "image.jpg", change: ScanChange.ADDED, signature, matchingCopies })],
+      hasMore: false,
+      totalEntryCount: 1n,
+    }),
+  );
+  render(<ScanCard job={Job.create({ id: 30n, kind: JobKind.SCAN, status })} />);
+  await userEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(await screen.findByText((text) => text.includes(message))).toBeInTheDocument();
+  expect(getCreation).toHaveBeenCalledTimes(1);
+  await userEvent.click(screen.getByRole("button", { name: "Close" }));
+  await userEvent.click(screen.getByRole("button", { name: "Results" }));
+  await screen.findByText("image.jpg");
+  expect(getCreation).toHaveBeenCalledTimes(1);
+});
+it("does not turn unavailable comparison settings or removed entries into zero matches", async () => {
+  getCreation.mockReturnValueOnce({ response: Promise.reject(new Error("Comparison settings offline")) });
+  getCreation.mockReturnValue(call({ request: { spec: { compareLibrary: true } } }));
+  listEntries.mockReturnValue(
+    call({
+      entries: [ScanEntry.create({ id: 1n, path: "gone.jpg", change: ScanChange.REMOVED, signature: new Uint8Array([1]) })],
+      hasMore: false,
+      totalEntryCount: 1n,
+    }),
+  );
+  render(<ScanCard job={Job.create({ id: 30n, kind: JobKind.SCAN, status: JobStatus.COMPLETED })} />);
+  await screen.findByText("Comparison settings offline");
+  await userEvent.click(screen.getByRole("button", { name: "Retry comparison settings" }));
+  await waitFor(() => expect(screen.queryByText("Comparison settings offline")).not.toBeInTheDocument());
+  await userEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(await screen.findByText(/Archived copies not compared \(removed\)/)).toBeInTheDocument();
+  expect(screen.queryByText(/Matching archived copies: 0/)).not.toBeInTheDocument();
+});
+
+it("rejects late comparison settings after the displayed Job changes", async () => {
+  let finish!: (value: unknown) => void;
+  getCreation.mockReturnValueOnce({
+    response: new Promise((resolve) => {
+      finish = resolve;
+    }),
+  });
+  getCreation.mockReturnValue(call({ request: { spec: { compareLibrary: false } } }));
+  listEntries.mockReturnValue(
+    call({
+      entries: [ScanEntry.create({ id: 1n, path: "current.jpg", change: ScanChange.ADDED, signature: new Uint8Array([1]), matchingCopies: 0n })],
+      hasMore: false,
+      totalEntryCount: 1n,
+    }),
+  );
+  const page = render(<ScanCard job={Job.create({ id: 30n, kind: JobKind.SCAN, status: JobStatus.COMPLETED })} />);
+  await waitFor(() => expect(getCreation).toHaveBeenCalledOnce());
+  page.rerender(<ScanCard job={Job.create({ id: 31n, kind: JobKind.SCAN, status: JobStatus.COMPLETED })} />);
+  await userEvent.click(screen.getByRole("button", { name: "Results" }));
+  expect(await screen.findByText(/Archived copy comparison not requested/)).toBeInTheDocument();
+  await act(async () => finish({ request: { spec: { compareLibrary: true } } }));
+  expect(screen.getByText(/Archived copy comparison not requested/)).toBeInTheDocument();
+  expect(screen.queryByText(/Matching archived copies: 0/)).not.toBeInTheDocument();
+  expect(getCreation).toHaveBeenCalledTimes(2);
 });

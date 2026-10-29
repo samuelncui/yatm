@@ -7,5 +7,5 @@ import (
 )
 
 func (s *mediaService) ListDevices(ctx context.Context, req *entity.ListDevicesRequest) (*entity.ListDevicesResponse, error) {
-	return &entity.ListDevicesResponse{Devices: s.api.exe.ListAvailableDevices()}, nil
+	return &entity.ListDevicesResponse{Devices: s.api.exe.ListDevices()}, nil
 }

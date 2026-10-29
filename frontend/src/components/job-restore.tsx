@@ -75,7 +75,7 @@ export const RestoreCard = ({ job }: { job: Job }) => {
       }
       buttons={
         <Fragment>
-          {job.status === JobStatus.READY && !running && (
+          {job.status === JobStatus.READY && !running && data !== undefined && (
             <ReadMediaDialog
               key={job.id.toString()}
               mediaIDs={media.filter((value) => value.status === CopyStatus.PENDING).map((value) => value.mediaId)}
