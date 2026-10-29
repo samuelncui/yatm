@@ -13,6 +13,7 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
+	github.com/hashicorp/go-multierror v1.1.1
 	github.com/improbable-eng/grpc-web v0.15.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/klauspost/compress v1.17.0
@@ -20,7 +21,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
-	github.com/samuelncui/acp v0.2.6
+	github.com/samuelncui/acp v0.2.7
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/image v0.36.0
@@ -50,6 +51,7 @@ require (
 	github.com/go-playground/validator/v10 v10.11.2 // indirect
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -77,7 +79,8 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
-	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
+	google.golang.org/genproto v0.0.0-20230526203410-71b5a4ffd15e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
