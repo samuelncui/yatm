@@ -75,12 +75,17 @@ func (e *Executor) finishAttemptTiming(jobID int64, runner Runner) {
 // ApplyAttemptProgress adds elapsed time for the latest attempt without counting time waiting for work.
 // Callers hold the Job read lock so a new attempt cannot replace the observed timing.
 func (e *Executor) ApplyAttemptProgress(ctx context.Context, jobID int64, progress *entity.Progress) error {
-	// Live timing comes from the server's monotonic clock, independent of polling or catalog updates.
+	// Active phase and timing come from the attempt, independently of progress polling.
 	progress.ElapsedMs = nil
 	e.attemptsLock.Lock()
 	current := e.attempts[jobID]
-	if current != nil && !current.startedAt.IsZero() {
-		progress.ElapsedMs = proto.Int64(time.Since(current.startedAt).Milliseconds())
+	if current != nil {
+		if progress.Stage != nil {
+			progress.Stage.Phase = current.phase
+		}
+		if !current.startedAt.IsZero() {
+			progress.ElapsedMs = proto.Int64(time.Since(current.startedAt).Milliseconds())
+		}
 		e.attemptsLock.Unlock()
 		return nil
 	}
@@ -96,17 +101,16 @@ func (e *Executor) ApplyAttemptProgress(ctx context.Context, jobID int64, progre
 	if err := db.WithContext(ctx).First(&record, singletonJobID).Error; err != nil {
 		return fmt.Errorf("read Job attempt timing failed, id=%d, %w", jobID, err)
 	}
+
 	// Cached runner phases describe retained work; only an active attempt exposes a live phase.
-	if current == nil {
-		if progress.Stage != nil {
-			progress.Stage = &entity.StageProgress{Phase: entity.JobPhase_JOB_PHASE_UNSPECIFIED,
-				Unit: progress.Stage.Unit, Completed: progress.Stage.Completed,
-				EstimateState: entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE}
-		}
-		if record.Kind == entity.JobKind_JOB_KIND_ARCHIVE || record.Kind == entity.JobKind_JOB_KIND_RESTORE {
-			checkpoint := manifestPosition(record.Checkpoint)
-			progress.TotalKnown = checkpoint == entity.JobStatus_JOB_STATUS_READY || checkpoint == entity.JobStatus_JOB_STATUS_COMPLETED
-		}
+	if progress.Stage != nil {
+		progress.Stage = &entity.StageProgress{Phase: entity.JobPhase_JOB_PHASE_UNSPECIFIED,
+			Unit: progress.Stage.Unit, Completed: progress.Stage.Completed,
+			EstimateState: entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE}
+	}
+	if record.Kind == entity.JobKind_JOB_KIND_ARCHIVE || record.Kind == entity.JobKind_JOB_KIND_RESTORE {
+		checkpoint := manifestPosition(record.Checkpoint)
+		progress.TotalKnown = checkpoint == entity.JobStatus_JOB_STATUS_READY || checkpoint == entity.JobStatus_JOB_STATUS_COMPLETED
 	}
 	if record.LatestAttemptStartedAtNS != nil && record.LatestAttemptFinishedAtNS != nil {
 		progress.ElapsedMs = proto.Int64(max(0, (*record.LatestAttemptFinishedAtNS-*record.LatestAttemptStartedAtNS)/int64(time.Millisecond)))

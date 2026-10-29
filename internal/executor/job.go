@@ -400,12 +400,15 @@ func jobSnapshots(rows []*jobCatalogRow) []*Job {
 }
 
 func (e *Executor) hydrateJob(ctx context.Context, job *Job) error {
+	// An idle observation must precede its durable read, never follow a read of the old result.
+	job.Phase = e.jobPhase(job.ID)
+
+	// Read the settled record or a conservative snapshot of the still-active attempt.
 	db, closeDB, err := e.openStateDB(job.ID)
 	if err != nil {
 		return err
 	}
 	defer closeDB()
-
 	record := new(JobRecord)
 	if err := db.WithContext(ctx).First(record, singletonJobID).Error; err != nil {
 		return fmt.Errorf("read Job DB failed, id=%d, %w", job.ID, err)
@@ -415,24 +418,17 @@ func (e *Executor) hydrateJob(ctx context.Context, job *Job) error {
 	job.Status = record.Status
 	job.Priority = record.Priority
 	job.Checkpoint = record.Checkpoint
-	job.Phase = e.jobPhase(job.ID)
 	return nil
 }
 
-// jobPhase reports the live stage of the runner that owns this Job. A Job nobody is running has no
-// phase: its durable state is the whole answer, and inventing a stage for it would put two
-// vocabularies on one fact.
+// jobPhase retains the attempt's last working stage until its complete settlement is published.
 func (e *Executor) jobPhase(jobID int64) entity.JobPhase {
-	if !e.IsRunning(jobID) {
-		return entity.JobPhase_JOB_PHASE_UNSPECIFIED
+	e.attemptsLock.Lock()
+	defer e.attemptsLock.Unlock()
+	if current := e.attempts[jobID]; current != nil {
+		return current.phase
 	}
-	e.runnersLock.Lock()
-	runner := e.runners[jobID]
-	e.runnersLock.Unlock()
-	if runner == nil {
-		return entity.JobPhase_JOB_PHASE_UNSPECIFIED
-	}
-	return runner.Phase()
+	return entity.JobPhase_JOB_PHASE_UNSPECIFIED
 }
 
 func (e *Executor) EnsureJobWorkPath(_ context.Context, jobID int64) (string, error) {
@@ -483,15 +479,16 @@ func (e *Executor) cleanupFailedJob(ctx context.Context, jobID int64) error {
 		e.removeRunner(jobID)
 	}
 
-	// Remove unpublished storage before deleting its catalog owner; report each failure.
+	// Attempt every removal so one failure does not strand the other owned records; report each failure.
+	var result error
 	if err := os.RemoveAll(e.jobWorkPath(jobID)); err != nil {
-		return fmt.Errorf("remove failed Job bundle, id=%d, %w", jobID, err)
+		result = errors.Join(result, fmt.Errorf("remove failed Job bundle, id=%d, %w", jobID, err))
 	}
 	if err := e.db.WithContext(ctx).Where("job_id = ?", jobID).Delete(&JobProperty{}).Error; err != nil {
-		return fmt.Errorf("remove failed Job properties, id=%d, %w", jobID, err)
+		result = errors.Join(result, fmt.Errorf("remove failed Job properties, id=%d, %w", jobID, err))
 	}
 	if err := e.db.WithContext(ctx).Unscoped().Delete(&jobCatalogRow{}, jobID).Error; err != nil {
-		return fmt.Errorf("remove failed Job catalog entry, id=%d, %w", jobID, err)
+		result = errors.Join(result, fmt.Errorf("remove failed Job catalog entry, id=%d, %w", jobID, err))
 	}
-	return nil
+	return result
 }

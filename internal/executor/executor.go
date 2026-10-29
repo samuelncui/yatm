@@ -66,6 +66,7 @@ type attempt struct {
 	cancel    context.CancelCauseFunc
 	resources []attemptResource
 	startedAt time.Time
+	phase     entity.JobPhase
 }
 
 type attemptResource struct {
@@ -596,24 +597,26 @@ func (e *Executor) runningJobIDsLocked() []int64 {
 }
 
 func (e *Executor) beginAttempt(jobID int64, cancel context.CancelCauseFunc) error {
+	// Reserve admission before the first runner transition or durable timing write.
 	e.attemptsLock.Lock()
 	defer e.attemptsLock.Unlock()
-
 	if e.quiescing || e.attempts[jobID] != nil {
 		return ErrJobBusy
 	}
+
+	// Keep runner files active for the admitted attempt's complete lifetime.
 	e.runnersLock.Lock()
 	runner := e.runners[jobID]
 	e.runnersLock.Unlock()
 	if err := setRunnerActive(runner, true); err != nil {
 		return fmt.Errorf("activate Job resources failed, id=%d, %w", jobID, err)
 	}
-	e.attempts[jobID] = &attempt{cancel: cancel}
+	e.attempts[jobID] = &attempt{cancel: cancel, phase: entity.JobPhase_JOB_PHASE_QUEUED}
 	return nil
 }
 
 func (e *Executor) endAttempt(jobID int64) {
-	// Detach the complete attempt before releasing any of its resources.
+	// Keep the last working phase visible until resources and publication have settled.
 	e.attemptsLock.Lock()
 	defer e.attemptsLock.Unlock()
 	current := e.attempts[jobID]
@@ -626,7 +629,6 @@ func (e *Executor) endAttempt(jobID int64) {
 	if err := setRunnerActive(runner, false); err != nil {
 		logrus.WithError(err).Errorf("release idle Job resources failed, id=%d", jobID)
 	}
-	delete(e.attempts, jobID)
 
 	// Release every resource the attempt still holds; retained ones stay unavailable.
 	for _, resource := range current.resources {
@@ -637,8 +639,11 @@ func (e *Executor) endAttempt(jobID int64) {
 
 	// Readers and new starts observe settlement only after its final catalog revision exists.
 	if !current.startedAt.IsZero() {
-		e.TouchJob(jobID)
+		if err := e.publishJobProjection(context.Background(), jobID); err != nil {
+			logrus.WithError(err).Errorf("touch Job catalog failed, id=%d", jobID)
+		}
 	}
+	delete(e.attempts, jobID)
 }
 
 // Runners without file resources need no retention hook, including in-memory test runners.
@@ -674,6 +679,21 @@ func (e *Executor) currentJobRevision() int64 {
 
 // TouchJob publishes a runtime phase change through the catalog revision.
 func (e *Executor) TouchJob(jobID int64) {
+	// Runner terminal phases do not end the attempt's result, timing and resource settlement.
+	e.runnersLock.Lock()
+	runner := e.runners[jobID]
+	e.runnersLock.Unlock()
+	if runner != nil {
+		e.attemptsLock.Lock()
+		if current := e.attempts[jobID]; current != nil {
+			phase := runner.Phase()
+			if phase != entity.JobPhase_JOB_PHASE_UNSPECIFIED && phase != entity.JobPhase_JOB_PHASE_COMPLETED {
+				current.phase = phase
+			}
+		}
+		e.attemptsLock.Unlock()
+	}
+
 	// Reconcile the query projection from the authoritative bundle on every publication.
 	err := e.publishJobProjection(context.Background(), jobID)
 	if err != nil {

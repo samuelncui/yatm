@@ -216,3 +216,5 @@ Cross-Location reassociation requires a successfully removed old binding and val
 ## Location File Operations
 
 Ordinary mutations use the shared [organization engine](library.md#shared-organization-interface), not Jobs. Library edits, browsing, annotation and manual original relocation also remain request-bound. Initial whole-Location collection uses Scan with KNOWN_ONLY and PUBLISH_ORIGINALS.
+
+An active attempt retains its last working phase until result publication, timing and resource settlement complete. Job hydration observes this phase before reading the durable result. Copy-page failures remain visible while accepted ACP work is drained.

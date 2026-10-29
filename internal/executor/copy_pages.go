@@ -5,20 +5,29 @@ import (
 	"errors"
 	"io"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/samuelncui/acp"
 )
 
 // RunCopyPages feeds bounded caller-owned pages and always drains accepted ACP work.
 // Callers own item policy and must drain their result writer after this returns.
 func RunCopyPages(ctx context.Context, engine *acp.StreamCopyer, next func(context.Context) ([]acp.Item, error)) (rerr error) {
-	// Wait owns pipeline failures; linear target exhaustion may be reported only by Submit.
+	// Drain accepted work without losing an independent page or Submit failure to the pipeline's final error.
 	defer func() {
 		closeErr := engine.Close()
-		if waitErr := engine.Wait(); waitErr != nil {
-			rerr = waitErr
+		for _, err := range []error{engine.Wait(), closeErr} {
+			if err == nil || errors.Is(rerr, err) {
+				continue
+			}
+			if rerr == nil {
+				rerr = err
+			} else {
+				rerr = multierror.Append(rerr, err).ErrorOrNil()
+			}
 		}
-		rerr = errors.Join(rerr, closeErr)
 	}()
+
+	// A failed page is never submitted; accepted earlier items still settle through the deferred drain.
 	for {
 		items, err := next(ctx)
 		if errors.Is(err, io.EOF) {
