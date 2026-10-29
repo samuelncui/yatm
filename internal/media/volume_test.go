@@ -187,3 +187,31 @@ func TestListVolumeCandidatesKeepsEveryCandidateVisible(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, skipped)
 }
+
+func TestTemporaryVolumeMarkerCleanupFailureRemainsRetryable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission fixture requires an unprivileged user")
+	}
+	root := t.TempDir()
+	path := filepath.Join(root, ".yatm-owned.tmp")
+	require.NoError(t, os.WriteFile(path, []byte("unpublished marker"), 0600))
+	require.NoError(t, os.Chmod(root, 0500))
+	t.Cleanup(func() { require.NoError(t, os.Chmod(root, 0700)) })
+	err := removeTemporaryVolumeMarker(path)
+	require.ErrorIs(t, err, os.ErrPermission)
+	require.ErrorContains(t, err, path)
+	require.FileExists(t, path)
+	require.NoError(t, os.Chmod(root, 0700))
+	require.NoError(t, removeTemporaryVolumeMarker(path))
+	require.NoError(t, removeTemporaryVolumeMarker(path))
+}
+
+func TestInitializeVolumeLeavesOnlyPublishedMarker(t *testing.T) {
+	root := t.TempDir()
+	_, err := InitializeVolume(root, &entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD})
+	require.NoError(t, err)
+	entries, err := os.ReadDir(root)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.Equal(t, VolumeMarkerName, entries[0].Name())
+}

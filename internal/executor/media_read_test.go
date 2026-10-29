@@ -57,7 +57,7 @@ func TestTapeReadRejectsWrongExpectedIdentityBeforeMount(t *testing.T) {
 	mutationMarker := filepath.Join(root, "mutated")
 	readInfo := writeExecutorTestScript(t, "identity", `printf '%s\n' '{"barcode":"ABC001"}' > "$OUT"`)
 	mutation := writeExecutorTestScript(t, "mutation", fmt.Sprintf(": > %s", strconv.Quote(mutationMarker)))
-	exe := New(nil, lib, []string{"fixture-device"}, Paths{}, Scripts{ReadInfo: readInfo, Encrypt: mutation, Mount: mutation}, nil)
+	exe := New(nil, lib, []string{"fixture-device"}, Paths{Work: t.TempDir()}, Scripts{ReadInfo: readInfo, Encrypt: mutation, Mount: mutation}, nil)
 	require.NoError(t, exe.beginAttempt(1, func(error) {}))
 	t.Cleanup(func() { exe.endAttempt(1) })
 	target := (&entity.ReadTapeTarget{Device: "fixture-device"}).Pack()

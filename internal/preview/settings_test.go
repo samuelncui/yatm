@@ -16,7 +16,7 @@ func TestNewWithSettingsUsesTypedDefaultsAndLiveGetter(t *testing.T) {
 		Options: map[string]any{"command": "legacy-ffmpeg", "max_width": 240, "max_height": 200, "quality": 60},
 	}}})
 	require.NoError(t, err)
-	manager, err := NewWithSettings(context.Background(), t.TempDir(), "", func(context.Context) (*entity.PreviewSettings, error) {
+	manager, err := NewWithSettings(context.Background(), t.TempDir(), t.TempDir(), func(context.Context) (*entity.PreviewSettings, error) {
 		return proto.Clone(stored).(*entity.PreviewSettings), nil
 	})
 	require.NoError(t, err)

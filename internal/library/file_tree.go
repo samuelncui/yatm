@@ -19,7 +19,7 @@ func (l *Library) FileTree() treeops.Store { return &fileTree{lib: l, db: l.read
 
 // FileTreeTransaction retains metadata-only rollback for a selected Library root.
 func (l *Library) FileTreeTransaction(ctx context.Context, use func(treeops.Store) error) error {
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return use(&fileTree{lib: &Library{db: tx}, db: tx}) })
+	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return use(&fileTree{lib: &Library{db: tx, work: l.work}, db: tx}) })
 }
 
 // moveTree keeps direct Library callers on the same organization engine as Files.
@@ -46,7 +46,7 @@ func (l *Library) moveTree(ctx context.Context, file *File, name string) error {
 // organizeTree freezes the plan outside metadata transactions and runs shared tree rules.
 func (l *Library) organizeTree(ctx context.Context, request treeops.Request) (resultID int64, returnErr error) {
 	// The request owns its temporary plan until execution and result delivery finish.
-	temporary, err := resource.OpenTemporaryDB("", "yatm-logical-operation-")
+	temporary, err := resource.OpenTemporaryDB(l.work, "yatm-logical-operation-")
 	if err != nil {
 		return 0, err
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -25,7 +26,7 @@ func TestIdenticalConstructionFailureCleansStaging(t *testing.T) {
 				sqlDB, err := db.DB()
 				require.NoError(t, err)
 				t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-				lib.identicalTempRoot = t.TempDir()
+				require.NoError(t, lib.PrepareTemporary(t.TempDir()))
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				failure := errors.New("catalog unavailable")
@@ -38,10 +39,10 @@ func TestIdenticalConstructionFailureCleansStaging(t *testing.T) {
 							if os.Geteuid() == 0 {
 								t.Skip("permission fixture requires an unprivileged user")
 							}
-							entries, err := os.ReadDir(lib.identicalTempRoot)
+							entries, err := os.ReadDir(resource.TemporaryRoot(lib.work))
 							require.NoError(t, err)
 							require.Len(t, entries, 1)
-							directory := filepath.Join(lib.identicalTempRoot, entries[0].Name())
+							directory := filepath.Join(resource.TemporaryRoot(lib.work), entries[0].Name())
 							t.Cleanup(func() {
 								require.NoError(t, os.Chmod(directory, 0700))
 								require.NoError(t, os.RemoveAll(directory))
@@ -70,7 +71,7 @@ func TestIdenticalConstructionFailureCleansStaging(t *testing.T) {
 					require.ErrorIs(t, err, os.ErrPermission)
 					return
 				}
-				entries, err := os.ReadDir(lib.identicalTempRoot)
+				entries, err := os.ReadDir(resource.TemporaryRoot(lib.work))
 				require.NoError(t, err)
 				require.Empty(t, entries)
 			})
@@ -84,7 +85,7 @@ func TestIdenticalResultsOutliveConstructionContext(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	lib.identicalTempRoot = t.TempDir()
+	require.NoError(t, lib.PrepareTemporary(t.TempDir()))
 	for _, name := range []string{"one", "two"} {
 		file := &File{Name: name, Kind: entity.FileKind_FILE_KIND_REGULAR}
 		createFileRows(t, db, file)

@@ -3,7 +3,6 @@ package fileops
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/resource"
 )
@@ -14,9 +13,8 @@ type operation struct {
 }
 
 func newOperation(ctx context.Context, exe *executor.Executor) (*operation, error) {
-	// The shared resource owns cleanup; the operation keeps its existing temporary namespace.
-	prefix := ".yatm-fileops-" + uuid.NewString() + "-"
-	temporary, err := resource.OpenTemporaryDB("", prefix)
+	// The request owns its disposable manifest through result delivery.
+	temporary, err := resource.OpenTemporaryDB(exe.Paths().Work, "file-operation-")
 	if err != nil {
 		return nil, err
 	}

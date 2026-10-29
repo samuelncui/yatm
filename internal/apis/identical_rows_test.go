@@ -11,6 +11,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor/fileops"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,8 +74,7 @@ func TestIdenticalContinuationsRequireRetainedResult(t *testing.T) {
 		cacheContentSignature(t, context.Background(), filename)
 	}
 	admittedPage(t, &locationService{api: s.api}, scope.Roots[0].LocationId)
-	temp := t.TempDir()
-	t.Setenv("TMPDIR", temp)
+	temp := resource.TemporaryRoot(s.api.exe.Paths().Work)
 
 	// Both legacy first-page methods still work without a result ID.
 	groups, err := s.ListIdenticalGroups(context.Background(), &entity.ListIdenticalGroupsRequest{Scope: scope, Limit: 1})
@@ -120,8 +120,7 @@ func TestIdenticalContinuationsRequireRetainedResult(t *testing.T) {
 func TestIdenticalServiceCloseRemovesRetainedSQLite(t *testing.T) {
 	// Clean shutdown releases this process's temporary results after requests have drained.
 	s, scope, _ := identicalFixture(t)
-	temp := t.TempDir()
-	t.Setenv("TMPDIR", temp)
+	temp := resource.TemporaryRoot(s.api.exe.Paths().Work)
 	for range 2 {
 		_, err := s.FindIdentical(context.Background(), &entity.FindIdenticalRequest{Scope: scope})
 		require.NoError(t, err)

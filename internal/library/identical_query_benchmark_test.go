@@ -142,9 +142,8 @@ func newIdenticalPerfCatalog(t testing.TB, count int) (*Library, []identicalPerf
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 	lib := New(db)
 	require.NoError(t, lib.AutoMigrate())
-	release, err := lib.PrepareIdenticalTemp(filepath.Join(root, "work"))
+	err = lib.PrepareTemporary(filepath.Join(root, "work"))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, release()) })
 	locations := make([]Location, 4)
 	for i := range locations {
 		locations[i] = Location{ID: int64(i + 1), Name: fmt.Sprintf("Location %d", i), ExecutorID: "fixture",

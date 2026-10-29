@@ -17,7 +17,7 @@ func (e *Executor) ReadTapeBarcode(ctx context.Context, device string) (string, 
 	// Run the configured device probe and decode its stable JSON boundary.
 	cmd := exec.CommandContext(ctx, e.scripts.ReadInfo)
 	cmd.Env = append(cmd.Env, fmt.Sprintf("DEVICE=%s", device))
-	data, err := tools.RunCmdWithReturn(logrus.StandardLogger(), cmd)
+	data, err := tools.RunCmdWithReturn(logrus.StandardLogger(), cmd, e.paths.Work)
 	if err != nil {
 		return "", fmt.Errorf("read tape info failed, %w", err)
 	}

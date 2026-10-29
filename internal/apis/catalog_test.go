@@ -27,6 +27,7 @@ func TestVersionMetadataSurvivesCorruptPreview(t *testing.T) {
 	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 	require.NoError(t, err)
 	lib := library.New(db)
+	require.NoError(t, lib.PrepareTemporary(root))
 	require.NoError(t, lib.AutoMigrate())
 	file := &library.File{Name: "photo.jpg", Kind: entity.FileKind_FILE_KIND_REGULAR}
 	require.NoError(t, lib.SaveFile(ctx, file))
@@ -62,6 +63,7 @@ func TestImportArchiveDirectoryReportsBoundedResults(t *testing.T) {
 	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 	require.NoError(t, err)
 	lib := library.New(db)
+	require.NoError(t, lib.PrepareTemporary(root))
 	require.NoError(t, lib.AutoMigrate())
 	media, err := lib.CreateMedia(ctx, &library.Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
 		Identity: "b95355a8-e71d-4528-a49d-434724d56e41", Name: "Archive",
@@ -106,6 +108,7 @@ func TestFileResponsesTolerateCatalogReplacement(t *testing.T) {
 			db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 			require.NoError(t, err)
 			lib := library.New(db)
+			require.NoError(t, lib.PrepareTemporary(root))
 			require.NoError(t, lib.AutoMigrate())
 			parent := &library.File{Name: "folder", Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 			require.NoError(t, lib.SaveFile(ctx, parent))

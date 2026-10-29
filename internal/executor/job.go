@@ -190,11 +190,15 @@ func (e *Executor) deleteJob(ctx context.Context, id int64) error {
 		return err
 	}
 
-	// Close cached resources before removing the bundle.
-	if runner := e.removeRunner(id); runner != nil {
+	// Retain cached resources until their owner confirms cleanup succeeded.
+	e.runnersLock.Lock()
+	runner := e.runners[id]
+	e.runnersLock.Unlock()
+	if runner != nil {
 		if err := runner.Close(); err != nil {
 			return fmt.Errorf("close job runner failed, id=%d, %w", id, err)
 		}
+		e.removeRunner(id)
 	}
 	if err := os.RemoveAll(e.jobWorkPath(id)); err != nil {
 		return fmt.Errorf("remove job bundle failed, id=%d, %w", id, err)
@@ -466,13 +470,28 @@ func jobPageSize(limit *int64) (int, error) {
 	return int(*limit), nil
 }
 
-func (e *Executor) cleanupFailedJob(ctx context.Context, jobID int64) {
-	// Remove the unpublished bundle and its catalog search entries together during failed creation.
+func (e *Executor) cleanupFailedJob(ctx context.Context, jobID int64) error {
+	// Keep the runner reachable until it has released every file owned by failed creation.
 	ctx = context.WithoutCancel(ctx)
-	if runner := e.removeRunner(jobID); runner != nil {
-		_ = runner.Close()
+	e.runnersLock.Lock()
+	runner := e.runners[jobID]
+	e.runnersLock.Unlock()
+	if runner != nil {
+		if err := runner.Close(); err != nil {
+			return fmt.Errorf("close failed Job runner, id=%d, %w", jobID, err)
+		}
+		e.removeRunner(jobID)
 	}
-	_ = os.RemoveAll(e.jobWorkPath(jobID))
-	_ = e.db.WithContext(ctx).Where("job_id = ?", jobID).Delete(&JobProperty{}).Error
-	_ = e.db.WithContext(ctx).Unscoped().Delete(&jobCatalogRow{}, jobID).Error
+
+	// Remove unpublished storage before deleting its catalog owner; report each failure.
+	if err := os.RemoveAll(e.jobWorkPath(jobID)); err != nil {
+		return fmt.Errorf("remove failed Job bundle, id=%d, %w", jobID, err)
+	}
+	if err := e.db.WithContext(ctx).Where("job_id = ?", jobID).Delete(&JobProperty{}).Error; err != nil {
+		return fmt.Errorf("remove failed Job properties, id=%d, %w", jobID, err)
+	}
+	if err := e.db.WithContext(ctx).Unscoped().Delete(&jobCatalogRow{}, jobID).Error; err != nil {
+		return fmt.Errorf("remove failed Job catalog entry, id=%d, %w", jobID, err)
+	}
+	return nil
 }

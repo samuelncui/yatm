@@ -114,12 +114,15 @@ func Prepare(ctx context.Context, options Options) (returnErr error) {
 		}
 	}()
 
-	// Configure the same Library settings and Preview manager used by the small fixture.
+	// Bind Library preferences and temporary work before admitting fixture operations.
 	appSettings := settingspkg.New(db, settingspkg.PreviewDefinition{
 		Default:  func() (*entity.PreviewSettings, error) { return preview.SettingsFromConfig(preview.Config{}) },
 		Validate: preview.ValidateSettings,
 	})
 	lib := library.NewWithSettings(db, appSettings)
+	if err := lib.PrepareTemporary(paths.Work); err != nil {
+		return fmt.Errorf("prepare Demo Library temporary storage failed, %w", err)
+	}
 	if err := lib.AutoMigrate(); err != nil {
 		return fmt.Errorf("migrate Demo Library failed, %w", err)
 	}

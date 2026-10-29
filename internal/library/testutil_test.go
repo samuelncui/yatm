@@ -20,6 +20,7 @@ func newTestLibrary(t *testing.T) (*gorm.DB, *Library) {
 	t.Helper()
 	db := openTestLibraryDB(t)
 	lib := New(db)
+	require.NoError(t, lib.PrepareTemporary(t.TempDir()))
 	require.NoError(t, lib.AutoMigrate())
 	return db, lib
 }

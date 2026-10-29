@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,7 +57,7 @@ func TestOutputNameProbesAreTemporaryAndContainNoRegularFiles(t *testing.T) {
 	require.ErrorContains(t, err, "file/directory")
 	require.NoError(t, names.close())
 	require.NoDirExists(t, probe)
-	require.NoDirExists(t, names.index)
+	require.Empty(t, names.temporary.Directory)
 	// The default Ignore rule is a name pattern; it stays in effect after the probe is gone.
 	require.True(t, source.Excluded(names.name, true))
 }
@@ -212,4 +214,136 @@ func TestRestoreNameOwnerLookupPagesTargetAncestors(t *testing.T) {
 	claimed, err := names.claim(ctx, "existing.txt")
 	require.NoError(t, err)
 	require.False(t, claimed, "an indexed owner on the second ancestor page keeps its name")
+}
+
+func TestOutputNameRegistrationFailureCreatesNoExternalProbe(t *testing.T) {
+	// Registration must succeed on protected storage before allocating a destination namespace.
+	root := t.TempDir()
+	index := filepath.Join(root, "index")
+	require.NoError(t, os.WriteFile(index, []byte("not a directory"), 0600))
+	names := &outputNames{temporary: &resource.TemporaryDirectory{Directory: index},
+		name: ".yatm-restore-00000000-0000-4000-8000-000000000001-é"}
+	parent := t.TempDir()
+	_, err := names.directory(parent)
+	require.Error(t, err)
+	entries, err := os.ReadDir(parent)
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
+
+func TestOutputNameProbesUseEachActualParentAndNativeRules(t *testing.T) {
+	// Existing nested parents receive their own native namespaces rather than a Work-side approximation.
+	temporary, err := resource.NewTemporaryDirectory(t.TempDir(), "restore-output-names-")
+	require.NoError(t, err)
+	names := &outputNames{temporary: temporary, name: ".yatm-restore-00000000-0000-4000-8000-000000000007-é"}
+	t.Cleanup(func() { require.NoError(t, names.close()) })
+	root := t.TempDir()
+	nested := filepath.Join(root, "existing", "nested")
+	require.NoError(t, os.MkdirAll(nested, 0700))
+	for _, parent := range []string{root, nested} {
+		shadow, err := names.directory(parent)
+		require.NoError(t, err)
+		require.Equal(t, parent, filepath.Dir(shadow))
+		rules, err := directoryNameRules(parent, names.name)
+		require.NoError(t, err)
+		claimed, err := names.claimRelative(shadow, "File.txt")
+		require.NoError(t, err)
+		require.True(t, claimed)
+		claimed, err = names.claimRelative(shadow, "file.txt")
+		require.NoError(t, err)
+		require.Equal(t, !rules[0], claimed)
+	}
+}
+
+func TestOutputNameFailedRemovalPreservesAllocationForRetry(t *testing.T) {
+	// The shared owner retains the only exact record when destination cleanup is denied.
+	if os.Geteuid() == 0 {
+		t.Skip("permission fixture requires an unprivileged user")
+	}
+	temporary, err := resource.NewTemporaryDirectory(t.TempDir(), "restore-output-names-")
+	require.NoError(t, err)
+	names := &outputNames{temporary: temporary, name: ".yatm-restore-00000000-0000-4000-8000-000000000003-é"}
+	parent := t.TempDir()
+	shadow, err := names.directory(parent)
+	require.NoError(t, err)
+	require.NoError(t, os.Chmod(parent, 0500))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chmod(parent, 0700))
+		require.NoError(t, names.close())
+	})
+	index := temporary.Directory
+	require.ErrorIs(t, names.close(), os.ErrPermission)
+	require.Equal(t, index, temporary.Directory)
+	require.DirExists(t, shadow)
+
+	// Another close uses the same exact cleanup records after permissions recover.
+	require.NoError(t, os.Chmod(parent, 0700))
+	require.NoError(t, names.close())
+	require.NoDirExists(t, shadow)
+	require.NoDirExists(t, index)
+}
+
+func TestDeletingRestoreJobPreservesSharedProbeCleanupRecords(t *testing.T) {
+	// Job deletion cannot remove the allocation that owns a failed external cleanup.
+	ctx := context.Background()
+	exe, lib := setupTestExecutor(t)
+	_, file := createMediaFile(t, lib, newTapeMedia("DELETEPROBE"), ".", "file.txt", []byte("saved"), nil)
+	job := createRestoreJob(t, exe, file.ID)
+	waitIndexed(t, exe, job.ID)
+	value, err := exe.GetJobRunner(ctx, job.ID)
+	require.NoError(t, err)
+	names, err := newOutputNames(ctx, value.(*jobRestoreRunner))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, names.close()) })
+	parent := filepath.Join(exe.Paths().Target, "nested")
+	require.NoError(t, os.Mkdir(parent, 0700))
+	shadow, err := names.directory(parent)
+	require.NoError(t, err)
+	index := names.temporary.Directory
+	require.Equal(t, resource.TemporaryRoot(exe.Paths().Work), filepath.Dir(index))
+
+	// An unavailable target releases the live hold but preserves its exact cleanup record.
+	parked := parent + "-offline"
+	require.NoError(t, os.Rename(parent, parked))
+	require.Error(t, names.close())
+	_, err = exe.DeleteJobs(ctx, false, job.ID)
+	require.NoError(t, err)
+	require.DirExists(t, index)
+	require.DirExists(t, filepath.Join(parked, names.name))
+	require.Error(t, resource.CleanupTemporary(exe.Paths().Work, time.Now().Add(8*24*time.Hour)))
+	require.DirExists(t, index)
+
+	// Once the same destination is available, ordinary expiry removes its directory-only probe.
+	require.NoError(t, os.Rename(parked, parent))
+	require.NoError(t, resource.CleanupTemporary(exe.Paths().Work, time.Now().Add(8*24*time.Hour)))
+	require.NoDirExists(t, shadow)
+	require.NoDirExists(t, index)
+}
+
+func TestClosingDuplicateRestoreRunnerPreservesActiveNameProbes(t *testing.T) {
+	// A factory instance that loses cache publication owns only its own handles.
+	ctx := context.Background()
+	exe, lib := setupTestExecutor(t)
+	_, file := createMediaFile(t, lib, newTapeMedia("DUPLICATE"), ".", "file.txt", []byte("saved"), nil)
+	job := createRestoreJob(t, exe, file.ID)
+	waitIndexed(t, exe, job.ID)
+	value, err := exe.GetJobRunner(ctx, job.ID)
+	require.NoError(t, err)
+	names, err := newOutputNames(ctx, value.(*jobRestoreRunner))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, names.close()) })
+	shadow, err := names.directory(exe.Paths().Target)
+	require.NoError(t, err)
+	claimed, err := names.claimRelative(shadow, "reserved.txt")
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	// GetJobRunner closes a redundant constructed instance; that must not erase the winner's index.
+	duplicate, err := newRunner(ctx, exe, job)
+	require.NoError(t, err)
+	require.NoError(t, duplicate.Close())
+	require.DirExists(t, names.temporary.Directory)
+	claimed, err = names.claimRelative(shadow, "reserved.txt")
+	require.NoError(t, err)
+	require.False(t, claimed)
 }

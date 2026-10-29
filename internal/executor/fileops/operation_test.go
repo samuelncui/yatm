@@ -41,6 +41,7 @@ func setup(t *testing.T) *fixture {
 		t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 	}
 	lib := library.New(libDB)
+	require.NoError(t, lib.PrepareTemporary(work))
 	require.NoError(t, lib.AutoMigrate())
 	exe := executor.New(executorDB, lib, nil, executor.Paths{Work: work, Access: []executor.AccessRange{{Root: root}}}, executor.Scripts{}, nil)
 	require.NoError(t, exe.AutoMigrate())
@@ -53,12 +54,12 @@ func setup(t *testing.T) *fixture {
 		var count int64
 		require.NoError(t, executorDB.Model(executor.ModelJob).Count(&count).Error)
 		require.Zero(t, count, "ordinary file operations must never create catalog Jobs")
-		entries, err := os.ReadDir(work)
+		entries, err := os.ReadDir(resource.TemporaryRoot(work))
 		if os.IsNotExist(err) {
 			return
 		}
 		require.NoError(t, err)
-		require.Empty(t, entries, "ordinary file operations must not create Job bundles")
+		require.Empty(t, entries, "ordinary file operations must immediately remove disposable manifests")
 	})
 	return f
 }
@@ -372,22 +373,15 @@ func TestDestinationReplacementBetweenItemsStaysOrdinaryConcurrency(t *testing.T
 	require.FileExists(t, filepath.Join(f.root, "destination/b.txt"))
 }
 
-func TestActiveOperationManifestIsHiddenByDefaultIgnore(t *testing.T) {
-	// The temporary database retains the operation namespace used by default Location Ignore.
+func TestActiveOperationManifestUsesProtectedWork(t *testing.T) {
+	// The operation owns a disposable manifest inside protected Work storage.
 	f := setup(t)
 	op, err := newOperation(context.Background(), f.exe)
 	require.NoError(t, err)
 	defer op.Close()
-	directory, err := os.MkdirTemp(f.root, filepath.Base(op.Directory)+"-")
-	require.NoError(t, err)
-	defer os.RemoveAll(directory)
-	require.NoError(t, os.WriteFile(filepath.Join(directory, "content"), []byte("unfinished"), 0600))
+	require.Equal(t, resource.TemporaryRoot(f.work), filepath.Dir(op.Directory))
 
-	// The default Location Ignore rules hide the operation namespace from ordinary reads.
-	relative := filepath.Base(directory) + "/content"
-	require.True(t, f.location.Excluded(relative, false))
-
-	// Ignore is visibility, not permission: an explicit observation stays available.
-	_, err = f.exe.ObserveLocationEntry(context.Background(), f.location.ID, relative)
-	require.NoError(t, err)
+	// A runtime temporary directory cannot become an authorized original Location.
+	_, err = f.exe.LocationRoot(op.Directory)
+	require.Error(t, err)
 }

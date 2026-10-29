@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 
@@ -96,6 +94,7 @@ type identicalEdge struct {
 type IdenticalSnapshot struct {
 	db             *gorm.DB
 	directory      string
+	temporary      *resource.TemporaryDB
 	scope          string
 	Revision       string
 	AllRows        int64
@@ -107,42 +106,32 @@ type IdenticalSnapshot struct {
 
 // Close releases SQLite before removing its disposable files.
 func (s *IdenticalSnapshot) Close() error {
-	// Partial construction still owns its directory; a close failure cannot skip file cleanup.
-	var result error
-	if s.db != nil {
-		db, err := s.db.DB()
-		if err == nil {
-			err = db.Close()
-		}
-		if err != nil {
-			result = fmt.Errorf("close identical staging database failed, %w", err)
-		}
+	// Keep the owner reachable when removal fails so a later Close can retry.
+	if s.temporary == nil {
+		return nil
 	}
-	if err := os.RemoveAll(s.directory); err != nil {
-		result = errors.Join(result, fmt.Errorf("remove identical staging failed, %w", err))
+	if err := s.temporary.Close(); err != nil {
+		return err
 	}
-	return result
+	s.temporary = nil
+	return nil
 }
 
 func (l *Library) newIdenticalSnapshot(
 	ctx context.Context, scope IdenticalScope, prefix string,
 ) (result *IdenticalSnapshot, returnErr error) {
 	// Both builders transfer the same SQLite/directory owner without sharing their query semantics.
-	directory, err := l.identicalDirectory(prefix)
+	temporary, err := resource.OpenTemporaryDB(l.work, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("create identical staging failed, %w", err)
 	}
-	s := &IdenticalSnapshot{directory: directory}
+	s := &IdenticalSnapshot{directory: temporary.Directory, temporary: temporary}
 	defer func() {
 		if result == nil {
 			returnErr = errors.Join(returnErr, s.Close())
 		}
 	}()
-	db, err := resource.OpenSQLite(filepath.Join(directory, "groups.sqlite"))
-	if err != nil {
-		return nil, fmt.Errorf("open identical staging failed, %w", err)
-	}
-	s.db = db.WithContext(ctx)
+	s.db = temporary.DB.WithContext(ctx)
 	encoded, _ := json.Marshal(scope)
 	s.scope = string(encoded)
 	return s, nil

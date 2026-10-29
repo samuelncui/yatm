@@ -63,7 +63,7 @@ func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope libr
 	if group.Fingerprint != req.Fingerprint {
 		return library.ErrLocationConflict
 	}
-	stage, closeStage, err := openKeepStage(ctx)
+	stage, closeStage, err := s.openKeepStage(ctx)
 	if err != nil {
 		return err
 	}
@@ -179,9 +179,9 @@ func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOpe
 	return stream.Send(&entity.FileOperationResult{Summary: summary})
 }
 
-func openKeepStage(ctx context.Context) (*gorm.DB, func() error, error) {
+func (s *filesService) openKeepStage(ctx context.Context) (*gorm.DB, func() error, error) {
 	// Request-owned staging is disposable and never part of Library backup or Job recovery.
-	stage, err := resource.OpenTemporaryDB("", "yatm-keep-")
+	stage, err := resource.OpenTemporaryDB(s.api.exe.Paths().Work, "yatm-keep-")
 	if err != nil {
 		return nil, nil, err
 	}

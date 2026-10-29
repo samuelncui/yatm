@@ -75,6 +75,7 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 
 	// Curated Files retain independent organization and annotations.
 	lib := library.New(db)
+	require.NoError(t, lib.PrepareTemporary(filepath.Join(root, "work")))
 	budget, err := lib.GetByPath(context.Background(), library.Root.ID, "Projects/aurora/budget.csv")
 	require.NoError(t, err)
 	require.Equal(t, "Draft budget; finance review is still pending.", budget.Note)

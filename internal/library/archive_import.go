@@ -70,9 +70,9 @@ func countImportedPath(tx, planned *gorm.DB, logicalPath string) (bool, int64, e
 	return false, created, nil
 }
 
-func openArchiveImportStage(ctx context.Context) (*gorm.DB, func() error, error) {
+func (l *Library) openArchiveImportStage(ctx context.Context) (*gorm.DB, func() error, error) {
 	// Reuse the existing File row schema in an isolated, request-owned naming workset.
-	stage, err := resource.OpenTemporaryDB("", "yatm-archive-import-")
+	stage, err := resource.OpenTemporaryDB(l.work, "yatm-archive-import-")
 	if err != nil {
 		return nil, nil, err
 	}

@@ -2,37 +2,33 @@ package restore
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/samuelncui/yatm/internal/resource"
 )
 
 // outputNames is an attempt-local filesystem namespace, never an output file or durable recovery log.
 type outputNames struct {
-	runner *jobRestoreRunner
-	index  string
-	name   string
-	groups int
+	runner    *jobRestoreRunner
+	temporary *resource.TemporaryDirectory
+	name      string
 }
 
 func newOutputNames(ctx context.Context, runner *jobRestoreRunner) (*outputNames, error) {
-	// Keep cleanup records on the Job's protected storage, not in an unbounded in-memory directory map.
-	work, err := runner.exe.EnsureJobWorkPath(ctx, runner.job.ID)
-	if err != nil {
+	// A disposable allocation outlives Job deletion while probes stay on the destination filesystem.
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	index, err := os.MkdirTemp(work, "output-names-")
+	temporary, err := resource.NewTemporaryDirectory(runner.exe.Paths().Work, "restore-output-names-")
 	if err != nil {
 		return nil, err
 	}
 	prefix := ".yatm-restore-" + uuid.NewString()
-	return &outputNames{runner: runner, index: index, name: prefix + "-\u00e9"}, nil
+	return &outputNames{runner: runner, temporary: temporary, name: prefix + "-\u00e9"}, nil
 }
 
 func (n *outputNames) rebuild(ctx context.Context) error {
@@ -141,23 +137,21 @@ func (n *outputNames) claimRelative(shadow, suffix string) (bool, error) {
 func (n *outputNames) directory(parent string) (string, error) {
 	// One random basename under each actual parent naturally shares a namespace across parent aliases.
 	shadow := filepath.Join(parent, n.name)
-	err := os.Mkdir(shadow, 0700)
-	if os.IsExist(err) {
-		info, inspectErr := os.Lstat(shadow)
-		if inspectErr != nil {
-			return "", inspectErr
-		}
+	info, err := os.Lstat(shadow)
+	if err == nil {
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return "", fmt.Errorf("Restore name probe is not a real directory")
 		}
 		return shadow, nil
 	}
-	if err != nil {
+	if !os.IsNotExist(err) {
 		return "", err
 	}
-	n.groups++
-	if err := os.WriteFile(filepath.Join(n.index, strconv.Itoa(n.groups)), []byte(shadow), 0600); err != nil {
-		return "", errors.Join(err, os.Remove(shadow))
+	if err := n.temporary.RegisterRestoreProbe(shadow); err != nil {
+		return "", err
+	}
+	if err := os.Mkdir(shadow, 0700); err != nil {
+		return "", err
 	}
 
 	// Check inherited case/normalization behavior in the actual directories, including network mounts.
@@ -203,38 +197,5 @@ func directoryNameRules(directory, name string) ([2]bool, error) {
 }
 
 func (n *outputNames) close() error {
-	// Clean only exact probe directories recorded by this attempt, in bounded pages.
-	index, err := os.Open(n.index)
-	if err != nil {
-		return err
-	}
-	defer index.Close()
-	var cleanupErr error
-	for {
-		entries, err := index.ReadDir(batchSize)
-		if err != nil && err != io.EOF {
-			cleanupErr = errors.Join(cleanupErr, err)
-			break
-		}
-		for _, entry := range entries {
-			value, readErr := os.ReadFile(filepath.Join(n.index, entry.Name()))
-			if readErr != nil {
-				cleanupErr = errors.Join(cleanupErr, readErr)
-				continue
-			}
-			target := string(value)
-			if !filepath.IsAbs(target) || filepath.Base(target) != n.name {
-				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("invalid Restore probe cleanup record"))
-				continue
-			}
-			cleanupErr = errors.Join(cleanupErr, os.RemoveAll(target))
-		}
-		if err == io.EOF {
-			break
-		}
-	}
-	if cleanupErr != nil {
-		return cleanupErr
-	}
-	return os.RemoveAll(n.index)
+	return n.temporary.Close()
 }

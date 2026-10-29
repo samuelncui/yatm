@@ -141,11 +141,11 @@ func TestBackupSnapshotIncludesWALWithoutWritingEvidence(t *testing.T) {
 	hashes := backupHashes(t, backup.Root)
 
 	// Snapshot reconstruction can write temporary SQLite state, but never source WAL or sidecars.
-	snapshot, cleanup, err := backup.open()
+	snapshot, cleanup, err := backup.open(t.TempDir())
 	require.NoError(t, err)
 	var job legacyJob
 	require.NoError(t, snapshot.First(&job, 42).Error)
-	cleanup()
+	require.NoError(t, cleanup())
 	require.Equal(t, hashes, backupHashes(t, backup.Root))
 }
 
@@ -169,4 +169,42 @@ func TestValidateDetectsChangedArchivedLog(t *testing.T) {
 	require.ErrorContains(t, err, "Job 1 log differs")
 	require.Error(t, Cleanup(ctx, db, root, backup))
 	require.True(t, db.Migrator().HasTable("jobs_legacy"))
+}
+
+func TestSnapshotScratchUsesActiveWorkAndCleansFailedConstruction(t *testing.T) {
+	work := t.TempDir()
+	_, _, err := openSnapshotCatalog(work, filepath.Join(t.TempDir(), "missing.db"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+	entries, err := os.ReadDir(resource.TemporaryRoot(work))
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
+
+func TestSnapshotCleanupFailureRetainsOwnedPathForRetry(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission fixture requires an unprivileged user")
+	}
+	db := newLegacyTestDB(t)
+	backup := preserveTestBackup(t, db, t.TempDir())
+	hashes := backupHashes(t, backup.Root)
+	work := t.TempDir()
+	snapshot, cleanup, err := backup.open(work)
+	require.NoError(t, err)
+	var databases []struct{ File string }
+	require.NoError(t, snapshot.Raw("PRAGMA database_list").Scan(&databases).Error)
+	root := resource.TemporaryRoot(work)
+	directory := filepath.Dir(databases[0].File)
+	expectedRoot, err := os.Stat(root)
+	require.NoError(t, err)
+	actualRoot, err := os.Stat(filepath.Dir(directory))
+	require.NoError(t, err)
+	require.True(t, os.SameFile(expectedRoot, actualRoot))
+	require.NoError(t, os.Chmod(root, 0500))
+	t.Cleanup(func() { require.NoError(t, os.Chmod(root, 0700)); require.NoError(t, cleanup()) })
+	require.ErrorIs(t, cleanup(), os.ErrPermission)
+	require.DirExists(t, directory)
+	require.NoError(t, os.Chmod(root, 0700))
+	require.NoError(t, cleanup())
+	require.NoDirExists(t, directory)
+	require.Equal(t, hashes, backupHashes(t, backup.Root))
 }

@@ -31,55 +31,67 @@ type Backup struct {
 	RestoreRoot string
 }
 
-func (backup Backup) open() (*gorm.DB, func(), error) {
+func (backup Backup) open(work string) (*gorm.DB, func() error, error) {
 	// Work on a disposable database copy so SQLite cannot create or update backup sidecars.
 	if backup.CatalogPath == "" || backup.WorkRoot == "" {
 		return nil, nil, fmt.Errorf("a complete legacy backup is required")
 	}
-	db, cleanup, err := openSnapshotCatalog(backup.CatalogPath)
+	db, cleanup, err := openSnapshotCatalog(work, backup.CatalogPath)
 	if err != nil {
 		return nil, nil, err
 	}
 	schema, err := DetectSchema(db)
 	if err != nil {
-		cleanup()
-		return nil, nil, fmt.Errorf("inspect backup catalog failed, %w", err)
+		return nil, nil, errors.Join(fmt.Errorf("inspect backup catalog failed, %w", err), cleanup())
 	}
 	if schema != SchemaLegacy {
-		cleanup()
-		return nil, nil, fmt.Errorf("backup must contain a legacy catalog, found %q", schema)
+		return nil, nil, errors.Join(fmt.Errorf("backup must contain a legacy catalog, found %q", schema), cleanup())
 	}
 	return db, cleanup, nil
 }
 
-func openSnapshotCatalog(filename string) (*gorm.DB, func(), error) {
-	// Copy the database and any retained WAL, never open the preserved source with SQLite.
-	dir, err := os.MkdirTemp("", "yatm-migration-check-")
+func openSnapshotCatalog(work, filename string) (_ *gorm.DB, _ func() error, returnErr error) {
+	// Copy the database and retained WAL under the active Work root, never beside preserved evidence.
+	owner, err := resource.NewTemporaryDirectory(work, "migration-check-")
 	if err != nil {
 		return nil, nil, err
 	}
-	remove := func() { _ = os.RemoveAll(dir) }
-	target := filepath.Join(dir, "state.db")
+	var db *gorm.DB
+	cleanup := func() error {
+		var result error
+		if db != nil {
+			sqlDB, err := db.DB()
+			if err != nil {
+				result = err
+			} else {
+				result = sqlDB.Close()
+			}
+			db = nil
+		}
+		return errors.Join(result, owner.Close())
+	}
+	defer func() {
+		if returnErr != nil {
+			returnErr = errors.Join(returnErr, cleanup())
+		}
+	}()
+	target := filepath.Join(owner.Directory, "state.db")
 	for _, suffix := range []string{"", "-wal"} {
 		if err := copyEvidence(filename+suffix, target+suffix); err != nil {
 			if suffix != "" && errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
-			remove()
 			return nil, nil, fmt.Errorf("copy backup catalog failed, %w", err)
 		}
 	}
-
-	// Opening only the copy also supports legacy transitional Job databases with WAL state.
-	db, err := resource.OpenSQLite(target)
+	db, err = resource.OpenSQLite(target)
 	if err != nil {
-		remove()
 		return nil, nil, err
 	}
-	return db, func() { closeDB(db); remove() }, nil
+	return db, cleanup, nil
 }
 
-func copyEvidence(sourcePath, targetPath string) error {
+func copyEvidence(sourcePath, targetPath string) (returnErr error) {
 	// Require a regular evidence file; links cannot redirect validation into the active tree.
 	info, err := os.Lstat(sourcePath)
 	if err != nil {
@@ -92,7 +104,7 @@ func copyEvidence(sourcePath, targetPath string) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() { returnErr = errors.Join(returnErr, source.Close()) }()
 
 	// The caller owns the temporary destination and its restrictive permissions.
 	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
@@ -104,7 +116,13 @@ func copyEvidence(sourcePath, targetPath string) error {
 }
 
 // Validate compares migration results with independently rebuilt backup facts before activation cleanup.
-func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) (_ *Report, rerr error) {
+func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) (report *Report, rerr error) {
+	defer func() {
+		if rerr != nil && report != nil {
+			report.Success = false
+			report.Error = rerr.Error()
+		}
+	}()
 	// Validate the active format before reading any backup or creating temporary output.
 	if db == nil {
 		return nil, fmt.Errorf("active migration catalog is missing")
@@ -115,23 +133,18 @@ func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) 
 	if err := dataformat.CheckBundles(db, workRoot); err != nil {
 		return nil, err
 	}
-	expected, cleanup, err := backup.open()
+	expected, cleanup, err := backup.open(workRoot)
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup()
+	defer func() { rerr = errors.Join(rerr, cleanup()) }()
 
 	// Reuse the migration's content reconciliation against captured backup indexes.
 	createdAtNS, err := dataformat.Nanoseconds(time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("record migration validation time failed, %w", err)
 	}
-	report := &Report{CreatedAtNS: createdAtNS}
-	defer func() {
-		if rerr != nil {
-			report.Error = rerr.Error()
-		}
-	}()
+	report = &Report{CreatedAtNS: createdAtNS}
 	if err := prepareLibrary(ctx, expected, backup.IndexRoot, report); err != nil {
 		return report, fmt.Errorf("rebuild expected Library failed, %w", err)
 	}
@@ -152,11 +165,12 @@ func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) 
 	}
 
 	// Compare each complete historical manifest independently, including logs and frozen targets.
-	jobsRoot, err := os.MkdirTemp("", "yatm-migration-jobs-")
+	jobs, err := resource.NewTemporaryDirectory(workRoot, "migration-jobs-")
 	if err != nil {
 		return report, err
 	}
-	defer os.RemoveAll(jobsRoot)
+	defer func() { rerr = errors.Join(rerr, jobs.Close()) }()
+	jobsRoot := jobs.Directory
 	var after int64
 	for {
 		var job legacyJob
@@ -172,7 +186,7 @@ func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) 
 			report.DeletedJobs = append(report.DeletedJobs, job.ID)
 			continue
 		}
-		counts, _, err := prepareJob(ctx, expected, "positions_staging", restorePositionsRequired,
+		counts, _, err := prepareJob(ctx, workRoot, expected, "positions_staging", restorePositionsRequired,
 			jobsRoot, filepath.Join(backup.WorkRoot, "jobs"), backup.WorkRoot, &job, backup.RestoreRoot)
 		if err != nil {
 			return report, fmt.Errorf("rebuild expected Job %d failed, %w", job.ID, err)
@@ -191,7 +205,7 @@ func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) 
 	return report, nil
 }
 
-func compareJob(ctx context.Context, db *gorm.DB, workRoot, expectedRoot string, job *legacyJob) error {
+func compareJob(ctx context.Context, db *gorm.DB, workRoot, expectedRoot string, job *legacyJob) (returnErr error) {
 	// Bind the historical row to the same catalog identity and authoritative Job status.
 	var catalog catalogJob
 	if err := db.WithContext(ctx).Table("jobs").First(&catalog, job.ID).Error; err != nil {
@@ -199,16 +213,16 @@ func compareJob(ctx context.Context, db *gorm.DB, workRoot, expectedRoot string,
 	}
 	id := strconv.FormatInt(job.ID, 10)
 	actualDir, expectedDir := filepath.Join(workRoot, "jobs", id), filepath.Join(expectedRoot, id)
-	actual, closeActual, err := openSnapshotCatalog(filepath.Join(actualDir, "state.db"))
+	actual, closeActual, err := openSnapshotCatalog(workRoot, filepath.Join(actualDir, "state.db"))
 	if err != nil {
 		return err
 	}
-	defer closeActual()
-	expected, closeExpected, err := openSnapshotCatalog(filepath.Join(expectedDir, "state.db"))
+	defer func() { returnErr = errors.Join(returnErr, closeActual()) }()
+	expected, closeExpected, err := openSnapshotCatalog(workRoot, filepath.Join(expectedDir, "state.db"))
 	if err != nil {
 		return err
 	}
-	defer closeExpected()
+	defer func() { returnErr = errors.Join(returnErr, closeExpected()) }()
 	var record executor.JobRecord
 	if err := expected.First(&record, 1).Error; err != nil {
 		return err

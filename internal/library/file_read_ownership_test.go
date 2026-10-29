@@ -20,6 +20,7 @@ func TestFileReadsUseCatalogReaderAndTransactionsKeepTheirOwnView(t *testing.T) 
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, catalog.Close()) })
 	lib := NewWithCatalog(catalog.Write, catalog.Read, nil)
+	require.NoError(t, lib.PrepareTemporary(t.TempDir()))
 	file := &File{Name: "committed"}
 	require.NoError(t, lib.SaveFile(context.Background(), file))
 	tx := catalog.Write.Begin()

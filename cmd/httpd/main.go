@@ -105,16 +105,17 @@ func main() {
 		Validate: preview.ValidateSettings,
 	})
 	lib := library.NewWithCatalog(catalog.Write, catalog.Read, appSettings)
-	// Hold exclusive ownership of disposable Find staging for the service lifetime.
-	releaseIdenticalTemp, err := lib.PrepareIdenticalTemp(conf.Paths.Work)
+	// Configure one disposable root and keep age-based cleanup within the service lifetime.
+	if err := lib.PrepareTemporary(conf.Paths.Work); err != nil {
+		panic(err)
+	}
+	stopTemporaryCleanup, err := resource.StartTemporaryCleanup(tools.ShutdownContext, conf.Paths.Work, func(err error) {
+		logrus.WithError(err).Warn("clean stale temporary files failed")
+	})
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		if err := releaseIdenticalTemp(); err != nil {
-			log.Printf("release identical result lock failed: %v", err)
-		}
-	}()
+	defer stopTemporaryCleanup()
 	if err := lib.AutoMigrate(); err != nil {
 		panic(err)
 	}

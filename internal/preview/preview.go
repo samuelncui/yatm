@@ -17,6 +17,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/previewprotocol"
+	"github.com/samuelncui/yatm/internal/resource"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,6 +46,7 @@ type Asset struct {
 // Manager owns Preview generation, storage addressing, and indexed bundle reads.
 type Manager struct {
 	root       string
+	work       string
 	generators map[string]configuredGenerator
 	settings   func(context.Context) (*entity.PreviewSettings, error)
 	lock       sync.Mutex
@@ -66,7 +68,7 @@ func New(config Config, work string) (*Manager, error) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, fmt.Errorf("create Preview root failed, path=%q, %w", root, err)
 	}
-	return &Manager{root: root, generators: generators, pending: make(map[string]*generation), changed: make(chan struct{})}, nil
+	return &Manager{root: root, work: work, generators: generators, pending: make(map[string]*generation), changed: make(chan struct{})}, nil
 }
 
 func (m *Manager) Supports(sourcePath string, settings *entity.PreviewJobSettings) bool {
@@ -209,12 +211,13 @@ func (m *Manager) Generate(
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(current.TimeoutSeconds)*time.Second)
 	defer cancel()
-	// Generate bounded derivative files beside the content-addressed store.
-	temporaryDir, err := os.MkdirTemp(m.root, ".generate-")
+	// Generate bounded derivatives under the shared Work temporary root.
+	temporary, err := resource.NewTemporaryDirectory(m.work, "preview-")
 	if err != nil {
 		return nil, fmt.Errorf("create Preview temporary directory failed, %w", err)
 	}
-	defer os.RemoveAll(temporaryDir)
+	defer func() { resultErr = errors.Join(resultErr, temporary.Close()) }()
+	temporaryDir := temporary.Directory
 	reportProgress(ctx, previewprotocol.Event{Type: "progress", Phase: "generate"})
 	assets, err := configured.generator.Generate(ctx, sourcePath, temporaryDir)
 	if err != nil {

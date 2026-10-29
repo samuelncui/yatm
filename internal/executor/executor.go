@@ -273,7 +273,7 @@ func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, p
 		if rerr == nil {
 			return
 		}
-		e.cleanupFailedJob(ctx, job.ID)
+		rerr = errors.Join(rerr, e.cleanupFailedJob(ctx, job.ID))
 	}()
 
 	// Index the primary target before exposing the completed bundle to catalog searches.

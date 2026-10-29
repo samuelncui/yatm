@@ -28,7 +28,7 @@ func TestMediaInspectTapePrefersDeviceBarcodeAndReturnsLibraryStats(t *testing.T
 	require.NoError(t, lib.AutoMigrate())
 	readInfo := filepath.Join(root, "read-info")
 	require.NoError(t, os.WriteFile(readInfo, []byte("#!/bin/sh\nset -eu\nprintf '%s\\n' '{\"barcode\":\"ABC001\"}' > \"$OUT\"\n"), 0o755))
-	exe := executor.New(executorDB, lib, []string{"/dev/nst0"}, executor.Paths{}, executor.Scripts{ReadInfo: readInfo}, nil)
+	exe := executor.New(executorDB, lib, []string{"/dev/nst0"}, executor.Paths{Work: filepath.Join(root, "work")}, executor.Scripts{ReadInfo: readInfo}, nil)
 	require.NoError(t, exe.AutoMigrate())
 	api := apis.New(lib, exe)
 
@@ -79,7 +79,7 @@ func TestMediaInspectTapeUsesManualBarcodeWhenDeviceHasNone(t *testing.T) {
 	require.NoError(t, lib.AutoMigrate())
 	readInfo := filepath.Join(root, "read-info")
 	require.NoError(t, os.WriteFile(readInfo, []byte("#!/bin/sh\nset -eu\nprintf '%s\\n' '{\"barcode\":\"\"}' > \"$OUT\"\n"), 0o755))
-	exe := executor.New(executorDB, lib, []string{"/dev/nst0"}, executor.Paths{}, executor.Scripts{ReadInfo: readInfo}, nil)
+	exe := executor.New(executorDB, lib, []string{"/dev/nst0"}, executor.Paths{Work: filepath.Join(root, "work")}, executor.Scripts{ReadInfo: readInfo}, nil)
 	require.NoError(t, exe.AutoMigrate())
 	api := apis.New(lib, exe)
 

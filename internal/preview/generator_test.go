@@ -56,7 +56,7 @@ func TestGenerationUsesLiveRuntimeAndFrozenOutputSettings(t *testing.T) {
 			} else {
 				live.Generators[0].GetVideo().PosterWidth = 200
 			}
-			manager, err := New(config, "")
+			manager, err := New(config, t.TempDir())
 			require.NoError(t, err)
 			var lock sync.Mutex
 			manager.settings = func(context.Context) (*entity.PreviewSettings, error) {
@@ -147,7 +147,7 @@ func TestGenerationRequiresFrozenAndLiveRoute(t *testing.T) {
 	frozen := &entity.PreviewJobSettings{Generators: proto.Clone(settings).(*entity.PreviewSettings).Generators}
 	live := proto.Clone(settings).(*entity.PreviewSettings)
 	live.Generators[0].Extensions = []*entity.PreviewExtension{{Name: "png", Enabled: true}}
-	manager, err := NewWithSettings(context.Background(), filepath.Join(root, "previews"), "", func(context.Context) (*entity.PreviewSettings, error) {
+	manager, err := NewWithSettings(context.Background(), filepath.Join(root, "previews"), t.TempDir(), func(context.Context) (*entity.PreviewSettings, error) {
 		return proto.Clone(live).(*entity.PreviewSettings), nil
 	})
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestGenerationRequiresFrozenAndLiveRoute(t *testing.T) {
 
 func TestNativeCapabilitiesExposeRAWByImageKind(t *testing.T) {
 	// Probe the packaged executable through the real manager/public capability projection.
-	manager, err := New(Config{Root: t.TempDir()}, "")
+	manager, err := New(Config{Root: t.TempDir()}, t.TempDir())
 	require.NoError(t, err)
 	helper := testPreviewHelper(t)
 	settings, err := SettingsFromConfig(Config{})
@@ -198,7 +198,7 @@ func TestBuiltInGenerators(t *testing.T) {
 					"command": helper, "format": format, "timeline_width": 45, "timeline_height": 81,
 					"timeline_interval_seconds": 1, "timeline_max_frames": 2,
 				}},
-			}}, "")
+			}}, t.TempDir())
 			require.NoError(t, err)
 
 			// Generate the image and validate that its manifest resource remains decodable in the stored bundle.
@@ -261,7 +261,7 @@ func TestBuiltInGeneratorsAcceptRelativeStoreAndSourcePaths(t *testing.T) {
 			require.False(t, filepath.IsAbs(relativeStore))
 			previews, err := New(Config{Root: relativeStore, Generators: []GeneratorConfig{
 				{Kind: kind, Extensions: []string{extension}, Options: map[string]any{"command": helper, "format": "png"}},
-			}}, "")
+			}}, t.TempDir())
 			require.NoError(t, err)
 			signature := generateFixturePreview(t, previews, relativeSource)
 

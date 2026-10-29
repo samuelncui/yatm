@@ -41,7 +41,7 @@ type Volume struct {
 }
 
 // InitializeVolume creates a marker without mounting or ejecting the filesystem.
-func InitializeVolume(root string, profile *entity.VolumeMediaProfile) (*Volume, error) {
+func InitializeVolume(root string, profile *entity.VolumeMediaProfile) (result *Volume, returnErr error) {
 	// Validate the immutable profile before writing an identity marker.
 	if profile == nil {
 		return nil, fmt.Errorf("initialize Volume failed, profile is nil")
@@ -78,19 +78,26 @@ func InitializeVolume(root string, profile *entity.VolumeMediaProfile) (*Volume,
 		return nil, fmt.Errorf("create temporary Volume marker failed, root=%q, %w", canonical, err)
 	}
 	temporaryPath := file.Name()
-	defer os.Remove(temporaryPath)
+	open := true
+	defer func() {
+		if open {
+			returnErr = errors.Join(returnErr, file.Close())
+		}
+		returnErr = errors.Join(returnErr, removeTemporaryVolumeMarker(temporaryPath))
+		if returnErr != nil {
+			result = nil
+		}
+	}()
 	if err := file.Chmod(0o644); err != nil {
-		_ = file.Close()
 		return nil, fmt.Errorf("set Volume marker mode failed, path=%q, %w", temporaryPath, err)
 	}
 	if _, err := file.Write(append(data, '\n')); err != nil {
-		_ = file.Close()
 		return nil, fmt.Errorf("write Volume marker failed, path=%q, %w", temporaryPath, err)
 	}
 	if err := file.Sync(); err != nil {
-		_ = file.Close()
 		return nil, fmt.Errorf("sync Volume marker failed, path=%q, %w", temporaryPath, err)
 	}
+	open = false
 	if err := file.Close(); err != nil {
 		return nil, fmt.Errorf("close Volume marker failed, path=%q, %w", temporaryPath, err)
 	}
@@ -98,6 +105,13 @@ func InitializeVolume(root string, profile *entity.VolumeMediaProfile) (*Volume,
 		return nil, fmt.Errorf("publish Volume marker failed, path=%q, %w", markerPath, err)
 	}
 	return &Volume{Root: canonical, Marker: marker}, nil
+}
+
+func removeTemporaryVolumeMarker(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove temporary Volume marker failed, path=%q, %w", path, err)
+	}
+	return nil
 }
 
 // OpenVolume validates one marker at an already mounted root.

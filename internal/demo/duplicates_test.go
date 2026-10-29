@@ -167,6 +167,7 @@ func TestPrepareScaledIdenticalFixture(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 	lib := library.New(db)
+	require.NoError(t, lib.PrepareTemporary(filepath.Join(root, "work")))
 
 	// Scaling adds only regular Files; Locations, retained Jobs and curated annotations stay small.
 	requireTableCount(t, db, library.ModelFile, 363+1001-207)

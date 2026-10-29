@@ -30,7 +30,7 @@ func TestTemporaryDBOwnsOnlyItsDirectory(t *testing.T) {
 	_, err = os.Stat(path)
 	require.ErrorIs(t, err, os.ErrNotExist)
 	require.NoError(t, second.DB.Exec("CREATE TABLE item(id INTEGER PRIMARY KEY)").Error)
-	entries, err := os.ReadDir(root)
+	entries, err := os.ReadDir(TemporaryRoot(root))
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	require.Equal(t, filepath.Base(second.Directory), entries[0].Name())

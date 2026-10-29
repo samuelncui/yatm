@@ -60,7 +60,7 @@ type legacyLibraryDecoders struct {
 
 func (l *Library) importLegacyJSON(ctx context.Context, r io.Reader, dryRun bool) (rerr error) {
 	// Resolve arbitrary legacy array order in a disposable indexed staging database, before replacement.
-	temporary, err := resource.OpenTemporaryDB("", "yatm-legacy-import-")
+	temporary, err := resource.OpenTemporaryDB(l.work, "yatm-legacy-import-")
 	if err != nil {
 		return err
 	}

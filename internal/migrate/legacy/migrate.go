@@ -206,6 +206,7 @@ func PrepareWithLTFSIndex(
 		}
 		counts, warnings, err := prepareJob(
 			ctx,
+			workRoot,
 			db,
 			"positions_staging",
 			restorePositionsRequired,
@@ -263,6 +264,7 @@ const (
 
 func prepareJob(
 	ctx context.Context,
+	workRoot string,
 	libraryDB *gorm.DB,
 	positionsTable string,
 	positionPolicy restorePositionPolicy,
@@ -271,7 +273,7 @@ func prepareJob(
 	legacyWorkRoot string,
 	job *legacyJob,
 	restoreRoot ...string,
-) (itemCounts, []string, error) {
+) (_ itemCounts, _ []string, returnErr error) {
 	// Reject an undecodable legacy row before creating staging artifacts.
 	if job.State == nil {
 		return itemCounts{}, nil, fmt.Errorf("JobState is missing")
@@ -312,13 +314,13 @@ func prepareJob(
 		var transitionalDB *gorm.DB
 		var table string
 		if state.Archive != nil && len(state.Archive.Sources) == 0 {
-			var cleanup func()
-			transitionalDB, table, cleanup, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files")
+			var cleanup func() error
+			transitionalDB, table, cleanup, err = openTransitionalJobDB(workRoot, legacyJobsRoot, job.ID, "files")
 			if err != nil {
 				return itemCounts{}, nil, err
 			}
 			if transitionalDB != nil {
-				defer cleanup()
+				defer func() { returnErr = errors.Join(returnErr, cleanup()) }()
 			}
 		}
 		count, err := migrateArchive(ctx, jobDB, transitionalDB, table, job, state.Archive)
@@ -345,13 +347,13 @@ func prepareJob(
 		var transitionalDB *gorm.DB
 		var table string
 		if state.Restore != nil && len(state.Restore.Tapes) == 0 {
-			var cleanup func()
-			transitionalDB, table, cleanup, err = openTransitionalJobDB(legacyJobsRoot, job.ID, "files", "restore_files")
+			var cleanup func() error
+			transitionalDB, table, cleanup, err = openTransitionalJobDB(workRoot, legacyJobsRoot, job.ID, "files", "restore_files")
 			if err != nil {
 				return itemCounts{}, nil, err
 			}
 			if transitionalDB != nil {
-				defer cleanup()
+				defer func() { returnErr = errors.Join(returnErr, cleanup()) }()
 			}
 		}
 		count, err := migrateRestore(
@@ -385,12 +387,12 @@ func prepareJob(
 	}
 }
 
-func openTransitionalJobDB(root string, jobID int64, tables ...string) (*gorm.DB, string, func(), error) {
+func openTransitionalJobDB(work, root string, jobID int64, tables ...string) (*gorm.DB, string, func() error, error) {
 	filename := filepath.Join(root, fmt.Sprint(jobID), "state.db")
 	if !exists(filename) {
 		return nil, "", nil, nil
 	}
-	db, cleanup, err := openSnapshotCatalog(filename)
+	db, cleanup, err := openSnapshotCatalog(work, filename)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("open transitional Job DB failed, %w", err)
 	}
@@ -399,8 +401,7 @@ func openTransitionalJobDB(root string, jobID int64, tables ...string) (*gorm.DB
 			return db, table, cleanup, nil
 		}
 	}
-	cleanup()
-	return nil, "", nil, nil
+	return nil, "", nil, cleanup()
 }
 
 func migrateLegacyJobLog(workRoot, jobDir string, jobID int64) ([]int64, error) {
@@ -1346,7 +1347,7 @@ func Commit(ctx context.Context, db *gorm.DB, workRoot string) error {
 	return err
 }
 
-func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, backup Backup) error {
+func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, backup Backup) (returnErr error) {
 	// Repair operates only on a recognized published installation.
 	if _, err := dataformat.CheckCatalog(db); err != nil {
 		return err
@@ -1364,11 +1365,11 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 	}
 
 	// Read the complete legacy backup without relying on active migration tables.
-	source, cleanup, err := backup.open()
+	source, cleanup, err := backup.open(workRoot)
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer func() { returnErr = errors.Join(returnErr, cleanup()) }()
 	var job legacyJob
 	result := source.WithContext(ctx).First(&job, jobID)
 	if result.Error != nil {
@@ -1419,6 +1420,7 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 	}
 	counts, _, err := prepareJob(
 		ctx,
+		workRoot,
 		source,
 		"positions_staging",
 		restorePositionsOptional,
@@ -1451,11 +1453,11 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 	}
 
 	// Publish the repaired runner state through the same revision allocator used by offline activation.
-	stateDB, cleanupState, err := openSnapshotCatalog(filepath.Join(activeDir, "state.db"))
+	stateDB, cleanupState, err := openSnapshotCatalog(workRoot, filepath.Join(activeDir, "state.db"))
 	if err != nil {
 		return err
 	}
-	defer cleanupState()
+	defer func() { returnErr = errors.Join(returnErr, cleanupState()) }()
 	var record executor.JobRecord
 	if err := stateDB.First(&record, 1).Error; err != nil {
 		return err

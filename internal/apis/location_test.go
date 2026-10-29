@@ -16,7 +16,7 @@ import (
 )
 
 func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
-	// Use an isolated permitted namespace with explicit runtime resources below it.
+	// Use an isolated permitted namespace with separate runtime resources.
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
@@ -27,8 +27,10 @@ func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
 		Validate: preview.ValidateSettings,
 	})
 	l := library.NewWithSettings(db, settings)
+	work := t.TempDir()
+	require.NoError(t, l.PrepareTemporary(work))
 	require.NoError(t, l.AutoMigrate())
-	exe := executor.New(db, l, nil, executor.Paths{Access: []executor.AccessRange{{Root: root}}, Work: filepath.Join(root, "work")}, executor.Scripts{}, nil)
+	exe := executor.New(db, l, nil, executor.Paths{Access: []executor.AccessRange{{Root: root}}, Work: work}, executor.Scripts{}, nil)
 	api := New(l, exe)
 	return api, &locationService{api: api}, root
 }

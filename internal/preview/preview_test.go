@@ -56,7 +56,7 @@ func TestGenerateStoresAndReusesContentAddressedBundle(t *testing.T) {
 		Generators: []GeneratorConfig{{
 			Kind: "test-fixture", Extensions: []string{"fixture"}, Options: map[string]any{"ignored": true},
 		}},
-	}, "")
+	}, t.TempDir())
 	require.NoError(t, err)
 	content := []byte("source fixture")
 	sourcePath := filepath.Join(t.TempDir(), "source.fixture")
@@ -117,7 +117,7 @@ func TestGenerateForceReplacesExistingBundles(t *testing.T) {
 	hash := sha256.Sum256(content)
 	initial, err := New(Config{Root: root, Generators: []GeneratorConfig{{
 		Kind: "test-fixture", Extensions: []string{"fixture"}, Options: map[string]any{"marker": "initial"},
-	}}}, "")
+	}}}, t.TempDir())
 	require.NoError(t, err)
 	signature, err := initial.Generate(
 		context.Background(), sourcePath, hash[:], info.Size(), info.ModTime().UnixNano(), false, nil,
@@ -127,7 +127,7 @@ func TestGenerateForceReplacesExistingBundles(t *testing.T) {
 	// Missing-only generation keeps an existing bundle even when generator settings differ.
 	updated, err := New(Config{Root: root, Generators: []GeneratorConfig{{
 		Kind: "test-fixture", Extensions: []string{"fixture"}, Options: map[string]any{"marker": "updated"},
-	}}}, "")
+	}}}, t.TempDir())
 	require.NoError(t, err)
 	_, err = updated.Generate(
 		context.Background(), sourcePath, hash[:], info.Size(), info.ModTime().UnixNano(), false, nil,
@@ -156,7 +156,7 @@ func TestGenerateForceReplacesExistingBundles(t *testing.T) {
 	// Replace the same content bundle when its configured generator changes.
 	next, err := New(Config{Root: root, Generators: []GeneratorConfig{{
 		Kind: "test-fixture-next", Extensions: []string{"fixture"}, Options: map[string]any{"marker": "updated"},
-	}}}, "")
+	}}}, t.TempDir())
 	require.NoError(t, err)
 	_, err = next.Generate(
 		context.Background(), sourcePath, hash[:], info.Size(), info.ModTime().UnixNano(), true, nil,
@@ -179,7 +179,7 @@ func TestGenerateForceReplacesExistingBundles(t *testing.T) {
 }
 
 func TestManifestRejectsInvalidSignature(t *testing.T) {
-	manager, err := New(Config{Root: t.TempDir()}, "")
+	manager, err := New(Config{Root: t.TempDir()}, t.TempDir())
 	require.NoError(t, err)
 	_, err = manager.Manifest([]byte{1})
 	require.ErrorContains(t, err, "invalid file signature length")

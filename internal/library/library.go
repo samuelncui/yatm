@@ -15,10 +15,10 @@ const (
 )
 
 type Library struct {
-	db                *gorm.DB
-	reader            *gorm.DB
-	settings          *settingspkg.Module
-	identicalTempRoot string
+	db       *gorm.DB
+	reader   *gorm.DB
+	settings *settingspkg.Module
+	work     string
 }
 
 func New(db *gorm.DB) *Library {

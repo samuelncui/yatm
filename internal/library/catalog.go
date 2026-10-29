@@ -141,7 +141,7 @@ func (l *Library) ImportArchivePositionSelection(ctx context.Context, ids []int6
 
 	// Reports leave the catalog untouched; real admission rolls back on any failed candidate.
 	if dryRun {
-		stage, closeStage, err := openArchiveImportStage(ctx)
+		stage, closeStage, err := l.openArchiveImportStage(ctx)
 		if err != nil {
 			return nil, err
 		}

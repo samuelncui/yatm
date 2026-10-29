@@ -43,7 +43,7 @@ func TestReadTapeBarcodeValidatesScriptResult(t *testing.T) {
 			script := writeExecutorTestScript(t, "read-info", fmt.Sprintf(
 				"printf '%%s\\n' %s > \"$OUT\"", strconv.Quote(string(data)),
 			))
-			exe := New(nil, nil, nil, Paths{}, Scripts{ReadInfo: script}, nil)
+			exe := New(nil, nil, nil, Paths{Work: t.TempDir()}, Scripts{ReadInfo: script}, nil)
 
 			// Normalize only the explicitly reported identity; malformed reports stay errors.
 			barcode, err := exe.ReadTapeBarcode(context.Background(), "/dev/nst0")
@@ -72,7 +72,7 @@ func TestHistoricalReadInfoScriptWorksUnchanged(t *testing.T) {
 	wrapper := writeExecutorTestScript(t, "legacy-probe", fmt.Sprintf(
 		"cd %q\nexport PATH=%q:$PATH\nexec ./readinfo", root, root,
 	))
-	exe := New(nil, nil, nil, Paths{}, Scripts{ReadInfo: wrapper}, nil)
+	exe := New(nil, nil, nil, Paths{Work: t.TempDir()}, Scripts{ReadInfo: wrapper}, nil)
 	barcode, err := exe.ReadTapeBarcode(context.Background(), "/dev/nst0")
 	require.NoError(t, err)
 	require.Equal(t, "ABC001", barcode)
@@ -260,7 +260,7 @@ func TestTapeSessionsRejectUnverifiedIdentityBeforeMutation(t *testing.T) {
 				readInfo = writeExecutorTestScript(t, "failed-read-info", "exit 1")
 			}
 			mutation := writeExecutorTestScript(t, "mutate", fmt.Sprintf(": > %s", strconv.Quote(mutationMarker)))
-			exe := New(nil, nil, []string{"/dev/nst0"}, Paths{}, Scripts{
+			exe := New(nil, nil, []string{"/dev/nst0"}, Paths{Work: t.TempDir()}, Scripts{
 				ReadInfo: readInfo, Encrypt: mutation, Mkfs: mutation, Mount: mutation,
 			}, nil)
 			require.NoError(t, exe.beginAttempt(1, func(error) {}))
