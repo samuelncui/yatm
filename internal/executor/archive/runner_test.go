@@ -66,11 +66,11 @@ func (capacityBoundarySession) Capabilities() mediapkg.Capabilities { return med
 
 func (capacityBoundarySession) Media() *mediapkg.Descriptor { return new(mediapkg.Descriptor) }
 
-func (capacityBoundarySession) TargetPath(string, int64) (string, error) {
-	return "", mediapkg.ErrCapacityBoundary
+func (capacityBoundarySession) Target(string, int64) (mediapkg.TargetRef, error) {
+	return mediapkg.TargetRef{}, mediapkg.ErrCapacityBoundary
 }
 
-func (s capacityBoundarySession) Finalize(context.Context, bool) (*mediapkg.WriteResult, error) {
+func (s capacityBoundarySession) Finalize(context.Context, error) (*mediapkg.WriteResult, error) {
 	return &mediapkg.WriteResult{Media: s.Media()}, nil
 }
 
@@ -80,15 +80,15 @@ func (*capacityAfterOneSession) Capabilities() mediapkg.Capabilities {
 
 func (*capacityAfterOneSession) Media() *mediapkg.Descriptor { return new(mediapkg.Descriptor) }
 
-func (s *capacityAfterOneSession) TargetPath(path string, _ int64) (string, error) {
+func (s *capacityAfterOneSession) Target(path string, _ int64) (mediapkg.TargetRef, error) {
 	s.requests++
 	if s.requests > 1 {
-		return "", mediapkg.ErrCapacityBoundary
+		return mediapkg.TargetRef{}, mediapkg.ErrCapacityBoundary
 	}
-	return path, nil
+	return mediapkg.TargetRef{Path: path}, nil
 }
 
-func (s *capacityAfterOneSession) Finalize(context.Context, bool) (*mediapkg.WriteResult, error) {
+func (s *capacityAfterOneSession) Finalize(context.Context, error) (*mediapkg.WriteResult, error) {
 	return &mediapkg.WriteResult{Media: s.Media()}, nil
 }
 
@@ -496,7 +496,7 @@ func TestStageCopyResultRecordsPathOnlyAfterSuccess(t *testing.T) {
 	runner := value.(*jobArchiveRunner)
 	item := new(Item)
 	require.NoError(t, runner.db.First(item).Error)
-	target := &copyItem{runner: runner, item: item, mediaTarget: "target"}
+	target := &copyItem{runner: runner, item: item, mediaTarget: mediapkg.TargetRef{Path: "target"}}
 
 	// Normalization must retain the original write and cleanup causes without staging a result.
 	writeErr := errors.New("write failed")
@@ -598,7 +598,7 @@ func TestArchiveReporterPersistsTheBatchItReceives(t *testing.T) {
 		Data: &entity.ArchiveManifestFile{SourcePath: "/source/file.txt"},
 	})
 	reporter := startTestReporter(t, runner)
-	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: "file.txt"}
+	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: mediapkg.TargetRef{Path: "file.txt"}}
 
 	require.NoError(t, reporter.onResults([]acp.Result{{
 		Job: target, Size: 4, Mode: 0o644, WriteTime: time.Unix(0, 1),
@@ -624,7 +624,7 @@ func TestArchiveReporterReportsAFailedFlush(t *testing.T) {
 	reporter.store = func(context.Context, []itemOutcome) error {
 		return failure
 	}
-	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: "file.txt"}
+	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: mediapkg.TargetRef{Path: "file.txt"}}
 
 	// The asynchronous write may fail before Enqueue returns. Either observation must retain
 	// the same terminal failure, rather than depend on the scheduler.
@@ -677,21 +677,21 @@ func (s *recordingSession) Media() *mediapkg.Descriptor {
 	return &mediapkg.Descriptor{ID: 1, Kind: entity.MediaKind_MEDIA_KIND_VOLUME, Identity: "volume-1", Name: "fixture"}
 }
 
-func (s *recordingSession) TargetPath(relative string, _ int64) (string, error) {
+func (s *recordingSession) Target(relative string, _ int64) (mediapkg.TargetRef, error) {
 	item := new(Item)
 	if err := s.db.Where("status = ? AND target_path = ?", entity.CopyStatus_COPY_STATUS_PENDING, relative).First(item).Error; err != nil {
-		return "", err
+		return mediapkg.TargetRef{}, err
 	}
 	if item.Size > 16 {
-		return "", mediapkg.ErrCapacityBoundary
+		return mediapkg.TargetRef{}, mediapkg.ErrCapacityBoundary
 	}
 	s.mutex.Lock()
 	s.target = append(s.target, relative)
 	s.mutex.Unlock()
-	return filepath.Join(s.root, filepath.FromSlash(relative)), nil
+	return mediapkg.TargetRef{Path: filepath.Join(s.root, filepath.FromSlash(relative))}, nil
 }
 
-func (s *recordingSession) Finalize(context.Context, bool) (*mediapkg.WriteResult, error) {
+func (s *recordingSession) Finalize(context.Context, error) (*mediapkg.WriteResult, error) {
 	return &mediapkg.WriteResult{Media: s.Media()}, nil
 }
 
@@ -767,7 +767,7 @@ func TestArchiveResultsArePersistedByTheSharedWriter(t *testing.T) {
 	counting := &countingLogger{Interface: runner.db.Logger}
 	runner.db.Logger = counting
 	reporter := startTestReporter(t, runner)
-	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: "file.txt"}
+	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: mediapkg.TargetRef{Path: "file.txt"}}
 	baseline := counting.count()
 
 	require.NoError(t, reporter.onResults([]acp.Result{{

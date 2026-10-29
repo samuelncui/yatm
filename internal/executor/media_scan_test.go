@@ -71,5 +71,5 @@ func TestTapeReadFinalizeDoesNotRequireASecondInventoryCapture(t *testing.T) {
 
 	// Finalization consumes no second inventory or cartridge probe after the current mount's read.
 	require.NoError(t, session.readInventory(context.Background(), nil))
-	require.NoError(t, session.Finalize(context.Background()))
+	require.NoError(t, session.Finalize(context.Background(), nil))
 }

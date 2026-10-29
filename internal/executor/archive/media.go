@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -53,6 +54,11 @@ func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.Arch
 		return err
 	}
 
+	return a.archivePreparedMedia(ctx, target, session)
+}
+
+// archivePreparedMedia owns content execution, finalization and publication for one prepared Session.
+func (a *jobArchiveRunner) archivePreparedMedia(ctx context.Context, target *entity.ArchiveMediaTarget, session mediapkg.WriteSession) error {
 	// Track this Media attempt independently until a Library commit publishes verified files. The
 	// attempt identity is fixed here and shared by the sampling work path and the request path.
 	progress := a.getProgress()
@@ -78,8 +84,11 @@ func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.Arch
 
 	// Let the Backend establish the physical result without inheriting the operation deadline.
 	cleanupCtx := context.WithoutCancel(ctx)
+	result, finalizeErr := session.Finalize(cleanupCtx, copyErr)
+	if result != nil && result.Stop != nil && !errors.Is(copyErr, result.Stop) {
+		copyErr = errors.Join(copyErr, result.Stop)
+	}
 	noSpaceErr := targetNoSpaceError(copyErr)
-	result, finalizeErr := session.Finalize(cleanupCtx, noSpaceErr != nil)
 	if errors.Is(finalizeErr, mediapkg.ErrFinalizeUnusable) || result == nil {
 		resetErr := a.resetStagedItems(cleanupCtx)
 		if result == nil && finalizeErr == nil {
@@ -94,12 +103,23 @@ func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.Arch
 	terminationErr := errors.Join(copyErr, noSpaceErr, finalizeErr, reconcileErr)
 
 	// Publish only the candidates retained by a usable finalization result.
-	stored, bytes, files, commitErr := a.commitStagedMedia(cleanupCtx, result.Media)
-	if commitErr == nil && files > 0 {
-		progress.UpdateSessionCurrent(bytes, files)
-		progress.CommitSession()
-		committed = true
-		a.logArchiveMediaNoSpaceCheckpoint(cleanupCtx, stored.ID, files, bytes, terminationErr)
+	var stored *library.Media
+	var bytes, files int64
+	var commitErr error
+	formattedTar := target.GetTape().GetMode() == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT &&
+		result.Media.Profile.GetTape().GetFormat() == library.TapeFormatTarPAXV1 && finalizeErr == nil
+	if formattedTar {
+		stored, bytes, files, commitErr = a.commitFormattedTarMedia(cleanupCtx, result.Media)
+	} else {
+		stored, bytes, files, commitErr = a.commitStagedMedia(cleanupCtx, result.Media)
+	}
+	if commitErr == nil && (files > 0 || formattedTar) {
+		if files > 0 {
+			progress.UpdateSessionCurrent(bytes, files)
+			progress.CommitSession()
+			committed = true
+			a.logArchiveMediaNoSpaceCheckpoint(cleanupCtx, stored.ID, files, bytes, terminationErr)
+		}
 		if err := a.writeMediaReport(cleanupCtx, stored, files, bytes, terminationErr); err != nil {
 			a.logger.WithContext(cleanupCtx).WithError(err).Warnf(
 				"write Archive report failed, media_id=%d", stored.ID,
@@ -234,12 +254,15 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 
 	// A result no durable row can express does not stop the feed, so the attempt reports it here;
 	// a failed staging write is the writer's terminal error and is reported the same way.
-	writeErr := reporter.Close()
-	if copyErr == nil {
-		copyErr = writeErr
-	}
-	if copyErr == nil {
-		copyErr = reporter.err()
+	for _, err := range []error{reporter.Close(), reporter.err()} {
+		if err == nil || errors.Is(copyErr, err) {
+			continue
+		}
+		if copyErr == nil {
+			copyErr = err
+		} else {
+			copyErr = multierror.Append(copyErr, err).ErrorOrNil()
+		}
 	}
 	if copyErr == nil {
 		return nil
@@ -361,4 +384,23 @@ func (a *jobArchiveRunner) writeMediaReport(
 		return err
 	}
 	return a.exe.WriteReport(ctx, a.job.ID, media.Identity, data)
+}
+
+// commitFormattedTarMedia also publishes a successfully initialized cartridge with no complete members.
+func (a *jobArchiveRunner) commitFormattedTarMedia(ctx context.Context, descriptor *mediapkg.Descriptor) (*library.Media, int64, int64, error) {
+	// Ordinary completed-member publication keeps its existing Job checkpoint behavior.
+	stored, bytes, files, err := a.commitStagedMedia(ctx, descriptor)
+	if err != nil || files != 0 {
+		return stored, bytes, files, err
+	}
+
+	// A usable FORMAT result proves the empty identity; no failed finalization reaches this branch.
+	stored, err = a.exe.Lib().CommitMedia(ctx, stored, func(context.Context, func(*library.MediaFile) error) error { return nil })
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("commit empty tar Media failed, %w", err)
+	}
+	if err := a.exe.AddJobProperties(ctx, a.job.ID, executor.JobProperty{Key: executor.JobPropertyMedia, Value: stored.ID}); err != nil {
+		return nil, 0, 0, err
+	}
+	return stored, 0, 0, nil
 }

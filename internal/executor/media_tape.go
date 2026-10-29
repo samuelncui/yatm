@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
@@ -25,6 +27,7 @@ type tapeReadSession struct {
 	tapeDir      string
 	recycleKey   func()
 	indexPath    string
+	readOrder    *ltfsSessionReadOrder
 }
 
 func (b *mediaBackend) newTapeReadSession(
@@ -94,41 +97,58 @@ func (b *mediaBackend) newTapeReadSession(
 	if err := b.configureTape(ctx, device, keyPath, barcode, stored.Name, tapeDir); err != nil {
 		return nil, err
 	}
+	observation, err := b.observeLTFSReadOrder(ctx, device, profile)
+	if err != nil {
+		return nil, err
+	}
 	mountPoint, err := b.mountTape(ctx, device, tapeDir)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if result == nil {
+			returnErr = errors.Join(returnErr, b.unmountTape(context.WithoutCancel(ctx), device, mountPoint, tapeDir))
+		}
+	}()
 
 	// The returned Session now owns the mount and key until Finalize.
-	return &tapeReadSession{
+	session := &tapeReadSession{
 		backend: b, media: describeMedia(stored), capabilities: capabilities, mountPoint: mountPoint,
 		device: device, tapeDir: tapeDir, recycleKey: recycleKey, indexPath: indexPath,
-	}, nil
+	}
+	if err := session.prepareReadOrder(ctx, stored, observation); err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
 func (s *tapeReadSession) Capabilities() mediapkg.Capabilities { return s.capabilities }
 
 func (s *tapeReadSession) Media() *mediapkg.Descriptor { return s.media }
 
-func (s *tapeReadSession) SourcePath(relative string) (string, error) {
-	return mediapkg.ResolveSourcePath(s.mountPoint, relative)
+func (s *tapeReadSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
+	filename, err := mediapkg.ResolveSourcePath(s.mountPoint, request.Path)
+	return mediapkg.SourceRef{Path: filename}, err
 }
 
-func (s *tapeReadSession) Finalize(ctx context.Context) error {
+func (s *tapeReadSession) Finalize(ctx context.Context, _ error) error {
 	// Identity was validated before mounting and the attempt still owns the drive.
 	// Re-running ReadInfo would issue mt load while LTFS is using that cartridge.
 	defer s.recycleKey()
+	if s.readOrder != nil {
+		s.readOrder.valid.Store(false)
+	}
 	return s.backend.unmountTape(ctx, s.device, s.mountPoint, s.tapeDir)
 }
 
 func (s *tapeReadSession) WalkInventory(ctx context.Context, yield func(*mediapkg.InventoryEntry) error) error {
 	// The mount-time LTFS index supplies authoritative paths and physical extents; live stat supplies read facts.
 	err := s.readInventory(ctx, func(entry *mediapkg.LTFSIndexEntry) error {
-		filename, err := s.SourcePath(entry.Path)
+		source, err := s.Source(mediapkg.ReadRequest{Path: entry.Path, Storage: entry.Storage})
 		if err != nil {
 			return err
 		}
-		info, err := os.Lstat(filename)
+		info, err := os.Lstat(source.Path)
 		if err != nil {
 			return err
 		}
@@ -315,15 +335,18 @@ func (s *tapeWriteSession) Capabilities() mediapkg.Capabilities { return s.capab
 
 func (s *tapeWriteSession) Media() *mediapkg.Descriptor { return s.media }
 
-func (s *tapeWriteSession) TargetPath(relative string, _ int64) (string, error) {
+func (s *tapeWriteSession) Target(relative string, _ int64) (mediapkg.TargetRef, error) {
+	// Reject unsafe archive paths before applying the physical prefix.
 	if err := entity.ValidateRelativePath(relative); err != nil {
-		return "", err
+		return mediapkg.TargetRef{}, err
 	}
+	// Expose the native target separately from the manifest-relative identifier.
 	mediaPath := filepath.ToSlash(filepath.Join(s.pathPrefix, relative))
-	return mediapkg.ResolveTargetPath(s.mountPoint, mediaPath)
+	filename, err := mediapkg.ResolveTargetPath(s.mountPoint, mediaPath)
+	return mediapkg.TargetRef{Path: filename}, err
 }
 
-func (s *tapeWriteSession) Finalize(ctx context.Context, targetFull bool) (*mediapkg.WriteResult, error) {
+func (s *tapeWriteSession) Finalize(ctx context.Context, cause error) (*mediapkg.WriteResult, error) {
 	// Establish the physical durability boundary before consulting any captured Index.
 	defer s.recycleKey()
 	if err := s.backend.unmountTape(ctx, s.device, s.mountPoint, s.tapeDir); err != nil {
@@ -336,7 +359,8 @@ func (s *tapeWriteSession) Finalize(ctx context.Context, targetFull bool) (*medi
 		return nil, errors.Join(mediapkg.ErrFinalizeUnusable, err)
 	}
 	return &mediapkg.WriteResult{
-		Media: s.media, PathPrefix: s.pathPrefix, VerifiedPrefix: targetFull, Inventory: inventory,
+		Media: s.media, PathPrefix: s.pathPrefix, VerifiedPrefix: errors.Is(cause, acp.ErrTargetNoSpace) || errors.Is(cause, syscall.ENOSPC) ||
+			errors.Is(cause, mediapkg.ErrTargetNoSpace) || errors.Is(cause, mediapkg.ErrCapacityBoundary), Inventory: inventory,
 	}, nil
 }
 
@@ -381,7 +405,7 @@ func (s *tapeWriteSession) finalInventory(ctx context.Context) (result mediapkg.
 	}
 
 	// Each consumption owns its own handle, including parser and callback failures.
-	return func(ctx context.Context, yield func(*mediapkg.LTFSIndexEntry) error) (returnErr error) {
+	return func(ctx context.Context, yield func(*mediapkg.CompletedFile) error) (returnErr error) {
 		file, err := os.Open(s.indexPath)
 		if err != nil {
 			return fmt.Errorf("open final LTFS index failed, barcode=%q, %w", s.barcode, err)
@@ -391,7 +415,9 @@ func (s *tapeWriteSession) finalInventory(ctx context.Context) (result mediapkg.
 				returnErr = errors.Join(returnErr, fmt.Errorf("close final LTFS index failed, barcode=%q, %w", s.barcode, err))
 			}
 		}()
-		return mediapkg.ParseLTFSIndex(ctx, file, yield)
+		return mediapkg.ParseLTFSIndex(ctx, file, func(entry *mediapkg.LTFSIndexEntry) error {
+			return yield(&mediapkg.CompletedFile{Path: entry.Path, Size: entry.Size, Storage: entry.Storage})
+		})
 	}, nil
 }
 

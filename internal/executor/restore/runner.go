@@ -35,11 +35,13 @@ type jobRestoreRunner struct {
 }
 
 func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (executor.Runner, error) {
+	// Open this Job's diagnostic writer before constructing its runner.
 	logFile, err := exe.NewLogWriter(ctx, job.ID)
 	if err != nil {
 		return nil, fmt.Errorf("open restore log failed, %w", err)
 	}
 
+	// Bind diagnostics while opening the existing bundle without migrating its schema.
 	logger := logrus.New()
 	logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
 	db, err := exe.NewStateDB(ctx, job.ID)
@@ -47,6 +49,16 @@ func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (
 		_ = logFile.Close()
 		return nil, fmt.Errorf("open restore Job DB failed, %w", err)
 	}
+	// Existing Alpha bundles must carry the current candidate schema; opening never migrates them.
+	if !db.Migrator().HasColumn(&Copy{}, "storage_metadata") {
+		if sqlDB, dbErr := db.DB(); dbErr == nil {
+			_ = sqlDB.Close()
+		}
+		_ = logFile.Close()
+		return nil, fmt.Errorf("unsupported Restore Job schema: copies.storage_metadata is missing")
+	}
+
+	// Recover the frozen creation options only after admitting the current candidate schema.
 	var config Config
 	if err := db.WithContext(ctx).First(&config, 1).Error; err != nil {
 		if sqlDB, dbErr := db.DB(); dbErr == nil {
@@ -64,7 +76,6 @@ func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (
 	if config.LegacyRoot != "" && runner.destination == nil {
 		runner.destination = &entity.RestoreDestination{RootPath: config.LegacyRoot, ExecutorId: "local"}
 	}
-
 	return runner, nil
 }
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -41,10 +42,10 @@ func TestScanStageSnapshotUsesOnlyActiveScope(t *testing.T) {
 
 type delayedTimingSession struct{ checkSession }
 
-func (s *delayedTimingSession) SourcePath(name string) (string, error) {
+func (s *delayedTimingSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
 	// Simulate source preparation before ACP can emit the first byte-progress event.
 	time.Sleep(30 * time.Millisecond)
-	return s.checkSession.SourcePath(name)
+	return s.checkSession.Source(request)
 }
 
 func TestScanReadTimingStartsBeforeFirstACPResult(t *testing.T) {

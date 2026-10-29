@@ -3,24 +3,32 @@ package restore
 import (
 	"context"
 	"fmt"
+
+	"github.com/samuelncui/yatm/entity"
+	"google.golang.org/protobuf/proto"
 )
 
 func newCopyCandidate(copy *Copy, file *File) *copyCandidate {
+	var metadata *entity.StorageMetadata
+	if copy.StorageMetadata != nil {
+		metadata = proto.Clone(copy.StorageMetadata).(*entity.StorageMetadata)
+	}
 	return &copyCandidate{
-		ID:            copy.ID,
-		ItemID:        copy.ItemID,
-		MediaID:       copy.MediaID,
-		MediaPath:     copy.MediaPath,
-		StorageOrder:  copy.StorageOrder,
-		PositionID:    copy.PositionID,
-		FileID:        file.FileID,
-		FileVersionID: file.FileVersionID,
-		Signature:     file.Signature,
-		Hash:          file.Hash,
-		Size:          file.Size,
-		Mode:          file.Mode,
-		MtimeNS:       file.MtimeNS,
-		TargetPath:    file.Path,
+		ID:              copy.ID,
+		ItemID:          copy.ItemID,
+		MediaID:         copy.MediaID,
+		MediaPath:       copy.MediaPath,
+		StorageOrder:    append([]byte{}, copy.StorageOrder...),
+		StorageMetadata: metadata,
+		PositionID:      copy.PositionID,
+		FileID:          file.FileID,
+		FileVersionID:   file.FileVersionID,
+		Signature:       file.Signature,
+		Hash:            file.Hash,
+		Size:            file.Size,
+		Mode:            file.Mode,
+		MtimeNS:         file.MtimeNS,
+		TargetPath:      file.Path,
 	}
 }
 

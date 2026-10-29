@@ -56,7 +56,7 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 	// A prepared source supplies enumeration and physical cleanup, not a separate processing flow.
 	defer func() {
 		if session != nil {
-			returnErr = errors.Join(returnErr, session.Finalize(context.WithoutCancel(ctx)))
+			returnErr = errors.Join(returnErr, session.Finalize(context.WithoutCancel(ctx), returnErr))
 		}
 	}()
 	r.setPhase(entity.JobPhase_JOB_PHASE_INDEXING)
@@ -88,7 +88,7 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 	// Physical identity finalization gates publication of positive and negative observations alike.
 	if session != nil {
 		r.setPhase(entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA)
-		err := session.Finalize(context.WithoutCancel(ctx))
+		err := session.Finalize(context.WithoutCancel(ctx), readErr)
 		session = nil
 		if err != nil {
 			return errors.Join(readErr, err)
@@ -113,8 +113,7 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 			"preview_error": ""}).Error; err != nil {
 			return err
 		}
-		// Indexing resolves each frozen entry's source path once for this attempt; the read stage
-		// never re-resolves it.
+		// Indexing retains native paths; content endpoints are bound only while feeding ACP.
 		return r.resolveMediaSources(ctx, session)
 	}
 	physical, ok := session.(mediapkg.InventorySession)
@@ -140,10 +139,14 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 		if row.PositionID > 0 {
 			row.Change = entity.ScanChange_SCAN_CHANGE_CHANGED
 		}
-		row.SourcePath, err = session.SourcePath(file.Path)
+		source, err := session.Source(mediapkg.ReadRequest{Path: file.Path, Storage: file.Storage})
+		if err == nil {
+			err = source.Validate()
+		}
 		if err != nil {
 			return err
 		}
+		row.SourcePath = source.Path
 		row.NeedsHash = config.Spec.SignaturePolicy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY
 		// A forced read changes evidence acquisition, not whether equal content is an inventory change.
 		p := row.Expected
@@ -156,7 +159,7 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 				row.SHA256, row.Signature = p.Sha256, p.Signature
 				row.NeedsHash = len(row.SHA256) != 32 && row.NeedsHash
 			}
-			if session.Capabilities().Read != mediapkg.AccessSequential {
+			if source.Path != "" && session.Capabilities().Read != mediapkg.AccessSequential {
 				cached, valid, err := reusableSignature(row.SourcePath)
 				if err != nil {
 					return err
@@ -193,9 +196,12 @@ func (r *runner) resolveMediaSources(ctx context.Context, session mediapkg.ReadS
 		}
 		for _, row := range rows {
 			after = row.ID
-			filename, err := session.SourcePath(row.Path)
+			source, err := session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
 			if err == nil {
-				row.SourcePath = filename
+				err = source.Validate()
+			}
+			if err == nil {
+				row.SourcePath = source.Path
 				continue
 			}
 			if isDeviceReadError(err) {

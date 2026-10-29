@@ -297,10 +297,12 @@ func (s *checkSession) Media() *mediapkg.Descriptor {
 		WrittenBytes:  s.media.WrittenBytes,
 	}
 }
-func (s *checkSession) SourcePath(name string) (string, error) {
-	return mediapkg.ResolveSourcePath(s.root, name)
+func (s *checkSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
+	name := request.Path
+	filename, err := mediapkg.ResolveSourcePath(s.root, name)
+	return mediapkg.SourceRef{Path: filename}, err
 }
-func (s *checkSession) Finalize(ctx context.Context) error { return s.finalize(ctx) }
+func (s *checkSession) Finalize(ctx context.Context, _ error) error { return s.finalize(ctx) }
 
 func TestVerifyFinalizeFailurePublishesNoHealth(t *testing.T) {
 	// Freeze a good file, then reject the final physical identity after it has been read.

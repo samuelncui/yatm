@@ -199,9 +199,9 @@ type countingSourceSession struct {
 	resolutions int
 }
 
-func (s *countingSourceSession) SourcePath(name string) (string, error) {
+func (s *countingSourceSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
 	s.resolutions++
-	return s.checkSession.SourcePath(name)
+	return s.checkSession.Source(request)
 }
 
 func TestContentFlushPersistsBatchedStatements(t *testing.T) {

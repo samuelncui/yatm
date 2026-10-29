@@ -14,7 +14,6 @@ import (
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -64,16 +63,6 @@ func (r *testRunner) Logger() *logrus.Logger {
 		r.logger = logrus.New()
 	}
 	return r.logger
-}
-
-func init() {
-	register := func(grpc.ServiceRegistrar, *Executor) {}
-	RegisterJobType(entity.JobKind_JOB_KIND_ARCHIVE, func(_ context.Context, exe *Executor, job *Job) (Runner, error) {
-		return &testRunner{exe: exe, job: job}, nil
-	}, register)
-	RegisterJobType(entity.JobKind_JOB_KIND_RESTORE, func(_ context.Context, exe *Executor, job *Job) (Runner, error) {
-		return &testRunner{exe: exe, job: job, indexErr: errors.New("injected index failure")}, nil
-	}, register)
 }
 
 func setupTestExecutor(t *testing.T) *Executor {
@@ -271,6 +260,7 @@ func TestExecutorJobCatalogAndBundle(t *testing.T) {
 }
 
 func TestExecutorAttemptAndDeviceExclusion(t *testing.T) {
+	// Cancellation owns only an active attempt and leaves settlement responsible for release.
 	exe := setupTestExecutor(t)
 	cancelled := false
 	require.NoError(t, exe.beginAttempt(1, func(error) { cancelled = true }))
@@ -280,12 +270,20 @@ func TestExecutorAttemptAndDeviceExclusion(t *testing.T) {
 	require.True(t, cancelled)
 	exe.endAttempt(1)
 
-	require.True(t, exe.OccupyDevice("/dev/nst0"))
-	require.False(t, exe.OccupyDevice("/dev/nst0"))
-	exe.ReleaseDevice("/dev/nst0")
+	// Operator requests hold the configured drive until their captured release runs.
+	release, acquired, err := exe.TryAcquireTapeDevice("/dev/nst0")
+	require.NoError(t, err)
+	require.True(t, acquired)
+	_, acquired, err = exe.TryAcquireTapeDevice("/dev/nst0")
+	require.NoError(t, err)
+	require.False(t, acquired)
+	release()
 	require.Contains(t, exe.ListAvailableDevices(), "/dev/nst0")
+
 	// A drive the operator did not configure is never offered for inspection or leasing.
-	require.False(t, exe.OccupyDevice("/dev/nst9"))
+	_, acquired, err = exe.TryAcquireTapeDevice("/dev/nst9")
+	require.ErrorContains(t, err, "not configured")
+	require.False(t, acquired)
 	require.NotContains(t, exe.ListAvailableDevices(), "/dev/nst9")
 }
 

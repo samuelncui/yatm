@@ -56,19 +56,36 @@ func (e *Executor) resourceHeld(key string) bool {
 }
 
 func (q *resourceQueue) acquire(ctx context.Context, key string, onWait func()) error {
-	// A caller that is already canceled never takes or waits for the resource.
-	if err := ctx.Err(); err != nil {
+	ready, err := q.enqueue(ctx, key)
+	if err != nil {
 		return err
 	}
+	return q.wait(ctx, key, ready, onWait)
+}
+
+// enqueue captures ownership or a FIFO slot before the caller drops its identity lock.
+// A nil ready channel means the resource was acquired without waiting.
+func (q *resourceQueue) enqueue(ctx context.Context, key string) (chan struct{}, error) {
+	// A caller that is already canceled never takes or waits for the resource.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	q.lock.Lock()
+	defer q.lock.Unlock()
 	if _, busy := q.held[key]; !busy {
 		q.held[key] = struct{}{}
-		q.lock.Unlock()
-		return nil
+		return nil, nil
 	}
 	ready := make(chan struct{})
 	q.waiters[key] = append(q.waiters[key], ready)
-	q.lock.Unlock()
+	return ready, nil
+}
+
+func (q *resourceQueue) wait(ctx context.Context, key string, ready chan struct{}, onWait func()) error {
+	// An immediate admission already owns its slot.
+	if ready == nil {
+		return nil
+	}
 
 	// Report the wait outside the queue lock; the caller may publish a waiting phase.
 	if onWait != nil {

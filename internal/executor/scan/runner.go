@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -168,13 +169,28 @@ func (r *runner) openSession(ctx context.Context, config *Config, requested *ent
 	if target == nil {
 		return nil, fmt.Errorf("select a Tape device to scan")
 	}
+	if target.GetTape().GetRefreshPositionMap() && (stored.Kind != entity.MediaKind_MEDIA_KIND_TAPE ||
+		config.MediaProfile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 || config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES) {
+		return nil, fmt.Errorf("position-map refresh requires tar VERIFY_COPIES")
+	}
 	if stored.Kind == entity.MediaKind_MEDIA_KIND_TAPE && target.GetTape() == nil {
 		return nil, fmt.Errorf("Scan requires Tape Media")
 	}
 	if stored.Kind == entity.MediaKind_MEDIA_KIND_VOLUME && target.GetVolume().GetUuid() != stored.Identity {
 		return nil, fmt.Errorf("Scan requires Volume %q", stored.Identity)
 	}
+
+	// Retain the physical selector while rebuilding trusted expectations from the frozen configuration.
 	target = proto.Clone(target).(*entity.ReadMediaTarget)
+	if tape := target.GetTape(); tape != nil {
+		if tape.MediaId != nil && tape.GetMediaId() != stored.ID {
+			return nil, fmt.Errorf("Scan Tape hint differs from frozen Media %d", stored.ID)
+		}
+		tape.Device = strings.TrimSpace(tape.Device)
+		if tape.MediaId != nil && tape.GetMediaId() <= 0 {
+			return nil, fmt.Errorf("Scan Tape Media hint is invalid")
+		}
+	}
 	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, config.MediaIdentity, config.MediaProfile
 	return r.exe.NewMediaBackend(r.job.ID, r.logger, r.mediaWait).NewReadSession(ctx, target)
 }

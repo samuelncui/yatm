@@ -21,15 +21,21 @@ func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequ
 	var inspectedVolume *mediapkg.Volume
 	route := tools.NewActionRouter[*entity.InspectMediaRequest, entity.OneofInspectMediaRequest](
 		tools.ActionMethod(func(ctx context.Context, target *entity.InspectMediaTapeTarget) error {
+			// Validate the script-facing name and reserve its captured drive resource.
 			device := strings.TrimSpace(target.Device)
 			if device == "" {
 				return fmt.Errorf("inspect Tape device is empty")
 			}
-			if !s.api.exe.OccupyDevice(device) {
+			release, acquired, err := s.api.exe.TryAcquireTapeDevice(device)
+			if err != nil {
+				return err
+			}
+			if !acquired {
 				return fmt.Errorf("inspect Tape device is busy, device=%q", device)
 			}
-			defer s.api.exe.ReleaseDevice(device)
+			defer release()
 
+			// Invoke the configured cartridge identity adapter only while holding that lease.
 			barcode, err := s.api.exe.ReadTapeBarcode(ctx, device)
 			if err != nil {
 				return fmt.Errorf("inspect Tape identity failed, %w", err)

@@ -2,6 +2,7 @@ package restore
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/samuelncui/yatm/internal/executor"
@@ -27,8 +28,17 @@ func TestRestoreSchemaCreatesOnlyPlannedTables(t *testing.T) {
 	var columns []string
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('copies') ORDER BY cid").Scan(&columns).Error)
 	require.Equal(t, []string{
-		"id", "item_id", "status", "media_id", "media_path", "storage_order", "media_identity", "media_profile",
+		"id", "item_id", "status", "media_id", "media_path", "storage_order", "storage_metadata", "media_identity", "media_profile",
 		"position_id", "health", "health_checked_at_ns", "health_published",
 	}, columns)
 	require.True(t, db.Migrator().HasIndex(&Copy{}, "idx_copies_media_status_order"))
+
+	// The frozen locator adds one nullable protobuf BLOB without another table or order index.
+	var locator struct {
+		Type    string
+		NotNull int
+	}
+	require.NoError(t, db.Raw(`SELECT type, "notnull" AS not_null FROM pragma_table_info('copies') WHERE name = 'storage_metadata'`).Scan(&locator).Error)
+	require.Equal(t, "blob", strings.ToLower(locator.Type))
+	require.Zero(t, locator.NotNull)
 }

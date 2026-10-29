@@ -60,7 +60,7 @@ func setupVolumeRestore(t *testing.T, name string, files map[string][]byte) (*jo
 // writer, and returns the attempt's terminal error.
 func completeCandidate(t *testing.T, runner *jobRestoreRunner, copy *copyCandidate, result acp.Result) error {
 	t.Helper()
-	buffer := startTestBuffer(t, runner, copy.MediaID, &testReadSession{root: "/media"})
+	buffer := startTestBuffer(t, runner)
 	item := &copyJob{source: "/media/" + copy.MediaPath, target: runner.restoreTarget(copy.TargetPath), copy: copy}
 	result.Job = item
 	if err := buffer.onResults([]acp.Result{result}); err != nil {
@@ -71,9 +71,9 @@ func completeCandidate(t *testing.T, runner *jobRestoreRunner, copy *copyCandida
 
 // startTestBuffer opens the result path of a Media attempt that is not running, with fixed
 // execution settings, and drains its writer when the test ends.
-func startTestBuffer(t *testing.T, runner *jobRestoreRunner, mediaID int64, session mediapkg.ReadSession) *copyBuffer {
+func startTestBuffer(t *testing.T, runner *jobRestoreRunner) *copyBuffer {
 	t.Helper()
-	buffer, err := newCopyBuffer(context.Background(), runner, mediaID, session)
+	buffer, err := newCopyBuffer(context.Background(), runner)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = buffer.Close() })
 	return buffer
@@ -103,7 +103,7 @@ func TestRestoreItemFailureDoesNotStopLaterResultBatches(t *testing.T) {
 	runner, _, copies := setupVolumeRestore(t, "independent", map[string][]byte{
 		"first.txt": []byte("first"), "second.txt": []byte("second"),
 	})
-	buffer := startTestBuffer(t, runner, copies[0].MediaID, &testReadSession{root: "/media"})
+	buffer := startTestBuffer(t, runner)
 	result := func(copy *copyCandidate, err error) acp.Result {
 		return acp.Result{Job: &copyJob{source: "/media/" + copy.MediaPath, target: runner.restoreTarget(copy.TargetPath), copy: copy},
 			Size: copy.Size, SHA256: copy.Hash,
@@ -195,7 +195,7 @@ func TestRestoreWriterFailureStopsTheAttempt(t *testing.T) {
 	copy := copies[0]
 
 	// A target-level failure is an item outcome, not a staged result.
-	buffer := startTestBuffer(t, runner, copy.MediaID, &testReadSession{root: "/media"})
+	buffer := startTestBuffer(t, runner)
 	item := &copyJob{source: "/media/" + copy.MediaPath, target: runner.restoreTarget(copy.TargetPath), copy: copy}
 	require.NoError(t, buffer.onResults([]acp.Result{{
 		Job: item, Size: copy.Size, SHA256: copy.Hash,
@@ -214,7 +214,7 @@ func TestRestoreWriterFailureStopsTheAttempt(t *testing.T) {
 		}
 	}))
 	t.Cleanup(func() { _ = runner.db.Callback().Update().Remove("test:restore-persist") })
-	buffer = startTestBuffer(t, runner, copy.MediaID, &testReadSession{root: "/media"})
+	buffer = startTestBuffer(t, runner)
 
 	// The asynchronous write may fail before the callback returns or after it hands over the batch.
 	err := buffer.onResults([]acp.Result{{
@@ -286,8 +286,7 @@ func TestRestoreAbandonedItemStaysPending(t *testing.T) {
 	runner, _, copies := setupVolumeRestore(t, "abandoned", map[string][]byte{"file.txt": []byte("saved")})
 	copy := copies[0]
 
-	session := &testReadSession{root: "/media"}
-	buffer := startTestBuffer(t, runner, copy.MediaID, session)
+	buffer := startTestBuffer(t, runner)
 	item := &copyJob{source: "/media/" + copy.MediaPath, target: runner.restoreTarget(copy.TargetPath), copy: copy}
 	require.NoError(t, buffer.onResults([]acp.Result{{Job: item, Err: context.Canceled}}))
 	require.ErrorIs(t, buffer.Close(), context.Canceled)

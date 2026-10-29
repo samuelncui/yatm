@@ -51,7 +51,18 @@ func (b *mediaBackend) NewReadSession(
 	route := tools.NewActionRouter[*entity.ReadMediaTarget, entity.OneofReadMediaTarget](
 		tools.ActionMethod(func(ctx context.Context, access *entity.ReadTapeTarget) error {
 			var err error
-			session, err = b.newTapeReadSession(ctx, access, target)
+			switch target.ExpectedProfile.GetTape().GetFormat() {
+			case library.TapeFormatTarPAXV1:
+				session, err = b.newTarReadSession(ctx, access, target)
+			case "", library.TapeFormatLTFSV0, library.TapeFormatLTFSV1:
+				if access.GetRefreshPositionMap() {
+					return fmt.Errorf("position-map refresh is supported only for eligible tar reads")
+				}
+				// Existing legacy requests retain the native identity/preparation path.
+				session, err = b.newTapeReadSession(ctx, access, target)
+			default:
+				err = fmt.Errorf("Tape read format is unsupported")
+			}
 			return err
 		}),
 		tools.ActionMethod(func(ctx context.Context, access *entity.ReadVolumeTarget) error {
@@ -85,8 +96,16 @@ func (b *mediaBackend) NewWriteSession(
 	var session mediapkg.WriteSession
 	route := tools.NewActionRouter[*entity.ArchiveMediaTarget, entity.OneofArchiveMediaTarget](
 		tools.ActionMethod(func(ctx context.Context, target *entity.ArchiveTapeTarget) error {
-			var err error
-			session, err = b.newTapeWriteSession(ctx, target)
+			// Resolve the requested or immutable format before invoking any adapter.
+			resolved, err := b.resolveTapeWrite(ctx, target)
+			if err != nil {
+				return err
+			}
+			if resolved.GetFormat() == library.TapeFormatTarPAXV1 {
+				session, err = b.newTarWriteSession(ctx, resolved)
+			} else {
+				session, err = b.newTapeWriteSession(ctx, resolved)
+			}
 			return err
 		}),
 		tools.ActionMethod(func(ctx context.Context, target *entity.ArchiveVolumeTarget) error {
@@ -105,6 +124,8 @@ func describeMedia(value *library.Media) *mediapkg.Descriptor {
 	if value == nil {
 		return nil
 	}
+
+	// Convert persisted instants for the runtime boundary without inventing unknown dates.
 	var created time.Time
 	if value.CreatedAtNS != 0 {
 		created = time.Unix(0, value.CreatedAtNS)
@@ -114,9 +135,16 @@ func describeMedia(value *library.Media) *mediapkg.Descriptor {
 		stamp := time.Unix(0, *value.DestroyedAtNS)
 		destroyed = &stamp
 	}
+
+	// Mutable geometry belongs to this request even when the Library row was cached.
+	var positionMap *entity.TapePositionMap
+	if value.TapePositionMap != nil {
+		positionMap = proto.Clone(value.TapePositionMap).(*entity.TapePositionMap)
+	}
 	return &mediapkg.Descriptor{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
-		CreateTime: created, DestroyTime: destroyed,
+		TapePositionMap: positionMap,
+		CreateTime:      created, DestroyTime: destroyed,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}
 }

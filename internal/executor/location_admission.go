@@ -17,9 +17,11 @@ const admissionPageSize = 128
 // AdmitLocationEntries resolves all higher-priority matches before creating unmatched Files.
 // Only the supplied live batch and positively absent old paths participate; no global scan occurs.
 func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.LocationEntryRef) ([]*library.FileLocation, error) {
+	// Reject invalid live batches before resolving any Location.
 	if len(refs) == 0 || len(refs) > 1000 || refs[0] == nil {
 		return nil, fmt.Errorf("admit between 1 and 1000 live files")
 	}
+
 	// Gathering evidence is bounded and performs no full-file reads. Cache misses remain optional.
 	ordered := append([]*entity.LocationEntryRef(nil), refs...)
 	for _, ref := range ordered {
@@ -36,6 +38,7 @@ func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.Loca
 	positions := make([]*library.ObservedEntry, 0, len(ordered))
 	claimed := map[int64]bool{}
 	for index, ref := range ordered {
+		// Observe each unique path before considering cached content or previous associations.
 		if index > 0 && ordered[index-1].Path == ref.Path {
 			return nil, fmt.Errorf("duplicate admission path %q", ref.Path)
 		}
@@ -53,14 +56,14 @@ func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.Loca
 		}
 		keys := ObserveTracking(location, info)
 		p := &library.ObservedEntry{Path: ref.Path, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, TrackingKeys: keys}
-		cached, valid, _ := acp.ReadCachedSignature(name)
-		if valid && cached.Size == p.Size && cached.MtimeNS == p.MtimeNS {
-			p.Hash = append([]byte(nil), cached.SHA256[:]...)
-			p.Signature, err = library.NewFileSignature(p.Hash, p.Size)
-			if err != nil {
-				return nil, err
-			}
+
+		// Cached content is optional evidence tied to this existing observation.
+		p.Hash, p.Signature, err = cachedObservedContent(name, p.Size, p.MtimeNS)
+		if err != nil {
+			return nil, err
 		}
+
+		// Exact path continuity preserves an existing opaque content identity.
 		previous, err := e.lib.GetFileLocationAtPath(ctx, location.ID, p.Path)
 		if err != nil {
 			return nil, err
@@ -79,6 +82,8 @@ func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.Loca
 			return nil, err
 		}
 	}
+
+	// A relocation needs positive absence before Library admission can replace an association.
 	for _, match := range matches {
 		if match.Previous != nil && match.Previous.Path != match.Observation.Path {
 			if !e.absentAdmissionPath(location, match.Previous) {
@@ -87,6 +92,19 @@ func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.Loca
 		}
 	}
 	return e.lib.AdmitObservations(ctx, location.ID, matches)
+}
+
+func cachedObservedContent(name string, size, mtimeNS int64) (hash, signature []byte, err error) {
+	// Disposable cache errors and facts outside the existing observation remain misses.
+	cached, valid, _ := acp.ReadCachedSignature(name)
+	if !valid || cached.Size != size || cached.MtimeNS != mtimeNS {
+		return nil, nil, nil
+	}
+
+	// Each observation owns its bytes; deriving a content identity still reports real errors.
+	hash = append([]byte(nil), cached.SHA256[:]...)
+	signature, err = library.NewFileSignature(hash, size)
+	return hash, signature, err
 }
 
 func (e *Executor) matchAdmissionRound(ctx context.Context, location *library.Location, kind library.TrackingKind, positions []*library.ObservedEntry, matches []*library.ObservationAdmission, claimed map[int64]bool) error {

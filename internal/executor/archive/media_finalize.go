@@ -12,43 +12,52 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
-var errInvalidTapeIndex = errors.New("invalid final Tape index")
+var errInvalidFinalInventory = errors.New("invalid final Media inventory")
 
 func (a *jobArchiveRunner) reconcileWriteResult(ctx context.Context, result *mediapkg.WriteResult) error {
+	// Incomplete physical results leave every candidate pending.
 	if result == nil || result.Media == nil {
 		resetErr := a.resetStagedItems(ctx)
 		return errors.Join(mediapkg.ErrFinalizeUnusable, fmt.Errorf("Media write result is incomplete"), resetErr)
 	}
 
+	// Match physical evidence transactionally; missing individual files retain proven matches.
 	var validationErr error
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := prefixStagedPaths(tx, result.PathPrefix); err != nil {
+		missing, err := finalizeStagedPaths(tx, result)
+		if err != nil {
 			return err
 		}
 		if result.Inventory == nil {
+			if missing > 0 && result.Stop == nil {
+				validationErr = fmt.Errorf("Media inventory is missing staged files, count=%d", missing)
+			}
 			return nil
 		}
-		if err := result.Inventory(ctx, func(entry *mediapkg.LTFSIndexEntry) error {
-			return attachTapeStorage(tx, entry)
+		if err := result.Inventory(ctx, func(entry *mediapkg.CompletedFile) error {
+			return attachCompletedStorage(tx, entry)
 		}); err != nil {
-			return errors.Join(errInvalidTapeIndex, err)
+			return errors.Join(errInvalidFinalInventory, err)
 		}
 		if result.VerifiedPrefix {
 			_, err := keepVerifiedPrefix(tx)
 			return err
 		}
-		missing, err := resetUnverifiedItems(tx)
+		unverified, err := resetUnverifiedItems(tx)
+		missing += unverified
 		if err != nil {
 			return err
 		}
-		if missing > 0 {
-			validationErr = fmt.Errorf("LTFS index is missing staged files, count=%d", missing)
+		if missing > 0 && result.Stop == nil {
+			validationErr = fmt.Errorf("Media inventory is missing staged files, count=%d", missing)
 		}
 		return nil
 	})
+	// A failed inventory invalidates the whole attempt; individual misses do not.
 	if err == nil {
 		return validationErr
 	}
@@ -56,41 +65,64 @@ func (a *jobArchiveRunner) reconcileWriteResult(ctx context.Context, result *med
 	return errors.Join(mediapkg.ErrFinalizeUnusable, err, resetErr)
 }
 
-func prefixStagedPaths(tx *gorm.DB, prefix string) error {
-	if prefix == "." || prefix == "" {
-		return nil
-	}
-	var cursor int64
+func finalizeStagedPaths(tx *gorm.DB, result *mediapkg.WriteResult) (int64, error) {
+	// Every result reconciles storage; an empty prefix only leaves staged paths unchanged.
+	prefix := result.PathPrefix
+	rewrite := prefix != "." && prefix != ""
+	var cursor, missing int64
 	for {
+		// Reuse the existing bounded path-update pass instead of a second inventory or per-file lookup.
 		var items []*Item
-		if err := tx.Select("id", "target_path", "media_path").Where(
+		if err := tx.Select("id", "target_path", "media_path", "result").Where(
 			"status = ? AND id > ?", entity.CopyStatus_COPY_STATUS_STAGED, cursor,
 		).Order("id").Limit(batchSize).Find(&items).Error; err != nil {
-			return fmt.Errorf("query staged Archive paths failed, cursor=%d, %w", cursor, err)
+			return 0, fmt.Errorf("query staged Archive paths failed, cursor=%d, %w", cursor, err)
 		}
 		if len(items) == 0 {
-			return nil
+			return missing, nil
 		}
 		for _, item := range items {
+			// Native nil positioning awaits Inventory; tar's private validator rejects missing evidence.
 			cursor = item.ID
-			if item.MediaPath != item.TargetPath {
-				return fmt.Errorf("staged Archive path is unexpected, id=%d path=%q", item.ID, item.MediaPath)
+			if item.MediaPath != item.TargetPath || item.Result == nil {
+				return 0, fmt.Errorf("staged Archive path or result is unexpected, id=%d path=%q", item.ID, item.MediaPath)
 			}
-			mediaPath := filepath.ToSlash(filepath.Join(prefix, item.TargetPath))
+			storage, err := result.FinalizeStorage(item.Result.Storage)
+			if err != nil {
+				return 0, errors.Join(errInvalidFinalInventory, err)
+			}
+			if item.Result.Storage != nil && storage == nil {
+				if err := resetOneItem(tx, item.ID); err != nil {
+					return 0, err
+				}
+				missing++
+				continue
+			}
+
+			// Prefix and any terminal anchor correction share the same ordinary row update.
+			updates := map[string]any{}
+			if rewrite {
+				updates["media_path"] = filepath.ToSlash(filepath.Join(prefix, item.TargetPath))
+			}
+			if !proto.Equal(storage, item.Result.Storage) {
+				item.Result.Storage = storage
+				updates["result"] = item.Result
+			}
+			if len(updates) == 0 {
+				continue
+			}
 			updated := tx.Model(&Item{}).Where(
 				"id = ? AND status = ? AND media_path = ?", item.ID, entity.CopyStatus_COPY_STATUS_STAGED, item.MediaPath,
-			).Update("media_path", mediaPath)
+			).Updates(updates)
 			if updated.Error != nil || updated.RowsAffected != 1 {
-				return fmt.Errorf(
-					"prefix staged Archive path failed, id=%d affected=%d, %w",
-					item.ID, updated.RowsAffected, updated.Error,
-				)
+				return 0, fmt.Errorf("finalize staged Archive path failed, id=%d affected=%d, %w", item.ID, updated.RowsAffected, updated.Error)
 			}
 		}
 	}
 }
 
-func attachTapeStorage(tx *gorm.DB, entry *mediapkg.LTFSIndexEntry) error {
+func attachCompletedStorage(tx *gorm.DB, entry *mediapkg.CompletedFile) error {
+	// Only a unique staged path can receive physical completion evidence.
 	var items []*Item
 	result := tx.Select("id", "result").Where(
 		"status = ? AND media_path = ?", entity.CopyStatus_COPY_STATUS_STAGED, entry.Path,
@@ -102,22 +134,23 @@ func attachTapeStorage(tx *gorm.DB, entry *mediapkg.LTFSIndexEntry) error {
 		return nil
 	}
 	if len(items) != 1 || items[0].Result == nil {
-		return errors.Join(errInvalidTapeIndex, fmt.Errorf("invalid staged Archive item, path=%q", entry.Path))
+		return errors.Join(errInvalidFinalInventory, fmt.Errorf("invalid staged Archive item, path=%q", entry.Path))
 	}
 	item := items[0]
 	if item.Result.Storage != nil {
-		return errors.Join(errInvalidTapeIndex, fmt.Errorf("LTFS index contains duplicate path, path=%q", entry.Path))
+		return errors.Join(errInvalidFinalInventory, fmt.Errorf("Media inventory contains duplicate path, path=%q", entry.Path))
 	}
 	if item.Result.SizeBytes != entry.Size {
 		return nil
 	}
+	// Attach storage only when the confirmed physical size matches the transferred content.
 	item.Result.Storage = entry.Storage
 	updated := tx.Model(&Item{}).Where(
 		"id = ? AND status = ?", item.ID, entity.CopyStatus_COPY_STATUS_STAGED,
 	).Update("result", item.Result)
 	if updated.Error != nil || updated.RowsAffected != 1 {
 		return fmt.Errorf(
-			"store LTFS position failed, path=%q affected=%d, %w", entry.Path, updated.RowsAffected, updated.Error,
+			"store completed Media position failed, path=%q affected=%d, %w", entry.Path, updated.RowsAffected, updated.Error,
 		)
 	}
 	return nil
@@ -205,6 +238,8 @@ func libraryMedia(value *mediapkg.Descriptor) (*library.Media, error) {
 	if value == nil {
 		return nil, nil
 	}
+
+	// Check runtime instants before admitting the session's metadata into the Library.
 	created, err := dataformat.Nanoseconds(value.CreateTime)
 	if err != nil {
 		return nil, err
@@ -219,7 +254,8 @@ func libraryMedia(value *mediapkg.Descriptor) (*library.Media, error) {
 	}
 	return &library.Media{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
-		CreatedAtNS: created, DestroyedAtNS: destroyed,
+		TapePositionMap: value.TapePositionMap,
+		CreatedAtNS:     created, DestroyedAtNS: destroyed,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}, nil
 }

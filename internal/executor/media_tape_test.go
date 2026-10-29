@@ -85,13 +85,13 @@ func TestVolumeSessionsRejectSymlinkPaths(t *testing.T) {
 	require.NoError(t, os.Symlink(outside, filepath.Join(root, "linked")))
 
 	read := &volumeReadSession{volume: volume}
-	_, err = read.SourcePath("linked/source.txt")
+	_, err = read.Source(mediapkg.ReadRequest{Path: "linked/source.txt"})
 	require.ErrorContains(t, err, "contains a symlink")
 
 	write := &volumeWriteSession{
 		volume: volume, pathPrefix: "", available: 1 << 20,
 	}
-	_, err = write.TargetPath("linked/target.txt", 6)
+	_, err = write.Target("linked/target.txt", 6)
 	require.ErrorContains(t, err, "contains a symlink")
 }
 
@@ -152,7 +152,7 @@ func TestTapeFinalizeStopsAfterUnmountFailureAndKeepsDeviceUnavailable(t *testin
 	}
 
 	// A failed normal unmount invalidates the attempt without waiting for or parsing an Index.
-	result, err := session.Finalize(ctx, true)
+	result, err := session.Finalize(ctx, mediapkg.ErrTargetNoSpace)
 	require.Nil(t, result)
 	require.ErrorIs(t, err, mediapkg.ErrFinalizeUnusable)
 	require.ErrorContains(t, err, "unmount Tape failed")
@@ -183,11 +183,11 @@ func TestTapeFinalizeReturnsInvalidPostUnmountIndexForArchiveValidation(t *testi
 	}
 
 	// Finalization exposes the bounded post-unmount Index for Archive to validate before publication.
-	result, err := session.Finalize(ctx, false)
+	result, err := session.Finalize(ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Inventory)
-	err = result.Inventory(ctx, func(*mediapkg.LTFSIndexEntry) error { return nil })
+	err = result.Inventory(ctx, func(*mediapkg.CompletedFile) error { return nil })
 	require.ErrorContains(t, err, "parse LTFS index failed")
 	exe.endAttempt(1)
 	require.Equal(t, []string{device}, exe.ListAvailableDevices())

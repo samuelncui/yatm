@@ -21,9 +21,9 @@ func TestKeepVerifiedPrefixStopsAtFirstUnverifiedFile(t *testing.T) {
 			Result: &entity.ArchiveCopyResult{SizeBytes: 1, Sha256: make([]byte, 32)},
 		}).Error)
 	}
-	require.NoError(t, attachTapeStorage(db, reconciliationIndexEntry("a.txt", 1)))
-	require.NoError(t, attachTapeStorage(db, reconciliationIndexEntry("b.txt", 0)))
-	require.NoError(t, attachTapeStorage(db, reconciliationIndexEntry("c.txt", 1)))
+	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("a.txt", 1)))
+	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("b.txt", 0)))
+	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("c.txt", 1)))
 
 	// A full Tape retains only the contiguous verified physical prefix.
 	kept, err := keepVerifiedPrefix(db)
@@ -50,8 +50,8 @@ func TestResetUnverifiedItemsKeepsEveryCapturedSuccess(t *testing.T) {
 			Result: &entity.ArchiveCopyResult{SizeBytes: 1, Sha256: make([]byte, 32)},
 		}).Error)
 	}
-	require.NoError(t, attachTapeStorage(db, reconciliationIndexEntry("a.txt", 1)))
-	require.NoError(t, attachTapeStorage(db, reconciliationIndexEntry("c.txt", 1)))
+	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("a.txt", 1)))
+	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("c.txt", 1)))
 
 	// A non-full Tape retains every individually verified candidate for later publication.
 	reset, err := resetUnverifiedItems(db)
@@ -74,8 +74,8 @@ func newReconciliationItemDB(t *testing.T) *gorm.DB {
 	return db.WithContext(context.Background())
 }
 
-func reconciliationIndexEntry(path string, size int64) *mediapkg.LTFSIndexEntry {
-	return &mediapkg.LTFSIndexEntry{
+func reconciliationIndexEntry(path string, size int64) *mediapkg.CompletedFile {
+	return &mediapkg.CompletedFile{
 		Path: path, Size: size,
 		Storage: &entity.StoragePosition{
 			Order: []byte{1}, Metadata: (&entity.LtfsMetadata{Extents: []*entity.LtfsExtent{{Partition: "b"}}}).Pack(),

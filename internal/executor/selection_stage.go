@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor/observation"
 	"github.com/samuelncui/yatm/internal/library"
@@ -257,14 +256,11 @@ func selectedFileObservation(location *library.Location, ref *entity.LocationEnt
 	name := filepath.Join(location.RootPath, filepath.FromSlash(ref.Path))
 	keys := ObserveTracking(location, info)
 	item := &observation.Item{Path: ref.Path, Reference: ref, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Evidence: observation.FromKeys(keys)}
-	cache, valid, _ := acp.ReadCachedSignature(name)
-	if valid && cache.Size == item.Size && cache.MtimeNS == item.MtimeNS {
-		item.Hash = append([]byte(nil), cache.SHA256[:]...)
-		signature, err := library.NewFileSignature(item.Hash, item.Size)
-		if err != nil {
-			return nil, err
-		}
-		item.Signature = signature
+
+	// Selection and direct admission share the same optional cache applicability rule.
+	item.Hash, item.Signature, err = cachedObservedContent(name, item.Size, item.MtimeNS)
+	if err != nil {
+		return nil, err
 	}
 	return item, nil
 }

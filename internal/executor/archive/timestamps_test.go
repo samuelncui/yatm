@@ -7,13 +7,14 @@ import (
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/stretchr/testify/require"
 )
 
 func TestArchiveRejectsUnrepresentableCopyTimestamps(t *testing.T) {
 	// Metadata from the successful transfer must be representable before a STAGED result is persisted.
 	runner := &jobArchiveRunner{}
-	item := &copyItem{mediaTarget: "target", item: &Item{ID: 1, TargetPath: "file", Data: &entity.ArchiveManifestFile{SourcePath: "source"}}}
+	item := &copyItem{mediaTarget: mediapkg.TargetRef{Path: "target"}, item: &Item{ID: 1, TargetPath: "file", Data: &entity.ArchiveManifestFile{SourcePath: "source"}}}
 	valid := time.Unix(1780000000, 123456)
 	for _, year := range []int{1600, 2400} {
 		for _, field := range []string{"mtime", "written"} {

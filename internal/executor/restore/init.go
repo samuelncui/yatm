@@ -10,6 +10,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -127,11 +128,16 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 					if err != nil {
 						return err
 					}
+					var metadata *entity.StorageMetadata
+					if position.StorageMetadata != nil {
+						metadata = proto.Clone(position.StorageMetadata).(*entity.StorageMetadata)
+					}
 					copies = append(copies, &Copy{
 						ItemID: id, Status: entity.CopyStatus_COPY_STATUS_PENDING, MediaID: position.MediaID,
 						Health:    entity.PositionHealth_POSITION_HEALTH_UNKNOWN,
 						MediaPath: position.Path, StorageOrder: append([]byte{}, position.StorageOrder...),
-						MediaIdentity: media.Identity, MediaProfile: media.Profile,
+						StorageMetadata: metadata,
+						MediaIdentity:   media.Identity, MediaProfile: proto.Clone(media.Profile).(*entity.MediaProfile),
 						PositionID: position.ID})
 					if !seenMedia[position.MediaID] {
 						seenMedia[position.MediaID] = true

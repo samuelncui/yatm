@@ -177,11 +177,12 @@ func (s *testReadSession) Media() *mediapkg.Descriptor {
 	}
 }
 
-func (s *testReadSession) SourcePath(relative string) (string, error) {
-	return filepath.Join(s.root, filepath.FromSlash(relative)), nil
+func (s *testReadSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
+	relative := request.Path
+	return mediapkg.SourceRef{Path: filepath.Join(s.root, filepath.FromSlash(relative))}, nil
 }
 
-func (*testReadSession) Finalize(context.Context) error { return nil }
+func (*testReadSession) Finalize(context.Context, error) error { return nil }
 
 func TestRestoreManifestUsesMediaFields(t *testing.T) {
 	exe, lib := setupTestExecutor(t)
@@ -305,7 +306,7 @@ func requireCopySequence(t *testing.T, source *copyItems, wantIDs ...int64) {
 	require.Equal(t, wantIDs, ids)
 }
 
-func TestRestoreCompletionUsesSessionSourcePath(t *testing.T) {
+func TestRestoreCompletionUsesResolvedSource(t *testing.T) {
 	// Build a one-copy Restore whose completion also exhausts the pending set.
 	exe, lib := setupTestExecutor(t)
 	content := []byte("fixture")
@@ -319,7 +320,8 @@ func TestRestoreCompletionUsesSessionSourcePath(t *testing.T) {
 	require.NoError(t, runner.db.First(&copy).Error)
 	candidate := loadTestCopyCandidate(t, runner, &copy)
 	session := &testReadSession{root: "/mounted", capabilities: mediapkg.Capabilities{Read: mediapkg.AccessSequential}}
-	source, err := session.SourcePath(candidate.MediaPath)
+	resolved, err := session.Source(mediapkg.ReadRequest{Path: candidate.MediaPath})
+	source := resolved.Path
 	require.NoError(t, err)
 	target := runner.restoreTarget(candidate.TargetPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
@@ -330,7 +332,7 @@ func TestRestoreCompletionUsesSessionSourcePath(t *testing.T) {
 	)})
 
 	// Completing the last copy uses the Session path and treats the empty pending query as normal.
-	require.NoError(t, completeTestCopy(t, runner, media.ID, session, candidate, source, target, file.Hash, content))
+	require.NoError(t, completeTestCopy(t, runner, candidate, source, target, file.Hash, content))
 	require.NoError(t, runner.finalizeOutputs(context.Background(), media.ID))
 	stored, err := exe.GetJob(context.Background(), job.ID)
 	require.NoError(t, err)
@@ -343,8 +345,6 @@ func TestRestoreCompletionUsesSessionSourcePath(t *testing.T) {
 func completeTestCopy(
 	t *testing.T,
 	runner *jobRestoreRunner,
-	mediaID int64,
-	session mediapkg.ReadSession,
 	copy *copyCandidate,
 	source string,
 	target string,
@@ -352,7 +352,7 @@ func completeTestCopy(
 	content []byte,
 ) error {
 	t.Helper()
-	buffer := startTestBuffer(t, runner, mediaID, session)
+	buffer := startTestBuffer(t, runner)
 	job := &copyJob{source: source, target: target, copy: copy}
 	if err := buffer.onResults([]acp.Result{{
 		Job: job, Size: int64(len(content)), Mode: 0o644, SHA256: hash,

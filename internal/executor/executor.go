@@ -99,8 +99,12 @@ type Executor struct {
 	lib      *library.Library
 	settings *settingspkg.Module
 
-	devices   []string
-	resources *resourceQueue
+	devices           []string
+	resources         *resourceQueue
+	deviceLock        sync.Mutex
+	deviceKeys        map[string]string
+	deviceUnavailable map[string]string
+	tapeProvider      tapeDeviceProvider
 
 	runnersLock sync.Mutex
 	runners     map[int64]Runner
@@ -121,6 +125,10 @@ type Executor struct {
 	previews           Previewer
 	temporaryNamesLock sync.RWMutex
 	temporaryNames     map[string]struct{}
+	// readRefits serializes passive read learning refits per device; values are *sync.Mutex.
+	readRefits sync.Map
+	// Protected by deviceLock; one last prepared observation per configured device, never live I/O state.
+	preparedRead map[string]*entity.TapePreparedRead
 }
 
 type Paths struct {
@@ -160,17 +168,20 @@ func New(
 		appSettings = lib.Settings()
 	}
 	value := &Executor{
-		db:        db,
-		lib:       lib,
-		settings:  appSettings,
-		devices:   devices,
-		resources: newResourceQueue(),
-		runners:   make(map[int64]Runner),
-		jobLocks:  make(map[int64]*jobMutex),
-		attempts:  make(map[int64]*attempt),
-		paths:     paths,
-		scripts:   scripts,
-		previews:  previews,
+		db:                db,
+		lib:               lib,
+		settings:          appSettings,
+		devices:           devices,
+		resources:         newResourceQueue(),
+		deviceKeys:        make(map[string]string),
+		deviceUnavailable: make(map[string]string),
+		tapeProvider:      rawTapeProvider{},
+		runners:           make(map[int64]Runner),
+		jobLocks:          make(map[int64]*jobMutex),
+		attempts:          make(map[int64]*attempt),
+		paths:             paths,
+		scripts:           scripts,
+		previews:          previews,
 	}
 
 	// Administrator rules are immutable after construction; compile them once.
@@ -455,6 +466,11 @@ func (e *Executor) StartJob(
 	// Freeze operator tunables and register the attempt once so duplicate starts fail deterministically.
 	runCtx, cancel := context.WithCancelCause(tools.ShutdownContext)
 	runCtx, err = e.withJobExecutionSettings(runCtx)
+	if err != nil {
+		cancel(context.Canceled)
+		return fmt.Errorf("start job failed, %w", err)
+	}
+	runCtx, err = e.withDeviceSettings(runCtx)
 	if err != nil {
 		cancel(context.Canceled)
 		return fmt.Errorf("start job failed, %w", err)

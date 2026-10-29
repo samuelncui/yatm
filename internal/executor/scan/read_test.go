@@ -135,8 +135,9 @@ func TestVerifyCancellationFinalizesWithoutInventingFindings(t *testing.T) {
 
 type failedDeviceSession struct{ checkSession }
 
-func (*failedDeviceSession) SourcePath(name string) (string, error) {
-	return "", &os.PathError{Op: "stat", Path: name, Err: syscall.EIO}
+func (*failedDeviceSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
+	name := request.Path
+	return mediapkg.SourceRef{}, &os.PathError{Op: "stat", Path: name, Err: syscall.EIO}
 }
 
 func TestVerifyDeviceFailureKeepsRemainingEntriesUnchecked(t *testing.T) {

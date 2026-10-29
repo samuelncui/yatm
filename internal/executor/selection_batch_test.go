@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor/observation"
 	"github.com/samuelncui/yatm/internal/library"
@@ -16,6 +17,52 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+func TestCachedObservedContentUsesObservedMetadata(t *testing.T) {
+	// An inaccessible cache supplies no admission evidence and never triggers a content read.
+	hash, signature, err := cachedObservedContent(filepath.Join(t.TempDir(), "missing"), 1, 1)
+	require.NoError(t, err)
+	require.Nil(t, hash)
+	require.Nil(t, signature)
+
+	// Prime a real disposable cache through ACP before testing already-observed metadata.
+	filename, observed := writeObservedFile(t, "cached", []byte("observed content"))
+	facts, err := HashObservedContent(context.Background(), filename, observed)
+	require.NoError(t, err)
+	_, valid, err := acp.ReadCachedSignature(filename)
+	require.NoError(t, err)
+	if !valid {
+		t.Skip("temporary filesystem does not support signature xattrs")
+	}
+
+	// A cache valid for the live path cannot replace a different existing observation.
+	for _, test := range []struct {
+		name          string
+		size, mtimeNS int64
+	}{
+		{name: "size", size: observed.Size() + 1, mtimeNS: observed.ModTime().UnixNano()},
+		{name: "mtime", size: observed.Size(), mtimeNS: observed.ModTime().UnixNano() + 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			hash, signature, err := cachedObservedContent(filename, test.size, test.mtimeNS)
+			require.NoError(t, err)
+			require.Nil(t, hash)
+			require.Nil(t, signature)
+		})
+	}
+
+	// Matching observations own their hash and signature bytes independently of later callers.
+	hash, signature, err = cachedObservedContent(filename, observed.Size(), observed.ModTime().UnixNano())
+	require.NoError(t, err)
+	require.Equal(t, facts.Sha256, hash)
+	require.Equal(t, facts.Signature, signature)
+	hash[0] ^= 0xff
+	signature[0] ^= 0xff
+	nextHash, nextSignature, err := cachedObservedContent(filename, observed.Size(), observed.ModTime().UnixNano())
+	require.NoError(t, err)
+	require.Equal(t, facts.Sha256, nextHash)
+	require.Equal(t, facts.Signature, nextSignature)
+}
 
 func TestSelectionStageAndCaptureReuseBatchFacts(t *testing.T) {
 	// Seed known original/native facts so the measured path does not need content hashing.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,14 +86,15 @@ func TestRestoreCompletionIsPerItemNotFile(t *testing.T) {
 	secondFile.ItemID, secondFile.FileVersionID, secondFile.Path = secondRow.ItemID, first.FileVersionID+1, "another-version.txt"
 	require.NoError(t, runner.db.Create(&secondFile).Error)
 	session := &testReadSession{root: "/mounted"}
-	source, err := session.SourcePath(first.MediaPath)
+	resolved, err := session.Source(mediapkg.ReadRequest{Path: first.MediaPath})
+	source := resolved.Path
 	require.NoError(t, err)
 	target := runner.restoreTarget(first.TargetPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
 	require.NoError(t, os.WriteFile(target, content, 0644))
 
 	// A valid ACP completion cannot complete another content item merely sharing its File ID.
-	require.NoError(t, completeTestCopy(t, runner, media.ID, session, first, source, target, first.Hash, content))
+	require.NoError(t, completeTestCopy(t, runner, first, source, target, first.Hash, content))
 	require.NoError(t, runner.finalizeOutputs(ctx, media.ID))
 	require.NoError(t, runner.db.First(&firstRow, first.ID).Error)
 	require.NoError(t, runner.db.First(&secondRow, secondRow.ID).Error)

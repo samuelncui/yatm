@@ -176,7 +176,7 @@ func (r *runner) freezeMedia(ctx context.Context, config *Config) error {
 		entry := &Entry{Path: p.Path, Change: change,
 			Size: p.Size, Mode: p.Mode, MtimeNS: p.MtimeNS, PositionID: p.ID,
 			Expected: &entity.ExpectedFile{Signature: p.Signature, Sha256: p.Hash, SizeBytes: p.Size, Mode: p.Mode, MtimeNs: p.MtimeNS},
-			Storage:  &entity.StoragePosition{Order: p.StorageOrder, Metadata: p.StorageMetadata}, StorageOrder: append([]byte{}, p.StorageOrder...)}
+			Storage:  proto.Clone(&entity.StoragePosition{Order: p.StorageOrder, Metadata: p.StorageMetadata}).(*entity.StoragePosition), StorageOrder: append([]byte{}, p.StorageOrder...)}
 		if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
 			// Result facts remain the frozen expectation; reads populate only the separate actual fields.
 			entry.SHA256, entry.Signature = p.Hash, p.Signature

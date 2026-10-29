@@ -11,6 +11,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -22,13 +23,14 @@ func finishRestoreCopy(t *testing.T, runner *jobRestoreRunner, copy *copyCandida
 	require.NoError(t, os.WriteFile(target, content, 0600))
 	hash := sha256.Sum256(content)
 	session := &testReadSession{root: "/mounted"}
-	source, err := session.SourcePath(copy.MediaPath)
+	resolved, err := session.Source(mediapkg.ReadRequest{Path: copy.MediaPath})
+	source := resolved.Path
 	require.NoError(t, err)
-	err = completeTestCopy(t, runner, copy.MediaID, session, copy, source, target, hash[:], content)
+	err = completeTestCopy(t, runner, copy, source, target, hash[:], content)
 	if err != nil {
 		return err
 	}
-	if err := session.Finalize(context.Background()); err != nil {
+	if err := session.Finalize(context.Background(), nil); err != nil {
 		return err
 	}
 	return runner.finalizeOutputs(context.Background(), copy.MediaID)

@@ -33,9 +33,16 @@ func (e *Executor) ReadTapeBarcode(ctx context.Context, device string) (string, 
 	if strings.TrimSpace(*info.Barcode) == "" {
 		return "", nil
 	}
-	// Historical probes return the cartridge label with its media suffix (for example ABC001L5).
-	// Keep their six-character identity normalization at this boundary, not on user-supplied targets.
-	value := strings.TrimSpace(*info.Barcode)
+	// Keep reported cartridge labels separate from strict operator-supplied targets.
+	return normalizeReportedTapeBarcode(*info.Barcode)
+}
+
+func normalizeReportedTapeBarcode(value string) (string, error) {
+	// Historical probes and MAM can include the media suffix after the six-character identity.
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
 	if len(value) > 6 {
 		value = value[:6]
 	}

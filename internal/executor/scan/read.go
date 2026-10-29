@@ -6,16 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"iter"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"github.com/samuelncui/yatm/internal/media/readplan"
+	"github.com/samuelncui/yatm/internal/media/tape"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,8 +54,14 @@ type contentStream struct {
 	// totals is the attempt's durable denominator and completed base, read before ACP starts.
 	totals contentTotals
 
-	pageLimit int
-	readModes map[int64]acp.ReadMode
+	pageLimit    int
+	readModes    map[int64]acp.ReadMode
+	orderChecked bool
+	provider     mediapkg.ReadOrderProvider
+	sequence     *readplan.Sequence
+	trackReads   bool
+	reads        *mediapkg.ReadBatch
+	hardStopped  <-chan struct{}
 }
 
 // contentWrite is one result waiting for the writer: a validated manifest row, or an item failure
@@ -63,10 +75,35 @@ type contentWrite struct {
 // the results callback recovers by asserting Result.Job back to this type.
 type contentItem struct {
 	*Entry
+	content acp.ContentSource
+	opened  atomic.Bool
+	reads   *mediapkg.ReadBatch
 }
 
-func (i *contentItem) Source() string    { return i.SourcePath }
+func (i *contentItem) Source() string {
+	if i.content != nil {
+		return i.Path
+	}
+	return i.SourcePath
+}
 func (i *contentItem) Targets() []string { return nil }
+
+func (i *contentItem) ContentSource() acp.ContentSource {
+	if i.content == nil {
+		return nil
+	}
+	return &scanContentSource{item: i}
+}
+
+type scanContentSource struct{ item *contentItem }
+
+func (s *scanContentSource) Open(ctx context.Context) (fs.File, error) {
+	// Every endpoint policy retains actual source entry, independently of optional page planning.
+	s.item.opened.Store(true)
+	return s.item.content.Open(ctx)
+}
+
+func (i *contentItem) ContentTargets() []acp.ContentTarget { return nil }
 
 // Indexed Preview input can contain originals from several Locations in one ACP stream.
 type indexedContentItem struct {
@@ -159,10 +196,12 @@ func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, 
 	runErr := stream.consume(ctx, engine)
 
 	// Drain before the progress checkpoint: every accepted result is persisted, including the ones
-	// a graceful stop left in flight, and the phase reports the writer's terminal error.
+	// a graceful stop left in flight. A source error cannot hide a later persistence failure.
 	writeErr := stream.writer.Close()
 	if runErr == nil {
 		runErr = writeErr
+	} else if writeErr != nil && !errors.Is(runErr, writeErr) {
+		runErr = multierror.Append(runErr, writeErr).ErrorOrNil()
 	}
 	readBytes, processed := stream.counters()
 	progress.UpdateSessionCurrent(readBytes, processed)
@@ -176,7 +215,7 @@ func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, 
 		if errors.Is(runErr, ctx.Err()) {
 			return runErr
 		}
-		return errors.Join(ctx.Err(), runErr)
+		return multierror.Append(ctx.Err(), runErr).ErrorOrNil()
 	}
 	return runErr
 }
@@ -220,7 +259,14 @@ func (s *contentStream) reuseAllowed() bool {
 		s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES
 }
 
-func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) error {
+func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) (rerr error) {
+	// Release the disposable route only after ACP has drained every accepted source.
+	defer func() {
+		if s.sequence != nil {
+			rerr = errors.Join(rerr, s.sequence.Close())
+		}
+	}()
+	s.hardStopped = engine.HardStopped()
 	return executor.RunCopyPages(ctx, engine, s.nextPage)
 }
 
@@ -232,16 +278,25 @@ func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) e
 func (s *contentStream) onResults(results []acp.Result) error {
 	batch := make([]contentWrite, 0, len(results))
 	for _, result := range results {
-		var row *Entry
-		switch item := result.Job.(type) {
+		var item *contentItem
+		switch value := result.Job.(type) {
 		case *contentItem:
-			row = item.Entry
+			item = value
 		case *indexedContentItem:
-			row = item.Entry
+			item = value.contentItem
 		default:
 			continue
 		}
-		if accepted, ok := s.accept(row, result); ok {
+		if item.reads != nil {
+			if _, err := item.reads.AcknowledgeResult(item.ID); err != nil {
+				return err
+			}
+		}
+		if item.content != nil && !item.opened.Load() {
+			// A copied stop cause is an attempt error; it cannot observe the unopened member's health.
+			result.Err = errors.Join(mediapkg.ErrReadUnavailable, result.Err)
+		}
+		if accepted, ok := s.accept(item.Entry, result); ok {
 			batch = append(batch, accepted)
 		}
 	}
@@ -251,6 +306,18 @@ func (s *contentStream) onResults(results []acp.Result) error {
 // nextPage returns the next manifest page in deterministic physical read order. Paging preserves
 // Tape locality without loading the whole manifest.
 func (s *contentStream) nextPage(ctx context.Context) ([]acp.Item, error) {
+	// Optional setup remains inside the feed owner, so even preparation failure drains ACP.
+	if !s.orderChecked {
+		s.orderChecked = true
+		if err := s.prepareSequence(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if s.sequence != nil || s.trackReads {
+		return s.nextOrderedPage(ctx)
+	}
+
+	// Ordinary manifest reads keep their existing source binding and Indexed Preview behavior.
 	items := make([]acp.Item, 0, s.pageLimit)
 	for len(items) < s.pageLimit {
 		row, err := s.nextRow(ctx)
@@ -261,6 +328,17 @@ func (s *contentStream) nextPage(ctx context.Context) ([]acp.Item, error) {
 			return nil, err
 		}
 		item := &contentItem{Entry: row}
+		// Native paths stay frozen; endpoints bind the recorded path and storage at submission.
+		if s.session != nil && row.SourcePath == "" {
+			source, err := s.session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
+			if err == nil {
+				err = source.Validate()
+			}
+			if err != nil {
+				return nil, err
+			}
+			item.SourcePath, item.content = source.Path, source.Content
+		}
 		if !s.config.IndexedInput {
 			items = append(items, item)
 			continue
@@ -304,18 +382,10 @@ func (s *contentStream) nextRow(ctx context.Context) (*Entry, error) {
 			return nil, err
 		}
 		if s.index >= len(s.page) {
-			query := s.runner.scopeQuery(ctx, s.scope).Where("needs_hash = ? AND published = ?", true, false)
-			order := "id"
-			if s.session != nil && s.session.Capabilities().Read == mediapkg.AccessSequential {
-				order = "storage_order, path, id"
-				if s.cursor > 0 {
-					query = query.Where("storage_order > ? OR (storage_order = ? AND path > ?) OR (storage_order = ? AND path = ? AND id > ?)", s.cursorOrder, s.cursorOrder, s.cursorPath, s.cursorOrder, s.cursorPath, s.cursor)
-				}
-			} else {
-				query = query.Where("id > ?", s.cursor)
-			}
-			s.page, s.index = nil, 0
-			if err := query.Order(order).Limit(s.pageLimit).Find(&s.page).Error; err != nil {
+			var err error
+			s.page, err = s.loadPage(ctx, s.pageLimit)
+			s.index = 0
+			if err != nil {
 				return nil, err
 			}
 			if len(s.page) == 0 {
@@ -331,6 +401,224 @@ func (s *contentStream) nextRow(ctx context.Context) (*Entry, error) {
 			continue
 		}
 		return row, nil
+	}
+}
+
+// loadPage preserves the SQL baseline; callers freeze its high-water before any permutation.
+func (s *contentStream) loadPage(ctx context.Context, limit int) ([]*Entry, error) {
+	query := s.runner.scopeQuery(ctx, s.scope).Where("needs_hash = ? AND published = ?", true, false)
+	order := "id"
+	if s.session != nil && s.session.Capabilities().Read == mediapkg.AccessSequential {
+		order = "storage_order, path, id"
+		if s.cursor > 0 {
+			query = query.Where("storage_order > ? OR (storage_order = ? AND path > ?) OR (storage_order = ? AND path = ? AND id > ?)",
+				s.cursorOrder, s.cursorOrder, s.cursorPath, s.cursorOrder, s.cursorPath, s.cursor)
+		}
+	} else {
+		query = query.Where("id > ?", s.cursor)
+	}
+	var page []*Entry
+	if err := query.Order(order).Limit(limit).Find(&page).Error; err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
+func (s *contentStream) prepareSequence(ctx context.Context) error {
+	// The complete selected-Media route is frozen before the feed can open its first source.
+	ordered, ok := s.session.(mediapkg.OrderedReadSession)
+	if !ok || s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
+		return nil
+	}
+	provider, reason, err := ordered.ReadOrder(ctx)
+	if err != nil {
+		return err
+	}
+	if provider == nil {
+		return nil
+	}
+
+	// Independent input traversal leaves a complete manifest fallback available after a soft stop.
+	s.provider, s.trackReads = provider, true
+	started := time.Now()
+	sequence, err := readplan.Plan(ctx, s.runner.exe.Paths().Work, provider, s.readSpans(ctx))
+	elapsed := time.Since(started).Nanoseconds()
+	order := entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL
+	switch {
+	case errors.Is(err, readplan.ErrBudget):
+		s.provider = nil
+		reason = "LOGICAL: read planning budget expired before the complete index was ready"
+	case err != nil:
+		return err
+	default:
+		s.sequence, order, reason = sequence, sequence.Order(), sequence.Reason()
+	}
+	ordered.ReadOrderPlanned(order, reason)
+
+	// One attempt reports its strategy once; page size controls only the subsequent handoff.
+	if s.runner.logger != nil {
+		s.runner.logger.WithContext(ctx).WithField("read_order", reason).
+			WithField("planning_ns", elapsed).Info("Scan read order prepared")
+	}
+	return nil
+}
+
+func (s *contentStream) readSpans(ctx context.Context) iter.Seq2[readplan.Span, error] {
+	return func(yield func(readplan.Span, error) bool) {
+		// A private keyset cursor leaves the original LOGICAL stream intact after a soft budget stop.
+		cursor := &contentStream{runner: s.runner, scope: s.scope, session: s.session}
+		for {
+			page, err := cursor.loadPage(ctx, batchSize)
+			if err != nil {
+				yield(readplan.Span{}, err)
+				return
+			}
+			if len(page) == 0 {
+				return
+			}
+			last := page[len(page)-1]
+			cursor.cursor, cursor.cursorOrder, cursor.cursorPath = last.ID, last.StorageOrder, last.Path
+			for _, row := range page {
+				if row.Change == entity.ScanChange_SCAN_CHANGE_REMOVED {
+					continue
+				}
+				request := mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage}
+				if row.SourcePath != "" {
+					s.trackReads = false
+				} else {
+					source, err := s.session.Source(request)
+					if err == nil {
+						err = source.Validate()
+					}
+					if err != nil {
+						yield(readplan.Span{}, err)
+						return
+					}
+					s.trackReads = s.trackReads && source.Content != nil
+				}
+
+				// Geometry belongs to Media, independently of native paths or endpoint-boundary tracking.
+				ranges, available := s.provider.Ranges(request)
+				if !available {
+					ranges = nil
+				}
+				span := readplan.Span{ID: row.ID, Ranges: ranges, Path: row.Path, Size: row.Size}
+				if !yield(span, nil) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (s *contentStream) loadOrderedPage(ctx context.Context) ([]*Entry, error) {
+	// A soft planning stop retains the original manifest and its source-boundary protection.
+	if s.sequence == nil {
+		page, err := s.loadPage(ctx, min(s.pageLimit, mediapkg.ReadOrderMaxItems))
+		if err != nil {
+			return nil, err
+		}
+		if len(page) == 0 {
+			return nil, io.EOF
+		}
+		last := page[len(page)-1]
+		s.cursor, s.cursorOrder, s.cursorPath = last.ID, last.StorageOrder, last.Path
+		selected := page[:0]
+		for _, row := range page {
+			if row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+				selected = append(selected, row)
+			}
+		}
+		return selected, nil
+	}
+
+	// The fixed route names existing manifest rows; only this handoff page needs hydration.
+	ids, err := s.sequence.Next(ctx, min(s.pageLimit, mediapkg.ReadOrderMaxItems))
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, io.EOF
+	}
+	var page []*Entry
+	if err := s.runner.scopeQuery(ctx, s.scope).
+		Where("id IN ? AND needs_hash = ? AND published = ? AND change != ?", ids, true, false,
+			entity.ScanChange_SCAN_CHANGE_REMOVED).Limit(len(ids)).Find(&page).Error; err != nil {
+		return nil, fmt.Errorf("load Scan planned content page failed, %w", err)
+	}
+	rows := make(map[int64]*Entry, len(page))
+	for _, row := range page {
+		rows[row.ID] = row
+	}
+	selected := make([]*Entry, 0, len(page))
+	for _, id := range ids {
+		if row := rows[id]; row != nil {
+			selected = append(selected, row)
+		}
+	}
+	return selected, nil
+}
+
+func (s *contentStream) nextOrderedPage(ctx context.Context) ([]acp.Item, error) {
+	for {
+		// Source boundaries still stop the feed on failure, without repricing the fixed route.
+		if s.reads != nil {
+			if err := s.reads.WaitSources(ctx, s.hardStopped); err != nil {
+				return nil, err
+			}
+		}
+		page, err := s.loadOrderedPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Bind only the bounded handoff page; planning preflight never retained content endpoints.
+		items := make([]*contentItem, 0, len(page))
+		endpoints := s.trackReads
+		for _, row := range page {
+			item := &contentItem{Entry: row}
+			if row.SourcePath == "" {
+				source, err := s.session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
+				if err == nil {
+					err = source.Validate()
+				}
+				if err != nil {
+					return nil, err
+				}
+				item.SourcePath, item.content = source.Path, source.Content
+			}
+			endpoints = endpoints && item.content != nil
+			items = append(items, item)
+		}
+		if len(items) == 0 {
+			continue
+		}
+
+		// Native sources retain the ordinary pipeline; endpoint pages keep the existing fatal-stop boundary.
+		s.reads = nil
+		s.trackReads = endpoints
+		if endpoints {
+			selected := make([]int64, len(items))
+			for i, item := range items {
+				selected[i] = item.ID
+			}
+			s.reads, err = mediapkg.NewReadBatch(selected)
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range items {
+				item.reads = s.reads
+				item.content, err = s.reads.WrapSource(item.ID, item.content)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		result := make([]acp.Item, len(items))
+		for i, item := range items {
+			result[i] = item
+		}
+		return result, nil
 	}
 }
 
@@ -502,7 +790,9 @@ func (s *contentStream) eventHandler() acp.EventHandler {
 }
 
 func isDeviceReadError(err error) bool {
-	return errors.Is(err, syscall.EIO) || errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ENXIO)
+	return errors.Is(err, syscall.EIO) || errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.ENXIO) ||
+		errors.Is(err, tape.ErrUncertain) || errors.Is(err, tape.ErrOwnershipUnknown) || errors.Is(err, tape.ErrBusy) ||
+		errors.Is(err, mediapkg.ErrReadUnavailable)
 }
 
 func reusableSignature(filename string) (acp.CachedSignature, bool, error) {

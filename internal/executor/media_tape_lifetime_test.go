@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,10 +21,14 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 		read          bool
 		unmountFails  bool
 		unassigned    bool
+		readOrder     bool
+		format        string
 	}{
 		{name: "read encryption failure", failure: "encrypt", read: true},
 		{name: "read mount failure", failure: "mount", read: true},
 		{name: "read success", read: true},
+		{name: "read AUTO preference", read: true, readOrder: true},
+		{name: "read legacy AUTO preference", read: true, readOrder: true, format: library.TapeFormatLTFSV0},
 		{name: "write encryption failure", failure: "encrypt"},
 		{name: "write format failure", failure: "format"},
 		{name: "write mounted index failure", failure: "index"},
@@ -64,16 +70,30 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			require.NoError(t, exe.beginAttempt(1, func(error) {}))
 			t.Cleanup(func() { exe.endAttempt(1) })
 			tapeDir := filepath.Join(exe.jobWorkPath(1), "tapes", "ABC001")
-			backend := exe.NewMediaBackend(1, nil, nil)
+			var diagnostics bytes.Buffer
+			logger := logrus.New()
+			logger.SetOutput(&diagnostics)
+			backend := exe.NewMediaBackend(1, logger, nil)
 			ctx := context.Background()
+			if test.readOrder {
+				ctx = context.WithValue(ctx, deviceSettingsKey{}, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
+					Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}},
+				}}})
+			}
 			var finalize func() error
 			var createErr error
 
 			// A successful constructor transfers key/mount ownership to Finalize.
 			if test.read {
+				// Native reads need no Device Settings access, even when an admitted snapshot is present.
+				exe.settings = nil
+				format := test.format
+				if format == "" {
+					format = library.TapeFormatLTFSV1
+				}
 				stored, err := exe.lib.CreateMedia(ctx, &library.Media{
 					Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "ABC001",
-					Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack(),
+					Profile: (&entity.TapeMediaProfile{Format: format}).Pack(),
 				})
 				require.NoError(t, err)
 				target := (&entity.ReadTapeTarget{Device: "/dev/nst0"}).Pack()
@@ -81,7 +101,14 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 				session, err := backend.NewReadSession(ctx, target)
 				createErr = err
 				if err == nil {
-					finalize = func() error { return session.Finalize(ctx) }
+					finalize = func() error { return session.Finalize(ctx, nil) }
+				}
+				if test.readOrder {
+					require.Contains(t, diagnostics.String(), "requested_read_order=TAPE_READ_ORDER_AUTO")
+					require.Contains(t, diagnostics.String(), "effective_read_order=TAPE_READ_ORDER_LOGICAL")
+					require.Contains(t, diagnostics.String(), "read_order_reason=")
+				} else {
+					require.NotContains(t, diagnostics.String(), "LTFS read order")
 				}
 			} else {
 				session, err := backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
@@ -90,7 +117,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 				}).Pack())
 				createErr = err
 				if err == nil {
-					finalize = func() error { _, err := session.Finalize(ctx, false); return err }
+					finalize = func() error { _, err := session.Finalize(ctx, nil); return err }
 				}
 			}
 			key, err := os.ReadFile(filepath.Join(tapeDir, "key-path"))

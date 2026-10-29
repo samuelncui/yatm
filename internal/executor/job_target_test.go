@@ -7,17 +7,9 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
-
-func init() {
-	// Targeted catalog tests use an in-memory runner contract without touching any Media.
-	RegisterJobType(entity.JobKind_JOB_KIND_SCAN, func(_ context.Context, exe *Executor, job *Job) (Runner, error) {
-		return &testRunner{exe: exe, job: job}, nil
-	}, func(grpc.ServiceRegistrar, *Executor) {})
-}
 
 func TestJobTargetFiltersBeforePagingAndRetainsFrozenLabels(t *testing.T) {
 	// Interleave unrelated scan targets so filtering after page selection would return wrong pages.

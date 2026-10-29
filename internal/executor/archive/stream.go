@@ -79,6 +79,7 @@ func (s *copySource) loadPage(ctx context.Context) error {
 // A source it cannot resolve aborts the batch, and a target that reports its capacity
 // boundary ends the batch after the file that does not fit.
 func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
+	// Keep resolution state bounded to the current manifest page.
 	if s.prepared == nil {
 		s.prepared = make([]*copyItem, 0, s.pageSize)
 		s.locations = make(map[int64]bool)
@@ -86,6 +87,7 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 			s.readModes = make(map[int64]bool)
 		}
 	}
+	// Admit the pending prefix until Media refuses a target.
 	for s.index < len(s.page) {
 		item := &copyItem{runner: s.runner, item: s.page[s.index]}
 		s.index++
@@ -95,7 +97,10 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 		if err := s.resolveSource(ctx, item); err != nil {
 			return nil, err
 		}
-		target, err := s.session.TargetPath(item.item.TargetPath, item.item.Size)
+		target, err := s.session.Target(item.item.TargetPath, item.item.Size)
+		if err == nil {
+			err = target.Validate()
+		}
 		if err != nil {
 			// The refused file still receives one terminal outcome, and it and the remaining
 			// PENDING suffix stay PENDING for the next Media attempt.
@@ -188,7 +193,7 @@ type copyItem struct {
 
 	// mediaTarget is the target ACP is asked to write; preparedErr holds a target outcome
 	// preparation already decided, which the item reports without a copy.
-	mediaTarget string
+	mediaTarget mediapkg.TargetRef
 	preparedErr error
 }
 
@@ -209,7 +214,21 @@ func (c *copyItem) Targets() []string {
 	if c.preparedErr != nil {
 		return nil
 	}
-	return []string{c.mediaTarget}
+	if c.mediaTarget.Content != nil {
+		return []string{c.item.TargetPath}
+	}
+	return []string{c.mediaTarget.Path}
+}
+
+// ContentSource keeps Archive originals on ACP's native read path.
+func (c *copyItem) ContentSource() acp.ContentSource { return nil }
+
+// ContentTargets aligns the selected endpoint with its frozen display identifier.
+func (c *copyItem) ContentTargets() []acp.ContentTarget {
+	if c.preparedErr != nil {
+		return nil
+	}
+	return []acp.ContentTarget{c.mediaTarget.Content}
 }
 
 // itemOutcome is one copy result waiting for the writer.
@@ -382,7 +401,11 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 	}
 
 	// Only complete copy facts can become a staged candidate for Media validation.
-	if target.Path != c.mediaTarget {
+	identifier := c.mediaTarget.Path
+	if c.mediaTarget.Content != nil {
+		identifier = item.TargetPath
+	}
+	if identifier == "" || target.Path != identifier {
 		return outcome, fmt.Errorf("archive copy result path mismatch, target=%q", target.Path)
 	}
 	if !result.Mode.IsRegular() {
@@ -405,6 +428,7 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 		ModTimeNs:   mtime,
 		WriteTimeNs: writtenAt,
 		Sha256:      append([]byte(nil), result.SHA256...),
+		Storage:     c.mediaTarget.Storage(),
 	}
 	if err := copyResult.Validate(); err != nil {
 		return outcome, err

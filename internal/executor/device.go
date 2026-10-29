@@ -4,32 +4,43 @@ import (
 	"context"
 	"fmt"
 	"sort"
+
+	"github.com/samuelncui/yatm/entity"
 )
 
-// ListAvailableDevices reports configured Tape drives that no operation currently holds.
-func (e *Executor) ListAvailableDevices() []string {
-	devices := make([]string, 0, len(e.devices))
+// ListDevices reports every configured Tape drive without issuing SCSI commands.
+func (e *Executor) ListDevices() []*entity.DeviceSummary {
+	// The configured spelling remains the operator-facing identifier across aliases.
+	resolved := e.resolveTapeDevices()
+	devices := make([]*entity.DeviceSummary, 0, len(e.devices))
 	for _, device := range e.devices {
-		if !e.resourceHeld(tapeResource(device)) {
-			devices = append(devices, device)
-		}
+		devices = append(devices, e.deviceSummary(device, resolved[device].key))
 	}
-	sort.Strings(devices)
+	sort.Slice(devices, func(i, j int) bool { return devices[i].Device < devices[j].Device })
 	return devices
 }
 
-// OccupyDevice reserves a configured drive for one operator request without waiting.
-func (e *Executor) OccupyDevice(dev string) bool {
-	if !e.configuredDevice(dev) {
-		return false
+// ListAvailableDevices retains the native available-device view over the shared summaries.
+func (e *Executor) ListAvailableDevices() []string {
+	devices := make([]string, 0, len(e.devices))
+	for _, device := range e.ListDevices() {
+		if !device.Busy {
+			devices = append(devices, device.Device)
+		}
 	}
-	_, acquired := e.tryAcquire(tapeResource(dev))
-	return acquired
+	return devices
 }
 
-// ReleaseDevice returns a drive reserved by OccupyDevice.
-func (e *Executor) ReleaseDevice(dev string) {
-	e.resources.release(tapeResource(dev))
+// TryAcquireTapeDevice reserves a configured drive without waiting and captures its release key.
+func (e *Executor) TryAcquireTapeDevice(device string) (func(), bool, error) {
+	// Reject names outside the configured Tape adapter boundary.
+	if !e.configuredDevice(device) {
+		return nil, false, fmt.Errorf("Tape device is not configured, device=%q", device)
+	}
+
+	// A raw-inspection failure does not prevent configured LTFS adapters from taking their lease.
+	_, release, acquired := e.tryAcquireTapeDevice(device)
+	return release, acquired, nil
 }
 
 func (e *Executor) configuredDevice(dev string) bool {
@@ -48,34 +59,46 @@ func (e *Executor) AcquireTapeDevice(ctx context.Context, jobID int64, device st
 	if !e.configuredDevice(device) {
 		return fmt.Errorf("Tape device is not configured, device=%q", device)
 	}
-	return e.holdAttemptResource(ctx, jobID, tapeResource(device), onWait)
+
+	// Capture identity and enqueue ownership before another discovery pass can rebind a free name.
+	return e.holdAttemptResource(ctx, jobID, func() string {
+		return e.resolveTapeDevicesLocked()[device].key
+	}, onWait)
 }
 
 // AcquireVolume waits for one mounted Volume identity and holds it until the Job attempt ends.
 func (e *Executor) AcquireVolume(ctx context.Context, jobID int64, uuid string, onWait func()) error {
-	return e.holdAttemptResource(ctx, jobID, volumeResource(uuid), onWait)
+	return e.holdAttemptResource(ctx, jobID, func() string { return volumeResource(uuid) }, onWait)
 }
 
 // holdAttemptResource waits for one shared resource and registers it on the Job attempt, so the
 // attempt end releases every hold even when the caller never reaches its cleanup.
-func (e *Executor) holdAttemptResource(ctx context.Context, jobID int64, key string, onWait func()) error {
-	// Reuse this attempt's lease when identity resolution and Session setup need the same resource.
+func (e *Executor) holdAttemptResource(ctx context.Context, jobID int64, resolve func() string, onWait func()) error {
+	// Keep attempt reuse, identity capture and queue admission atomic in attempt/device/queue lock order.
 	e.attemptsLock.Lock()
 	current := e.attempts[jobID]
 	if current == nil {
 		e.attemptsLock.Unlock()
 		return fmt.Errorf("job attempt is not active, id=%d", jobID)
 	}
+	e.deviceLock.Lock()
+	key := resolve()
 	for _, resource := range current.resources {
 		if resource.key == key {
+			e.deviceLock.Unlock()
 			e.attemptsLock.Unlock()
 			return nil
 		}
 	}
+	ready, err := e.resources.enqueue(ctx, key)
+	e.deviceLock.Unlock()
 	e.attemptsLock.Unlock()
-
-	release, err := e.AcquireJobResource(ctx, key, onWait)
 	if err != nil {
+		return err
+	}
+
+	// Waiting and phase publication happen without identity or attempt locks, preserving cancellation.
+	if err := e.resources.wait(ctx, key, ready, onWait); err != nil {
 		return err
 	}
 
@@ -84,7 +107,7 @@ func (e *Executor) holdAttemptResource(ctx context.Context, jobID int64, key str
 	current = e.attempts[jobID]
 	if current == nil {
 		e.attemptsLock.Unlock()
-		release()
+		e.resources.release(key)
 		return fmt.Errorf("job attempt ended while acquiring %q", key)
 	}
 	current.resources = append(current.resources, attemptResource{key: key})
@@ -95,6 +118,15 @@ func (e *Executor) holdAttemptResource(ctx context.Context, jobID int64, key str
 // keepTapeDeviceUnavailable retains a drive whose physical cleanup failed, so later attempts
 // wait for an explicit investigation instead of reusing unknown device state.
 func (e *Executor) keepTapeDeviceUnavailable(jobID int64, device string) {
+	// Reuse the remembered lease identity even when failed I/O makes sysfs unavailable.
+	e.deviceLock.Lock()
+	key := e.deviceKeys[device]
+	e.deviceLock.Unlock()
+	if key == "" {
+		key = tapeResource(device)
+	}
+
+	// Retain the actual attempt resource through settlement.
 	e.attemptsLock.Lock()
 	defer e.attemptsLock.Unlock()
 
@@ -104,8 +136,11 @@ func (e *Executor) keepTapeDeviceUnavailable(jobID int64, device string) {
 	}
 	for index := range current.resources {
 		resource := &current.resources[index]
-		if resource.key == tapeResource(device) {
+		if resource.key == key {
 			resource.retain = true
+			e.deviceLock.Lock()
+			e.deviceUnavailable[key] = "Tape cleanup failed; device retained for investigation"
+			e.deviceLock.Unlock()
 			return
 		}
 	}

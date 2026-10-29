@@ -40,7 +40,7 @@ func TestReadSessionDoesNotDependOnRestoreCopies(t *testing.T) {
 	session, err := exe.NewMediaBackend(1, nil, nil).NewReadSession(ctx, target)
 	require.NoError(t, err)
 	require.Equal(t, stored.ID, session.Media().ID)
-	require.NoError(t, session.Finalize(ctx))
+	require.NoError(t, session.Finalize(ctx, nil))
 }
 
 func TestTapeReadRejectsWrongExpectedIdentityBeforeMount(t *testing.T) {
@@ -91,7 +91,7 @@ func TestTapeReadFinalizeDoesNotReloadTheMountedCartridge(t *testing.T) {
 				tapeDir: root, recycleKey: func() { recycled++ }}
 
 			// Unmount determines success, and either outcome releases the temporary key exactly once.
-			err := session.Finalize(context.Background())
+			err := session.Finalize(context.Background(), nil)
 			if unmountFails {
 				require.ErrorContains(t, err, "unmount Tape failed")
 				require.DirExists(t, mountPoint)

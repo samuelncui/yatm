@@ -24,8 +24,6 @@ type copyResult struct {
 // copies already past the read stage are still reported, and the rest keep their PENDING status.
 type copyBuffer struct {
 	runner  *jobRestoreRunner
-	mediaID int64
-	session media.ReadSession
 	writer  *executor.ResultWriter[copyResult]
 	lock    sync.Mutex
 	failure error
@@ -35,11 +33,9 @@ type copyBuffer struct {
 func newCopyBuffer(
 	ctx context.Context,
 	runner *jobRestoreRunner,
-	mediaID int64,
-	session media.ReadSession,
 ) (*copyBuffer, error) {
-	buffer := &copyBuffer{runner: runner, mediaID: mediaID, session: session}
 	// Persistence survives the operator's stop; the attempt's own context must not cut it short.
+	buffer := &copyBuffer{runner: runner}
 	writer, err := executor.NewResultWriter(context.WithoutCancel(ctx), buffer.writeBatch)
 	if err != nil {
 		return nil, err
@@ -51,14 +47,21 @@ func newCopyBuffer(
 // onResults hands one batch of results to the writer. A result that carries an error arrives on its
 // own, so failures are classified as they arrive and successes stay in the batch they arrived in.
 func (b *copyBuffer) onResults(results []acp.Result) error {
+	// Unopened endpoints cannot provide observations about their frozen candidates.
 	batch := make([]copyResult, 0, len(results))
 	for _, result := range results {
 		job, ok := result.Job.(*copyJob)
 		if !ok {
 			return fmt.Errorf("restore copy result carries an unknown item")
 		}
+		if job.content != nil && !job.opened.Load() {
+			// A terminal result for an unopened endpoint cannot observe that copy's health.
+			result.Err = errors.Join(media.ErrReadUnavailable, result.Err)
+		}
 		batch = append(batch, copyResult{job: job, result: result})
 	}
+
+	// Persistence remains independent of execution-order paging.
 	return b.writer.Enqueue(batch...)
 }
 
@@ -69,7 +72,7 @@ func (b *copyBuffer) onResults(results []acp.Result) error {
 func (b *copyBuffer) writeBatch(ctx context.Context, batch []copyResult) error {
 	var failure error
 	for _, item := range batch {
-		err := b.runner.storeCompletion(ctx, b.mediaID, b.session, item.job, item.result)
+		err := b.runner.storeCompletion(ctx, item.job, item.result)
 		var local *restoreItemError
 		if errors.As(err, &local) {
 			if recordErr := b.runner.recordItemFailure(ctx, item.job.copy, err); recordErr != nil {

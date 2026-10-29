@@ -51,11 +51,12 @@ func (s *volumeReadSession) Capabilities() mediapkg.Capabilities { return s.capa
 
 func (s *volumeReadSession) Media() *mediapkg.Descriptor { return s.media }
 
-func (s *volumeReadSession) SourcePath(relative string) (string, error) {
-	return mediapkg.ResolveSourcePath(s.volume.Root, relative)
+func (s *volumeReadSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
+	filename, err := mediapkg.ResolveSourcePath(s.volume.Root, request.Path)
+	return mediapkg.SourceRef{Path: filename}, err
 }
 
-func (s *volumeReadSession) Finalize(context.Context) error { return nil }
+func (s *volumeReadSession) Finalize(context.Context, error) error { return nil }
 
 func (s *volumeReadSession) WalkInventory(ctx context.Context, yield func(*mediapkg.InventoryEntry) error) error {
 	// Enumerate bounded directory pages without following links or interpreting an unreadable directory as empty.
@@ -179,22 +180,25 @@ func (s *volumeWriteSession) Capabilities() mediapkg.Capabilities { return s.cap
 
 func (s *volumeWriteSession) Media() *mediapkg.Descriptor { return s.media }
 
-func (s *volumeWriteSession) TargetPath(relative string, size int64) (string, error) {
+func (s *volumeWriteSession) Target(relative string, size int64) (mediapkg.TargetRef, error) {
+	// Admit only a valid frozen item that fits the current planning allowance.
 	if err := entity.ValidateRelativePath(relative); err != nil {
-		return "", err
+		return mediapkg.TargetRef{}, err
 	}
 	if size < 0 {
-		return "", fmt.Errorf("Archive item size is negative, path=%q size=%d", relative, size)
+		return mediapkg.TargetRef{}, fmt.Errorf("Archive item size is negative, path=%q size=%d", relative, size)
 	}
 	if size > s.available-s.planned {
-		return "", mediapkg.ErrCapacityBoundary
+		return mediapkg.TargetRef{}, mediapkg.ErrCapacityBoundary
 	}
+	// Reserve the admitted bytes before exposing the contained filesystem target.
 	s.planned += size
 	mediaPath := filepath.ToSlash(filepath.Join(s.pathPrefix, relative))
-	return mediapkg.ResolveTargetPath(s.volume.Root, mediaPath)
+	filename, err := mediapkg.ResolveTargetPath(s.volume.Root, mediaPath)
+	return mediapkg.TargetRef{Path: filename}, err
 }
 
-func (s *volumeWriteSession) Finalize(_ context.Context, _ bool) (*mediapkg.WriteResult, error) {
+func (s *volumeWriteSession) Finalize(_ context.Context, _ error) (*mediapkg.WriteResult, error) {
 	return &mediapkg.WriteResult{Media: s.media, PathPrefix: s.pathPrefix}, nil
 }
 
