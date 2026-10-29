@@ -16,20 +16,25 @@ import (
 
 func (api *API) Uploader() *gin.Engine {
 	// Apply one recovery boundary to all file-transfer endpoints.
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger())
 	r.Use(func(ctx *gin.Context) {
+		// Keep transport aborts outside the ordinary JSON error response boundary.
 		defer func() {
 			err := recover()
 			if err == nil {
 				return
 			}
+			if err == http.ErrAbortHandler {
+				panic(err)
+			}
 
+			// Retain the existing diagnostic context for unexpected handler failures.
 			method := ctx.Request.Method
 			path := ctx.Request.URL.Path
 			status := 500
 			remoteAddr := ctx.Request.RemoteAddr
 			clientIP := ctx.ClientIP()
-
 			var e error
 			switch v := err.(type) {
 			case error:
@@ -37,7 +42,6 @@ func (api *API) Uploader() *gin.Engine {
 			default:
 				e = fmt.Errorf("%v", v)
 			}
-
 			logrus.WithContext(ctx).
 				WithError(e).WithField("stack", string(debug.Stack())).
 				Errorf(
@@ -45,11 +49,16 @@ func (api *API) Uploader() *gin.Engine {
 					method, path, status, remoteAddr, clientIP,
 				)
 
-			reason := e.Error()
-			ctx.JSON(status, gin.H{"reason": reason})
-			ctx.Abort()
+			// A started response cannot be replaced by a JSON error body.
+			if ctx.Writer.Written() {
+				panic(http.ErrAbortHandler)
+			}
+			ctx.Header("Content-Disposition", "")
+			ctx.Header("Content-Type", "")
+			ctx.AbortWithStatusJSON(status, gin.H{"reason": e.Error()})
 		}()
 
+		// Run every file-transfer handler through this recovery boundary.
 		ctx.Next()
 	})
 
@@ -80,6 +89,7 @@ func (api *API) Uploader() *gin.Engine {
 
 	// Stream complete Library snapshots directly between the database and HTTP clients.
 	r.GET("/library/_export", func(ctx *gin.Context) {
+		// Keep streaming on every HTTP version; JSONL's end record identifies a complete snapshot.
 		ctx.Header("Content-Type", library.JSONLContentType)
 		ctx.Header("Content-Disposition", `attachment; filename="library.jsonl"`)
 		if err := api.lib.Export(ctx, ctx.Writer, []entity.LibraryEntityType{
@@ -90,7 +100,12 @@ func (api *API) Uploader() *gin.Engine {
 			entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_FILE_LOCATION,
 		}); err != nil {
 			logrus.WithContext(ctx).WithError(err).Error("export library failed")
-			ctx.Abort()
+			if ctx.Writer.Written() {
+				panic(http.ErrAbortHandler)
+			}
+			ctx.Header("Content-Disposition", "")
+			ctx.Header("Content-Type", "")
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"reason": err.Error()})
 		}
 	})
 	r.POST("/library/_import", func(ctx *gin.Context) {

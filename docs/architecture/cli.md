@@ -171,3 +171,5 @@ together: a command, flag, output or safety rule it describes must update the Sk
 same commit. The Skill supplies operational guidance alongside the matching installed
 CLI help and JSON output. Installed copies refresh through the
 [optional Skill step](../operations/install.md#optional-agent-skill).
+
+The standalone Library exporter defaults to `file,media,position`, rejects unknown types, and replaces a named output only after a complete successful export. Stdout remains streaming. HTTP Library exports abort failed partial responses; clients must validate the JSONL end record when transport framing cannot identify truncation.
