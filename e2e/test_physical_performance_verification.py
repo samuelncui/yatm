@@ -1,6 +1,7 @@
 """Bounded fixture and physical-evidence semantics without Tape access."""
 
 import base64
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
@@ -232,7 +233,7 @@ class VerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Duplicate"):
             self.verify.restore_page([rows[0]], "/restored")
         source = self.root / "restore.db"
-        with sqlite3.connect(source) as database:
+        with closing(sqlite3.connect(source)) as database, database:
             database.execute("CREATE TABLE copies(id INTEGER,media_id INTEGER,media_path TEXT,storage_order BLOB)")
             for number in (1, 0):
                 position = self.position(number)
@@ -241,7 +242,7 @@ class VerificationTests(unittest.TestCase):
         self.verify.restore_complete(source, output)
         self.assertEqual([json.loads(line)["media_path"] for line in output.read_text().splitlines()],
                          [self.position(0)["path"], self.position(1)["path"]])
-        with sqlite3.connect(source) as database:
+        with closing(sqlite3.connect(source)) as database, database:
             database.execute("UPDATE copies SET storage_order=? WHERE id=1", (b"wrong",))
         with self.assertRaisesRegex(RuntimeError, "storage order"):
             self.verify.restore_complete(source, self.root / "bad-order.jsonl")

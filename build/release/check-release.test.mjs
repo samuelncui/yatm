@@ -24,10 +24,13 @@ function fixture(t, change = () => {}) {
       { kind: "node", name: "@example/widget", version: "1.2.3", notices: ["LICENSE.md"] },
     ])],
     ["licenses/go/example.org/library@v1.2.3/LICENSE", "fixture"],
+    ["licenses/jpt-lkh-amz.LICENSE", "fixture"],
     ["licenses/node/@example/widget@1.2.3/LICENSE.md", "fixture"],
     ["licenses/node/@example/widget@1.2.3/package.json", "{}"],
     ["frontend/assets/index-abcdefgh.js", "fixture"],
-    ["docs/README.md", "# Documentation\n"],
+    ["docs/operations/index.md", "# User Guide\n"],
+    ["docs/operations/devices.md", "# Devices and Tape Operations\n"],
+    ["docs/operations/tar-tape-recovery.md", "# Recover Tar Tape with Public Tools\n"],
     ["docs/operations/install.md", "# Installation\n"],
     ["docs/operations/migration.md", "# Upgrade from v0.1.x to v1\n"],
     ["docs/operations/library.md", "# Library\n"],
@@ -105,6 +108,10 @@ test("rejects filesystem metadata hidden in PAX records", (t) => {
 
 for (const [name, change, message] of [
   ["missing executable", (files) => files.delete("yatm-cli"), "Required package file missing"],
+  ...["index", "devices", "tar-tape-recovery"].map(guide =>
+    [`missing ${guide} guide`, files => files.delete(`docs/operations/${guide}.md`), "Required package file missing"]),
+  ["developer entry", files => files.set("docs/README.md", "private"), "Unexpected packaged documentation"],
+  ["research documentation", files => files.set("docs/research/tar-tape.md", "private"), "Unexpected packaged documentation"],
   ["missing migration guide", (files) => files.delete("docs/operations/migration.md"), "Required package file missing"],
   ["missing testing adapter", (files) => files.delete("templates/testing/ltfs-file-backend/mount"), "Required testing adapter missing"],
   ["active config", (files) => files.set("config.yaml", "private"), "Development/private file"],
@@ -118,6 +125,7 @@ for (const [name, change, message] of [
   ...["templates/testing/ltfs-file-backend/run.log", "licenses/.git/HEAD", "skills/yatm/local.tmp"].map(name =>
     [name, files => files.set(name, "fixture"), "Development/private file"]),
   ["missing declared notice", files => files.delete("licenses/go/example.org/library@v1.2.3/LICENSE"), "Required dependency notice missing"],
+  ["missing JPT source notice", files => files.delete("licenses/jpt-lkh-amz.LICENSE"), "Required package file missing"],
 ]) {
   test(`rejects ${name}`, (t) => {
     const result = check(fixture(t, change));

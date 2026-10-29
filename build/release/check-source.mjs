@@ -7,11 +7,11 @@ import { releaseCommit } from './committed-inputs.mjs';
 
 const rootFiles = new Set([
   '.gitattributes', '.gitignore', '.gitleaksignore', 'AGENTS.md', 'CONTEXT.md', 'LICENSE', 'Makefile',
-  'README.md', 'THIRD_PARTY_NOTICES', 'config.example.yaml', 'go.mod', 'go.sum', 'install-release.sh',
+  'README.md', 'THIRD_PARTY_NOTICES', 'TODO.md', 'config.example.yaml', 'go.mod', 'go.sum', 'install-release.sh',
 ]);
 const owners = /^(?:\.agents\/skills\/yatm\/|\.github\/|cmd\/|internal\/|entity\/|frontend\/|previewworker\/|scripts\/|build\/(?:backend|release)\/|dev\/|e2e\/|docs\/|licenses\/)/;
-const scratch = /(?:\.(?:db|sqlite|sqlite3|log|tmp|temp|bak|orig|rej|swp|swo|tsbuildinfo|out|test|exe|dll|o|a|so|dylib|zip|tgz|tar|tar\.gz|tar\.xz)|~)$/i;
-const privateComponent = /(?:^|\/)(?:\.local|\.pnpm-store|\.drafts|node_modules|vendor|\.DS_Store)(?:\/|$)/;
+const scratch = /(?:\.(?:db|sqlite|sqlite3|log|tmp|temp|bak|orig|rej|swp|swo|tsbuildinfo|out|test|exe|dll|o|a|so|dylib|pyc|pyo|zip|tgz|tar|tar\.gz|tar\.xz)|~)$/i;
+const privateComponent = /(?:^|\/)(?:\.local|\.pnpm-store|\.drafts|node_modules|vendor|__pycache__|\.DS_Store)(?:\/|$)/;
 const executableMagic = new Set(['7f454c46', 'feedface', 'cefaedfe', 'feedfacf', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca']);
 
 // Repository source excludes runtime data and build output. Corresponding-source archives

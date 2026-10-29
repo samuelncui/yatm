@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from package_physical_cases import PhysicalCases, baseline_files, run_stage
+from package_physical_cases import PhysicalCases, baseline_files, redact_tape_keys, run_stage
 from package_physical_evidence import (check_positions, check_restore_database,
                                        check_signature, format_partition_map, library_positions, parse_index, relative_path,
                                        seal_evidence, verify_evidence)
@@ -21,6 +21,24 @@ from package_physical_evidence import (check_positions, check_restore_database,
 
 def encoded(data):
     return base64.b64encode(data).decode()
+
+
+def library_export(media_id, identity, key, **media):
+    """Private Library export reply; API Media replies carry only encryption_key_saved."""
+    tape = {"encryption": key} if key else {}
+    return [{"type": "header", "format": "yatm-library-backup"},
+            {"type": "media", "data": {"id": media_id, "identity": identity, "profile": {"tape": tape}, **media}},
+            {"type": "end"}]
+
+
+class KeyRedactionTests(unittest.TestCase):
+    def test_redaction_replaces_keys_with_same_length_placeholders(self):
+        key = b"v1:" + b"aB" * 32
+        data = b"\x00prefix" + key + b"\x01" + key + b"tail"
+        redacted = redact_tape_keys(data)
+        self.assertEqual(len(redacted), len(data))
+        self.assertNotIn(key, redacted)
+        self.assertEqual(redacted.count(b"v1:" + b"x" * 64), 2)
 
 
 class EvidenceTests(unittest.TestCase):
@@ -218,16 +236,24 @@ class StageSafetyTests(unittest.TestCase):
         self.test.url = "http://127.0.0.1:1234"
         job = {"id": "44", "status": "JOB_STATUS_READY"}
         self.test.one.return_value = {"job": job}
-        self.test.remote.return_value = SimpleNamespace(stderr=json.dumps({"code": "safety", "error":
+        mismatch = SimpleNamespace(stderr=json.dumps({"code": "safety", "error":
             'Tape barcode does not match the inspected identity, requested="BAD999" inspected="ABC001"'}).encode())
+        unregistered = SimpleNamespace(stderr=json.dumps({"code": "not_found", "error":
+            'Tape is not registered in the Library, barcode="BAD999"'}).encode())
+        self.test.remote.side_effect = [mismatch, unregistered, None]
         self.cases.inspect = Mock(return_value={"identity": "ABC001", "media": {"id": "9"}})
         self.cases.archive_items = Mock(return_value=[{"id": "1", "status": "COPY_STATUS_PENDING"}])
         self.cases.media = Mock(return_value={"id": "9", "identity": "ABC001"})
         self.cases.barcode_refusal(job)
         self.test.cli.assert_not_called()
-        self.assertEqual(self.test.remote.call_args_list[0].kwargs["expected"], 2)
-        self.test.remote.return_value = SimpleNamespace(stderr=b'{"code":"usage","error":"bad flag"}')
+        calls = self.test.remote.call_args_list
+        self.assertEqual([call.args[0][8] for call in calls[:2]], ["format", "append"])
+        self.assertEqual([call.kwargs["expected"] for call in calls[:2]], [2, 1])
+        self.test.remote.side_effect = [SimpleNamespace(stderr=b'{"code":"usage","error":"bad flag"}')]
         with self.assertRaisesRegex(RuntimeError, "identity refusal"):
+            self.cases.barcode_refusal(job)
+        self.test.remote.side_effect = [mismatch, mismatch]
+        with self.assertRaisesRegex(RuntimeError, "unregistered Media refusal"):
             self.cases.barcode_refusal(job)
 
     def test_barcode_refusal_rejects_active_job_and_changed_media(self):
@@ -240,8 +266,10 @@ class StageSafetyTests(unittest.TestCase):
         self.test.url = "http://127.0.0.1:1234"
         self.cases.archive_items = Mock(return_value=[{"id": "1", "status": "COPY_STATUS_PENDING"}])
         self.cases.media = Mock(side_effect=[{"id": "9"}, {"id": "10"}])
-        self.test.remote.return_value = SimpleNamespace(stderr=json.dumps({"code": "safety", "error":
-            'Tape barcode does not match the inspected identity, requested="BAD999" inspected="ABC001"'}).encode())
+        self.test.remote.side_effect = [SimpleNamespace(stderr=json.dumps({"code": "safety", "error":
+            'Tape barcode does not match the inspected identity, requested="BAD999" inspected="ABC001"'}).encode()),
+            SimpleNamespace(stderr=json.dumps({"code": "not_found", "error":
+            'Tape is not registered in the Library, barcode="BAD999"'}).encode())]
         with self.assertRaisesRegex(RuntimeError, "manifest or durable Media"):
             self.cases.barcode_refusal(job)
 
@@ -281,9 +309,9 @@ class StageSafetyTests(unittest.TestCase):
         self.test.cli.assert_not_called()
 
     def test_baseline_after_append_cannot_inspect_or_format(self):
-        for key in ("append_job_id", "baseline_complete"):
+        for key in ("append_write_started", "baseline_complete"):
             with self.subTest(key=key):
-                state = {**self.state, key: "1"}
+                state = {**self.state, key: True}
                 with self.assertRaisesRegex(RuntimeError, "without replaying writes"):
                     PhysicalCases(self.test, state, self.save).baseline()
         self.test.one.assert_not_called()
@@ -319,7 +347,9 @@ class StageSafetyTests(unittest.TestCase):
         self.cases.ejected = Mock()
         self.cases.format = Mock()
         self.cases.inspect = Mock()
-        self.cases.media = Mock(return_value={"id": "9", "profile": {"tape": {"encryption": encryption}}})
+        self.cases.media = Mock(return_value={"id": "9", "identity": "ABC001", "encryption_key_saved": True,
+                                              "profile": {"tape": {}}})
+        self.test.private_cli.return_value = library_export(9, "ABC001", encryption)
         self.cases.archive_items = Mock(return_value=[{"id": "1"}])
         self.cases.check_fixture = Mock()
         self.cases.export = Mock(return_value={"dataset/a.bin": {}})
@@ -338,6 +368,35 @@ class StageSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "different Media or encryption profile"):
             self.cases.baseline()
         self.cases.index.assert_called_once()
+
+    def test_saved_key_comes_only_from_matching_private_export_media(self):
+        self.test.private_cli.return_value = library_export(9, "ABC001", "test-key")
+        self.assertEqual(self.cases.saved_media("9", "ABC001")["profile"]["tape"]["encryption"], "test-key")
+        self.test.private_cli.assert_called_once_with("library", "export", "--output", "-", timeout=600)
+        for reply, reason in ((library_export(8, "ABC001", "test-key"), "lacks the saved Media"),
+                              (library_export(9, "OTHER1", "test-key"), "lacks the saved Media"),
+                              (library_export(9, "ABC001", None), "did not retain encryption"),
+                              (library_export(9, "ABC001", "test-key")[:-1], "export is incomplete")):
+            self.test.private_cli.return_value = reply
+            with self.subTest(reason=reason), self.assertRaisesRegex(RuntimeError, reason):
+                self.cases.saved_media("9", "ABC001")
+        self.test.cli.assert_not_called()
+
+    def test_performance_format_hashes_key_from_private_export(self):
+        from package_physical_performance import PerformanceCases
+        cases = PerformanceCases(self.test, self.state, self.save)
+        self.test.one.return_value = {"identity": "ABC001"}
+        cases.job = Mock(return_value={"id": "44"})
+        cases.format, cases.settled, cases.ejected = Mock(), Mock(), Mock()
+        cases.media = Mock(return_value={"id": "9", "identity": "ABC001", "encryption_key_saved": True,
+                                         "profile": {"tape": {}}})
+        self.test.private_cli.return_value = library_export(9, "ABC001", "test-key")
+        cases.archive_items = Mock(side_effect=RuntimeError("stop at evidence boundary"))
+        with self.assertRaisesRegex(RuntimeError, "stop at evidence boundary"):
+            cases.performance_format()
+        self.assertEqual(self.state["media_id"], "9")
+        self.assertEqual(self.state["encryption_sha256"], hashlib.sha256(b"test-key").hexdigest())
+        self.test.cli.assert_not_called()
 
     def test_unprepared_baseline_does_not_touch_device(self):
         with self.assertRaisesRegex(RuntimeError, "nonphysical preparation"):
@@ -431,7 +490,7 @@ class StageSafetyTests(unittest.TestCase):
     def test_capture_failure_prevents_all_cleanup_deletes(self):
         self.state.update(restore_complete=True, completed_stages=["prepare", "baseline", "restore"])
         self.test.one.side_effect = [{"jobs": [{"id": "1", "status": "JOB_STATUS_COMPLETED"},
-                                               {"id": "2", "status": "JOB_STATUS_READY"}]}, {"devices": ["/dev/nst0"]}]
+                                               {"id": "2", "status": "JOB_STATUS_READY"}]}, {"devices": [{"device": "/dev/nst0"}]}]
         self.cases.ejected = Mock()
         self.cases.export = Mock()
         self.cases.capture_job = Mock(side_effect=RuntimeError("snapshot failed"))
@@ -452,7 +511,7 @@ class StageSafetyTests(unittest.TestCase):
             if args[:2] == ("job", "list"):
                 return {"jobs": jobs}
             if args[:3] == ("tape", "device", "list"):
-                return {"devices": ["/dev/nst0"]}
+                return {"devices": [{"device": "/dev/nst0"}]}
             if args[:2] == ("job", "get"):
                 return {"job": next(job for job in jobs if job["id"] == args[2])}
             self.fail("Unexpected cleanup request: " + repr(args))
@@ -659,7 +718,7 @@ class StageSafetyTests(unittest.TestCase):
         events = []
         def one(*args):
             events.append("lease")
-            return {"devices": ["/dev/nst0"]}
+            return {"devices": [{"device": "/dev/nst1", "busy": True}, {"device": "/dev/nst0"}]}
         def remote(argv):
             self.assertEqual(events, ["lease"])
             events.append("status")
@@ -669,6 +728,23 @@ class StageSafetyTests(unittest.TestCase):
         self.cases.ejected()
         self.assertEqual(events, ["lease", "status"])
         self.test.one.assert_called_once_with("tape", "device", "list")
+        self.test.remote.assert_called_once_with(["mt", "-f", "/dev/nst0", "status"])
+
+    def test_ejected_refuses_unknown_or_busy_device_before_status(self):
+        for devices, reason in (([], "Device owner remains uncertain"),
+                                ([{"device": "/dev/nst1"}], "Device owner remains uncertain"),
+                                ([{"device": "/dev/nst0", "busy": True}], "Device remains busy")):
+            with self.subTest(devices=devices):
+                self.test.one.return_value = {"devices": devices}
+                with self.assertRaisesRegex(RuntimeError, reason):
+                    self.cases.ejected()
+                self.test.remote.assert_not_called()
+
+    def test_ejected_requires_native_eject_status(self):
+        self.test.one.return_value = {"devices": [{"device": "/dev/nst0", "busy": False}]}
+        self.test.remote.return_value = SimpleNamespace(stdout=b"ONLINE")
+        with self.assertRaisesRegex(RuntimeError, "before cartridge eject"):
+            self.cases.ejected()
         self.test.remote.assert_called_once_with(["mt", "-f", "/dev/nst0", "status"])
 
     def test_no_giant_source_fixture(self):

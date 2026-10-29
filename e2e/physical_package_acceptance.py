@@ -1,6 +1,7 @@
 """Run explicitly authorized scratch-Tape stages through shipped YATM programs."""
 
 import argparse
+from copy import copy
 
 import json
 import os
@@ -11,9 +12,13 @@ import sys
 import time
 
 from package_acceptance import Acceptance, argument_parser, check_arguments, documents, require
+from physical_tar_recovery import MAX_RECORD_BYTES
 
 
 STAGES = ("prepare", "baseline", "restore", "cleanup")
+# Tar acceptance runs only through the installed service and CLI; each stage names its prerequisite.
+TAR_STAGES = {"prepare": None, "tar-clear-barcode": "prepare", "baseline": "prepare", "restore": "baseline",
+              "tar-fill": "restore", "tar-ew": "tar-fill", "tar-read-order": "tar-ew", "cleanup": None}
 PERFORMANCE_STAGES = ("performance-prepare", "performance-format", "performance-run")
 CAPACITY_STAGES = ("capacity-write", "capacity-verify")
 TAPE_SCRIPTS = {"read_info": "readinfo", "encrypt": "encrypt", "mkfs": "mkfs",
@@ -25,7 +30,15 @@ def physical_arguments(argv=None):
     parser.description = __doc__
     parser.add_argument("--physical-device", required=True)
     parser.add_argument("--physical-barcode", required=True, help="Explicitly assigned, erasable six-character barcode.")
-    parser.add_argument("--physical-stage", choices=STAGES + PERFORMANCE_STAGES + CAPACITY_STAGES, required=True)
+    parser.add_argument("--physical-format", choices=("ltfs_v1", "tar_pax_v1"), default="ltfs_v1",
+                        help="Physical baseline format; LTFS remains the default.")
+    parser.add_argument("--record-mode", choices=("fixed", "variable"), help="Tar baseline's frozen record mode.")
+    parser.add_argument("--record-bytes", type=int, help="Tar baseline's explicit, frozen 512-aligned record size.")
+    parser.add_argument("--physical-stage", choices=STAGES + PERFORMANCE_STAGES + CAPACITY_STAGES
+                        + ("tar-clear-barcode", "tar-fill", "tar-ew", "tar-read-order"), required=True)
+    parser.add_argument("--sg-device", help="Tar: the SCSI generic path that sysfs resolves for --physical-device.")
+    parser.add_argument("--confirm-clear-barcode",
+                        help="tar-clear-barcode: exactly 'CLEAR BARCODE DEVICE SG_DEVICE BARCODE'.")
     parser.add_argument("--state", type=Path, required=True, help="Private local state shared by the separate stages.")
     parser.add_argument("--mkltfs", default="mkltfs", help="Host executable used by the isolated packaged format script.")
     parser.add_argument("--ltfs-binary", default="ltfs", help="Host executable used by the isolated packaged mount script.")
@@ -35,7 +48,7 @@ def physical_arguments(argv=None):
     parser.add_argument("--performance-size-gib", type=int, choices=(4, 32, 64), default=4,
                         help="Logical fixture size per selected performance case.")
     parser.add_argument("--performance-driver-sampling", action=argparse.BooleanOptionalAction, default=True,
-                        help="Read owned LTFS metric xattrs; disable for collector calibration.")
+                        help="Read owned LTFS metric xattrs; disable to measure collector overhead.")
     parser.add_argument("--capacity-observe", action="store_true",
                         help="Install passive capacity hooks before FORMAT; repeat on subsequent stages.")
     parser.add_argument("--capacity-source-reflink", action="store_true",
@@ -54,11 +67,37 @@ def physical_arguments(argv=None):
     parser.add_argument("--require-sg-trace", action="store_true",
                         help="Cleanup: require SG traces for the capacity Archive and Restore Jobs.")
     args = parser.parse_args(argv)
+    supplied = argv if argv is not None else sys.argv[1:]
+    args.physical_ltfs_options = [value.split("=", 1)[0] for value in supplied
+                                  if value.startswith(("--mkltfs", "--ltfs-binary", "--performance-",
+                                                       "--no-performance-", "--capacity-", "--require-sg-trace",
+                                                       "--preview-archive"))]
     check_physical_arguments(args)
     return args
 
 
 def check_physical_arguments(args):
+    if args.physical_format == "tar_pax_v1":
+        require(args.host == "local", "Run the tar controller on the selected host with --host local, in tmux.")
+        # tar-fill and tar-ew reuse the capacity payload plan; every other tar stage rejects LTFS-only options.
+        planned = args.physical_stage in ("tar-fill", "tar-ew")
+        fill = {"--capacity-file-mib", "--capacity-source-reflink"} if planned else set()
+        require(args.physical_stage in TAR_STAGES and set(args.physical_ltfs_options) <= fill,
+                "Tar baseline does not accept LTFS Preview, script, performance or capacity options.")
+        require(not planned or args.capacity_file_mib,
+                args.physical_stage + " requires the reviewed --capacity-file-mib payload plan.")
+        require(args.record_mode is not None and args.record_bytes is not None
+                and 0 < args.record_bytes <= MAX_RECORD_BYTES and args.record_bytes % 512 == 0,
+                "Tar baseline requires explicit record mode and positive 512-aligned record bytes no greater than 0xfffe00.")
+        require(args.sg_device is not None and re.fullmatch(r"/dev/sg\d+", args.sg_device),
+                "Tar stages require the explicit resolved --sg-device /dev/sgN.")
+        confirmation = f"CLEAR BARCODE {args.physical_device} {args.sg_device} {args.physical_barcode}"
+        require((args.physical_stage == "tar-clear-barcode") == (args.confirm_clear_barcode is not None)
+                and args.confirm_clear_barcode in (None, confirmation),
+                "tar-clear-barcode requires exactly --confirm-clear-barcode '" + confirmation + "'; other stages reject it.")
+    else:
+        require(args.record_mode is None and args.record_bytes is None and args.sg_device is None
+                and args.confirm_clear_barcode is None, "Record, SG and barcode-clearing options apply only to tar.")
     if args.physical_stage == "cleanup":
         require(args.syscall_trace or args.no_syscall_trace,
                 "Cleanup requires explicit --syscall-trace paths or --no-syscall-trace.")
@@ -74,7 +113,8 @@ def check_physical_arguments(args):
         args.capacity_files = len(args.capacity_file_mib)
     require(not args.ltfs and not args.legacy_package and not args.legacy_fixture and not args.case,
             "Physical stages cannot select virtual Tape, legacy migration or ordinary package cases.")
-    require(args.physical_stage in PERFORMANCE_STAGES + CAPACITY_STAGES + ("cleanup",) or args.preview_archive is not None,
+    require(args.physical_format == "tar_pax_v1" or
+            args.physical_stage in PERFORMANCE_STAGES + CAPACITY_STAGES + ("cleanup",) or args.preview_archive is not None,
             "Use the matching packaged native Preview helper.")
     require(re.fullmatch(r"/dev/(?:n?st\d+[alm]?|tape/by-id/[A-Za-z0-9_.:-]+)", args.physical_device),
             "Choose an explicit physical Tape device or its by-id path.")
@@ -93,9 +133,15 @@ def validate_state(args, state):
                 "mkltfs": args.mkltfs, "ltfs_binary": args.ltfs_binary}
     require(all(state.get(key) == value for key, value in expected.items()),
             "Stage inputs differ from the owned physical acceptance state.")
+    require(state.get("physical_format", "ltfs_v1") == args.physical_format
+            and state.get("record_mode") == args.record_mode and state.get("record_bytes") == args.record_bytes
+            and state.get("sg_device") == args.sg_device,
+            "Physical format, record parameters or SG path differ from saved preparation.")
     require(state.get("capacity_observe", False) == args.capacity_observe,
             "Capacity observation differs from saved preparation.")
-    require(state.get("capacity_source_reflink", False) == args.capacity_source_reflink,
+    # Tar uses the reflink source option only at its single tar-fill or tar-ew admission.
+    require(args.physical_format == "tar_pax_v1"
+            or state.get("capacity_source_reflink", False) == args.capacity_source_reflink,
             "Capacity source reflink differs from saved preparation.")
     root = state.get("remote_root", "")
     require(re.fullmatch(re.escape(args.test_parent.rstrip("/")) + r"/yatm-package-acceptance\.[A-Za-z0-9]{8}", root),
@@ -111,6 +157,13 @@ def validate_state(args, state):
         return
     require(args.physical_stage not in state.get("completed_stages", []),
             "Physical stage already completed; retain its original evidence and timing.")
+    if args.physical_format == "tar_pax_v1":
+        require(not state.get(tar_marker(args.physical_stage)),
+                "Tar stage was already admitted; inspect retained state instead of replaying device work.")
+        require(state.get("performance", False) is False, "Cannot mix tar and performance state.")
+        previous = TAR_STAGES[args.physical_stage]
+        require(previous in state.get("completed_stages", []), f"Complete {previous} before {args.physical_stage}.")
+        return
     if args.physical_stage == "performance-format":
         require(not state.get("performance_format_started"),
                 "FORMAT was already admitted; inspect preserved state instead of replaying.")
@@ -150,10 +203,35 @@ def validate_state(args, state):
     require(previous in state.get("completed_stages", []), f"Complete {previous} before {args.physical_stage}.")
 
 
+def tar_marker(stage):
+    """State key persisted before a tar stage's first device or Job operation."""
+    return "tar_" + stage.removeprefix("tar-").replace("-", "_") + "_started"
+
+
 def adapt_script(source, command, executable, options=""):
     marker = "\n" + command + " "
     require(source.count(marker) == 1, f"Packaged {command} script changed; review its adaptation.")
     return source.replace(marker, "\n" + shlex.quote(executable) + options + " ", 1)
+
+
+def public_tape_data(value):
+    """Remove saved Tape keys from evidence while retaining public observations."""
+    if isinstance(value, list):
+        return [public_tape_data(item) for item in value]
+    if isinstance(value, dict):
+        return {key: public_tape_data(item) for key, item in value.items()
+                if not (key == "encryption" and isinstance(item, str))}
+    return value
+
+
+def public_output(data):
+    if not data:
+        return data
+    try:
+        return b"".join(json.dumps(public_tape_data(row)).encode() + b"\n" for row in documents(data))
+    except (ValueError, UnicodeError):
+        # Also protect partial/error output and ordinary log lines before transcript persistence.
+        return re.sub(rb"v1:[0-9a-fA-F]{64}", b"[redacted Tape key]", data)
 
 
 class PhysicalAcceptance(Acceptance):
@@ -166,12 +244,39 @@ class PhysicalAcceptance(Acceptance):
                                      "selected": [name], "executed": [], "skipped": [], "subset": True}
         self.report["physical_device"] = args.physical_device
         self.report["physical_barcode"] = args.physical_barcode
-        self.report["limits"].append("Hardware checks CLI barcode refusal; backend Session identity and failed-Media lifecycle checks reuse local/CI evidence, not a physical RPC mismatch probe.")
+        self.report["physical_format"] = args.physical_format
+        self.report["limits"].append(
+            "Tar stages run the installed service and CLI with the configured encryption adapter and passive read learning; "
+            "they cover cartridge memory barcode preparation, FORMAT/APPEND identity, restarted reads, AUTO/LOGICAL records, EW fill "
+            "and public-tool recovery. Fault, crash and reload/seek qualification are separate."
+            if args.physical_format == "tar_pax_v1" else
+            "Hardware checks CLI barcode refusal; backend Session identity and failed-Media lifecycle checks reuse local/CI evidence, not a physical RPC mismatch probe.")
         self.save()
+
+    def command_result(self, record, outcome, expected, timeout):
+        result, elapsed = outcome
+        # Redact before Acceptance writes stdout/stderr, including errors and timeouts.
+        observed = copy(result)
+        for name in ("stdout", "stderr"):
+            if getattr(observed, name, None):
+                setattr(observed, name, public_output(getattr(observed, name)))
+        super().command_result(record, (observed, elapsed), expected, timeout)
+        return result
+
+    def cli(self, *args, **kwargs):
+        response = super().cli(*args, **kwargs)
+        return public_tape_data(response)
+
+    def private_cli(self, *args, **kwargs):
+        # Only saved-key checks and explicit recovery need the unredacted Library export in memory.
+        return super().cli(*args, **kwargs)
 
     def save_state(self):
         self.state.update(host=self.args.host, commit=self.args.commit, version=self.args.version,
                           device=self.args.physical_device, barcode=self.args.physical_barcode,
+                          physical_format=self.args.physical_format,
+                          record_mode=self.args.record_mode, record_bytes=self.args.record_bytes,
+                          sg_device=self.args.sg_device,
                           mkltfs=self.args.mkltfs, ltfs_binary=self.args.ltfs_binary,
                           capacity_observe=self.args.capacity_observe,
                           capacity_source_reflink=self.args.capacity_source_reflink,
@@ -231,7 +336,8 @@ class PhysicalAcceptance(Acceptance):
             boundary = str(PurePosixPath(helper).with_name("physical_capacity_boundary.py"))
             observation = ("python3 -B " + shlex.quote(boundary)
                            + ' --work-directory "${TAPE_DIR}" --mount "${MOUNT_POINT}"')
-        names = ("get_device", "readinfo", "encrypt", "umount", "mkfs", "mount.openltfs")
+        names = (("encrypt",) if self.args.physical_format == "tar_pax_v1" else
+                 ("get_device", "readinfo", "encrypt", "umount", "mkfs", "mount.openltfs"))
         source = self.root + "/package/templates/scripts/"
         for name in names:
             data = self.remote(["cat", source + name]).stdout.decode()
@@ -252,7 +358,7 @@ class PhysicalAcceptance(Acceptance):
         self.remote(["chmod", "700", *[adapters + "/" + name for name in names]])
         config["tape_devices"] = [self.args.physical_device]
         config["database"]["sqlite_wal"] = True
-        config["scripts"] = {key: adapters + "/" + name for key, name in TAPE_SCRIPTS.items()}
+        config["scripts"] = {key: adapters + "/" + name for key, name in TAPE_SCRIPTS.items() if name in names}
         self.write(self.root + "/config.yaml", json.dumps(config, indent=2).encode() + b"\n")
 
     def verify_owner(self):
@@ -265,10 +371,11 @@ class PhysicalAcceptance(Acceptance):
         resolved = self.remote(["readlink", "-f", "--", filename]).stdout.decode().strip()
         require(resolved == self.install + "/" + self.service, "Refusing a service outside the owned installation.")
         value = json.loads(config.stdout)
+        scripts = {key: self.root + "/tape-scripts/" + name for key, name in TAPE_SCRIPTS.items()
+                   if self.args.physical_format != "tar_pax_v1" or key == "encrypt"}
         require(value["tape_devices"] == [self.args.physical_device]
                 and value["database"] == {"dialect": "sqlite", "dsn": "./catalog.db", "sqlite_wal": True}
-                and value["scripts"] == {key: self.root + "/tape-scripts/" + name
-                                         for key, name in TAPE_SCRIPTS.items()}
+                and value["scripts"] == scripts
                 and value["paths"]["work"] == self.install + "/work"
                 and value["paths"]["access"] == [{"root": self.root + "/fixtures"}]
                 and value["domain"] == self.url, "Owned physical configuration changed.")
@@ -300,8 +407,12 @@ class PhysicalAcceptance(Acceptance):
                 with self.phase("verify-inputs"):
                     self.verify_inputs()
                 with self.phase("prepare-host"):
-                    for tool in ("mt", "stenc", "fuser", "umount", "openssl", "sqlite3", "findmnt",
-                                 self.args.mkltfs, self.args.ltfs_binary):
+                    tools = (("mt", "dd", "tar", "fuser", "sqlite3", "findmnt", "python3", "sg_raw",
+                              "sg_read_attr", "journalctl")
+                             if self.args.physical_format == "tar_pax_v1" else
+                             ("mt", "stenc", "fuser", "umount", "openssl", "sqlite3", "findmnt",
+                              self.args.mkltfs, self.args.ltfs_binary))
+                    for tool in tools:
                         self.remote(["sh", "-c", 'command -v "$1"', "check-tool", tool])
                     self.prepare_host()
                     self.save_state()
@@ -330,6 +441,8 @@ class PhysicalAcceptance(Acceptance):
                 from package_physical_capacity import run_stage
             elif self.args.physical_stage in PERFORMANCE_STAGES:
                 from package_physical_performance import run_stage
+            elif self.args.physical_format == "tar_pax_v1":
+                from package_physical_tar import run_stage
             else:
                 from package_physical_cases import run_stage
             self.case("physical-" + self.args.physical_stage, lambda: run_stage(self, self.state, self.save_state))
@@ -356,8 +469,8 @@ class PhysicalAcceptance(Acceptance):
             self.save()
             if (self.args.physical_stage != "cleanup" and self.state.get("physical_evidence_dir")
                     and self.report["case_scope"]["executed"]):
-                from package_physical_cases import PhysicalCases
-                PhysicalCases(self, self.state, self.save_state).keep(
+                from package_physical_cases import PhysicalEvidence
+                PhysicalEvidence(self, self.state, self.save_state).keep(
                     "stages/" + self.args.physical_stage + "/report.json",
                     (self.args.out / "report.json").read_bytes())
 

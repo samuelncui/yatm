@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve dependencies from the committed module files, never an external workspace.
+export GOWORK=off
 REPOSITORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 RELEASE_DIRECTORY="${RELEASE_DIRECTORY:-$REPOSITORY/output/releases}"
 case "$RELEASE_DIRECTORY" in /*) ;; *) RELEASE_DIRECTORY="$PWD/$RELEASE_DIRECTORY" ;; esac
@@ -40,8 +42,7 @@ for script in encrypt get_device mkfs mount readinfo umount README.md; do
 done
 cp cmd/httpd/yatm-httpd.service config.example.yaml "$OUTPUT_DIRECTORY/templates/"
 cp LICENSE README.md CONTEXT.md install-release.sh "$OUTPUT_DIRECTORY/"
-cp docs/README.md "$OUTPUT_DIRECTORY/docs/"
-for guide in install migration library locations; do
+for guide in index install migration library locations devices tar-tape-recovery; do
   cp "docs/operations/$guide.md" "$OUTPUT_DIRECTORY/docs/operations/"
 done
 cp .agents/skills/yatm/SKILL.md "$OUTPUT_DIRECTORY/skills/yatm/"

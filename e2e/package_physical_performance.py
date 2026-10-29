@@ -114,8 +114,8 @@ class PerformanceCases(PhysicalCases):
         self.settled(job, timeout=14400)
         self.ejected()
         media = self.media(self.barcode)
-        self.save(media_id=str(media["id"]),
-                  encryption_sha256=hashlib.sha256(media["profile"]["tape"]["encryption"].encode()).hexdigest())
+        encryption = self.saved_media(media["id"], self.barcode)["profile"]["tape"]["encryption"]
+        self.save(media_id=str(media["id"]), encryption_sha256=hashlib.sha256(encryption.encode()).hexdigest())
         items = self.archive_items(job)
         self.check_fixture(items, "dataset")
         positions = self.export("performance-library-setup.jsonl")

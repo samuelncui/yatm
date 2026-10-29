@@ -62,6 +62,32 @@ def check_preflight(path, state):
     return record
 
 
+def generate_sources(cases, fixture_helper, sizes, reflink, subdirectory="capacity"):
+    """Write ordered incompressible capacity sources and return their immutable size/hash manifest."""
+    directory = cases.test.root + "/fixtures/source/" + subdirectory
+    cases.test.remote(["mkdir", "--", directory])
+    manifest = {}
+    if reflink:
+        reply = cases.test.remote(["python3", fixture_helper, "capacity-reflink", directory, json.dumps(sizes)], timeout=43200)
+        generated = json.loads(reply.stdout)
+        names = [f"chunk-{number:03d}.bin" for number in range(len(sizes))]
+        require(isinstance(generated, dict) and set(generated) == set(names), "Reflink fixture changed selected filenames.")
+        for name, size in zip(names, sizes):
+            entry = generated[name]
+            require(isinstance(entry, dict) and entry.get("size") == size
+                    and isinstance(entry.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]),
+                    "Reflink fixture returned an invalid size/hash manifest.")
+            manifest[subdirectory + "/" + name] = {"size": size, "sha256": entry["sha256"]}
+        return manifest
+    stream = 1 << 64
+    for number, size in enumerate(sizes):
+        name = f"chunk-{number:03d}.bin"
+        # Offset beyond setup/other fixture streams, with disjoint AES counter ranges.
+        manifest[subdirectory + "/" + name] = cases.stream_fixture(directory + "/" + name, size, stream)
+        stream += size // 16
+    return manifest
+
+
 def idle(job):
     return (job.get("status") in ("JOB_STATUS_READY", "JOB_STATUS_FAILED", "JOB_STATUS_COMPLETED")
             and job.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED"))
@@ -219,28 +245,7 @@ class CapacityCases(PerformanceCases):
             inspected = self.inspect()
             require(str(inspected["media"]["id"]) == self.state["media_id"], "Capacity inspected a different Media.")
             helper = self.install_helper()
-            directory = self.test.root + "/fixtures/source/capacity"
-            self.test.remote(["mkdir", "--", directory])
-            manifest = {}
-            if reflink:
-                fixture_helper = str(Path(helper).with_name("physical_performance_fixture.py"))
-                reply = self.test.remote(["python3", fixture_helper, "capacity-reflink", directory, json.dumps(sizes)], timeout=43200)
-                generated = json.loads(reply.stdout)
-                names = [f"chunk-{number:03d}.bin" for number in range(count)]
-                require(isinstance(generated, dict) and set(generated) == set(names), "Reflink fixture changed selected filenames.")
-                for name, size in zip(names, sizes):
-                    entry = generated[name]
-                    require(isinstance(entry, dict) and entry.get("size") == size
-                            and isinstance(entry.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]),
-                            "Reflink fixture returned an invalid size/hash manifest.")
-                    manifest["capacity/" + name] = {"size": size, "sha256": entry["sha256"]}
-            else:
-                stream = 1 << 64
-                for number, size in enumerate(sizes):
-                    name = f"chunk-{number:03d}.bin"
-                    # Offset beyond setup/other fixture streams, with disjoint AES counter ranges.
-                    manifest["capacity/" + name] = self.stream_fixture(directory + "/" + name, size, stream)
-                    stream += size // 16
+            manifest = generate_sources(self, str(Path(helper).with_name("physical_performance_fixture.py")), sizes, reflink)
             path = self.evidence / "capacity" / "source-manifest.json"
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("x") as output:

@@ -31,25 +31,29 @@ function fixture(t) {
     write(root, name, fs.readFileSync(path.join(repository, name)), fs.statSync(path.join(repository, name)).mode);
   }
   for (const name of ['LICENSE', 'README.md', 'CONTEXT.md', 'install-release.sh', 'config.example.yaml', 'cmd/httpd/yatm-httpd.service',
-    'docs/README.md', ...['install', 'migration', 'library', 'locations'].map(guide => `docs/operations/${guide}.md`), '.agents/skills/yatm/SKILL.md',
+    'docs/README.md', 'docs/architecture/media-io.md', 'docs/research/tar-tape.md', ...['index', 'install', 'migration', 'library', 'locations', 'devices', 'tar-tape-recovery'].map(guide => `docs/operations/${guide}.md`), '.agents/skills/yatm/SKILL.md',
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'mount.openltfs', 'readinfo', 'umount'].map(name => `scripts/${name}`),
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'readinfo', 'umount', 'README.md'].map(name => `e2e/ltfs-file-backend/${name}`)]) write(root, name, 'committed fixture');
   write(root, 'e2e/ltfs-file-backend/mount.test.mjs', '// maintained local regression, not a runtime adapter');
   for (const name of ['build/release/build.sh', 'build/release/check-release.mjs', 'build/release/build-frontend.sh', 'build/release/frontend-artifact.mjs', 'build/release/package-assets.mjs']) {
     write(root, name, fs.readFileSync(path.join(repository, name)), fs.statSync(path.join(repository, name)).mode);
   }
-  write(root, 'build/backend/build.sh', '#!/usr/bin/env bash\nset -eu\nfor item in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate; do printf fixture > "$OUTPUT_DIRECTORY/$item"; done\n', 0o755);
+  write(root, 'build/backend/build.sh', '#!/usr/bin/env bash\nset -eu\n[[ "${GOWORK:-}" == off ]] || { echo "backend inherited a workspace" >&2; exit 1; }\nfor item in yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate; do printf fixture > "$OUTPUT_DIRECTORY/$item"; done\n', 0o755);
   write(root, 'frontend/scripts/build.sh', '#!/usr/bin/env bash\nset -eu\nmkdir -p "$OUTPUT_DIRECTORY/frontend"\nprintf \'<meta name="yatm-version" content="%s"><meta name="yatm-commit" content="%s">\' "$RELEASE_VERSION" "$RELEASE_COMMIT" > "$OUTPUT_DIRECTORY/frontend/index.html"\n', 0o755);
   write(root, 'build/release/build-documents.mjs', '// fixture document conversion\n');
   write(root, 'frontend/pnpm-lock.yaml', 'fixture locked dependencies');
   write(root, 'build/release/build-licenses.mjs', `import fs from 'node:fs'; import path from 'node:path';
+    if (process.env.GOWORK !== 'off') throw new Error('license collection inherited a workspace');
     const output=process.argv[2]; fs.mkdirSync(output, {recursive:true});
     if (process.argv[3] === 'frontend') {
       const dir=path.join(output,'node/fixture@1'); fs.mkdirSync(dir,{recursive:true});
       fs.writeFileSync(path.join(dir,'LICENSE'),'fixture'); fs.writeFileSync(path.join(dir,'package.json'),'{}');
       fs.writeFileSync(path.join(output,'dependencies.json'),JSON.stringify([{kind:'node',name:'fixture',version:'1',notices:['LICENSE']}]));
       fs.writeFileSync(path.join(output,'react-dnd.LICENSE'),'fixture');
-    } else fs.writeFileSync(path.join(output,'THIRD_PARTY_NOTICES'),'fixture');
+    } else {
+      fs.writeFileSync(path.join(output,'THIRD_PARTY_NOTICES'),'fixture');
+      fs.writeFileSync(path.join(output,'jpt-lkh-amz.LICENSE'),'fixture');
+    }
   `);
   git('add', '.');
   const tree = git('write-tree');
@@ -95,14 +99,66 @@ test('main builder includes only committed runtime adapters, excluding tests and
   write(root, 'e2e/ltfs-file-backend/private.log', 'local fixture');
   write(root, '.local/private.txt', 'local fixture');
   const releases = path.join(temporaryRoot, 'releases');
+  const workspace = path.join(temporaryRoot, 'outside', 'go.work');
+  write(temporaryRoot, 'outside/go.work', 'go 1.26.8\n');
   const result = spawnSync('bash', [path.join(root, 'build/release/build.sh')], { cwd: temporaryRoot, encoding: 'utf8',
-    env: { ...process.env, GOOS: 'darwin', RELEASE_VERSION: version, TARGET_NAME: 'fixture', RELEASE_COMMIT: commit, RELEASE_DIRECTORY: releases } });
+    env: { ...process.env, GOWORK: workspace, GOOS: 'darwin', RELEASE_VERSION: version, TARGET_NAME: 'fixture', RELEASE_COMMIT: commit, RELEASE_DIRECTORY: releases } });
   assert.equal(result.status, 0, result.stderr);
   const { files } = readArchive(path.join(releases, `yatm-fixture-${version}.tar.gz`));
   assert.equal(files.get('templates/testing/ltfs-file-backend/mount').toString(), 'committed fixture');
   assert(!files.has('templates/testing/ltfs-file-backend/private.log'));
   assert(!files.has('templates/testing/ltfs-file-backend/mount.test.mjs'));
   assert.equal(files.get('COMMIT').toString().trim(), commit);
+  for (const guide of ['index', 'devices', 'tar-tape-recovery']) {
+    assert.equal(files.get(`docs/operations/${guide}.md`).toString(), 'committed fixture');
+  }
+  assert(!files.has('docs/README.md'));
+  assert(!files.has('docs/architecture/media-io.md'));
+  assert(!files.has('docs/research/tar-tape.md'));
+});
+test('release-check disables inherited and command-line workspaces without changing development checks', t => {
+  const root = temporary(t);
+  write(root, 'Makefile', fs.readFileSync(path.join(repository, 'Makefile'), 'utf8') + '\ninclude probe.mk\n');
+  write(root, 'probe.mk', `check test-race generate:
+\t@go workspace-probe
+`);
+  const tools = path.join(root, 'tools');
+  const observed = path.join(root, 'workspace-observed');
+  const sqlite = path.join(root, 'sqlite-observed');
+  write(tools, 'node', '#!/usr/bin/env bash\nexit 0\n', 0o755);
+  write(tools, 'go', '#!/usr/bin/env bash\nprintf "%s\\n" "${GOWORK:-}" >> "$WORKSPACE_OBSERVED"\nif [[ "${CGO_ENABLED:-}" == 0 ]]; then printf "%s\\n" "$*" >> "$SQLITE_OBSERVED"; fi\n', 0o755);
+  const workspace = path.join(root, 'outside', 'go.work');
+  write(root, 'outside/go.work', 'go 1.26.8\n');
+  for (const args of [['release-check'], ['release-check', 'GOWORK=' + workspace], ['check']]) {
+    fs.writeFileSync(observed, '');
+    fs.writeFileSync(sqlite, '');
+    const result = spawnSync('make', ['--no-print-directory', '-s', ...args], {
+      cwd: root, encoding: 'utf8', env: { ...process.env, PATH: `${tools}:${process.env.PATH}`,
+        // Parent release-check invokes recursive make with GOWORK=off; this fixture owns its own command-line policy.
+        MAKEFLAGS: '', MFLAGS: '', MAKEOVERRIDES: '',
+        GOWORK: workspace, CGO_ENABLED: '1', WORKSPACE_OBSERVED: observed, SQLITE_OBSERVED: sqlite },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const values = fs.readFileSync(observed, 'utf8').trim().split('\n');
+    assert.deepEqual(values, args[0] === 'release-check' ? Array(5).fill('off') : [workspace], args.join(' '));
+    if (args[0] === 'release-check') {
+      const packages = fs.readFileSync(sqlite, 'utf8').trim().split(/\s+/);
+      assert.equal(packages[0], 'test');
+      for (const owner of ['./internal/media/...', './internal/resource']) assert(packages.includes(owner), `Missing pure-Go SQLite owner: ${owner}`);
+    }
+  }
+});
+test('Preview builder disables an external workspace before its first Go tool call', t => {
+  const { root, commit, temporaryRoot } = fixture(t);
+  const tools = path.join(temporaryRoot, 'tools');
+  const observed = path.join(temporaryRoot, 'workspace-observed');
+  write(tools, 'go', '#!/usr/bin/env bash\nprintf "%s" "${GOWORK:-}" > "$WORKSPACE_OBSERVED"\nexit 97\n', 0o755);
+  const result = spawnSync('bash', [path.join(root, 'previewworker/build/build.sh')], { cwd: temporaryRoot, encoding: 'utf8',
+    env: { ...process.env, PATH: `${tools}:${process.env.PATH}`, GOWORK: path.join(temporaryRoot, 'outside', 'go.work'),
+      WORKSPACE_OBSERVED: observed, RELEASE_VERSION: version, RELEASE_COMMIT: commit, TMPDIR: temporaryRoot } });
+  // The stub stops before native tools or downloads; this checks only release environment isolation.
+  assert.equal(result.status, 97, result.stderr);
+  assert.equal(fs.readFileSync(observed, 'utf8'), 'off');
 });
 for (const builder of ['build/release/build.sh', 'previewworker/build/build.sh']) {
   test(`${builder} rejects dirty source and mismatched commit before build tools run`, t => {

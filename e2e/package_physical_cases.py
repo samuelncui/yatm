@@ -40,21 +40,32 @@ def check_cleanup_state(state):
                     and state.get("capacity_restore_complete") and state.get("capacity_verify_complete"))
     else:
         required = ("prepare", "baseline", "restore")
-        complete = state.get("restore_complete")
+        # An admitted optional tar stage must finish its readback before cleanup.
+        complete = (state.get("restore_complete") and
+                    (state.get("physical_format", "ltfs_v1") != "tar_pax_v1" or state.get("tar_recovery_complete"))
+                    and all(not state.get("tar_" + stage + "_started") or state.get("tar_" + stage + "_complete")
+                            for stage in ("fill", "ew", "read_order")))
     require(complete and all(stage in state.get("completed_stages", []) for stage in required),
             "Cleanup requires completed baseline or capacity readback; retain incomplete evidence and owned resources.")
 
 
-class PhysicalCases(TapeWorkflows):
+TAPE_KEY = re.compile(rb"v1:[0-9a-fA-F]{64}")
+
+
+def redact_tape_keys(data):
+    # Same-length replacement keeps SQLite pages and protobuf lengths valid for later evidence checks.
+    return TAPE_KEY.sub(b"v1:" + b"x" * 64, data)
+
+class PhysicalEvidence:
+    """Owned Job receipts and sealed evidence shared by the two physical formats."""
+
     def __init__(self, test, state, save_state):
-        super().__init__(test, str(state.get("source_location", "")), str(state.get("restored_location", "")))
+        self.test = test
+        self.source = str(state.get("source_location", ""))
+        self.restored = str(state.get("restored_location", ""))
         self.state, self.save_state = state, save_state
         self.barcode = test.args.physical_barcode
         self.evidence = Path(state.get("physical_evidence_dir", Path(test.args.out) / "physical-evidence"))
-
-    def device(self, barcode):
-        require(barcode == self.barcode, "Tape operation requested a different barcode.")
-        return self.test.args.physical_device
 
     def save(self, **values):
         self.state.update(values)
@@ -81,15 +92,6 @@ class PhysicalCases(TapeWorkflows):
         self.save(**{key: str(job["id"])})
         return job
 
-    def inspect(self, allow_unassigned=False):
-        reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode))
-        if allow_unassigned and reply.get("identity", "") == "":
-            # Resolve registration for the explicitly assigned FORMAT identity, not a guessed label.
-            reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode),
-                                  "--identity", self.barcode)
-        require(reply["identity"] == self.barcode, "Device inspection returned a different barcode.")
-        return reply
-
     def settled(self, job, status="JOB_STATUS_COMPLETED", timeout=7200):
         result = self.test.wait_job(job, status, timeout=timeout)
         require(result.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED"),
@@ -97,15 +99,16 @@ class PhysicalCases(TapeWorkflows):
         require(not result.get("error"), "Physical operation settled with an error.")
         return result
 
-    def ejected(self):
-        devices = self.test.one("tape", "device", "list").get("devices", [])
-        require(self.device(self.barcode) in devices, "Device owner remains uncertain; no physical status query attempted.")
-        status = self.test.remote(["mt", "-f", self.device(self.barcode), "status"]).stdout.decode()
-        require(re.search(r"\bDR_OPEN\b", status), "Physical operation completed before cartridge eject.")
-
-    def archive_items(self, job):
-        # Shared assertions handle the deliberately small baseline; no EOM-size assumption here.
-        return self.items(job)
+    def saved_media(self, media_id, identity):
+        """One Media record from a private Library export; API replies omit its saved Tape key."""
+        records = self.test.private_cli("library", "export", "--output", "-", timeout=600)
+        require(records and records[0].get("type") == "header" and records[-1].get("type") == "end",
+                "Library export is incomplete.")
+        rows = [record["data"] for record in records
+                if record.get("type") == "media" and str(record.get("data", {}).get("id")) == str(media_id)]
+        require(len(rows) == 1 and rows[0].get("identity") == identity, "Library export lacks the saved Media.")
+        require(rows[0].get("profile", {}).get("tape", {}).get("encryption"), "Tape profile did not retain encryption.")
+        return rows[0]
 
     def export(self, name):
         records = self.test.cli("library", "export", "--output", "-")
@@ -132,40 +135,12 @@ class PhysicalCases(TapeWorkflows):
         self.tape_evidence(identifier)
         return self.evidence / "jobs" / identifier
 
-    def tape_evidence(self, identifier, verify=False):
-        root = self.test.install + "/work/jobs/" + identifier
-        listing = self.test.remote(["find", root, "(", "-type", "f", "-o", "-type", "l", ")", "-print0"]).stdout
-        for raw in listing.split(b"\x00"):
-            if not raw:
-                continue
-            path = raw.decode()
-            require(path.startswith(root + "/"), "Job artifact escaped its bundle.")
-            relative = str(relative_path(path[len(root) + 1:]))
-            if relative.startswith("tapes/") and (relative.endswith(".schema") or relative.rsplit("/", 1)[-1] in
-                                                 ("ltfs.log", "yatm-report.json", "capacity-before-copy.json",
-                                                  "capacity-before-unmount.json", "sg-trace.jsonl", "sg-trace.jsonl.error")):
-                self.test.remote(["test", "!", "-L", path])
-                destination = "jobs/" + identifier + "/" + relative
-                if verify:
-                    preserved = self.evidence / destination
-                    require(preserved.is_file() and sha256(preserved) ==
-                            self.test.remote(["sha256sum", "--", path]).stdout.decode().split()[0],
-                            "Live Tape evidence is missing or differs from its sealed copy; retain all Jobs.")
-                else:
-                    self.copy_evidence(path, destination)
-
     def copy_evidence(self, source, relative):
         expected = self.test.remote(["sha256sum", "--", source]).stdout.decode().split()[0]
-        path = self.keep(relative, self.test.remote(["cat", "--", source]).stdout)
-        require(sha256(path) == expected, "Transferred evidence checksum mismatch; retain Jobs.")
-        return path
-
-    def index(self, job):
-        root = self.capture_job(job)
-        directory = root / "tapes" / self.barcode
-        require((directory / "ltfs.log").is_file() and (directory / "yatm-report.json").is_file(),
-                "Archive Tape artifacts are incomplete.")
-        return parse_index((directory / (self.barcode + ".schema")).read_bytes())
+        data = self.test.remote(["cat", "--", source]).stdout
+        require(hashlib.sha256(data).hexdigest() == expected, "Transferred evidence checksum mismatch; retain Jobs.")
+        # Job profiles and state retain Media keys; evidence keeps same-length placeholders so files stay readable.
+        return self.keep(relative, redact_tape_keys(data))
 
     def check_fixture(self, items, group):
         expected = {name: value for name, value in self.state["fixture_manifest"].items() if name.startswith(group + "/")}
@@ -194,6 +169,173 @@ class PhysicalCases(TapeWorkflows):
                     and not item["file"].get("media_path")
                     and str(item["file"]["expected"].get("original_location_id")) == self.source for item in items),
                 "Prepared Archive is not pending on the selected source Location.")
+
+    def cleanup_evidence(self):
+        # Fixed existing artifacts, not a second acceptance record or reconstructed timings.
+        manifests = {}
+        for name in ("packages.sha256", "controller.sha256"):
+            path = self.evidence / "source" / name
+            require(path.is_file() and not path.is_symlink(), "Preserve source/" + name + " before cleanup.")
+            rows = [line.split("  ", 1) for line in path.read_text().splitlines()]
+            require(rows and all(len(row) == 2 and re.fullmatch(r"[0-9a-f]{64}", row[0]) and row[1] for row in rows),
+                    "Source checksum manifest is incomplete: " + name)
+            manifests[name] = {Path(filename).name: digest for digest, filename in rows}
+        require("physical_package_acceptance.py" in manifests["controller.sha256"],
+                "Source manifest lacks the executed physical controller identity.")
+        stages = (("performance-prepare", "performance-format", "capacity-write", "capacity-verify")
+                  if self.state.get("performance") else ("prepare", "baseline", "restore") + tuple(
+                      stage for stage in ("tar-clear-barcode", "tar-fill", "tar-ew", "tar-read-order")
+                      if stage in self.state.get("completed_stages", [])))
+        for stage in stages:
+            path = self.evidence / "stages" / stage / "report.json"
+            require(path.is_file() and not path.is_symlink(), "Preserve the original stage report before cleanup: " + stage)
+            report = json.loads(path.read_text())
+            require(all(report.get(key) == self.state[key] for key in ("commit", "version", "remote_root")),
+                    "Stage report belongs to a different source or installation: " + stage)
+            duration = report.get("duration_seconds")
+            require(type(duration) in (int, float) and math.isfinite(duration) and duration >= 0
+                    and report.get("status") in (("passed", "failed") if stage == "capacity-write" else ("passed",))
+                    and any(case.get("name") == "physical-" + stage and case.get("status") == report["status"]
+                            for case in report.get("cases", [])), "Stage timing/result is incomplete: " + stage)
+            if stage == stages[0]:
+                archive = report.get("archive", {})
+                require(archive.get("sha256") and manifests["packages.sha256"].get(Path(archive.get("path", "")).name)
+                        == archive["sha256"], "Package source manifest differs from the preparation report.")
+        if self.test.args.require_sg_trace:
+            require(self.state.get("performance"), "Required SG evidence applies to capacity Archive and Restore.")
+            require("physical_sg_trace.c" in manifests["controller.sha256"]
+                    and "physical_sg_trace.so" in manifests["controller.sha256"],
+                    "Source manifest lacks the executed SG observer source/binary identities.")
+            for key in ("capacity_archive_job_id", "capacity_restore_job_id"):
+                path = self.evidence / "jobs" / self.job(key)["id"] / "tapes" / self.barcode / "sg-trace.jsonl"
+                require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+                        "Required capacity SG trace is missing or empty: " + key)
+
+    def syscall_evidence(self):
+        paths = self.test.args.syscall_trace or []
+        require(paths or self.test.args.no_syscall_trace, "Declare syscall evidence before cleanup.")
+        names = [Path(path).name for path in paths]
+        require(len(set(names)) == len(names), "Supplied syscall traces have duplicate filenames.")
+        for source, name in zip(paths, names):
+            relative_path(name)
+            self.test.remote(["test", "-f", source])
+            self.test.remote(["test", "!", "-L", source])
+            users = self.test.remote(["fuser", "--", source], expected=None)
+            require(users.returncode == 1 and not users.stdout.strip() and not users.stderr.strip(),
+                    "Syscall evidence is active or ownership is uncertain; stop the observer before cleanup.")
+            destination = "observers/syscall/" + name
+            if self.state.get("evidence_complete"):
+                preserved = self.evidence / destination
+                require(preserved.is_file() and sha256(preserved) ==
+                        self.test.remote(["sha256sum", "--", source]).stdout.decode().split()[0],
+                        "Syscall evidence differs from its sealed copy; retain owned resources.")
+            else:
+                self.copy_evidence(source, destination)
+
+    def cleanup(self):
+        check_cleanup_state(self.state)
+        jobs, offset = [], 0
+        while True:
+            page = self.test.one("job", "list", "--limit", "100", "--offset", str(offset))
+            batch = page.get("jobs", [])
+            jobs.extend(batch)
+            if not page.get("has_more"):
+                break
+            require(batch, "Job listing did not advance.")
+            offset += len(batch)
+        require(all(job.get("status") in ("JOB_STATUS_READY", "JOB_STATUS_COMPLETED", "JOB_STATUS_FAILED")
+                    and job.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED")
+                    for job in jobs), "Cannot clean active or uncertain Jobs.")
+        self.check_device_released()
+        self.test.check_cleanup_paths()
+        # Capture the entire isolated catalog, including companion Jobs, before any deletion.
+        if not self.state.get("evidence_complete"):
+            require(jobs, "No physical Jobs remain to preserve.")
+            self.export("library-final.jsonl")
+            for job in jobs:
+                self.capture_job(job)
+        self.cleanup_evidence()
+        self.syscall_evidence()
+        if not self.state.get("evidence_complete"):
+            digest = seal_evidence(self.evidence)
+            self.save(evidence_complete=True, evidence_sha256=digest, cleanup_job_ids=[str(j["id"]) for j in jobs])
+        verify_evidence(self.evidence)
+        require(sha256(self.evidence / "SHA256SUMS") == self.state["evidence_sha256"],
+                "Saved evidence manifest changed; retain all Jobs.")
+        remaining = set(self.state["cleanup_job_ids"]) - set(self.state.get("deleted_job_ids", []))
+        require({str(job["id"]) for job in jobs} == remaining, "Job catalog changed after sealing; retain owned resources.")
+        for job in jobs:
+            saved = json.loads((self.evidence / "jobs" / str(job["id"]) / "catalog.json").read_text())
+            require(self.test.one("job", "get", str(job["id"]))["job"] == saved,
+                    "Job changed after evidence capture; retain owned resources.")
+            self.tape_evidence(str(job["id"]), verify=True)
+        for identifier in self.state["cleanup_job_ids"]:
+            if identifier in self.state.get("deleted_job_ids", []):
+                continue
+            self.test.cli("job", "delete", identifier)
+            self.test.remote(["test", "!", "-e", self.test.install + "/work/jobs/" + identifier])
+            self.save(deleted_job_ids=self.state.get("deleted_job_ids", []) + [identifier])
+        self.save(cleanup_complete=True)
+
+
+
+class PhysicalCases(PhysicalEvidence, TapeWorkflows):
+    def check_device_released(self):
+        self.ejected()
+    def device(self, barcode):
+        require(barcode == self.barcode, "Tape operation requested a different barcode.")
+        return self.test.args.physical_device
+
+    def inspect(self, allow_unassigned=False):
+        reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode))
+        if allow_unassigned and reply.get("identity", "") == "":
+            # Resolve registration for the explicitly assigned FORMAT identity, not a guessed label.
+            reply = self.test.one("media", "inspect", "tape", "--device", self.device(self.barcode),
+                                  "--identity", self.barcode)
+        require(reply["identity"] == self.barcode, "Device inspection returned a different barcode.")
+        return reply
+
+    def ejected(self):
+        devices = self.test.one("tape", "device", "list").get("devices", [])
+        device = self.device(self.barcode)
+        summary = next((summary for summary in devices if summary.get("device") == device), None)
+        require(summary is not None, "Device owner remains uncertain; no physical status query attempted.")
+        require(not summary.get("busy", False), "Device remains busy; no physical status query attempted.")
+        status = self.test.remote(["mt", "-f", device, "status"]).stdout.decode()
+        require(re.search(r"\bDR_OPEN\b", status), "Physical operation completed before cartridge eject.")
+
+    def archive_items(self, job):
+        # Shared assertions handle the deliberately small baseline; no EOM-size assumption here.
+        return self.items(job)
+
+    def tape_evidence(self, identifier, verify=False):
+        root = self.test.install + "/work/jobs/" + identifier
+        listing = self.test.remote(["find", root, "(", "-type", "f", "-o", "-type", "l", ")", "-print0"]).stdout
+        for raw in listing.split(b"\x00"):
+            if not raw:
+                continue
+            path = raw.decode()
+            require(path.startswith(root + "/"), "Job artifact escaped its bundle.")
+            relative = str(relative_path(path[len(root) + 1:]))
+            if relative.startswith("tapes/") and (relative.endswith(".schema") or relative.rsplit("/", 1)[-1] in
+                                                 ("ltfs.log", "yatm-report.json", "capacity-before-copy.json",
+                                                  "capacity-before-unmount.json", "sg-trace.jsonl", "sg-trace.jsonl.error")):
+                self.test.remote(["test", "!", "-L", path])
+                destination = "jobs/" + identifier + "/" + relative
+                if verify:
+                    preserved = self.evidence / destination
+                    require(preserved.is_file() and sha256(preserved) ==
+                            self.test.remote(["sha256sum", "--", path]).stdout.decode().split()[0],
+                            "Live Tape evidence is missing or differs from its sealed copy; retain all Jobs.")
+                else:
+                    self.copy_evidence(path, destination)
+
+    def index(self, job):
+        root = self.capture_job(job)
+        directory = root / "tapes" / self.barcode
+        require((directory / "ltfs.log").is_file() and (directory / "yatm-report.json").is_file(),
+                "Archive Tape artifacts are incomplete.")
+        return parse_index((directory / (self.barcode + ".schema")).read_bytes())
 
     def configure_preview(self):
         # settings preview prints PreviewSettings directly, matching package_media_cases.preview_assets.
@@ -252,7 +394,7 @@ class PhysicalCases(TapeWorkflows):
         self.save(prepare_complete=True)
 
     def baseline(self):
-        require("append_job_id" not in self.state and not self.state.get("baseline_complete"),
+        require(not self.state.get("append_write_started") and not self.state.get("baseline_complete"),
                 "Baseline APPEND already started; retain its state without replaying writes.")
         require(self.state.get("prepare_complete"), "Baseline requires completed nonphysical preparation.")
         job = self.job("format_job_id")
@@ -265,8 +407,7 @@ class PhysicalCases(TapeWorkflows):
         self.settled(job)
         self.ejected()
         media = self.media(self.barcode)
-        encryption = media["profile"]["tape"].get("encryption")
-        require(encryption, "Tape profile did not retain encryption.")
+        encryption = self.saved_media(media["id"], self.barcode)["profile"]["tape"]["encryption"]
         encryption_sha256 = hashlib.sha256(encryption.encode()).hexdigest()
         if "media_id" in self.state:
             require(str(media["id"]) == self.state["media_id"]
@@ -295,10 +436,13 @@ class PhysicalCases(TapeWorkflows):
         inspected = self.inspect()
         require(str(inspected["media"]["id"]) == self.state["media_id"]
                 and int(inspected.get("file_count", 0)) == len(initial), "Reload changed durable Tape identity/count.")
-        append = self.created("append_job_id", "archive", "create", "--location", self.source + ":append")
+        # A prepared APPEND Job is reused until its Media write is admitted.
+        append = (self.job("append_job_id") if "append_job_id" in self.state else
+                  self.created("append_job_id", "archive", "create", "--location", self.source + ":append"))
         self.settled(append, "JOB_STATUS_READY")
         self.check_prepared(append, "append")
         self.barcode_refusal(append)
+        self.save(append_write_started=True)
         self.test.cli("archive", "write", "tape", "append", append["id"], "--device", self.device(self.barcode),
                       "--barcode", self.barcode)
         self.settled(append)
@@ -327,14 +471,22 @@ class PhysicalCases(TapeWorkflows):
                 and not before["job"].get("error"), "Barcode preflight requires an idle prepared Job.")
         prepared = self.archive_items(job)
         media = self.media(self.barcode)
-        result = self.test.remote([self.test.install + "/yatm-cli", "--server", self.test.url,
-                                   "--timeout", "160s", "archive", "write", "tape", "append", job["id"],
-                                   "--device", self.device(self.barcode), "--barcode", wrong], expected=2)
+        cli = [self.test.install + "/yatm-cli", "--server", self.test.url, "--timeout", "160s",
+               "archive", "write", "tape"]
+        device = ["--device", self.device(self.barcode), "--barcode", wrong]
+        # FORMAT compares the request with the loaded cartridge's identity.
+        result = self.test.remote(cli + ["format", job["id"], *device, "--name", "Mismatch " + wrong,
+                                         "--confirm-format", wrong], expected=2)
         error = json.loads(result.stderr)
         message = error.get("error", "")
         require(error.get("code") == "safety" and "does not match the inspected identity" in message
                 and f'requested="{wrong}" inspected="{self.barcode}"' in message,
                 "Wrong-barcode CLI test did not observe its explicit identity refusal.")
+        # APPEND resolves the requested barcode's registered Media before inspecting the device.
+        result = self.test.remote(cli + ["append", job["id"], *device], expected=1)
+        error = json.loads(result.stderr)
+        require(error.get("code") == "not_found" and f'barcode="{wrong}"' in error.get("error", ""),
+                "Wrong-barcode APPEND did not observe its unregistered Media refusal.")
         require(self.test.one("job", "get", job["id"]) == before, "CLI preflight refusal admitted a Media attempt.")
         require(self.archive_items(job) == prepared and self.media(self.barcode) == media,
                 "CLI preflight refusal changed the prepared manifest or durable Media.")
@@ -346,7 +498,8 @@ class PhysicalCases(TapeWorkflows):
     def check_media(self):
         media = self.media(self.barcode)
         require(str(media["id"]) == self.state["media_id"] and hashlib.sha256(
-            media["profile"]["tape"]["encryption"].encode()).hexdigest() == self.state["encryption_sha256"],
+            self.saved_media(media["id"], self.barcode)["profile"]["tape"]["encryption"].encode()).hexdigest()
+            == self.state["encryption_sha256"],
             "APPEND/restart changed the Tape identity or encryption profile.")
 
     def restore(self):
@@ -432,111 +585,6 @@ class PhysicalCases(TapeWorkflows):
         digest = result.stdout.decode().split()[0]
         require(re.fullmatch(r"[0-9a-f]{64}", digest), "Fixture stream did not complete its SHA-256.")
         return {"size": size, "stream": stream, "sha256": digest}
-
-    def cleanup_evidence(self):
-        # Fixed existing artifacts, not a second acceptance record or reconstructed timings.
-        manifests = {}
-        for name in ("packages.sha256", "controller.sha256"):
-            path = self.evidence / "source" / name
-            require(path.is_file() and not path.is_symlink(), "Preserve source/" + name + " before cleanup.")
-            rows = [line.split("  ", 1) for line in path.read_text().splitlines()]
-            require(rows and all(len(row) == 2 and re.fullmatch(r"[0-9a-f]{64}", row[0]) and row[1] for row in rows),
-                    "Source checksum manifest is incomplete: " + name)
-            manifests[name] = {Path(filename).name: digest for digest, filename in rows}
-        require("physical_package_acceptance.py" in manifests["controller.sha256"],
-                "Source manifest lacks the executed physical controller identity.")
-        stages = (("performance-prepare", "performance-format", "capacity-write", "capacity-verify")
-                  if self.state.get("performance") else ("prepare", "baseline", "restore"))
-        for stage in stages:
-            path = self.evidence / "stages" / stage / "report.json"
-            require(path.is_file() and not path.is_symlink(), "Preserve the original stage report before cleanup: " + stage)
-            report = json.loads(path.read_text())
-            require(all(report.get(key) == self.state[key] for key in ("commit", "version", "remote_root")),
-                    "Stage report belongs to a different source or installation: " + stage)
-            duration = report.get("duration_seconds")
-            require(type(duration) in (int, float) and math.isfinite(duration) and duration >= 0
-                    and report.get("status") in (("passed", "failed") if stage == "capacity-write" else ("passed",))
-                    and any(case.get("name") == "physical-" + stage and case.get("status") == report["status"]
-                            for case in report.get("cases", [])), "Stage timing/result is incomplete: " + stage)
-            if stage == stages[0]:
-                archive = report.get("archive", {})
-                require(archive.get("sha256") and manifests["packages.sha256"].get(Path(archive.get("path", "")).name)
-                        == archive["sha256"], "Package source manifest differs from the preparation report.")
-        if self.test.args.require_sg_trace:
-            require(self.state.get("performance"), "Required SG evidence applies to capacity Archive and Restore.")
-            require("physical_sg_trace.c" in manifests["controller.sha256"]
-                    and "physical_sg_trace.so" in manifests["controller.sha256"],
-                    "Source manifest lacks the executed SG observer source/binary identities.")
-            for key in ("capacity_archive_job_id", "capacity_restore_job_id"):
-                path = self.evidence / "jobs" / self.job(key)["id"] / "tapes" / self.barcode / "sg-trace.jsonl"
-                require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
-                        "Required capacity SG trace is missing or empty: " + key)
-
-    def syscall_evidence(self):
-        paths = self.test.args.syscall_trace or []
-        require(paths or self.test.args.no_syscall_trace, "Declare syscall evidence before cleanup.")
-        names = [Path(path).name for path in paths]
-        require(len(set(names)) == len(names), "Supplied syscall traces have duplicate filenames.")
-        for source, name in zip(paths, names):
-            relative_path(name)
-            self.test.remote(["test", "-f", source])
-            self.test.remote(["test", "!", "-L", source])
-            users = self.test.remote(["fuser", "--", source], expected=None)
-            require(users.returncode == 1 and not users.stdout.strip() and not users.stderr.strip(),
-                    "Syscall evidence is active or ownership is uncertain; stop the observer before cleanup.")
-            destination = "observers/syscall/" + name
-            if self.state.get("evidence_complete"):
-                preserved = self.evidence / destination
-                require(preserved.is_file() and sha256(preserved) ==
-                        self.test.remote(["sha256sum", "--", source]).stdout.decode().split()[0],
-                        "Syscall evidence differs from its sealed copy; retain owned resources.")
-            else:
-                self.copy_evidence(source, destination)
-
-    def cleanup(self):
-        check_cleanup_state(self.state)
-        jobs, offset = [], 0
-        while True:
-            page = self.test.one("job", "list", "--limit", "100", "--offset", str(offset))
-            batch = page.get("jobs", [])
-            jobs.extend(batch)
-            if not page.get("has_more"):
-                break
-            require(batch, "Job listing did not advance.")
-            offset += len(batch)
-        require(all(job.get("status") in ("JOB_STATUS_READY", "JOB_STATUS_COMPLETED", "JOB_STATUS_FAILED")
-                    and job.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED")
-                    for job in jobs), "Cannot clean active or uncertain Jobs.")
-        self.ejected()
-        self.test.check_cleanup_paths()
-        # Capture the entire isolated catalog, including companion Jobs, before any deletion.
-        if not self.state.get("evidence_complete"):
-            require(jobs, "No physical Jobs remain to preserve.")
-            self.export("library-final.jsonl")
-            for job in jobs:
-                self.capture_job(job)
-        self.cleanup_evidence()
-        self.syscall_evidence()
-        if not self.state.get("evidence_complete"):
-            digest = seal_evidence(self.evidence)
-            self.save(evidence_complete=True, evidence_sha256=digest, cleanup_job_ids=[str(j["id"]) for j in jobs])
-        verify_evidence(self.evidence)
-        require(sha256(self.evidence / "SHA256SUMS") == self.state["evidence_sha256"],
-                "Saved evidence manifest changed; retain all Jobs.")
-        remaining = set(self.state["cleanup_job_ids"]) - set(self.state.get("deleted_job_ids", []))
-        require({str(job["id"]) for job in jobs} == remaining, "Job catalog changed after sealing; retain owned resources.")
-        for job in jobs:
-            saved = json.loads((self.evidence / "jobs" / str(job["id"]) / "catalog.json").read_text())
-            require(self.test.one("job", "get", str(job["id"]))["job"] == saved,
-                    "Job changed after evidence capture; retain owned resources.")
-            self.tape_evidence(str(job["id"]), verify=True)
-        for identifier in self.state["cleanup_job_ids"]:
-            if identifier in self.state.get("deleted_job_ids", []):
-                continue
-            self.test.cli("job", "delete", identifier)
-            self.test.remote(["test", "!", "-e", self.test.install + "/work/jobs/" + identifier])
-            self.save(deleted_job_ids=self.state.get("deleted_job_ids", []) + [identifier])
-        self.save(cleanup_complete=True)
 
 
 def run_stage(test, state, save_state):

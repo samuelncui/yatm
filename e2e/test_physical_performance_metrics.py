@@ -3,6 +3,9 @@
 import csv
 import importlib.util
 import json
+import math
+import os
+import sys
 from pathlib import Path
 import tempfile
 import time
@@ -195,11 +198,93 @@ class CurveTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "SVG rendering requires optional matplotlib")
     def test_plot_artifact_contains_real_curve_and_wait_extent(self):
+        import matplotlib.pyplot as plt
+
         with tempfile.TemporaryDirectory() as directory:
-            result = self.analyze([row(t, t * 1000000) for t in range(0, 202, 2)], directory, plot=True)
-            svg = Path(result["artifacts"]["curve"]).read_text()
+            # A complete day retains preparation/finalization waits around the copying observations.
+            paths = {name: Path(directory, "synthetic-24h-" + name + suffix) for name, suffix in
+                     (("intervals", ".csv"), ("bins", ".csv"), ("files", ".csv"), ("driver", ".csv"),
+                      ("resources", ".csv"), ("observations", ".csv"), ("milestones", ".csv"), ("curve", ".svg"))}
+            duration, copy_start, copy_end, origin, gap = 86400, 120, 86280, 122, 43200
+
+            def write(name, fields, rows):
+                with paths[name].open("w", newline="") as output:
+                    writer = csv.writer(output)
+                    writer.writerow(fields)
+                    writer.writerows(rows)
+
+            write("intervals", ["series", "start", "end", "rate"],
+                  ((series, start, start + period, "" if start == gap else 1000000)
+                   for series, period, begin, end in [("acp", 2, copy_start, copy_end)] +
+                   [("0C:" + str(code), 5, 0, duration) for code in range(4)]
+                   for start in range(begin, end, period)))
+            write("files", ["start", "end", "file_work_entries_per_second"],
+                  ((start, start + 2, "" if start == gap else 1) for start in range(copy_start, copy_end, 2)))
+
+            def bins():
+                for width in (10, 30):
+                    for end in range(width, duration + 1, width):
+                        known = copy_start < end <= copy_end and not end - width <= gap < end
+                        yield width, end, 1000000 if known else "", int(known)
+
+            write("bins", ["width_seconds", "end_seconds", "bytes_per_second", "coverage"],
+                  bins())
+
+            # Saved protocol shapes have ten 0C and five 34 parameters; only four counters become rates.
+            write("driver", ["time_seconds", "page", "parameter", "value", "status"],
+                  ((seconds, page, code, 0, "observed") for seconds in range(0, duration + 1, 5)
+                   for page, codes in (("0C", [*range(9), 256]), ("34", range(5))) for code in codes))
+            process = ("cpu_ticks", "user_ticks", "system_ticks", "VmRSS_kib", "VmHWM_kib", "rchar", "wchar",
+                       "syscr", "syscw", "read_bytes", "write_bytes", "cancelled_write_bytes", "open_descriptors")
+            host = ("cpu_total_ticks", "cpu_idle_ticks", "cpu_iowait_ticks", "clock_ticks_per_second", "MemAvailable_kib",
+                    "MemFree_kib", "Cached_kib", "Dirty_kib", "Writeback_kib")
+            write("resources", ["time_seconds", "role", "pid", "start_ticks", "metric", "value"],
+                  ((seconds, role, 1234, 5678, metric, 100 if metric == "clock_ticks_per_second" else
+                    65536 if metric == "VmRSS_kib" else seconds * (100 if metric == "cpu_ticks" else 1000000))
+                   for seconds in range(0, duration + 1, 5) for role, names in (("executor", process), ("host", host))
+                   for metric in names))
+            write("observations", ["time_seconds", "phase", "status"],
+                  ((seconds, phase, "observed") for seconds, phase in
+                   ((0, "JOB_PHASE_PREPARING_MEDIA"), (copy_start, "JOB_PHASE_COPYING_TO_MEDIA"),
+                    (copy_end, "JOB_PHASE_FINALIZING_MEDIA"))))
+            write("milestones", ["time_seconds", "name"], ((0, "admitted"), (duration, "settled")))
+
+            # Render the actual figure once, inspecting its axes before the normal Close releases it.
+            summary = {"origin_seconds": origin, "observation_start_seconds": 0, "observation_end_seconds": duration,
+                       "first_stable_window": {"start_seconds": 122, "end_seconds": 302}}
+            close = plt.close
+            figures = []
+
+            def inspect(figure):
+                if hasattr(figure, "axes"):
+                    figures.append(figure)
+                    self.assertEqual(len(figure.axes), 7)
+                    for axis in figure.axes:
+                        self.assertEqual(axis.get_xlim(), (-origin, duration - origin))
+                    line = next(line for line in figure.axes[0].lines if line.get_label() == "Raw ACP handoff intervals")
+                    index = (gap - copy_start) // 2 * 3
+                    self.assertTrue(math.isnan(line.get_ydata()[index]))
+                    self.assertTrue(math.isnan(line.get_ydata()[index + 1]))
+                    self.assertEqual(line.get_ydata()[index - 2], 1)
+                    self.assertEqual(line.get_ydata()[index + 3], 1)
+                    self.assertTrue(math.isnan(figure.axes[6].lines[0].get_ydata()[index]))
+                    finite = [value for value in line.get_xdata() if math.isfinite(value)]
+                    self.assertGreater(min(finite), -origin)
+                    self.assertLess(max(finite), duration - origin)
+                close(figure)
+
+            with mock.patch.object(plt, "close", side_effect=inspect):
+                metrics.plot_curves(paths, summary)
+            self.assertEqual(len(figures), 1)
+            for name, count in (("intervals", 112200), ("files", 43080), ("driver", 259215),
+                                ("bins", 11520), ("resources", 380182)):
+                with paths[name].open() as source:
+                    self.assertEqual(sum(1 for _ in source) - 1, count)
+            svg = paths["curve"].read_text()
             self.assertIn("ACP supply", svg)
             self.assertIn("First qualifying", svg)
+            self.assertIn("settled", svg)
+            self.assertIn("Page34/0", svg)
 
 
 class SamplerTests(unittest.TestCase):
@@ -295,6 +380,177 @@ class SamplerTests(unittest.TestCase):
                     request=lambda argv, timeout: {"exit_code": 0, "stdout": "{}"}):
                     time.sleep(0.02)
             self.assertEqual(path.read_text(), "preserve")
+
+
+class ExplicitResourceTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.proc = Path(self.directory.name) / "proc"
+        self.proc.mkdir()
+        (self.proc / "stat").write_text("cpu 10 2 3 40 5 6 7 8 0 0\n")
+        (self.proc / "diskstats").write_text("8 0 sda 1 2 3 4\n")
+        (self.proc / "meminfo").write_text("MemAvailable: 100 kB\nDirty: 2 kB\n")
+        self.process = self.proc / "20"
+        self.process.mkdir()
+        self.executable = "/owned/executor.test"
+        (self.process / "exe").symlink_to(self.executable)
+        fields = ["0"] * 20
+        fields[0], fields[7], fields[9], fields[11], fields[12], fields[19] = "S", "72", "3", "123", "45", "600"
+        self.stat = "20 (executor with ) parenthesis) " + " ".join(fields)
+        (self.process / "stat").write_text(self.stat)
+        (self.process / "status").write_text("VmRSS: 1000 kB\nVmHWM: 2000 kB\n")
+        (self.process / "io").write_text("read_bytes: 1234\nwrite_bytes: 5678\n")
+        (self.process / "fd").mkdir()
+        (self.process / "fd" / "0").touch()
+        # An unrelated process must never be inspected in explicit mode.
+        (self.proc / "21").mkdir()
+        def mapped(value):
+            value = str(value)
+            return self.proc / value.removeprefix("/proc/") if value.startswith("/proc/") else self.proc if value == "/proc" else Path(value)
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(metrics, "Path", side_effect=mapped).start()
+        mock.patch.object(metrics.os, "sysconf", return_value=100).start()
+        original_stat = metrics.os.stat
+        def stat(path, *args, **kwargs):
+            if str(path) == "/owned":
+                return SimpleNamespace(st_dev=metrics.os.makedev(8, 3))
+            return original_stat(path, *args, **kwargs)
+        mock.patch.object(metrics.os, "stat", side_effect=stat).start()
+        mock.patch.object(metrics.os, "statvfs", return_value=SimpleNamespace(
+            f_blocks=100, f_bfree=40, f_bavail=30, f_frsize=4096)).start()
+
+    def sample(self, **kwargs):
+        return metrics.resource_sample(pid=20, executable=self.executable, start_ticks=600, **kwargs)
+
+    def test_valid_explicit_identity_uses_shared_counters_only_for_executor(self):
+        with mock.patch.object(Path, "glob", side_effect=AssertionError("Explicit sampling must not scan processes")):
+            result = self.sample()
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(set(result["processes"]), {"executor"})
+        self.assertEqual(result["processes"]["executor"], {
+            "pid": 20, "cpu_ticks": 168, "start_ticks": 600, "minflt": 72, "majflt": 3,
+            "VmRSS_kib": 1000, "VmHWM_kib": 2000, "read_bytes": 1234,
+            "write_bytes": 5678, "open_descriptors": 1})
+        self.assertEqual(result["host"]["cpu_total_ticks"], 81)
+        self.assertEqual(result["diskstats"], "8 0 sda 1 2 3 4\n")
+        self.assertEqual(result["filesystem"], {"path": "/owned", "device_major": 8,
+            "device_minor": 3, "total_bytes": 409600, "free_bytes": 163840, "available_bytes": 122880})
+
+    def test_foreign_executable_reused_pid_and_exited_process_are_absent(self):
+        for change in ("executable", "start_ticks", "exited"):
+            with self.subTest(change=change):
+                (self.process / "stat").write_text(self.stat)
+                (self.process / "exe").unlink(missing_ok=True)
+                if change != "exited":
+                    (self.process / "exe").symlink_to("/foreign/executor.test" if change == "executable" else self.executable)
+                if change == "start_ticks":
+                    (self.process / "stat").write_text(self.stat.removesuffix("600") + "601")
+                result = self.sample()
+                self.assertEqual(result["processes"], {})
+                self.assertTrue(result["errors"])
+
+    def test_identity_change_or_exit_during_collection_discards_sample(self):
+        original = metrics._proc_text
+        for change in ("executable", "start_ticks", "exited"):
+            with self.subTest(change=change):
+                (self.process / "stat").write_text(self.stat)
+                (self.process / "exe").unlink(missing_ok=True)
+                (self.process / "exe").symlink_to(self.executable)
+                def read(path, limit=1024 * 1024):
+                    value = original(path, limit)
+                    if path.name == "io":
+                        if change == "start_ticks":
+                            (self.process / "stat").write_text(self.stat.removesuffix("600") + "601")
+                        else:
+                            (self.process / "exe").unlink()
+                            if change == "executable":
+                                (self.process / "exe").symlink_to("/foreign/executor.test")
+                    return value
+                with mock.patch.object(metrics, "_proc_text", side_effect=read):
+                    result = self.sample()
+                self.assertEqual(result["processes"], {})
+                self.assertTrue(result["errors"])
+
+    def test_unknown_filesystem_facts_remain_absent(self):
+        for target in ("stat", "statvfs"):
+            with self.subTest(target=target), mock.patch.object(metrics.os, target, side_effect=OSError("unavailable")):
+                result = self.sample()
+            self.assertNotIn("filesystem", result)
+            self.assertIn("executor", result["processes"])
+            self.assertTrue(any("Executor filesystem: unavailable" in error for error in result["errors"]))
+
+    def test_full_identity_and_exclusive_modes_are_required(self):
+        for kwargs in ({"pid": 20}, {"executable": self.executable}, {"start_ticks": 600},
+                       {"pid": 20, "executable": self.executable},
+                       {"pid": 0, "executable": self.executable, "start_ticks": 600},
+                       {"pid": 20, "executable": "relative", "start_ticks": 600},
+                       {"pid": 20, "executable": self.executable, "start_ticks": -1},
+                       {"pid": 20, "executable": self.executable, "start_ticks": 600, "install": "/owned", "tape_dir": "/tape"},
+                       {}, {"install": "/owned"}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                metrics.resource_sample(**kwargs)
+
+    def test_resource_read_and_descriptor_limits_fail_without_partial_process(self):
+        (self.process / "io").write_text("x" * (1024 * 1024 + 1))
+        result = self.sample()
+        self.assertEqual(result["processes"], {})
+        self.assertTrue(any("read limit" in error for error in result["errors"]))
+        (self.process / "io").write_text("read_bytes: 1234\n")
+        with mock.patch.object(Path, "iterdir", return_value=iter(range(65537))):
+            result = self.sample()
+        self.assertEqual(result["processes"], {})
+        self.assertTrue(any("descriptor count" in error for error in result["errors"]))
+
+    def test_cli_preserves_positional_mode_and_accepts_explicit_identity(self):
+        for argv, expected in ((["resources", "/owned", "/tape"],
+                                (("/owned", "/tape"), {"pid": None, "executable": None, "start_ticks": None})),
+                               (["resources", "--pid", "20", "--executable", self.executable, "--start-ticks", "600"],
+                                ((None, None), {"pid": 20, "executable": self.executable, "start_ticks": 600}))):
+            with self.subTest(argv=argv), mock.patch.object(metrics, "resource_sample", return_value={}) as sample, mock.patch("builtins.print") as output:
+                metrics.main(argv)
+                self.assertEqual(sample.call_args, mock.call(*expected[0], **expected[1]))
+                output.assert_called_once_with("{}")
+
+    def test_cli_rejects_missing_mixed_and_invalid_identity(self):
+        for argv in (["resources"], ["resources", "--pid", "20"],
+                     ["resources", "/owned", "/tape", "--pid", "20", "--executable", self.executable, "--start-ticks", "600"],
+                     ["resources", "--pid", "not-an-int"],
+                     ["resources", "--pid", "20", "--executable", self.executable, "--start-ticks", "-1"]):
+            with self.subTest(argv=argv), mock.patch("sys.stderr"), self.assertRaises(SystemExit) as error:
+                metrics.main(argv)
+            self.assertEqual(error.exception.code, 2)
+
+
+class NativeResourceTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "Native resource sampling requires Linux /proc")
+    def test_own_process_identity_counters_and_filesystem(self):
+        pid = os.getpid()
+        executable = os.readlink("/proc/self/exe")
+        fields = Path("/proc", str(pid), "stat").read_text().rsplit(")", 1)[1].split()
+        start_ticks = int(fields[19])
+        result = metrics.resource_sample(pid=pid, executable=executable, start_ticks=start_ticks)
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(set(result["processes"]), {"executor"})
+        process = result["processes"]["executor"]
+        self.assertEqual((process["pid"], process["start_ticks"]), (pid, start_ticks))
+        for name in ("cpu_ticks", "minflt", "majflt", "read_bytes", "write_bytes"):
+            self.assertGreaterEqual(process[name], 0)
+        self.assertGreater(process["VmRSS_kib"], 0)
+        self.assertGreater(process["open_descriptors"], 0)
+        directory = os.path.dirname(executable)
+        device = os.stat(directory).st_dev
+        filesystem = result["filesystem"]
+        self.assertEqual(filesystem["path"], directory)
+        self.assertEqual((filesystem["device_major"], filesystem["device_minor"]),
+                         (os.major(device), os.minor(device)))
+        capacity = os.statvfs(directory)
+        self.assertEqual(filesystem["total_bytes"], capacity.f_blocks * capacity.f_frsize)
+        for name in ("free_bytes", "available_bytes"):
+            self.assertGreaterEqual(filesystem[name], 0)
+            self.assertLessEqual(filesystem[name], filesystem["total_bytes"])
+        self.assertEqual(result["host"]["clock_ticks_per_second"], os.sysconf("SC_CLK_TCK"))
+        self.assertTrue(result["diskstats"].strip())
 
 
 if __name__ == "__main__":

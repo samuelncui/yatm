@@ -1,11 +1,11 @@
 """Bounded measurement of ACP handoff and drive proxies, never physical commitment."""
 
+import argparse
 import csv
 from collections import deque
 import json
 import math
 import os
-import sys
 from pathlib import Path
 import queue
 import threading
@@ -436,45 +436,95 @@ def analyze_samples(raw_path, output_prefix, plot=True):
     return summary
 
 
-def resource_sample(install, tape_dir):
-    """Run on the execution host; no SG commands, configuration or process mutations."""
+def _proc_text(path, limit=1024 * 1024):
+    with path.open("rb") as source:
+        value = source.read(limit + 1)
+    if len(value) > limit:
+        raise ValueError("Resource file exceeds read limit: " + str(path))
+    return os.fsdecode(value)
+
+
+def _process_stat(process):
+    # proc stat comm may include spaces/parentheses; split after its final ')'.
+    fields = _proc_text(process / "stat").rsplit(")", 1)[1].split()
+    return {"pid": int(process.name), "cpu_ticks": int(fields[11]) + int(fields[12]),
+            "start_ticks": int(fields[19]), "minflt": int(fields[7]), "majflt": int(fields[9])}
+
+
+def resource_sample(install=None, tape_dir=None, *, pid=None, executable=None, start_ticks=None):
+    """Read execution-host counters for owned services or one explicitly identified Executor."""
+    explicit = any(value is not None for value in (pid, executable, start_ticks))
+    if explicit:
+        if install is not None or tape_dir is not None:
+            raise ValueError("Explicit process identity cannot be combined with install/Tape directory")
+        if (type(pid) is not int or pid <= 0 or type(start_ticks) is not int or start_ticks < 0
+                or not executable or not os.path.isabs(executable)):
+            raise ValueError("Explicit process identity requires positive pid, absolute executable and nonnegative start_ticks")
+    elif install is None or tape_dir is None:
+        raise ValueError("Resource sampling requires install and Tape directory")
     result = {"host": {}, "processes": {}, "errors": []}
     try:
-        cpu = list(map(int, Path("/proc/stat").read_text().splitlines()[0].split()[1:9]))
+        cpu = list(map(int, _proc_text(Path("/proc/stat")).splitlines()[0].split()[1:9]))
         result["host"].update(cpu_total_ticks=sum(cpu), cpu_idle_ticks=cpu[3], cpu_iowait_ticks=cpu[4])
         result["host"]["clock_ticks_per_second"] = os.sysconf("SC_CLK_TCK")
-        result["diskstats"] = Path("/proc/diskstats").read_text()
-        for line in Path("/proc/meminfo").read_text().splitlines():
+        result["diskstats"] = _proc_text(Path("/proc/diskstats"))
+        for line in _proc_text(Path("/proc/meminfo")).splitlines():
             key, value = line.split(":", 1)
             if key in ("MemAvailable", "MemFree", "Cached", "Dirty", "Writeback"):
                 result["host"][key + "_kib"] = int(value.split()[0])
     except (OSError, ValueError, IndexError) as error:
         result["errors"].append(str(error))
-    ambiguous = set()
-    for process in Path("/proc").glob("[0-9]*"):
-        role = None
+    if explicit:
         try:
-            argv = [os.fsdecode(arg) for arg in (process / "cmdline").read_bytes().split(b"\0") if arg]
-            if not argv:
-                continue
-            role = None
-            if argv[0] == install + "/yatm-httpd":
-                role = "yatm"
-            elif Path(argv[0]).name == "ltfs" and ("work_directory=" + tape_dir) in argv:
-                role = "ltfs"
-            if role is None:
-                continue
-            # proc stat comm may include spaces/parentheses; split after its final ')'.
-            fields = (process / "stat").read_text().rsplit(")", 1)[1].split()
-            values = {"pid": int(process.name), "cpu_ticks": int(fields[11]) + int(fields[12]),
-                      "start_ticks": int(fields[19]), "minflt": int(fields[7]), "majflt": int(fields[9])}
-            for line in (process / "status").read_text().splitlines():
+            directory = os.path.dirname(executable)
+            device = os.stat(directory).st_dev
+            filesystem = os.statvfs(directory)
+            result["filesystem"] = {"path": directory, "device_major": os.major(device),
+                                    "device_minor": os.minor(device),
+                                    "total_bytes": filesystem.f_blocks * filesystem.f_frsize,
+                                    "free_bytes": filesystem.f_bfree * filesystem.f_frsize,
+                                    "available_bytes": filesystem.f_bavail * filesystem.f_frsize}
+        except (OSError, ValueError, AttributeError) as error:
+            result["errors"].append("Executor filesystem: " + str(error))
+    ambiguous = set()
+    processes = [Path("/proc") / str(pid)] if explicit else Path("/proc").glob("[0-9]*")
+    for index, process in enumerate(processes):
+        if index >= 65536:
+            result["errors"].append("Resource process count exceeds limit")
+            break
+        role = "executor" if explicit else None
+        try:
+            if explicit:
+                if os.readlink(process / "exe") != executable:
+                    raise ValueError("Executor executable identity mismatch")
+            else:
+                argv = [arg for arg in _proc_text(process / "cmdline").split("\0") if arg]
+                if not argv:
+                    continue
+                if argv[0] == install + "/yatm-httpd":
+                    role = "yatm"
+                elif Path(argv[0]).name == "ltfs" and ("work_directory=" + tape_dir) in argv:
+                    role = "ltfs"
+                if role is None:
+                    continue
+            values = _process_stat(process)
+            if explicit and values["start_ticks"] != start_ticks:
+                raise ValueError("Executor start_ticks identity mismatch")
+            for line in _proc_text(process / "status").splitlines():
                 if line.startswith(("VmRSS:", "VmHWM:")):
                     values[line.split(":", 1)[0] + "_kib"] = int(line.split()[1])
-            for line in (process / "io").read_text().splitlines():
+            for line in _proc_text(process / "io").splitlines():
                 key, value = line.split(":", 1)
                 values[key] = int(value)
-            values["open_descriptors"] = len(list((process / "fd").iterdir()))
+            descriptors = 0
+            for _ in (process / "fd").iterdir():
+                descriptors += 1
+                if descriptors > 65536:
+                    raise ValueError("Resource descriptor count exceeds limit")
+            values["open_descriptors"] = descriptors
+            if explicit and (_process_stat(process)["start_ticks"] != start_ticks
+                             or os.readlink(process / "exe") != executable):
+                raise ValueError("Executor identity changed during resource collection")
             if role in ambiguous or role in result["processes"]:
                 result["errors"].append("Multiple matching " + role + " processes; ownership ambiguous")
                 result["processes"].pop(role, None)
@@ -489,7 +539,7 @@ def resource_sample(install, tape_dir):
 
 
 def plot_curves(paths, summary):
-    """Standalone fixed-bin/raw/proxy plot; limits cover the four-hour Job timeout."""
+    """Bounded 24-hour plot at 2s app/5s driver cadence, with ten 0C and five 34 parameters."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -498,8 +548,8 @@ def plot_curves(paths, summary):
     lines = {}
     with paths["intervals"].open() as source:
         for index, row in enumerate(csv.DictReader(source)):
-            if index >= 100000:
-                raise ValueError("Curve exceeds bounded 100000 raw intervals")
+            if index >= 120000:
+                raise ValueError("Curve exceeds bounded 120000 raw intervals")
             key = row["series"]
             x, y = lines.setdefault(key, ([], []))
             x.extend([float(row["start"]) - origin, float(row["end"]) - origin, math.nan])
@@ -524,7 +574,7 @@ def plot_curves(paths, summary):
     file_x, file_y = [], []
     with paths["files"].open() as source:
         for index, row in enumerate(csv.DictReader(source)):
-            if index >= 30000:
+            if index >= 45000:
                 raise ValueError("Curve exceeds bounded file-work-entry intervals")
             file_x.extend([float(row["start"]) - origin, float(row["end"]) - origin, math.nan])
             rate = float(row["file_work_entries_per_second"]) if row["file_work_entries_per_second"] else math.nan
@@ -533,7 +583,7 @@ def plot_curves(paths, summary):
     reposition = ([], [])
     with paths["driver"].open() as source:
         for index, row in enumerate(csv.DictReader(source)):
-            if index >= 200000:
+            if index >= 300000:
                 raise ValueError("Curve exceeds bounded driver rows")
             if row["page"].upper() == "34" and row["parameter"] == "0" and row["status"] == "observed":
                 reposition[0].append(float(row["time_seconds"]) - origin)
@@ -613,8 +663,23 @@ def plot_curves(paths, summary):
     plt.close(figure)
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    resources = commands.add_parser("resources")
+    resources.add_argument("install", nargs="?")
+    resources.add_argument("tape_dir", nargs="?")
+    resources.add_argument("--pid", type=int)
+    resources.add_argument("--executable")
+    resources.add_argument("--start-ticks", type=int)
+    args = parser.parse_args(argv)
+    try:
+        result = resource_sample(args.install, args.tape_dir, pid=args.pid,
+                                 executable=args.executable, start_ticks=args.start_ticks)
+    except ValueError as error:
+        parser.error(str(error))
+    print(json.dumps(result))
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "resources":
-        print(json.dumps(resource_sample(sys.argv[2], sys.argv[3])))
-    else:
-        raise SystemExit("Usage: physical_performance_metrics.py resources INSTALL TAPE_DIRECTORY")
+    main()

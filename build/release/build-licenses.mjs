@@ -95,6 +95,7 @@ fs.writeFileSync(path.join(output, "dependencies.json"), JSON.stringify(records,
 if (mode !== "frontend") {
   fs.copyFileSync("THIRD_PARTY_NOTICES", path.join(output, "THIRD_PARTY_NOTICES"));
   fs.copyFileSync("licenses/lto-info.LICENSE", path.join(output, "lto-info.LICENSE"));
+  fs.copyFileSync("licenses/jpt-lkh-amz.LICENSE", path.join(output, "jpt-lkh-amz.LICENSE"));
 }
 fs.copyFileSync("licenses/react-dnd.LICENSE", path.join(output, "react-dnd.LICENSE"));
 console.log(`Collected notices for ${records.length} distributed dependencies.`);

@@ -101,6 +101,7 @@ test('package sources verifies module inputs and preserves offline guide links',
     GOMODCACHE: cache,
     GOPROXY: pathToFileURL(path.join(root, 'proxy')).href,
     GOSUMDB: 'off',
+    GOWORK: 'off',
     GOTOOLCHAIN: 'local',
   };
   const download = run('go', ['mod', 'tidy'], { cwd: worker, env: environment });

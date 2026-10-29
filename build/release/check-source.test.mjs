@@ -37,7 +37,7 @@ function fixture(t) {
 
 test('owned templates, generated source, migration and licensed Demo media remain releasable', t => {
   const { root, write, commit } = fixture(t);
-  for (const name of ['frontend/.env.example', '.vscode/settings.json', 'config.example.yaml',
+  for (const name of ['TODO.md', 'frontend/.env.example', '.vscode/settings.json', 'config.example.yaml',
     'entity/file.pb.go', 'frontend/src/entity/file.ts', 'internal/migrate/legacy/pb/legacy.pb.go',
     'e2e/testdata/mount-file.sh', 'e2e/ltfs-file-backend/mount', 'previewworker/build/ffmpeg-sysctl-header.patch',
     '.agents/skills/yatm/SKILL.md', 'internal/demo/assets/timeline.png', 'internal/demo/assets/big-buck-bunny.mp4']) write(name, 'Public fixture');
@@ -64,6 +64,8 @@ for (const [name, bytes, reason] of [
   ['frontend/.env.production', 'private configuration', /Local environment/],
   ['dev/config.yaml', 'local deployment', /Local configuration/],
   ['frontend/node_modules/package/index.js', 'dependency output', /Private or generated/],
+  ['dev/performance/__pycache__/tool.pyc', 'Python bytecode', /Private or generated/],
+  ['dev/performance/tool.pyc', 'Python bytecode', /Runtime data/],
   ['output/README.md', 'build output', /no repository owner/],
   ['experiments/main.go', 'unowned prototype', /no repository owner/],
   ['build/README.md', 'unowned build content', /no repository owner/],

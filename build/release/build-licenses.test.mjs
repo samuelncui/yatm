@@ -16,6 +16,8 @@ test('split notice collection preserves the full graph without frontend dependen
   };
   for (const name of ['build-licenses.mjs', 'native-notices.mjs']) write(`build/release/${name}`, fs.readFileSync(new URL(name, import.meta.url)));
   for (const name of ['THIRD_PARTY_NOTICES', 'licenses/lto-info.LICENSE', 'licenses/react-dnd.LICENSE', 'module/LICENSE', 'goroot/LICENSE', 'frontend/node_modules/example/LICENSE']) write(name, 'public attribution');
+  const jptLicense = fs.readFileSync(new URL('../../licenses/jpt-lkh-amz.LICENSE', import.meta.url));
+  write('licenses/jpt-lkh-amz.LICENSE', jptLicense);
   write('frontend/package.json', JSON.stringify({ dependencies: { example: '1.0.0' } }));
   write('frontend/node_modules/example/package.json', JSON.stringify({ name: 'example', version: '1.0.0', license: 'MIT' }));
   write('bin/go', `#!/bin/sh
@@ -39,10 +41,12 @@ test('split notice collection preserves the full graph without frontend dependen
   assert.equal(collect('split', 'frontend'), '', 'Frontend collection invoked Go');
   const frontend = JSON.parse(fs.readFileSync(path.join(root, 'split/dependencies.json')));
   assert.deepEqual(frontend.map(item => item.kind), ['node']);
+  assert(!fs.existsSync(path.join(root, 'split/jpt-lkh-amz.LICENSE')), 'Backend source notice entered the shared frontend artifact');
   fs.rmSync(path.join(root, 'frontend/node_modules'), { recursive: true });
   assert(collect('split', 'backend').includes('env GOROOT'));
   const full = directoryFiles(path.join(root, 'full'));
   const split = directoryFiles(path.join(root, 'split'));
+  assert.deepEqual(split.get('jpt-lkh-amz.LICENSE'), jptLicense, 'Backend collection must retain the exact source license');
   const records = bytes => JSON.parse(bytes).sort((a, b) => `${a.kind}/${a.name}`.localeCompare(`${b.kind}/${b.name}`));
   assert.deepEqual(records(full.get('dependencies.json')), records(split.get('dependencies.json')));
   full.delete('dependencies.json');

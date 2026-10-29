@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build an optional, native Preview package without installing system libraries.
 set -euo pipefail
+# Resolve dependencies from the committed module files, never an external workspace.
+export GOWORK=off
 REPOSITORY="$(cd "$(dirname "$0")/../.." && pwd)"
 RELEASE_DIRECTORY="${RELEASE_DIRECTORY:-$REPOSITORY/output/releases}"
 [[ "$RELEASE_DIRECTORY" == /* ]] || RELEASE_DIRECTORY="$PWD/$RELEASE_DIRECTORY"

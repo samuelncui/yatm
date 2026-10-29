@@ -68,12 +68,12 @@ release-check:
 	node build/release/check-source.mjs
 	node build/release/check-content.mjs source . HEAD
 	node build/release/check-preview-fixtures.mjs
-	$(MAKE) check
-	$(MAKE) test-race
-	CGO_ENABLED=0 go test ./internal/library ./entity ./internal/executor/... ./internal/apis ./internal/migrate/legacy ./internal/demo ./internal/preview/...
-	$(MAKE) generate
+	$(MAKE) GOWORK=off check
+	$(MAKE) GOWORK=off test-race
+	GOWORK=off CGO_ENABLED=0 go test ./internal/library ./entity ./internal/executor/... ./internal/apis ./internal/migrate/legacy ./internal/demo ./internal/preview/... ./internal/media/... ./internal/resource
+	$(MAKE) GOWORK=off generate
 	node build/release/check-source.mjs
-	$(MAKE) generate
+	$(MAKE) GOWORK=off generate
 	node build/release/check-source.mjs
 
 test-race:

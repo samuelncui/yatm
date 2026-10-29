@@ -14,11 +14,13 @@ const members = readArchive(archive);
 const { files } = members;
 const roots = ['yatm-httpd', 'yatm-cli', 'yatm-export-library', 'yatm-lto-info', 'yatm-migrate',
   'install-release.sh', 'VERSION', 'COMMIT', 'LICENSE', 'README.md', 'CONTEXT.md'];
-const documents = ['docs/README.md', ...['install', 'migration', 'library', 'locations'].map(name => `docs/operations/${name}.md`)];
+const documents = ['index', 'install', 'migration', 'library', 'locations', 'devices', 'tar-tape-recovery']
+  .map(name => `docs/operations/${name}.md`);
 const scripts = ['encrypt', 'get_device', 'mkfs', 'mount', 'mount.openltfs', 'readinfo', 'umount'].map(name => `templates/scripts/${name}`);
 const testing = ['encrypt', 'get_device', 'mkfs', 'mount', 'readinfo', 'umount', 'README.md'].map(name => `templates/testing/ltfs-file-backend/${name}`);
 const required = [...roots, ...documents, ...scripts, 'frontend/index.html', 'templates/config.example.yaml',
-  'templates/yatm-httpd.service', 'skills/yatm/SKILL.md', 'licenses/dependencies.json', 'licenses/THIRD_PARTY_NOTICES'];
+  'templates/yatm-httpd.service', 'skills/yatm/SKILL.md', 'licenses/dependencies.json', 'licenses/THIRD_PARTY_NOTICES',
+  'licenses/jpt-lkh-amz.LICENSE'];
 for (const name of required) assert(files.has(name), `Required package file missing: ${name}`);
 for (const name of testing) assert(files.has(name), `Required testing adapter missing: ${name}`);
 const allowed = new Set([...required, ...testing, 'licenses/lto-info.LICENSE', 'licenses/react-dnd.LICENSE']);

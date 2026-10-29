@@ -1,6 +1,7 @@
 """Real copied metadata acceptance using only the shipped installer, migrator and CLI."""
 
 from collections import Counter
+from contextlib import closing
 import json
 from pathlib import PurePosixPath
 import re
@@ -189,7 +190,7 @@ def run_legacy(test):
             test.report["limits"].append("Fixture has no retained Job; historical Job repair is untested.")
             return
         job = result["jobs"][0]["id"]
-        with sqlite3.connect(migrated / "tapes.db") as db:
+        with closing(sqlite3.connect(migrated / "tapes.db")) as db:
             revisions = dict(db.execute("SELECT id,revision FROM jobs"))
         revisions[job] = max(revisions.values()) + 1
         migrate("repair-job", *common, "-job-id", str(job), "--confirm")

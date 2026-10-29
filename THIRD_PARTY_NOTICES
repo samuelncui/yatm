@@ -4,6 +4,13 @@ cmd/lto-info includes source adapted from speed47/lto-info:
 https://github.com/speed47/lto-info
 Its MIT license is reproduced in licenses/lto-info.LICENSE.
 
+internal/media/readplan/perturb.go adapts weak-edge sampling and
+candidate-walk structure and constants from JPT/LKH-AMZ's KSwapKick.c:
+https://github.com/heldstephan/jpt-amz/blob/dc4ebc0aa091d4d1eb7dc7d9b9b2d8f8c19664ce/LKH-AMZ/SRC/KSwapKick.c
+The source-directory MIT license, Copyright (c) 2021 Keld Helsgaun, is
+reproduced in licenses/jpt-lkh-amz.LICENSE from the same revision's
+LKH-AMZ/SRC/LICENSE.txt.
+
 The @react-dnd/* packages inherit the react-dnd monorepo's MIT license:
 https://github.com/react-dnd/react-dnd/blob/main/LICENSE
 Some published subpackages omit that file. A copy is maintained in

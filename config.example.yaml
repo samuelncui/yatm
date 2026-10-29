@@ -14,8 +14,10 @@ database:
   # Restart after changing this setting. Job databases keep their existing journal mode.
   sqlite_wal: false
 
-# Volume-only installations leave this empty. For Tape, add the actual device
-# with an sg mapping (see sg_map) and adapt the scripts below to the environment.
+# Volume-only installations leave this empty. For one Tape drive, use its actual
+# non-rewinding device path, for example: tape_devices: [/dev/nst0]
+# Linux resolves the SCSI generic device through sysfs; there is no separate sg
+# mapping setting. Adapt the scripts below to the installed LTFS environment.
 tape_devices: []
 
 # working path settings

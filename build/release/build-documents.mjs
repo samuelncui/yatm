@@ -3,12 +3,25 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+// These linked operator attachments are installed under the template directory.
+const attachments = {
+  "config.example.yaml": "templates/config.example.yaml",
+  "scripts/mount": "templates/scripts/mount",
+  "scripts/readinfo": "templates/scripts/readinfo",
+  "scripts/umount": "templates/scripts/umount",
+};
+
 export function packageDocument(text, document, sourceRoot, packageRoot, version) {
   return text.replace(/\]\(([^\s)]+)([^)]*)\)/g, (match, href, suffix) => {
     if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(href)) return match;
     const [filename, fragment] = href.split("#", 2);
     const relative = path.normalize(path.join(path.dirname(document), decodeURIComponent(filename)));
     if (fs.existsSync(path.join(packageRoot, relative))) return match;
+    const attachment = attachments[relative.split(path.sep).join("/")];
+    if (attachment && fs.existsSync(path.join(packageRoot, attachment))) {
+      const href = path.relative(path.dirname(document), attachment).split(path.sep).join("/");
+      return `](${href}${fragment ? `#${fragment}` : ""}${suffix})`;
+    }
     const source = path.join(sourceRoot, relative);
     if (!fs.existsSync(source)) throw new Error(`Broken documentation link: ${document} -> ${href}`);
     const kind = fs.statSync(source).isDirectory() ? "tree" : "blob";
