@@ -44,7 +44,7 @@ type Group[T proto.Message] struct {
 	definition definition[T]
 }
 
-// Module owns the three persisted Settings groups.
+// Module owns the persisted Settings groups.
 type Module struct {
 	db                *gorm.DB
 	previewDefinition PreviewDefinition
@@ -52,6 +52,7 @@ type Module struct {
 	Library Group[*entity.LibrarySettings]
 	Preview Group[*entity.PreviewSettings]
 	Job     Group[*entity.JobSettings]
+	Device  DeviceGroup
 }
 
 type row struct {
@@ -89,6 +90,11 @@ func New(db *gorm.DB, preview PreviewDefinition) *Module {
 		},
 		validate: ValidateJob,
 	})
+	module.Device = DeviceGroup{group: newGroup(db, definition[*entity.DeviceSettings]{
+		key:      "devices",
+		defaults: func() (*entity.DeviceSettings, error) { return &entity.DeviceSettings{}, nil },
+		validate: ValidateDevice,
+	})}
 	return module
 }
 
@@ -104,7 +110,7 @@ func (m *Module) WithDB(db *gorm.DB) *Module {
 // NewWithCatalog keeps committed Settings reads off the Catalog writer connection.
 func NewWithCatalog(write, read *gorm.DB, preview PreviewDefinition) *Module {
 	module := New(write, preview)
-	module.Library.reader, module.Preview.reader, module.Job.reader = read, read, read
+	module.Library.reader, module.Preview.reader, module.Job.reader, module.Device.group.reader = read, read, read, read
 	return module
 }
 
@@ -146,11 +152,12 @@ func (g Group[T]) Read(ctx context.Context) (Stored[T], error) {
 	}
 
 	// Stored values are complete authoritative documents; malformed values never become defaults.
+	// Fields retired by an earlier build are ignored, and the next save omits them.
 	value, err := g.definition.defaults()
 	if err != nil {
 		return Stored[T]{}, fmt.Errorf("build %s Settings value failed, %w", g.definition.key, err)
 	}
-	if err := protojson.Unmarshal(stored.Value, value); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(stored.Value, value); err != nil {
 		return Stored[T]{}, fmt.Errorf("%w, group=%s: %v", ErrStored, g.definition.key, err)
 	}
 	if err := g.validate(value); err != nil {

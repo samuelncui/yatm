@@ -23,45 +23,63 @@ var ModelMedia = new(Media)
 const maxMediaPageSize = 1000
 
 const (
-	TapeFormatLTFSV0 = "ltfs_v0"
-	TapeFormatLTFSV1 = "ltfs_v1"
+	TapeFormatLTFSV0   = "ltfs_v0"
+	TapeFormatLTFSV1   = "ltfs_v1"
+	TapeFormatTarPAXV1 = "tar_pax_v1"
 )
 
 // Media is the common Library identity for Tape and mounted offline Volumes.
 type Media struct {
-	ID            int64                `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
-	Kind          entity.MediaKind     `gorm:"not null;index:idx_media_kind_identity,unique,priority:1" json:"kind,omitempty"`
-	Identity      string               `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2" json:"identity,omitempty"`
-	Name          string               `gorm:"type:varchar(256)" json:"name,omitempty"`
-	Profile       *entity.MediaProfile `gorm:"type:blob;not null" json:"profile,omitempty"`
-	CreatedAtNS   int64                `json:"created_at_ns,string"`
-	DestroyedAtNS *int64               `json:"destroyed_at_ns,omitempty,string"`
-	CapacityBytes int64                `json:"capacity_bytes,omitempty"`
-	WrittenBytes  int64                `json:"written_bytes,omitempty"`
+	ID              int64                   `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
+	Kind            entity.MediaKind        `gorm:"not null;index:idx_media_kind_identity,unique,priority:1" json:"kind,omitempty"`
+	Identity        string                  `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2" json:"identity,omitempty"`
+	Name            string                  `gorm:"type:varchar(256)" json:"name,omitempty"`
+	Profile         *entity.MediaProfile    `gorm:"type:blob;not null" json:"profile,omitempty"`
+	CreatedAtNS     int64                   `json:"created_at_ns,string"`
+	DestroyedAtNS   *int64                  `json:"destroyed_at_ns,omitempty,string"`
+	CapacityBytes   int64                   `json:"capacity_bytes,omitempty"`
+	WrittenBytes    int64                   `json:"written_bytes,omitempty"`
+	TapePositionMap *entity.TapePositionMap `gorm:"type:blob" json:"tape_position_map,omitempty"`
 }
 
 type mediaJSON struct {
-	ID            int64            `json:"id,omitempty"`
-	Kind          entity.MediaKind `json:"kind,omitempty"`
-	Identity      string           `json:"identity,omitempty"`
-	Name          string           `json:"name,omitempty"`
-	Profile       json.RawMessage  `json:"profile"`
-	CreatedAtNS   int64            `json:"created_at_ns,string"`
-	DestroyedAtNS *int64           `json:"destroyed_at_ns,omitempty,string"`
-	CapacityBytes int64            `json:"capacity_bytes,omitempty"`
-	WrittenBytes  int64            `json:"written_bytes,omitempty"`
+	ID              int64            `json:"id,omitempty"`
+	Kind            entity.MediaKind `json:"kind,omitempty"`
+	Identity        string           `json:"identity,omitempty"`
+	Name            string           `json:"name,omitempty"`
+	Profile         json.RawMessage  `json:"profile"`
+	CreatedAtNS     int64            `json:"created_at_ns,string"`
+	DestroyedAtNS   *int64           `json:"destroyed_at_ns,omitempty,string"`
+	CapacityBytes   int64            `json:"capacity_bytes,omitempty"`
+	WrittenBytes    int64            `json:"written_bytes,omitempty"`
+	TapePositionMap json.RawMessage  `json:"tape_position_map,omitempty"`
 }
 
 func (value Media) MarshalJSON() ([]byte, error) {
+	// Invalid geometry cannot become a metadata backup that cannot be restored.
+	if err := ValidateTapePositionMap(&value, value.TapePositionMap); err != nil {
+		return nil, err
+	}
+
 	// Keep the typed profile encoding while writing exact decimal-string instants.
 	profile, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(value.Profile)
 	if err != nil {
 		return nil, fmt.Errorf("encode Media profile failed, %w", err)
 	}
+
+	// Optional derived geometry uses the same lossless protobuf JSON encoding as the profile.
+	var positionMap json.RawMessage
+	if value.TapePositionMap != nil {
+		positionMap, err = protojson.MarshalOptions{UseProtoNames: true}.Marshal(value.TapePositionMap)
+		if err != nil {
+			return nil, fmt.Errorf("encode Media Tape position map failed, %w", err)
+		}
+	}
 	return json.Marshal(&mediaJSON{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: profile,
 		CreatedAtNS: value.CreatedAtNS, DestroyedAtNS: value.DestroyedAtNS,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
+		TapePositionMap: positionMap,
 	})
 }
 
@@ -79,11 +97,25 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 	if err := protojson.Unmarshal(decoded.Profile, profile); err != nil {
 		return fmt.Errorf("decode Media profile failed, %w", err)
 	}
-	*value = Media{
+
+	// Validate mutable geometry separately so it never becomes an immutable profile fact.
+	var positionMap *entity.TapePositionMap
+	if len(decoded.TapePositionMap) > 0 && !bytes.Equal(decoded.TapePositionMap, []byte("null")) {
+		positionMap = new(entity.TapePositionMap)
+		if err := protojson.Unmarshal(decoded.TapePositionMap, positionMap); err != nil {
+			return fmt.Errorf("decode Media Tape position map failed, %w", err)
+		}
+	}
+	result := Media{
 		ID: decoded.ID, Kind: decoded.Kind, Identity: decoded.Identity, Name: decoded.Name, Profile: profile,
 		CreatedAtNS: decoded.CreatedAtNS, DestroyedAtNS: decoded.DestroyedAtNS,
 		CapacityBytes: decoded.CapacityBytes, WrittenBytes: decoded.WrittenBytes,
+		TapePositionMap: positionMap,
 	}
+	if err := ValidateTapePositionMap(&result, positionMap); err != nil {
+		return err
+	}
+	*value = result
 	return nil
 }
 
@@ -470,6 +502,7 @@ func insertMediaFiles(
 }
 
 func validateMediaFile(media *Media, file *MediaFile, previous string) error {
+	// Validate portable file facts before checking format-specific placement.
 	if file == nil {
 		return fmt.Errorf("Media file is nil")
 	}
@@ -483,12 +516,16 @@ func validateMediaFile(media *Media, file *MediaFile, previous string) error {
 		return fmt.Errorf("Media files are not strictly ordered, previous=%q path=%q", previous, file.Path)
 	}
 
+	// Immutable cartridge facts select the required physical placement representation.
 	tape := media.Profile.GetTape()
 	if tape == nil {
 		if len(file.StorageOrder) != 0 || file.StorageMetadata != nil {
 			return fmt.Errorf("random-readable Media file has storage order, path=%q", file.Path)
 		}
 		return nil
+	}
+	if err := validateStorageMetadata(tape, file.Path, file.StorageOrder, file.StorageMetadata, false); err != nil {
+		return fmt.Errorf("Media storage position is invalid, path=%q, %w", file.Path, err)
 	}
 	if tape.Format == TapeFormatLTFSV1 && file.Size > 0 &&
 		(len(file.StorageOrder) == 0 || file.StorageMetadata == nil) {
@@ -498,6 +535,7 @@ func validateMediaFile(media *Media, file *MediaFile, previous string) error {
 }
 
 func validateMedia(value *Media) error {
+	// Normalize the backend identity before validating its immutable profile.
 	if value == nil {
 		return fmt.Errorf("Media is nil")
 	}
@@ -509,14 +547,22 @@ func validateMedia(value *Media) error {
 		return fmt.Errorf("Media profile is nil")
 	}
 
+	// Each backend owns the identity and profile facts needed by its consumers.
 	switch value.Kind {
 	case entity.MediaKind_MEDIA_KIND_TAPE:
 		profile := value.Profile.GetTape()
 		if profile == nil || value.Profile.GetVolume() != nil {
 			return fmt.Errorf("Tape Media profile is invalid")
 		}
-		if profile.Format != TapeFormatLTFSV0 && profile.Format != TapeFormatLTFSV1 {
+		if profile.Format != TapeFormatLTFSV0 && profile.Format != TapeFormatLTFSV1 && profile.Format != TapeFormatTarPAXV1 {
 			return fmt.Errorf("Tape Media format is unsupported, format=%q", profile.Format)
+		}
+		if profile.Format == TapeFormatTarPAXV1 {
+			if err := entity.ValidateTarMediaProfile(profile); err != nil {
+				return err
+			}
+		} else if profile.Tar != nil {
+			return fmt.Errorf("LTFS Media cannot carry a tar profile")
 		}
 	case entity.MediaKind_MEDIA_KIND_VOLUME:
 		profile := value.Profile.GetVolume()
@@ -534,7 +580,7 @@ func validateMedia(value *Media) error {
 	default:
 		return fmt.Errorf("unsupported Media kind, kind=%s", value.Kind)
 	}
-	return nil
+	return ValidateTapePositionMap(value, value.TapePositionMap)
 }
 
 func normalizeMediaIdentity(kind entity.MediaKind, identity string) string {

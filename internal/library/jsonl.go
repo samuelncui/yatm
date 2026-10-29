@@ -244,6 +244,9 @@ func (l *Library) importJSONL(ctx context.Context, input io.Reader, dryRun bool)
 					return err
 				}
 				if _, included := included[recordTypePosition]; included {
+					if err := validateImportedPositionStorage(ctx, tx); err != nil {
+						return err
+					}
 					if err := rebuildPositionIndex(ctx, tx); err != nil {
 						return err
 					}
@@ -405,6 +408,37 @@ func importCatalogRecord(ctx context.Context, tx *gorm.DB, record *jsonlInputRec
 
 	// Reference validation runs after all records, within the same import transaction.
 	return tx.Create(value).Error
+}
+
+func validateImportedPositionStorage(ctx context.Context, tx *gorm.DB) error {
+	// Import records may precede their owners; validate only replaced Positions after all records arrive.
+	var after int64
+	for {
+		var rows []struct {
+			Position
+			MediaProfile *entity.MediaProfile `gorm:"type:blob"`
+		}
+		if err := tx.WithContext(ctx).Model(&Position{}).
+			Select("positions.id, positions.path, positions.storage_order, positions.storage_metadata, "+
+				"positions.is_dir, media.profile AS media_profile").
+			Joins("JOIN media ON media.id = positions.media_id").
+			Where("positions.id > ?", after).Order("positions.id").Limit(batchSize).Scan(&rows).Error; err != nil {
+			return fmt.Errorf("read imported Position storage failed, %w", err)
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+
+		// The completed relationship check guarantees every row has its immutable Media profile.
+		for _, row := range rows {
+			if err := validateStorageMetadata(
+				row.MediaProfile.GetTape(), row.Path, row.StorageOrder, row.StorageMetadata, row.IsDir,
+			); err != nil {
+				return fmt.Errorf("invalid imported Position storage, id=%d, %w", row.ID, err)
+			}
+		}
+		after = rows[len(rows)-1].ID
+	}
 }
 
 func decodeCatalogJSON(data []byte, value any, required ...string) error {

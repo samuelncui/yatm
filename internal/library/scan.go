@@ -45,6 +45,11 @@ func (l *Library) ApplyScan(
 			if err := validateScanEntry(entry, previous); err != nil {
 				return err
 			}
+			if entry.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+				if err := validateStorageMetadata(stored.Profile.GetTape(), entry.Path, entry.Storage.GetOrder(), entry.Storage.GetMetadata(), false); err != nil {
+					return err
+				}
+			}
 			previous = entry.Path
 			return applyScanEntry(tx, mediaID, entry)
 		}); err != nil {
