@@ -7,6 +7,7 @@ import (
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/samuelncui/yatm/entity"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 )
 
 type archiveCreateCommand struct {
@@ -32,18 +33,69 @@ type archiveWriteVolumeCommand struct {
 
 type archiveWriteTapeAppendCommand struct {
 	runtime *runtime
+	tapeWriteOptions
 	Device  string     `long:"device" required:"yes" description:"Server-side Tape device"`
 	Barcode string     `long:"barcode" required:"yes" description:"Expected Tape barcode"`
 	Args    fileIDArgs `positional-args:"yes"`
 }
 
 type archiveWriteTapeFormatCommand struct {
-	runtime       *runtime
+	runtime *runtime
+	tapeWriteOptions
 	Device        string     `long:"device" required:"yes" description:"Server-side Tape device"`
-	Barcode       string     `long:"barcode" required:"yes" description:"Tape barcode; supplied when the electronic barcode is empty"`
+	Barcode       string     `long:"barcode" required:"yes" description:"Tape barcode; supplied when the cartridge memory barcode is empty"`
 	Name          string     `long:"name" required:"yes" description:"Library display name"`
 	ConfirmFormat string     `long:"confirm-format" required:"yes" value-name:"BARCODE" description:"Exact Tape barcode confirmation"`
 	Args          fileIDArgs `positional-args:"yes"`
+}
+
+type tapeWriteOptions struct {
+	Format              *string `long:"format" choice:"ltfs_v1" choice:"tar_pax_v1" description:"FORMAT override; APPEND must match the registered profile"`
+	RecordMode          *string `long:"record-mode" choice:"fixed" choice:"variable" description:"Tar record policy; immutable on APPEND"`
+	RecordBytes         *uint32 `long:"record-bytes" description:"Tar record size in bytes, aligned to 512; FORMAT omission uses the device default or 524288 (512 KiB)"`
+	HardwareCompression *string `long:"hardware-compression" choice:"true" choice:"false" description:"Tar write compression; the selected drive is rechecked before writing"`
+}
+
+func (c tapeWriteOptions) options() (*entity.TarWriteOptions, error) {
+	// An omitted option must remain absent, including optional false values.
+	if c.RecordMode == nil && c.RecordBytes == nil && c.HardwareCompression == nil {
+		return nil, nil
+	}
+	options := &entity.TarWriteOptions{RecordBytes: c.RecordBytes}
+	if c.RecordMode != nil {
+		mode := entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED
+		if *c.RecordMode == "variable" {
+			mode = entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE
+		}
+		options.RecordMode = &mode
+	}
+	if c.HardwareCompression != nil {
+		value := *c.HardwareCompression == "true"
+		options.HardwareCompression = &value
+	}
+
+	// Reject malformed relationships before device access without changing explicit choices.
+	if err := settingspkg.ValidateTarWriteOptions(options); err != nil {
+		return nil, usageError(err)
+	}
+	return options, nil
+}
+
+func resolveTapeFormat(ctx context.Context, rt *runtime, device string, explicit *string) (string, error) {
+	// Explicit overrides bypass saved-preference reads.
+	if explicit != nil {
+		return *explicit, nil
+	}
+
+	// Resolve the configured entry's preference through the existing typed Settings RPC.
+	value, err := getSettings(ctx, rt, entity.SettingsGroup_SETTINGS_GROUP_DEVICE)
+	if err != nil {
+		return "", err
+	}
+	if value.GetDevice() == nil {
+		return "", runtimeError("protocol", fmt.Errorf("Device settings reply is missing"))
+	}
+	return settingspkg.TapeDefaultFormat(settingspkg.TapeDefaults(value.GetDevice(), device)), nil
 }
 
 func registerArchiveCommands(root *flags.Command, commandRuntime *runtime) error {
@@ -174,34 +226,59 @@ func (c *archiveWriteVolumeCommand) Execute(_ []string) error {
 }
 
 func (c *archiveWriteTapeAppendCommand) Execute(_ []string) error {
-	// Validate the Job and inspect the actual Tape identity and Library profile.
+	// Resolve the registered format before choosing a physical adapter.
 	if err := positiveID("Job ID", c.Args.ID); err != nil {
+		return err
+	}
+	options, err := c.options()
+	if err != nil {
 		return err
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	device := strings.TrimSpace(c.Device)
-	inspected, err := inspectExpectedTape(ctx, c.runtime, device, c.Barcode)
+	if device == "" {
+		return usageError(fmt.Errorf("Tape device is empty"))
+	}
+	barcode := strings.ToUpper(strings.TrimSpace(c.Barcode))
+	registered, err := findTapeMedia(ctx, c.runtime, barcode)
 	if err != nil {
 		return err
 	}
-	if inspected.Media == nil {
-		return runtimeError("not_found", fmt.Errorf("Tape is not registered in the Library, barcode=%q", inspected.Identity))
+	if registered == nil {
+		return runtimeError("not_found", fmt.Errorf("Tape is not registered in the Library, barcode=%q", barcode))
 	}
-	profile := inspected.Media.GetProfile().GetTape()
-	if profile == nil || profile.Format != "ltfs_v1" {
-		return safetyError(fmt.Errorf("Tape does not support append, barcode=%q", inspected.Identity))
+	format := registered.GetProfile().GetTape().GetFormat()
+	if c.Format != nil && *c.Format != format {
+		return safetyError(fmt.Errorf("format conflicts with registered Tape profile, format=%q", format))
+	}
+	if format == "ltfs_v1" && options != nil {
+		return usageError(fmt.Errorf("tar options are not accepted for LTFS"))
 	}
 
-	// Start one append attempt against the inspected compatible Tape.
-	return writeArchiveTape(
-		ctx,
-		c.runtime,
-		c.Args.ID,
-		&entity.ArchiveTapeTarget{
-			Device: device, Barcode: inspected.Identity, Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
-		},
-	)
+	// LTFS retains its identity adapter; raw APPEND verifies the immutable label under the lease.
+	switch format {
+	case "ltfs_v1":
+		inspected, err := inspectExpectedTape(ctx, c.runtime, device, barcode)
+		if err != nil {
+			return err
+		}
+		if inspected.Media == nil || inspected.Media.Id != registered.Id {
+			return safetyError(fmt.Errorf("inspected Tape does not match its registered Media"))
+		}
+	case "tar_pax_v1":
+		if _, err := inspectRawTapeDevice(ctx, c.runtime, device); err != nil {
+			return err
+		}
+	default:
+		return safetyError(fmt.Errorf("Tape does not support append, format=%q", format))
+	}
+
+	// Only explicitly supplied APPEND options are checked against the immutable stored profile.
+	return writeArchiveTape(ctx, c.runtime, c.Args.ID, &entity.ArchiveTapeTarget{
+		Device: device, Barcode: barcode, Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
+		Format: &format, TarOptions: options,
+	})
 }
 
 func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
@@ -222,31 +299,54 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 		}
 	}
 
-	// An empty electronic barcode is allowed only after a successful physical probe.
-	ctx, cancel := c.runtime.context()
-	defer cancel()
-	device := strings.TrimSpace(c.Device)
-	inspected, err := inspectTape(ctx, c.runtime, device, &barcode)
+	// Confirm destructive initialization before format resolution or physical inspection.
+	if c.ConfirmFormat != barcode {
+		return safetyError(fmt.Errorf("confirm-format must exactly match the Tape barcode, barcode=%q", barcode))
+	}
+	options, err := c.options()
 	if err != nil {
 		return err
 	}
-	if inspected.Identity != "" && inspected.Identity != barcode {
-		return safetyError(fmt.Errorf(
-			"Tape barcode does not match the inspected identity, requested=%q inspected=%q",
-			barcode, inspected.Identity,
-		))
+
+	// Resolve the selected device's FORMAT preference before selecting its physical adapter.
+	ctx, cancel := c.runtime.context()
+	defer cancel()
+	device := strings.TrimSpace(c.Device)
+	if device == "" {
+		return usageError(fmt.Errorf("Tape device is empty"))
 	}
-	if c.ConfirmFormat != barcode {
-		return safetyError(fmt.Errorf(
-			"confirm-format must exactly match the Tape barcode, barcode=%q",
-			barcode,
-		))
+	format, err := resolveTapeFormat(ctx, c.runtime, device, c.Format)
+	if err != nil {
+		return err
 	}
-	if inspected.Media != nil {
-		return safetyError(fmt.Errorf(
-			"Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q",
-			barcode,
-		))
+	switch format {
+	case "ltfs_v1":
+		if options != nil {
+			return usageError(fmt.Errorf("tar options are not accepted for LTFS"))
+		}
+		inspected, err := inspectTape(ctx, c.runtime, device, &barcode)
+		if err != nil {
+			return err
+		}
+		if inspected.Identity != "" && inspected.Identity != barcode {
+			return safetyError(fmt.Errorf("Tape barcode does not match the inspected identity, requested=%q inspected=%q", barcode, inspected.Identity))
+		}
+		if inspected.Media != nil {
+			return safetyError(fmt.Errorf("Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q", barcode))
+		}
+	case "tar_pax_v1":
+		registered, err := findTapeMedia(ctx, c.runtime, barcode)
+		if err != nil {
+			return err
+		}
+		if registered != nil {
+			return safetyError(fmt.Errorf("Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q", barcode))
+		}
+		if _, err := inspectRawTapeDevice(ctx, c.runtime, device); err != nil {
+			return err
+		}
+	default:
+		return usageError(fmt.Errorf("unsupported device default format %q; choose --format ltfs_v1 or tar_pax_v1", format))
 	}
 
 	// Start one FORMAT using the confirmed barcode, including when MAM reports none.
@@ -259,6 +359,7 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 			Barcode: barcode,
 			Name:    c.Name,
 			Mode:    entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Format:  &format, TarOptions: options,
 		},
 	)
 }

@@ -28,6 +28,11 @@ type settingsJobCommand struct {
 	ExecutionJSON string `long:"execution-json" description:"Read JobExecutionSettings protobuf JSON from this file"`
 }
 
+type settingsDeviceCommand struct {
+	runtime    *runtime
+	DeviceJSON string `long:"device-json" description:"Read DeviceSettings protobuf JSON from this file; saving Device settings performs no hardware operation"`
+}
+
 type settingsAccessCommand struct{ runtime *runtime }
 
 type settingsBrowseCommand struct {
@@ -47,6 +52,7 @@ func registerSettingsCommands(root *flags.Command, rt *runtime) error {
 		commandSpec{name: "library", description: "Read or update the default Library view", handler: &settingsLibraryCommand{runtime: rt}},
 		commandSpec{name: "preview", description: "Read or update Preview generation preferences", handler: &settingsPreviewCommand{runtime: rt}},
 		commandSpec{name: "job", description: "Read or update the Job pipeline preferences", handler: &settingsJobCommand{runtime: rt}},
+		commandSpec{name: "devices", description: "Read or replace Device settings without operating hardware", handler: &settingsDeviceCommand{runtime: rt}},
 		commandSpec{name: "access", description: "List administrator access ranges and migration results", handler: &settingsAccessCommand{runtime: rt}},
 		commandSpec{name: "browse", description: "Browse authorized directories", handler: &settingsBrowseCommand{runtime: rt}},
 	)
@@ -140,6 +146,34 @@ func (c *settingsJobCommand) Execute(_ []string) error {
 		return err
 	}
 	return writeProto(c.runtime.stdout, reply.GetJob())
+}
+
+func (c *settingsDeviceCommand) Execute(_ []string) error {
+	// Read the complete typed group without querying physical devices.
+	ctx, cancel := c.runtime.context()
+	defer cancel()
+	value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_DEVICE)
+	if err != nil {
+		return err
+	}
+	settings := value.GetDevice()
+	if settings == nil {
+		return runtimeError("protocol", fmt.Errorf("Device settings reply is missing"))
+	}
+	if c.DeviceJSON == "" {
+		return writeProto(c.runtime.stdout, settings)
+	}
+
+	// Replace only the Device settings; admission validates hardware later.
+	settings = &entity.DeviceSettings{}
+	if err := readSettingsJSON(c.DeviceJSON, "Device", settings); err != nil {
+		return err
+	}
+	reply, err := updateSettings(ctx, c.runtime, &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: settings}})
+	if err != nil {
+		return err
+	}
+	return writeProto(c.runtime.stdout, reply.GetDevice())
 }
 
 func getSettings(ctx context.Context, rt *runtime, group entity.SettingsGroup) (*entity.SettingsValue, error) {

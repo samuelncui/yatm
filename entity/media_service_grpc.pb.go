@@ -27,6 +27,7 @@ const (
 	MediaService_RegisterVolume_FullMethodName       = "/yatm.v1.MediaService/RegisterVolume"
 	MediaService_ListVolumeCandidates_FullMethodName = "/yatm.v1.MediaService/ListVolumeCandidates"
 	MediaService_ListDevices_FullMethodName          = "/yatm.v1.MediaService/ListDevices"
+	MediaService_InspectDevice_FullMethodName        = "/yatm.v1.MediaService/InspectDevice"
 )
 
 // MediaServiceClient is the client API for MediaService service.
@@ -41,6 +42,7 @@ type MediaServiceClient interface {
 	RegisterVolume(ctx context.Context, in *RegisterVolumeRequest, opts ...grpc.CallOption) (*RegisterVolumeResponse, error)
 	ListVolumeCandidates(ctx context.Context, in *ListVolumeCandidatesRequest, opts ...grpc.CallOption) (*ListVolumeCandidatesResponse, error)
 	ListDevices(ctx context.Context, in *ListDevicesRequest, opts ...grpc.CallOption) (*ListDevicesResponse, error)
+	InspectDevice(ctx context.Context, in *InspectDeviceRequest, opts ...grpc.CallOption) (*InspectDeviceResponse, error)
 }
 
 type mediaServiceClient struct {
@@ -123,6 +125,15 @@ func (c *mediaServiceClient) ListDevices(ctx context.Context, in *ListDevicesReq
 	return out, nil
 }
 
+func (c *mediaServiceClient) InspectDevice(ctx context.Context, in *InspectDeviceRequest, opts ...grpc.CallOption) (*InspectDeviceResponse, error) {
+	out := new(InspectDeviceResponse)
+	err := c.cc.Invoke(ctx, MediaService_InspectDevice_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MediaServiceServer is the server API for MediaService service.
 // All implementations must embed UnimplementedMediaServiceServer
 // for forward compatibility
@@ -135,6 +146,7 @@ type MediaServiceServer interface {
 	RegisterVolume(context.Context, *RegisterVolumeRequest) (*RegisterVolumeResponse, error)
 	ListVolumeCandidates(context.Context, *ListVolumeCandidatesRequest) (*ListVolumeCandidatesResponse, error)
 	ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error)
+	InspectDevice(context.Context, *InspectDeviceRequest) (*InspectDeviceResponse, error)
 	mustEmbedUnimplementedMediaServiceServer()
 }
 
@@ -165,6 +177,9 @@ func (UnimplementedMediaServiceServer) ListVolumeCandidates(context.Context, *Li
 }
 func (UnimplementedMediaServiceServer) ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDevices not implemented")
+}
+func (UnimplementedMediaServiceServer) InspectDevice(context.Context, *InspectDeviceRequest) (*InspectDeviceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InspectDevice not implemented")
 }
 func (UnimplementedMediaServiceServer) mustEmbedUnimplementedMediaServiceServer() {}
 
@@ -323,6 +338,24 @@ func _MediaService_ListDevices_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MediaService_InspectDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MediaServiceServer).InspectDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MediaService_InspectDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MediaServiceServer).InspectDevice(ctx, req.(*InspectDeviceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MediaService_ServiceDesc is the grpc.ServiceDesc for MediaService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -361,6 +394,10 @@ var MediaService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListDevices",
 			Handler:    _MediaService_ListDevices_Handler,
+		},
+		{
+			MethodName: "InspectDevice",
+			Handler:    _MediaService_InspectDevice_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

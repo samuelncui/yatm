@@ -150,6 +150,46 @@ func (p *TapeRecordLimits) ToOneof() OneofDeviceFeature {
 	return p
 }
 
+type OneofInspectDeviceResponse interface {
+	isOneofInspectDeviceResponse()
+}
+
+func (x *TapeDeviceReport) isOneofInspectDeviceResponse() {}
+
+func (x *InspectDeviceResponse) Unpack() OneofInspectDeviceResponse {
+	switch param := x.Report.(type) {
+	case *InspectDeviceResponse_Tape:
+		return param.Tape
+	default:
+		return nil
+	}
+}
+
+func PackInspectDeviceResponse(param OneofInspectDeviceResponse) *InspectDeviceResponse {
+	switch param := param.(type) {
+	case *TapeDeviceReport:
+		return &InspectDeviceResponse{
+			Report: &InspectDeviceResponse_Tape{
+				Tape: param,
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+func (p *TapeDeviceReport) Pack() *InspectDeviceResponse {
+	return &InspectDeviceResponse{
+		Report: &InspectDeviceResponse_Tape{
+			Tape: p,
+		},
+	}
+}
+
+func (p *TapeDeviceReport) ToOneof() OneofInspectDeviceResponse {
+	return p
+}
+
 type OneofInspectMediaRequest interface {
 	isOneofInspectMediaRequest()
 }

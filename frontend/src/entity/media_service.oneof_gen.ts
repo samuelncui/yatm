@@ -8,6 +8,8 @@ import {
 	TapeGeometryLimits,
 	TapeNavigationLimits,
 	TapeRecordLimits,
+	InspectDeviceResponse,
+	TapeDeviceReport,
 	InspectMediaRequest,
 	InspectMediaTapeTarget,
 	InspectMediaVolumeTarget,
@@ -86,6 +88,25 @@ export function packTapeRecordLimits(param: TapeRecordLimits): DeviceFeature {
 		limits: {
 			oneofKind: "records",
 			records: param,
+		}
+	});
+}
+
+export function unpackInspectDeviceResponse(wrapper: InspectDeviceResponse): TapeDeviceReport | undefined {
+	if (!wrapper.report) return undefined;
+	switch (wrapper.report.oneofKind) {
+		case "tape":
+			return wrapper.report.tape;
+		default:
+			return undefined;
+	}
+}
+
+export function packTapeDeviceReport(param: TapeDeviceReport): InspectDeviceResponse {
+	return InspectDeviceResponse.create({
+		report: {
+			oneofKind: "tape",
+			tape: param,
 		}
 	});
 }

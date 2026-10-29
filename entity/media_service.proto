@@ -14,6 +14,7 @@ service MediaService {
   rpc RegisterVolume(RegisterVolumeRequest) returns (RegisterVolumeResponse) {}
   rpc ListVolumeCandidates(ListVolumeCandidatesRequest) returns (ListVolumeCandidatesResponse) {}
   rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse) {}
+  rpc InspectDevice(InspectDeviceRequest) returns (InspectDeviceResponse) {}
 }
 
 message ListMediaRequest {
@@ -141,6 +142,26 @@ message DeviceSummary {
   DeviceKind kind = 2;
   bool busy = 3;
   string detail = 4;
+}
+
+message InspectDeviceRequest { string device = 1; }
+
+message InspectDeviceResponse {
+  DeviceSummary device = 1;
+  // Absent when no hardware observation could be made, for example while busy.
+  optional int64 observed_at_ns = 2;
+  optional string vendor = 3;
+  optional string model = 4;
+  optional string firmware = 5;
+  optional string serial_number = 6;
+  // Access identity unifies OS aliases; it is not a cartridge identity.
+  optional string access_identity = 7;
+  optional string transport = 8;
+  DeviceReason reason = 9;
+  string detail = 10;
+  oneof report { TapeDeviceReport tape = 17; }
+  // Last prepared read in this process, not a claim about the currently loaded cartridge.
+  optional TapePreparedRead prepared_read = 18;
 }
 
 message TapePreparedRead {

@@ -59,6 +59,8 @@ func TestVerifyCommandsPreserveExplicitMediaAndPagedFindings(t *testing.T) {
 func TestVerifyRejectsAmbiguousTargetsBeforeTransport(t *testing.T) {
 	for _, args := range [][]string{
 		{"verify", "run", "3"},
+		{"verify", "run", "3", "--uuid", "139a1d3d-a54a-4b9b-8ee9-9f103f01d6b6", "--refresh-position-map"},
+		{"scan", "run", "3", "--uuid", "139a1d3d-a54a-4b9b-8ee9-9f103f01d6b6", "--refresh-position-map"},
 		{"verify", "run", "3", "--uuid", "invalid", "--device", "/dev/example"},
 		{"verify", "entries", "3", "--limit", "1001"},
 		{"verify", "create", "0"},

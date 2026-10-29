@@ -4,6 +4,8 @@
 import type { RpcTransport } from "@protobuf-ts/runtime-rpc";
 import type { ServiceInfo } from "@protobuf-ts/runtime-rpc";
 import { MediaService } from "./media_service";
+import type { InspectDeviceResponse } from "./media_service";
+import type { InspectDeviceRequest } from "./media_service";
 import type { ListDevicesResponse } from "./media_service";
 import type { ListDevicesRequest } from "./media_service";
 import type { ListVolumeCandidatesResponse } from "./media_service";
@@ -59,6 +61,10 @@ export interface IMediaServiceClient {
      * @generated from protobuf rpc: ListDevices
      */
     listDevices(input: ListDevicesRequest, options?: RpcOptions): UnaryCall<ListDevicesRequest, ListDevicesResponse>;
+    /**
+     * @generated from protobuf rpc: InspectDevice
+     */
+    inspectDevice(input: InspectDeviceRequest, options?: RpcOptions): UnaryCall<InspectDeviceRequest, InspectDeviceResponse>;
 }
 /**
  * @generated from protobuf service yatm.v1.MediaService
@@ -124,5 +130,12 @@ export class MediaServiceClient implements IMediaServiceClient, ServiceInfo {
     listDevices(input: ListDevicesRequest, options?: RpcOptions): UnaryCall<ListDevicesRequest, ListDevicesResponse> {
         const method = this.methods[7], opt = this._transport.mergeOptions(options);
         return stackIntercept<ListDevicesRequest, ListDevicesResponse>("unary", this._transport, method, opt, input);
+    }
+    /**
+     * @generated from protobuf rpc: InspectDevice
+     */
+    inspectDevice(input: InspectDeviceRequest, options?: RpcOptions): UnaryCall<InspectDeviceRequest, InspectDeviceResponse> {
+        const method = this.methods[8], opt = this._transport.mergeOptions(options);
+        return stackIntercept<InspectDeviceRequest, InspectDeviceResponse>("unary", this._transport, method, opt, input);
     }
 }

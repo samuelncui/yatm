@@ -43,9 +43,11 @@ type restoreRunVolumeCommand struct {
 }
 
 type restoreRunTapeCommand struct {
-	runtime *runtime
-	Device  string     `long:"device" required:"yes" description:"Server-side Tape device"`
-	Args    fileIDArgs `positional-args:"yes"`
+	runtime            *runtime
+	RefreshPositionMap bool       `long:"refresh-position-map" description:"Request eligible non-ejecting reload and map capture for tar Restore or VERIFY_COPIES only"`
+	MediaID            *int64     `long:"media-id" description:"Optional pending Media hint; the server still verifies the loaded Tape label"`
+	Device             string     `long:"device" required:"yes" description:"Server-side Tape device"`
+	Args               fileIDArgs `positional-args:"yes"`
 }
 
 func registerRestoreCommands(root *flags.Command, commandRuntime *runtime) error {
@@ -224,6 +226,13 @@ func (c *restoreRunTapeCommand) Execute(_ []string) error {
 		return usageError(fmt.Errorf("Tape device is empty"))
 	}
 
+	// Validate the optional selection without substituting caller-controlled expected facts.
+	if c.MediaID != nil {
+		if err := positiveID("Media ID", *c.MediaID); err != nil {
+			return err
+		}
+	}
+
 	// Start one Restore attempt from the selected Tape device.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
@@ -232,7 +241,7 @@ func (c *restoreRunTapeCommand) Execute(_ []string) error {
 		c.runtime,
 		entity.RestoreJobService_RestoreMedia_FullMethodName,
 		&entity.RestoreMediaRequest{
-			Id: c.Args.ID, Target: (&entity.ReadTapeTarget{Device: device}).Pack(),
+			Id: c.Args.ID, Target: (&entity.ReadTapeTarget{Device: device, MediaId: c.MediaID, RefreshPositionMap: c.RefreshPositionMap}).Pack(),
 		},
 	)
 	if err != nil {

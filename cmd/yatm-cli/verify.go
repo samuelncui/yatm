@@ -22,10 +22,12 @@ type verifyEntriesCommand struct {
 }
 
 type verifyRunCommand struct {
-	runtime *runtime
-	UUID    string     `long:"uuid" description:"Mounted Volume UUID; mutually exclusive with device"`
-	Device  string     `long:"device" description:"Tape device; mutually exclusive with uuid"`
-	Args    fileIDArgs `positional-args:"yes"`
+	runtime            *runtime
+	RefreshPositionMap bool       `long:"refresh-position-map" description:"Request eligible non-ejecting reload and map capture for tar Restore or VERIFY_COPIES only"`
+	MediaID            *int64     `long:"media-id" description:"Optional Tape Media hint; must match this Scan and its verified label"`
+	UUID               string     `long:"uuid" description:"Mounted Volume UUID; mutually exclusive with device"`
+	Device             string     `long:"device" description:"Tape device; mutually exclusive with uuid"`
+	Args               fileIDArgs `positional-args:"yes"`
 }
 
 func registerVerifyCommands(root *flags.Command, rt *runtime) error {
@@ -93,6 +95,17 @@ func (c *verifyRunCommand) Execute(_ []string) error {
 	if (c.UUID == "") == (strings.TrimSpace(c.Device) == "") {
 		return usageError(fmt.Errorf("provide exactly one of --uuid and --device"))
 	}
+	if c.RefreshPositionMap && c.UUID != "" {
+		return usageError(fmt.Errorf("refresh-position-map requires a tar Tape device"))
+	}
+	if c.MediaID != nil {
+		if c.UUID != "" {
+			return usageError(fmt.Errorf("media-id requires --device"))
+		}
+		if err := positiveID("Media ID", *c.MediaID); err != nil {
+			return err
+		}
+	}
 	var target *entity.ReadMediaTarget
 	if c.UUID != "" {
 		uuid, err := media.NormalizeVolumeUUID(c.UUID)
@@ -101,7 +114,7 @@ func (c *verifyRunCommand) Execute(_ []string) error {
 		}
 		target = (&entity.ReadVolumeTarget{Uuid: uuid}).Pack()
 	} else {
-		target = (&entity.ReadTapeTarget{Device: strings.TrimSpace(c.Device)}).Pack()
+		target = (&entity.ReadTapeTarget{Device: strings.TrimSpace(c.Device), MediaId: c.MediaID, RefreshPositionMap: c.RefreshPositionMap}).Pack()
 	}
 
 	// The server supplies the immutable expected Media identity, not caller-controlled expectations.

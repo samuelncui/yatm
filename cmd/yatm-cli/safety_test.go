@@ -161,7 +161,9 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	// Return physical identities and one registered append-compatible Tape profile.
 	var writes []*entity.WriteArchiveMediaRequest
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		registerTestServices(server, &stubService{mediaInspect: func(
+		registerTestServices(server, &stubService{mediaList: func(_ context.Context, request *entity.ListMediaRequest) (*entity.ListMediaResponse, error) {
+			return &entity.ListMediaResponse{Media: []*entity.Media{{Id: 8, Identity: "XYZ789", Kind: entity.MediaKind_MEDIA_KIND_TAPE, Profile: (&entity.TapeMediaProfile{Format: "ltfs_v1"}).Pack()}}}, nil
+		}, mediaInspect: func(
 			_ context.Context,
 			request *entity.InspectMediaRequest,
 		) (*entity.InspectMediaResponse, error) {
@@ -193,7 +195,7 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	exit, _, stderr := executeTestCLI(
 		server.URL,
 		"",
-		"archive", "write", "tape", "format", "31",
+		"archive", "write", "tape", "format", "31", "--format", "ltfs_v1",
 		"--device", " /dev/nst0 ", "--barcode", "ABC123", "--name", "Tape A",
 		"--confirm-format", "ABC123",
 	)
@@ -222,7 +224,7 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	exit, stdout, stderr := executeTestCLI(
 		server.URL,
 		"",
-		"archive", "write", "tape", "format", "31",
+		"archive", "write", "tape", "format", "31", "--format", "ltfs_v1",
 		"--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tape B",
 		"--confirm-format", "WRONG1",
 	)
@@ -234,18 +236,18 @@ func TestTapeWriteInspectsBarcodeBeforeMutation(t *testing.T) {
 	exit, stdout, stderr = executeTestCLI(
 		server.URL,
 		"",
-		"archive", "write", "tape", "format", "31",
+		"archive", "write", "tape", "format", "31", "--format", "ltfs_v1",
 		"--device", "/dev/nst0", "--barcode", "MNO456", "--name", "Tape B",
 		"--confirm-format", "MNO456",
 	)
 	require.Equal(t, exitUsage, exit)
 	require.Empty(t, stdout)
 	require.Len(t, writes, 2)
-	require.Equal(t, 4, recorder.count(entity.MediaService_Inspect_FullMethodName))
+	require.Equal(t, 3, recorder.count(entity.MediaService_Inspect_FullMethodName))
 	require.Equal(t, 2, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 }
 
-func TestTapeFormatWithEmptyElectronicBarcode(t *testing.T) {
+func TestTapeFormatWithEmptyCartridgeMemoryBarcode(t *testing.T) {
 	// FORMAT accepts a supplied identity only after a successful empty physical probe.
 	tests := []struct {
 		name         string
@@ -260,7 +262,7 @@ func TestTapeFormatWithEmptyElectronicBarcode(t *testing.T) {
 		{name: "wrong confirmation", barcode: "ABC123", confirmation: "XYZ789", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
 		{name: "invalid barcode", barcode: "ABC/23", confirmation: "ABC/23", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
 		{name: "short barcode", barcode: "ABC12", confirmation: "ABC12", inspected: &entity.InspectMediaResponse{}, exit: exitUsage},
-		{name: "mismatched electronic barcode", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{Identity: "XYZ789"}, exit: exitUsage},
+		{name: "mismatched cartridge memory barcode", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{Identity: "XYZ789"}, exit: exitUsage},
 		{name: "probe error", barcode: "ABC123", confirmation: "ABC123", inspectError: errors.New("Tape probe failed"), exit: exitFailure},
 		{name: "registered Media", barcode: "ABC123", confirmation: "ABC123", inspected: &entity.InspectMediaResponse{Media: &entity.Media{Id: 7}}, exit: exitUsage},
 	}
@@ -285,7 +287,7 @@ func TestTapeFormatWithEmptyElectronicBarcode(t *testing.T) {
 			}, nil, nil)
 
 			// Confirmation authorizes one explicit FORMAT; every refusal stops before WriteMedia.
-			exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "31",
+			exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "31", "--format", "ltfs_v1",
 				"--device", "/dev/nst0", "--barcode", test.barcode, "--name", "New Tape", "--confirm-format", test.confirmation)
 			require.Equal(t, test.exit, exit, stderr)
 			if recorder.count(entity.MediaService_Inspect_FullMethodName) > 0 {
@@ -297,17 +299,19 @@ func TestTapeFormatWithEmptyElectronicBarcode(t *testing.T) {
 				return
 			}
 			require.True(t, proto.Equal(&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC123", Name: "New Tape",
-				Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT}, written))
+				Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String("ltfs_v1")}, written))
 			require.Equal(t, 1, recorder.count(entity.MediaService_Inspect_FullMethodName))
 			require.Equal(t, 1, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 		})
 	}
 }
 
-func TestTapeAppendRejectsEmptyElectronicBarcode(t *testing.T) {
+func TestTapeAppendRejectsEmptyCartridgeMemoryBarcode(t *testing.T) {
 	// Registered metadata cannot substitute for the physical identity when appending.
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		registerTestServices(server, &stubService{mediaInspect: func(
+		registerTestServices(server, &stubService{mediaList: func(_ context.Context, _ *entity.ListMediaRequest) (*entity.ListMediaResponse, error) {
+			return &entity.ListMediaResponse{Media: []*entity.Media{{Id: 7, Identity: "ABC123", Kind: entity.MediaKind_MEDIA_KIND_TAPE, Profile: (&entity.TapeMediaProfile{Format: "ltfs_v1"}).Pack()}}}, nil
+		}, mediaInspect: func(
 			_ context.Context, _ *entity.InspectMediaRequest,
 		) (*entity.InspectMediaResponse, error) {
 			return &entity.InspectMediaResponse{Media: &entity.Media{Id: 7,

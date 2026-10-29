@@ -33,6 +33,7 @@ type stubService struct {
 	volumeInitialize func(context.Context, *entity.InitializeVolumeRequest) (*entity.InitializeVolumeResponse, error)
 	volumeRegister   func(context.Context, *entity.RegisterVolumeRequest) (*entity.RegisterVolumeResponse, error)
 	deviceList       func(context.Context, *entity.ListDevicesRequest) (*entity.ListDevicesResponse, error)
+	deviceInspect    func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error)
 	libraryTrim      func(context.Context, *entity.TrimLibraryRequest) (*entity.TrimLibraryResponse, error)
 }
 
@@ -94,6 +95,16 @@ func (s *stubService) ListDevices(
 		return s.deviceList(ctx, request)
 	}
 	return &entity.ListDevicesResponse{}, nil
+}
+
+func (s *stubService) InspectDevice(
+	ctx context.Context,
+	request *entity.InspectDeviceRequest,
+) (*entity.InspectDeviceResponse, error) {
+	if s.deviceInspect != nil {
+		return s.deviceInspect(ctx, request)
+	}
+	return &entity.InspectDeviceResponse{}, nil
 }
 
 func (s *stubService) Trim(

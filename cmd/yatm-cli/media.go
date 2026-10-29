@@ -86,6 +86,11 @@ type tapeDeviceListCommand struct {
 	runtime *runtime
 }
 
+type tapeDeviceInspectCommand struct {
+	runtime *runtime
+	Device  string `long:"device" required:"yes" description:"Configured server-side Tape device"`
+}
+
 func registerMediaCommands(root *flags.Command, commandRuntime *runtime) error {
 	group, err := addGroup(root, "media", "Inspect and manage Library Media")
 	if err != nil {
@@ -125,6 +130,7 @@ func registerVolumeCommands(root *flags.Command, commandRuntime *runtime) error 
 }
 
 func registerTapeCommands(root *flags.Command, commandRuntime *runtime) error {
+	// Retain the existing Tape/device namespace independently of cartridge inspection.
 	group, err := addGroup(root, "tape", "Inspect Tape resources")
 	if err != nil {
 		return err
@@ -133,9 +139,18 @@ func registerTapeCommands(root *flags.Command, commandRuntime *runtime) error {
 	if err != nil {
 		return err
 	}
-	return addCommands(device, commandSpec{
-		name: "list", description: "List available Tape devices", handler: &tapeDeviceListCommand{runtime: commandRuntime},
-	})
+
+	// Expose configuration-only listing and explicitly requested passive diagnostics.
+	return addCommands(device,
+		commandSpec{
+			name: "list", description: "List configured Tape devices and availability",
+			handler: &tapeDeviceListCommand{runtime: commandRuntime},
+		},
+		commandSpec{
+			name: "inspect", description: "Inspect a Tape device without moving or writing Media",
+			handler: &tapeDeviceInspectCommand{runtime: commandRuntime},
+		},
+	)
 }
 
 func (c *mediaListCommand) Execute(_ []string) error {
@@ -380,4 +395,78 @@ func (c *tapeDeviceListCommand) Execute(_ []string) error {
 		return err
 	}
 	return writeProto(c.runtime.stdout, reply)
+}
+
+func (c *tapeDeviceInspectCommand) Execute(_ []string) error {
+	// Validate the configured selector before requesting passive hardware diagnostics.
+	device := strings.TrimSpace(c.Device)
+	if device == "" {
+		return usageError(fmt.Errorf("Tape device is empty"))
+	}
+
+	// Preserve absent observations and independent feature states in protobuf JSON.
+	ctx, cancel := c.runtime.context()
+	defer cancel()
+	reply, err := callRPC[entity.InspectDeviceRequest, entity.InspectDeviceResponse](
+		ctx, c.runtime, entity.MediaService_InspectDevice_FullMethodName, &entity.InspectDeviceRequest{Device: device},
+	)
+	if err != nil {
+		return err
+	}
+	return writeProto(c.runtime.stdout, reply)
+}
+
+// findTapeMedia compares exact identity within the existing bounded catalog search.
+func findTapeMedia(ctx context.Context, rt *runtime, barcode string) (*entity.Media, error) {
+	if barcode == "" {
+		return nil, usageError(fmt.Errorf("Tape barcode is empty"))
+	}
+
+	// Advance the stable ID cursor without treating a fuzzy name match as cartridge identity.
+	after := int64(0)
+	limit := int64(100)
+	for {
+		previous := after
+		reply, err := callRPC[entity.ListMediaRequest, entity.ListMediaResponse](ctx, rt, entity.MediaService_List_FullMethodName,
+			(&entity.MediaFilter{Kinds: []entity.MediaKind{entity.MediaKind_MEDIA_KIND_TAPE}, Query: barcode, Limit: &limit, AfterId: &after}).Pack())
+		if err != nil {
+			return nil, err
+		}
+		for _, value := range reply.Media {
+			if value.GetIdentity() == barcode && value.GetKind() == entity.MediaKind_MEDIA_KIND_TAPE {
+				return value, nil
+			}
+			if value.GetId() > after {
+				after = value.GetId()
+			}
+		}
+		if !reply.HasMore {
+			return nil, nil
+		}
+		if after <= previous {
+			return nil, runtimeError("protocol", fmt.Errorf("Tape Media page did not advance"))
+		}
+	}
+}
+
+// inspectRawTapeDevice requests passive diagnostics without invoking the LTFS cartridge adapter.
+func inspectRawTapeDevice(ctx context.Context, rt *runtime, device string) (*entity.InspectDeviceResponse, error) {
+	// Inspect once; the leased write attempt owns authoritative protocol qualification.
+	reply, err := callRPC[entity.InspectDeviceRequest, entity.InspectDeviceResponse](ctx, rt, entity.MediaService_InspectDevice_FullMethodName, &entity.InspectDeviceRequest{Device: device})
+	if err != nil {
+		return nil, err
+	}
+
+	// Optional diagnostic failures do not override explicit physical availability blockers.
+	tape := reply.GetTape()
+	if reply.GetDevice().GetBusy() || tape != nil && (tape.MediumPresent != nil && !tape.GetMediumPresent() || tape.GetWriteProtected()) {
+		return nil, safetyError(fmt.Errorf("Tape device is unavailable: %s", reply.Detail))
+	}
+	switch reply.Reason {
+	case entity.DeviceReason_DEVICE_REASON_UNSPECIFIED, entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
+		entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED:
+		return reply, nil
+	default:
+		return nil, safetyError(fmt.Errorf("Tape device is unavailable: %s", reply.Detail))
+	}
 }

@@ -347,6 +347,82 @@ export interface DeviceSummary {
     detail: string;
 }
 /**
+ * @generated from protobuf message yatm.v1.InspectDeviceRequest
+ */
+export interface InspectDeviceRequest {
+    /**
+     * @generated from protobuf field: string device = 1
+     */
+    device: string;
+}
+/**
+ * @generated from protobuf message yatm.v1.InspectDeviceResponse
+ */
+export interface InspectDeviceResponse {
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceSummary device = 1
+     */
+    device?: DeviceSummary;
+    /**
+     * Absent when no hardware observation could be made, for example while busy.
+     *
+     * @generated from protobuf field: optional int64 observed_at_ns = 2
+     */
+    observedAtNs?: bigint;
+    /**
+     * @generated from protobuf field: optional string vendor = 3
+     */
+    vendor?: string;
+    /**
+     * @generated from protobuf field: optional string model = 4
+     */
+    model?: string;
+    /**
+     * @generated from protobuf field: optional string firmware = 5
+     */
+    firmware?: string;
+    /**
+     * @generated from protobuf field: optional string serial_number = 6
+     */
+    serialNumber?: string;
+    /**
+     * Access identity unifies OS aliases; it is not a cartridge identity.
+     *
+     * @generated from protobuf field: optional string access_identity = 7
+     */
+    accessIdentity?: string;
+    /**
+     * @generated from protobuf field: optional string transport = 8
+     */
+    transport?: string;
+    /**
+     * @generated from protobuf field: yatm.v1.DeviceReason reason = 9
+     */
+    reason: DeviceReason;
+    /**
+     * @generated from protobuf field: string detail = 10
+     */
+    detail: string;
+    /**
+     * @generated from protobuf oneof: report
+     */
+    report: {
+        oneofKind: "tape";
+        /**
+         * @generated from protobuf field: yatm.v1.TapeDeviceReport tape = 17
+         */
+        tape: TapeDeviceReport;
+    } | {
+        oneofKind: undefined;
+    };
+    /**
+     * Last prepared read in this process, not a claim about the currently loaded cartridge.
+     *
+     * @generated from protobuf field: optional yatm.v1.TapePreparedRead prepared_read = 18
+     */
+    preparedRead?: TapePreparedRead;
+}
+/**
  * @generated from protobuf message yatm.v1.TapePreparedRead
  */
 export interface TapePreparedRead {
@@ -2232,6 +2308,182 @@ class DeviceSummary$Type extends MessageType<DeviceSummary> {
  */
 export const DeviceSummary = new DeviceSummary$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class InspectDeviceRequest$Type extends MessageType<InspectDeviceRequest> {
+    constructor() {
+        super("yatm.v1.InspectDeviceRequest", [
+            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<InspectDeviceRequest>): InspectDeviceRequest {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.device = "";
+        if (value !== undefined)
+            reflectionMergePartial<InspectDeviceRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: InspectDeviceRequest): InspectDeviceRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string device */ 1:
+                    message.device = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: InspectDeviceRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string device = 1; */
+        if (message.device !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.device);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.InspectDeviceRequest
+ */
+export const InspectDeviceRequest = new InspectDeviceRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class InspectDeviceResponse$Type extends MessageType<InspectDeviceResponse> {
+    constructor() {
+        super("yatm.v1.InspectDeviceResponse", [
+            { no: 1, name: "device", kind: "message", T: () => DeviceSummary },
+            { no: 2, name: "observed_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 3, name: "vendor", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "model", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "firmware", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "serial_number", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "access_identity", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 8, name: "transport", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
+            { no: 9, name: "reason", kind: "enum", T: () => ["yatm.v1.DeviceReason", DeviceReason, "DEVICE_REASON_"] },
+            { no: 10, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 17, name: "tape", kind: "message", oneof: "report", T: () => TapeDeviceReport },
+            { no: 18, name: "prepared_read", kind: "message", T: () => TapePreparedRead }
+        ]);
+    }
+    create(value?: PartialMessage<InspectDeviceResponse>): InspectDeviceResponse {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.reason = 0;
+        message.detail = "";
+        message.report = { oneofKind: undefined };
+        if (value !== undefined)
+            reflectionMergePartial<InspectDeviceResponse>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: InspectDeviceResponse): InspectDeviceResponse {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* yatm.v1.DeviceSummary device */ 1:
+                    message.device = DeviceSummary.internalBinaryRead(reader, reader.uint32(), options, message.device);
+                    break;
+                case /* optional int64 observed_at_ns */ 2:
+                    message.observedAtNs = reader.int64().toBigInt();
+                    break;
+                case /* optional string vendor */ 3:
+                    message.vendor = reader.string();
+                    break;
+                case /* optional string model */ 4:
+                    message.model = reader.string();
+                    break;
+                case /* optional string firmware */ 5:
+                    message.firmware = reader.string();
+                    break;
+                case /* optional string serial_number */ 6:
+                    message.serialNumber = reader.string();
+                    break;
+                case /* optional string access_identity */ 7:
+                    message.accessIdentity = reader.string();
+                    break;
+                case /* optional string transport */ 8:
+                    message.transport = reader.string();
+                    break;
+                case /* yatm.v1.DeviceReason reason */ 9:
+                    message.reason = reader.int32();
+                    break;
+                case /* string detail */ 10:
+                    message.detail = reader.string();
+                    break;
+                case /* yatm.v1.TapeDeviceReport tape */ 17:
+                    message.report = {
+                        oneofKind: "tape",
+                        tape: TapeDeviceReport.internalBinaryRead(reader, reader.uint32(), options, (message.report as any).tape)
+                    };
+                    break;
+                case /* optional yatm.v1.TapePreparedRead prepared_read */ 18:
+                    message.preparedRead = TapePreparedRead.internalBinaryRead(reader, reader.uint32(), options, message.preparedRead);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: InspectDeviceResponse, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* yatm.v1.DeviceSummary device = 1; */
+        if (message.device)
+            DeviceSummary.internalBinaryWrite(message.device, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* optional int64 observed_at_ns = 2; */
+        if (message.observedAtNs !== undefined)
+            writer.tag(2, WireType.Varint).int64(message.observedAtNs);
+        /* optional string vendor = 3; */
+        if (message.vendor !== undefined)
+            writer.tag(3, WireType.LengthDelimited).string(message.vendor);
+        /* optional string model = 4; */
+        if (message.model !== undefined)
+            writer.tag(4, WireType.LengthDelimited).string(message.model);
+        /* optional string firmware = 5; */
+        if (message.firmware !== undefined)
+            writer.tag(5, WireType.LengthDelimited).string(message.firmware);
+        /* optional string serial_number = 6; */
+        if (message.serialNumber !== undefined)
+            writer.tag(6, WireType.LengthDelimited).string(message.serialNumber);
+        /* optional string access_identity = 7; */
+        if (message.accessIdentity !== undefined)
+            writer.tag(7, WireType.LengthDelimited).string(message.accessIdentity);
+        /* optional string transport = 8; */
+        if (message.transport !== undefined)
+            writer.tag(8, WireType.LengthDelimited).string(message.transport);
+        /* yatm.v1.DeviceReason reason = 9; */
+        if (message.reason !== 0)
+            writer.tag(9, WireType.Varint).int32(message.reason);
+        /* string detail = 10; */
+        if (message.detail !== "")
+            writer.tag(10, WireType.LengthDelimited).string(message.detail);
+        /* yatm.v1.TapeDeviceReport tape = 17; */
+        if (message.report.oneofKind === "tape")
+            TapeDeviceReport.internalBinaryWrite(message.report.tape, writer.tag(17, WireType.LengthDelimited).fork(), options).join();
+        /* optional yatm.v1.TapePreparedRead prepared_read = 18; */
+        if (message.preparedRead)
+            TapePreparedRead.internalBinaryWrite(message.preparedRead, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.InspectDeviceResponse
+ */
+export const InspectDeviceResponse = new InspectDeviceResponse$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class TapePreparedRead$Type extends MessageType<TapePreparedRead> {
     constructor() {
         super("yatm.v1.TapePreparedRead", [
@@ -3254,5 +3506,6 @@ export const MediaService = new ServiceType("yatm.v1.MediaService", [
     { name: "InitializeVolume", options: {}, I: InitializeVolumeRequest, O: InitializeVolumeResponse },
     { name: "RegisterVolume", options: {}, I: RegisterVolumeRequest, O: RegisterVolumeResponse },
     { name: "ListVolumeCandidates", options: {}, I: ListVolumeCandidatesRequest, O: ListVolumeCandidatesResponse },
-    { name: "ListDevices", options: {}, I: ListDevicesRequest, O: ListDevicesResponse }
+    { name: "ListDevices", options: {}, I: ListDevicesRequest, O: ListDevicesResponse },
+    { name: "InspectDevice", options: {}, I: InspectDeviceRequest, O: InspectDeviceResponse }
 ]);
