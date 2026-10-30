@@ -32,17 +32,24 @@ source review and physical acceptance retain their own explicit decisions.
    Inspect modules, tools and temporary files for a current runtime, generator, test or packaging
    consumer before deleting them. Review ignored local directories separately; CI cannot inspect
    workstation leftovers. Accepted limitations remain documented and do not become release blockers.
-2. **Audit the history and squash unpublished development.** Scan the development range before
-   squashing, including intermediate source and commit messages. Review credentials, internal
-   services, personal paths, real data, configuration and private notes manually as well as with
-   the pinned scanner. Rotate an exposed real credential before attempting public-history cleanup;
-   history rewriting needs separate authorization. Recheck the public branch tip, retain a local
-   backup and squash only unpublished commits into one release commit whose parent is that tip.
-   Do not publish the backup branch or rewrite already public history. Review the final diff and
-   commit message again; squashing does not sanitize final content. Finish required dependency
-   releases and update their pins before freezing YATM.
-3. **Complete review and fixes with affected checks.** Review the integrated source and finish
-   focused fixes/verification until no unresolved, unaccepted finding remains. Use
+2. **Audit the history and prepare a reviewed commit stack.** Scan the development range before
+   restructuring it, including intermediate source and commit messages. Review credentials,
+   internal services, personal paths, real data, configuration and private notes manually as well
+   as with the pinned scanner. Rotate an exposed real credential before attempting public-history
+   cleanup; history rewriting needs separate authorization. Recheck the public branch tip and
+   retain a local backup. Re-slice only unpublished development, from its final source, into a
+   stack whose parent is that tip: each commit introduces the final form of one concern with its
+   tests, later fixes and renames belong to the commit they correct, and commits follow dependency
+   order. An incompatible contract change lands with all of its callers. Documentation lands with
+   its concern, or in one final documentation commit when new documents and the index link to
+   each other.
+   Every commit must build and pass its Go and frontend tests on its own, and the stack's final
+   tree must equal the reviewed source. Do not publish the backup branch or rewrite already
+   public history. Review every commit and message again; restructuring does not sanitize
+   content. Finish required dependency releases and update their pins before freezing YATM.
+3. **Complete review and fixes with affected checks.** Review the stack and finish focused
+   fixes/verification until no unresolved, unaccepted finding remains. Fold each fix into the
+   stack commit that owns the change and recheck the affected commits. Use
    [Evidence Reuse](#evidence-reuse); do not run a full preflight per fix.
    Complete the [performance acceptance](../development/performance.md#performance-acceptance) before source-push approval,
    retaining unaffected measurements and checking only changed operations again.
@@ -52,7 +59,7 @@ source review and physical acceptance retain their own explicit decisions.
    For workflow edits, validate GitHub syntax and expression contexts before pushing with
    `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes=`;
    script diagnostics remain covered by the existing shell checks.
-4. **Run the final source preflight on the clean release commit.** Go commands in release gates
+4. **Run the final source preflight on the clean stack tip.** Go commands in release gates
    and package builders use `GOWORK=off` so dependencies resolve from committed module files.
    Development checks can still use a local workspace. The candidate workflow owns
    the final full run before its platform matrix. A local full run is available for an intentional
@@ -158,7 +165,7 @@ scans retain its credential rules while removing global dependency/generated-fil
 Install it with
 `bash build/release/install-gitleaks.sh /path/to/scanner`, set `GITLEAKS_BIN` to that directory's
 `gitleaks`, and run `node build/release/check-content.mjs source . HEAD`. A different revision range
-can inspect unpublished development before squashing. `node build/release/check-content.mjs artifacts /path/to/candidates` checks
+can inspect unpublished development before restructuring it. `node build/release/check-content.mjs artifacts /path/to/candidates` checks
 nested archives and embedded executable/library strings, normalizing npm `.tgz` names in a private
 scan copy so the scanner opens them. Source maps and dependency sources are
 included; the only project exception is the exact deterministic physical-Tape fixture seed at its
