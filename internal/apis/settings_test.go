@@ -123,15 +123,15 @@ func TestSettingsLibraryReplacesOneTypedGroup(t *testing.T) {
 	service := &settingsService{api: api}
 	before, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_LIBRARY})
 	require.NoError(t, err)
-	require.True(t, before.GetValue().GetLibrary().IncludeUnbackedFiles)
+	require.True(t, before.GetValue().GetLibrary().IncludeFilesWithoutVersions)
 	saved, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: &entity.LibrarySettings{}}}})
 	require.NoError(t, err)
-	require.False(t, saved.GetValue().GetLibrary().IncludeUnbackedFiles)
+	require.False(t, saved.GetValue().GetLibrary().IncludeFilesWithoutVersions)
 
 	// A later complete value replaces the earlier one; a missing typed value remains invalid.
 	replaced, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: before.Value})
 	require.NoError(t, err)
-	require.True(t, replaced.GetValue().GetLibrary().IncludeUnbackedFiles)
+	require.True(t, replaced.GetValue().GetLibrary().IncludeFilesWithoutVersions)
 	_, err = service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{}})
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }

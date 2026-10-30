@@ -514,19 +514,19 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	require.Equal(t, "original-only.txt", page.Results[0].File.Name)
-	unbackedID := page.Results[0].File.ID
+	unversionedID := page.Results[0].File.ID
 
 	// Global duplicates and an explicit Inspector selection remain actionable in saved-only Library views.
 	settings, err := lib.Settings().Library.Current(ctx)
 	require.NoError(t, err)
 	hidden, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{
-		IncludeUnbackedFiles: false,
-		ConfirmRemove:        settings.ConfirmRemove,
+		IncludeFilesWithoutVersions: false,
+		ConfirmRemove:               settings.ConfirmRemove,
 	})
 	require.NoError(t, err)
 	selection, err := lib.InspectSelection(ctx, &entity.SelectionInspection{Selections: []*entity.FileSelection{{
 		Scope:  entity.FileScope_FILE_SCOPE_ALL,
-		Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: unbackedID}},
+		Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: unversionedID}},
 	}}})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, selection.FileCount)
@@ -588,8 +588,8 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	}
 	require.True(t, pair, "the cross-Location pair remains one complete group")
 	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{
-		IncludeUnbackedFiles: settings.IncludeUnbackedFiles,
-		ConfirmRemove:        hidden.ConfirmRemove,
+		IncludeFilesWithoutVersions: settings.IncludeFilesWithoutVersions,
+		ConfirmRemove:               hidden.ConfirmRemove,
 	})
 	require.NoError(t, err)
 }

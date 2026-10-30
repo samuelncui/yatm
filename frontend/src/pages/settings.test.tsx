@@ -12,7 +12,7 @@ const { get, update, list } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(),
 vi.mock("@/api", () => ({ fileBase: "/files", settingsCli: { get, update }, locationCli: { list } }));
 import { SettingsBrowser } from "./settings";
 
-const initial = LibrarySettings.create({ includeUnbackedFiles: true, confirmRemove: true });
+const initial = LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true });
 const value = (settings = initial) => SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.clone(settings) } });
 const open = () =>
   render(
@@ -33,13 +33,13 @@ beforeEach(() => {
 describe("Library Settings", () => {
   it("edits locally and saves the whole typed group", async () => {
     open();
-    const toggle = await screen.findByRole("checkbox", { name: "Include unbacked files" });
+    const toggle = await screen.findByRole("checkbox", { name: "Include files without saved versions" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     expect(update).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(update).toHaveBeenCalledExactlyOnceWith({
-      value: { value: { oneofKind: "library", library: { ...initial, includeUnbackedFiles: false } } },
+      value: { value: { oneofKind: "library", library: { ...initial, includeFilesWithoutVersions: false } } },
     });
     expect(await screen.findByText("Library settings saved.")).toBeVisible();
     expect(screen.getByText(/Locations are unaffected/)).toBeInTheDocument();

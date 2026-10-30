@@ -29,7 +29,7 @@ func TestCatalogReadersAndTransactionViewsUseTheirOwnedConnections(t *testing.T)
 	defer cancel()
 	location := &Location{Name: "original", ExecutorID: "local", RootPath: t.TempDir(), Config: &entity.LocationConfig{}}
 	require.NoError(t, lib.CreateLocation(ctx, location))
-	_, err = settings.Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: true})
+	_, err = settings.Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true})
 	require.NoError(t, err)
 
 	// The writer sees its own updates while public readers still see committed values.
@@ -48,10 +48,10 @@ func TestCatalogReadersAndTransactionViewsUseTheirOwnedConnections(t *testing.T)
 	require.Equal(t, "changed", current.Name)
 	committedSettings, err := settings.Library.Current(ctx)
 	require.NoError(t, err)
-	require.True(t, committedSettings.IncludeUnbackedFiles)
+	require.True(t, committedSettings.IncludeFilesWithoutVersions)
 	currentSettings, err := view.settings.Library.Current(ctx)
 	require.NoError(t, err)
-	require.False(t, currentSettings.IncludeUnbackedFiles)
+	require.False(t, currentSettings.IncludeFilesWithoutVersions)
 	require.True(t, currentSettings.ConfirmRemove)
 
 	// The same long-lived readers see the next committed transaction normally.

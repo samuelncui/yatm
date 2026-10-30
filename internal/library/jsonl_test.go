@@ -164,7 +164,7 @@ func TestLibraryJSONLImportPreservesSettings(t *testing.T) {
 	module := settingspkg.New(target.db, settingspkg.PreviewDefinition{Default: func() (*entity.PreviewSettings, error) {
 		return &entity.PreviewSettings{}, nil
 	}})
-	librarySettings := &entity.LibrarySettings{IncludeUnbackedFiles: false, ConfirmRemove: false}
+	librarySettings := &entity.LibrarySettings{IncludeFilesWithoutVersions: false, ConfirmRemove: false}
 	previewSettings := &entity.PreviewSettings{Enabled: true, Concurrency: 7}
 	jobSettings := &entity.JobSettings{Execution: settingspkg.DefaultJobExecution()}
 	_, err := module.Library.Save(ctx, librarySettings)

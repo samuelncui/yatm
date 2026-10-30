@@ -115,7 +115,7 @@ enum TapeReadOrder {
 
 // Library preferences: what the Library shows and how it confirms removal.
 message LibrarySettings {
-  bool include_unbacked_files = 1;
+  bool include_files_without_versions = 1;
   bool confirm_remove = 2;
 }
 // Executor preferences: how an attempt drives the pipeline its runner owns.

@@ -185,7 +185,7 @@ func (s *stubSettingsService) Get(_ context.Context, request *entity.GetSettings
 	case entity.SettingsGroup_SETTINGS_GROUP_LIBRARY:
 		value := s.library
 		if value == nil {
-			value = &entity.LibrarySettings{IncludeUnbackedFiles: true, ConfirmRemove: true}
+			value = &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true}
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_PREVIEW:
@@ -234,9 +234,9 @@ func TestSettingsCLIExplicitFalseAndScopedBrowsing(t *testing.T) {
 	exit, _, stderr := executeTestCLI(server.URL, "", "settings", "library")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Nil(t, settings.updated)
-	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "library", "--include-unbacked=false")
+	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "library", "--include-files-without-versions=false")
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.False(t, settings.updated.GetLibrary().IncludeUnbackedFiles)
+	require.False(t, settings.updated.GetLibrary().IncludeFilesWithoutVersions)
 
 	// Administrator discovery uses absolute paths and bounded page state.
 	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "browse", "--path", "/restored/2026", "--cursor", "cursor", "--limit", "4")

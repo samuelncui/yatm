@@ -61,7 +61,7 @@ func TestGroupsShareStorageWithoutSharingBehavior(t *testing.T) {
 	library, err := module.Library.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, library.Present)
-	require.True(t, library.Value.IncludeUnbackedFiles)
+	require.True(t, library.Value.IncludeFilesWithoutVersions)
 	preview, err := module.Preview.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, preview.Present)
@@ -85,11 +85,11 @@ func TestGroupsShareStorageWithoutSharingBehavior(t *testing.T) {
 	require.EqualValues(t, 4, preview.Value.Concurrency)
 
 	// A later complete replacement is last-write-wins for this local operator surface.
-	_, err = module.Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: true})
+	_, err = module.Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true})
 	require.NoError(t, err)
 	library, err = module.Library.Read(ctx)
 	require.NoError(t, err)
-	require.True(t, library.Value.IncludeUnbackedFiles)
+	require.True(t, library.Value.IncludeFilesWithoutVersions)
 	require.False(t, library.Value.ConfirmRemove)
 }
 

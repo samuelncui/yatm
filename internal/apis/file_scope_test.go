@@ -13,7 +13,7 @@ import (
 )
 
 func TestFileListScopeBeforePaginationWithoutRecursiveSize(t *testing.T) {
-	// Build a nested tree whose unbacked leaf is larger than either saved leaf.
+	// Build a nested tree whose version-less leaf is larger than either saved leaf.
 	ctx := context.Background()
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "library.db"))
 	require.NoError(t, err)
@@ -29,7 +29,7 @@ func TestFileListScopeBeforePaginationWithoutRecursiveSize(t *testing.T) {
 	sub := &library.File{Name: "a-directory", ParentID: root.ID, Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 	require.NoError(t, lib.SaveFile(ctx, sub))
 	nested := &library.File{Name: "nested", ParentID: sub.ID, Kind: entity.FileKind_FILE_KIND_REGULAR}
-	unsaved := &library.File{Name: "b-unbacked", ParentID: root.ID, Kind: entity.FileKind_FILE_KIND_REGULAR}
+	unsaved := &library.File{Name: "b-unversioned", ParentID: root.ID, Kind: entity.FileKind_FILE_KIND_REGULAR}
 	saved := &library.File{Name: "z-saved", ParentID: root.ID, Kind: entity.FileKind_FILE_KIND_REGULAR}
 	for _, file := range []*library.File{nested, unsaved, saved} {
 		require.NoError(t, lib.SaveFile(ctx, file))

@@ -9,7 +9,7 @@ describe("Content availability matrix", () => {
   it.each([
     ["current archived content", { ...present, restorableCurrentCopyCount: 1n }, "success", undefined],
     ["local only", present, "warning", undefined],
-    ["unbacked changes with history", { ...present, ...history }, "success", "changed"],
+    ["unarchived changes with history", { ...present, ...history }, "success", "changed"],
     ["unknown content with history", { ...present, ...history, currentObservationValid: false }, "success", "unknown"],
     ["unknown content without history", { ...present, currentObservationValid: false }, "info", undefined],
     [

@@ -14,7 +14,7 @@ import (
 
 type settingsLibraryCommand struct {
 	runtime       *runtime
-	Include       *string `long:"include-unbacked" choice:"true" choice:"false" description:"Set whether the default Library view includes files without versions"`
+	Include       *string `long:"include-files-without-versions" choice:"true" choice:"false" description:"Set whether the default Library view includes files without versions"`
 	ConfirmRemove *string `long:"confirm-remove" choice:"true" choice:"false" description:"Require browser confirmation before moving entries into Trash; CLI still requires explicit confirmation"`
 }
 
@@ -77,7 +77,7 @@ func (c *settingsLibraryCommand) Execute(_ []string) error {
 
 	// Publish the explicit value without confusing false with an omitted option.
 	if c.Include != nil {
-		settings.IncludeUnbackedFiles = *c.Include == "true"
+		settings.IncludeFilesWithoutVersions = *c.Include == "true"
 	}
 	if c.ConfirmRemove != nil {
 		settings.ConfirmRemove = *c.ConfirmRemove == "true"

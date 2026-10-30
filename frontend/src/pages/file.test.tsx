@@ -150,7 +150,7 @@ vi.mock("@/api", () => ({
     get: ({ group }: { group: SettingsGroup }) => ({
       response: Promise.resolve(
         group === SettingsGroup.LIBRARY
-          ? { value: { value: { oneofKind: "library", library: { includeUnbackedFiles: true, confirmRemove: true } } } }
+          ? { value: { value: { oneofKind: "library", library: { includeFilesWithoutVersions: true, confirmRemove: true } } } }
           : { value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } } },
       ),
     }),

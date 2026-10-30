@@ -18,7 +18,7 @@ func (l *Library) ResolveFileScope(ctx context.Context, scope entity.FileScope) 
 		if err != nil {
 			return scope, err
 		}
-		if settings.IncludeUnbackedFiles {
+		if settings.IncludeFilesWithoutVersions {
 			return entity.FileScope_FILE_SCOPE_ALL, nil
 		}
 		return entity.FileScope_FILE_SCOPE_SAVED, nil

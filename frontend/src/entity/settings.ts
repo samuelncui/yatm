@@ -300,9 +300,9 @@ export interface TapeReadTiming {
  */
 export interface LibrarySettings {
     /**
-     * @generated from protobuf field: bool include_unbacked_files = 1
+     * @generated from protobuf field: bool include_files_without_versions = 1
      */
-    includeUnbackedFiles: boolean;
+    includeFilesWithoutVersions: boolean;
     /**
      * @generated from protobuf field: bool confirm_remove = 2
      */
@@ -1347,13 +1347,13 @@ export const TapeReadTiming = new TapeReadTiming$Type();
 class LibrarySettings$Type extends MessageType<LibrarySettings> {
     constructor() {
         super("yatm.v1.LibrarySettings", [
-            { no: 1, name: "include_unbacked_files", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 1, name: "include_files_without_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 2, name: "confirm_remove", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<LibrarySettings>): LibrarySettings {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.includeUnbackedFiles = false;
+        message.includeFilesWithoutVersions = false;
         message.confirmRemove = false;
         if (value !== undefined)
             reflectionMergePartial<LibrarySettings>(this, message, value);
@@ -1364,8 +1364,8 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* bool include_unbacked_files */ 1:
-                    message.includeUnbackedFiles = reader.bool();
+                case /* bool include_files_without_versions */ 1:
+                    message.includeFilesWithoutVersions = reader.bool();
                     break;
                 case /* bool confirm_remove */ 2:
                     message.confirmRemove = reader.bool();
@@ -1382,9 +1382,9 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
         return message;
     }
     internalBinaryWrite(message: LibrarySettings, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* bool include_unbacked_files = 1; */
-        if (message.includeUnbackedFiles !== false)
-            writer.tag(1, WireType.Varint).bool(message.includeUnbackedFiles);
+        /* bool include_files_without_versions = 1; */
+        if (message.includeFilesWithoutVersions !== false)
+            writer.tag(1, WireType.Varint).bool(message.includeFilesWithoutVersions);
         /* bool confirm_remove = 2; */
         if (message.confirmRemove !== false)
             writer.tag(2, WireType.Varint).bool(message.confirmRemove);

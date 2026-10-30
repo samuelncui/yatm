@@ -254,7 +254,7 @@ func TestScanSavedAllOverlapAndTrashKeepSelectionSemantics(t *testing.T) {
 	spec.Selections = append([]*entity.FileSelection{saved}, spec.Selections...)
 	r, _ := runAnalysis(t, f.exe, spec)
 
-	// Later ALL still includes unbacked leaves, deduplicates saved leaves and excludes Trash.
+	// Later ALL still includes version-less leaves, deduplicates saved leaves and excludes Trash.
 	job, err := f.exe.GetJob(ctx, r.job.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, job.Status, job.Error)

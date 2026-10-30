@@ -13,7 +13,7 @@ import (
 )
 
 func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
-	// Put more than a page of unbacked names before two saved files and a retained empty directory.
+	// Put more than a page of version-less names before two saved files and a retained empty directory.
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
 	for index := 0; index < 105; index++ {
@@ -59,7 +59,7 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 	// A frozen selection retains its scope when the persistent display preference changes.
 	selection := &entity.FileSelection{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: Root.ID}}}
 	require.NoError(t, lib.FreezeSelections(ctx, []*entity.FileSelection{selection}))
-	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: true, ConfirmRemove: true})
+	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true})
 	require.NoError(t, err)
 	var selected []int64
 	require.NoError(t, lib.WalkFileSelections(ctx, []*entity.FileSelection{selection}, func(file *File, target string) error {
@@ -96,7 +96,7 @@ func TestMixedPhysicalAndLogicalSelectionsDeduplicateWithFrozenRevision(t *testi
 	require.NoError(t, lib.FreezeSelections(ctx, selections))
 	require.Equal(t, "dir", selections[1].GetLocation().Path)
 
-	// Saved logical roots cannot suppress unbacked entries explicitly selected from a Location.
+	// Saved logical roots cannot suppress version-less entries explicitly selected from a Location.
 	var selected []int64
 	require.NoError(t, lib.WalkFileSelections(ctx, selections, func(file *File, target string) error {
 		require.Contains(t, target, "Unforged/Everyday/dir/")
@@ -173,9 +173,9 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	// Saved-only presentation must not filter a complete metadata backup.
 	ctx := context.Background()
 	_, lib := newTestLibrary(t)
-	file := &File{Name: "unbacked.txt", Kind: entity.FileKind_FILE_KIND_REGULAR, Note: "do not lose"}
+	file := &File{Name: "unversioned.txt", Kind: entity.FileKind_FILE_KIND_REGULAR, Note: "do not lose"}
 	require.NoError(t, lib.SaveFile(ctx, file))
-	_, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: false})
+	_, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: false})
 	require.NoError(t, err)
 	_, err = lib.Settings().Job.Save(ctx, &entity.JobSettings{Execution: &entity.JobExecutionSettings{ReadBatch: 4, ReadBufferMax: 16,
 		WriteBufferMax: 8, WriteBatchSize: 4, FlushIntervalMs: 500}})
@@ -183,7 +183,7 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	var backup bytes.Buffer
 	require.NoError(t, lib.Export(ctx, &backup, []entity.LibraryEntityType{entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_FILE}))
 	_, imported := newTestLibrary(t)
-	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: true, ConfirmRemove: false})
+	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: false})
 	require.NoError(t, err)
 	targetJob := &entity.JobSettings{Execution: &entity.JobExecutionSettings{ReadBatch: 2, ReadBufferMax: 8,
 		WriteBufferMax: 4, WriteBatchSize: 2, FlushIntervalMs: 250}}
@@ -192,7 +192,7 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	require.NoError(t, imported.Import(ctx, bytes.NewReader(backup.Bytes()), false))
 	settings, err := imported.Settings().Library.Current(ctx)
 	require.NoError(t, err)
-	require.True(t, settings.IncludeUnbackedFiles)
+	require.True(t, settings.IncludeFilesWithoutVersions)
 	require.False(t, settings.ConfirmRemove)
 	job, err := imported.Settings().Job.Current(ctx)
 	require.NoError(t, err)
@@ -202,13 +202,13 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	require.Equal(t, file.Note, kept.Note)
 
 	// A malformed body cannot leave its header preference applied outside the replacement transaction.
-	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeUnbackedFiles: true, ConfirmRemove: true})
+	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true})
 	require.NoError(t, err)
 	broken := append(append([]byte{}, backup.Bytes()...), []byte("{invalid record}\n")...)
 	require.Error(t, imported.Import(ctx, bytes.NewReader(broken), false))
 	after, err := imported.Settings().Library.Current(ctx)
 	require.NoError(t, err)
-	require.True(t, after.IncludeUnbackedFiles)
+	require.True(t, after.IncludeFilesWithoutVersions)
 	require.True(t, after.ConfirmRemove)
 	afterJob, err := imported.Settings().Job.Current(ctx)
 	require.NoError(t, err)

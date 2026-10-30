@@ -29,7 +29,7 @@ describe("Shared file row status", () => {
             id: "file",
             name: "photo.jpg",
             status: {
-              label: "Local · Backed up · Changes not archived",
+              label: "Local · Archived · Changes not archived",
               color: "green",
               marker: { kind: "changed", label: "Changes not archived", color: "orange" },
             },

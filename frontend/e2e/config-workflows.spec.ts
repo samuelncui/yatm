@@ -160,7 +160,7 @@ const fixture = async (page: Page) => {
             ? { oneofKind: "preview" as const, preview: state.preview }
             : request.group === SettingsGroup.DEVICE
               ? { oneofKind: "device" as const, device: DeviceSettings.create() }
-              : { oneofKind: "library" as const, library: LibrarySettings.create({ includeUnbackedFiles: true }) };
+              : { oneofKind: "library" as const, library: LibrarySettings.create({ includeFilesWithoutVersions: true }) };
         return fulfill(route, GetSettingsResponse.toBinary(GetSettingsResponse.create({ value: { value } })));
       }
       case "yatm.v1.SettingsService/Update": {

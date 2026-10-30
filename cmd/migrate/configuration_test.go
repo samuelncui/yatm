@@ -122,7 +122,7 @@ func TestConfigurationPlanRejectsStaleConfigurationAndSettings(t *testing.T) {
 	require.NoError(t, err)
 	settings, err := configurationSettings(db).Library.Current(ctx)
 	require.NoError(t, err)
-	settings.IncludeUnbackedFiles = false
+	settings.IncludeFilesWithoutVersions = false
 	_, err = configurationSettings(db).Library.Save(ctx, settings)
 	require.NoError(t, err)
 	require.Error(t, checkConfigurationPlan(ctx, db, filename, plan))

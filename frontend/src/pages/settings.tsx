@@ -47,13 +47,13 @@ export const SettingsBrowser = () => {
           <>
             <SettingsSection title="File visibility">
               <SettingsField
-                label="Include unbacked files"
+                label="Include files without saved versions"
                 description="When off, Library shows files with saved versions. Locations are unaffected."
                 control={
                   <Checkbox
-                    checked={draft.includeUnbackedFiles}
+                    checked={draft.includeFilesWithoutVersions}
                     disabled={loading || saving}
-                    onChange={(_, includeUnbackedFiles) => setDraft((value) => (value ? { ...value, includeUnbackedFiles } : value))}
+                    onChange={(_, includeFilesWithoutVersions) => setDraft((value) => (value ? { ...value, includeFilesWithoutVersions } : value))}
                   />
                 }
               />

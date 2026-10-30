@@ -121,7 +121,7 @@ func TestSelectionOverlappingRootsDoNotRepeatTraversal(t *testing.T) {
 	require.Equal(t, ids, again)
 	require.Equal(t, visits, repeated, "duplicate roots must not multiply directory page visits")
 
-	// SAVED owns only versioned leaves; ALL must still visit directories for unbacked leaves.
+	// SAVED owns only versioned leaves; ALL must still visit directories for version-less leaves.
 	mixed := []*entity.FileSelection{selectRoot(child.ID, entity.FileScope_FILE_SCOPE_SAVED), base[1]}
 	ids, visits = collect(mixed)
 	want := append(append(append([]int64{}, saved...), unsaved...), outside.ID)

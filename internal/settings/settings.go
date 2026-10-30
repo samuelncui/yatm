@@ -70,7 +70,7 @@ func New(db *gorm.DB, preview PreviewDefinition) *Module {
 	module.Library = newGroup(db, definition[*entity.LibrarySettings]{
 		key: "library",
 		defaults: func() (*entity.LibrarySettings, error) {
-			return &entity.LibrarySettings{IncludeUnbackedFiles: true, ConfirmRemove: true}, nil
+			return &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true}, nil
 		},
 	})
 	module.Preview = newGroup(db, definition[*entity.PreviewSettings]{

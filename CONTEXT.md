@@ -8,7 +8,7 @@ These are the domain's words, each with the alternatives to avoid. The list is c
 concept, or a new name for one already here, needs explicit developer authorization.
 
 **Library**:
-The catalog of logical Files, annotations, originals, saved versions and Media inventory. Membership does not require a backup; logical organization is independent of an original's presence or physical directory structure.
+The catalog of logical Files, annotations, originals, saved versions and Media inventory. Membership does not require a saved version or archived copy; logical organization is independent of an original's presence or physical directory structure.
 _Avoid_: source filesystem, backup directory
 
 **File**:

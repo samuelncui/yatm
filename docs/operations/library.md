@@ -64,7 +64,7 @@ mtime:>="2026-01-01T00:00:00Z" AND NOT tag:obsolete
 
 **Settings → Library** separates two default-on preferences:
 
-- **Include unbacked files** affects only Library visibility. Saved-only mode retains editable logical directories and Files with any saved version, including versions whose last copy is lost. Location browsing and duplicate groups are independent.
+- **Include files without saved versions** affects only Library visibility. Saved-only mode retains editable logical directories and Files with any saved version, including versions whose last copy is lost. Location browsing and duplicate groups are independent.
 - **Confirm Delete** controls the browser's move-to-Trash dialog. Server checks always run; a CLI mutation reports its resolved plan under `--dryrun` and writes when the flag is omitted.
 
     yatm-cli settings library

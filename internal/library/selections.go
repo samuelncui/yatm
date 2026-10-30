@@ -128,7 +128,7 @@ func (l *Library) readSelectionRoots(ctx context.Context, selections []*entity.F
 	if excludeTrash {
 		for _, state := range states {
 			if _, trash := state.seen[TrashFileID]; trash {
-				return nil, nil, fmt.Errorf("Library Trash cannot be scanned or backed up")
+				return nil, nil, fmt.Errorf("Library Trash cannot be scanned or archived")
 			}
 		}
 	}
@@ -342,7 +342,7 @@ func (l *Library) savedSelectionFiles(ctx context.Context, ids []int64) (map[int
 	return versions, nil
 }
 
-// A preceding SAVED root covers only another SAVED traversal, never unbacked leaves.
+// A preceding SAVED root covers only another SAVED traversal, never leaves without versions.
 func selectionTreeCovered(target string, scope entity.FileScope, earlier []selectionRoot) bool {
 	for _, root := range earlier {
 		if root.locationID == 0 && underSelection(target, root.path) &&

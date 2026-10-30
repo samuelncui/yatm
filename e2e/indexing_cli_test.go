@@ -104,7 +104,7 @@ func TestCLIIndexFailureCancellationAndVisibility(t *testing.T) {
 	require.Positive(t, filesEntryID(detail.Entry))
 
 	// Settings scope changes visibility only; it never removes the retained association or metadata.
-	cliResult(t, ctx, connection, new(entity.LibrarySettings), "settings", "library", "--include-unbacked=false")
+	cliResult(t, ctx, connection, new(entity.LibrarySettings), "settings", "library", "--include-files-without-versions=false")
 	cliResult(t, ctx, connection, page, "ls", "--file-id", "0", "--scope", "default", "--query", "tag:keep", "--recursive")
 	require.Empty(t, page.Entries)
 	cliResult(t, ctx, connection, page, "ls", "--file-id", "0", "--scope", "all", "--query", "tag:keep", "--recursive")

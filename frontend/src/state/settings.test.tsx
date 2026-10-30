@@ -139,7 +139,7 @@ it("preserves a dirty draft when committed values change and cancels to the newe
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
   const { result } = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
-  act(() => result.current.setDraft((draft) => draft && { ...draft, includeUnbackedFiles: true }));
+  act(() => result.current.setDraft((draft) => draft && { ...draft, includeFilesWithoutVersions: true }));
   const edited = result.current.draft;
   act(() => store.dispatch(settingsActions.saved({ group: SettingsGroup.LIBRARY, value: SettingsValue.toJsonString(value(false)) })));
   expect(result.current.draft).toEqual(edited);
