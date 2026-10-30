@@ -26,7 +26,8 @@ fi
 # Validate provenance before invoking compilers or fetching dependencies.
 BUILD_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/yatm-preview-build.XXXXXX")"
 BUILD_DIRECTORY="$(cd "$BUILD_DIRECTORY" && pwd -P)"
-trap 'status=$?; if [[ "$status" == 0 ]]; then rm -rf -- "$BUILD_DIRECTORY"; else echo "Failed build retained at $BUILD_DIRECTORY" >&2; fi' EXIT
+# Copied Go module sources keep the cache's read-only modes; restore write access before removal.
+trap 'status=$?; if [[ "$status" == 0 ]]; then chmod -R u+w "$BUILD_DIRECTORY" && rm -rf -- "$BUILD_DIRECTORY"; else echo "Failed build retained at $BUILD_DIRECTORY" >&2; fi' EXIT
 RELEASE_COMMIT="$(node "$REPOSITORY/build/release/committed-inputs.mjs" checkout "$REPOSITORY" "$BUILD_DIRECTORY/source" "${RELEASE_COMMIT:-}" "${PREVIEW_SOURCE_DIRECTORY:-}")"
 export RELEASE_COMMIT
 REPOSITORY="$BUILD_DIRECTORY/source"
@@ -222,7 +223,7 @@ fi
 node "$REPOSITORY/previewworker/build/package-sources.mjs" "$PACKAGE" "$RELEASE_COMMIT"
 if [[ "$DISTRIBUTED_SOURCES" == true ]]; then
   # Preserve full dependency sources when the build uses only their vendored subset.
-  rm -rf -- "$PACKAGE/sources/modules"
+  chmod -R u+w "$PACKAGE/sources/modules" && rm -rf -- "$PACKAGE/sources/modules"
   cp -R "$PREVIEW_SOURCE_DIRECTORY/modules" "$PACKAGE/sources/"
 fi
 printf '%s\n' "$RELEASE_COMMIT" > "$PACKAGE/sources/COMMIT"
