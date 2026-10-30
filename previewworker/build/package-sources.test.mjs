@@ -59,7 +59,11 @@ function run(command, args, options) {
 
 test('package sources verifies module inputs and preserves offline guide links', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yatm-package-sources-test-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => {
+    // Go keeps module-cache directories read-only; restore write access so cleanup can remove them.
+    spawnSync('chmod', ['-R', 'u+w', root]);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 
   const proxy = path.join(root, 'proxy', fixtureModule, '@v');
   const worker = path.join(root, 'worker');
