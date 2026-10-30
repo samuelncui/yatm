@@ -128,7 +128,7 @@ Linux backend builds require Zig **0.15.2** and always enable CGO, selecting the
 | linux/arm, GOARM=7 | arm-linux-musleabihf | cortex_a7 |
 | linux/s390x | s390x-linux-musl | default |
 
-ARMv5 and other unmapped Linux targets or ARM values fail before compilation. ARMv5 remains an explicitly allowed failure in the CI matrix and produces no candidate archive. There is no automatic pure-Go fallback. Every built Linux program passes `build/release/check-static-linux.mjs`: ELF program headers must have no interpreter or dynamic segment, Go build metadata must enable CGO, and no native Preview module may enter the main dependency graph. This excludes shared libc/SQLite/FFmpeg dependencies. Runtime acceptance remains Linux amd64; other mapped release targets are experimental until exercised on matching hardware.
+ARMv5 and other unmapped Linux targets or ARM values fail before compilation. CI does not build ARMv5, and the candidate set contains no ARMv5 archive. There is no automatic pure-Go fallback. Every built Linux program passes `build/release/check-static-linux.mjs`: ELF program headers must have no interpreter or dynamic segment, Go build metadata must enable CGO, and no native Preview module may enter the main dependency graph. This excludes shared libc/SQLite/FFmpeg dependencies. Runtime acceptance remains Linux amd64; other mapped release targets are experimental until exercised on matching hardware.
 
 Distributed main binaries omit Go debug data and strip native debug data at the Linux external
 link, so compiler and cache paths do not become public package content. Package scanning checks
