@@ -13,7 +13,7 @@ const repositoryFiles = new Set(execFileSync(
 
 const markdown = [...repositoryFiles].filter((name) => name.endsWith(".md")).sort();
 const documentation = markdown.filter((name) => name.startsWith("docs/"));
-const allowedDocumentation = /^(?:docs\/README\.md|docs\/(?:architecture|operations|research)\/[a-z0-9-]+\.md)$/;
+const allowedDocumentation = /^(?:docs\/README\.md|docs\/(?:architecture|development|operations|release|research)\/[a-z0-9-]+\.md)$/;
 const retiredDocumentationReference = /docs\/(?:history|designs|decisions|releases)\/|docs\/(?:demo|e2e-test|physical-tape-e2e|platform-changes|platform-design)\.md|docs\/operations\/(?:demo|preview-build)\.md|docs\/architecture\/(?:api-ui|states)\.md/;
 
 for (const document of documentation) {

@@ -23,7 +23,7 @@ test("packaged user entry and Tape procedures stay local while developer referen
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "yatm-user-guides-"));
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
   const source = path.resolve(import.meta.dirname, "../..");
-  const guides = ["index", "install", "migration", "library", "locations", "devices", "tar-tape-recovery"];
+  const guides = ["index", "install", "migration", "locations", "library", "jobs", "devices", "tape-scripts", "read-order", "cli", "tar-tape-recovery", "offline-migration"];
   fs.mkdirSync(path.join(target, "docs/operations"), { recursive: true });
   for (const guide of guides) {
     fs.copyFileSync(path.join(source, `docs/operations/${guide}.md`), path.join(target, `docs/operations/${guide}.md`));
@@ -45,8 +45,8 @@ test("packaged user entry and Tape procedures stay local while developer referen
   assert.match(documents.get("index"), /\]\(tar-tape-recovery\.md\)/);
   assert.match(documents.get("library"), /\]\(\.\.\/\.\.\/templates\/config\.example\.yaml\)/);
   assert.match(documents.get("migration"), /\]\(\.\.\/\.\.\/templates\/scripts\/mount\)/);
-  assert.match(documents.get("migration"), /\]\(\.\.\/\.\.\/templates\/scripts\/readinfo\)/);
-  assert.match(documents.get("migration"), /\]\(\.\.\/\.\.\/templates\/scripts\/umount\)/);
+  assert.match(documents.get("tape-scripts"), /\]\(\.\.\/\.\.\/templates\/scripts\/readinfo\)/);
+  assert.match(documents.get("tape-scripts"), /\]\(\.\.\/\.\.\/templates\/scripts\/umount\)/);
   assert.match(documents.get("devices"), /\]\(tar-tape-recovery\.md\)/);
   assert.match(documents.get("tar-tape-recovery"), /\]\(devices\.md\)/);
   assert.match(documents.get("index"), /\]\(https:\/\/github\.com\/samuelncui\/yatm\/blob\/v1\.0\.0-alpha\.1\/docs\/README\.md\)/);

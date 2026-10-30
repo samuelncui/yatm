@@ -7,7 +7,7 @@ are ordinary files; the binary archive requires no symlinks. Pinned native archi
 inputs are distributed in the separate `yatm-preview-source-<os>-<arch>-<version>.tar.gz` asset with
 its own checksum. Transfer only the binary package to acceptance hosts. It does not install or
 replace system `ffmpeg` or `ffprobe`. The main programs never link FFmpeg; [backend
-builds](../../docs/operations/testing.md#release-backend-builds) retain the static Linux C SQLite
+builds](../../docs/release/release.md#release-backend-builds) retain the static Linux C SQLite
 implementation.
 
 ## Native Build
@@ -44,7 +44,7 @@ requires their distributed notices and rejects unowned members.
 
 Runnable builds first verify a separate FFmpeg fixture generator through
 `node build/release/check-preview-fixtures.mjs`. It needs libx264, 10-bit libx265, PNG, lavfi and
-display-rotation support. The [test guide](../../docs/operations/testing.md#release-sop) describes
+display-rotation support. The [release guide](../../docs/release/release.md#release-sop) describes
 the pinned Linux fixture-tool build. These test encoders are not added to the Preview runtime.
 
 Repository builds require a clean HEAD: tracked edits and untracked nonignored files fail before
@@ -79,7 +79,7 @@ provide the same external directory; the source package includes the inventory a
 without bundling camera files or requiring a download during an offline rebuild.
 
 Use the optional helper installation described in the [installation
-guide](../../docs/operations/install.md#preview-preferences), or verify its checksum and extract it
+guide](../../docs/operations/install.md#preview-helper), or verify its checksum and extract it
 in an explicitly selected installation. Configure the native helper executable path in Preview
 Settings when it is outside YATM's executable directory.
 

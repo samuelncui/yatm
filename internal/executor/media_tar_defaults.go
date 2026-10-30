@@ -14,7 +14,7 @@ const (
 	tarBuiltinHP6Reference       = "https://docs.oracle.com/cd/E38452_01/en/LTO6_Vol4_E1/LTO6_Vol4_E1.pdf"
 	tarBuiltinHP5Reference       = "https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol4_E4/LTO5_Vol4_E4.pdf"
 	tarBuiltinQuantumReference   = "https://cdn.allbound.com/iq-ab/2022/12/LTO-9-TB00068A.pdf"
-	tarBuiltinEmpiricalReference = "docs/research/tar-tape.md#uncompressed-full-cartridge-measurement"
+	tarBuiltinEmpiricalReference = "docs/research/tape-read-ordering.md#uncompressed-full-cartridge-measurement"
 )
 
 func builtinTapeReadParameters(report *entity.InspectDeviceResponse, scope *entity.TapeReadApplicability) *entity.TapeReadParameters {

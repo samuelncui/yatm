@@ -3,7 +3,7 @@
 Status: Current v1 development architecture.
 
 These rules bind every published surface together: the [gRPC and HTTP API](api.md), the
-[user interface](ui.md) and the [command-line interface](cli.md). A surface document
+[user interface](ui.md) and the [command-line interface](../operations/cli.md). A surface document
 describes what its surface publishes; a rule that governs more than one surface belongs
 here, so one decision has one owner and no surface restates it.
 
@@ -67,7 +67,44 @@ One word per concept on every surface, in the [domain vocabulary](../../CONTEXT.
 
 A Job publishes one durable state and, while an attempt is active, one live phase. `QUEUED` identifies an admitted resource wait; an idle Job reports no phase even when its runner is cached. A surface reads the durable state for the retained result and reads the live phase to identify admitted execution, including resource queueing. Media actions require an idle `READY` Job; no surface derives permission from counters, a retained manifest or a phase name.
 
-No surface offers Job-level retry or restart. Failed or cancelled Scan execution and manifest preparation require a new Job. Only admitted Archive/Restore Media errors or operator cancellation, including while `QUEUED`, return the Job to its pre-Media `READY` state for another explicit load-Media operation, preserving successful per-file/Media checkpoints and the reason/timing. Rejections before attempt admission leave state unchanged, and process restart never restarts a Job or revives terminal `FAILED` work. The [Job lifecycle](jobs.md#shared-lifecycle) owns settlement and retained facts; transport and page-read Retry actions repeat only their reads.
+No surface offers Job-level retry or restart; the [Job lifecycle](jobs.md#shared-lifecycle) owns which failures return a Job to `READY` and which are terminal. Transport and page-read Retry actions repeat only their reads.
+
+## Tape options and selection
+
+FORMAT resolves explicit fields before saved Device defaults. Unset tar record policy defaults to
+variable records with a 512 KiB (524288-byte) maximum; validated recommendations can supply other
+still-unset write fields. Native record and transport limits remain mandatory: an incompatible
+choice fails preparation rather than silently changing the mode or size.
+With no explicit or saved format, FORMAT defaults to LTFS; a recommendation never chooses the format
+or overrides the record policy. Optional false remains distinct from omission. Unsupported record
+choices and controls are field errors. Tar FORMAT can select hardware compression
+On or Off; APPEND enforces the immutable cartridge choice after validating its label and physical
+tail. Read preparation preserves write compression controls and independently requires hardware
+decoding for a compressed profile. The existing `Scripts.Encrypt` adapter owns encryption setup
+for tar and LTFS. FORMAT generates the existing key representation; APPEND/read uses the saved
+Media key through a temporary 0600 file. Native encryption modes and any observed public algorithm
+are diagnostics, not new write options or key-presence evidence. No extra persistent key copy is made.
+
+The UI submits its resolved explicit choices. CLI/API omissions use the same server resolution.
+Job admission snapshots Device Settings before asynchronous work or a device wait; subsequent
+saves affect later FORMAT and read attempts. Resolved non-secret choices are visible in diagnostics.
+APPEND and reads use the immutable cartridge profile, with conflicting APPEND options rejected.
+Saving Device Settings validates all entries structurally, including inactive entries, without
+opening hardware; deployment configuration alone authorizes devices. Tape read order defaults to
+LOGICAL. AUTO requests a bounded permutation only with an eligible provider; unknown geometry,
+freshness or costs preserve the complete logical selection. Eligible LTFS uses the same planner
+and retains native file paths; optional raw observations finish before its mount.
+
+Position-map refresh is an explicit read-preparation action for tar Restore and VERIFY_COPIES.
+Known LTFS, Volume and other Scan policies reject it before physical preparation.
+A missing qualified non-ejecting reload/freshness contract rejects the action before motion; AUTO
+never implicitly requests it. The [position-map refresh contract](read-planning.md#position-map-refresh) owns provider
+eligibility and source-boundary settlement.
+
+A read Media hint selects existing frozen work; it cannot supply expected identity/profile.
+Restore rejects hints outside pending candidates and Scan rejects a hint different from its
+configured Media before device access. Automatic identification and manual hints have the same
+physical identity checks and [Job settlement](jobs.md#shared-lifecycle).
 
 ## Synchronous operation reports
 

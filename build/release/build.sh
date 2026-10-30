@@ -42,7 +42,7 @@ for script in encrypt get_device mkfs mount readinfo umount README.md; do
 done
 cp cmd/httpd/yatm-httpd.service config.example.yaml "$OUTPUT_DIRECTORY/templates/"
 cp LICENSE README.md CONTEXT.md install-release.sh "$OUTPUT_DIRECTORY/"
-for guide in index install migration library locations devices tar-tape-recovery; do
+for guide in index install migration locations library jobs devices tape-scripts read-order cli tar-tape-recovery offline-migration; do
   cp "docs/operations/$guide.md" "$OUTPUT_DIRECTORY/docs/operations/"
 done
 cp .agents/skills/yatm/SKILL.md "$OUTPUT_DIRECTORY/skills/yatm/"

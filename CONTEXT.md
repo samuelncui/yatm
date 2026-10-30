@@ -1,6 +1,6 @@
 # YATM Domain
 
-YATM organizes ongoing files independently of their originals and archival copies. This glossary defines the domain; the [Library contract](docs/architecture/library.md) owns implemented behavior. The [documentation index](docs/README.md) owns the published Alpha compatibility policy and the exception for unpublished Draft data.
+YATM organizes ongoing files independently of their originals and archival copies. This glossary defines the domain; the [Library contract](docs/architecture/library.md) owns implemented behavior. The [documentation index](docs/README.md#pre-stable-compatibility) owns the pre-stable compatibility policy.
 
 ## Language
 

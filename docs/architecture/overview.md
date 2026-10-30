@@ -10,7 +10,7 @@ one original, saved FileVersions, and signature-linked independent Tape/Volume c
 | Module | Responsibility | Interface |
 | --- | --- | --- |
 | Library | Files, annotations, versions, Media/Positions and health, Locations, originals and tracking | Metadata transactions; no physical copy orchestration |
-| Settings | Typed Library, Preview and Job preferences | Complete independently stored groups; not part of Library metadata backup |
+| Settings | Typed Library, Preview, Job and Device settings | Complete independently stored groups; not part of Library metadata backup |
 | Executor | Job catalog projections, runner lifetime, cancellation, Job locking, accessible paths and device allocation | One execution owner per Job and attempt-scoped Media leases |
 | Job runner | Typed specification, durable manifest, live phase and progress | Archive, Restore and Scan own their operation-specific execution |
 | Media Backend/Session | Physical preparation, safe paths, capabilities and finalization | Stateless factory and short-lived read/write sessions |
@@ -21,7 +21,7 @@ Application entry and configuration are in the [HTTP service](../../cmd/httpd/ma
 [configuration](../../internal/config/config.go), and [example configuration](../../config.example.yaml).
 [Executor construction](../../internal/executor/executor.go), [Job registration](../../internal/executor/job_type.go),
 and [API wiring](../../internal/apis/api.go) connect the modules. Source ownership and build entrypoints
-follow the [repository layout](../operations/testing.md#repository-layout-and-entrypoints).
+follow the [repository layout](../../AGENTS.md#repository-layout).
 
 ## Supported operating model
 
@@ -64,7 +64,9 @@ concurrent mutations. Keep and Merge validate their current connected component 
 physical guarantees; [Library](library.md) owns organization, versions and inventory;
 [Persistence](persistence.md) owns durable stores and recovery. Accessibility, copy health, Job state,
 live phase and UI summaries are separate facts. Library organization never renames or removes physical
-Media files, whose ordinary LTFS/filesystem paths remain recoverable without a YATM-specific format.
+Media files. LTFS/filesystem files and tar members use ordinary public formats;
+[Media/I/O](media-io.md) and the [recovery guide](../operations/tar-tape-recovery.md) own their
+physical recovery requirements.
 
 ## Source Modules and Dependency Direction
 
@@ -78,7 +80,8 @@ The source tree therefore follows the business modules above:
 | `internal/settings/` | Typed Settings groups, validation and persistence | `entity` and its Settings store |
 | `internal/executor/` | Job catalog, execution admission, resources and composition of runners | Library, Settings, Media contracts and operation modules |
 | `internal/executor/archive/`, `restore/`, `scan/` | One Job kind's bundle rows, runtime pipeline and results | Executor capabilities plus the Library and Media operations that Job kind uses |
-| `internal/media/` | Backend and session contracts for physical Media behavior | `entity`; never a Library row or Job database |
+| `internal/media/` | Backend and session contracts, Tape records and tar encoding for physical Media behavior | `entity`, ACP content endpoints; never a Library row or Job database |
+| `internal/media/readplan/` | Software read ordering of one frozen selection in a disposable index | `entity`, temporary resources; never `internal/media`, Tape I/O or locators |
 | `internal/apis/`, `cmd/` | Transport and process composition | Public module interfaces; no duplicate domain state |
 
 Dependencies point toward contracts and owning modules. A physical Media session receives the facts
@@ -88,35 +91,3 @@ interface: Archive observation rows and Scan entry rows each map their own schem
 Extract shared behavior when it materially removes duplication between current callers or establishes
 one independently testable ownership or invariant boundary. Similar structs, a hypothetical future
 caller, or a generic `models`, `services` or `repositories` layer are not sufficient.
-
-## Type Roles and File Layout
-
-Every durable type remains in the package that owns its invariant. When one package needs several
-representations of the same subject, names make their lifecycle explicit:
-
-- a private `...Row` is the exact persisted table shape and carries only persistence behavior;
-- a runtime aggregate or snapshot carries execution state but has no ORM tags or hooks;
-- a projection is a read result assembled for a particular query and is never saved as a row;
-- an adapter translates between an owning representation and a real cross-module interface;
-- an `entity` type is a wire or stored-blob contract, not the default internal model.
-
-Files follow the same roles. A cohesive type may keep its ordinary domain filename; when roles would
-otherwise mix, use focused names such as `job_row.go`, `job.go`, `file_projection.go` or
-`match_store.go`. Focused responsibility files live inside their existing owner; a catch-all
-`models.go` file is not an ownership boundary.
-A new subpackage is introduced only when it owns behavior and invariants behind a useful interface;
-moving passive structs into a separate package only adds navigation and dependency cost.
-
-Persistence hooks never assemble presentation state. Queries explicitly load the projection or
-snapshot they promise, so production behavior does not depend on callers remembering to disable an
-ORM hook. The process composition root creates the Settings module, and attempt admission freezes the
-validated effective settings used by a runner.
-
-## Test Ownership
-
-Tests live beside the behavior they protect. Row tests own table names, columns and indexes; module
-tests own transactions and state changes; interface contract tests run against each real adapter; API,
-CLI and end-to-end tests retain only behavior visible at those boundaries. A lower-level test is not
-repeated through test-only compatibility methods, and tests for removed commands or superseded wire
-shapes are deleted rather than retained as historical documentation. Stable wire numbers, published
-formats and supported migration inputs remain positive compatibility tests.

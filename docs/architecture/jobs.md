@@ -40,7 +40,13 @@ Process restart never retries or restarts a Job, revives terminal `FAILED` work,
 
 Completion is not a universal assertion that every recovered byte or checked copy is healthy. Job deletion removes its retained execution bundle, not physical copies, versions or original associations.
 
-The durable completion checkpoint can precede the end of an active runner's cleanup. An attached runner reports `JOB_PHASE_COMPLETED` when its work and cleanup finish; a working phase still requires waiting. A completed Job without an attached runner reports `JOB_PHASE_UNSPECIFIED` and has no runner cleanup left to await. `FAILED` is an actionable result, and a `READY` Job whose runner is not working needs its operator. The [CLI waiting command](cli.md) succeeds for a completed Job even after its runner detaches.
+The durable completion checkpoint can precede the end of an active attempt's cleanup. The attempt
+keeps its last working phase until its result, timing, resource release and final catalog publication
+settle; admission before its first runner transition reports `QUEUED`. Get, List and typed progress
+use that same live phase. An idle snapshot reads its durable result after observing settlement, so
+it cannot pair an earlier empty error with a newly idle phase. A completed idle Job reports
+`JOB_PHASE_UNSPECIFIED`, and the [CLI waiting command](../operations/cli.md) succeeds without an attached runner.
+`FAILED` is an actionable result, and an idle `READY` Job needs its operator.
 
 The Executor records the latest attempt's start and finish in the common Job bundle record. Typed progress replies expose optional `elapsed_ms`: live server-measured duration while executing, then a frozen duration after success, error or cancellation. Waiting between attempts is excluded; a new attempt starts a new measurement. Historical Jobs without timing and attempts interrupted by process loss have unknown duration rather than a value inferred from catalog timestamps. Progress polling does not write timing or catalog revisions.
 
@@ -64,7 +70,9 @@ The typed `jobs` Settings group supplies one complete set of pipeline limits. De
 `read_batch=256`, `read_buffer_max=4096`, `write_buffer_max=4096`,
 `write_batch_size=256` and `flush_interval_ms=1000`. Read batch and write batch must be at
 least 1; each buffer is limited to 1–1,000,000 items; the write batch cannot exceed the
-write buffer; and the flush interval must be at least 100 milliseconds. A malformed saved
+write buffer; and the flush interval must be at least 100 milliseconds. The Settings UI labels
+these in their actual units: manifest batch, queued reads, queued results, results per update and
+update interval in milliseconds. Queue counts are item counts, not byte or memory limits. A malformed saved
 group is an error rather than permission to substitute defaults. Each new attempt reads
 the current group and keeps its own effective limits.
 
@@ -83,17 +91,28 @@ One [Media operation](../../internal/executor/archive/media.go) proceeds in this
 1. Acquire the target's exclusive attempt lease and create its typed Write Session.
 2. Submit PENDING items to ACP in target order, one bounded manifest page per submission.
    Each item uses the current original Location's read mode; Archive does not regroup files by Location because that would change Media order and the prefix that fits on a full target.
-3. Persist each successful ACP result as STAGED immediately, including the actual Media path, hash, size, mode, and times. The Archive records the bytes ACP transferred instead of running a second source-stability policy.
-4. Call Write Finalize exactly once after ACP returns, including error/cancellation, using a cleanup context without the original deadline.
-5. Publish only backend-verified STAGED items with `CommitMedia`. Create or reuse the selected File's version from the actual transferred facts in that same transaction; when those facts match the earlier observation, preserve its opaque signature. Raw inputs already have per-Job File associations; no later signature-based File merge or binding occurs.
+3. Persist each successful ACP result as STAGED immediately, including the actual Media path, hash, size, mode, times and any target-provided provisional storage position. The Archive records the bytes ACP transferred instead of running a second source-stability policy.
+4. Call Write Finalize exactly once after ACP returns, passing the copy/stop error and using a cleanup context without the original deadline. Combine any newly returned write stop with the copy cause; keep physical-finalization errors independently observable.
+5. Reconcile staged positions against the completed Media result in the existing path-update pass. On normal completion or an exclusively capacity/EW stop, tar excludes members beyond its accepted complete-member cutoff and normalizes optional anchors; LTFS retains its captured Index reconciliation. Publish only backend-verified STAGED items with `CommitMedia`. Create or reuse the selected File's version from the actual transferred facts in that same transaction; when those facts match the earlier observation, preserve its opaque signature. Raw inputs already have per-Job File associations; no later signature-based File merge or binding occurs.
 6. Mark published items SUBMITTED with their Media ID; complete the Job when nothing remains pending. Return copy/finalization/publication errors after retaining eligible successes.
 
-The [result stream](../../internal/executor/archive/stream.go) validates completed copy facts and hands them to the shared [result writer](../../internal/executor/result_writer.go): the results callback only starts a write of the outcomes a durable row can express, which ACP hands over in batches of up to `write_batch_size` items, and the writer stages them outside the feed. A staging failure is the writer's terminal error and fails the phase; a result no durable row can express, such as a target that refused its file, is a per-item outcome the attempt reports while it keeps the item PENDING. STAGED is a candidate result, not durable archive success. Initialization resets leftover unsubmitted STAGED items and attempt report data to PENDING; resetting also clears Media path and result. Only submitted files count toward durable progress, historical speed, ETA, and reports; verified zero-byte files count too.
+The [result stream](../../internal/executor/archive/stream.go) validates completed copy facts and hands them to the shared [result writer](../../internal/executor/result_writer.go): the results callback only starts a write of the outcomes a durable row can express, which ACP hands over in batches of up to `write_batch_size` items, and the writer stages them outside the feed. A staging failure is the writer's terminal error and fails the phase; a result no durable row can express, such as a target that refused its file, is a per-item outcome the attempt reports while it keeps the item PENDING. STAGED is a candidate result, not durable archive success. Initialization resets leftover unsubmitted STAGED items to PENDING; resetting also clears Media path and result. Only submitted files count toward durable progress, historical speed, ETA, and reports; verified zero-byte files count too.
 
 ACP target no-space normalization retains the original error chain, including joined write, close
 and temporary-output cleanup failures. The failed item stays PENDING without a staged copy result.
 
 An Archive Media operation ending in an error or operator cancellation settles the runner and returns the Job to its pre-Media `READY` state with its reason and timing. The prepared manifest and successfully submitted items remain; another explicit load-Media operation processes the remaining items.
+
+Tar keeps each provisional locator in the existing item result, with no separate member report.
+A successful member Finish alone cannot authorize publication while bytes remain buffered. On normal completion or an exclusively capacity/EW stop, the accepted-member cutoff and mandatory
+physical gates determine which staged rows survive. Cancellation or an in-progress member failure
+returns no publishable tar result; cleanup does not seal or salvage that Archive.
+A source-open failure can leave a gap before later complete files. Incomplete members remain
+pending. A successfully finalized zero-member tar FORMAT registers the initialized Media, its
+Job property and zero-file report while retaining the stop reason and remaining work in READY.
+An EW first observed during the final buffered WRITE remains a no-space result. Unaccepted staged
+members return to pending under that known stop; missing evidence on normal completion remains an error.
+It advances no content progress. Failed physical completion or cleanup publishes no usable result.
 
 [Media finalization](media-io.md) defines which candidates survive normal completion, cancellation, target-full conditions, or validation failure. Prefix directories have no batch identity or cleanup ownership.
 
@@ -103,7 +122,7 @@ An Archive Media operation ending in an error or operator cancellation settles t
 
 No saved version, only newer archive dates, and unknown archive dates are unmatched selection results, separate from a chosen version with no usable copy. Unmatched selections block preparation by default. `skip_unmatched_versions` requires a cutoff and explicit consent; it skips only automatic unmatched selections, never missing-copy errors. An all-skipped selection cannot become an executable Job. Inspection reports unmatched/skipped counts and resolved version/date details only for bounded explicit regular-file roots or explicit versions, not an entire directory manifest. Directory membership and logical output paths use the Library at preparation, not historical directory snapshots.
 
-The `files` table freezes one row per selected version, including content facts, logical name/parent, the reconnect decision and output state. `copies` contains only persisted Media-candidate facts. Execution explicitly assembles a private runtime candidate from one Copy row and the matching File row; it never hydrates execution fields into the persisted Copy type. The latest selected version per logical File is the only reconnect candidate. Once the manifest is frozen, the remaining Media work uses its persisted output paths without selecting newer versions from the Library.
+The `files` table freezes one row per selected version, including content facts, logical name/parent, the reconnect decision and output state. `copies` contains only persisted Media-candidate facts, including nullable frozen storage metadata. Profile and locator messages are copied when captured and when assembled for use; reopening the bundle uses the same facts. Native and migrated v0.1.x candidates can have absent locators. Execution explicitly assembles a private runtime candidate from one Copy row and the matching File row; it never hydrates execution fields into the persisted Copy type. The latest selected version per logical File is the only reconnect candidate. Once the manifest is frozen, the remaining Media work uses its persisted output paths without selecting newer versions from the Library.
 
 A Restore Media operation ending in an error or operator cancellation returns the Job to its pre-Media `READY` state with its reason and timing. It preserves the prepared manifest and successful per-file/Media checkpoints; another explicit load-Media operation processes the remaining work without restarting the Job.
 
@@ -111,7 +130,31 @@ A Restore Media operation ending in an error or operator cancellation returns th
 
 [Native name reservation](../../internal/executor/restore/output_names.go) uses temporary directory-only namespaces under each actual existing output parent, including parent aliases and nested mounts. Filesystem lookup handles case and Unicode equivalence; no SQL collation guesses those rules. A target whose new directories do not inherit its observed name rules is rejected, as are selected file/directory conflicts. Reservations are rebuilt from bounded Job pages when an attempt starts. Probe directories contain no file content, are excluded dynamically from original readers and are removed after indexing; interrupted leftovers contain only directories and cannot become indexed ordinary files.
 
-The [Restore runner](../../internal/executor/restore/media.go) opens a typed Read Session and owns the ACP items of its candidates. The [results callback](../../internal/executor/restore/buffer.go) only starts a write of each batch ACP hands over, and the shared [result writer](../../internal/executor/result_writer.go) completes and stages those batches of up to `write_batch_size` items outside the feed; a failed persistence is the writer's terminal error and stops the run exactly like a caller cancellation, while the drain still persists every accepted item. One target that wrote nothing is an item outcome, not a pipeline failure: its copy keeps its PENDING status and the attempt reports that error while the other candidates of the Media are still persisted and published. Sequential-read Media follows backend storage order; random-read Media uses ordinary path order. [Copy completion](../../internal/executor/restore/stream.go) compares ACP's real hash and size with the expected content and restores the version's own mode/mtime. The output retains read-source and ready facts, but Library association and item/alternative completion wait for successful Session Finalize. Failed physical finalization retains complete bytes without claiming success; a later attempt cannot adopt its own unfinalized output as an unrelated preexisting file. Completion is per item/version, not every version of its File. Metadata restoration may invalidate disposable ACP caches; completed targets are not reread to rebuild caches. Restore does not share Archive's STAGED/submit state machine.
+Name probes are recorded in [temporary allocations](persistence.md#catalog-connections), which own
+their cleanup. Closing a duplicate runner only releases that instance's handles and cannot delete
+another instance's active name probes. Durable chosen paths and results remain in the Job database.
+
+The [Restore runner](../../internal/executor/restore/media.go) opens a typed Read Session and owns the ACP items of its candidates. The [results callback](../../internal/executor/restore/buffer.go) only starts a write of each batch ACP hands over, and the shared [result writer](../../internal/executor/result_writer.go) completes and stages those batches of up to `write_batch_size` items outside the feed; a failed persistence is the writer's terminal error and stops the run exactly like a caller cancellation, while the drain still persists every accepted item. After draining, the attempt preserves both transfer and persistence failures; an earlier item failure cannot hide a later checkpoint error. One target that wrote nothing is an item outcome, not a pipeline failure: its copy keeps its PENDING status and the attempt reports that error while the other candidates of the Media are still persisted and published.
+
+Sequential-read Media uses backend storage order as its baseline. An eligible provider plans the
+complete chosen-Media read selection once under the [read-order contract](read-planning.md#software-read-ordering).
+Verified local outputs are settled before planning; they never contribute phantom Tape movement.
+The derived execution index is disposable and leaves frozen physical locators unchanged. Bounded
+Copy/File joins consume its ranks, independently of ACP handoff size and result batches. No page
+waits for source closure to choose its next order. LOGICAL keeps the existing manifest keyset stream;
+random-read Media uses ordinary path order.
+
+[Copy completion](../../internal/executor/restore/stream.go) compares ACP's real hash and size with the expected content and restores the version's own mode/mtime. The output retains read-source and ready facts, but Library association and item/alternative completion wait for successful Session Finalize. Failed physical finalization retains complete bytes without claiming success; a later attempt cannot adopt its own unfinalized output as an unrelated preexisting file. Completion is per item/version, not every version of its File. Metadata restoration may invalidate disposable ACP caches; completed targets are not reread to rebuild caches. Restore does not share Archive's STAGED/submit state machine.
+Finalize receives the read/stop cause so native tar can distinguish normal unload from failed or
+canceled cleanup. The original read error and physical-release error remain independently visible.
+
+Read preparation selects exclusively from pending frozen candidates. An explicit Tape Media hint
+outside those candidates is rejected before device access; expected identity/profile always come
+from the Job. Automatic tar selection reads the cartridge memory barcode under the attempt lease and returns a
+trusted frozen candidate; a Tape without a cartridge memory barcode fails identification.
+Explicit tar hints bypass LTFS barcode scripts. All-LTFS selection retains its configured adapter.
+Sequential tar reads use logical Tape file/header order. [Media/I/O](media-io.md) owns label validation
+and physical lifetime; [interface contracts](contracts.md#tape-options-and-selection) owns defaults.
 
 Candidate listing reports missing catalog Media explicitly, including its ID; it never silently removes a frozen candidate from the response. Catalog metadata must be restored before that candidate can be used.
 
@@ -145,9 +188,9 @@ Default Restore candidates are healthy or unchecked and are still validated duri
 [ScanJobService](../../entity/job_scan.proto) owns one SCAN kind, [runner](../../internal/executor/scan/runner.go), manifest and [pipeline](../../internal/executor/scan/pipeline.go) for Location/Library `selections` or a whole Volume/Tape Media. One `LocationSelection` with an empty path selects an entire Location; selected paths and overlapping roots use the same bounded expansion. Only selections all naming one Location give the Job a single Location target, while properties retain all involved Location IDs. Content acquisition, comparison, Preview, validation and publication are stages, not delegated Jobs. Source adapters supply access, enumeration, order, leases and identity checks. Ordinary browsing and Refresh remain request-bound reads.
 
 1. Freeze source bindings and old content baselines into the Job bundle. Media keeps identity, profile, expected Positions and storage order; Location selections keep the registered root and bounded selected scopes.
-2. Enumerate real entries in ordered, bounded pages into the existing `entries` manifest. Logical selections expand once across all Locations; physical and logical overlaps share the `(location_id, path)` key. All selected sources finish preparation before content processing or Library publication begins. Location selections prune Ignore, including an explicitly named path; administrator authorization is never bypassed. Media inventory requires fresh physical enumeration, including the current trusted LTFS index for Tape; old Positions cannot stand in for it. Enumeration reports discovered files and bytes but keeps the total explicitly unknown until its manifest is frozen.
+2. Enumerate real entries in ordered, bounded pages into the existing `entries` manifest. Logical selections expand once across all Locations; physical and logical overlaps share the `(location_id, path)` key. All selected sources finish preparation before content processing or Library publication begins. Location selections prune Ignore, including an explicitly named path; administrator authorization is never bypassed. Media inventory requires fresh physical enumeration, using the current trusted LTFS index or complete tar members as appropriate; old Positions cannot stand in for it. Enumeration reports discovered files and bytes but keeps the total explicitly unknown until its manifest is frozen.
 3. Acquire content facts under the signature policy below, optionally look up matching Library content, and optionally generate Preview assets in this same pipeline.
-4. Finalize the physical Media session where applicable. Location publication uses the observations already produced by enumeration and content reads; it does not run a second filesystem pass to prove that the source stayed unchanged.
+4. Finalize the physical Media session where applicable, forwarding the read/stop cause. Location publication uses the observations already produced by enumeration and content reads; it does not run a second filesystem pass to prove that the source stayed unchanged.
 5. Publish the selected result policy through metadata-only Library transactions, then checkpoint the Job independently. Keep detailed results in the paged `entries` table; range descriptions come from the specification and current attempt.
 
 A failed or cancelled Scan is terminal at every stage, including an admitted Media operation.
@@ -172,7 +215,7 @@ scope; paths, content and tracking rows stay in their existing paged stores.
 
 Valid cached SHA-256/size facts do not replace opaque YATM signatures. Matching prior content retains its existing signature. Reuse requires applicable metadata and binding/native evidence; metadata-preserving changes require FORCE_READ. Cache read failures never silently turn KNOWN_ONLY into hashing. A Scan records what its reads return under the supported single-operator content-stability model; it does not implement snapshot or drift-detection semantics.
 
-Indexing resolves and stores each selected source path once; the content phase reads that stored path without re-resolving it or comparing before/after metadata. The phase submits caller-owned items to ACP one `read_batch`-sized manifest page at a time, and its results callback only starts a write: it performs no I/O and never waits for a database write, so the one place it waits is a busy writer. ACP owns the result queue and the batch, and the shared [result writer](../../internal/executor/result_writer.go) persists each batch the engine hands over through at most eight concurrent write goroutines and records the first write error once; that error stops the feed and fails the phase, and the drain before the phase returns persists everything the callback accepted. Verification persists a failed item as a per-file finding and continues, while every other result policy reports the cause and stops its scope. `read_batch` is the manifest page, and `read_buffer_max`, `write_buffer_max`, `write_batch_size` and `flush_interval_ms` are ACP's read buffer, result queue, result batch and result flush interval, so the engine owns the queue and the delivery cadence while the runner owns persistence.
+Indexing resolves and stores each selected native source path once; the content phase reads that stored path without re-resolving it or comparing before/after metadata. A Media content endpoint has no native path or filesystem signature cache: its transient reference binds the recorded Media path and storage facts when the page is submitted. Sequential Media still cannot supply native Preview inputs. The phase submits caller-owned items to ACP one `read_batch`-sized manifest page at a time, and its results callback only starts a write: it performs no I/O and never waits for a database write, so the one place it waits is a busy writer. ACP owns the result queue and the batch, and the shared [result writer](../../internal/executor/result_writer.go) persists each batch the engine hands over through at most eight concurrent write goroutines and records the first write error once; that error stops the feed and fails the phase, and the drain before the phase returns persists everything the callback accepted. Verification persists per-file findings and continues; device errors stop the scope, as do content errors under every other result policy. `read_batch` is the manifest page, and `read_buffer_max`, `write_buffer_max`, `write_batch_size` and `flush_interval_ms` are ACP's read buffer, result queue, result batch and result flush interval, so the engine owns the queue and the delivery cadence while the runner owns persistence.
 
 | Result policy | Publication boundary |
 | --- | --- |
@@ -181,7 +224,56 @@ Indexing resolves and stores each selected source path once; the content phase r
 | PUBLISH_INVENTORY | Automatically replace inventory only after complete trustworthy Media observation and identity validation; no Apply step |
 | VERIFY_COPIES | Require real uncached reads against frozen old Position baselines; publish guarded historical check findings, not replacement content |
 
-Inventory publication permits unsigned content, does not manufacture health checks, and preserves applicable prior bad observations. A genuinely empty observed range can remove original references or inventory Positions, never File organization or saved history. Location publication covers the manifest observations directly; it does not omit entries because a later `stat` differs. An unrecoverable read failure stops later Locations, while earlier published Locations remain; the failed Scan is terminal, and a new Scan covers the full selection again, including the Locations that already published. Inventory failures preserve the previous inventory. Library and Job commits remain separate, with errors reported directly.
+Inventory publication permits unsigned content, does not manufacture health checks, and preserves
+applicable prior bad observations. A genuinely empty observed range can remove original references
+or inventory Positions, never File organization or saved history. Location publication covers the
+manifest observations directly; it does not omit entries because a later `stat` differs. An
+unrecoverable read failure stops later Locations, while earlier published Locations remain; the
+failed Scan is terminal, and a new Scan covers the full selection again, including the Locations
+that already published.
+
+Tar inventory can omit the incomplete last member of a filemark-terminated capacity/EW archive
+while retaining complete later Tape files. This framing support is not an interrupted-write recovery workflow. A
+complete inventory can therefore remove its old Position. Read, cancellation or Session finalization
+failure withholds replacement inventory for the entire selected scope, preserving the previous
+inventory. Verify instead checks frozen expected Positions, retains individual findings and
+continues when possible. Unread candidates receive no invented finding; raw command uncertainty
+or lost access ownership stops Verify without changing per-file findings. Whole-Media
+unavailability is not per-file corruption. Library and Job commits remain separate, with errors
+reported directly.
+
+Content endpoints retain whether their Open was actually entered, independently of read ordering.
+An ACP stop cause propagated to an unopened endpoint is attempt unavailability, not that member's
+missing/unreadable finding. Its check timestamp and pending content work remain unchanged.
+Restore uses the same rule for unopened copy candidates, preserving PENDING without manufacturing
+copy-health observations.
+
+Optional ordering in VERIFY_COPIES plans the complete selected-Media manifest once, using the
+same disposable [execution index](read-planning.md#software-read-ordering) as Restore. Submission pages
+only deliver the fixed ranks; they neither replan nor wait for per-page source acknowledgements.
+Inventory keeps sequential discovery, and absent providers retain the ordinary keyset stream.
+Cancellation and ACP's fatal-stop notification stop submission; the existing Close/Wait path
+drains accepted work before Session finalization.
+
+Scan uses the same append-only `jobs/<id>/job.log` and public log reader as Archive and Restore. Logs are retained until Job deletion without disk rotation or a size limit; bounded log reads do not bound retained disk usage. Logs record phase and source-range boundaries, read outcomes, Preview starts/results and summary counts with duration; high-frequency progress events remain counters rather than log lines. Per-file completion does not imply that the source range has been published.
+
+The Location walker reads at most 256 directory entries per call and rejects traversal beyond 256 directory levels; its recursive implementation can therefore retain at most one open directory handle per allowed level. Manifest traversal, matching and publication use 256-row ordered pages. Public Scan result queries return at most 1,000 rows per request. These are structural bounds, not a fixed RSS guarantee: the per-Job SQLite manifest and its journal still scale with the number of observed entries, while callers must replace result windows rather than retain the whole manifest.
+
+Verification findings distinguish match, mismatch, missing, unreadable and unavailable baseline. A per-file issue permits continued checking; device errors/cancellation retain completed observations and leave the rest unexamined. Session finalization failure prevents health publication. Expected hashes are never replaced by damaged bytes. Mounted Volume scans execute automatically; Tape scans wait for an explicit matching device through ReadMedia. Waiting holds no Media lease. Sequential sources do not support Preview or implicit Restore/staging.
+
+Location analysis is the original-publication configuration of Scan, and integrity checking is its
+VERIFY_COPIES result policy; [copy health](library.md#copy-health) remains independent of inventory
+and accessibility. Neither is a separate runner or Job kind.
+
+Preview is optional and off by default. Its policy selects missing-only generation or forced regeneration of all identified content. KNOWN_ONLY without a usable identity skips generation and counts it. Generator failures are per-item findings, not a rollback of otherwise valid scanning. Asset addressing and validity belong to [Preview storage](preview.md).
+
+## Original Matching
+
+[Matching](../../internal/executor/observation/matching.go), shared with live Archive preparation, runs ordered rounds over the current complete Location selection: path → available signature → native identity. One shared observation-store implementation applies matching to the common identity/evidence columns of disposable Archive observations and durable Scan entries. Each caller supplies its own scoped table; consumer tests verify that assignments cannot cross the admitted Location. Matching evidence lives in the owning row. Old File IDs and new paths are ordered; later rounds never override earlier matches. Matching does not hash. Unmatched entries become independent Files; occupied paths preserve their File without retaining invalid content facts.
+
+Cross-Location reassociation requires a successfully removed old binding and valid same-Executor tracking evidence. Unavailable Locations and unobserved ranges cannot lose bindings to another analysis. Native tracking keys are derived from existing stat observations and published with originals; matching never reads or writes tracking xattrs. Matching is organization continuity, not proof of move versus copy-and-delete.
+
+## Progress and Estimates
 
 Progress is stage-local rather than a false whole-Job percentage. One decision in the shared [stage helper](../../internal/executor/stage_progress.go) answers what a phase may display: phases `PROCESSING_CONTENT`, `VERIFYING_MEDIA`, `GENERATING_PREVIEWS`, `COPYING_TO_MEDIA` and `COPYING_FROM_MEDIA` may show a percentage and an estimate, `COMPARING_CONTENT` and `COMPLETED` may show a percentage, and every other phase reports counters alone. Content acquisition opens its window once per attempt from the durable manifest — the active scope's denominator and its already completed work — and ACP work events advance it from there; comparison uses manifest outcomes for its processed/total window, Preview uses its attempt's own completions over the manifest's denominator because a successful Preview is never stored per entry, and validation, waiting and publication name their phase without inventing a denominator. A new Location Scan Job builds fresh observations and progress; it does not resume a failed or cancelled Scan. Completion reports the non-removed manifest total.
 
@@ -189,32 +281,10 @@ All typed Job progress replies include the shared `StageProgress` contract: a wi
 
 The bounded [stage helper](../../internal/executor/stage_progress.go) uses wall-clock throughput, minimum five-second sampling windows and EWMA smoothing (0.25). Three productive windows are required; Preview also requires three actual decoder-start/completion observations. Samples come from work rather than from polling: Scan read, Archive write and Restore read sample the one-second ACP progress event that already advances their counters, and Preview samples decoder completions, while a progress request only reads the recorded window without recording a sample. Cache hits and joined content-addressed work never become generation samples. Preview measures decoder items: its work unit is never the bytes of the content whose previews settled. Preview first streams ordered content groups and reads existing manifests to classify its unique generation workload without hashing or invoking a decoder; only one group is retained, and SQL does not grow per row. Runtime disabling makes its workload unknown. Estimates exclude later stages and remain `ESTIMATING` until their own denominator and samples are meaningful. A gap longer than the greater of 30 seconds or three observed average completion intervals invalidates the rate; three productive windows restore it, and because the work path observes that gap, a stalled stage is still detected while no card is visible. A merely slower-than-average file no longer repeatedly removes the ETA. Comparison, waiting, validation, publication and finalization expose `NOT_APPLICABLE`, never a fabricated remaining time.
 
-Job cards use one stable metric layout and the server-provided stage percentage/estimate for every kind. One shared module owns the frame, the counter wording and the waiting/active/terminal classification behind the status label and the action buttons; only active work animates a bar of unknown length. Polling keeps the last coherent snapshot through refresh/error/offscreen transitions and rejects obsolete requests, and it never changes an estimate, because every sample is recorded on a work path. Current and session-average byte speeds remain distinct from persisted business results; elapsed time stays the common latest-attempt measurement.
-
-Scan uses the same append-only `jobs/<id>/job.log` and public log reader as Archive and Restore. Logs are retained until Job deletion without disk rotation or a size limit; bounded log reads do not bound retained disk usage. Logs record phase and source-range boundaries, read outcomes, Preview starts/results and summary counts with duration; high-frequency progress events remain counters rather than log lines. Per-file completion does not imply that the source range has been published.
-
-The Location walker reads at most 256 directory entries per call and rejects traversal beyond 256 directory levels; its recursive implementation can therefore retain at most one open directory handle per allowed level. Manifest traversal, matching and publication use 256-row ordered pages. Public Scan result queries return at most 1,000 rows per request. These are structural bounds, not a fixed RSS guarantee: the per-Job SQLite manifest and its journal still scale with the number of observed entries, while callers must replace result windows rather than retain the whole manifest.
+## Manifest Paging
 
 Every Job manifest listing shares one page request: a bounded `limit`, an order key cursor, an `order` direction, an `offset`, and an optional total. The listing defines one order key and applies the same clauses in every case; a cursor restricts the sequence to rows beyond that key in the requested direction, an offset addresses a position in the filtered sequence, and the two combine without a separate jump mode. A page reads one sentinel row to report `has_more`, and continuous paging uses the cursor so a page never re-walks the rows it skips; `offset` is only how a client anchors a jump to a position it has not loaded. `include_total` additionally reports the filtered result-set size, which is the height a client needs to present the manifest as one list; a request without it issues no count. Scan orders by entry ID, Archive by the frozen logical target path, and Restore Media by Media ID; Restore Files orders by the composite `(media_id, id)` and carries an index for it, so one sequence spans every required Media.
-
-Verification findings distinguish match, mismatch, missing, unreadable and unavailable baseline. A per-file issue permits continued checking; device errors/cancellation retain completed observations and leave the rest unexamined. Session finalization failure prevents health publication. Expected hashes are never replaced by damaged bytes. Mounted Volume scans execute automatically; Tape scans wait for an explicit matching device through ReadMedia. Waiting holds no Media lease. Sequential sources do not support Preview or implicit Restore/staging.
-
-Preview is optional and off by default. Its policy selects missing-only generation or forced regeneration of all identified content. KNOWN_ONLY without a usable identity skips generation and counts it. Generator failures are per-item findings, not a rollback of otherwise valid scanning. Asset addressing and validity belong to [Preview storage](preview.md).
-
-## Analyze
-
-Location analysis is the original-publication configuration of [Scan](#scan), not a separate runner or Job kind.
-
-## Verify
-
-Integrity checking is Scan's VERIFY_COPIES result policy; [copy health](media-io.md#copy-health) remains independent of inventory and accessibility.
-
-[Matching](../../internal/executor/observation/matching.go), shared with live Archive preparation, runs ordered rounds over the current complete Location selection: path → available signature → native identity. One shared observation-store implementation applies matching to the common identity/evidence columns of disposable Archive observations and durable Scan entries. Each caller supplies its own scoped table; consumer tests verify that assignments cannot cross the admitted Location. Matching evidence lives in the owning row. Old File IDs and new paths are ordered; later rounds never override earlier matches. Matching does not hash. Unmatched entries become independent Files; occupied paths preserve their File without retaining invalid content facts.
-
-Cross-Location reassociation requires a successfully removed old binding and valid same-Executor tracking evidence. Unavailable Locations and unobserved ranges cannot lose bindings to another analysis. Native tracking keys are derived from existing stat observations and published with originals; matching never reads or writes tracking xattrs. Matching is organization continuity, not proof of move versus copy-and-delete.
 
 ## Location File Operations
 
 Ordinary mutations use the shared [organization engine](library.md#shared-organization-interface), not Jobs. Library edits, browsing, annotation and manual original relocation also remain request-bound. Initial whole-Location collection uses Scan with KNOWN_ONLY and PUBLISH_ORIGINALS.
-
-An active attempt retains its last working phase until result publication, timing and resource settlement complete. Job hydration observes this phase before reading the durable result. Copy-page failures remain visible while accepted ACP work is drained.

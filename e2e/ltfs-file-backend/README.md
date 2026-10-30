@@ -14,4 +14,4 @@ official LTFS uses the default `directory` form. The package controller records 
 installed mount script, including for SSH execution, so systemd uses the selected syntax. Select
 the installed build's syntax during preparation and record it with the executable identity.
 
-Use these scripts for release-package acceptance of format, append, restore and integrity checking. Fault injection remains in the local/CI E2E harness, outside the release templates. See the public [development and release guide](https://github.com/samuelncui/yatm/blob/v1/docs/operations/testing.md).
+Fault injection remains in the local/CI E2E harness, outside the release templates.

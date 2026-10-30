@@ -1,11 +1,19 @@
-# Documentation
+# Developer Documentation
+
+This is the implementation and contributor entry point. For installation, configuration and daily
+operation, start with the separate [User Guide](operations/index.md).
 
 Architecture and operations describe the current YATM v1 development line; research records
-the evidence and open questions behind further work. Start with
-[installation](operations/install.md), the [v0.1.x upgrade](operations/migration.md),
-[Library and Media workflows](operations/library.md), or [live Locations](operations/locations.md).
+the evidence and open questions behind further work.
 Published versions and their change notes belong to
 [GitHub Releases](https://github.com/samuelncui/yatm/releases); this tree is not a release archive.
+
+Start with the [contributor rules](../AGENTS.md), the [domain vocabulary](../CONTEXT.md) and the
+[documentation rules](development/documentation.md). Component guides live beside their code:
+[frontend](../frontend/README.md), [Preview helper](../previewworker/README.md) and its
+[build recipes](../previewworker/build/README.md), the
+[LTFS file backend adapters](../e2e/ltfs-file-backend/README.md) and the
+[cartridge memory fixtures](../internal/media/tape/testdata/README.md).
 
 ## Pre-stable Compatibility
 
@@ -18,7 +26,7 @@ identities and versions independently of software release numbers.
 Configured Tape scripts have a separate, long-term compatibility requirement. Upgrades preserve
 user adapters wherever possible; a necessary incompatible change requires explicit approval and
 an actionable notice before upgrade, including pre-stable releases. The
-[Tape script contract](architecture/media-io.md#tape-script-compatibility) owns that boundary.
+[Tape script contract](architecture/tape.md#tape-script-compatibility) owns that boundary.
 
 Known incompatible installations are rejected before writes. Their data is retained until the operator
 chooses backup, migration, conversion or reinstallation; YATM never clears databases or physical
@@ -33,106 +41,53 @@ published stable upgrade policy.
 - [Library identities, organization and backups](architecture/library.md)
 - [Jobs and execution](architecture/jobs.md)
 - [Media backends and file I/O](architecture/media-io.md)
+- [Tape devices, lifecycle and formats](architecture/tape.md)
+- [Tape read planning](architecture/read-planning.md)
 - [Preview storage](architecture/preview.md)
 - [Interface contracts](architecture/contracts.md)
 - [APIs and services](architecture/api.md)
 - [User interface](architecture/ui.md)
-- [Command-line interface](architecture/cli.md)
 
-## Operations
+## User Documentation
 
+- [User Guide entry](operations/index.md)
 - [Installation and service configuration](operations/install.md)
-- [Library and mounted Volume workflows](operations/library.md)
+- [Upgrade from v0.1.x](operations/migration.md)
+- [Offline migration and repair](operations/offline-migration.md)
 - [Locations](operations/locations.md)
-- [v0.1.x to v1 migration](operations/migration.md)
-- [Development checks and test environments](operations/testing.md)
-- [Automated E2E](operations/e2e-test.md)
-- [Physical Tape E2E](operations/physical-tape-e2e.md)
+- [Library and mounted Volumes](operations/library.md)
+- [Archive, Restore and Scan](operations/jobs.md)
+- [Devices and Tape operations](operations/devices.md)
+- [Tape scripts](operations/tape-scripts.md)
+- [Faster Restores with Auto read order](operations/read-order.md)
+- [Command-line reference](operations/cli.md)
+- [Independent tar Tape recovery](operations/tar-tape-recovery.md)
 
-## Release Packages
+## Contributing
 
-The release package includes this index and the four operator guides: installation, migration,
-Library/Media workflows and Locations. Architecture, research and developer validation remain repository
-documentation; release packaging uses an explicit allowlist rather than copying the whole tree.
+- [Documentation rules](development/documentation.md)
+- [Development checks and test environments](development/testing.md)
+- [Code layout and test ownership](development/code-layout.md)
+- [Automated E2E](development/e2e-test.md)
+- [Performance acceptance](development/performance.md)
+- [Local Demo](development/demo.md)
+
+## Release
+
+- [Release process](release/release.md)
+- [Package acceptance](release/package-acceptance.md)
+- [Physical Tape E2E](release/physical-tape-e2e.md)
+- [Physical Tape host runbook](release/physical-tape-runbook.md)
+- [Physical tar acceptance](release/physical-tar-acceptance.md)
+- [Physical Tape measurements](release/physical-measurements.md)
 
 ## Research
 
 - [Tape capacity and safe completion](research/tape-capacity.md)
+- [Tar on Tape](research/tar-tape.md)
+- [Tape read ordering](research/tape-read-ordering.md)
 
 Research is published with the repository. Each study states its objective, source versions,
 confirmed findings, community observations, unresolved questions and criteria for evaluating
 possible approaches. A study describes the current state of knowledge; it does not establish
 implemented behavior or authorize experiments and production changes.
-
-## Documentation Ownership
-
-Every maintained fact has one owner. Other documents link to that owner instead of restating it.
-
-| Location | Owns | Does not own |
-| --- | --- | --- |
-| Root `README.md` | Released product introduction, quick start and documentation entry points | Development status, architecture detail or repeated runbooks |
-| Root `CONTEXT.md` | Domain vocabulary and core domain invariants | Schemas, algorithms, task notes or UI layout |
-| Root `AGENTS.md` | Contributor rules, safety gates, repository layout and required verification | Product or architecture contracts |
-| Root `TODO.md` | Concise confirmed pending work with source Issue links | Detailed designs, implemented behavior or completed-work history |
-| `docs/architecture/` | Current implemented behavior, module interfaces, invariants and durable constraints | Proposals, implementation plans, acceptance transcripts or superseded behavior |
-| `docs/operations/` | Current setup, migration, use, maintenance and reproducible validation | Domain definitions or another architecture specification |
-| `docs/research/` | Public technical studies, evidence, limitations and evaluation of possible approaches | Product guarantees, implementation backlogs, private incident reports or raw acceptance logs |
-| `.agents/skills/yatm/` | Installed agent operating and safety instructions | Human-facing architecture or change history |
-
-## Decision Authority
-
-Within overlapping scope, broader accepted constraints bound narrower descriptions: the repository
-engineering rules, the domain invariants and compatibility policy, the architecture overview, area
-architecture, operations guides, and finally implementation and tests. A lower level may provide
-evidence and implementation detail, but its existence cannot justify complexity or override a broader
-decision. When they conflict, update the lower-level documents, code and tests together.
-
-The repository intentionally has no documentation archive, ADR archive or redirect stubs.
-Git already retains deleted text and rationale. Root `TODO.md` records concise confirmed pending
-work; detailed implementation plans belong in an Issue or pull request. Remove completed TODO
-items instead of retaining a work history. Public research follows the scope above.
-Published change notes belong to GitHub Releases. Raw acceptance logs, checksums,
-measurements, screenshots and host-specific reports belong in CI artifacts rather than Markdown.
-
-## Update Workflow
-
-1. Establish the intended behavior from the decision authority above, then inspect `CONTEXT.md`, the
-   owning document and the implementation. A mismatch is something to resolve, not a reason to
-   promote the current implementation into a requirement.
-2. Update the implementation, semantic tests, owning architecture document and affected operating
-   guide together. Describe the final behavior in present tense; remove the replaced text instead of
-   marking it historical, implemented or superseded.
-3. Keep unsettled implementation designs in a PR or Issue. Public studies may evaluate alternatives
-   in `docs/research/`, with evidence, assumptions and remaining proof clearly identified. After
-   implementation, update the current architecture and link to research for supporting evidence.
-   Update or remove invalidated research conclusions instead of accumulating superseded studies.
-4. Keep implementation detail only when callers or maintainers must know it to use the module
-   correctly. Function names, CSS placement, one measurement, one candidate checksum and step-by-step
-   development history belong in code, tests or verification output.
-5. Keep repository documentation self-contained. Every repository-relative link or file reference
-   must resolve to a tracked file, or to a new file committed in the same change; external references
-   use stable public URLs. Private notes, ignored artifacts and machine-local paths are never sources
-   for repository documentation.
-6. Before delivery, run `make check` or at minimum `node dev/check-documents.mjs` and
-   `git diff --check`. The document check enforces the allowed tree, complete index, valid relative
-   links and the absence of private/history references.
-
-For research, use official specifications and source code together with relevant original community
-reports and maintainer responses. Record what was observed, what was actually resolved and which
-explanations remain hypotheses; a forum's resolved label alone is not evidence of a verified fix.
-Use stable public citations and concise summaries. Keep credentials, local paths, device identifiers,
-private host details and raw logs out of public studies; include only the technical context needed
-to assess the evidence. Hardware measurements establish the tested configuration's behavior, while
-general guarantees require an applicable specification or other evidence with a defined scope.
-
-Use English Markdown, short topic-based kebab-case filenames and repository-relative links. Current
-architecture filenames are version-independent. Adding a new documentation file requires a distinct
-current owner that cannot be expressed clearly in an existing file; update this index in the same
-change.
-
-## UI Prototypes
-
-Build UI prototypes with the existing React modules, styling and layout, and capture their rendered
-pages for review. Store temporary sources and screenshots under ignored `frontend/.drafts/`, then
-remove them after the accepted behavior and constraints have been recorded in the owning current
-architecture document. Generated concept images are not interface specifications.

@@ -4,7 +4,7 @@ Status: Current v1 development architecture.
 
 The browser application: routes, browsers, dialogs, selection models and presentation.
 [APIs and services](api.md) owns the endpoints it calls, the
-[command-line interface](cli.md) owns the scripted surface over the same operations, and
+[command-line interface](../operations/cli.md) owns the scripted surface over the same operations, and
 [Interface contracts](contracts.md) owns the rules shared across them, which this
 document does not restate.
 
@@ -32,87 +32,9 @@ describes only what has loaded. This is the contract for every surface that list
 whether the rows come from the catalog or from a live filesystem directory. A query is
 not a directory listing and keeps its own paged form.
 
-## State and Styling
-
-Each fact has one owner. Redux stores shared application state; it does not replace the router,
-controlled forms or request lifetimes.
-
-| State | Owner and lifetime |
-| --- | --- |
-| Archive/Restore selections and Restore version policy | Application Redux store; hydrate browser-session preferences once, then persist changes. Successful submission clears only the submitted revision, preserving later edits. |
-| Committed Library/Preview/Job Settings | Application Redux store; only a current Get or successful Save publishes values. Older reads cannot replace a Save or a newer read, and an initial failure leaves values unknown until explicit Retry. Editors keep local drafts. |
-| Configured Locations | Application Redux store; fetch the complete catalog once, share choices with Settings, and publish successful configuration edits. Live availability and latest analysis use detail reads. |
-| File list sorting and folders-first | Application Redux store, persisted to local browser storage by list identity, independently of the current path. |
-| Jobs return position, loaded rows, revisions and tombstones | In-memory Redux snapshot per route filter; request lifetimes remain local and late responses cannot publish after leaving. |
-| Navigation and active route filters | Router. |
-| Panes, sparse Identical pages, log/result windows, dialog drafts and pending actions | The owning view or shared feature hook; discard or invalidate them when their request or source changes. |
-
-The [application state module](../../frontend/src/state/store.ts) uses serializable protobuf JSON
-and memoized decoded selectors. Controllers, timers and in-flight promises remain outside Redux.
-Committed Settings and Job snapshots are not persisted. Browser storage is an optional preference
-boundary: failed reads use the established default, and failed writes cannot turn a successful
-server operation into a failure. A preference retains its own commit rule, such as a confirmed
-Restore destination or successful Scan submission; merely editing a draft does not persist it.
-
-Instants follow the [shared time contract](contracts.md#time-values). Decoded values remain
-`bigint`; serializable state uses decimal strings. [Shared date helpers](../../frontend/src/tools/time.ts)
-convert to `Date` only for display and date controls, with range validation and correct rounding
-before the Unix epoch. An unchanged Restore cutoff keeps its original nanoseconds rather than
-round-tripping through the control's lower precision.
-File rows keep their original nanoseconds as the shared browser date-sort key; saved-version
-ordering and Preview selection follow the Library's [latest saved version order](library.md#organization-and-content)
-with exact nanosecond comparisons. A first-date display fallback does not replace an unknown last archive date in that order.
-
-Shared read hooks keep requests local to each consumer. Preview and saved-version reads share their
-feature hooks; the [Location-choice hook](../../frontend/src/components/use-location-choices.ts) owns
-the root menu, Library filters, Restore, Locate original and Identical scope's choices from the
-same configured Location catalog as Settings. The application preloads its complete paged catalog;
-opening a chooser and filtering its names use that shared cache. An initial read shows loading,
-and a failed read exposes Retry. Settings Refresh explicitly reloads the catalog; successful
-configuration changes update it. A successful Library import refreshes the catalog and supersedes any earlier read. Late reads cannot overwrite newer edits. Live filesystem state
-and latest analysis remain separate detail reads. Selection, Restore eligibility checks and save
-actions remain with their components. Library filters retain their selected Location and label
-when canceled and reopened. Media search keeps its successful current query/page when reopened;
-changed queries/pages and explicit Retry perform a new read. Scan Location search and the Location choices
-in Jobs filters use the same configured catalog; changing a Job filter retains loaded Media choices. The RPC transport does not log request or
-response bodies; request owners present failures, and obsolete cancellation is not an application error.
-
-Styling has four owners:
-
-| Concern | Implementation |
-| --- | --- |
-| Application colors, type, shape and framework-wide defaults | The application theme. |
-| Shared component appearance and interactive states | The owning React component, using MUI `styled`, `sx`, theme overrides and supported slots. Reuse Feedback, ActionRow, Settings shells, search popup shells and navigation instead of copying their appearance. |
-| Page layout and native application-owned elements | Co-located Less/CSS; shared components keep these styles together with their markup, and no stylesheet targets another component's private DOM or state classes. |
-| Measured row positions and dimensions | Dynamic styles owned by the virtual list or resizer. |
-
-`styled` and `sx` use MUI's Emotion styling system. Less styles page layout and application-owned
-HTML; it does not reskin framework components. A shared component's native markup may retain
-co-located Less, while MUI controls use the theme and component APIs above.
-Components own text alignment; root layout containers leave it unset.
-Settings editors keep one shared page shell across lazy code loading and the first data read,
-with one progress indicator in that shell. Revisiting committed Settings uses the shared cache;
-a failed read remains an actionable error until Retry. The router owns the selected tab,
-including detail and trailing-slash routes.
-The [entrypoint](../../frontend/src/main.tsx) configures MUI utility names before importing component
-modules, including production chunks. Use exported utility classes or slots instead of hardcoded
-`app-Mui*` selectors. The application theme wraps application controls, including controls placed
-inside Chonky slots; Chonky owns its theme and browser appearance. Do not override all Chonky
-buttons from an application stylesheet. The [application FileBrowser](../../frontend/src/components/file-browser.tsx)
-owns its layout element and supplies Chonky's public theme props, so pages need no `.chonky-*`
-stylesheet selectors. Chonky owns the native scroll container for ordinary, grouped and sparse
-rows. Rows fill its client width; the browser allocates scrollbar space. Fixed content insets
-must not stand in for a scrollbar, including when the list fits without scrolling.
-Component states must work under lazy route loading,
-portals, narrow layouts and nested browsers without depending on import order.
-
-`pnpm styles:check` and ESLint reject known boundary violations. Direct configured-Location
-list reads and Settings Get/Update calls are restricted to their shared owners, as are Job result
-page reads. Visual acceptance still checks
-alignment, wrapping, focus, disabled/loading states and both browser panes; a static guard cannot
-prove rendered appearance.
-
 ## Browsing and Interaction
+
+### Files Browsing
 
 The shared Files controller records a loaded view only after publishing its successful result. Request replacement before that point, including when Settings resolves the Library scope, remains initial loading. Superseded responses cannot settle the replacement request; each page boundary rejects obsolete work before fetching another page, and obsolete failures do not surface against the new view. A read publishes batch by batch, so a read failure has already shown part of the directory: those rows are discarded rather than presented as the directory, and a failed Library refresh falls back to the listing it last read completely. Navigation or a read failure that clears rows also clears their loaded-view identity; only successful empty responses display the empty state. A list without rows states which of the three it is - reading, empty, or failed - through one [shared placeholder](../../frontend/src/components/list-placeholder.tsx); the loading state never doubles as the empty state, and no placeholder outlives the read that owned it. Navigation publishes the target directory's breadcrumb together with the loading list, before its rows: a Location target is derived from its path, and an opened Library folder from the row or ancestor entry that opened it. A Library directory without a known entry, such as a remembered position or a located parent, keeps its breadcrumb until the response.
 
@@ -148,31 +70,95 @@ Authorized path browsing skips explicit policy/resource exclusions; filesystem o
 
 Retain the product logo, build-derived version, contextual Library/Location root labels, compact row height, full-width separators, inherited surfaces, and usable empty spacing. Tape drawers close independently and physical-file panel height stays stable when expanded/collapsed. Visible dot-prefixed directories remain navigable unless a backend explicitly excludes them. Shared browser interaction fixes belong in Chonky, not per-page CSS/event workarounds.
 
-[MUI class-name initialization](../../frontend/src/mui-classnames.ts) must run before component imports in both the application entry and browser test setup. The entry dynamically loads [application bootstrap](../../frontend/src/bootstrap.tsx) after initialization, preserving that order across production shared chunks. Cached internal selectors and rendered classes must use the same prefix; otherwise default select overflow and outlined-label styles can fail. Verify long selected values and floating labels in real rendering.
+### Locations and Source Navigation
 
-The [application theme](../../frontend/src/theme.ts) owns MUI primitive appearance; `sx` and `styled` use the same Emotion engine. Shared components own repeated structure and placement, including tabs, section cards, action rows, confirmations, feedback, result rows and saved-version choices. Less owns page layout and scoped third-party adaptations; it does not restyle those shared components. Bootstrap loads the reset before importing the application and its global styles. Component styles stay scoped, so opening a lazy route cannot change another surface. Chonky retains its own Emotion styles and notifications retain their distributed CSS.
-
-The [Locations page](../../frontend/src/pages/locations.tsx) lives in **Settings → Locations**. Its compact table leads to routed add/detail pages; **Add location** and Refresh sit in that order at the left below the list instead of competing with the page title, and unrelated Library tools are not repeated here. Details separate configuration, live files and related Jobs, with unsaved-change protection. The detail header shows the Location's name and availability; the Configuration form owns the root path along with the other values. Its bottom action row places Save changes, Scan, Cancel and Remove location together in that order. The Directory field offers **Browse directories** before registration or while editing. Its read-only chooser uses the existing authorized path service, retains exact server paths and pages directories without collecting files; Choose changes only the draft, Cancel leaves it unchanged, and Save registers or updates the Location. Failed pages retain their retry context and closed or superseded navigation discards late replies. Browsing registered contents remains the Files tab's job; the tab fills the height the page leaves it rather than a fixed pane. **Restore destination** is a recommendation, not permission. Ignore is verbatim gitignore text; matching entries disappear from the live file list and from Restore destination choices. An explicitly named destination still writes normally, and its output stays unlinked. New and imported Locations are immediately usable. Registration does not create a collection Job. Access errors and analysis results remain separate. Shared containers unify gutters and panel gaps.
+The [Locations page](../../frontend/src/pages/locations.tsx) lives in **Settings → Locations**. Its compact table leads to routed add/detail pages; **Add location** and Refresh sit in that order at the left below the list instead of competing with the page title, and unrelated Library tools are not repeated here. Details separate configuration, live files and related Jobs, with unsaved-change protection. The detail header shows the Location's name and availability; the Configuration form owns the root path along with the other values. Its bottom action row places Save changes, Scan, Cancel and Remove location together in that order. The Directory field offers **Browse directories** before registration or while editing. Its read-only chooser uses the existing authorized path service, retains exact server paths and pages directories without collecting files; Choose changes only the draft, Cancel leaves it unchanged, and Save registers or updates the Location. Failed pages retain their retry context and closed or superseded navigation discards late replies. Browsing registered contents remains the Files tab's job; the tab fills the height the page leaves it rather than a fixed pane. **Restore destination** is a recommendation, not permission. Ignore is verbatim gitignore text. New blank input uses the server's default YATM entry rules; nonempty custom text replaces them. Updates retain intentionally empty rules. Matching entries disappear from ordinary live browsing, measurement and Scan/Archive selections. Only root/Ignore edits show the scope warning: existing history remains, future reads use current configuration and a frozen Job cannot be redirected. An explicitly named destination still writes normally, and its output stays unlinked. New and imported Locations are immediately usable. Registration does not create a collection Job. Access errors and analysis results remain separate. Shared containers unify gutters and panel gaps.
 
 Each Chonky pane has a keyboard-accessible **Library / Locations** root menu. Files' dual panes share one source: both Library or both the same Location. Either menu changes the shared source, including the hidden pane in Inspector mode; source changes discard stale rows and selections. Directory positions, search, pagination and scrolling remain independent, with each pane remembering its directory per source. Selection browsers retain their separate waitlists. Library actions change logical organization; Location cut/paste, rename/move, mkdir and delete change actual disk entries. Neither offers user-level Copy. Shared focused-pane hotkeys and drag actions enforce same-source operation boundaries. Cross Library/Location drags never imply a filesystem transfer. Unadmitted regular files support explicit annotation/admission and Archive; unknown content has no invented version or Preview. Library visibility uses [server-side saved-version scope](library.md#visibility-and-selection), independent of Location and duplicate browsing. Root composition and interaction extensions belong to Chonky, not page overlays.
 
-Clicking the root name returns to that source's root; its separate arrow switches sources and restores remembered navigation. Media roots also remain clickable. The compact single-line navbar uses measured available width to fold intermediate ancestors into an accessible menu, retaining root and current directory without wrapping height. Copy path writes a source-qualified display path, not an executable object reference. **Include unbacked files in Library** belongs to **Settings → Library**, separately from import/export; it is not a Files toolbar control. Settings separates its surfaces the same way the preference groups are stored: **Library** holds visibility and Trash confirmation, **Preview** holds Generation, Runtime, Output and reported formats, and **Jobs** holds the pipeline limits an attempt runs with. Each editor loads one complete typed group, keeps a local draft, and replaces that group on Save; Cancel restores the last loaded value. Save/Cancel is one page-level action row below the editable sections, never an action embedded in one section. A page states what its values apply to. All four surfaces render through one [Settings page shell](../../frontend/src/components/settings-page.tsx), one [page heading](../../frontend/src/components/page-heading.tsx), uniform section cards, one shared action row and one [field](../../frontend/src/components/settings-field.tsx) that carries a control's label, control and explanation. The framework's own components own the frame, widths and spacing, so a title, group or explanation cannot take a different size or place on one surface than on another.
+Clicking the root name returns to that source's root; its separate arrow switches sources and restores remembered navigation. Media roots also remain clickable. The compact single-line navbar uses measured available width to fold intermediate ancestors into an accessible menu, retaining root and current directory without wrapping height. Copy path writes a source-qualified display path, not an executable object reference. **Include unbacked files in Library** belongs to **Settings → Library**, separately from import/export; it is not a Files toolbar control. Settings separates its surfaces the same way the preference groups are stored: **Library** holds visibility and Trash confirmation, **Preview** leads with generation/type/output and places execution, resource limits, extensions and sampling in Advanced, and **Jobs** holds the pipeline limits an attempt runs with. **Devices** holds per-device FORMAT preferences and Tape read order; saving them performs no hardware operation. Each editor loads one complete typed group, keeps a local draft, and replaces that group on Save; Cancel restores the last loaded value. Save/Cancel is one page-level action row below the editable sections, never an action embedded in one section. A page states what its values apply to. All Settings surfaces render through one [Settings page shell](../../frontend/src/components/settings-page.tsx), one [page heading](../../frontend/src/components/page-heading.tsx), uniform section cards, one shared action row and one [field](../../frontend/src/components/settings-field.tsx) that carries a control's label, control and explanation. The framework's own components own the frame, widths and spacing, so a title, group or explanation cannot take a different size or place on one surface than on another.
+
+### Settings Surfaces
+
+The [Device editor](../../frontend/src/pages/settings-devices.tsx) uses the existing typed DEVICE
+Settings Get/Update group and shared committed cache/editor. Configured devices and saved inactive
+entries remain distinct; inactive Device settings grant no access. FORMAT defaults are resolved for the
+selected drive in an existing Archive Job's **Choose archive storage** dialog after selecting
+**Storage type → Tape**, following manifest preparation. The absent
+format means LTFS; explicit operation edits override saved defaults and remain when the drive changes.
+APPEND and reads use the cartridge's immutable stored profile. **Read order** is an ordinary field beside FORMAT defaults and edits the selected device's
+LOGICAL/AUTO preference; unspecified resolves to LOGICAL and remains unspecified
+through unrelated edits. Saving validates the enum without hardware access and retains inactive
+entries. Each admitted read freezes that preference. LOGICAL preserves manifest order while keeping
+eligible exact seek. AUTO plans the complete selected-Media sequence when a usable position map
+and applicable read parameters are available. The Media backend records the effective order and
+fallback reason in the existing Job log. Device inspection is an explicit action
+separate from Save. Unknown observations stay unknown; omitted tar record options resolve as the
+[Tape option contract](contracts.md#tape-options-and-selection) defines. Persistence checks record shape;
+actual admission checks current device/driver bounds without clamping. The
+[Device guide](../operations/devices.md) owns operator instructions.
+
+The separate collapsed **Manual read parameters** section opens a JSON dialog copied from the page draft.
+Apply validates it and updates only that draft; the page Save persists it. Cancel leaves the page
+unchanged, using the existing discard confirmation for edits. Starting from device details uses
+only the displayed report and performs no new query; it creates fresh applicable identity fields
+instead of relabeling previous timings. Clearing manual read parameters is also a draft edit and
+returns selection to automatic parameters only after Save. Partial manual read parameters retain priority
+and may leave insufficient costs for AUTO; absence stays unknown rather than zero. Variable-record
+maximum size and written compression/encryption conditions cannot be inferred from current controls.
+
+Advanced also owns passive read learning (omitted means enabled) and the complete-selection
+planning budget (omitted means 300 seconds; explicit values are positive). Learned
+models are server-owned Device Settings facts; a form Save cannot erase or replace them.
+Manual read parameters take precedence over matching learned read parameters and source-labelled initial
+values. Device details show the last prepared read's identity, parameter/position sources,
+coverage gaps and the learned read parameters' mean and maximum error when available. This historical snapshot does not certify
+the currently loaded cartridge or report the final read order; Inspect does not start
+measurement or extra planning queries.
+
+Job pipeline tuning, Preview runtime tuning and Device tar options use SettingsSection.collapsible
+in initially collapsed **Advanced** sections. Hidden fields stay mounted and retain values; validation
+expands the affected section and shows its error without discarding the draft. Each page keeps its
+normal Save/Cancel actions. Devices places Save, Cancel and **Refresh devices** in one row below
+the fields. Refresh devices reloads availability only and retains the settings draft; refreshing
+saved Settings through the editor is a separate action that replaces the page draft after a
+successful read, without a discard prompt. A failed reload retains the draft and reports the error.
+Read-only Device details are collapsed after the editable sections. Raw tar hardware compression offers On/Off with leased validation.
+Encryption setup belongs to the configured adapter for both tar and LTFS; there are no native
+key, encryption-On or algorithm-choice controls.
+Settings retains unavailable saved Device settings for explicit correction. Compression diagnostics show the current numeric
+algorithm and optional control changeability without inferring an algorithm list or physical
+validation. Encryption diagnostics expose public algorithm/index/key-size and optional non-secret
+mode/scope/counter facts; a counter is never labeled key presence. No key input or download surface
+is added. An optional observed algorithm does not establish whether a key is present or the
+cartridge is plaintext. Every stored Tape shows one **Encryption** value in Media details, the
+APPEND summary and the read chooser: the observed algorithm, **Configured · algorithm not recorded**
+when a key is saved without one, or **Off** when no key is saved. Responses report only key presence.
+Geometry diagnostics distinguish the reported
+all-wrap command form from qualified coverage and preserve unknown freshness and reported-wrap count
+until their observations exist. Stored Media details show format and non-secret profile facts and link to
+the Device editor and [independent recovery guide](../operations/tar-tape-recovery.md); there is no
+recovery RPC or download action.
+
+### Shared Interaction Patterns
 
 Actions for one page or entity belong in one left-aligned inline row after its content, ordered from the main action at the left to less central actions at the right. Editable forms place Save first in that row and Cancel to its right; related actions, including Scan, import, export and removal, share the same row. List-level actions sit below their list; dialogs keep their actions in the footer. Navigation tabs, status indicators, field controls and contextual browser tools stay with the content they control. The [shared action row](../../frontend/src/components/action-row.tsx) owns alignment, spacing and horizontal scrolling on narrow screens, keeping actions together without shrinking their buttons. Settings pages and their forms use the available content width without a separate narrow maximum. Settings groups use one restrained card treatment: a clear section heading, a separated body with consistent field spacing, and explanations next to the setting they describe. Location's Advanced settings use the same section component and are initially collapsed in one bordered section; expanding it reveals default-off mmap content reads without a nested card.
 
 Double-clicking a file in ordinary Library/Location and Archive/Restore source browsing opens details, never a content tab or an implicit waitlist addition. Location entries with a File association use the same Library details and saved versions; unadmitted entries show live properties without forcing admission. Double-clicking a directory navigates into it. Original details link to the live containing folder and reveal the file; they do not add a separate Open button. Archived copies show health and availability with Restore guidance, not an HTTP content link. A dedicated file picker may use double-click to choose its entry; Library search retains its locate-result behavior.
 
-Library, Jobs and Preview Settings share the same loading, retry and save feedback. Every group reuses its committed Redux value on revisit. Before the first value arrives, the editor shows shared loading feedback without inventing field values; an explicit reload retains its existing form while the read runs. Location removal uses the shared confirmation dialog, retaining an error in that dialog for correction and retry.
+Library, Jobs, Preview and Device Settings share the same loading, retry and save feedback. Every group reuses its committed Redux value on revisit. Before the first value arrives, the editor shows shared loading feedback without inventing field values; an explicit reload retains its existing form while the read runs. Location removal uses the shared confirmation dialog, retaining an error in that dialog for correction and retry.
 
 Composed browsers connect pagination to `FileList.onScroll`; `FileBrowser` is the state container and does not forward that event to an explicitly supplied child. Integration tests render the installed list component as well as testing the paging hook, so a mocked wrapper cannot conceal a disconnected native scroll handler.
 
 The [shared query bar](../../frontend/src/components/library-filters.tsx) keeps optional structured controls out of the workspace. Find identical files opens **Tools → Identical files**. Ordinary queries, including `has:duplicates`, remain flat file results. Duplicate semantics belong to [Library search](library.md#annotation-search-and-cleanup). Inspector is the default unless Dual pane was saved; both keep the complete Chonky toolbar and dot-directory navigation.
 
-Rows use the [Library state matrix](library.md#file-and-version-display-states): present/archive green, present/no-archive yellow, absent/archive blue, absent/no-archive red and uncertainty gray. Current changes and historical anomalies use a supplementary mark, never an implicit health expiry. Files.List computes requested status using batched existence facts and bounded current-original observations, without hashing or reading Media. No exact copy counts, versions or signature bytes accompany ordinary list rows.
+Rows use the [Library state matrix](#file-and-version-display-states): present/archive green, present/no-archive yellow, absent/archive blue, absent/no-archive red and uncertainty gray. Current changes and historical anomalies use a supplementary mark, never an implicit health expiry. Files.List computes requested status using batched existence facts and bounded current-original observations, without hashing or reading Media. No exact copy counts, versions or signature bytes accompany ordinary list rows.
 
 The [controlled detail flow](../../frontend/src/pages/file-detail.tsx) is keyed by a `FileOperationRef` and uses `FilesService.Get` for both Library and live Location entries. The [shared detail surface](../../frontend/src/components/detail-surface.tsx) owns the same compact header, optional status, fixed tab row, Preview region, and scroll boundary in the Files Inspector, Files dialog, and Media/Position Inspector; each caller supplies its own facts and operations. The Files dialog uses the same content as the Inspector and becomes full-screen on small viewports. Basic detail loading does not wait for Preview or history; versions load on first opening Saved versions, and that version's copies load with its detail. Each region owns errors, retry and stale-response rejection. A refresh retains the last coherent snapshot with one unobtrusive indicator; late responses for another entry cannot clear or replace the current selection. Selecting another entry clears the previous snapshot and holds its layout as a skeleton until the new detail arrives, while retaining the selected Overview or Saved versions tab. The [File content](../../frontend/src/components/file-content.tsx) keeps a fixed Overview/Saved versions tab row while Preview stays above the selected tab's content. The image or video display area is a responsive 16:9 frame; video controls sit below it, and media fit without stretching. Overview keeps the original, inline Tags/Note editing with Save/Cancel, and collapsed technical details together. Overview shows **Add to Archive list** only when the entry publishes the Archive operation and a regular Library File has an original association. Directories offer their root without checking descendant original associations. Saved versions use a paginated dated list with the newest loaded archive time first. File details and the Restore picker use one [saved-version choice](../../frontend/src/components/saved-version-choice.tsx) for selected, disabled and keyboard-focus presentation; each caller retains its own content and selection. A version shows its recorded last archive date, then its first archive date; without either it reads **Date not recorded**. Matching copy write dates do not establish when that FileVersion was archived. **Add to Archive list** and **Add to Restore list** lead the bottom action rows of Overview and the selected saved version, respectively. The selected saved version can be added to the Restore waitlist by its exact `FileVersion` identity. Both additions retain the Inspector or dialog, report whether the item was added or already present, and expose **View list**; neither chooses Media or a destination, estimates a Job, or creates one. Copies are immediately visible as individually collapsible MUI cards with a right-side icon arrow; signature, hash and permissions stay in collapsed technical details. A current original's Preview is never replaced by saved assets. An entry with no current original previews its newest saved version instead, under a label naming that version, and shows no Preview when it has no saved version either. Archive-only Files use the same eligible-history summary as the list. Saved content remains available through [Library publication](library.md#archive-inventory); Restore execution remains the explicit waitlist review and Job creation workflow. Duplicate queries never merge organization. Originals are not archive copies.
 
 Persistent copy is limited to names, paths, facts and actions. Location names are user-defined directory labels, not product modes. Overview labels the association **Location** and shows its name and physical relative path as inline links separated by a slash. The name opens the live Location root; the path opens its containing folder and reveals the file, including later pages. An original hidden by user Ignore opens that folder without appearing in it, because explicit access does not make the entry browsable. It has no redundant location heading or missing-location paragraph. Archive-only entries use the neutral **Saved versions only** label. Location pages and Scan dialogs omit generic introductions and repeated operation descriptions. The selected File header does not repeat the domain model; version lists do not repeat archive rules, and copy lists do not repeat their section context. Empty/unavailable/error states retain concise next steps. The selected version's Preview uses that version's endpoint; switching versions clears the previous image, including when a prior response arrives late. Successful File refreshes update original facts, loaded version/copy pages and selected-version Preview while retaining the tab and selection. A current Preview is read under the content signature the detail published, which the Library only publishes while the live original still agrees with its record. Path review, Ignore semantics, destructive-action scope and Restore destination/non-in-place warnings remain at their relevant operations.
+
+### Job Creation
 
 **Jobs → New → Scan** orders its controls as source, target, signature policy, result handling and Preview. Location and Media use required single-choice search fields; free text is not a selection. Location choices reuse the shared configured catalog. Media searches use bounded server ID-cursor pages. Search matches registered names and directory paths or Media identities, treating wildcard characters literally. Loading, empty results and retry stay in the chooser. Stale responses cannot overwrite a newer search or selection. Inventory update and recorded-copy verification are mutually exclusive policies. Verification forces real reads; sequential Media disallow Preview. The shared Preview select offers **Don’t generate / Generate missing / Regenerate all** in Scan and Archive. [Preview](preview.md) owns execution semantics. All modes use the same SCAN runner and result types.
 
@@ -192,9 +178,15 @@ Generic workflow explanations belong in documentation, not persistent Job cards,
 
 When an original's content signature becomes unknown, its Preview clears the preceding error and offers no retry for that unknown content.
 
-All Scan entry points open the same [controlled form](../../frontend/src/components/scan-form.tsx) at `/scan`: source/range, Signatures, Results, Find matching Library content, Previews, then **Start scan**. Location and Media use required server-search selectors. Location supports the whole root or selected entries within that Location; Files supports Library/Location roots accumulated across directories; Media remains whole-resource. The read-only Chonky range dialog edits a temporary selection: Choose commits it, Cancel discards it. Roots retain their source, path and scope; an empty Location path selects its whole root, and directories expand only on the server. Browsing does not collect files, organize entries or start Jobs.
+All Scan entry points open the same [controlled form](../../frontend/src/components/scan-form.tsx) at `/scan`: source/range, Results and Previews, then **Start scan**. Advanced holds signature acquisition and archived-copy counting. A compact summary keeps the effective reading/publication choices visible, including remembered non-default choices. Location and Media use required server-search selectors. Location supports the whole root or selected entries within that Location; Files supports Library/Location roots accumulated across directories; Media remains whole-resource. The read-only Chonky range dialog edits a temporary selection: Choose commits it, Cancel discards it. Roots retain their source, path and scope; an empty Location path selects its whole root, and directories expand only on the server. Browsing does not collect files, organize entries or start Jobs.
 
-The route initializes defaults, applicable last-used settings, then explicit [prefill](../../frontend/src/pages/scan-input.ts) once per navigation. Files context actions supply editable selections; both file and directory Add to Library supply known-only/original-publication/no-comparison/no-Preview defaults. Location/Media URL shortcuts and `collect=1` resolve into the same prefill, not separate form modes. Only actual capabilities constrain options: copy verification forces real reads and Tape disables Preview. Target changes discard incompatible ranges; late lookups cannot overwrite a newer choice. Invalid or stale targets require correction rather than falling back to a whole Location. Successful creation alone saves final options and valid Location/Media identity; individual file selections are never stored as long-term preferences. All submissions use the existing ScanJobSpec/Create contract.
+The route initializes defaults, applicable last-used settings, then explicit [prefill](../../frontend/src/pages/scan-input.ts) once per navigation. Files context actions supply editable selections; both file and directory Add to Library supply known-only/original-publication/no-comparison/no-Preview defaults. Location/Media URL shortcuts and `collect=1` resolve into the same prefill, not separate form modes. Only actual capabilities constrain options: copy verification forces real reads and Tape disables Preview. Target changes discard incompatible ranges; late lookups cannot overwrite a newer choice. Invalid or stale targets require correction rather than falling back to a whole Location. Successful creation alone saves final options and valid Location/Media identity; individual file selections are never stored as long-term preferences. All submissions use the existing ScanJobSpec/Create contract. Known-only with Preview skips files
+whose content signature is unknown and offers a choice to read missing facts; known signatures can
+still require reads for decoding. Report-only suppresses catalog publication, not content I/O or
+Preview generation. Optional comparison counts recorded archived copies and displays those counts
+in results; an unrequested or unknown count is not shown as zero. A visible Scan Job loads its
+creation settings in any state, and rows add no comparison text until they arrive. Capability errors expose Retry
+without leaving the draft. Copy-verification remains an explicit real-read policy.
 
 Confirmations and name prompts use the application-owned [action dialog](../../frontend/src/components/action-dialog.tsx), not browser `alert`, `confirm` or `prompt`; lint enforces this boundary. Dialogs name the operation and target, retain destructive-action scope, and accept operation-specific content/options. The dialog paper is the form, keeping its scrolling content and fixed footer in one flex layout. Cancel/Escape does not execute the action; submission locks dismiss and repeat-submit controls, and failures remain in the dialog. A successful mutation followed by a refresh failure reports the refresh separately instead of inviting another mutation. Inline errors and notifications remain appropriate for non-blocking feedback; browser unload protection is a separate platform capability.
 
@@ -202,23 +194,62 @@ Inline operation errors and Alerts with actions use the shared [Feedback](../../
 
 File Overview offers **Locate original** for regular Library Files, including associated entries viewed through a Location. It reviews the selected Location and observed file before replacing the association through the existing relocation operation. Choosing another Location or file clears the prior selection's error. Successful linking closes its dialog before refreshing details; a refresh failure reports separately and cannot repeat the association change.
 
+### Job Review and Cards
+
 Job creation must have a review surface before execution: Archive/Restore creation dialogs, Scan configuration, and Media read/write dialogs provide it through their target/options and final action button. Creation pages use their top tabs as labels, without redundant New headings or a Locations shortcut. Check integrity opens the prefilled Scan form; stop and delete require confirmation. Navigation to a creation page, Properties, results or logs does not require confirmation or start a Job.
 
 **Recreate** opens the normal Archive, Restore or Scan form with the retained creation inputs from the [read-only creation API](api.md). It never changes or submits the old Job. Archive/Restore ask before replacing a nonempty waitlist, and concurrent draft edits require a fresh confirmation. Missing roots, versions or destinations stay visible and require correction; a failed lookup never widens a selection or chooses another destination. Original options, priority and an unchanged Restore cutoff are preserved exactly. Submission remains an explicit action through the normal estimates and pre-submit checks. Imported Jobs without retained creation inputs explain why the form cannot be restored.
 
-Job cards offer no Job-level retry or restart. Media choices require an idle `READY` Job. Admitted Archive and Restore Media errors or operator cancellation, including while `QUEUED`, return to pre-Media `READY`, retaining the prepared manifest, successful per-file/Media checkpoints and reason/timing so the operator can load Media for the remaining work. Failed or cancelled Scan execution and manifest preparation offer no start action; a new Job is required. `total_known`, retained counters and an `UNSPECIFIED` phase never enable a `FAILED` Job. Active and queued attempts suppress another Media choice, and process restart never restarts a Job or revives terminal `FAILED` work. Storage dialogs reject responses from a cancelled opening, and a successful start closes the dialog before refreshing Jobs; a failed refresh reports separately without reopening the Start action. Successful Volume initialization or registration likewise closes its dialog before refreshing Media. Page and transport Retry actions repeat reads only.
+Job cards use one stable metric layout and the server-provided stage percentage/estimate for every kind. One shared module owns the frame, the counter wording and the waiting/active/terminal classification behind the status label and the action buttons; only active work animates a bar of unknown length. Polling keeps the last coherent snapshot through refresh/error/offscreen transitions and rejects obsolete requests, and it never changes an estimate, because every sample is recorded on a work path. Current and session-average byte speeds remain distinct from persisted business results; elapsed time stays the common latest-attempt measurement.
+
+Job cards offer no Job-level retry or restart, and offer a Media choice only for an idle `READY` Job as the [Job lifecycle](jobs.md#shared-lifecycle) defines. `total_known`, retained counters and an `UNSPECIFIED` phase never enable a `FAILED` Job, and active or queued attempts suppress another Media choice. Storage dialogs reject responses from a cancelled opening, and a successful start closes the dialog before refreshing Jobs; a failed refresh reports separately without reopening the Start action. Successful Volume initialization or registration likewise closes its dialog before refreshing Media. Page and transport Retry actions repeat reads only.
+
+### Tape Dialogs
+
+Tape Archive uses format-aware preflight. Raw tar FORMAT inspects the configured device passively,
+checks exact Library barcode registration, resolves supported record values and requires explicit
+barcode confirmation before destructive submission. Resetting recommendations reuses the loaded
+report and saved defaults; it does not perform another inspection. Changing FORMAT/APPEND retains
+the selected device and barcode-registration result while clearing only action-specific overrides.
+Tar uses the encryption adapter without the LTFS formatting/mounting/readinfo workflow.
+The [read chooser](../../frontend/src/components/read-media-dialog.tsx) keeps **Refresh position map
+before reading** in Advanced and offers it only for known tar Restore or Scan VERIFY_COPIES.
+An enabled action retains a visible consequence summary even when Advanced is collapsed. Scan reuses GetCreation to load
+its frozen result policy once per chooser admission; unknown or failed policy loading hides this
+optional action without blocking ordinary reads. Native LTFS/Volume does not fetch an unused policy.
+The selected device's qualified non-ejecting reload support controls availability. A supported,
+READY observation enables the action unless validation failed; UNVALIDATED alone does not disable it.
+An explicit request is revalidated under the lease and refused
+before motion without that lifecycle; AUTO alone never reloads. LTFS, Volume and inventory/other
+Scan policies omit the action. Late responses cannot restore a closed chooser's policy.
+
+Raw APPEND requires an explicit action choice and displays its registered immutable profile; the
+Session verifies the label/profile and tail under the attempt lease. Failed submissions retain the
+form and error. LTFS retains cartridge inspection and **Check Tape**, together with its
+initialization, key, mount and normal unmount workflow.
+
+When Tape inspection cannot identify the cartridge, the Archive storage dialog requests its barcode with an **ABC123** example and helper text specifying six letters or digits without the LTO suffix. Input is trimmed and uppercased for validation and submission; **Check Tape** remains required before starting the Archive.
+
+### Archive and Restore Details
 
 Presentation cleanup includes tracing response fields and server calculations to their consumers. Remove presentation-only data with no remaining business or client use through the protobuf generation path; retain fields used for validation, selection binding, content identity, pagination and actionable diagnostics. The selection-review API follows the [Library aggregate contract](library.md#visibility-and-selection), not a hidden output-path preview.
+
+Archive's **Recheck source hashes for previews** remains an advanced preparation option. It
+changes hashing before the companion Preview Scan, not the integrity check performed while
+copying Archive content. Disabling Preview keeps its draft value without making it active.
 
 Archive and Restore waitlists use Chonky's optional `footer` slot for their creation-dialog entry action. One browser frame owns the outline, divider and outer corners; there is no separately rounded list inside another card. The list scrolls independently of its footer. Configuration scrolls inside the modal, with Cancel and final preparation in its action bar. The [shared component integration](../../frontend/README.md) documents the published dependency and consumer regression coverage.
 
 Rows containing path or version details use content-measured heights in the shared virtual list, including after details change. Ordinary single-line rows remain compact. Waitlists omit a secondary path when it is identical to the displayed name.
 
-Restore shows a compact destination path control. Its compact save-location dialog puts a preferred-Location selector above the live directory browser, compact breadcrumbs and **Choose / New folder / Cancel** actions. The dialog follows content height; only the directory list scrolls, without a fixed-height sidebar or empty space below its actions. Double-click enters a directory; Choose confirms the current directory. Re-selecting the current breadcrumb, including the root, is a no-op rather than a reload. New folder performs an immediate checked creation; Cancel does not undo it. Navigation and cancellation do not collect files or change Library. There is no preferred/all toggle or fallback; an empty preferred list links to Settings. Failed navigation clears old rows; Retry reloads the complete directory. Advanced damaged-copy recovery remains off by default. [Job indexing](jobs.md) freezes contents, logical targets, destination bindings and collision-safe outputs.
+Restore shows a compact destination path control. Its compact save-location dialog puts a preferred-Location selector above the live directory browser, compact breadcrumbs and **Choose / New folder / Cancel** actions. The dialog follows content height; only the directory list scrolls, without a fixed-height sidebar or empty space below its actions. Double-click enters a directory; Choose confirms the current directory. Re-selecting the current breadcrumb, including the root, is a no-op rather than a reload. New folder performs an immediate checked creation; Cancel does not undo it. Navigation and cancellation do not collect files or change Library. There is no preferred/all toggle or fallback; an empty preferred list links to Settings. Failed navigation clears old rows; Retry reloads the complete directory. Advanced damaged-copy recovery remains off by default; enabling it shows that complete mismatched
+output is retained without a verified original association. [Job indexing](jobs.md) freezes contents, logical targets, destination bindings and collision-safe outputs.
 
 The target picker filters preferred Locations on the server before pagination; additional-page requests cannot overlap or append duplicate IDs. Closing the modal invalidates its pending responses. Only a confirmed choice is saved in browser-local storage, including Location ID, root path and relative directory. Returning to Restore reloads that Location and reuses the choice only if it remains preferred with the same root path. Deleted, moved or ineligible targets require selection again; a late lookup cannot override a new choice. Cancel leaves the prior choice intact. This is a browser preference, not a change to CLI destinations or server write authorization.
 
-All creation results, Jobs rows and related-object histories link to the canonical `/jobs/:id` detail. The detail names the Job and when it was created through the shared page heading, and the navigation strip's **All** tab is what returns to the list, so the page carries no second back link; **Back to Location** remains as its page action. Returning to Jobs preserves filters, loaded pages and list position. The same detail component owns progress, results, logs, cancellation and explicit Media actions. **View Log** opens at the newest lines, pages backward or forward by cursor in a bounded virtual list, and follows new lines while the operator is at the bottom or the filtered view is empty. It keeps raw lines copyable, colors their severity, highlights timestamps, and filters by level or text across the retained log. An oversized line fragment whose match cannot be confirmed is labeled as such, and the filtered search continues. A filter or closed dialog invalidates pending reads; a search with no confirmed match in one byte page continues through the log and can be stopped. Settled Jobs do not poll. Read dialogs offer only the kinds represented by required Media: a single-kind Job opens directly on that kind, and Verify displays its fixed Media identity rather than offering another backend. Restore with both kinds defaults to Volume and allows switching to Tape; Tape inspection must match a required identity before submission. Missing catalog Media is an error, not a fallback choice. Job creation is never presented as a finished Archive or Restore.
+### Jobs Pages
+
+All creation results, Jobs rows and related-object histories link to the canonical `/jobs/:id` detail. The detail names the Job and when it was created through the shared page heading, and the navigation strip's **All** tab is what returns to the list, so the page carries no second back link; **Back to Location** remains as its page action. Returning to Jobs preserves filters, loaded pages and list position. The same detail component owns progress, results, logs, cancellation and explicit Media actions. **View Log** opens at the newest lines, pages backward or forward by cursor in a bounded virtual list, and follows new lines while the operator is at the bottom or the filtered view is empty. It keeps raw lines copyable, colors their severity, highlights timestamps, and filters by level or text across the retained log. An oversized line fragment whose match cannot be confirmed is labeled as such, and the filtered search continues. A filter or closed dialog invalidates pending reads; a search with no confirmed match in one byte page continues through the log and can be stopped. Settled Jobs do not poll. Restore offers its Media chooser only after candidate IDs are known; retained snapshots remain usable during progress refresh, while a known empty list reports no pending Media. Read dialogs offer only the kinds represented by required Media: a single-kind Job opens directly on that kind, and Verify displays its fixed Media identity rather than offering another backend. Restore with both kinds defaults to Volume and allows switching to Tape; All-LTFS candidates, including migrated `ltfs_v0`, and an explicit LTFS Media hint use the existing cartridge adapter and require its matching identity before submission. Raw tar or mixed-format automatic reads show passive details and offer an explicit Media hint from the Job's candidates; the server proves identity/profile under the lease. Hint-required failures retain the form for reviewed resubmission, and missing raw prerequisites never force all-LTFS reads through SG inspection. Missing catalog Media is an error, not a fallback choice. Job creation is never presented as a finished Archive or Restore.
 
 The top **All** tab and sidebar **Jobs** preserve an originating `/jobs` list URL and its
 filters; other origins and direct detail links go to `/jobs`. **Back to Location** returns
@@ -233,11 +264,71 @@ All Job kinds use the same card title/status/body/footer spacing and one shared 
 
 Job cards keep their bodies mounted while offscreen; visibility gates only a shared serialized progress hook. One shared progress card owns the frame, its counter wording and the waiting/active/terminal classification that the status label and the action buttons read, so the three kinds render the same frame for the same phase and counter set. `QUEUED` displays **Queued — waiting for Media**, keeps **Cancel** available and suppresses another start and **Delete Job**; active attempts also suppress deletion. Live working phases take precedence over `COMPLETED` and `FAILED` while cleanup is active. An idle `UNSPECIFIED` stage displays **--** as its current phase. Counter wording names the phase's own work: discovery reports **Found**, Preview reports **Generated**, comparison reports **Compared**, content, verification and publication report **Processed**, and copy reports **Copied**. An idle Scan keeps **Processed** for its retained counters; Archive and Restore keep **Copied**. A phase measured in items alone reports no byte counter, because the bytes beside a decoder count describe the source rather than the stage; the Job's own total rows stay visible beside it. The bar animates only while the Job is active on a stage of unknown length. An idle completed Job shows 100%, including before its counters load or when the workload is empty; active cleanup still uses its live stage progress. Other waiting or settled Jobs show a still bar at the percentage they have. The failure alert keeps its own space under the title. A settled attempt that carries a reason is shown as a failure whatever settled it, including the operator's own cancellation. Leaving a Job or hiding its card aborts its current read and prevents late publication, while completed snapshots remain visible. The Jobs list owns the bounded flex scroll region and pagination observer. Chonky synchronizes controlled rows before paint so loading completion cannot briefly show an empty folder.
 
-Media names stay separate from secondary capability/availability details so prompts and breadcrumbs identify only the target. A Media Scan with **Update inventory** offers **Add to Library** beside **Start scan**: it counts the records that admission would add, shows the count with its folder/unsigned breakdown, and writes only after confirmation. **Don't show this next time** records that answer in browser-local storage so later clicks import directly without the count. The dialog admits the Media's published records, which are not the entries this Scan is about to publish. Mounted Volumes start scanning directly; Tape requires its explicit device/read step and fresh LTFS inventory. **Add to Library** accepts signed regular archive entries or inventory directories; directory descendants expand in bounded Media-path pages and only ordinary signed content becomes independent Library Files. Empty or unsigned-only selections return an explicit result. Position copies are labeled **Archived copies**, inventory deletion is **Remove from Library**, and **Clean up Library** explains its retention scope before execution. Single-Media operations reject multiple eligible selections with an actionable notice rather than silently doing nothing or choosing one. Context actions use Chonky's filtered action selection.
+### Media
 
-The [command-line interface](cli.md) exposes the same named methods and projections to scripts and agents; [CLI E2E](../operations/e2e-test.md) records its executable acceptance and the [local Demo](../operations/testing.md#local-demo) remains a review surface.
+Media names stay separate from secondary capability/availability details so prompts and breadcrumbs identify only the target. A Media Scan exposes **Add existing inventory to Library** separately from starting the configured Scan. The default action reviews the dry-run count, including already-present and unsigned records, before writing. The existing browser opt-out may skip that confirmation after a successful admission, but **Review what will be added** always runs the dry run independently and lets the operator restore confirmation. Its label states that the preference applies across Media in this browser. This action admits already published inventory, not the entries a new Scan might later publish. Zero-result feedback distinguishes empty inventory, already-present Files and records skipped because signatures are missing. Mounted Volumes start scanning directly; Tape requires its explicit device/read step and fresh inventory through the selected format. **Add to Library** accepts signed regular archive entries or inventory directories; directory descendants expand in bounded Media-path pages and only ordinary signed content becomes independent Library Files. Empty or unsigned-only selections return an explicit result. Position copies are labeled **Archived copies**, inventory deletion is **Remove from Library**, and **Clean up Library** explains its retention scope before execution. Single-Media operations reject multiple eligible selections with an actionable notice rather than silently doing nothing or choosing one. Context actions use Chonky's filtered action selection.
+
+The [command-line interface](../operations/cli.md) exposes the same named methods and projections to scripts and agents; [CLI E2E](../development/e2e-test.md) records its executable acceptance and the [local Demo](../development/demo.md#local-demo) remains a review surface.
 
 The Media Properties dialog uses the shared detail surface, retaining Tape drive selection and physical inspection results in its body.
+
+Archive, Restore/Scan and Media Properties share the Tape device chooser. It lists all configured
+drives with busy reasons, disables busy operation choices and selects a drive automatically only
+when exactly one available entry remains. Pending or failed device discovery is distinct from a
+confirmed empty list. **Refresh devices** refreshes list facts; **Device details** and **Refresh
+device details** explicitly request passive diagnostics, including for a busy entry. Reports keep
+unknown facts visible and separate support, availability, validation and evidence. These actions
+do not replace cartridge inspection or authorize an operation. In Restore/Scan, changing Tape Media
+preserves a pending device-list refresh, which clears its loading state when it settles. Selection
+changes invalidate earlier cartridge inspection and device diagnostics; closing or reopening a
+dialog also invalidates its device-list reads. Device details
+are not polled automatically; [Media/I/O](tape.md#device-observation-and-raw-transport) owns their
+physical access rules.
+
+### Preview
+
+Video position and duration use the same fields from `days:hours:minutes:seconds`, omitting
+leading days and hours only when they are zero in the total duration. The current position
+retains those fields even at zero. The first displayed component has no leading zero;
+following components have two digits. For example, a 65-second clip starts at `0:00 / 1:05`,
+a two-hour clip at `0:00:00 / 2:00:00`, and a one-day clip at `0:00:00:00 / 1:00:00:00`.
+Fractional seconds are rounded down; the display retains minutes and seconds for short clips.
+
+The settings editor uses a searchable Type selector and one card at a time, without repeating the selected type as a card heading. Image/video types use descriptive names; multiple routes of the same type are distinguished by extensions. File extensions use a searchable multi-select: selection enables a route, deselection retains it disabled, and custom extensions remain editable. Per-kind helper capabilities supply suggestions; unconfirmed extensions stay visible rather than being discarded. Switching cards preserves unsaved edits, and Save returns to any card with invalid parameters. Basic fields cover generation enablement, type and output dimensions/format. Advanced holds helper execution, resource limits, extensions and video sampling. PNG quality is inapplicable and disabled without clearing its stored value. Video controls are **Minimum sampling interval** and **Maximum timeline frames**: long videos spread samples across the duration, and keyframe reuse can produce fewer frames. The Supported formats section reports the saved helper, not an unsaved command draft. Check and Retry use that saved helper; a successful settings Save refreshes its report. Failed or pending reads retain prior information and the draft. The master switch defaults off; configured kinds and extensions default on beneath it. Disabling a kind or extension retains its parameters. The helper path, input pixel limit and timeout are read after a file acquires an execution slot; changes do not alter the Job's frozen output dimensions, format or quality. `PreviewService.GetCapabilities` and `yatm-cli preview capabilities` probe the installed helper separately from enablement and asset reads. Explicit Scan or Archive generation requests fail before Job creation when the master switch is off or the helper is unavailable. A later failure creating Archive's companion does not invalidate the prepared Archive.
+
+Unchecking an extension retains its disabled route. Deleting its selected chip removes that route, allowing corrections or reassignment to another configured generator without discarding the other draft settings.
+
+## File and Version Display States
+
+The primary color combines current local presence with known default Restore candidates. It does not measure health or archive recency.
+
+| Local original | Known selectable archive copy | Color | Short meaning |
+| --- | --- | --- | --- |
+| Present | Yes | Green | Local and archived |
+| Present | No | Yellow | Local only |
+| Missing or unlinked | Yes | Blue | Archive only |
+| Missing or unlinked | No | Red | No available content source |
+| Either axis unknown | Any | Gray | Identify the unconfirmed axis |
+
+Present requires a current observation; FileLocation existence alone is insufficient. Missing means the associated path was observed absent. Unlinked means no association, not proof that matching bytes do not exist elsewhere. Inaccessible and unobservable originals remain unknown. With unknown current content and no selectable historical copy, archive coverage is unknown rather than definitely absent. A saved version without a selectable Position does not count as an archived copy. Unchecked copies can be candidates; known damaged, missing or unreadable copies are excluded by default. Candidate existence never promises immediate Media accessibility.
+
+| Additional scenario | Primary color and supplement |
+| --- | --- |
+| Present; current content has a candidate | Green |
+| Present; current content uncovered but history has a candidate | Green + unbacked-change marker |
+| Present; current content unknown but history has a candidate | Green + unknown-content marker |
+| Present; current content unknown and no historical candidate | Gray: archive unconfirmed |
+| Missing/unlinked; latest saved version has a candidate | Blue; distinguish missing from unlinked in the tooltip |
+| Missing/unlinked; only an older version has a candidate | Blue + latest-version-unavailable warning |
+| Missing/unlinked; every saved version lacks candidates | Red |
+| Present; known saved copies are all unusable | Yellow + copy-problem marker when current coverage is known; gray when it remains unknown |
+| Original inaccessible; history has a candidate | Gray: local inaccessible, archive known |
+| Original unchecked; history has a candidate | Gray: local unconfirmed, archive known |
+| Candidate remains, but another recorded copy is abnormal | Green or blue by local presence + copy-problem marker |
+
+Lists retain at most one supplement: copy/latest-version problem, then unbacked changes, then unknown content. Inspector and tooltips retain all facts. Shape and accessible text accompany color. Directories reserve the same status-column width but do not invent recursive coverage.
+
+[Copy health](library.md#copy-health) records historical actual-read observations and time. It has no automatic expiry and does not control the primary color. An unloaded Tape is not damaged; successful archive writing is not a read-back check. A new matching-content read on the expected Media and successful Session finalization are required to replace a bad finding. File/FileVersion display states are derived projections, not persisted state machines; [Restore outcomes](jobs.md#restore-outcomes) remain separate.
 
 ## Identical Files
 
@@ -247,4 +338,4 @@ Selected members remain pinned while pages are replaced, including selection cha
 
 Opening the tool queries nothing: an explicit **Find** starts a global search and repeats it on demand, and a source or scope change clears results and selection. The Locations source has a searchable multi-select whose chips are the selected whole Locations. The retained result supplies bounded rows for arbitrary scroll positions; missing pages retry without discarding loaded pages. The hidden-file toggle switches between two positions computed by the same Find, keeping the previous projection visible until replacement rows and selected positions are ready. A transient read failure keeps that projection; a shorter result clamps the viewport to its new end. The list exposes only **Sort by size**, using the same control as ordinary lists. Groups start largest first; selecting it reverses and remembers the direction. Members stay in ascending path order. The retained indexes supply both directions without another Find. Sorting keeps the current rows visible until the replacement viewport, selected rows and collapsed/removed group positions are ready together. Delete, Keep and Merge wait while a sort remaps row positions; sorting also waits for active file operations. Date sorting, view switching, folders-first and Select all are unavailable on this sparse list. A result lost through expiration or restart asks for another Find rather than silently searching again. Version removal remains available through the shared Saved versions detail.
 
-Independent Remove requests may overlap, including different files in one Location. The action is labeled **Delete**, as in ordinary file lists; its confirmation explains that the selected files move to Trash. Identical Delete and Keep confirmations close after admission; per-file progress and failure remain in the list, allowing another file to be deleted while the first request is pending. A physically removed row disappears when its result arrives; a publication-pending row also disappears with an explicit Library warning. Failed and unprocessed rows retain diagnostics. Changed groups show their remaining file count but are not regrouped until Find; Keep and Merge are unavailable on them. A successful Merge removes its group; partial Keep updates the affected members, including members that were not loaded. Neither these actions nor Inspector or metadata updates automatically start a new Find. [Library](library.md#identical-file-tools) owns matching, merge, Trash and historical Job semantics.
+Independent Remove requests may overlap, including different files in one Location. The action is labeled **Delete**, as in ordinary file lists; its confirmation explains that the selected files move to Trash. Identical Delete and Keep confirmations close after admission; per-file progress and failure remain in the list, allowing another file to be deleted while the first request is pending. A physically removed row disappears when its result arrives; a publication-pending row also disappears with an explicit Library warning. Failed and unprocessed rows retain diagnostics. Changed groups show their remaining file count but are not regrouped until Find; Keep and Merge are unavailable on them. Merge confirmation states that the chosen File retains its original while the others move to Library Trash and lose original links without deleting their disk bytes. A successful Merge removes its group; partial Keep updates the affected members, including members that were not loaded. Neither these actions nor Inspector or metadata updates automatically start a new Find. [Library](library.md#identical-file-tools) owns matching, merge, Trash and historical Job semantics.

@@ -10,14 +10,14 @@ Obtain the versioned installer rather than reusing a script from the old install
 
 ```shell
 curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.2/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.2 --check
-sudo bash install-release.sh --version v1.0.0-alpha.2
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
+sudo bash install-release.sh --version v1.0.0-alpha.3 --check
+sudo bash install-release.sh --version v1.0.0-alpha.3
 ```
 
 The default channel remains stable; Alpha requires `--version`. See [installation](install.md#install-or-update) for prerequisites, custom installation/unit paths, and local candidate archives. `--check` downloads and verifies the candidate and reads installation metadata without stopping the service, quiescing Jobs, creating databases, or leaving an upgrade attempt in the installation.
 
-Automatic upgrade supports Linux amd64/systemd with SQLite and configuration, Job storage, scripts, helpers and captured indexes contained in the installation. External databases or storage require coordinated manual backup. The preflight reports passed checks, manual checks and blockers. Script existence is not evidence of Tape compatibility. Busy operations, unknown versions, missing migration instructions, invalid packages and unsupported layouts stop before service interruption. Originals, Restore output and archive Media are not software migration data; mixed layouts that cannot be classified must be resolved first.
+Automatic upgrade supports Linux amd64/systemd with SQLite and configuration, Job storage, scripts, helpers and captured indexes contained in the installation. The [offline migration procedure](offline-migration.md) has the same contained-layout requirement. External resources need coordinated backup and a layout-specific migration procedure before Prepare or Commit; this guide does not provide that procedure. The preflight reports passed checks, manual checks and blockers. Script existence is not evidence of Tape compatibility. Busy operations, unknown versions, missing migration instructions, invalid packages and unsupported layouts stop before service interruption. Originals, Restore output and archive Media are not software migration data; mixed layouts that cannot be classified must be resolved first.
 
 The actual upgrade shows its retained report directory before the first confirmation. Review the current/target versions, findings, backup scope, configuration diff and Settings summary. Cancel or EOF at that prompt leaves the service unchanged. A second confirmation approves a legacy database migration report after the service has stopped and its complete backup exists.
 
@@ -29,12 +29,10 @@ Creating empty Settings tables during migration preserves the approved configura
 - Each historical Job becomes a bundle containing its manifest, execution metadata and archived log. A submitted Archive item requires an unambiguous recorded physical copy; pending Restore selections require valid candidates. Legacy Restore output roots retain their original working-directory-relative meaning and are frozen for later execution.
 - Migration writes the current Catalog and Job bundle revision 1 directly, including the current Position parent index and signed nanosecond timestamps. Legacy instants retain their precision, lower digits are zero-filled, and out-of-range dates fail conversion instead of wrapping. Existing pre-stable v1 data is not upgraded in place; the [timestamp contract](../architecture/persistence.md#timestamps) defines current encoding and unknown values.
 - Captured legacy LTFS indexes supply validated order/extents for exact path/size matches. Missing or mismatched inventory is reported. Physical storage profiles retain their own `ltfs_v0`/`ltfs_v1` identities.
-- The reviewed conversion moves legacy `paths.source` and `paths.target` to Locations and removes them from YAML; the old target becomes a preferred Restore destination. Existing registrations and user removals take precedence. This registration does not scan contents or move Library organization. [Location configuration](install.md#location-configuration-and-migration) owns authorization and subsequent editing.
+- The reviewed conversion moves legacy `paths.source` and `paths.target` to Locations and removes them from YAML; the old target becomes a preferred Restore destination. Existing registrations and user removals take precedence. This registration does not scan contents or move Library organization. [Location configuration](locations.md) owns authorization and subsequent editing.
 - Preview generator preferences move to Settings when absent; saved preferences take precedence. Deployment paths, scripts, helpers, permissions, service working directory and unrelated configuration remain in place. Release-owned programs, frontend, documentation, licenses, Skill and templates are replaced completely. Default script templates are deployed only for a fresh installation.
 
 ## Tape Script Adaptation
-
-Scripts are the environment adaptation boundary: they own LTFS executable paths, device mapping, vendor options and local helper logic. Preserve that customization. Installation checks never run Tape scripts, mount a cartridge, format Media or establish physical Tape readiness.
 
 **Action required before the first Tape Job:** v1 requires a completed captured Index at
 `TAPE_DIR/<barcode>.schema`. A legacy script that writes elsewhere or captures no Index is
@@ -42,50 +40,17 @@ incompatible until adapted. Keep the old capture directory through migration, th
 mount output and ensure unmount waits for final Index output and device release as described below.
 The installer displays this notice before upgrade and preserves active scripts for manual adaptation.
 
-Device-information scripts write JSON containing `barcode` to `OUT`. The service accepts the
-historical full cartridge label (for example `ABC001L5`), takes its first six characters and normalizes
-the identity to uppercase. Explicit user-supplied Tape identities remain six-character values.
-Successful `{"barcode":""}` output means the electronic barcode is unassigned: FORMAT uses the
-explicit user-supplied barcode and writes it through the formatting script. APPEND and Restore
-require an existing device identity. An unreadable field or failed probe exits nonzero rather than
-reporting an unassigned barcode. FORMAT still erases existing content regardless of barcode state.
-Check this distinction in customized probes: historical shell pipelines can hide a failed helper
-and return an empty barcode with exit status zero. Preserve local device/helper choices while
-propagating failures; the [bundled probe](../../scripts/readinfo) shows an explicit field check.
-Scripts run from the service working directory. Migration resolves literal relative capture options
-from that same directory, independently of `paths.work`; offline backup validation maps this path
-into the preserved installation.
-
 Complete data migration **before changing the legacy mount script's captured-index output directory**. Prepare reads the old script/configuration to locate existing index evidence. Keep that directory and its contents if any retained script still uses it. After migration, adapt scripts manually and validate them before the first Tape Job.
 
-| Input | Meaning |
-| --- | --- |
-| `DEVICE` | Configured Tape device; helpers may resolve its SCSI generic mapping. |
-| `KEY_FILE` | Encryption key file supplied to the encryption script. |
-| `MOUNT_POINT` | Mount destination for the current operation. |
-| `TAPE_BARCODE`, `TAPE_NAME` | Cartridge identity/name passed to formatting and encryption scripts. |
-| `TAPE_DIR` | Per-Job, per-cartridge artifact directory once identity is known; write captured indexes and LTFS diagnostics here. |
-| `OUT` | Output filename for the device-information script's JSON result. |
+Update the mount output destination while retaining vendor-specific commands: replace the fixed
+`-o work_directory=/opt/yatm/captured_indices` with `-o work_directory="${TAPE_DIR}"` and use the
+index capture arguments for the installed LTFS distribution from the
+[mount template table](tape-scripts.md#mount-and-unmount).
 
-The mount script must make the current cartridge's captured Index available as `TAPE_DIR/<barcode>.schema`, where `<barcode>` is the mounted cartridge identity. Mount/unmount receive `TAPE_DIR`, not the formatting script's barcode/name inputs. The final Index must describe the completed write before YATM publishes it. Retain vendor-specific commands while updating their output destination; for an LTFS implementation supporting the bundled options, the relevant change is:
+The installer preserves customized active scripts; apply the relevant [bundled template](../../scripts/mount)
+changes manually. [Tape scripts](tape-scripts.md) owns the complete input, output, mount and unmount contract.
 
-```diff
-- -o work_directory=/opt/yatm/captured_indices -o capture_index
-+ -o work_directory="${TAPE_DIR}" -o capture_index
-```
-
-Create `TAPE_DIR`, then resolve it to an absolute path before passing LTFS its directory options, so background execution does not reinterpret a relative `paths.work`:
-
-```shell
-mkdir -p -- "${TAPE_DIR}"
-TAPE_DIR=$(cd -- "${TAPE_DIR}" && pwd -P)
-```
-
-The [bundled mount template](../../scripts/mount) illustrates this contract; its flags are not universal across LTFS distributions. The installer preserves customized active scripts; apply the relevant template changes manually.
-
-Unmount must return only after final Index output is complete, the mount has ended, and the Tape device has been released. A successful `umount` invocation alone may precede background LTFS cleanup. An ejecting setup must also wait for its configured eject completion condition. The [bundled unmount template](../../scripts/umount) shows one bounded wait implementation; retain the equivalent behavior appropriate to the local environment. Nonzero exit or timeout reports failure rather than claiming successful publication.
-
-Service startup acceptance and Tape acceptance are separate outcomes. A successful installer does not certify customized scripts or physical hardware. Use the [physical Tape procedure](physical-tape-e2e.md) only with explicitly assigned scratch Media.
+Service startup acceptance and Tape acceptance are separate outcomes. A successful installer does not certify customized scripts or physical hardware.
 
 ## Backup Layout and Upgrade Phases
 
@@ -131,42 +96,9 @@ The installer has no durable phase-resume protocol. A previously unfinished `.ya
 
 ## Configuration Review
 
-`yatm-migrate -phase config-plan -plan-file <private-file>` generates a review without changing the installation. It contains a unified YAML diff, proposed Location imports, preserved Settings and resolved Preview preferences. The installer displays these before consent. `config-check` rechecks the exact file, all three Settings groups and relevant Locations after stop; any presence or value change invalidates the review. `config-apply -service-stopped --confirm` publishes the reviewed preferences and rewrites YAML after the backup and required legacy migration.
+`yatm-migrate -phase config-plan -plan-file <private-file>` generates a review without changing the installation. It contains a unified YAML diff, proposed Location imports, preserved Settings and resolved Preview preferences. The installer displays these before consent. `config-check -service-stopped -plan-file <private-file>` rechecks the exact file, all three Settings groups and relevant Locations after stop; any presence or value change invalidates the review. `config-apply -service-stopped -plan-file <private-file> --confirm` publishes the reviewed preferences and rewrites YAML after the backup and required legacy migration. All phases use the same `-config` and service working directory.
 
 Missing or null `paths.access` is replaced with explicit roots equivalent to the legacy source/target authorization. Explicit access rules, including `[]`, are unchanged. Relative paths retain their original service-working-directory meaning. Equal source/target roots share one registration. Successful conversion removes the legacy YAML fields; subsequent startup does not import them or recreate deleted registrations. No persistent import checkpoint is stored. Each saved Settings group is detected independently; a saved Preview group wins, while an absent Preview group receives the resolved legacy generator preferences. Location identity/name/Ignore/restore preference, unrelated YAML fields/comments and file permissions are retained. Unsupported ambiguous YAML blocks conversion before stop. An already converted configuration has no legacy fields to import; new installations use current configuration and default Settings.
-
-## Offline Migration and Repair
-
-The offline sequence below supports a contained SQLite installation, with the same backup-root mapping as the installer. Stop the service and take a verified complete backup first. External databases/work roots need coordinated backup. Run the verified candidate's `yatm-migrate` from the original working directory, with its original configuration and captured indexes intact. Verify the archive checksum, then extract it with GNU tar (`--acls --xattrs --xattrs-include='*' --numeric-owner`) into a private temporary directory under `.backup/`. Use that directory as `yatm_backup_dir`; the immutable archive itself is not a `-backup-root` directory. Replace the placeholders below with the candidate, report and extracted-backup directories:
-
-```shell
-cd /opt/yatm
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase preflight -service-stopped
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase prepare \
-  -report-file "$yatm_reports_dir/migration.json"
-# Review the report and historical manifests before continuing.
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase commit --confirm
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase cleanup \
-  -install-root /opt/yatm -backup-root "$yatm_backup_dir" --confirm
-```
-
-The installer runs Cleanup once after Commit. Cleanup owns the complete validation before deleting obsolete artifacts. To inspect a committed migration and obtain a validation report separately, use the standalone phase:
-
-```shell
-"$yatm_release_dir/yatm-migrate" -config ./config.yaml -phase validate \
-  -install-root /opt/yatm -backup-root "$yatm_backup_dir"
-```
-
-On a failed or declined Prepare, use `-phase abort --confirm`; restart the legacy service only after Abort succeeds. Keep the report. Complete Cleanup before resuming business activity: later Library edits or Job progress can legitimately differ from the migration baseline. Apply the previously reviewed configuration only after Cleanup succeeds. Cleanup is repeatable and removes only verified obsolete active artifacts, not the archive. [Migration implementation](../../internal/migrate/legacy/migrate.go) owns conversion and validation details.
-
-Historical Job repair reads evidence from the explicitly selected backup, not legacy tables retained indefinitely in the active Catalog:
-
-```shell
-./yatm-migrate -config ./config.yaml -phase repair-job -job-id 123 \
-  -install-root /opt/yatm -backup-root "$yatm_backup_dir" --confirm
-```
-
-Stop the service and inspect the selected Job before repair. A previously frozen Restore root takes precedence over later configuration edits. A replaced Job bundle is retained beside the extracted backup under `jobs-before-repair/<id>`. Move this repair evidence to the retained attempt directory before removing extraction scratch, and verify all repaired items before resuming the Job. The original archive remains unchanged.
 
 ## Failure and Complete-Backup Recovery
 

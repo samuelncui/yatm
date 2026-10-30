@@ -28,7 +28,20 @@ Signature remains opaque bytes in VARBINARY(256), with empty values normalized t
 
 [Position](../../internal/library/position.go) stores Media ID, actual path, derived parent_path, directory flag, signature/hash/size, physical mode/times, storage order and typed storage metadata. It has no File or FileVersion owner column. Media/path remains unique; indexed parents support direct-child browsing. Derived directory Positions are not ownership or deletion units.
 
-Verified Archive publication writes Positions and creates/reuses the selected File's version in the same metadata transaction. [Volume Scan publication](../../internal/library/scan.go) reconciles physical inventory without creating logical File identities. Explicit [inventory admission](../../internal/library/catalog.go) creates independent Files under Unforged using known copy facts, with unknown archive times; discovering content is not a new archive event. Only new logical names receive collision suffixes.
+Verified Archive publication writes Positions and creates/reuses the selected File's version in the same metadata transaction. [Media Scan publication](../../internal/library/scan.go) reconciles physical inventory without creating logical File identities. Explicit [inventory admission](../../internal/library/catalog.go) creates independent Files under Unforged using known copy facts, with unknown archive times; discovering content is not a new archive event. Only new logical names receive collision suffixes.
+
+Tar Tape profiles retain the initialization UUID and immutable fixed/variable record policy. Each
+regular Position, including an empty member, retains a tar locator and the 16-byte big-endian
+`(tape_file, header_offset_bytes)` order key. Its path is
+`archives/<16-digit lowercase hexadecimal tape_file>/<archive target path>`; label file zero is
+excluded. Library publication and import validate format/profile/locator agreement, namespace,
+512-byte alignment and paired optional physical anchors in partition zero. The physical header
+offset cannot exceed the tar header offset or the declared record bound, and the exclusive end
+must follow the header. Derived directory Positions have no
+member locator. JSONL backups preserve these existing profile/storage BLOB payloads; import
+allows Position records before their Media records and validates their joined storage facts in bounded
+pages after all records arrive, before committing replacement. Inconsistent combinations roll back. [Media/I/O](media-io.md) owns the physical
+record and member-completion rules.
 
 Exact signature lookup pages matching Positions and independently organized duplicate Files. One Position can serve several Files' versions. Coverage does not imply present readability or a fresh integrity check.
 
@@ -38,7 +51,7 @@ The version keeps this original's mode/mtime and content facts, not another File
 
 ## Registered Originals
 
-[Location](../../internal/library/location.go) stores name, Executor/canonical root, preferred Restore destination flag, one JSON configuration for Ignore text and mmap content reads, revision and nanosecond observation/configuration times. Values queried separately, including Restore preference, remain columns. Mmap defaults off. Every Location supports live originals; preference is not write authorization. A Location's entries have exactly one shape per layer: the recorded association is one [FileLocation](../../internal/library/file_location.go), a listed entry is one [entity.LocationEntry](../../entity/location.proto), and what a read observed is one [library.ObservedEntry](../../internal/library/observed_entry.go) - the manifest a Scan publishes and the before/after facts of its result, never a stored entity. Readers return the association itself and read retained evidence separately. Duplicate roots on an Executor conflict. Registration is immediately browsable and usable, including after an import. Name changes do not reorganize Files. [Configuration migration and access](../operations/install.md#location-configuration-and-migration) own administrator boundaries and explicit installer conversion.
+[Location](../../internal/library/location.go) stores name, Executor/canonical root, preferred Restore destination flag, one JSON configuration for Ignore text and mmap content reads, revision and nanosecond observation/configuration times. Values queried separately, including Restore preference, remain columns. Mmap defaults off. Every Location supports live originals; preference is not write authorization. A Location's entries have exactly one shape per layer: the recorded association is one [FileLocation](../../internal/library/file_location.go), a listed entry is one [entity.LocationEntry](../../entity/location.proto), and what a read observed is one [library.ObservedEntry](../../internal/library/observed_entry.go) - the manifest a Scan publishes and the before/after facts of its result, never a stored entity. Readers return the association itself and read retained evidence separately. Duplicate roots on an Executor conflict. Registration is immediately browsable and usable, including after an import. Name changes do not reorganize Files. [The upgrade guide](../operations/migration.md#what-changes) owns explicit installer conversion.
 
 GORM hooks advance revisions for configuration, attempts and association publication. Search continuations bind directory facts and query; complete directory List has no cursor. Accessibility is a separate timed runtime observation.
 
@@ -62,11 +75,11 @@ Each FileLocation records the relative path and observed facts of its original. 
 
 Scan creation normalizes Location selections to `ALL` regardless of the requested Library visibility scope. An empty Location path therefore covers the whole Location under its existing Ignore and access rules. Library selections retain their visibility scope and never establish whole-Location coverage.
 
-[Admission](../../internal/executor/location_admission.go) shares path → available valid signature → native identity matching across explicit and automatic collection. Rounds finish within the observed batch before unmatched entries become independent Files under Unforged/location-name. Existing paths win; later evidence cannot steal a still-present or unavailable original. [Scan](jobs.md#scan) matches bounded Job entries and publishes complete selected Location ranges through metadata transactions. Failed or unobserved ranges never imply disappearance. Content changes preserve organization and invalidate stale content facts; versions follow the archive-evidence rule above.
+[Admission](../../internal/executor/location_admission.go) shares path → available valid signature → native identity matching across explicit and automatic collection. Rounds finish within the observed batch before unmatched entries become independent Files under Unforged/location-name. Existing paths win; later evidence cannot steal a still-present or unavailable original. Admission and selection share one optional ACP-cache applicability rule: cached size/mtime must match their already-observed facts; cache errors supply no evidence and trigger no content read. [Scan](jobs.md#scan) matches bounded Job entries and publishes complete selected Location ranges through metadata transactions. Failed or unobserved ranges never imply disappearance. Content changes preserve organization and invalidate stale content facts; versions follow the archive-evidence rule above.
 
 [Private tracking keys](../../internal/library/file_tracking.go) use primary (file_id, kind) and nonunique (kind, scope, key_value), with typed validation details, observation time and Location provenance. Candidates require trustworthy same-Executor evidence. Scoped native identities are evidence, not File IDs. An available native identity records the Executor and device in its scope and the inode in its key value, without writing a marker into the file. Birth time and generation constrain matching only when their recorded values are nonzero: Darwin records both platform values, while Linux records neither. Available signature or native evidence can preserve continuity under the matching order above. Matching does not prove that a move or copy occurred or provide a platform-independent guarantee against inode reuse. Positively missing originals may retain keys; rebindings, import, explicit deletion and unregistration invalidate untrusted evidence. A root or Ignore change keeps it: evidence confirms a later observation only when that observation agrees with it, so evidence recorded under an older configuration leaves a File unconfirmed rather than claimed, and dropping it would silently unconfirm every File of the Location. Tracking never opens the observed file or reads/writes xattrs. Retired tracking UUID markers are left untouched. Catalogs containing obsolete UUID evidence are rejected before writes; importing such JSONL evidence rolls back the entire import.
 
-Whether a File is backed up is not decided by tracking evidence: archive coverage is the recorded content signature matching published Positions, read from the catalog alone. Tracking evidence decides whether the content currently on disk is the recorded one. A listing reports what it observed - including `Local file present` for an original whose facts it read - and states `Current content not checked` where the evidence was not confirmed, rather than implying coverage; operations that act on bytes confirm identity themselves. Explicit manual relocation replaces only the original association, refusing a path owned by another File; it preserves organization and cannot move physical bytes.
+Whether a File has an archived copy is not decided by tracking evidence: archive coverage is the recorded content signature matching published Positions, read from the catalog alone. Tracking evidence decides whether the content currently on disk is the recorded one. A listing reports what it observed - including `Local file present` for an original whose facts it read - and states `Current content not checked` where the evidence was not confirmed, rather than implying coverage; operations that act on bytes confirm identity themselves. Explicit manual relocation replaces only the original association, refusing a path owned by another File; it preserves organization and cannot move physical bytes.
 
 Location operations use the [supported single-operator model](overview.md#supported-operating-model): the operator does not issue conflicting mutations or replace selected files while an operation uses them. Requests therefore do not add filesystem locks, repeated observations or publication-time filesystem checks to manufacture multi-user semantics. Metadata transactions still keep one requested catalog mutation atomic. Catalog import is performed with no active Job, and a later revision may require stopping the service first. [Live access](../../internal/executor/location_live.go) owns administrator/path validation; [file operation publication](../../internal/library/file_operation.go) updates original paths after moves and removes bindings after deletion, never logically reorganizing existing Files or transferring annotations to copies.
 
@@ -112,40 +125,6 @@ and member observation. They are separate from the flat `has:duplicates` search 
 [File content summaries](../../internal/library/file_content.go) batch-query associations, current/history copy counts and latest-version availability without filesystem or Media reads. [Original observation](../../internal/executor/file_observation.go) supplements visible entries with an explicit check time and present, missing, unlinked, unavailable or unchecked status. It checks paths and facts, not hashes. Unknown or changed originals lose current-coverage validity; history remains independently queryable. Physical Positions are counted once across a File's versions, and restore-candidate counts use the same content-baseline and known-bad-copy rules as Restore.
 
 Observed disappearance within a completely validated Location selection, explicit physical deletion or unregistration can remove recorded originals, never Files, versions, archive bytes or Preview. Mere failed access cannot remove associations. Media deletion removes inventory metadata only. Trash remains logical organization.
-
-### File and Version Display States
-
-The primary color combines current local presence with known default Restore candidates. It does not measure health or archive recency.
-
-| Local original | Known selectable archive copy | Color | Short meaning |
-| --- | --- | --- | --- |
-| Present | Yes | Green | Local and archived |
-| Present | No | Yellow | Local only |
-| Missing or unlinked | Yes | Blue | Archive only |
-| Missing or unlinked | No | Red | No available content source |
-| Either axis unknown | Any | Gray | Identify the unconfirmed axis |
-
-Present requires a current observation; FileLocation existence alone is insufficient. Missing means the associated path was observed absent. Unlinked means no association, not proof that matching bytes do not exist elsewhere. Inaccessible and unobservable originals remain unknown. With unknown current content and no selectable historical copy, archive coverage is unknown rather than definitely absent. A saved version without a selectable Position does not count as an archived copy. Unchecked copies can be candidates; known damaged, missing or unreadable copies are excluded by default. Candidate existence never promises immediate Media accessibility.
-
-| Additional scenario | Primary color and supplement |
-| --- | --- |
-| Present; current content has a candidate | Green |
-| Present; current content uncovered but history has a candidate | Green + unbacked-change marker |
-| Present; current content unknown but history has a candidate | Green + unknown-content marker |
-| Present; current content unknown and no historical candidate | Gray: archive unconfirmed |
-| Missing/unlinked; latest saved version has a candidate | Blue; distinguish missing from unlinked in the tooltip |
-| Missing/unlinked; only an older version has a candidate | Blue + latest-version-unavailable warning |
-| Missing/unlinked; every saved version lacks candidates | Red |
-| Present; known saved copies are all unusable | Yellow + copy-problem marker when current coverage is known; gray when it remains unknown |
-| Original inaccessible; history has a candidate | Gray: local inaccessible, archive known |
-| Original unchecked; history has a candidate | Gray: local unconfirmed, archive known |
-| Candidate remains, but another recorded copy is abnormal | Green or blue by local presence + copy-problem marker |
-
-Lists retain at most one supplement: copy/latest-version problem, then unbacked changes, then unknown content. Inspector and tooltips retain all facts. Shape and accessible text accompany color. Directories reserve the same status-column width but do not invent recursive coverage.
-
-[Copy health](media-io.md#copy-health) records historical actual-read observations and time. It has no automatic expiry and does not control the primary color. An unloaded Tape is not damaged; successful archive writing is not a read-back check. A new matching-content read on the expected Media and successful Session finalization are required to replace a bad finding. File/FileVersion display states are derived projections, not persisted state machines; [Restore outcomes](jobs.md#restore-outcomes) remain separate.
-
-Explicit [Trim](../../internal/library/library.go) removes dangling inventory and, when requested, regular Files having neither an original nor saved history. References are rechecked inside the deletion transaction. Unavailable indexed originals still protect Files. Version history is deliberately retained even after its last Position disappears; signature equality never establishes a physical-delete cascade.
 
 ## Shared Organization Interface
 
@@ -200,9 +179,13 @@ attributes for the retained old path. Another explicit Find supplies the current
 
 Frozen Restore manifests retain their selected IDs and content facts. Publication accepts that immutable version snapshot after catalog removal or reassignment and creates an independent restored File when reconnecting the source is no longer valid. Restore outcomes stay in the Job bundle; the Library stores the resulting organization and associations.
 
+## Trim
+
+Explicit [Trim](../../internal/library/library.go) removes dangling inventory and, when requested, regular Files having neither an original nor saved history. References are rechecked inside the deletion transaction. Unavailable indexed originals still protect Files. Version history is deliberately retained even after its last Position disappears; signature equality never establishes a physical-delete cascade.
+
 ## Backup and Legacy Compatibility
 
-[Library metadata backups](../../internal/library/jsonl.go) export Files/versions, Media/Positions, Locations/originals and tracking evidence using the [version 1 JSONL format](persistence.md#published-data-formats). Each Location record includes its complete JSON configuration. The header declares only its format, version and included Library entities. Settings and operation receipts are outside this boundary, and import always preserves the target installation's Settings. Location data requires its complete File/Location/FileLocation group. Imports validate live relationships and roll back replacement on invalid input, including cross-batch conflicts. Media-only replacements preserve the immutable identity, kind and profile of retained Position owners; reused numeric IDs cannot redirect archived copies. This also applies to legacy Tape-only imports.
+[Library metadata backups](../../internal/library/jsonl.go) export Files/versions, Media/Positions, Locations/originals and tracking evidence using the [version 1 JSONL format](persistence.md#published-data-formats). Each Location record includes its complete JSON configuration. Tape Media records include their saved encryption keys, so a backup must be protected like those keys. The header declares only its format, version and included Library entities. Settings and operation receipts are outside this boundary, and import always preserves the target installation's Settings. Location data requires its complete File/Location/FileLocation group. Imports validate live relationships and roll back replacement on invalid input, including cross-batch conflicts. Media-only replacements preserve the immutable identity, kind and profile of retained Position owners; reused numeric IDs cannot redirect archived copies. This also applies to legacy Tape-only imports.
 
 Import rebuilds derived Position directories, so their IDs may change, and issues fresh Location revisions. Physical Position IDs come from the imported records. Compare derived directories by Media and path and exclude Location revisions when verifying a metadata roundtrip. Location configuration, including empty or whitespace-only Ignore text, is preserved; default rules apply only to new registrations.
 
@@ -219,4 +202,20 @@ stand in for admitted content, and repeated admission reuses an already resolved
 
 [Legacy whole-object import](../../internal/library/json_legacy.go) uses bounded temporary staging. [Offline legacy migration](../operations/migration.md) preserves IDs/organization and copies signatures without rehashing, deriving versions only from observed archive evidence. Isolated File content facts do not create invented history.
 
-Legacy whole-object JSON and the version 1 metadata format have explicit readers. Draft JSONL versions and unsupported schemas are rejected before replacement; data is retained for inspection. The [persistence contract](persistence.md#published-data-formats) owns artifact identities and version handling.
+Legacy whole-object JSON and the version 1 metadata format have explicit readers. Unpublished pre-stable JSONL versions and unsupported schemas are rejected before replacement; data is retained for inspection. The [persistence contract](persistence.md#published-data-formats) owns artifact identities and version handling.
+
+## Copy Health
+
+Position stores the latest health observation, check time and local checking Job ID. Detailed findings belong to Verify or Restore. Verification reads against the Job's frozen expected content, and [publication](../../internal/library/position_health.go) records the completed check after successful Session Finalize on the Media validated before access.
+
+| Health | Evidence | Restore and subsequent changes |
+| --- | --- | --- |
+| Unknown | No usable completed verification baseline | Candidate by default, but actual transfer must verify; never counted as healthy |
+| Healthy | Actual hash/size matched and Session finalized successfully | Candidate; a newer complete check can supersede the observation |
+| Damaged | Complete read mismatched frozen expected content | Excluded by default; explicit salvage may retain complete mismatched output |
+| Missing | A specific recorded path was absent during valid Media access | Not a candidate; expected content and version history remain |
+| Unreadable | A specific path could not be read | Excluded by default; explicit salvage permits another read attempt |
+
+Successful Archive writing does not manufacture a readback check or check timestamp. Inventory publication preserves health only for unchanged content and never accepts damaged bytes as a replacement baseline. Only actual successful reads on the expected Media after successful finalization can clear bad observations. Checks have no automatic expiry and do not claim continuous health. Whole-Media unavailability and canceled/unattempted entries do not mark individual copies bad. Export/import preserves historical observations tied to the same expected content; installation-specific Job links do not survive import.
+
+Media access (unchecked/reachable/unavailable), lease state (free/owned/uncertain), and Position health are independent. Inspection observes Media identity/capacity, not bytes. Preparation acquires a lease; the attempt releases it after physical finalization and settlement. Uncertain device cleanup preserves the existing lifetime-level unavailable guard; it is not a Position corruption finding. No health transition deletes physical bytes or saved history.

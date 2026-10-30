@@ -1,25 +1,15 @@
-# Command-line interface
-
-Status: Current v1 development architecture.
+# Command-Line Reference
 
 The `yatm-cli` executable is the scripted and agent-facing surface. It calls the same
-[gRPC and HTTP API](api.md) the browser does, so a CLI request carries no separate
-server semantics; [Interface contracts](contracts.md) owns the rules shared with those
+[gRPC and HTTP API](../architecture/api.md) the browser does, so a CLI request carries no separate
+server semantics; [Interface contracts](../architecture/contracts.md) owns the rules shared with those
 surfaces.
 
-## Shape
-
-[Command registration](../../cmd/yatm-cli/main.go) attaches one command to each public
-service method, so every operation has a CLI spelling. [CLI coverage
-tests](../../cmd/yatm-cli/coverage_test.go) hold the two together by resolving every
-public RPC to one real parser leaf and rejecting a binding whose RPC no longer exists, so
-a new public method without its command fails that check instead of leaving the surface
-unreachable. The [development guide](../operations/testing.md) owns the commands that run
-it.
+## Agents and Connection
 
 The [bundled Skill](../../.agents/skills/yatm/SKILL.md) routes agent work to command domains
 and defines operating rules. It ships inside the release package beside the
-[operations guides](../operations/library.md) that own the workflows. Agents read the
+[operations guides](library.md) that own the workflows. Agents read the
 matching installed `--help` down to the selected command for its inventory, arguments and
 flags, and interpret its JSON output as the operational source of truth. The Skill's
 domain table does not duplicate the installed command inventory; this document owns the
@@ -53,19 +43,16 @@ command; full archived content is obtained through Restore. The CLI has no comma
 operation the API does not expose.
 
 Instant fields in JSON use decimal strings and names ending in `_ns`, following the
-[shared time contract](contracts.md#time-values). Preserve them as signed 64-bit integers when
+[shared time contract](../architecture/contracts.md#time-values). Preserve them as signed 64-bit integers when
 processing output. Restore `--before` accepts a timestamp with its stated timezone and retains
 its nanosecond precision; dates outside the supported range are usage errors.
 
 `job wait` succeeds for a durable `COMPLETED` Job whose phase is `COMPLETED` or
 `UNSPECIFIED`, including after a service restart. It keeps waiting while an attached runner
 reports `QUEUED` for an admitted attempt waiting for shared Media resources, or a finalizing
-phase. `FAILED` is terminal: no Job kind supports Job-level retry. An idle `READY` Job
-reports `UNSPECIFIED` and requires an explicit Media choice. Only an Archive or Restore
-Media operation failure or operator cancellation, including while `QUEUED`, returns
-the Job to pre-Media `READY`, retaining its prepared manifest and error or cancel reason
-for another explicit Media operation. Initial preparation and Scan failure or cancellation
-remain terminal. Waiting returns nonzero with `action_required` for `FAILED` or idle
+phase. An idle `READY` Job reports `UNSPECIFIED` and requires an explicit Media choice; the
+[Job lifecycle](../architecture/jobs.md#shared-lifecycle) defines which failures return a Job to
+`READY` and which are terminal. Waiting returns nonzero with `action_required` for `FAILED` or idle
 `READY`, including the persisted error when present.
 
 `archive creation ID`, `restore creation ID` and `scan creation ID` call their kind's
@@ -87,7 +74,7 @@ rows; group and member CLI pages default to 20. `identical rows` and `identical 
 accept the same `--sort-key file-id|name|size` and `--order asc|desc`. The default
 is File ID ascending; name starts ascending and size starts descending when selected.
 Row pages and position lookups use the same requested order under the
-[Library sorting contract](library.md#identical-file-tools). These reads never scan or hash physical files.
+[Library sorting contract](../architecture/library.md#identical-file-tools). These reads never scan or hash physical files.
 
 `job log` reads a raw bounded byte page and returns JSON with text in `logs`
 and the next byte offset as a decimal string in `offset`. Follow that returned offset, not
@@ -102,6 +89,27 @@ An empty filtered page can still advance its cursor, so use the returned `has_ol
 `has_newer` flags to continue.
 Continuation fragments can appear as context when their line start lies outside the
 bounded read, even if that fragment does not establish a filter match.
+
+`library export` retains streamed delivery. Reported HTTP or transport failures return nonzero;
+named-file output is published only after the response is received and the file is closed. The CLI
+does not validate the JSONL end record. In particular, close-delimited HTTP/1.0 can make an
+interrupted download appear complete; import still rejects the missing end record. Stdout may
+contain a partial stream on failure, so its exit status must be checked.
+
+The separate [standalone export tool](../../cmd/export-library/main.go) opens the configured local
+Catalog and delegates to the same Library snapshot writer. Its default selection is
+`file,media,position`; related version groups follow Library selection rules. This selected export
+omits Location/original groups and Settings, so it is not a complete installation backup.
+Unknown or empty comma-separated type names fail before opening configuration, Catalog or output.
+Named regular-file output is staged in the same directory and replaces the resolved target only
+after export, resource cleanup, file synchronization and close succeed; failures retain the previous
+backup and remove the owned staging file. Existing permission bits and final symlink targets are
+preserved; replacement creates a new inode, so other hard links retain the old file. New files keep
+the normal creation mode and process umask. Stdout and explicitly named device/pipe outputs remain
+streaming and can contain partial data on failure. Interrupt and termination signals cancel the
+operation cooperatively. Signal interception is released after the first cancellation, so a later
+signal can terminate an operation blocked in an OS call. Cooperative cancellation runs normal
+cleanup; forced termination cannot guarantee it.
 
 ## Directory paths
 
@@ -147,29 +155,43 @@ drains the remaining rows, then returns the existing failure exit code with `cod
 directory or transport failures retain their own errors. Supported filenames are legal UTF-8,
 including literal backslashes, whitespace and control characters. Non-UTF-8 names are escaped for
 display only and are not usable path operands. Quote shell operands so the shell preserves their bytes.
-The [Library guide](../operations/library.md#browse-from-the-cli) shows usage.
+The [Library guide](library.md#browse-from-the-cli) shows usage.
 
 ## Reports and mutations
 
-The [shared rule](contracts.md#synchronous-operation-reports) owns which commands report
+The [shared rule](../architecture/contracts.md#synchronous-operation-reports) owns which commands report
 under `--dryrun`, what a report contains and which operations are excluded. This surface
 adds only where the CLI differs: `archive write tape format` keeps `--confirm-format`,
 because confirming the Tape barcode authorizes a write to a device rather than a dry-run decision,
 and a report needs no follow-up command — the
 same command without `--dryrun` performs the resolved work.
 
-Tape FORMAT first inspects the device and Library registration. A successful inspection with
-an empty electronic barcode accepts the user-supplied `--barcode`, normalized to six uppercase
-alphanumeric characters; a nonempty inspected barcode must match it. `--confirm-format` must
-exactly match that resolved barcode. Probe errors and registered Media stop before the write.
-APPEND retains its requirement for a matching inspected identity and compatible registered Media.
+## Tape Commands
 
-## Skill
+- `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the user-owned
+  Device settings without device access. Server-owned `learned_read_parameters` are preserved and
+  incoming values for them are ignored. [Device settings](devices.md#save-device-settings) and
+  [Auto read order](read-order.md) explain the fields and give JSON examples.
+- `archive write tape format` resolves the selected device's defaults at this Media operation.
+  `--format ltfs_v1|tar_pax_v1`, `--record-mode`, `--record-bytes` and
+  `--hardware-compression true|false` override them as [Tar write options](devices.md#tar-write-options)
+  describe; LTFS rejects tar options. `--barcode` is normalized to six uppercase letters or digits
+  and requires an exact `--confirm-format`. Registered Media and identity conflicts stop before
+  writing, and FORMAT erases the cartridge even when its cartridge memory barcode is empty.
+- `archive write tape append` uses the registered profile and rejects conflicting explicit options.
+- `restore run tape`, Tape `verify run` and `scan run` take `--device`, an optional `--media-id` hint
+  and `--refresh-position-map` (default false). Without a hint, the server identifies the Tape by its
+  cartridge memory barcode; a hint never bypasses physical verification.
+  [Load Tape for Restore or Scan](devices.md#load-tape-for-restore-or-scan) describes both options.
+- No command sets encryption: the configured `encrypt` script owns it, and Media output carries
+  `encryption_key_saved`, never the key. The Device's read order applies to each read attempt, and
+  the Job log records the requested and effective order with any fallback reason.
 
-The CLI surface and its bundled [Skill](../../.agents/skills/yatm/SKILL.md) change
-together: a command, flag, output or safety rule it describes must update the Skill in the
-same commit. The Skill supplies operational guidance alongside the matching installed
-CLI help and JSON output. Installed copies refresh through the
-[optional Skill step](../operations/install.md#optional-agent-skill).
+## Tape Device Diagnostics
 
-The standalone Library exporter defaults to `file,media,position`, rejects unknown types, and replaces a named output only after a complete successful export. Stdout remains streaming. HTTP Library exports abort failed partial responses; clients must validate the JSONL end record when transport framing cannot identify truncation.
+`tape device list` prints every configured Tape entry with its busy status and detail; listing
+sends no SCSI commands. `tape device inspect --device DEVICE` explicitly requests passive diagnostics
+as protobuf JSON. Absent facts stay absent, and inspection never loads, positions or modifies the
+cartridge. `media inspect tape` is the separate cartridge identification operation; it uses the
+configured LTFS adapter and can load the cartridge. [Inspect a Device](devices.md#inspect-a-device)
+explains the reported fields.

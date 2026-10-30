@@ -1,32 +1,37 @@
 # Installation and Service Configuration
 
-This guide describes the current installer. The examples select `v1.0.0-alpha.2.1`; the same installer accepts an explicitly supplied, checksum-verified local candidate. Existing installations follow the [migration guide](migration.md).
+This guide describes the current installer. The examples select `v1.0.0-alpha.3`; the same installer accepts an explicitly supplied, checksum-verified local candidate. Existing installations follow the [migration guide](migration.md).
 
 ## Requirements
 
-- Tape workflows require an LTFS-capable LTO drive (LTO-5 or later), its SCSI generic mapping, and compatible LTFS software. Volume-only workflows do not require a Tape drive.
+- LTFS Tape workflows require an LTFS-capable LTO drive (LTO-5 or later), its SCSI generic mapping, compatible LTFS software and the configured adapters. Raw tar Tape uses the Linux protocol requirements below and does not require LTFS. Volume-only workflows do not require a Tape drive.
 - Linux amd64 is the primary deployment target; the existing deployment scripts have been exercised on Debian 11/12. Other release architectures are experimental, and Windows is unsupported by the Unix-oriented mount workflow.
 - Historical CPUs such as Pentium III are outside the maintained runtime targets. Source ports to these systems are user-maintained; a Linux 386 experimental archive does not establish support for every 32-bit x86 CPU.
-- Place required tools in PATH or adapt the configured scripts: LTFS formatting/mounting, `mt`, device inspection, and [Stenc](https://github.com/scsitape/stenc) for hardware encryption. The repository's Tape scripts target HPE LTFS conventions; other LTFS implementations may require script changes.
+- Place the required tools in PATH or adapt the configured scripts: LTFS formatting/mounting, `mt`, `fuser` from psmisc and device inspection where applicable. Both tar and LTFS use `scripts.encrypt` for encryption setup; the bundled adapter uses [Stenc](https://github.com/scsitape/stenc). The bundled unmount adapter uses `fuser` to verify device release. The repository's Tape scripts target HPE LTFS conventions; other LTFS implementations may require script changes.
 - The optional Image/Video Preview helper ships its own private native libraries; a system ffmpeg/ffprobe installation is not required. The main service and existing Preview reads work without this helper. See [native build targets](../../previewworker/build/README.md) for the helper's separate platform requirements.
+
+Tape device access, raw tar protocol requirements and device diagnostics are described in
+[Device requirements](devices.md#device-requirements). Installation never runs raw preparation or
+hardware qualification, and public-tool recovery needs its own
+[reader qualification](tar-tape-recovery.md).
 
 ## Install or Update
 
-The [release installer](../../install-release.sh) supports Linux amd64 with systemd and requires Bash 4.4 or newer. Its `--help` output is the authoritative list of required command-line tools. Run it with an account authorized to write the installation and manage the service. The default `/opt/yatm` installation normally requires `sudo`; a dedicated writable installation and user-owned unit may use an unprivileged account. The default selects the latest stable release; Alpha requires an explicit version. Obtain that revision's installer, check, then install:
+The [release installer](../../install-release.sh) supports Linux amd64 with systemd and requires Bash 4.4 or newer. Its `--help` output is the authoritative list of required command-line tools. Run it with an account authorized both to write the installation directory and to manage the system-level systemd unit. The default `/opt/yatm` installation normally requires `sudo`; a writable custom directory alone does not grant system-service permissions. The installer does not manage `systemctl --user` units. The default selects the latest stable release; Alpha requires an explicit version. Obtain that revision's installer, check, then install:
 
 ```shell
 curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.2.1/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.2.1 --check
-sudo bash install-release.sh --version v1.0.0-alpha.2.1
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
+sudo bash install-release.sh --version v1.0.0-alpha.3 --check
+sudo bash install-release.sh --version v1.0.0-alpha.3
 ```
 
 For an extracted local candidate, supply its archive and companion checksum; it follows the same installation path:
 
 ```shell
-sudo bash install-release.sh --version v1.0.0-alpha.2.1 \
-  --archive ./yatm-linux-amd64-v1.0.0-alpha.2.1.tar.gz \
-  --checksum ./yatm-linux-amd64-v1.0.0-alpha.2.1.tar.gz.sha256 --check
+sudo bash install-release.sh --version v1.0.0-alpha.3 \
+  --archive ./yatm-linux-amd64-v1.0.0-alpha.3.tar.gz \
+  --checksum ./yatm-linux-amd64-v1.0.0-alpha.3.tar.gz.sha256 --check
 ```
 
 `--check` validates the candidate and performs read-only installation checks. Remove it to proceed to the confirmation prompts. `--install-dir` and `--service` select a dedicated installation and unit; `--config` supplies a reviewed configuration for a fresh installation. Otherwise fresh installation opens the configuration template in `$EDITOR` (default `vi`). Review the listener, database and access roots. Volume-only users leave `tape_devices: []`; no fictitious Tape device or script execution is needed to install.
@@ -42,6 +47,7 @@ After systemd starts, bind acceptance to the direct-loopback API process identit
 For a fresh manual installation from a downloaded archive, verify its companion checksum before extraction. Then install the package and bind acceptance to the versioned programs and the systemd-owned process:
 
 ```shell
+RELEASE_VERSION=v1.0.0-alpha.3
 sha256sum --check "yatm-linux-amd64-${RELEASE_VERSION}.tar.gz.sha256"
 sudo mkdir -p /opt/yatm
 sudo tar -xzf "yatm-linux-amd64-${RELEASE_VERSION}.tar.gz" -C /opt/yatm
@@ -58,29 +64,51 @@ sudo systemctl show yatm-httpd.service --property MainPID,WorkingDirectory,Fragm
 /opt/yatm/yatm-cli --server http://127.0.0.1:8080 --timeout 3s status
 ```
 
+The installer keeps programs inside the chosen installation directory. For the bare `yatm-cli`
+commands in the daily guides, add that directory to the current shell's PATH:
+
+```shell
+export PATH="/opt/yatm:$PATH"
+yatm-cli --version
+```
+
+Use the directory selected by `--install-dir` when different, or invoke its full `yatm-cli` path.
+Persist that PATH setting in your shell profile if desired.
+
 Compare each program's reported version/commit with the package `VERSION` and `COMMIT`, and confirm that the readiness endpoint belongs to the unit's `MainPID`; the automatic installer performs these checks. Review paths, database settings, listener/domain, optional Tape devices/scripts, and Preview settings before starting. Manual commands above are for a new installation only. If installing elsewhere, update the service and scripts for that location. The configuration supports SQLite and an untested MySQL option; per-Job state uses SQLite bundles.
 
-Automatic upgrade covers standard SQLite layouts contained in the installation backup. External databases, Job storage, scripts or captured indexes require the manual procedure with coordinated backup of those resources. Other platform archives use manual installation and carry explicit runtime-validation or experimental labels.
+Automatic upgrade and the documented offline migration cover standard SQLite layouts contained in the installation backup. External databases, Job storage, scripts or captured indexes need a layout-specific migration procedure and coordinated backup before Prepare or Commit; the contained-layout command sequence does not cover them. See the [offline migration scope](offline-migration.md#offline-migration-and-repair). Other platform archives use manual installation and carry explicit runtime-validation or experimental labels.
 
 `database.sqlite_wal: true` optionally permits Catalog reads during a write; it defaults to false.
 Keep the SQLite database on a local disk even when the service runs on a NAS. Do not place it on an
-SMB/NFS share or copy only a live main database file: WAL sidecars may contain committed data.
-Use metadata export or stop the service before backing up the complete installation. Turning the
+SMB/NFS share; [Backups](#backups) explains how to copy it safely. Turning the
 option off restores DELETE journal mode on startup; an unsuccessful switch prevents startup.
 
-`paths.access` defines administrator-approved directory roots and optional ordered gitignore exclusions. Daily original/Restore directory choices live in **Settings → Locations**, not YAML. `paths.work` owns execution artifacts and is relative to the service working directory when not absolute. A relative `preview.root` resolves under it, defaulting to `previews`; an absolute Preview root is used directly. `paths.volumes` contains already-mounted archive Volume discovery roots. Restore destinations are not archive Media. See [Location configuration and migration](#location-configuration-and-migration).
+`paths.access` defines administrator-approved directory roots and optional ordered gitignore exclusions. Daily original/Restore directory choices live in **Settings → Locations**, not YAML. `paths.work` owns execution artifacts and is relative to the service working directory when not absolute. A relative `preview.root` resolves under it, defaulting to `previews`; an absolute Preview root is used directly. `paths.volumes` contains already-mounted archive Volume discovery roots. Restore destinations are not archive Media. See [Location configuration and migration](#locations).
 
-Scripts isolate environment-specific LTFS and device behavior from the service. Operators may edit configured scripts and helpers for local tool versions, platforms and hardware; bundled commands are starting points. Review the [script contract and adaptation sequence](migration.md#tape-script-adaptation) before Tape use. The default unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Retain unexpected LTFS/index diagnostics for investigation.
+For LTFS, scripts isolate environment-specific LTFS and device behavior from the service. Operators may edit configured scripts and helpers for local tool versions, platforms and hardware; bundled commands are starting points. Review the [Tape script contract](tape-scripts.md) before Tape use. The default unmount script ejects the cartridge. Once Archive has finished and the final Index is captured, use physical write protection when retaining a cartridge offline. Retain unexpected LTFS/index diagnostics for investigation.
 
-## Location Configuration and Migration
+## Locations
 
-Every Location supports live browsing and authorized physical operations. **Restore destination** includes it in the UI's preferred-target picker; this preference is not a write permission. CLI/API targets still pass the same authorization checks. Scan and Restore publish observations without whole-directory readiness. Ignore scopes ordinary Location reads and new associations, but never controls authorization and never rewrites existing facts. Settings provides path browsing, registration and inline configuration. Startup, registration, browsing and preference updates do not collect files or create Scan Jobs; use explicit Scan to publish originals.
+Register original directories and Restore destinations after installation in the
+[Location guide](locations.md). An upgrade from v0.1.x converts legacy `paths.source` and
+`paths.target`, as listed in [What Changes](migration.md#what-changes).
 
-The installer previews and applies legacy `paths.source` and `paths.target` conversion to Locations, then removes those YAML fields. The old target is recommended for Restore; existing registrations remain authoritative. Relative paths resolve from the original service working directory; equal normalized roots share one registration. Conversion does not scan roots or move Library nodes. Startup does not import these fields, and no migration-history table or Locations-page migration notice is retained.
+## Backups
 
-The installer materializes effective legacy authorization as explicit `paths.access` before removing source/target. Existing explicit access rules remain unchanged; an explicit empty list permits no directories. YAML never overrides later Location edits. Paths outside allowed roots, symlink descendants, runtime files (including `.backup/`) and overlapping archive storage remain denied. Ignore rules cannot reopen paths outside an allowed root, and an ignored parent requires reopening before a child exception can apply. Revoking access invalidates a frozen Job rather than redirecting it.
+Two things are called a backup:
 
-A registered or imported path is immediately usable. Original access additionally needs a current per-file observation; Restore validates the selected path and its existing parent components, and writes can still fail if permissions or space change. Root/Ignore edits do not retarget existing records: a frozen Restore destination still requires its registration to keep the same root, and later reads resolve recorded paths under the current root. [Legacy migration](migration.md) retains frozen legacy Job inputs and configured Restore roots. Unpublished Draft data is distinct from the [published format families](../architecture/persistence.md#published-data-formats).
+| Backup | Contains | Owner |
+| --- | --- | --- |
+| Installation backup | The complete installation directory, taken by the installer before an upgrade | [Backup layout](migration.md#backup-layout-and-upgrade-phases) |
+| Library metadata backup | Library, Locations, original links and saved Media keys, as JSONL; no file contents or global Settings | [Metadata backup](library.md#metadata-backup) |
+
+File contents on Tape or Volume Media are archived copies, not backups; see
+[Archive, Restore and Scan](jobs.md).
+
+To back up a running installation, export Library metadata or stop the service and copy the
+complete installation. Copying only a live main database file is not a backup: WAL sidecars may
+contain committed data.
 
 ## Optional Agent Skill
 
@@ -96,13 +124,9 @@ DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 \
 
 Run this as the user of the selected agent. `npx --yes` allows fetching the pinned tool; Skills still asks which agents to use and confirms installation. The bundled Skill belongs to the installed YATM release and documents its supported CLI commands.
 
-## Preview Preferences
+## Preview Helper
 
-The installer offers the optional helper before changing the service. `--with-preview` selects it explicitly; `--without-preview` skips it. Noninteractive installation skips it unless explicitly selected. The helper package must match the main package's version and commit and pass its checksum and capability probe before installation. For an unpublished local candidate, add `--preview-archive /path/to/yatm-preview-linux-amd64-VERSION.tar.gz --preview-checksum /path/to/archive.sha256` to the ordinary install command. A same-version rerun can add the helper later. No helper source or system-wide native libraries are installed.
-
-Installing the helper does not enable generation. In **Settings → Preview**, enable generation, choose Image or Video and edit the corresponding extensions and output options. Shared controls set concurrent files, timeout, input-pixel limit and an optional helper command override. Disabled controls preserve their values. Existing Preview assets remain accessible when generation is disabled or the helper is absent. Check installation independently with `yatm-cli preview capabilities`.
-
-The installer previews legacy generator import when no saved preferences exist, preserves saved Settings, and removes `preview.generators` from YAML. Startup does not import these options; manual upgrades must run the explicit configuration conversion. The asset storage root remains deployment configuration. See the [Preview contract](../architecture/preview.md#generation) for task snapshots, enablement and resource limits.
+The installer offers the optional helper before changing the service. `--with-preview` selects it explicitly; `--without-preview` skips it. Noninteractive installation skips it unless explicitly selected. The helper package must match the main package's version and commit and pass its checksum and capability probe before installation. For an unpublished local candidate, add `--preview-archive /path/to/yatm-preview-linux-amd64-VERSION.tar.gz --preview-checksum /path/to/archive.sha256` to the ordinary install command. A same-version rerun can add the helper later. No helper source or system-wide native libraries are installed. To enable generation afterwards, see [Scan signatures and Previews](jobs.md#scan-signatures-and-previews).
 
 ## Reverse Proxy
 
@@ -120,7 +144,7 @@ requests follow the page's current origin. CLI clients select their address inde
 with `--server`. `domain` does not configure TLS, bind a socket or restrict incoming Host
 values. YATM is served at the origin root; adding a path such as `/yatm` to `domain`
 does not provide subpath deployment support. The [API address contract](../architecture/api.md#browser-endpoint-addresses)
-owns these rules.
+describes how the browser derives its request URLs.
 
 YATM serves its control API and frontend through the configured HTTP endpoint with gRPC support. The existing Nginx deployment example below uses TLS and basic authentication; adapt its certificates, authentication file, host, and upstream to the installation:
 
@@ -152,4 +176,4 @@ server {
 }
 ```
 
-See [Library/Volume workflows](library.md) for normal operations and [testing](testing.md) for isolated validation requirements.
+See [Library/Volume workflows](library.md) for normal operations.

@@ -35,6 +35,11 @@ function fixture(t, change = () => {}) {
     ["docs/operations/migration.md", "# Upgrade from v0.1.x to v1\n"],
     ["docs/operations/library.md", "# Library\n"],
     ["docs/operations/locations.md", "# Locations\n"],
+    ["docs/operations/jobs.md", "# Archive, Restore and Scan\n"],
+    ["docs/operations/read-order.md", "# Faster Restores with Auto Read Order\n"],
+    ["docs/operations/cli.md", "# Command-Line Reference\n"],
+    ["docs/operations/offline-migration.md", "# Offline Migration and Repair\n"],
+    ["docs/operations/tape-scripts.md", "# Tape Scripts\n"],
     ["install-release.sh", "#!/usr/bin/env bash\nexit 0\n"],
     ["frontend/index.html", `<meta name="yatm-version" content="${version}"><meta name="yatm-commit" content="${commit}">`],
   ]);

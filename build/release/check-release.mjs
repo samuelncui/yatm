@@ -14,7 +14,7 @@ const members = readArchive(archive);
 const { files } = members;
 const roots = ['yatm-httpd', 'yatm-cli', 'yatm-export-library', 'yatm-lto-info', 'yatm-migrate',
   'install-release.sh', 'VERSION', 'COMMIT', 'LICENSE', 'README.md', 'CONTEXT.md'];
-const documents = ['index', 'install', 'migration', 'library', 'locations', 'devices', 'tar-tape-recovery']
+const documents = ['index', 'install', 'migration', 'locations', 'library', 'jobs', 'devices', 'tape-scripts', 'read-order', 'cli', 'tar-tape-recovery', 'offline-migration']
   .map(name => `docs/operations/${name}.md`);
 const scripts = ['encrypt', 'get_device', 'mkfs', 'mount', 'mount.openltfs', 'readinfo', 'umount'].map(name => `templates/scripts/${name}`);
 const testing = ['encrypt', 'get_device', 'mkfs', 'mount', 'readinfo', 'umount', 'README.md'].map(name => `templates/testing/ltfs-file-backend/${name}`);

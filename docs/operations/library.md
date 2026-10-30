@@ -1,6 +1,6 @@
-# Library and Mounted Volume Workflows
+# Library and Mounted Volumes
 
-These workflows cover Library browsing and archive operations. See the [Location guide](locations.md) for registered originals, live browsing, and Library-selected Archive.
+These workflows cover Library browsing, organization and search, mounted Volumes, metadata backup and identical-file tools under the [daily-use constraints](index.md#daily-use). [Archive, Restore and Scan](jobs.md) owns those Jobs; the [Location guide](locations.md) owns registered originals and live browsing.
 
 ## Browse from the CLI
 
@@ -26,7 +26,7 @@ path such as `'/Photos/100% ready?#'` can be written as the URI
 `'library:///Photos/100%25 ready%3F%23'`; plain paths keep those characters literally.
 Names containing a colon are also literal: `yatm-cli ls library:2026` selects the same
 directory as `yatm-cli ls /library:2026`.
-The [CLI path rules](../architecture/cli.md#directory-paths) define decoding,
+The [CLI path rules](cli.md#directory-paths) define decoding,
 root containment and selector conflicts.
 
 An ordinary listing reads the complete directory. `--query` and Library `--recursive`
@@ -52,7 +52,7 @@ The OS owns mount/unmount/eject. `yatm-cli volume candidates` lists the same dis
 
 Tags and notes belong to logical File/directory identity, not content or shared archive copies. Rename, move, and Trash preserve annotations without changing physical files. [Library](../architecture/library.md) defines normalization, limits, versions and cleanup protection.
 
-Search runs in the active pane and keeps the other pane available for **Locate in Other Pane**. Fields are `name`, `tag`, `note`, `type`, `size`, `mtime`, `location`, and `has`; bare terms match name, Tag, or note. Use `location:<id>` with a positive Location ID; the [Library search contract](../architecture/library.md#annotation-search-and-cleanup) defines Location and content-presence predicates. Adjacent conditions mean AND. Boolean operators, parentheses, and `*`/`?` wildcards use the query parser's native rules. Use decimal bytes and quoted RFC3339 timestamps:
+Search runs in the active pane and keeps the other pane available for **Locate in Other Pane**. Fields are `name`, `tag`, `note`, `type`, `size`, `mtime`, `location`, and `has`; bare terms match name, Tag, or note. Use `location:<id>` with a positive Location ID; `has:original`, `has:archive` (known archive coverage, not a health check), `has:unknown` and `has:duplicates` select by content presence; the [Library search contract](../architecture/library.md#annotation-search-and-cleanup) defines them. Adjacent conditions mean AND. Boolean operators, parentheses, and `*`/`?` wildcards use the query parser's native rules. Use decimal bytes and quoted RFC3339 timestamps:
 
 ```text
 name:report AND (tag:finance OR note:"final")
@@ -60,9 +60,42 @@ type:file AND size:>=1048576
 mtime:>="2026-01-01T00:00:00Z" AND NOT tag:obsolete
 ```
 
-Export creates a Library metadata backup, not a copy of physical content or Settings. Import replaces declared entity types transactionally, always preserves the target installation's Settings, and preserves prior Library data on invalid references or unique-key conflicts; review the [backup contract](../architecture/library.md#backup-and-legacy-compatibility) before replacement.
+## Library Settings
 
-Open **Tools → Identical files**, or **Find identical files** from Files. Nothing is queried until **Find** runs in the tool; changing the source or scope clears the results. Library matches current and saved-version content, including transitive relationships. Results use one scrollable grouped list and load visible rows automatically. Select one target and choose **Merge into** to combine the whole group and its version history. The Locations source searches complete selected Locations; search by name and see each selection as a chip. Choose **Keep this** for one survivor or **Delete** for a selection. Physical removals use each Location's Trash. Completed removals disappear without repeating Find; a changed group needs another explicit Find before Keep or Merge. Click a member for the ordinary right-side Inspector.
+**Settings → Library** separates two default-on preferences:
+
+- **Include unbacked files** affects only Library visibility. Saved-only mode retains editable logical directories and Files with any saved version, including versions whose last copy is lost. Location browsing and duplicate groups are independent.
+- **Confirm Delete** controls the browser's move-to-Trash dialog. Server checks always run; a CLI mutation reports its resolved plan under `--dryrun` and writes when the flag is omitted.
+
+    yatm-cli settings library
+    yatm-cli settings library --confirm-remove=false
+    yatm-cli ls --file-id 0 --scope saved
+
+The CLI reads the current Library group before applying supplied fields, so omitted flags preserve other preferences. Startup never silently traverses existing roots. There is no watcher or periodic full scan.
+
+## Trim
+
+`yatm-cli library trim --positions [--files] [--dryrun]` removes invalid Positions and, with
+`--files`, Files with neither an original nor saved history. Review the dry-run report first; saved version history is
+kept. The [Trim contract](../architecture/library.md#trim) owns the exact rules.
+
+## Metadata Backup
+
+Export creates a Library metadata backup, including Locations, original links and saved Media encryption keys, not physical content or global preferences. Protect it like the keys it contains. Import replaces the entity types declared by that backup, including Location configuration when present. It preserves global Library/Preview/Job/Device preferences and rolls back on invalid references or unique-key conflicts; review the [backup contract](../architecture/library.md#backup-and-legacy-compatibility) before replacement.
+
+Use `yatm-cli library import --input library.jsonl --dryrun` to validate a downloaded backup without
+replacing Library data. Downloads remain streamed on all supported HTTP versions. With an HTTP/1.0
+connection, including a proxy's upstream connection, a truncated download can appear successful;
+import validation rejects the missing JSONL end record.
+
+Import is a quiesced operator action taken with no Job running. It validates live relationships,
+keeps imported registrations immediately usable, and imported facts cannot authorize local retries.
+
+## Identical Files
+
+Open **Tools → Identical files**, or **Find identical files** from Files. Nothing is queried until **Find** runs in the tool; changing the source or scope clears the results. Library matches current and saved-version content, including transitive relationships. Results use one scrollable grouped list and load visible rows automatically. Select one target and choose **Merge into** to combine the whole group and its version history. The chosen File retains its original; other File identities move to Library Trash and lose their original links while their disk bytes remain. The Locations source searches complete selected Locations; search by name and see each selection as a chip. Choose **Keep this** for one survivor or **Delete** for a selection. Physical removals use each Location's Trash. Completed removals disappear without repeating Find; a changed group needs another explicit Find before Keep or Merge. Click a member for the ordinary right-side Inspector.
+
+**Duplicates in Locations** groups known signatures without automatic full-disk hashing. Expanded pages check members and distinguish confirmed, changed and unavailable entries; unopened ranges remain unchecked. Scan selected ranges to improve coverage. Unknown content does not mean unique content. Duplicate Files keep independent organization, tags and Note.
 
 ```shell
 yatm-cli identical groups --source library --limit 20
@@ -79,37 +112,4 @@ yatm-cli identical keep --source locations --root 12 --root 18 --group <id> --fi
 yatm-cli files remove-version --file-id <id> --version-id <id> [--dryrun]
 ```
 
-The first groups or members reply includes a `result_id`; pass it as `--result` with the returned `--cursor` to continue without recalculating. `find` also returns a result ID and row counts for offset reads; `close` releases it early. A result expires after 30 minutes idle or a service restart, and then requires a new Find. Reuse the exact source/root scope and current fingerprint for mutations; changed groups require refresh. Keep processes unloaded members too. Version removal deletes the catalog record only; later existing coverage reconciliation can recreate it.
-
-## Restore Versions
-
-Add files or directories from multiple folders to the Restore waitlist. Ordinary
-selections follow **Latest saved version**, or **At or before** a local date/time
-chosen in the Restore dialog's application-owned calendar. Double-click a regular waitlist entry or use **Change version**
-to choose explicit content. Custom versions remain selected when the global time
-changes; **Apply current policy to all** returns them to automatic selection.
-
-Files without a matching dated version remain in the waitlist. Change the cutoff,
-choose an explicit version, remove the entry, or explicitly skip unmatched entries
-before preparing. A version with no usable copy remains an error; skipping a date
-mismatch never substitutes newer content or bypasses a copy failure. Selecting a
-date chooses recorded file content, not a historical directory snapshot. Older
-metadata may retain only first/last archive dates, not every intermediate save.
-
-The CLI uses RFC3339 with an explicit timezone; the cutoff is inclusive:
-
-```shell
-yatm-cli restore estimate --file-id 12 --before '2026-09-01T23:59:59+08:00'
-yatm-cli restore create --file-id 12 --before '2026-09-01T23:59:59+08:00' --skip-unmatched-versions --target-location 7
-yatm-cli restore create 42 --file-id 12 --before '2026-09-01T23:59:59+08:00' --target-location 7
-```
-
-The last example pins version 42 for its File while other Files under selection
-12 follow the cutoff. Omit `--skip-unmatched-versions` to keep missing time matches
-blocking. Creation prepares a frozen Job; later waitlist/policy changes do not
-change that Job's selected content. [Restore execution](../architecture/jobs.md#restore)
-owns output and retry rules.
-
-## Preview and Hash Cache
-
-Preview generation is an optional Scan stage. Archive can request a companion Scan from its frozen input manifest. Signature policy selects cache-only reuse, filling missing content facts, or uncached reads. Preview policy independently selects no generation, missing-only generation, or regeneration of every eligible bundle. Cache-only misses do not trigger hashing. Existing Preview metadata is read independently with `preview get`. See [Preview](../architecture/preview.md) for bundle ownership and [ACP integrity](../architecture/media-io.md#acp-and-integrity) for cache versus verification guarantees.
+The first groups or members reply includes a `result_id`; pass it as `--result` with the returned `--cursor` to continue without recalculating. `find` also returns a result ID and row counts for offset reads; `close` releases it early. A result expires after 30 minutes idle or a service restart, and then requires a new Find. Reuse the exact source/root scope and current fingerprint for mutations; changed groups require refresh. Keep acts on the whole current group, including members not yet loaded. Version removal deletes the catalog record only; later existing coverage reconciliation can recreate it.

@@ -31,7 +31,7 @@ function fixture(t) {
     write(root, name, fs.readFileSync(path.join(repository, name)), fs.statSync(path.join(repository, name)).mode);
   }
   for (const name of ['LICENSE', 'README.md', 'CONTEXT.md', 'install-release.sh', 'config.example.yaml', 'cmd/httpd/yatm-httpd.service',
-    'docs/README.md', 'docs/architecture/media-io.md', 'docs/research/tar-tape.md', ...['index', 'install', 'migration', 'library', 'locations', 'devices', 'tar-tape-recovery'].map(guide => `docs/operations/${guide}.md`), '.agents/skills/yatm/SKILL.md',
+    'docs/README.md', 'docs/architecture/media-io.md', 'docs/research/tar-tape.md', ...['index', 'install', 'migration', 'locations', 'library', 'jobs', 'devices', 'tape-scripts', 'read-order', 'cli', 'tar-tape-recovery', 'offline-migration'].map(guide => `docs/operations/${guide}.md`), '.agents/skills/yatm/SKILL.md',
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'mount.openltfs', 'readinfo', 'umount'].map(name => `scripts/${name}`),
     ...['encrypt', 'get_device', 'mkfs', 'mount', 'readinfo', 'umount', 'README.md'].map(name => `e2e/ltfs-file-backend/${name}`)]) write(root, name, 'committed fixture');
   write(root, 'e2e/ltfs-file-backend/mount.test.mjs', '// maintained local regression, not a runtime adapter');

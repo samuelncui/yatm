@@ -4,7 +4,7 @@ Status: Current v1 development architecture.
 
 The published programmatic surface comprises gRPC services, HTTP resource endpoints,
 and their contracts. [User interface](ui.md) owns the browser behavior built on them,
-the [command-line interface](cli.md) owns the scripted surface that calls the same
+the [command-line interface](../operations/cli.md) owns the scripted surface that calls the same
 methods, and [Interface contracts](contracts.md) owns the rules shared across surfaces.
 
 | Service | Responsibility |
@@ -18,17 +18,20 @@ methods, and [Interface contracts](contracts.md) owns the rules shared across su
 | [FilesService](../../entity/files.proto) | Projected List, explicit Measure, basic Get, annotations, Mkdir/Move/Remove, versions, copies, single-signature duplicates, retained identical Find results with bounded rows, [Library-defined sorting](library.md#identical-file-tools) and group/member pages, Keep/Merge, inventory admission and original relocation |
 | [ScanJobService](../../entity/job_scan.proto) | Configurable source/content/result policies, GetCreation, ReadMedia, progress and paged entries |
 | [LocationService](../../entity/location.proto) | Register/list/get/update/delete, access summary and administrator discovery of unregistered paths |
-| [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation and Job pipeline limits |
+| [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation, Job pipeline limits and Device settings |
 
-Archive/Restore use typed Tape/Volume operation targets. A kind's service is registered with its runner; Job listings include kind and optional target identity/name for routing and filtered history. New input browsing reads registered Location directories or administrator-authorized paths. Archive accepts Library/Location `selections`; Scan accepts those `selections` or a whole Media ID. A Scan whose selections all name one Location reports it as the primary target, including partial ranges; mixed Library/Location or multiple-Location selections have no single primary target. Job properties still index every Location actually involved.
+Archive/Restore use typed Tape/Volume operation targets. Archive Tape FORMAT carries optional
+format/write choices; APPEND uses the registered immutable profile. Read Tape targets carry an
+optional Media hint. Restore resolves it against pending frozen candidates; Scan requires its
+configured Media. Their existing WriteMedia, RestoreMedia and ReadMedia envelopes remain the
+operation boundary, with no separate Media-selection RPC. [Interface contracts](contracts.md#tape-options-and-selection)
+owns option resolution and [Jobs](jobs.md) owns attempt admission/publication.
+
+A kind's service is registered with its runner; Job listings include kind and optional target identity/name for routing and filtered history. New input browsing reads registered Location directories or administrator-authorized paths. Archive accepts Library/Location `selections`; Scan accepts those `selections` or a whole Media ID. A Scan whose selections all name one Location reports it as the primary target, including partial ranges; mixed Library/Location or multiple-Location selections have no single primary target. Job properties still index every Location actually involved.
 
 JobService exposes no Job retry/restart operation. Job listings filter by kind, Location and Media;
-`JobFilter` has no status filter. Typed Media operations require an idle `READY` Job and follow the
-[shared lifecycle](jobs.md#shared-lifecycle): pre-admission failures leave state unchanged,
-admitted Scan/Index errors or operator cancellation settle as terminal `FAILED`, and only admitted
-Archive/Restore Media errors or operator cancellation, including while `QUEUED`, return to pre-Media
-`READY` with the prepared manifest, successful per-file/Media checkpoints and reason/timing.
-Failed or cancelled Scans require a new Scan; process restart never restarts a Job or revives terminal work.
+`JobFilter` has no status filter. Typed Media operations require an idle `READY` Job; the
+[shared lifecycle](jobs.md#shared-lifecycle) owns their admission and settlement.
 
 Each kind's `GetCreation` reads the existing Job configuration and priority under the Job deletion
 guard, through a read-only bundle connection. It returns that kind's typed Create request and an
@@ -40,6 +43,14 @@ Recovered inputs remain subject to the normal creation checks against current so
 Registered directory selectors, including Restore targets, use complete `Files.List` reads with navigation and operations, and select directory rows locally. They validate the returned source identity and directory capabilities before enabling selection or creation. `Location.BrowsePaths` discovers unregistered administrator-authorized absolute paths only; CLI users browse registered directories with `ls`.
 
 [HTTP resource endpoints](../../internal/apis/files.go) serve Library JSONL metadata export/import and [Preview assets](../../internal/apis/preview_service.go). They do not serve full original or archived file bytes; obtaining saved content is a Restore workflow. There is no file or Preview Download CLI command. Loopback-only upgrade endpoints report running operations and quiesce admission for preflight.
+
+Library export streams through HTTP/1.0, HTTP/1.1 and HTTP/2 without staging a complete snapshot.
+A failure before response commitment returns an error without attachment headers; a later failure
+aborts the response without appending JSON. The single HTTP recovery boundary preserves that abort.
+HTTP/1.1 framing and HTTP/2 stream resets expose interrupted transfers. Close-delimited HTTP/1.0
+cannot distinguish interruption from normal EOF; download success alone does not validate a backup.
+The existing JSONL `end` record identifies completed snapshot records, and import rejects a missing
+end record while rolling back all changes. The CLI checks transport errors, not JSONL completeness.
 
 `JobService.GetLog` retains its raw forward byte read for CLI and evidence consumers.
 `JobService.ListLogLines` serves the browser's bidirectional log view: no cursor starts at
@@ -55,6 +66,68 @@ the caller continues until the corresponding `has_older` or `has_newer` flag is 
 
 Files.Get supplies organization, original navigation and applicable content references for explicit workflows without opening file bytes in the browser. User Ignore hides an entry from browsing, measurement and Location selection but does not prevent explicit admission. Physical mutations accept typed relative references, never shell commands or unrestricted absolute paths.
 
+## Device Discovery
+
+MediaService.ListDevices returns all configured Tape entries as DeviceSummary values with the
+configured device spelling, kind, busy status and detail. It reports configuration and lease state
+without issuing SCSI commands. Busy entries remain visible; Job resource admission retains its
+existing queued behavior.
+
+MediaService.InspectDevice accepts one configured device and returns transient passive observations.
+Busy devices return a typed reason without hardware queries.
+The optional `prepared_read` is separately timestamped last-prepared-read information from this
+process, including Job/Media, requested/prepared order, parameter and position sources, applicability,
+coverage and the selected learned read parameters' mean and maximum error. It can accompany a busy response; it never identifies the
+currently loaded cartridge or claims the final execution route. It adds no hardware query. Optional identity/mode/limit facts
+remain absent when unknown; feature support, current availability and validation are separate.
+Capacity limits report optional native bytes before EW, partition, observation timestamps and error/
+unreflected-write allowances, with estimate/lower-bound quality. Existing feature fields distinguish
+support, availability and measured validation.
+They are transient diagnostics, not a per-file fit guarantee or persisted FORMAT preference.
+Compression/decompression limits expose an optional current numeric algorithm and enable-bit
+changeability. Current-enabled observations remain in TapeDeviceReport. Missing changeability
+stays unknown, and an algorithm observation is not a supported-algorithm list or physical validation.
+Encryption limits expose public algorithm names, device-local indexes and key sizes, plus optional
+current mode, scope, parameter-control and key-instance observations. Indexes are resolved on each
+reader and are not FORMAT preferences. Encryption setup belongs to the configured Tape script;
+these observations do not add native key management. A key counter is not evidence that a key is present or correct;
+neither keys nor key-associated data enter inspection responses.
+Geometry limits expose the reported all-wrap command form and source, with count only after an
+interpretable response and optional freshness. Command-form support is not proof of full coverage;
+passive queries leave freshness unknown. Software ordering and non-ejecting reload retain separate
+qualification and availability.
+Permission, missing tools, no medium, clean unsupported forms, malformed responses and unknown
+ownership have distinct reasons. No capability report is saved in the Catalog. The
+[Tape device contract](tape.md#device-observation-and-raw-transport) defines physical access and cleanup.
+InspectDevice can include supported baseline tar write recommendations; absent recommendations
+remain unknown and never certify physical writes. The existing MediaService.Inspect retains its
+cartridge-oriented LTFS/Volume behavior. Tar label validation occurs under the operation lease.
+Settings Get/Update stores typed Device settings without issuing hardware commands or granting
+access to an unconfigured device. Media List exposes tar profiles without the saved key; Media responses
+report its presence only through `encryption_key_saved`; existing ScanEntry storage and
+Library JSONL backups carry the locators. There is no separate recovery export.
+Device Settings also carries the optional tar capacity-polling interval. The admitted Device
+snapshot owns its effective value for both FORMAT and APPEND; the [tar capacity admission contract](tape.md#tar-capacity-admission)
+owns its defaults, query-failure handling and confirmed-WRITE accounting.
+The optional `TapeDeviceSettings.read_parameters` uses this same replacement and snapshot path.
+It contains measured applicability conditions, nominal geometry, seven positioning terms,
+READ-rate/overhead estimates, separate normal-unload `completion` timings and descriptive provenance.
+Completion has optional `full_span_seconds` and `fixed_seconds`; supplied
+full-span time must be positive and fixed time nonnegative. Supplied values are type/range checked;
+partial measurements retain absent fields, separately from explicit zero, false and plaintext.
+The longitudinal coefficient uses either seconds per absolute LPOS unit or seconds per complete
+longitudinal span (`longitudinal_seconds_per_wrap`), mutually exclusive by field presence.
+Explicit zero positioning terms are valid; omitted measurements stay unknown. Saving input does not establish its
+applicability or accuracy; the prepared tar factory checks actual conditions and map coverage.
+There is no measurement RPC, registry, cartridge-position table or new tar metadata.
+The same Device group carries optional `passive_read_learning` (omitted means enabled) and
+`read_planning_seconds` (omitted means 300; explicit values must be positive). Read-only
+`learned_read_parameters` are server-owned: Settings Update replaces user-owned Device settings while retaining
+the latest learned read parameters, including when a client submits an older snapshot. The observations behind
+them have no API. Media responses and backups
+include the optional derived `tape_position_map`; the [persistence owner](persistence.md#derived-tape-data)
+defines its initialization binding and separate update boundary.
+
 ## Browser Endpoint Addresses
 
 `listen` selects the bound service address. `domain` independently selects the browser's
@@ -64,10 +137,9 @@ without a trailing slash. An empty or omitted value yields `/services` and `/fil
 the page's current origin. Preview resource URLs are always root-relative `/files/preview`
 URLs; CLI consumers select their own server address.
 
-The service does not infer this address from Host or forwarded headers, enforce a canonical
-hostname, or terminate TLS based on `domain`. Deployment is at the origin root: frontend
-assets, navigation and resource URLs do not support an arbitrary path prefix. The
-[reverse-proxy guide](../operations/install.md#reverse-proxy) shows the existing configuration.
+The service does not infer this address from Host or forwarded headers. The
+[reverse-proxy guide](../operations/install.md#reverse-proxy) owns operator configuration and
+deployment limits.
 
 ## Listing projection
 

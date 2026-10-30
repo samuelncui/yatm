@@ -85,15 +85,15 @@ test('package sources verifies module inputs and preserves offline guide links',
     '# Synthetic build guide',
     '[Build](build.sh)',
     '[Worker tests](../README.md#local-tests)',
-    '[Release checks](../../docs/operations/testing.md#release-sop)',
+    '[Release checks](../../docs/release/release.md#release-sop)',
     '[External](https://example.invalid/guide)',
     '[Section](#synthetic-build-guide)',
     '',
   ].join('\n');
   fs.writeFileSync(path.join(build, 'README.md'), guide);
   // The checkout has this guide, but the corresponding source does not include it.
-  fs.mkdirSync(path.join(root, 'docs/operations'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'docs/operations/testing.md'), '# Release SOP\n');
+  fs.mkdirSync(path.join(root, 'docs/release'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs/release/release.md'), '# Release SOP\n');
 
   const environment = {
     ...process.env,
@@ -119,7 +119,7 @@ test('package sources verifies module inputs and preserves offline guide links',
   assert.equal(copied.status, 0, copied.stderr);
   assert(fs.existsSync(path.join(cleanPackage, 'sources', 'modules', `${fixtureModule}@${fixtureVersion}`, 'LICENSE')));
   const publicRoot = `https://github.com/samuelncui/yatm/blob/${commit}`;
-  const sourceReadme = guide.replace('](../../docs/operations/testing.md#release-sop)', `](${publicRoot}/docs/operations/testing.md#release-sop)`);
+  const sourceReadme = guide.replace('](../../docs/release/release.md#release-sop)', `](${publicRoot}/docs/release/release.md#release-sop)`);
   assert.equal(fs.readFileSync(path.join(sourceBuild, 'README.md'), 'utf8'), sourceReadme);
   assert.equal(fs.readFileSync(path.join(cleanPackage, 'README.md'), 'utf8'), sourceReadme
     .replace('](build.sh)', `](${publicRoot}/previewworker/build/build.sh)`)

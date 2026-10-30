@@ -1,21 +1,20 @@
 # Tape Capacity and Safe Completion
 
-Status: Research; evidence reviewed on 2026-10-11. No complete solution has yet been established
-for all supported drive/LTFS combinations. Possible approaches below are not implemented guarantees.
-The [Media contract](../architecture/media-io.md#tape-capacity) owns current YATM behavior.
+Status: Research; evidence reviewed on 2026-10-24. Findings describe the studied counters,
+streaming behavior and normal capacity boundaries, not guarantees for every drive/LTFS combination.
+The [Tape contract](../architecture/tape.md#tape-capacity) owns current YATM behavior.
 
 ## Objective
 
-Prevent capacity exhaustion from leaving an unsafe Archive result:
+Study what capacity counters and write observations can establish for whole-file admission and
+controlled EW completion. Account for writes once, retain unknown capacity as unknown, and distinguish
+complete published members from pending content. Ordinary write, cleanup and finalization failures
+remain errors; partial files must not become successful Positions.
 
-- Refuse the next complete file before creating its output when it cannot safely fit.
-- Preserve completed files and the Index needed to locate and read them.
-- Handle write, Close, rename, cleanup and finalization failures without publishing partial files.
-- Leave a Tape that can be normally unloaded, mounted again and used for Restore.
-- Report what completed, what remains pending and any cleanup/finalization failure separately.
-
-Explaining a particular shortfall is useful only when it establishes a mechanism needed for these
-outcomes. A successful write or an accurate progress counter alone does not establish safe completion.
+Normal completion and controlled EW require their own physical evidence. Restoring interrupted
+Archive prefixes, repairing failed tails or guaranteeing remount after an arbitrary failure are
+not product requirements of this study. A successful write or progress counter alone does not
+establish physical completion.
 
 The compatibility constraints are ordinary LTFS files, existing user-owned Tape adapters and the
 [supported operating model](../architecture/overview.md#supported-operating-model). Replacing the
@@ -24,7 +23,7 @@ reserve does not meet this scope. Device-specific capabilities may improve an op
 when the existing adapters and other supported configurations retain a defined behavior.
 
 Capacity management must preserve continuous data supply during normal Archive, following the
-[Media constraint](../architecture/media-io.md#tape-capacity). Periodically pausing submission,
+[Media constraint](../architecture/tape.md#tape-capacity). Periodically pausing submission,
 draining buffers, synchronizing an Index and resuming is outside this scope, including per-batch
 or increasingly frequent synchronization near the capacity boundary. Normal finalization when
 ending use of the current Tape remains necessary.
@@ -38,9 +37,7 @@ that a deployed binary contains these paths. HP LTO-5 and IBM LTO manuals below 
 own products and revisions; support and units must be checked before applying one vendor's fields
 to another. Community observations retain their reported hardware and software scope.
 
-Current YATM checks available space through ACP at the actual start of each positive-size linear
-output. Its finalization and Index reconciliation establish which staged results may be published;
-they do not perform a content readback. See the [Media contract](../architecture/media-io.md#tape-capacity),
+For how YATM currently checks LTFS space, finalizes and reconciles the Index, see the [Tape contract](../architecture/tape.md#tape-capacity),
 [Tape finalization](../../internal/executor/media_tape.go) and
 [Archive result handling](../../internal/executor/archive/stream.go).
 
@@ -57,6 +54,13 @@ it does not prevent the capacity shortfall or make failed-tail cleanup succeed.
 The path under examination is:
 
 `drive counters -> LTFS partition/reserve handling -> statfs -> ACP admission`
+
+Advertised native capacity is nominal, not an exact count of available host bytes. IBM labels its
+[drive capacity table](https://www.ibm.com/support/pages/tape-drive-model-characteristics-lto-and-3592-drives)
+as nominal without compression. The HP manual below explicitly allows more data than its calculated
+capacity, while tape defects and block packing can reduce usable capacity. A reported capacity,
+advertised cartridge capacity, accepted WRITE bytes and published file payload have distinct meanings;
+one must not be treated as an exact upper bound on another.
 
 The [HP LTO-5 integration manual, page 14](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol2_E3a/LTO5_Vol2_E3a.pdf#page=14)
 describes native user-data estimates in units of 1,048,576 bytes, without a predicted compression
@@ -85,6 +89,68 @@ maps partition roles, subtracts half the total Index-partition capacity from dat
 availability, and clamps availability after warning states. Reading the raw drive value instead
 would omit these adjustments. The compatibility case below explains why changing all drives to
 page `0x17` is insufficient.
+
+### Capacity Query Errors and Retries
+
+At the pinned revision, [LTFS capacity collection](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/libltfs/ltfs.c#L686-L751)
+returns a failed query before updating its cached capacity. That path does not itself set the
+data-write error flag. The cache is used when no device is attached, rather than as a successful
+response to an attached device's timeout. Capacity and data commands also share serialization;
+this does not establish the behavior of concurrent native queries and writes.
+
+The [SG command helper](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/tape_drivers/linux/sg/sg_scsi_tape.c#L193-L385)
+classifies host/driver timeouts separately from busy responses and resets. A returned timeout on
+this read-only command is not itself evidence of failed data WRITE. Selected driver suggestions
+can trigger one native retry; there is no general two-second sample deadline or three-failure
+capacity cutoff. The LTO timeout tables for
+[HP](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/tape_drivers/hp_tape.c#L86-L103),
+[IBM](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/tape_drivers/ibm_tape.c#L446-L463) and
+[Quantum](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/tape_drivers/quantum_tape.c#L106-L123)
+specify sixty seconds for LOG SENSE; supported-command recommendations can supersede those tables.
+These are implementation defaults, not universal device timing guarantees.
+
+These findings support separating optional capacity samples from data-write failure and
+native settlement. Keeping a debited estimate and retrying on a periodic cadence is YATM's
+advisory accounting policy, not an LTFS promise about concurrent sampling or counter accuracy.
+A later successful query cannot establish that a reset preserved earlier buffered writes.
+
+### Capacity Query Concurrency
+
+Linux SG supports multiple requests and separate opens have separate request state, but those
+requests still use the same SCSI device queue. Removing a userspace lock does not establish
+independent device execution or a bound on WRITE delay.
+SG request allocation can also sleep when shared host request slots are exhausted, even on its
+asynchronous path.
+[Linux v6.12 SG request state](https://github.com/torvalds/linux/blob/v6.12/drivers/scsi/sg.c#L128-L164),
+[shared queue and request allocation](https://github.com/torvalds/linux/blob/v6.12/drivers/scsi/sg.c#L1634-L1664).
+
+The HP LTO-5 host reference describes ordered untagged execution and a separate FC tagged queue;
+its ABORTED COMMAND examples include overlapping commands from one host. LOG SENSE checks deferred
+errors, and a non-write command can report and clear an earlier write-behind error. A second Linux
+descriptor therefore needs shared attempt error handling; it is not an independent SCSI initiator.
+[HP EH890-90900 Volume 3, April 2011 edition 5, pages 14, 56, 189–190](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol3_E5b/LTO5_Vol3_E5b.pdf#page=14).
+The integration guide also advises against interspersing position/log queries with long writes.
+[HP software integration, page 24](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol2_E3a/LTO5_Vol2_E3a.pdf#page=24).
+
+The same HP manual reports standard INQUIRY `BQue=0, CmdQue=1` for all drives; the untagged
+ordering description alone does not establish that a SAS drive cannot queue commands.
+[HP INQUIRY fields, pages 38–39](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol3_E5b/LTO5_Vol3_E5b.pdf#page=38).
+
+A read-only 2026-10-19 sysfs observation on HP Ultrium 5/Z6ED with Debian Linux
+`6.12.111+deb13-amd64` and `mpt3sas` reported device `queue_depth=128`, host `can_queue=6548`
+and `cmd_per_lun=128`. Retained standard INQUIRY responses from an earlier serial-polling
+comparison on this drive reported `BQue=0, CmdQue=1`. Upstream mpt3sas caps an untagged device's depth at one;
+these observations support the configured tagged-capability path, without proving parallel
+firmware execution or exact equivalence to Debian's patched driver. Host limits describe
+controller resources, not the drive's query latency.
+[mpt3sas v6.12.111 queue adjustment](https://github.com/gregkh/linux/blob/v6.12.111/drivers/scsi/mpt3sas/mpt3sas_scsih.c#L1676-L1723),
+[Linux v6.12 INQUIRY tag discovery](https://github.com/torvalds/linux/blob/v6.12/drivers/scsi/scsi_scan.c#L916-L920).
+
+These findings distinguish background execution, absence of a shared userspace I/O lock and physical
+noninterference. The latter requires applicable driver/device evidence. Under concurrent querying,
+a before-WRITE submission counter also cannot prove that the WRITE settled before the sample;
+capacity debit ordering must account for overlapping writes. Neither descriptor isolation nor a
+small whole-run throughput difference resolves counter lag, native costs or whole-member fit.
 
 ### Estimate Accuracy and Shared Inputs
 
@@ -156,7 +222,7 @@ A 2026-10-09 experiment used HP LTO-5 firmware Z6ED, Linux SG LTFS 2.5.0.0 (Prel
 512-KiB LTFS blocks and enabled drive compression. SET CAPACITY followed by FORMAT with
 `--keep-capacity` shortened the scratch cartridge. Ordinary YATM Archive supplied twenty 4-GiB
 incompressible files, three 512-MiB files and a final 4-GiB file. The
-[maintained procedure](../operations/physical-tape-e2e.md#continuous-boundary-capture) records
+[maintained procedure](../release/physical-measurements.md#continuous-boundary-capture) records
 application progress, raw device pages, filesystem availability, file metadata and errors on the
 same host clock, without recurring synchronization or a separate SG controller.
 
@@ -203,7 +269,7 @@ does not establish a full-length error bound or demonstrate that every admitted 
 ### Full-Capacity EW Measurements
 
 A second 2026-10-09 experiment used the same HP LTO-5/Z6ED and LTFS configuration at full
-cartridge capacity. The [EW procedure](../operations/physical-tape-e2e.md#continue-to-the-drives-ew-boundary)
+cartridge capacity. The [EW procedure](../release/physical-measurements.md#continue-to-the-drives-ew-boundary)
 streamed incompressible data into ordinary 4-GiB files until LTFS refused further output.
 It deliberately bypassed application admission to reach the hardware warning. This was a
 drive/LTFS experiment, not an Archive/Restore acceptance or a production change. There were no
@@ -283,13 +349,12 @@ failed-Close/failed-cleanup path that finalization and result publication must h
 
 ### Full-Capacity YATM Admission and Restore
 
-A 2026-10-10–11 retest used ordinary YATM Archive and Restore with ACP v0.2.5 in
-`v1.0.0-alpha.60020` (commit `be76d11887882cfe93109d7f2bdd993e8dffbde7`). The HP LTO-5/Z6ED,
+A 2026-10-10–11 retest used ordinary YATM Archive and Restore with ACP v0.2.5. The HP LTO-5/Z6ED,
 LTFS 2.5.0.0 (Prelim), 512-KiB blocks and enabled drive compression were unchanged. The scratch
 cartridge used its full capacity. Mount options retained `sync_type=unmount` and the existing
 buffer pool; no recurring forced synchronization was added. The inputs were 100 ordinary
 incompressible files: twenty 64-GiB files followed by eighty 1-GiB files. The
-[maintained capacity acceptance](../operations/physical-tape-e2e.md#continuous-boundary-capture)
+[maintained capacity acceptance](../release/physical-measurements.md#continuous-boundary-capture)
 recorded application results, file syscalls, LTFS capacity and same-owner SG observations.
 
 **The earlier failed-tail outcome did not recur in this configuration.** Archive completed
@@ -340,141 +405,37 @@ does not establish a guarantee for an arbitrary next file or every drive. It sup
 LTFS's capacity adjustment and the tested ACP integration; it supplies no reason to add periodic
 copy pauses or replace the capacity source with a more optimistic raw counter.
 
-### Reading Position Through SG
+### Full-Cartridge Tar Archive Observation
 
-SG is a command transport; the returned field determines what can be inferred. For the HP LTO-5
-[READ POSITION contract, pages 148-150](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol3_E5b/LTO5_Vol3_E5b.pdf#page=148),
-the position counts logical blocks and filemarks, not physical tape length or a percentage of the
-partition consumed. The EOP bit indicates an existing EW-EOM condition; it is not a configurable
-warning before that boundary. The old manual and the observed idle short/extended responses mark
-buffer block/byte counts as unknown (`LOCU=1`, `BYCU=1`); zero-filled counters with these flags cannot
-establish that the write buffer is empty. Idle observations do not establish every firmware's
-behavior during writes.
-Logical position alone cannot account for physical length spent rewriting the same content.
+A 2026-10-21 YATM tar Archive run used HP LTO-5 firmware Z6ED, disabled drive compression,
+256-KiB variable records and the production five-second capacity observer. This raw-Tape path
+does not use LTFS filesystem availability or its Index allowance. Its native write journal
+distinguishes full WRITE acknowledgements from application progress and complete published members.
 
-Reading page `0x31` through SG obtains the same underlying capacity source used by the pinned LTFS
-LTO-5 backend. Bypassing LTFS does not improve that source's contract and omits its partition and
-Index adjustments.
+The final APPEND reached current `NO SENSE` / `EOM` / `00/02` EW with confirmed full-record
+acceptance. No further data WRITE followed. A non-immediate count-one filemark also reported
+confirmed completion at EW; physical finalization and cleanup succeeded. The attempt published
+45,592 complete members totaling 1,524,705,599,488 payload bytes. The admitted final 4,048-MiB
+member remained incomplete by 389,658,112 payload bytes and was not published. This exercises
+the [tar writer's completion boundary](../../internal/media/tar_write.go), rather than assuming
+that every acknowledged record belongs to a complete member.
 
-For the inspected Linux installation, `ltfs --version` reported 2.5.0.0 (Prelim) and the configured
-Tape backend was `sg`. Inspection of its installed executable and libraries confirmed the relevant
-call path and branches:
+The last successful page `0x0C:5 - 0x0C:4` query reported 1,754,000,000 bytes remaining;
+645,922,816 bytes were acknowledged from its issue through the EW record about 4.5 seconds
+later. The resulting 1,108,077,184-byte discrepancy is evidence against treating that estimate
+as a whole-member fit guarantee. The [cached accounting](../../internal/media/tar_capacity.go)
+charged the member's complete encoded cost before its first header and debited reservations beyond
+the full-return prefix captured at query issue. No missing member debit was demonstrated; even
+retaining only the preparation estimate and cumulative encoded debits would have admitted it.
+Full WRITE returns do not prove that the drive's remaining-space counter already reflects them.
+The capture cannot apportion the discrepancy among unreflected buffered bytes, estimation error
+and physical overhead.
 
-`statfs -> ltfs_capacity_data -> tape_get_capacity -> sg_remaining_capacity -> LOG SENSE 0x31`
-
-The LTO-5 branch reads parameters 1/2 for remaining partition 0/1 capacity and 3/4 for their maxima.
-After backend adjustments, partition mapping and unit conversion, ordinary data availability is
-the remaining data-partition capacity minus half the total Index-partition capacity, clamped at
-zero. Known `NO_SPACE` or `LESS_SPACE` states also force zero. The FUSE callback assigns that result
-to both `f_bfree` and `f_bavail`. These binary checks establish the inspected functions' behavior,
-not the complete build's source revision.
-
-This availability calculation does not use page `0x0C`'s EOD/EW/current-position fields, READ
-POSITION coordinates or CM EOD records, and does not separately debit the live contents of LTFS
-or drive buffers. A direct page `0x31` observation therefore duplicates its drive-level input,
-while page `0x0C` adds boundary and position information rather than another independently verified
-remaining-capacity measurement.
-
-**Observed HP LTO-5 capability:** firmware Z6ED returned complete page `0x0C` responses containing
-parameters `0x0004` through `0x0008`, each four bytes with control byte `0x60`. The
-[2011 HP LTO-5 manual, page 60](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol3_E5b/LTO5_Vol3_E5b.pdf#page=60)
-omits these fields; that omission does not establish their absence in later firmware. The
-[2012 HP LTO-6 manual, pages 64-65](https://docs.oracle.com/cd/E38452_01/en/LTO6_Vol3_E1_D20/LTO6_Vol3_E1_D20.pdf#page=64)
-defines the matching layout in megabytes. The observed relationships to page 31 support a
-decimal-MB interpretation on Z6ED; the table alone is not a firmware-specific unit/update guarantee:
-
-| Parameter | Meaning in the newer HP definition |
-| --- | --- |
-| `0x0004` | Approximate native capacity from partition beginning to recorded end of data |
-| `0x0005` | Approximate native capacity from partition beginning to EW |
-| `0x0006` | Minimum native capacity between EW and partition end |
-| `0x0007` | Approximate native capacity from partition beginning to current medium position |
-| `0x0008` | Maximum native capacity currently allowed in the device buffer; not its occupied bytes |
-
-Read-only positioning between the two partitions changed these capacity fields consistently with
-page `0x17`'s partition totals and recorded use. In both partitions, `0x0004` matched recorded use
-even at logical block zero. This supports an EOD interpretation rather than a count of blocks
-crossed by the current reader. In the data partition, page `0x31` remaining capacity exceeded
-`0x0005 - 0x0004` by approximately the reported EW-to-end region. This supports distinguishing
-the two boundaries. The pinned LTFS Index deduction was larger than that difference in the same
-sample, so replacing its availability with the raw EW distance would not necessarily be safer.
-
-A read-only comparison at confirmed data-partition logical blocks 0, 100,000 and recorded EOD
-(197,013) returned `0x0007` values of 47, 26,263 and 68,738 MB respectively. Recorded EOD
-(`0x0004`) remained 68,739 MB. Thus the firmware exposes a position estimate that responds to
-positioning and distinguishes the current position from recorded EOD. This is native-capacity
-distance, not a measured length in metres or a verified wrap/LPOS interface. An earlier observation
-at logical block zero returned 22 MB. The nonzero, differing beginning-position observations leave
-the relationship between logical position, physical head position and field refresh unresolved.
-
-These positioning observations are read-only measurements of one firmware; the newer HP definition
-is an interpretation supported by them, not an explicit HP5/Z6ED update guarantee. The
-[continuous Archive measurements](#continuous-archive-measurements) add evidence of delayed capacity
-updates during writes. The fields remain useful observations through the LTFS owner without forced
-synchronization. Neither the position test nor the size of the EW-to-end region identifies the cause
-of a previous capacity shortfall.
-
-A physical-position field could help observe already-consumed tape length. A usable admission rule
-would additionally need its partition/warning coordinates, freshness, outstanding-write accounting
-and a bound on the next file's physical consumption. The observed `0x0C` fields provide a concrete
-candidate for the warning-distance part of that work, while a complete admission guarantee remains
-unestablished. The [HP-authored SSC proposal](https://www.t10.org/ftp/t10/document.06/06-235r0.pdf#page=2)
-also qualifies its minimum EW-to-end capacity by media condition, block size and compression;
-the reported buffer allowance alone is not a worst-case bound for an arbitrary next file.
-
-READ POSITION itself causes no tape movement. Nevertheless, the
-[HP integration guidance, page 24](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol2_E3a/LTO5_Vol2_E3a.pdf#page=24)
-advises against interleaving READ POSITION or LOG SENSE with long writes. Any observation used during
-Archive must remain coordinated through the LTFS device owner and demonstrate acceptable command
-latency and streaming behavior. More frequent polling alone does not prove complete-file admission.
-
-### Direct Physical Coordinates
-
-A physical location needs both the wrap and the longitudinal position (LPOS); the same longitudinal
-position occurs on successive passes across the Tape. The
-[Ultrium-1 format, ECMA-319](https://ecma-international.org/wp-content/uploads/ECMA-319_1st_edition_june_2001.pdf)
-describes servo-encoded longitudinal position and stored EOD coordinates. It establishes the
-distinction between physical and logical position, not the later HP5 command or CM-page layout.
-
-Some drives expose these coordinates to the host. The
-[IBM SCSI reference, printed page 166](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference_GA32-0928-05%20%28EXTERNAL%29_0.pdf#page=196)
-defines physical wrap and relative LPOS in vendor-specific REQUEST SENSE data. That is evidence of
-an available IBM interface, not a portable SCSI or HP5 interface. The reviewed HP5 host guide does
-not document the same pair. Its attribute `0x1000` contains LPOS at the fixed LP1 reference point,
-which does not track current position.
-
-An idle HP5/Z6ED hardware comparison tested these interfaces immediately after completed positioning
-at the three data-partition locations above:
-
-- Fixed-format REQUEST SENSE requested 255 bytes and returned 24 at each location. Its additional
-  length was 16 bytes; it did not contain the later offsets used by IBM's wrap/LPOS fields.
-- Descriptor-format REQUEST SENSE returned 16 bytes at each location: the stream-command and
-  drive-error descriptors, without physical coordinates. Both sense replies were unchanged across
-  the positions, including after SPACE to EOD.
-- READ POSITION service action `0x01`, the legacy device-specific block form, returned ILLEGAL
-  REQUEST / INVALID FIELD IN CDB at all three positions. The normal short, long and extended forms
-  succeeded and reported logical positions.
-
-These observations establish the tested interfaces' behavior on this firmware. They provide no
-live wrap/LPOS pair to replace the native-capacity estimate.
-
-HP5 also documents reading cartridge memory through
-[READ BUFFER, buffer ID `0x10`, pages 139-141](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol3_E5b/LTO5_Vol3_E5b.pdf#page=139).
-The observed drive returned an 8,160-byte buffer. Pages `0x104` and `0x10E` were version 2 and
-96 bytes each, with the same bytes at all three positions. The stored EOD pages therefore did not
-track the read-only head movement in this experiment. Their layout differs from the Ultrium-1
-EOD page. An inspected
-[community CM decoder](https://github.com/habibkaratas/hp-tape-tools/blob/3bb25b49de1864ed6392fab61f94d17cfa9d8388/lto-cm-decoder/lto_cm_decode.py)
-applies older EOD offsets and labels a wrap-section field as a wrap number. Those interpretations
-are not validated for HP5. Establish the versioned layout, partition mapping, validity and update
-rules before treating CM bytes as coordinates. Stored EOD can locate the recorded tail; it is not
-automatically live head telemetry or evidence that all submitted writes have reached that tail.
-
-For capacity control, relate the data partition's written tail to its writable EW boundary. Head
-position by itself can change during reads, Index work and repositioning. Verified coordinates
-would improve accounting for already-consumed medium, including length lost to previous rewrites;
-conversion of the remaining region into a complete-file allowance still needs the bounds described
-above. This separates a promising physical observation from an unproved remaining-byte guarantee.
+The 49 near-end queries spanning 240 seconds completed in 1.974–12.520 ms, without a
+failed query. These native request timings do not bound shared-device interference or physical
+stop/reposition activity. This one drive/firmware/workload observation establishes neither a
+portable capacity error bound nor complete-member readability after reload. Publication and
+physical finalization remain separate from content readback and whole-file admission guarantees.
 
 ### Close and Explicit Synchronization
 
@@ -568,15 +529,8 @@ before safe finalization: the new file, pending writes, required metadata/Index 
 rewrite overhead. All quantities must refer to the same partition, warning boundary and completion
 state. An allowance already included by the drive or LTFS must be accounted for once.
 
-The following approaches do not establish a solution under the current requirements. Their mechanisms
-and limitations remain useful research evidence; they are not a recommended implementation sequence.
-Combining them does not supply the missing physical bounds or remove the recovery costs.
-
-| Approach evaluated | Intended result | Assessment against the requirements |
-| --- | --- | --- |
-| Budget whole files from an initial capacity observation | Refuse an unaffordable file before creating its output, without repeated capacity queries | Does not resolve inaccurate initial capacity or unbounded additional physical consumption during writing |
-| Finalize once, then remount and verify complete files | Establish which completed files remain readable after an unexpected capacity failure | Adds a full read pass over the files being accepted, with substantial Tape time; does not prevent partial output or guarantee cleanup |
-| Recover through an Index, then rebuild on other Media | Salvage content when ordinary finalization or mounting fails | Repeats copying without resolving the cause; drive-related capacity loss can recur on replacement Media, so forward progress is unproved |
+The accounting below remains advisory wherever its physical bounds are unknown. Public LTFS
+finalization and Index findings are separate from YATM's ordinary operation contract.
 
 ### Initial Capacity and Whole-File Accounting
 
@@ -603,110 +557,34 @@ unproved, so using estimates in this workflow improves accounting but still give
 Its capacity-utilization cost must be explicit; rereading space and resuming after a forced drain
 would reintroduce the excluded workflow.
 
-### Finalize Once and Verify the Readable Result
+### LTFS Finalization and Index Evidence
 
-This approach would stop new outputs and settle outstanding work on unexpected exhaustion. Attempt normal
-LTFS finalization once, then reload and mount normally. Compare completed candidates with the actual
-Index and verify their content against the expected signatures in sequential read order. Only the
-confirmed complete files become successful Archive results; other files remain pending for another
-Media choice. A temporary file that cannot be deleted stays an explicitly reported failed output.
-
-There is a concrete stock-LTFS basis: the pinned
-[unmount path](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/libltfs/ltfs.c#L2079)
+The pinned [unmount path](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/libltfs/ltfs.c#L2079)
 uses Index-writing logic that tolerates `NO_SPACE` and can attempt the Index partition after a
-data-partition failure. This does not prove that finalization will succeed. Its
-[FUSE callback](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/ltfs_fuse.c#L1165)
-also discards finalization return values, so command exit status alone is insufficient.
+data-partition failure. Its [FUSE callback](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/ltfs_fuse.c#L1165)
+discards finalization return values, so command exit status alone is insufficient. YATM reconciles
+staged results with its captured final Index. Neither that metadata nor these source paths prove
+that failed writes can be recovered, and no automatic remount/readback phase is part of Archive.
 
-Current YATM already reconciles staged results with a captured final Index. The proposed additional
-evidence is normal remount and content verification after exhaustion; captured metadata alone is not
-a readback. The extra read phase starts after this Tape's writing has ended. This candidate cannot
-promise that no file starts before an unexpected EW, or that the ordinary LTFS directory is free of
-failed temporary files. Those are explicit product tradeoffs, not completed research objectives.
-
-### Recover with an Index and Rebuild Elsewhere
-
-This approach would retain a separate copy of the existing Index before append and any usable final
-capture. These are disk copies of available metadata, not requests for periodic tape synchronization.
-If normal mounting fails, use an existing on-tape generation or supported external-XML read-only
-mount to recover the files represented by that Index. Verify their bytes, combine them with retained
-originals for unconfirmed new files, and Archive the required files onto other Media. With one drive,
-recovery to disk precedes writing the replacement Tape.
-
-The pinned implementation supports an
+The implementation also supports an
 [external Index with the actual Tape for read-only access](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/libltfs/ltfs.c#L1931).
-Availability must be checked through each configured adapter. An old Index only describes its own
-files, and a final capture can be absent or incomplete after failure. Neither an XML file nor a
-successful read-only mount proves that its referenced bytes are intact. Retained originals are
-therefore still needed for new content absent from a usable Index.
-
-This yields a normal replacement archive only after that archive's own acceptance. It does not
-repair the original Tape or reclaim its tail. If the drive causes increased rewrites, changing the
-cartridge while retaining that drive does not remove the mechanism. Rebuilding is therefore a possible
-salvage operation, not an established way to finish Archive after capacity loss. Stock `ltfsindextool`
-validates XML; it does not install
-a filtered Index on Tape. Stock `ltfsck` rolls back to an existing generation, and the pinned
-[`ltfsck` path](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/utils/ltfsck.c#L1280)
-can return immediately when that is already the current generation. Same-Tape destructive rollback
-is separate from this read-only recovery candidate.
+An old Index describes only its own files; a readable XML document or mount does not prove the
+referenced bytes remain intact. Stock `ltfsindextool` validates XML rather than installing a
+filtered Index. The pinned [ltfsck path](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/utils/ltfsck.c#L1280)
+can return immediately when the requested generation is already current. These are public-tool
+findings, not a YATM repair, automatic rollback or interrupted-write recovery workflow.
 
 ### Remaining Research Boundary
 
-The unresolved requirement is safe completion when physical capacity proves smaller than the
-application expected. An applicable pre-write bound or a demonstrated way to contain exhaustion is
-still needed. The latter must account for completed-file readability, failed-tail cleanup, normal
-LTFS mounting, continued Archive progress and total Tape time; it would not by itself satisfy strict
-pre-write refusal. Neither path may assume recurring forced synchronization, an accurate estimate,
-or that replacing the cartridge eliminates a drive-related mechanism. PEW remains an optional
-device-specific capability, not the compatibility baseline. No approach above is selected by this study.
+The evidence does not establish a portable bound proving every admitted whole file and its
+finalization will fit. Capacity estimates remain advisory where such a bound is absent. Fixed
+reserves and compression/rewrite averages cannot supply an unmeasured guarantee. PEW remains an
+optional device-specific capability, not the compatibility baseline.
 
-Fixed byte/percentage reserves, subtracting only the configured buffer size, or using past
-compression/rewrite averages have no demonstrated bound covering these requirements. They can move
-a failure point without establishing any of the required guarantees.
-
-## Evidence Required for a Solution
-
-Start with the applicable manuals and source contracts, including original community reports that
-challenge the assumptions. Resolve the remaining questions in this order:
-
-1. **Writable boundary:** determine whether the available counter reaches EW or a later physical
-   boundary, how LTFS adjusts it, when it is valid, and whether an applicable lower bound exists.
-2. **Complete-file cost:** establish which pending writes, compression/formatting overhead,
-   corrected rewrites and final Index work are already included and which need a separate bound.
-3. **Failure containment:** account for every transition below, including cleanup and finalization
-   failures after successful content writes. A retained older Index needs demonstrated recovery.
-4. **Streaming and compatibility:** preserve continuous data supply and supported adapters. Assess
-   query latency and additional stop/reposition activity alongside throughput. Candidates requiring
-   recurring forced drains do not meet the design constraint. Retain an experimental change only
-   when it provides its intended benefit.
-
-| Failure boundary | Required result to demonstrate |
-| --- | --- |
-| Capacity observation fails or is unknown | No fabricated capacity or unqualified claim that the file fits |
-| Next complete file is rejected | No output for that file; previously completed files still finalize normally |
-| Write or Close fails after admission | Partial output never becomes a successful Position; later files remain pending |
-| Rename or temporary-file removal fails | The failure is retained alongside the original cause; completed files remain accessible |
-| Index synchronization or unmount fails | No success inferred from staging or an old Index; physical uncertainty remains visible |
-| Reload after a full Tape | The retained Index and completed file bytes are readable; Restore verifies content |
-| Continue on another Tape | Completed work is retained and only pending files continue through the normal Media choice |
-
-Use native Go tests and maintained scripts for deterministic admission, error propagation and
-publication checks. Simulated capacity loss can validate software decisions but cannot prove a
-drive's physical consumption bound. Reuse the
-[physical measurement procedure](../operations/physical-tape-e2e.md#capacity-measurement) for separately
-authorized experiments, with one hardware owner and observations obtained through LTFS. Short tests
-can establish a specific counter behavior before a full Archive/Restore acceptance. A separately
-authorized synchronization experiment can investigate observation lag; it does not authorize a
-recurring synchronization policy in production.
-Optional reduced-capacity cartridges only accelerate testing after their destructive setup and
-restoration are approved; they do not establish behavior for differently aged hardware.
-
-Final physical acceptance must exercise ordinary files through YATM Archive, then normal unload,
-reload and Restore. A direct giant filler, successful `df` comparison or successful unmount cannot
-substitute for the combined outcome. Counter values, logical write progress and finalization evidence
-must be interpreted separately. Raw run evidence belongs in acceptance artifacts.
-
-The remaining gap is substantive: the reviewed evidence has not established a portable pair of
-bounds that guarantees every admitted whole file and its finalization will fit. Research must either
-establish those bounds for a compatible approach, or identify the exact recovery behavior and
-remaining risks requiring a product decision. A better estimate alone does not complete this work.
+Further qualification should establish the counter's boundary and units, measured write/formatting
+costs, and the cost of querying while streaming. Use native tests for admission, error propagation
+and publication; use the [physical measurement procedure](../release/physical-measurements.md#capacity-measurement)
+only for separately authorized hardware questions. Reuse completed evidence for unchanged paths.
+Normal Archive/EW, unload and Restore must be assessed together for the tested configuration;
+a giant filler, `df` comparison or unmount exit alone cannot establish that outcome. Raw failures
+remain in the evidence. No arbitrary-failure recovery matrix is required to close this study.
