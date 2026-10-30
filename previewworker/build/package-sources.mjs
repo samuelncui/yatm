@@ -40,6 +40,8 @@ for (const item of modules.values()) {
   for (const notice of notices) fs.copyFileSync(path.join(item.directory, notice), path.join(licenseDirectory, notice));
   records.push({ name: item.name, version: item.version, source: `modules/${item.name}@${item.version}`, notices });
 }
+// Module-cache directories are read-only; keep the distributed copies removable after extraction.
+if (records.length) execFileSync('chmod', ['-R', 'u+w', path.join(output, 'sources/modules')]);
 fs.writeFileSync(path.join(output, 'licenses/go-dependencies.json'), JSON.stringify(records, null, 2) + '\n');
 fs.copyFileSync(import.meta.filename, path.join(output, 'sources/yatm/previewworker/build/package-sources.mjs'));
 const commit = process.argv[3] || fs.readFileSync(path.join(output, 'COMMIT'), 'utf8').trim();

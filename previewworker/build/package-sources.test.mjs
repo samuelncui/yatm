@@ -122,6 +122,8 @@ test('package sources verifies module inputs and preserves offline guide links',
   const copied = run('node', [path.join(build, 'package-sources.mjs'), cleanPackage, commit], { cwd: worker, env: environment });
   assert.equal(copied.status, 0, copied.stderr);
   assert(fs.existsSync(path.join(cleanPackage, 'sources', 'modules', `${fixtureModule}@${fixtureVersion}`, 'LICENSE')));
+  // Distributed module sources stay removable although the module cache is read-only.
+  assert(fs.statSync(path.join(cleanPackage, 'sources', 'modules', `${fixtureModule}@${fixtureVersion}`, 'LICENSE')).mode & 0o200);
   const publicRoot = `https://github.com/samuelncui/yatm/blob/${commit}`;
   const sourceReadme = guide.replace('](../../docs/release/release.md#release-sop)', `](${publicRoot}/docs/release/release.md#release-sop)`);
   assert.equal(fs.readFileSync(path.join(sourceBuild, 'README.md'), 'utf8'), sourceReadme);
