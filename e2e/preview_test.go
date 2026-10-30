@@ -84,13 +84,10 @@ func runPreviewPolicyJob(
 	lib := library.NewWithSettings(libraryDB, appSettings)
 	require.NoError(t, lib.AutoMigrate())
 
-	// Exercise deployment-relative storage through the real Scan and helper boundary.
-	workingDir, err := os.Getwd()
-	require.NoError(t, err)
-	previewRoot, err := filepath.Rel(workingDir, filepath.Join(root, "previews"))
-	require.NoError(t, err)
-	require.False(t, filepath.IsAbs(previewRoot))
-	previews, err := previewcore.NewWithSettings(context.Background(), previewRoot, "", appSettings.Preview.Current)
+	// Exercise Work-relative storage through the real Scan and helper boundary; runs share one Work.
+	work := filepath.Join(root, "work")
+	require.NoError(t, lib.PrepareTemporary(work))
+	previews, err := previewcore.NewWithSettings(context.Background(), "previews", work, appSettings.Preview.Current)
 	require.NoError(t, err)
 	exe := executor.New(executorDB, lib, nil, executor.Paths{
 		Work: filepath.Join(databaseRoot, "work"), Source: sourceRoot,

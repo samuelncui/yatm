@@ -129,6 +129,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"), Target: filepath.Join(root, "target"),
 		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "target")}},
 	}
+	require.NoError(t, lib.PrepareTemporary(paths.Work))
 	failedDevice := filepath.Join(root, "failed-tapes", "ABC001")
 	device := filepath.Join(root, "tapes", "ABC001")
 
@@ -486,7 +487,9 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoError(t, err)
 	legacyLibrary := library.NewWithSettings(legacyDB, settingspkg.New(legacyDB, previewDefinition))
 	require.NoError(t, legacyLibrary.AutoMigrate())
-	legacyExecutor := executor.New(legacyDB, legacyLibrary, nil, executor.Paths{Work: filepath.Join(root, "legacy-work")}, executor.Scripts{}, nil)
+	legacyWork := filepath.Join(root, "legacy-work")
+	require.NoError(t, legacyLibrary.PrepareTemporary(legacyWork))
+	legacyExecutor := executor.New(legacyDB, legacyLibrary, nil, executor.Paths{Work: legacyWork}, executor.Scripts{}, nil)
 	require.NoError(t, legacyExecutor.AutoMigrate())
 	legacyCLI := serveCLI(t, apis.New(legacyLibrary, legacyExecutor), legacyExecutor)
 	legacyPath := filepath.Join(root, "legacy-library.json")

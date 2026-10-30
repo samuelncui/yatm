@@ -51,6 +51,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 		Work: filepath.Join(root, "work"), Source: filepath.Join(root, "source"), Target: filepath.Join(root, "target"),
 		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "target")}},
 	}
+	require.NoError(t, lib.PrepareTemporary(paths.Work))
 	firstDevice := filepath.Join(root, "tapes", "FUL001")
 	secondDevice := filepath.Join(root, "tapes", "FUL002")
 	scripts := executor.Scripts{

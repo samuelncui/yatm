@@ -304,6 +304,7 @@ func newVolumeE2EFixture(t *testing.T, ctx context.Context) *volumeE2EFixture {
 		Target: filepath.Join(root, "target"), Volumes: []string{filepath.Join(root, "volumes")},
 		Access: []executor.AccessRange{{Root: filepath.Join(root, "source")}, {Root: filepath.Join(root, "target")}},
 	}
+	require.NoError(t, lib.PrepareTemporary(paths.Work))
 	volumeRoot := filepath.Join(paths.Volumes[0], "offline-disk")
 	require.NoError(t, os.MkdirAll(volumeRoot, 0o755))
 	exe := executor.New(executorDB, lib, nil, paths, executor.Scripts{}, nil)
