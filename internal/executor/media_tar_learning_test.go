@@ -190,6 +190,8 @@ func recordTapeReadJob(t *testing.T, exe *Executor, base *entity.TapeReadParamet
 ) int64 {
 	t.Helper()
 	job := createTestJob(t, exe, entity.JobKind_JOB_KIND_RESTORE, 0)
+	// Let the fixture Job's asynchronous indexing settle before test cleanup removes its storage.
+	waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_FAILED)
 	encoded, err := protojson.Marshal(base.AppliesTo)
 	require.NoError(t, err)
 	var scope bytes.Buffer
