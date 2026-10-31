@@ -18,14 +18,6 @@ import (
 	"github.com/modern-go/reflect2"
 )
 
-/*
-type TapeDriveInterface interface {
-	Open() error
-	SetUserLabel(string) error
-	GetAttribute(*CmAttr) error
-}
-*/
-
 type InquiryInfoType struct {
 	Vendor   string
 	Model    string
@@ -38,10 +30,6 @@ type TapeDrive struct {
 	CmList      *Cm
 	InquiryInfo InquiryInfoType
 	dumpFd      *os.File
-}
-
-func TapeDriveNewDefault() (*TapeDrive, error) {
-	return TapeDriveNew("")
 }
 
 func TapeDriveNewFake() (*TapeDrive, error) {
@@ -128,53 +116,6 @@ func (drive *TapeDrive) SetDumpFile(file string) error {
 		panic(err)
 	}
 	drive.dumpFd = fo
-	return nil
-}
-
-func (drive *TapeDrive) SetUserLabel(str string) error {
-	senseBuf := make([]byte, sgio.SENSE_BUF_LEN)
-	inqCmdBlk := []uint8{0x8D, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 169, 0, 0}
-	wrAtt := make([]byte, 169)
-	wrAtt[0] = 0
-	wrAtt[1] = 0
-	wrAtt[2] = 0
-	wrAtt[3] = 165
-	wrAtt[4] = 0x08
-	wrAtt[5] = 0x03
-	wrAtt[6] = 2
-	wrAtt[7] = 0
-	wrAtt[8] = 160
-
-	for i := 0; i < 160; i++ {
-		if i < len(str) {
-			wrAtt[9+i] = str[i]
-		} else {
-			wrAtt[9+i] = 0
-		}
-	}
-
-	ioHdr := &sgio.SgIoHdr{
-		InterfaceID:    int32('S'),
-		CmdLen:         uint8(len(inqCmdBlk)),
-		MxSbLen:        sgio.SENSE_BUF_LEN,
-		DxferDirection: sgio.SG_DXFER_TO_DEV,
-		DxferLen:       uint32(len(wrAtt)),
-		Dxferp:         &wrAtt[0],
-		Cmdp:           &inqCmdBlk[0],
-		Sbp:            &senseBuf[0],
-		Timeout:        sgio.TIMEOUT_20_SECS,
-	}
-
-	err := sgio.SgioSyscall(drive.Dev, ioHdr)
-	if err != nil {
-		return err
-	}
-
-	err = sgio.CheckSense(ioHdr, &senseBuf)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -411,83 +352,6 @@ func (drive *TapeDrive) ScsiInquiry() error {
 	drive.InquiryInfo.Firmware = strings.Trim(string(parsed.ProductRevision[:]), " \u0000")
 	//fmt.Printf("MaxSpeed=%d ProtoID=%d OEMSpec=%d OEMSpecSub=%d PartNu=<%s>\n", parsed.MaxSpeed, parsed.ProtocolID, parsed.OEMSpecific, parsed.OEMSpecificSubfield, parsed.PartNumber)
 	//fmt.Printf("Truc1=%04x Truc2=%04x Truc3=%04x Truc4=%04x Truc5=%04x Truc6=%04x\n", parsed.Truc1, parsed.Truc2, parsed.Truc3, parsed.Truc4, parsed.Truc5, parsed.Truc6)
-
-	return nil
-}
-
-type LogSenseType struct {
-	PageCode    uint8
-	SubPageCode uint8
-}
-
-func (drive *TapeDrive) scsiLogSense(ls *LogSenseType) error {
-	senseBuf := make([]byte, sgio.SENSE_BUF_LEN)
-	replyBuf := make([]byte, READ_ATT_REPLY_LEN)
-
-	/* LOG SENSE (4Dh)
-			bits: 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
-		   byte0: --- OPERATION CODE (4Dh) ----
-		   byte1: reserved              |PPC|SP
-		   byte2:   PC  |    PAGE CODE
-		   byte3:     SUBPAGE CODE
-		   byte4: reserved
-		   byte5: <-- (MSB) PARAMETER..........
-		   byte6: ............POINTER (LSB) -->
-		   byte7: <-- (MSB) ALLOCATION.........
-		   byte8: .............LENGTH (LSB) -->
-		   byte9:  CONTROL BYTE (00h)
-		The log values returned are controlled by the Page Control ( PC ) field value as follows:
-	Value Description
-	00b the maximum value for each log entry is returned.
-	01b the current values are returned.
-	10b the maximum value for each log entry is returned.
-	11b the power-on values are returned.
-	NOTE 10 - For page 2Eh (TapeAlert) only, the PC field is ignored. Current values are always returned.
-	The Parameter Pointer Control ( PPC ) must be set to 0. Returning changed parameters is not supported. The
-	Save Page ( SP ) field must be set to 0. Saved pages are not supported. The Parameter Pointer will be 0.
-	*/
-	var opcode uint8 = 0x4D
-	var ppc uint8 = 0
-	var sp uint8 = 0
-	var pc uint8 = 0b01
-	var parameterpointer uint16 = 0
-	var alloclen uint16 = 0
-	var controlbyte uint8 = 0
-	inqCmdBlk := []uint8{
-		opcode,
-		((ppc & 0b1) << 1) | (sp & 0b1),
-		((pc & 0b11) << 6) | (ls.PageCode & 0b111111),
-		ls.SubPageCode,
-		0,
-		uint8((parameterpointer & 0xFF00) >> 8),
-		uint8((parameterpointer & 0x00FF) >> 0),
-		uint8((alloclen & 0xFF00) >> 8),
-		uint8((alloclen & 0x00FF) >> 0),
-		controlbyte}
-
-	ioHdr := &sgio.SgIoHdr{
-		InterfaceID:    int32('S'),
-		CmdLen:         uint8(len(inqCmdBlk)),
-		MxSbLen:        sgio.SENSE_BUF_LEN,
-		DxferDirection: sgio.SG_DXFER_FROM_DEV,
-		DxferLen:       READ_ATT_REPLY_LEN,
-		Dxferp:         &replyBuf[0],
-		Cmdp:           &inqCmdBlk[0],
-		Sbp:            &senseBuf[0],
-		Timeout:        sgio.TIMEOUT_20_SECS,
-	}
-
-	err := sgio.SgioSyscall(drive.Dev, ioHdr)
-	if err != nil {
-		return err
-	}
-
-	err = sgio.CheckSense(ioHdr, &senseBuf)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(replyBuf)
 
 	return nil
 }

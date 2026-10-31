@@ -42,7 +42,6 @@ func main() {
 	}
 
 	if options.Man {
-		fmt.Println("man")
 		parser.WriteManPage(os.Stdout)
 		return
 	}
@@ -93,19 +92,7 @@ waitfor:
 		drive.SetDumpFile(options.Dump)
 	}
 
-	/*
-			poh := &LogSenseType{0x3C, 0x0008}
-			err = scsiLogSense(dev, poh)
-			if err != nil {
-				fmt.Println("logtest:",err)
-		/	}
-	*/
-
-	//fmt.Println("Inquiry")
-	/*err =*/
 	drive.ScsiInquiry()
-	//fmt.Println("Inquiry err:")
-	//fmt.Println(err)
 
 	drive.GetStatus()
 	drive.GetAttributes()
