@@ -50,6 +50,21 @@ describe("shared Job progress polling", () => {
     unmount();
   });
 
+  it("retries a settled Job's failed read until one succeeds", async () => {
+    const load = vi.fn(async (_signal: AbortSignal) => 1).mockRejectedValueOnce(new Error("offline"));
+    const { result, unmount } = renderHook(() => useJobProgress(1n, true, false, load, "Progress failed"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.error).toBe("offline");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(result.current).toEqual({ data: 1, error: "" });
+    unmount();
+  });
+
   it("ignores a late response for another Job and aborts on unmount", async () => {
     const old = deferred<number>();
     const latest = deferred<number>();
