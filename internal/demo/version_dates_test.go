@@ -32,7 +32,7 @@ func requireDatedRestoreFixtures(t *testing.T, lib *library.Library, fileIDs ...
 		// Saved folder browsing must expose the same File and accept one nested Restore override.
 		file, err := lib.GetFile(context.Background(), fileID)
 		require.NoError(t, err)
-		children, err := lib.ListFiles(context.Background(), file.ParentID, entity.FileScope_FILE_SCOPE_SAVED, "", 100)
+		children, err := lib.ListFileRows(context.Background(), file.ParentID, entity.FileScope_FILE_SCOPE_SAVED, false, "", "", 100)
 		require.NoError(t, err)
 		found := false
 		for _, child := range children.Files {

@@ -32,17 +32,17 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 	require.NoError(t, err)
 
 	// Saved visibility is version existence, including versions with no surviving Position.
-	page, err := lib.ListFiles(ctx, Root.ID, entity.FileScope_FILE_SCOPE_DEFAULT, "", 2)
+	page, err := lib.ListFileRows(ctx, Root.ID, entity.FileScope_FILE_SCOPE_DEFAULT, false, "", "", 2)
 	require.NoError(t, err)
 	require.Equal(t, entity.FileScope_FILE_SCOPE_SAVED, page.Scope)
 	require.Equal(t, []int64{directory.ID, first.ID}, []int64{page.Files[0].ID, page.Files[1].ID})
 	require.NotEmpty(t, page.NextCursor)
-	last, err := lib.ListFiles(ctx, Root.ID, page.Scope, page.NextCursor, 2)
+	last, err := lib.ListFileRows(ctx, Root.ID, page.Scope, false, "", page.NextCursor, 2)
 	require.NoError(t, err)
 	require.Len(t, last.Files, 1)
 	require.Equal(t, second.ID, last.Files[0].ID)
 	require.Empty(t, last.NextCursor)
-	_, err = lib.ListFiles(ctx, Root.ID, entity.FileScope_FILE_SCOPE_ALL, page.NextCursor, 2)
+	_, err = lib.ListFileRows(ctx, Root.ID, entity.FileScope_FILE_SCOPE_ALL, false, "", page.NextCursor, 2)
 	require.Error(t, err)
 
 	// Search applies the same database predicate before selecting each page.
@@ -68,7 +68,7 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 		return nil
 	}))
 	require.Equal(t, []int64{first.ID, second.ID}, selected)
-	all, err := lib.ListFiles(ctx, Root.ID, entity.FileScope_FILE_SCOPE_ALL, "", 200)
+	all, err := lib.ListFileRows(ctx, Root.ID, entity.FileScope_FILE_SCOPE_ALL, false, "", "", 200)
 	require.NoError(t, err)
 	require.Len(t, all.Files, 108)
 	kept, err := lib.GetFile(ctx, first.ID)

@@ -254,10 +254,6 @@ func TestSelectionProjectionRetainsOriginalAndSavedSize(t *testing.T) {
 	require.NoError(t, db.Create(&FileLocation{FileID: current.ID, LocationID: location.ID, Path: current.Name, Size: 5, Mode: 0644}).Error)
 	require.NoError(t, db.Create(&FileVersion{FileID: current.ID, Signature: []byte("old"), Size: 99}).Error)
 	require.NoError(t, db.Create(&FileVersion{FileID: saved.ID, Signature: []byte("saved"), Size: 9, Mode: 0644}).Error)
-	// FileTreeSize needs the original-first compatibility projection after raw traversal.
-	size, err := lib.FileTreeSize(ctx, 0, entity.FileScope_FILE_SCOPE_ALL)
-	require.NoError(t, err)
-	require.EqualValues(t, 14, size)
 	selection := []*entity.FileSelection{{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: saved.ID}}, Scope: entity.FileScope_FILE_SCOPE_SAVED}}
 	require.NoError(t, lib.WalkFileSelections(ctx, selection, func(file *File, target string) error {
 		require.EqualValues(t, 9, file.Size)

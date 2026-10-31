@@ -118,17 +118,6 @@ func (l *Library) ValidateFilesQuery(query string) error {
 	return err
 }
 
-func (l *Library) filesQuery(query string, live bool) (clause.Expression, error) {
-	compiled, err := l.CompileFilesQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	if live {
-		return compiled.live, nil
-	}
-	return compiled.catalog, nil
-}
-
 // MatchLiveFiles evaluates the ordinary query compiler over bound observations, not a cached tree.
 // It returns matching input indexes without persisting the rows or reading the filesystem.
 func (l *Library) MatchLiveFiles(ctx context.Context, query string, rows []LiveQueryRow) ([]int, error) {
