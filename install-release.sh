@@ -28,7 +28,7 @@ INSTALL_PREVIEW=0
 CHECK_ONLY=0
 SHOW_HELP=0
 LEGACY=0
-REQUIRED_TOOLS=(curl jq tar sha256sum systemctl cp du df readlink mktemp find flock tee awk grep sed mv rm mkdir rmdir chmod date sleep id uname cat)
+REQUIRED_TOOLS=(curl jq tar sha256sum systemctl cp du df readlink mktemp find flock tee awk grep sed mv rm mkdir rmdir chmod date sleep id uname cat diff)
 MANAGED_ITEMS=(yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate install-release.sh frontend README.md CONTEXT.md docs VERSION COMMIT LICENSE licenses skills templates)
 OBSOLETE_MANAGED_ITEMS=(config.example.yaml)
 
@@ -420,7 +420,41 @@ inspect_installation() {
   fi
   echo 'Passed: configuration, backup scope and current service activity checks.'
   jq -r '.warnings[]? | "Manual check: " + .' "$TMP_DIRECTORY/preflight.json"
+  report_script_templates
   echo 'Tape scripts were not executed; installation checks do not establish Tape readiness.'
+}
+
+report_script_templates() {
+  # Preserved scripts are compared, never replaced; a local name may append .local to its template's.
+  [[ "$CURRENT_VERSION" != none ]] || return 0
+  local templates="$RELEASE_DIRECTORY/templates/scripts" script path name
+  local -A configured=() directories=()
+  [[ -d "$templates" ]] || return 0
+  while IFS= read -r script; do
+    path="$script"
+    [[ "$path" == /* ]] || path="$INSTALL_DIRECTORY/${path#./}"
+    configured[$path]=1
+    directories[${path%/*}]=1
+    name="${path##*/}"
+    name="${name%.local}"
+    if [[ ! -f "$templates/$name" ]]; then
+      echo "Manual check: configured Tape script $script has no bundled template to compare."
+    elif ! diff -q -- "$templates/$name" "$path" > /dev/null 2>&1; then
+      echo "Manual check: configured Tape script $script differs from bundled template templates/scripts/$name:"
+      diff -u --label "templates/scripts/$name" --label "$script" -- "$templates/$name" "$path" || true
+    fi
+  done < <(jq -r '.tape_scripts[]?' "$TMP_DIRECTORY/preflight.json")
+
+  # Helpers beside the configured scripts, such as get_device, are compared by their template name.
+  local directory template
+  for directory in "${!directories[@]}"; do
+    for template in "$templates"/*; do
+      path="$directory/${template##*/}"
+      [[ -f "$path" && -z "${configured[$path]:-}" ]] || continue
+      diff -q -- "$template" "$path" > /dev/null 2>&1 ||
+        echo "Manual check: unconfigured file ${path#"$INSTALL_DIRECTORY"/} differs from bundled template templates/scripts/${template##*/}; it is a helper or an unused copy."
+    done
+  done
 }
 
 show_migration_guide() {

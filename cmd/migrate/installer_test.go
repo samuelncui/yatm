@@ -282,6 +282,48 @@ main --check
 	require.NoDirExists(t, filepath.Join(root, "yatm"))
 }
 
+func TestInstallerReportsScriptsDifferingFromTemplates(t *testing.T) {
+	// Preserved scripts are compared with the candidate templates; matching ones stay silent.
+	root := t.TempDir()
+	templates := filepath.Join(root, "release/templates/scripts")
+	scripts := filepath.Join(root, "yatm/scripts")
+	require.NoError(t, os.MkdirAll(templates, 0700))
+	require.NoError(t, os.MkdirAll(scripts, 0700))
+	for name, content := range map[string]string{"encrypt": "encrypt\n", "mount.openltfs": "mount new\n", "get_device": "sysfs\n", "mount": "bare\n"} {
+		require.NoError(t, os.WriteFile(filepath.Join(templates, name), []byte(content), 0700))
+	}
+	for name, content := range map[string]string{"encrypt": "encrypt\n", "mount.openltfs.local": "mount old\n", "custom": "custom\n", "get_device": "sg_map\n", "mount": "bare\n"} {
+		require.NoError(t, os.WriteFile(filepath.Join(scripts, name), []byte(content), 0700))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(root, "preflight.json"),
+		[]byte(`{"tape_scripts":["./scripts/encrypt","./scripts/mount.openltfs.local","./scripts/custom"]}`), 0600))
+	output, err := installerShell(t, `
+TMP_DIRECTORY="$1"
+INSTALL_DIRECTORY="$1/yatm"
+RELEASE_DIRECTORY="$1/release"
+CURRENT_VERSION=v1.0.0-alpha.2
+report_script_templates
+`, "", root)
+	require.NoError(t, err, output)
+	require.Contains(t, output, "Manual check: configured Tape script ./scripts/mount.openltfs.local differs from bundled template templates/scripts/mount.openltfs:")
+	require.Contains(t, output, "-mount new\n+mount old\n")
+	require.Contains(t, output, "Manual check: configured Tape script ./scripts/custom has no bundled template to compare.")
+	require.Contains(t, output, "Manual check: unconfigured file scripts/get_device differs from bundled template templates/scripts/get_device;")
+	require.NotContains(t, output, "scripts/encrypt")
+	require.NotContains(t, output, "file scripts/mount ")
+
+	// A fresh installation copies the templates and has nothing to compare.
+	output, err = installerShell(t, `
+TMP_DIRECTORY="$1"
+INSTALL_DIRECTORY="$1/yatm"
+RELEASE_DIRECTORY="$1/release"
+CURRENT_VERSION=none
+report_script_templates
+`, "", root)
+	require.NoError(t, err, output)
+	require.Empty(t, output)
+}
+
 func TestInstallerFreshCheckUsesFinalDirectory(t *testing.T) {
 	// Stage the supplied configuration separately without changing the final installation path.
 	root := t.TempDir()

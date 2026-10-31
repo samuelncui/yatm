@@ -73,4 +73,8 @@ from the key file's second line instead of accepting `-kd`; operators select the
 supported by their local tool.
 
 Installation checks never run Tape scripts. A successful installer does not certify customized
-scripts or physical hardware.
+scripts or physical hardware. When upgrading, `--check` and the installation run compare each
+configured script with the candidate's bundled template of the same name (a local copy such as
+`mount.openltfs.local` is compared with `mount.openltfs`), and print a unified diff for each difference. Other template-named files beside them,
+such as `get_device`, are listed when they differ. The installer reports these differences as manual
+checks and never replaces a preserved script.
