@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -22,6 +23,7 @@ import (
 	previewpkg "github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -94,11 +96,15 @@ func waitIndexed(t *testing.T, exe *executor.Executor, id int64) {
 	value, err := exe.GetJobRunner(context.Background(), id)
 	require.NoError(t, err)
 	runner := value.(*jobRestoreRunner)
-	require.Eventually(t, func() bool {
+	// Report the last observation so a timeout under load shows where indexing stopped.
+	var last string
+	ok := assert.Eventually(t, func() bool {
 		record := new(executor.JobRecord)
 		err := runner.db.First(record, 1).Error
+		last = fmt.Sprintf("status=%s running=%t err=%v", record.Status, exe.IsRunning(id), err)
 		return err == nil && record.Status == entity.JobStatus_JOB_STATUS_READY && !exe.IsRunning(id)
 	}, 5*time.Second, 10*time.Millisecond)
+	require.True(t, ok, "Job %d did not finish indexing: %s", id, last)
 }
 
 func createMediaFile(
