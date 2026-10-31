@@ -7,7 +7,6 @@ case "$OUTPUT_DIRECTORY" in /*) ;; *) OUTPUT_DIRECTORY="$PWD/$OUTPUT_DIRECTORY" 
 mkdir -p "$OUTPUT_DIRECTORY"
 export OUTPUT_DIRECTORY
 cd "$REPOSITORY"
-mkdir -p "$OUTPUT_DIRECTORY"
 RELEASE_VERSION="${RELEASE_VERSION:-development}"
 RELEASE_COMMIT="${RELEASE_COMMIT:-$(git rev-parse HEAD)}"
 LDFLAGS="-X github.com/samuelncui/yatm/internal/buildinfo.Version=$RELEASE_VERSION -X github.com/samuelncui/yatm/internal/buildinfo.Commit=$RELEASE_COMMIT"
