@@ -48,7 +48,7 @@ export const ArchiveCard = ({ job }: { job: Job }) => {
     async (signal: AbortSignal) => GetArchiveJobProgressResponse.create(await archiveJobCli.getProgress({ id: job.id }, { abort: signal }).response),
     [job.id],
   );
-  const { data, error: progressError } = useJobProgress(job.id, visible, loadProgress, "Could not load archive progress");
+  const { data, error: progressError } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load archive progress");
   const archive = data ?? GetArchiveJobProgressResponse.create();
   const progress = archive.progress ?? null;
 

@@ -18,7 +18,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
     async (signal: AbortSignal) => GetScanJobProgressResponse.create(await scanJobCli.getProgress({ id: job.id }, { abort: signal }).response),
     [job.id],
   );
-  const { data, error } = useJobProgress(job.id, visible, loadProgress, "Could not load scan progress");
+  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load scan progress");
   const scan = data ?? GetScanJobProgressResponse.create();
   const rows = useMemo(() => scanExtraRows(scan), [scan]);
   // A Job's frozen creation settings apply to every row and to the Media chooser.

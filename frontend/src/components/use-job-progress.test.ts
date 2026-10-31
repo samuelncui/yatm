@@ -19,7 +19,7 @@ describe("shared Job progress polling", () => {
   it("waits for a slow request before scheduling another and retains data offscreen", async () => {
     const first = deferred<number>();
     const load = vi.fn((_signal: AbortSignal) => first.promise);
-    const { result, rerender } = renderHook(({ visible }) => useJobProgress(1n, visible, load, "Progress failed"), { initialProps: { visible: true } });
+    const { result, rerender } = renderHook(({ visible }) => useJobProgress(1n, visible, true, load, "Progress failed"), { initialProps: { visible: true } });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10000);
     });
@@ -35,6 +35,21 @@ describe("shared Job progress polling", () => {
     expect(result.current.data).toBe(42);
   });
 
+  it("reads a settled Job once and resumes polling only while it runs", async () => {
+    const load = vi.fn(async (_signal: AbortSignal) => 1);
+    const { rerender, unmount } = renderHook(({ running }) => useJobProgress(1n, true, running, load, "Progress failed"), { initialProps: { running: false } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(load).toHaveBeenCalledTimes(1);
+    rerender({ running: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    expect(load).toHaveBeenCalledTimes(3);
+    unmount();
+  });
+
   it("ignores a late response for another Job and aborts on unmount", async () => {
     const old = deferred<number>();
     const latest = deferred<number>();
@@ -42,7 +57,7 @@ describe("shared Job progress polling", () => {
       .fn((_signal: AbortSignal) => old.promise)
       .mockImplementationOnce(() => old.promise)
       .mockImplementationOnce(() => latest.promise);
-    const { result, rerender, unmount } = renderHook(({ id }) => useJobProgress(id, true, load, "Progress failed"), { initialProps: { id: 1n } });
+    const { result, rerender, unmount } = renderHook(({ id }) => useJobProgress(id, true, true, load, "Progress failed"), { initialProps: { id: 1n } });
     rerender({ id: 2n });
     expect(load.mock.calls[0][0].aborted).toBe(true);
     await act(async () => latest.resolve(2));
@@ -58,7 +73,7 @@ describe("shared Job progress polling", () => {
       .mockResolvedValueOnce(1)
       .mockRejectedValueOnce(new Error("Offline"))
       .mockResolvedValueOnce(2);
-    const { result, unmount } = renderHook(() => useJobProgress(1n, true, load, "Progress failed"));
+    const { result, unmount } = renderHook(() => useJobProgress(1n, true, true, load, "Progress failed"));
     await act(async () => {});
     expect(result.current.data).toBe(1);
     await act(async () => {
@@ -77,7 +92,7 @@ describe("shared Job progress polling", () => {
     const current = deferred<{ window: string }>();
     const previousLoad = vi.fn((_signal: AbortSignal) => old.promise);
     const nextLoad = vi.fn((_signal: AbortSignal) => current.promise);
-    const { result, rerender } = renderHook(({ load }) => useJobProgress(1n, true, load, "Progress failed"), {
+    const { result, rerender } = renderHook(({ load }) => useJobProgress(1n, true, true, load, "Progress failed"), {
       initialProps: { load: previousLoad },
     });
     rerender({ load: nextLoad });

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { errorMessage } from "@/tools";
 
 // Visibility controls requests, never the card's height or its last completed snapshot.
-export function useJobProgress<T>(jobID: bigint, visible: boolean, load: (signal: AbortSignal) => Promise<T>, failureMessage: string) {
+// A settled Job reads its snapshot once and does not poll; a running one refreshes every two seconds.
+export function useJobProgress<T>(jobID: bigint, visible: boolean, running: boolean, load: (signal: AbortSignal) => Promise<T>, failureMessage: string) {
   const [snapshot, setSnapshot] = useState<{ jobID: bigint; data?: T; error: string }>();
 
   useEffect(() => {
@@ -22,14 +23,14 @@ export function useJobProgress<T>(jobID: bigint, visible: boolean, load: (signal
           }));
         }
       }
-      if (!controller.signal.aborted) timer = setTimeout(() => void refresh(), 2000);
+      if (running && !controller.signal.aborted) timer = setTimeout(() => void refresh(), 2000);
     };
     void refresh();
     return () => {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [jobID, visible, load, failureMessage]);
+  }, [jobID, visible, running, load, failureMessage]);
 
   return { data: snapshot?.jobID === jobID ? snapshot.data : undefined, error: snapshot?.jobID === jobID ? snapshot.error : "" };
 }

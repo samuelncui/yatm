@@ -52,7 +52,7 @@ export const RestoreCard = ({ job }: { job: Job }) => {
     },
     [job.id, job.status],
   );
-  const { data, error } = useJobProgress(job.id, visible, loadProgress, "Could not load restore progress");
+  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load restore progress");
   const progress = data?.progress ?? null;
   const summary = data?.summary;
   const media = data?.media ?? [];
