@@ -9,7 +9,7 @@ import { contentTime } from "@/components/content-status";
 import { mediaCli } from "@/api";
 import { MediaKind } from "@/entity";
 import type { InspectMediaResponse, InspectMediaRequest } from "@/entity";
-import { formatFilesize } from "@/tools";
+import { formatFilesize, errorMessage } from "@/tools";
 
 export const useMediaInspect = () => {
   const [reply, setReply] = useState<InspectMediaResponse | null>(null);
@@ -29,7 +29,7 @@ export const useMediaInspect = () => {
     } catch (reason) {
       if (current !== sequence.current) return null;
       setReply(null);
-      setError(reason instanceof Error ? reason.message : "Unable to inspect Media");
+      setError(errorMessage(reason, "Unable to inspect Media"));
       return null;
     } finally {
       if (current === sequence.current) setLoading(false);

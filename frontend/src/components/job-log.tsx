@@ -12,6 +12,7 @@ import { Virtuoso } from "react-virtuoso";
 
 import { jobCli } from "@/api";
 import { JobLogDirection, type JobLogLine, type ListJobLogLinesResponse } from "@/entity/job";
+import { errorMessage } from "@/tools";
 
 const maxLoadedLines = 2000;
 const maxLoadedCharacters = 4 * 1024 * 1024;
@@ -169,7 +170,7 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
         }
       } catch (cause) {
         if (currentGeneration === generation.current) {
-          setError(cause instanceof Error ? cause.message : "Could not read Job log");
+          setError(errorMessage(cause, "Could not read Job log"));
           setFailedRead(inFlight.current);
         }
       } finally {

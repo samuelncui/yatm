@@ -35,6 +35,7 @@ import logoURL from "../favicon.svg";
 
 import "./app.less";
 import "./product.less";
+import { errorMessage } from "@/tools";
 
 const IdenticalFiles = lazy(async () => ({ default: (await import("@/pages/identical")).IdenticalFiles }));
 const FileBrowser = lazy(async () => ({ default: (await import("@/pages/file")).FileBrowser }));
@@ -198,7 +199,7 @@ const App = () => {
           </ErrorMessage>
           <ErrorMessage>
             <b>Message: </b>
-            {error.reason.message}
+            {errorMessage(error.reason, "Request failed")}
           </ErrorMessage>
         </div>,
       );

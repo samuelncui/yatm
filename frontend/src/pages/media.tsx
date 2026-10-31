@@ -109,7 +109,7 @@ export const useMediaBrowser = (
       setNextPage(reply.hasMore ? { kind: "positions", mediaID: page.mediaID, directory: page.directory, afterPath: reply.positions.at(-1)?.path } : null);
     } catch (error) {
       if (sequence !== request.current) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error, "Could not read Media");
       if (append) {
         toast.error(`Could not load more Media: ${message}`);
       } else {

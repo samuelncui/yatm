@@ -375,7 +375,7 @@ export const useFileBrowser = (
       try {
         await runSearch(query, originID);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Search failed");
+        toast.error(errorMessage(error, "Search failed"));
       }
     },
     [currentID, runSearch, searchState?.originID, navigate, source],
@@ -386,7 +386,7 @@ export const useFileBrowser = (
     try {
       await runSearch(searchState.query, searchState.originID, searchState.nextCursor, true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Load more failed");
+      toast.error(errorMessage(error, "Load more failed"));
     }
   }, [runSearch, searchState]);
 
