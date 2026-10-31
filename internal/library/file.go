@@ -497,16 +497,3 @@ func listFileRowParents(tx *gorm.DB, id int64) ([]*File, error) {
 
 	return result, nil
 }
-
-func (l *Library) Search(ctx context.Context, name string) ([]*File, error) {
-	// Search persisted identities before attaching compatibility projections.
-	rows := make([]*fileRow, 0, 4)
-	if r := l.readDB().WithContext(ctx).Where("name LIKE ?", "%"+name+"%").Order("name").Limit(100).Find(&rows); r.Error != nil {
-		return nil, fmt.Errorf("find files fail, %w", r.Error)
-	}
-	files := fileViews(rows)
-	if err := hydrateFileViews(l.readDB().WithContext(ctx), files...); err != nil {
-		return nil, fmt.Errorf("hydrate files fail, %w", err)
-	}
-	return files, nil
-}
