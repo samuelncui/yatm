@@ -1,4 +1,5 @@
 import { Alert } from "@mui/material";
+import { tapeFormatLabel } from "@/components/tape-format";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import { MediaKind, PositionHealth, VolumeType, TapeRecordMode, type Media, type Position } from "@/entity";
 import { ContentCopies, ContentPreview, copyHealthLabel } from "@/components/file-content";
@@ -54,7 +55,6 @@ export const tapeEncryption = (media: Media) => {
 };
 
 // Users see the storage format; the stored profile identifier stays in Technical details.
-const tapeFormatLabel = (format: string) => (format === "ltfs_v0" || format === "ltfs_v1" ? "LTFS" : format === "tar_pax_v1" ? "Tar" : format || "Unknown");
 
 const MediaContent = ({ media }: { media: Media }) => {
   const profile = media.profile?.kind;

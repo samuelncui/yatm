@@ -1,4 +1,5 @@
 import { SettingsSection } from "@/components/settings-page";
+import { isLtfsFormat, tapeFormatOf } from "@/components/tape-format";
 import { Feedback } from "@/components/feedback";
 import { Fragment, useContext, useEffect, useRef, useState, type FormEvent } from "react";
 import {
@@ -187,10 +188,9 @@ export const ReadMediaDialog = ({
     .filter((value) => !tapeID || value.id.toString() === tapeID)
     .some((value) => value.id === inspection.reply?.media?.id && value.identity === inspection.reply.identity);
   const selectedTape = tapes.find((value) => value.id.toString() === tapeID);
-  const isLTFS = (value: Media) =>
-    value.profile?.kind.oneofKind === "tape" && (value.profile.kind.tape.format === "ltfs_v1" || value.profile.kind.tape.format === "ltfs_v0");
+  const isLTFS = (value: Media) => isLtfsFormat(tapeFormatOf(value));
   const useLTFS = selectedTape ? isLTFS(selectedTape) : tapes.length > 0 && tapes.every(isLTFS);
-  const isTar = (value: Media) => value.profile?.kind.oneofKind === "tape" && value.profile.kind.tape.format === "tar_pax_v1";
+  const isTar = (value: Media) => tapeFormatOf(value) === "tar_pax_v1";
   const refreshApplicable =
     backend === "tape" &&
     (selectedTape ? isTar(selectedTape) : tapes.length > 0 && tapes.every(isTar)) &&

@@ -1,4 +1,5 @@
 import { Feedback } from "@/components/feedback";
+import { isWritableTapeFormat, tapeFormatOf } from "@/components/tape-format";
 import { Fragment, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
 
 import Alert from "@mui/material/Alert";
@@ -99,7 +100,6 @@ const emptyTapeForm = (): TapeForm => ({
   format: "ltfs_v1",
   options: TarWriteOptions.create(),
 });
-const tapeFormat = (media?: Media) => (media?.profile?.kind.oneofKind === "tape" ? media.profile.kind.tape.format : "");
 
 const WriteMediaDialog = ({ job }: { job: Job }) => {
   const refresh = useContext(RefreshContext);
@@ -146,7 +146,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
       return;
     }
     setRegistered(reply.media);
-    const existingFormat = tapeFormat(reply.media);
+    const existingFormat = tapeFormatOf(reply.media);
     setTape((current) => ({
       ...current,
       device,
@@ -187,7 +187,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
       setCheckedBarcode(barcode ?? "");
       setRegistered(existing);
       if (existing) {
-        setTape((current) => (current.mode === ArchiveTapeWriteMode.APPEND ? { ...current, format: tapeFormat(existing), name: existing.name } : current));
+        setTape((current) => (current.mode === ArchiveTapeWriteMode.APPEND ? { ...current, format: tapeFormatOf(existing), name: existing.name } : current));
       }
     } catch (reason) {
       if (sequence === deviceRequest.current) setSubmitError(errorMessage(reason, "Could not inspect Tape"));
@@ -386,7 +386,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
     (tar
       ? checkedBarcode === barcode &&
         inspectionAllowsWrite &&
-        (formatMode ? !existing && !optionError && resolved : existing && tapeFormat(existing) === "tar_pax_v1")
+        (formatMode ? !existing && !optionError && resolved : existing && tapeFormatOf(existing) === "tar_pax_v1")
       : tape.format === "ltfs_v1" &&
         !inspecting &&
         inspected !== null &&
@@ -472,7 +472,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                   onRefresh={refreshDevices}
                 />
                 {devicesError && <Feedback severity="error">{devicesError}</Feedback>}
-                {existing && !["ltfs_v1", "tar_pax_v1"].includes(tapeFormat(existing)) && (
+                {existing && !isWritableTapeFormat(tapeFormatOf(existing)) && (
                   <Alert severity="warning">This Tape cannot be appended. Delete its Media metadata before formatting it.</Alert>
                 )}
                 {tape.device && (
@@ -501,11 +501,9 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                     >
                       <MenuItem value="ltfs_v1">LTFS</MenuItem>
                       <MenuItem value="tar_pax_v1">Tar</MenuItem>
-                      {!["ltfs_v1", "tar_pax_v1"].includes(tape.format) && <MenuItem value={tape.format}>{tape.format} · unsupported</MenuItem>}
+                      {!isWritableTapeFormat(tape.format) && <MenuItem value={tape.format}>{tape.format} · unsupported</MenuItem>}
                     </TextField>
-                    {!["ltfs_v1", "tar_pax_v1"].includes(tape.format) && (
-                      <Alert severity="warning">This saved format is unsupported. Choose LTFS or Tar explicitly.</Alert>
-                    )}
+                    {!isWritableTapeFormat(tape.format) && <Alert severity="warning">This saved format is unsupported. Choose LTFS or Tar explicitly.</Alert>}
                     {tar && (
                       <TextField
                         select
@@ -560,7 +558,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                     )}
                     {tape.mode === ArchiveTapeWriteMode.APPEND && existing && (
                       <Alert severity="info">
-                        APPEND uses {tapeFormat(existing)} and its immutable cartridge profile.
+                        APPEND uses {tapeFormatOf(existing)} and its immutable cartridge profile.
                         {existingTar && ` Records ${existingTar.recordBytes} bytes · hardware compression ${existingTar.hardwareCompression ? "on" : "off"}.`}
                         {` Encryption: ${tapeEncryption(existing)}.`}
                       </Alert>

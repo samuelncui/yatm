@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { isWritableTapeFormat } from "@/components/tape-format";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from "@mui/material";
 import { mediaCli } from "@/api";
 import {
@@ -183,11 +184,11 @@ export const DeviceSettingsBrowser = () => {
                     <MenuItem value="">LTFS by default</MenuItem>
                     <MenuItem value="ltfs_v1">LTFS</MenuItem>
                     <MenuItem value="tar_pax_v1">Tar</MenuItem>
-                    {tape.defaultFormat && !["ltfs_v1", "tar_pax_v1"].includes(tape.defaultFormat) && (
+                    {tape.defaultFormat && !isWritableTapeFormat(tape.defaultFormat) && (
                       <MenuItem value={tape.defaultFormat}>{tape.defaultFormat} · unsupported</MenuItem>
                     )}
                   </TextField>
-                  {tape.defaultFormat && !["ltfs_v1", "tar_pax_v1"].includes(tape.defaultFormat) && (
+                  {tape.defaultFormat && !isWritableTapeFormat(tape.defaultFormat) && (
                     <Alert severity="warning">Choose LTFS or Tar before using this default.</Alert>
                   )}
                   {(tape.defaultFormat ?? "ltfs_v1") === "ltfs_v1" && <Alert severity="info">Tar settings are inactive for LTFS.</Alert>}
