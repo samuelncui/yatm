@@ -115,6 +115,10 @@ def installation_replacement(test):
         return sorted(test.remote(["find", install + "/.backup", "-name", "yatm.tar.gz", "-type", "f",
                                    "-exec", "sha256sum", "--", "{}", "+"]).stdout.splitlines())
 
+    # Previews are regenerable derivatives: backups leave them out and a restore keeps them in place.
+    preview = install + "/work/previews/acceptance-preview"
+    test.write(preview, b"generated before the backups\n")
+
     backups = []
     for attempt in (1, 2):
         obsolete = install + f"/docs/acceptance-obsolete-{attempt}.txt"
@@ -144,6 +148,8 @@ def installation_replacement(test):
         require(all("./" + name in members for name in preserved), "The complete backup omitted custom or hidden files.")
         require(f"./docs/acceptance-obsolete-{attempt}.txt" in members,
                 "The complete backup omitted the managed file awaiting replacement.")
+        require(not any(name == "./work/previews" or name.startswith("./work/previews/") for name in members),
+                "The installation backup included regenerable Previews.")
         mirror = test.root + f"/backup-inspection-{attempt}"
         test.remote(["mkdir", mirror])
         test.remote(["tar", "--acls", "--xattrs", "--xattrs-include=*", "--numeric-owner", "-xzf", archive, "-C", mirror], timeout=300)
@@ -156,33 +162,28 @@ def installation_replacement(test):
         test.remote(["rm", "-rf", "--", mirror])
         backups.append(archive)
 
-    # Rehearse the documented same-root recovery, retaining the displaced tree instead of overlaying it.
+    # Restore through the installed installer, retaining the displaced tree instead of overlaying it.
     test.write(install + "/.acceptance-new-only", b"must not survive recovery\n")
-    test.remote(["systemctl", "stop", test.service])
-    require(test.remote(["systemctl", "show", test.service, "--property", "ActiveState", "--value"]).stdout.strip() == b"inactive",
-            "Recovery requires a stopped service.")
+    later = install + "/work/previews/acceptance-later"
+    test.write(later, b"generated after the backup\n")
     old_backups = backup_hashes()
-    test.remote(["sh", "-c", 'cd "$1" && sha256sum -c yatm.tar.gz.sha256',
-                 "check-recovery-backup", str(PurePosixPath(backups[-1]).parent)])
-    retained = test.remote(["mktemp", "-d", install + "/.backup/failed-installation.XXXXXXXX"]).stdout.decode().strip()
-    require(re.fullmatch(re.escape(install) + r"/\.backup/failed-installation\.[A-Za-z0-9]{8}", retained),
-            "Unexpected failed-installation path.")
-    entries = test.remote(["find", install, "-mindepth", "1", "-maxdepth", "1", "!", "-name", ".backup", "-print0"]).stdout.split(b"\0")
-    entries = [entry.decode() for entry in entries if entry]
-    require(entries and all(str(PurePosixPath(entry).parent) == install for entry in entries), "Recovery selected an unowned entry.")
-    test.remote(["mv", "--", *entries, retained + "/"], timeout=300)
-    test.remote(["tar", "--acls", "--xattrs", "--xattrs-include=*", "--numeric-owner", "-xzf", backups[-1], "-C", install], timeout=300)
-    # Compare the stopped tree before startup can update databases or logs.
-    test.remote(["tar", "--acls", "--xattrs", "--xattrs-include=*", "--numeric-owner", "-dzf", backups[-1], "-C", install], timeout=300)
+    result = test.remote(["bash", install + "/install-release.sh", "--restore-backup", PurePosixPath(backups[-1]).parent.name,
+                          "--install-dir", install, "--service", test.service], body=b"y\n", timeout=600)
+    match = re.search(rb"^Current installation will be retained at (.+)\.$", result.stdout, re.MULTILINE)
+    require(match is not None, "Restore did not identify the retained installation.")
+    retained = match.group(1).decode()
+    require(re.fullmatch(re.escape(install) + r"/\.backup/replaced-[0-9]{14}\.[A-Za-z0-9]{6}", retained),
+            "Unexpected replaced-installation path.")
     require(test.remote(["test", "-e", install + "/.acceptance-new-only"], expected=None).returncode == 1,
             "Recovery overlaid the failed tree and retained a new-only file.")
     require(test.remote(["cat", retained + "/.acceptance-new-only"]).stdout == b"must not survive recovery\n",
             "Recovery discarded the displaced installation instead of preserving it.")
     require(test.remote(["cat", install + "/docs/acceptance-obsolete-2.txt"]).stdout == b"owned managed-tree fixture\n",
             "Recovery did not restore the selected backup's managed tree.")
+    require(test.remote(["cat", preview]).stdout == b"generated before the backups\n" and
+            test.remote(["cat", later]).stdout == b"generated after the backup\n",
+            "Recovery did not keep the live Previews in place.")
     check_customization(install)
-    test.remote(["systemctl", "daemon-reload"])
-    test.remote(["systemctl", "start", test.service])
     wait_for_service(test)
     require(backup_hashes() == old_backups, "Recovery changed the retained complete backups.")
     check_application()

@@ -27,6 +27,10 @@ PREVIEW_CHECKSUM=
 INSTALL_PREVIEW=0
 CHECK_ONLY=0
 SHOW_HELP=0
+PREVIEW_ROOT=
+RESTORE_BACKUP=
+PRUNE_KEEP=
+RESTORE_RETAINED=
 LEGACY=0
 REQUIRED_TOOLS=(curl jq tar sha256sum systemctl cp du df readlink mktemp find flock tee awk grep sed mv rm mkdir rmdir chmod date sleep id uname cat diff)
 MANAGED_ITEMS=(yatm-httpd yatm-cli yatm-export-library yatm-lto-info yatm-migrate install-release.sh frontend README.md CONTEXT.md docs VERSION COMMIT LICENSE licenses skills templates)
@@ -44,16 +48,20 @@ usage() {
   echo '       [--archive FILE --checksum FILE] [--install-dir DIR] [--service NAME]'
   echo '       [--config FILE]'
   echo '       [--with-preview | --without-preview] [--preview-archive FILE --preview-checksum FILE]'
+  echo '       install-release.sh --restore-backup NAME [--install-dir DIR] [--service NAME]'
+  echo '       install-release.sh --prune-backups KEEP [--install-dir DIR]'
   echo "Linux amd64/systemd only. Required tools: ${REQUIRED_TOOLS[*]}."
   echo 'Stable is the default. Alpha and local candidates require an explicit version.'
   echo '--check performs read-only checks; it does not stop or quiesce YATM.'
   echo '--config supplies the configuration for a fresh installation only.'
+  echo '--restore-backup replaces the installation with a complete backup under .backup/; Previews stay in place.'
+  echo '--prune-backups keeps the newest KEEP complete backups and removes older ones after confirmation.'
 }
 
 parse_options() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --version|--archive|--checksum|--install-dir|--service|--config|--preview-archive|--preview-checksum)
+      --version|--archive|--checksum|--install-dir|--service|--config|--preview-archive|--preview-checksum|--restore-backup|--prune-backups)
         [[ $# -ge 2 && "$2" != --* && -n "$2" ]] || { fail "Missing value for $1."; return 1; } ;;
     esac
     case "$1" in
@@ -67,6 +75,8 @@ parse_options() {
       --without-preview) PREVIEW_CHOICE=no; shift ;;
       --preview-archive) PREVIEW_ARCHIVE="$2"; PREVIEW_CHOICE=yes; shift 2 ;;
       --preview-checksum) PREVIEW_CHECKSUM="$2"; shift 2 ;;
+      --restore-backup) RESTORE_BACKUP="$2"; shift 2 ;;
+      --prune-backups) PRUNE_KEEP="$2"; shift 2 ;;
       --check) CHECK_ONLY=1; shift ;;
       -h|--help) SHOW_HELP=1; shift ;;
       *) fail "Unknown option: $1"; return 1 ;;
@@ -194,11 +204,8 @@ identify_platform() {
   [[ "$SERVICE_NAME" =~ ^[a-zA-Z0-9_-]+\.service$ ]] || { fail 'Invalid systemd service name.'; return 1; }
 }
 
-begin_attempt() {
-  [[ "$CHECK_ONLY" == 0 ]] || return 0
+lock_installation() {
   local upgrades="$INSTALL_DIRECTORY/.backup"
-  umask 077
-  mkdir -p -m 755 "$INSTALL_DIRECTORY"
   if [[ -e "$upgrades" || -L "$upgrades" ]]; then
     [[ -d "$upgrades" && ! -L "$upgrades" ]] || {
       fail 'Reserved .backup path is not a directory.'; return 1;
@@ -218,6 +225,14 @@ begin_attempt() {
     exec 8<> "$old_lock"
     flock -n 8 || { fail 'An older installer is using this installation.'; return 1; }
   fi
+}
+
+begin_attempt() {
+  [[ "$CHECK_ONLY" == 0 ]] || return 0
+  local upgrades="$INSTALL_DIRECTORY/.backup"
+  umask 077
+  mkdir -p -m 755 "$INSTALL_DIRECTORY"
+  lock_installation
   reject_pending_migration
   ATTEMPT_DIRECTORY="$(mktemp -d "$upgrades/$(date +%Y%m%d%H%M%S).XXXXXX")"
   REPORT_DIRECTORY="$ATTEMPT_DIRECTORY"
@@ -398,6 +413,7 @@ inspect_installation() {
   jq . "$TMP_DIRECTORY/preflight.json"
   SCHEMA="$(jq -er .schema "$TMP_DIRECTORY/preflight.json")"
   SERVER_URL="$(jq -er .server_url "$TMP_DIRECTORY/preflight.json")"
+  PREVIEW_ROOT="$(jq -r '.preview_root // empty' "$TMP_DIRECTORY/preflight.json")"
   if [[ "$CURRENT_VERSION" != none && "$SCHEMA" != legacy && "$SCHEMA" != current ]]; then
     fail 'Existing installation has no recognized catalog. Inspect its configured database before upgrading.'; return 1
   fi
@@ -405,6 +421,10 @@ inspect_installation() {
     local needed available candidate
     (cd "$INSTALL_DIRECTORY" && find . -mindepth 1 -maxdepth 1 ! -name .backup -print0) > "$TMP_DIRECTORY/backup.entries"
     needed="$(cd "$INSTALL_DIRECTORY" && du -skc --files0-from="$TMP_DIRECTORY/backup.entries" | awk 'END {print $1}')"
+    if [[ -n "$PREVIEW_ROOT" && -d "$INSTALL_DIRECTORY/$PREVIEW_ROOT" ]]; then
+      (( needed -= $(du -sk "$INSTALL_DIRECTORY/$PREVIEW_ROOT" | awk '{print $1}') ))
+      echo "Previews in $PREVIEW_ROOT are regenerable and stay outside the backup."
+    fi
     candidate="$(du -sk "$RELEASE_DIRECTORY" | awk '{print $1}')"
     available="$(df -Pk "$INSTALL_DIRECTORY" | awk 'END {print $4}')"
     (( available > needed * 2 + candidate + 10240 )) || {
@@ -482,6 +502,11 @@ backup_installation() {
   local partial="$BACKUP_DIRECTORY/yatm.tar.gz.partial"
   local -a archive_options=(--format=pax --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime
     --sort=name --sparse --acls --xattrs --xattrs-include='*' --numeric-owner --exclude=./.backup)
+  # Previews are regenerable derivatives; restore keeps the live directory in place.
+  if [[ -n "$PREVIEW_ROOT" ]]; then
+    archive_options+=(--anchored --no-wildcards --exclude="./$PREVIEW_ROOT")
+    printf '%s\n' "$PREVIEW_ROOT" > "$BACKUP_DIRECTORY/preview-root"
+  fi
   if ! tar "${archive_options[@]}" \
     -C "$INSTALL_DIRECTORY" -czf "$partial" .; then
     fail "Installation backup failed; incomplete archive remains at $partial."
@@ -794,6 +819,107 @@ offer_skill() {
   fi
 }
 
+complete_backup() {
+  # A complete backup is an attempt directory with a verified archive; RESTORE_BACKUP names one.
+  local name="$1" backup="$INSTALL_DIRECTORY/.backup/$1"
+  [[ "$name" =~ ^[0-9]{14}\.[A-Za-z0-9]{6}$ && -d "$backup" && ! -L "$backup" && \
+    -f "$backup/yatm.tar.gz" && ! -L "$backup/yatm.tar.gz" && -f "$backup/yatm.tar.gz.sha256" ]]
+}
+
+# Moves every entry below $1 into $2 except .backup and the kept relative Preview path $3,
+# so a Preview root on its own mount point never moves.
+retire_entries() {
+  local source="$1" target="$2" keep="$3" entry name first="${3%%/*}"
+  while IFS= read -r -d '' entry; do
+    name="${entry##*/}"
+    if [[ -n "$keep" && "$name" == "$first" ]]; then
+      [[ "$keep" != "$first" ]] || continue
+      [[ -d "$entry" && ! -L "$entry" ]] || { fail "Preview path ancestor is not a directory: $entry"; return 1; }
+      mkdir -p -- "$target/$name"
+      retire_entries "$entry" "$target/$name" "${keep#*/}"
+      continue
+    fi
+    mv -- "$entry" "$target/"
+  done < <(find "$source" -mindepth 1 -maxdepth 1 ! -path "$INSTALL_DIRECTORY/.backup" -print0)
+}
+
+restore_backup() {
+  local backup="$INSTALL_DIRECTORY/.backup/$RESTORE_BACKUP" preview= replaced needed available attempt
+  complete_backup "$RESTORE_BACKUP" || { fail "No complete backup named $RESTORE_BACKUP under $INSTALL_DIRECTORY/.backup."; return 1; }
+  CURRENT_VERSION=installed
+  verify_service_ownership
+  lock_installation
+  reject_pending_migration
+  (cd "$backup" && sha256sum --check --quiet yatm.tar.gz.sha256) || { fail 'Backup checksum does not match.'; return 1; }
+  if [[ -f "$backup/preview-root" ]]; then
+    preview="$(< "$backup/preview-root")"
+    [[ -n "$preview" && "$preview" != /* && "/$preview/" != */../* && "/$preview/" != */./* ]] || {
+      fail 'Backup records an unsafe Preview path.'; return 1;
+    }
+  fi
+  # The replaced tree is renamed in place, so extraction needs room for the archive contents only.
+  needed="$(tar -tvzf "$backup/yatm.tar.gz" | awk '{size += $3} END {print int(size / 1024) + 1}')" || {
+    fail 'Backup archive is unreadable.'; return 1;
+  }
+  available="$(df -Pk "$INSTALL_DIRECTORY" | awk 'END {print $4}')"
+  (( available > needed + 10240 )) || { fail 'Insufficient installation-filesystem space to extract the backup.'; return 1; }
+  echo "Restore $INSTALL_DIRECTORY from $backup/yatm.tar.gz."
+  echo 'The service stops and the current installation moves to a new .backup/replaced-* directory.'
+  if [[ -n "$preview" ]]; then
+    echo "Previews in $preview stay in place."
+  else
+    echo 'This backup includes its own Previews; the current Previews move with the replaced installation.'
+  fi
+  echo 'Rollback restores software and metadata; it does not undo file moves, deletions, Restore output or Media writes made since the backup.'
+  confirm_action 'Stop the service and restore this backup?' || { echo 'Restore cancelled; the installation is unchanged.'; return 0; }
+  replaced="$(mktemp -d "$INSTALL_DIRECTORY/.backup/replaced-$(date +%Y%m%d%H%M%S).XXXXXX")"
+  echo "Current installation will be retained at $replaced."
+  STAGE=stopping
+  if systemctl is-active --quiet "$SERVICE_NAME" && ! systemctl stop "$SERVICE_NAME"; then
+    fail 'Stopping the service failed; the installation is unchanged.'; return 1
+  fi
+  INSTALLATION_CHANGED=1
+  RESTORE_RETAINED="$replaced"
+  STAGE=restore
+  retire_entries "$INSTALL_DIRECTORY" "$replaced" "$preview"
+  tar --acls --xattrs --xattrs-include='*' --numeric-owner -xzf "$backup/yatm.tar.gz" -C "$INSTALL_DIRECTORY"
+  STAGE=readiness
+  systemctl daemon-reload
+  systemctl start "$SERVICE_NAME"
+  for attempt in {1..15}; do
+    systemctl is-active --quiet "$SERVICE_NAME" && break
+    sleep 1
+  done
+  systemctl is-active --quiet "$SERVICE_NAME" || { fail "$SERVICE_NAME did not start after the restore."; return 1; }
+  STAGE=complete
+  echo "Restored $(< "$INSTALL_DIRECTORY/VERSION") from $backup."
+  echo "Replaced installation: $replaced. Check the UI, Library and Jobs before resuming use, then remove it when no longer needed."
+}
+
+prune_backups() {
+  [[ "$PRUNE_KEEP" =~ ^[0-9]+$ ]] && (( 10#$PRUNE_KEEP >= 1 )) || {
+    fail '--prune-backups needs the number of newest complete backups to keep, at least 1.'; return 1;
+  }
+  PRUNE_KEEP=$((10#$PRUNE_KEEP))
+  [[ -d "$INSTALL_DIRECTORY/.backup" ]] || { echo 'No backups.'; return 0; }
+  lock_installation
+  reject_pending_migration
+  local -a complete=() remove=() other=()
+  local entry name
+  while IFS= read -r -d '' entry; do
+    name="${entry##*/}"
+    if complete_backup "$name"; then complete+=("$name"); elif [[ "$name" != lock ]]; then other+=("$name"); fi
+  done < <(find "$INSTALL_DIRECTORY/.backup" -mindepth 1 -maxdepth 1 -print0 | sort -rz)
+  remove=("${complete[@]:PRUNE_KEEP}")
+  for name in "${complete[@]:0:PRUNE_KEEP}"; do echo "Keep: $name"; done
+  for name in "${other[@]}"; do echo "Not a complete backup, left for manual review: $name"; done
+  [[ ${#remove[@]} -gt 0 ]] || { echo 'Nothing to remove.'; return 0; }
+  for name in "${remove[@]}"; do echo "Remove: $name ($(du -sh "$INSTALL_DIRECTORY/.backup/$name" | awk '{print $1}'))"; done
+  confirm_action "Permanently remove ${#remove[@]} backup(s)?" || { echo 'Nothing removed.'; return 0; }
+  for name in "${remove[@]}"; do rm -rf -- "${INSTALL_DIRECTORY:?}/.backup/$name"; done
+  echo "Removed ${#remove[@]} backup(s)."
+}
+
 on_failure() {
   local status="$1"
   trap - ERR
@@ -809,12 +935,26 @@ on_failure() {
     echo "Incomplete backup: $BACKUP_DIRECTORY. Do not use it as a complete recovery source." >&2
   fi
   [[ -z "$REPORT_FILE" ]] || echo "Report: $REPORT_FILE" >&2
+  if [[ -n "$RESTORE_RETAINED" ]]; then
+    echo "The installation being replaced is in $RESTORE_RETAINED. Remove partly extracted files, then move its entries back or rerun --restore-backup." >&2
+  fi
   exit "$status"
 }
 
 main() {
   parse_options "$@"
   if [[ "$SHOW_HELP" == 1 ]]; then usage; return; fi
+  if [[ -n "$RESTORE_BACKUP" || -n "$PRUNE_KEEP" ]]; then
+    [[ -z "$RESTORE_BACKUP" || -z "$PRUNE_KEEP" ]] && [[ -z "$RELEASE_VERSION$LOCAL_ARCHIVE$CHECKSUM_FILE$FRESH_CONFIG$PREVIEW_ARCHIVE$PREVIEW_CHECKSUM" && \
+      "$CHECK_ONLY" == 0 && "$PREVIEW_CHOICE" == ask ]] || {
+      fail '--restore-backup and --prune-backups run alone, without release or check options.'; return 1;
+    }
+    identify_platform
+    trap 'on_failure "$?"' ERR
+    trap 'on_failure 130' INT TERM
+    if [[ -n "$RESTORE_BACKUP" ]]; then restore_backup; else prune_backups; fi
+    return
+  fi
   identify_platform
   TMP_DIRECTORY="$(mktemp -d -t yatm-install.XXXXXX)"
   RELEASE_DIRECTORY="$TMP_DIRECTORY/release"

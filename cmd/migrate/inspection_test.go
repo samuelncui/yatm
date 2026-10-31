@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/samuelncui/yatm/internal/config"
@@ -231,4 +232,74 @@ func TestFreshInspectionChecksBackupDirectoryWithoutWrites(t *testing.T) {
 			require.Len(t, entries, 1)
 		})
 	}
+}
+
+func TestBackupScopeLeavesPreviewRootOutOfTheArchive(t *testing.T) {
+	// Previews are regenerable; the installer excludes a contained root and accepts an external one.
+	root := t.TempDir()
+	t.Chdir(root)
+	conf := &config.Config{Listen: ":8080"}
+	conf.Database.Dialect = "sqlite"
+	conf.Database.DSN = filepath.Join(root, "catalog.db")
+	conf.Paths.Work = root
+	require.NoError(t, os.Mkdir(filepath.Join(root, "previews"), 0o700))
+	require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(root, "previews", "external-asset")))
+	report, err := inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.NoError(t, err)
+	require.Equal(t, "previews", report.PreviewRoot)
+	require.NoError(t, os.Remove(filepath.Join(root, "previews", "external-asset")))
+
+	// An external Preview root, directly or through a contained link, needs no exclusion.
+	external := t.TempDir()
+	conf.Preview.Root = external
+	report, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.NoError(t, err)
+	require.Empty(t, report.PreviewRoot)
+	require.NoError(t, os.Symlink(external, filepath.Join(root, "linked-previews")))
+	conf.Preview.Root = "linked-previews"
+	report, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.NoError(t, err)
+	require.Empty(t, report.PreviewRoot)
+
+	// Excluding the root itself or a required resource would leave the backup incomplete.
+	conf.Preview.Root = "."
+	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.ErrorContains(t, err, "separate directory")
+	conf.Preview.Root = "data"
+	conf.Database.DSN = filepath.Join(root, "data", "catalog.db")
+	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.ErrorContains(t, err, "inside the Preview root")
+}
+
+func TestInspectionFlagsUnmodifiedLegacyTapeScripts(t *testing.T) {
+	// Byte-identical v0.1.x templates hide failures; edited scripts remain the operator's to review.
+	root := t.TempDir()
+	t.Chdir(root)
+	conf := &config.Config{Listen: ":8080", TapeDevices: []string{"/dev/nst0"}}
+	conf.Database.Dialect = "sqlite"
+	conf.Database.DSN = filepath.Join(root, "catalog.db")
+	conf.Paths.Work = root
+	conf.Scripts.Encrypt = filepath.Join(root, "encrypt")
+	conf.Scripts.ReadInfo = filepath.Join(root, "readinfo")
+	legacyEncrypt := "#!/usr/bin/env bash\nset -ex;\n\nmt -f ${DEVICE} load\nsleep 5\n\nfor i in {1..60}; do\n" +
+		"    stenc -f ${DEVICE} -e on -k ${KEY_FILE} -kd ${TAPE_BARCODE} -a 1 --ckod && break || sleep 5;\ndone\n\nsleep 3\n"
+	legacyReadInfo := "#!/usr/bin/env bash\nset -ex;\n\nmt -f ${DEVICE} load\n" +
+		"BARCODE=`./yatm-lto-info -f ${DEVICE} | grep 'Barcode' | awk '{print $3}'`\n" +
+		"echo \"{\\\"barcode\\\": \\\"$BARCODE\\\"}\" > $OUT\nsleep 3\n"
+	require.NoError(t, os.WriteFile(conf.Scripts.Encrypt, []byte(legacyEncrypt), 0o700))
+	require.NoError(t, os.WriteFile(conf.Scripts.ReadInfo, []byte(legacyReadInfo), 0o700))
+	_, err := inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.ErrorContains(t, err, "unmodified v0.1.x template")
+
+	// A fixed encrypt script passes; the legacy readinfo is reported for replacement after upgrade.
+	require.NoError(t, os.WriteFile(conf.Scripts.Encrypt, []byte(legacyEncrypt+"exit 1\n"), 0o700))
+	report, err := inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.NoError(t, err)
+	require.Contains(t, strings.Join(report.Warnings, "\n"), "readinfo script")
+
+	// Volume-only installations never run Tape scripts.
+	conf.TapeDevices = nil
+	require.NoError(t, os.WriteFile(conf.Scripts.Encrypt, []byte(legacyEncrypt), 0o700))
+	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
+	require.NoError(t, err)
 }

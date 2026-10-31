@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -21,6 +23,7 @@ type installationReport struct {
 	Schema          legacy.Schema `json:"schema"`
 	ServerURL       string        `json:"server_url"`
 	BackupPaths     []string      `json:"backup_paths"`
+	PreviewRoot     string        `json:"preview_root,omitempty"`
 	TapeScripts     []string      `json:"tape_scripts"`
 	Warnings        []string      `json:"warnings"`
 	MigrationReport string        `json:"migration_report"`
@@ -60,14 +63,7 @@ func inspectFreshInstallation(conf *config.Config, root string) (*installationRe
 	if !filepath.IsAbs(work) {
 		work = filepath.Join(root, work)
 	}
-	previewRoot := conf.Preview.Root
-	if previewRoot == "" {
-		previewRoot = "previews"
-	}
-	if !filepath.IsAbs(previewRoot) {
-		previewRoot = filepath.Join(work, previewRoot)
-	}
-	for _, path := range []string{dbPath, work, previewRoot} {
+	for _, path := range []string{dbPath, work} {
 		if !withinRoot(root, path) || withinRoot(filepath.Join(root, ".backup"), path) {
 			return report, fmt.Errorf("new installation resource must fit inside the installation root: %s", path)
 		}
@@ -221,14 +217,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	if err != nil {
 		return err
 	}
-	previewRoot := conf.Preview.Root
-	if previewRoot == "" {
-		previewRoot = "previews"
-	}
-	if !filepath.IsAbs(previewRoot) {
-		previewRoot = filepath.Join(conf.Paths.Work, previewRoot)
-	}
-	paths := []string{configPath, dbPath, conf.Paths.Work, previewRoot, legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, ".")}
+	paths := []string{configPath, dbPath, conf.Paths.Work, legacy.LegacyLTFSIndexRoot(conf.Scripts.Mount, ".")}
 	for _, script := range []string{conf.Scripts.Encrypt, conf.Scripts.Mkfs, conf.Scripts.Mount, conf.Scripts.Umount, conf.Scripts.ReadInfo} {
 		if script == "" {
 			continue
@@ -240,6 +229,11 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 			if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
 				return fmt.Errorf("configured Tape script must be an executable file: %s", script)
 			}
+		}
+	}
+	if len(conf.TapeDevices) > 0 {
+		if err := inspectLegacyScripts(conf, report); err != nil {
+			return err
 		}
 	}
 
@@ -264,6 +258,26 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		report.BackupPaths = append(report.BackupPaths, canonical)
 	}
 
+	// Previews are regenerable derivatives; an installation backup leaves them in place.
+	previewRoot, err := canonicalExisting(resolvePreviewRoot(conf))
+	if err != nil {
+		return err
+	}
+	if withinRoot(previewRoot, canonicalRoot) || withinRoot(filepath.Join(canonicalRoot, ".backup"), previewRoot) {
+		return fmt.Errorf("Preview root must be a separate directory outside .backup: %s", previewRoot)
+	}
+	for _, path := range report.BackupPaths {
+		if withinRoot(previewRoot, path) {
+			return fmt.Errorf("required resource %s is inside the Preview root, which backups exclude", path)
+		}
+	}
+	if withinRoot(canonicalRoot, previewRoot) {
+		report.PreviewRoot, err = filepath.Rel(canonicalRoot, previewRoot)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Archives preserve links, not their external contents; reject incomplete backup layouts.
 	return filepath.WalkDir(canonicalRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -275,6 +289,9 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 			}
 			return filepath.SkipDir
 		}
+		if report.PreviewRoot != "" && path == previewRoot && entry.IsDir() {
+			return filepath.SkipDir
+		}
 		if entry.Type()&os.ModeSocket != 0 {
 			return fmt.Errorf("installation contains a socket that cannot be archived: %s", path)
 		}
@@ -282,6 +299,9 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 			return nil
 		}
 		target, err := canonicalExisting(path)
+		if err == nil && target == previewRoot {
+			return nil
+		}
 		if err != nil || !withinRoot(canonicalRoot, target) {
 			return fmt.Errorf("installation contains an external or unresolved link %s; use a complete manual backup", path)
 		}
@@ -297,6 +317,66 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		}
 		return nil
 	})
+}
+
+// resolvePreviewRoot mirrors the service: a relative Preview root lives under the Work directory.
+func resolvePreviewRoot(conf *config.Config) string {
+	root := strings.TrimSpace(conf.Preview.Root)
+	if root == "" {
+		root = "previews"
+	}
+	if filepath.IsAbs(root) {
+		return root
+	}
+	return filepath.Join(conf.Paths.Work, root)
+}
+
+// Unmodified v0.1.x templates hide failures: encrypt exits 0 after every stenc attempt fails,
+// and readinfo reports an empty barcode when the probe fails.
+var (
+	legacyEncryptTemplates = map[string]bool{
+		"df4a78a905fa52fbb41e63f51c99ffc40d5a336f13cd44e4ef38c58fe4493838": true, // v0.1.0-v0.1.7
+		"4614df3ae2b6f0d1d1ad62bcc42306440f16f1a16a81e4e380aa1d3b1c31d1b6": true, // v0.1.8-v0.1.21
+	}
+	legacyReadInfoTemplates = map[string]bool{
+		"269b3d66e515a0ccb91b6d178ad107d880a669dd398bf962cc00eb8e95996817": true, // v0.1.0-v0.1.7
+		"0c87d122cf0978cab3cfd4f7e1df039bcc6f1909141b8a5a07e52ff44010e9f4": true, // v0.1.8-v0.1.21
+	}
+)
+
+func inspectLegacyScripts(conf *config.Config, report *installationReport) error {
+	// Encryption must be fixed before upgrade; the readinfo template needs v1 lto-info, so it follows the upgrade.
+	if conf.Scripts.Encrypt != "" {
+		sum, err := fileSHA256(conf.Scripts.Encrypt)
+		if err != nil {
+			return err
+		}
+		if legacyEncryptTemplates[sum] {
+		return fmt.Errorf("configured encrypt script %s is the unmodified v0.1.x template, which exits successfully when every stenc attempt fails; "+
+			"make it exit nonzero as described in docs/operations/migration.md, Tape Script Adaptation, then rerun", conf.Scripts.Encrypt)
+		}
+	}
+	if conf.Scripts.ReadInfo == "" {
+		return nil
+	}
+	sum, err := fileSHA256(conf.Scripts.ReadInfo)
+	if err != nil {
+		return err
+	}
+	if legacyReadInfoTemplates[sum] {
+		report.Warnings = append(report.Warnings, fmt.Sprintf("Action required after upgrade: configured readinfo script %s is the unmodified v0.1.x template, "+
+			"which reports an empty barcode when the probe fails. Replace it with templates/scripts/readinfo before the first Tape Job.", conf.Scripts.ReadInfo))
+	}
+	return nil
+}
+
+func fileSHA256(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func inspectUpgradeDirectory(path string) error {

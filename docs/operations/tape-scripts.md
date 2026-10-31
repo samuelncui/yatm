@@ -78,4 +78,6 @@ scripts or physical hardware. When upgrading, `--check` and the installation run
 configured script with the candidate's bundled template of the same name (a local copy such as
 `mount.openltfs.local` is compared with `mount.openltfs`), and print a unified diff for each difference. Other template-named files beside them,
 such as `get_device`, are listed when they differ. The installer reports these differences as manual
-checks and never replaces a preserved script.
+checks and never replaces a preserved script. When Tape devices are configured, an unmodified
+v0.1.x `encrypt` template blocks the upgrade because it hides encryption failure; the
+[upgrade guide](migration.md#tape-script-adaptation) lists each v0.1.x script's required change.

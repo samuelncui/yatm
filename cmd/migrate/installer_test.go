@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -908,4 +909,156 @@ func TestInstallerCleansRecognizedIncompleteAttemptsOnlyAfterNewBackup(t *testin
 	require.NoDirExists(t, incomplete)
 	require.DirExists(t, unknown)
 	require.FileExists(t, pending)
+}
+
+func TestInstallerBackupLeavesPreviewsAndRestoreKeepsThem(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("The supported installer verifies backups with Linux GNU tar")
+	}
+
+	// Previews are regenerable; the backup omits them and a restore never moves the live directory.
+	root := t.TempDir()
+	for name, data := range map[string]string{"VERSION": "v1.0.0-alpha.3\n", "work/jobs/1/log": "job\n", "work/previews/aa/asset": "preview\n"} {
+		path := filepath.Join(root, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o700))
+		require.NoError(t, os.WriteFile(path, []byte(data), 0o640))
+	}
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+CURRENT_VERSION=v1.0.0-alpha.3
+PREVIEW_ROOT=work/previews
+begin_attempt
+backup_installation
+! tar -tzf "$BACKUP_DIRECTORY/yatm.tar.gz" | grep -q '^./work/previews'
+tar -tzf "$BACKUP_DIRECTORY/yatm.tar.gz" | grep -Fx './work/jobs/1/log'
+[[ "$(< "$BACKUP_DIRECTORY/preview-root")" == work/previews ]]
+`, "", root)
+	require.NoError(t, err, output)
+
+	// Later changes: a new version, extra files and a newly generated Preview.
+	require.NoError(t, os.WriteFile(filepath.Join(root, "VERSION"), []byte("v1.0.0-alpha.4\n"), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "added"), []byte("new\n"), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "work/jobs/2"), []byte("new job\n"), 0o640))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "work/previews/aa/later"), []byte("later\n"), 0o640))
+	inode := func() uint64 {
+		info, err := os.Stat(filepath.Join(root, "work/previews"))
+		require.NoError(t, err)
+		return info.Sys().(*syscall.Stat_t).Ino
+	}
+	before := inode()
+
+	// A restore runs as its own installer process.
+	output, err = installerShell(t, `
+INSTALL_DIRECTORY="$1"
+verify_service_ownership() { :; }
+systemctl() { echo "service:$1"; [[ "$1" != is-active ]] || return 0; }
+RESTORE_BACKUP="$(cd "$INSTALL_DIRECTORY/.backup" && echo [0-9]*)"
+restore_backup
+[[ "$(< "$INSTALL_DIRECTORY/VERSION")" == v1.0.0-alpha.3 ]]
+[[ ! -e "$INSTALL_DIRECTORY/added" && ! -e "$INSTALL_DIRECTORY/work/jobs/2" ]]
+[[ "$(< "$INSTALL_DIRECTORY/work/jobs/1/log")" == job ]]
+[[ "$(< "$INSTALL_DIRECTORY/work/previews/aa/asset")" == preview ]]
+[[ "$(< "$INSTALL_DIRECTORY/work/previews/aa/later")" == later ]]
+replaced=("$INSTALL_DIRECTORY"/.backup/replaced-*)
+[[ "$(< "${replaced[0]}/VERSION")" == v1.0.0-alpha.4 && -f "${replaced[0]}/added" && -f "${replaced[0]}/work/jobs/2" ]]
+[[ ! -e "${replaced[0]}/work/previews" ]]
+`, "y\n", root)
+	require.NoError(t, err, output)
+	require.Equal(t, before, inode(), "the live Preview root was moved")
+	require.Contains(t, output, "Previews in work/previews stay in place.")
+	require.Contains(t, output, "service:stop")
+	require.Contains(t, output, "service:start")
+	require.Contains(t, output, "Restored v1.0.0-alpha.3")
+}
+
+func TestInstallerRestoreRequiresCompleteBackupAndConsent(t *testing.T) {
+	// A missing archive, a foreign unit or a declined prompt never stops the service or moves files.
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "VERSION"), []byte("v1.0.0-alpha.3\n"), 0o600))
+	output, err := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+systemctl() { echo "service:$1"; }
+mkdir -p "$INSTALL_DIRECTORY/.backup/20261101000000.abcdef"
+RESTORE_BACKUP=20261101000000.abcdef
+! restore_backup
+RESTORE_BACKUP=../outside
+! restore_backup
+`, "", root)
+	require.NoError(t, err, output)
+	require.Contains(t, output, "No complete backup named 20261101000000.abcdef")
+	require.NotContains(t, output, "service:")
+
+	// A complete backup still requires this installation's own unit and a confirmed, successful stop.
+	backup := filepath.Join(root, ".backup", "20261101000000.abcdef")
+	require.NoError(t, exec.Command("tar", "-czf", filepath.Join(backup, "yatm.tar.gz"), "-C", root, "VERSION").Run())
+	require.NoError(t, exec.Command("sh", "-c", `cd "$1" && sha256sum yatm.tar.gz > yatm.tar.gz.sha256`, "sh", backup).Run())
+	for _, test := range []struct{ name, script, input, want string }{
+		{"foreign unit", `systemctl() { [[ "$1" != show ]] || { echo /etc/systemd/system/other.service; return; }; echo "service:$1"; }`, "y\n", "outside the installation"},
+		{"declined", `verify_service_ownership() { :; }; systemctl() { echo "service:$1"; }`, "n\n", "Restore cancelled"},
+		{"stop refused", `verify_service_ownership() { :; }; systemctl() { echo "service:$1"; [[ "$1" != stop ]]; }`, "y\n", "Stopping the service failed"},
+	} {
+		if test.name == "foreign unit" && runtime.GOOS != "linux" {
+			continue // ownership checks use GNU readlink -m
+		}
+		output, _ := installerShell(t, `
+INSTALL_DIRECTORY="$1"
+flock() { :; }
+`+test.script+`
+RESTORE_BACKUP=20261101000000.abcdef
+restore_backup
+`, test.input, root)
+		require.Contains(t, output, test.want, test.name)
+		require.NotContains(t, output, "service:daemon-reload", test.name)
+		require.FileExists(t, filepath.Join(root, "VERSION"), test.name)
+	}
+
+	output, err = installerShell(t, `main --restore-backup 20261101000000.abcdef --version v1.0.0-alpha.3`, "")
+	require.Error(t, err)
+	require.Contains(t, output, "run alone")
+}
+
+func TestInstallerPruneKeepsNewestCompleteBackups(t *testing.T) {
+	// Only complete backups count; replaced installations and failed attempts are left for review.
+	root := t.TempDir()
+	backups := filepath.Join(root, ".backup")
+	for _, name := range []string{"20261001000000.aaaaaa", "20261015000000.bbbbbb", "20261101000000.cccccc"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(backups, name), 0o700))
+		for _, file := range []string{"yatm.tar.gz", "yatm.tar.gz.sha256"} {
+			require.NoError(t, os.WriteFile(filepath.Join(backups, name, file), []byte("x"), 0o600))
+		}
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(backups, "20260901000000.failed"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(backups, "replaced-20261020000000.dddddd"), 0o700))
+
+	// Declining removes nothing.
+	script := `
+INSTALL_DIRECTORY="$1"
+PRUNE_KEEP=1
+flock() { :; }
+prune_backups
+`
+	output, err := installerShell(t, script, "n\n", root)
+	require.NoError(t, err, output)
+	require.Contains(t, output, "Keep: 20261101000000.cccccc")
+	require.Contains(t, output, "Remove: 20261015000000.bbbbbb")
+	require.Contains(t, output, "left for manual review: replaced-20261020000000.dddddd")
+	require.DirExists(t, filepath.Join(backups, "20261001000000.aaaaaa"))
+
+	// The count is decimal and must keep at least one backup.
+	for _, keep := range []string{"0", "00", "x"} {
+		output, err := installerShell(t, "INSTALL_DIRECTORY=\"$1\"\nflock() { :; }\nPRUNE_KEEP="+keep+"\nprune_backups\n", "y\n", root)
+		require.Error(t, err, output)
+		require.Contains(t, output, "at least 1")
+	}
+	output, err = installerShell(t, "INSTALL_DIRECTORY=\"$1\"\nflock() { :; }\nPRUNE_KEEP=08\nprune_backups\n", "n\n", root)
+	require.NoError(t, err, output)
+	require.Equal(t, 3, strings.Count(output, "Keep: "))
+
+	output, err = installerShell(t, script, "y\n", root)
+	require.NoError(t, err, output)
+	require.DirExists(t, filepath.Join(backups, "20261101000000.cccccc"))
+	require.NoDirExists(t, filepath.Join(backups, "20261015000000.bbbbbb"))
+	require.NoDirExists(t, filepath.Join(backups, "20261001000000.aaaaaa"))
+	require.DirExists(t, filepath.Join(backups, "20260901000000.failed"))
+	require.DirExists(t, filepath.Join(backups, "replaced-20261020000000.dddddd"))
 }

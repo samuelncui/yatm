@@ -62,10 +62,10 @@ are newly allocated beneath the attempt root;
 physical device paths are not accepted. Omitting this flag records the missing acceptance explicitly.
 SQLite acceptance enables WAL on the stopped test service, writes through the CLI, restarts with
 WAL disabled and compares committed Catalog data. Two same-version replacements check decline/EOF,
-whole-directory backup contents, hidden files,
+whole-directory backup contents without Previews, hidden files,
 links, permissions, user attributes, customization and removal of obsolete managed files. A
-same-root recovery retains the displaced tree and restores Catalog/Job identities without overlaying
-new-only files. These cases do not simulate every installer failure stage or a cross-version upgrade.
+`--restore-backup` recovery retains the displaced tree, keeps live Previews and restores Catalog/Job
+identities without overlaying new-only files. These cases do not simulate every installer failure stage or a cross-version upgrade.
 Browser form interaction, legacy migration and physical Tape retain their separate acceptance
 requirements below. Helper-only RAW/codec acceptance remains separate.
 
@@ -120,9 +120,9 @@ Installer semantic tests cover read-only checks, version ordering, cancellation,
 | Pre-stop rejection | Installer confirmation/package/version checks | Cancel, EOF, unknown version, missing packaged migration guide, wrong checksum and Busy preserve service PID/state and active file hashes. |
 | Legacy activation | Installer; `yatm-migrate` Prepare/Commit/validate/cleanup | Guide text comes from the verified archive; two explicit approvals; retained report on Prepare failure/cancel; item-by-item Library/Job/log validation before cleanup. |
 | Configuration review | `yatm-migrate` config-plan/config-check/config-apply; installer | Unified YAML diff and Settings summary before stop; stale inputs rejected; explicit access preserved, legacy authorization materialized; saved/deleted registrations and Preview preferences preserved; idempotent conversion. |
-| Repeated upgrade | Two successive installer updates, same-version replacement and unchanged rerun | Whole-installation tar includes hidden files, hard/symbolic links, permissions and supported xattrs; only `.backup/` excluded; archive/source verified; old checksums unchanged; successful scratch removed; unchanged rerun offers Skill without another archive. |
+| Repeated upgrade | Two successive installer updates, same-version replacement and unchanged rerun | Whole-installation tar includes hidden files, hard/symbolic links, permissions and supported xattrs; only `.backup/` and the Preview root excluded; archive/source verified; old checksums unchanged; successful scratch removed; unchanged rerun offers Skill without another archive. |
 | Customization | Installer update | Reviewed config changes only; scripts/helpers, unit, permissions, original working-directory path meanings unchanged; complete replacement removes obsolete managed resources. |
-| Failure and rollback | Installer faults plus documented in-root recovery | Backup/Prepare/Commit/config-apply/cleanup/replacement/readiness failure retains reports; uncertain mutation stays stopped; failed tree saved before whole-archive restore; `.backup/` retained. |
+| Failure and rollback | Installer faults plus `--restore-backup` | Backup/Prepare/Commit/config-apply/cleanup/replacement/readiness failure retains reports; uncertain mutation stays stopped; failed tree saved before whole-archive restore; `.backup/` and live Previews retained. |
 | Historical repair | `yatm-migrate -phase repair-job -backup-root ...` | Operates after active legacy tables are removed; every repaired item/log matches backup evidence; already frozen Restore destination survives config changes. |
 | Old installation entry | `main` branch's legacy `install-release.sh` | Full parameter validation and cross-major rejection; `v0.1.x`-to-`v0.1.x` update remains available. |
 
