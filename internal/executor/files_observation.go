@@ -278,7 +278,7 @@ func (e *Executor) parentGuard(location *library.Location, root, relative string
 	guard, cached := guards[key]
 	if !cached {
 		// The root was resolved once for this page, so only the row path itself is new.
-		_, info, err := e.checkPreparedLocationPath(location, root, parent)
+		_, info, err := e.CheckPreparedLocationPath(location, root, parent)
 		if err == nil && !info.IsDir() {
 			err = fmt.Errorf("file parent %q is not a real directory: %w", parent, ErrAccessExcluded)
 		}

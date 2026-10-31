@@ -186,7 +186,7 @@ func (e *Executor) newLocationDirectoryReader(location *library.Location, relati
 
 // PrepareLocationDirectory validates a parent within an already checked Location.
 func (e *Executor) PrepareLocationDirectory(location *library.Location, relative string) (*LocationDirectoryReader, error) {
-	full, info, err := e.checkPreparedLocationPath(location, location.RootPath, relative)
+	full, info, err := e.CheckPreparedLocationPath(location, location.RootPath, relative)
 	if err != nil {
 		return nil, err
 	}

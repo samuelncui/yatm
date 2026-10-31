@@ -270,14 +270,14 @@ func (s *locationStage) explicitScope(name string) *Scope {
 
 // walkSelection resolves selected paths under one Location, applying Ignore to files and directories.
 func walkSelection(ctx context.Context, exe *executor.Executor, source *library.Location, selected string, yield func(string, os.FileInfo) error) error {
-	// The Executor's path guard rejects symlink ancestors and paths outside the registered root.
+	// openLocation admitted the Location once; the path guard rejects symlink ancestors and paths outside its root.
 	if executor.IsLocationTrashPath(selected) {
 		return fmt.Errorf("Trash content cannot be selected for Scan")
 	}
 	if selected == "" {
 		return walk(ctx, exe, source, "", 0, yield)
 	}
-	_, info, err := exe.CheckLocationPath(source, selected)
+	_, info, err := exe.CheckPreparedLocationPath(source, source.RootPath, selected)
 	if err != nil {
 		return err
 	}

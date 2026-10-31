@@ -32,11 +32,11 @@ func (e *Executor) CheckLocationPath(location *library.Location, relative string
 	if err != nil {
 		return "", nil, err
 	}
-	return e.checkPreparedLocationPath(location, root, relative)
+	return e.CheckPreparedLocationPath(location, root, relative)
 }
 
-// checkPreparedLocationPath shares one validated configuration within a bounded read.
-func (e *Executor) checkPreparedLocationPath(location *library.Location, root, relative string) (string, os.FileInfo, error) {
+// CheckPreparedLocationPath checks one path under a Location already admitted by CheckLocation.
+func (e *Executor) CheckPreparedLocationPath(location *library.Location, root, relative string) (string, os.FileInfo, error) {
 	// Validate physical ancestors and the leaf without repeating catalog/configuration queries.
 	if relative != "" {
 		if err := entity.ValidateRelativePath(relative); err != nil {

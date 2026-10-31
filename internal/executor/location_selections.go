@@ -75,7 +75,7 @@ func (e *Executor) WalkLiveSelections(ctx context.Context, db *gorm.DB, selectio
 
 func (e *Executor) walkLiveSelection(ctx context.Context, location *library.Location, ref *entity.LocationEntryRef, recursive bool, depth int, yield func(*entity.LocationEntryRef) error) error {
 	// Resolve the explicit root once; descendants reuse the directory reader's metadata.
-	_, info, err := e.checkPreparedLocationPath(location, location.RootPath, ref.Path)
+	_, info, err := e.CheckPreparedLocationPath(location, location.RootPath, ref.Path)
 	if err != nil {
 		return err
 	}

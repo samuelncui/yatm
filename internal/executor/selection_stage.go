@@ -56,7 +56,7 @@ func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locatio
 	}
 	var covered []string
 	for _, root := range roots {
-		_, info, err := e.checkPreparedLocationPath(location, location.RootPath, root.Path)
+		_, info, err := e.CheckPreparedLocationPath(location, location.RootPath, root.Path)
 		if err != nil {
 			return err
 		}
