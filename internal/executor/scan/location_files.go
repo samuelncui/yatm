@@ -270,28 +270,19 @@ func (s *locationStage) explicitScope(name string) *Scope {
 
 // walkSelection resolves selected paths under one Location, applying Ignore to files and directories.
 func walkSelection(ctx context.Context, exe *executor.Executor, source *library.Location, selected string, yield func(string, os.FileInfo) error) error {
-	// Resolve each path without following symlink components or escaping its registered root.
+	// The Executor's path guard rejects symlink ancestors and paths outside the registered root.
 	if executor.IsLocationTrashPath(selected) {
 		return fmt.Errorf("Trash content cannot be selected for Scan")
 	}
 	if selected == "" {
 		return walk(ctx, exe, source, "", 0, yield)
 	}
-	if err := entity.ValidateRelativePath(selected); err != nil {
+	_, info, err := exe.CheckLocationPath(source, selected)
+	if err != nil {
 		return err
 	}
-	full := source.RootPath
-	var info os.FileInfo
-	for _, component := range strings.Split(selected, "/") {
-		full = filepath.Join(full, component)
-		current, err := os.Lstat(full)
-		if err != nil {
-			return err
-		}
-		if current.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("analysis path contains a symbolic link: %q", selected)
-		}
-		info = current
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("analysis path contains a symbolic link: %q", selected)
 	}
 	if info.IsDir() {
 		return walk(ctx, exe, source, selected, 0, yield)
@@ -300,10 +291,7 @@ func walkSelection(ctx context.Context, exe *executor.Executor, source *library.
 		return fmt.Errorf("analysis selection %q is not an ordinary file or directory", selected)
 	}
 
-	// Administrator boundaries stay explicit errors; Location Ignore excludes the named file.
-	if source.AccessExcluded(selected, false) {
-		return executor.ErrAccessExcluded
-	}
+	// The Executor enforces administrator boundaries; Location Ignore excludes the named file.
 	if source.Excluded(selected, false) {
 		return nil
 	}

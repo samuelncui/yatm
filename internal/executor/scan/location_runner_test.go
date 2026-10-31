@@ -180,3 +180,21 @@ func TestAnalyzeRejectsUnknownPreviewPolicy(t *testing.T) {
 	_, err := (&service{exe: exe}).Create(context.Background(), &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID), PreviewPolicy: entity.PreviewPolicy(99)}})
 	require.ErrorContains(t, err, "invalid Scan Preview policy")
 }
+
+func TestWalkSelectionUsesLocationPathGuard(t *testing.T) {
+	// Explicit selections share the Executor guard: no symlink ancestor or leaf is followed.
+	ctx := context.Background()
+	exe, source := setupAnalyze(t)
+	writeAnalyzeFile(t, source, "folder/file", "content")
+	require.NoError(t, os.Symlink("folder", filepath.Join(source.RootPath, "alias")))
+	require.NoError(t, os.Symlink("folder/file", filepath.Join(source.RootPath, "leaf")))
+	var seen []string
+	yield := func(name string, _ os.FileInfo) error {
+		seen = append(seen, name)
+		return nil
+	}
+	require.Error(t, walkSelection(ctx, exe, source, "alias/file", yield))
+	require.Error(t, walkSelection(ctx, exe, source, "leaf", yield))
+	require.NoError(t, walkSelection(ctx, exe, source, "folder/file", yield))
+	require.Equal(t, []string{"folder/file"}, seen)
+}
