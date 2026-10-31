@@ -77,13 +77,8 @@ export const ReadMediaDialog = ({
   const tapes = media.filter((value) => value.kind === MediaKind.TAPE);
   const candidates = backend === "volume" ? volumes : tapes;
 
-  const show = async () => {
-    const current = ++request.current;
-    const currentPolicy = ++policyRequest.current;
-    setOpen(true);
-    setLoading(true);
-    setError("");
-    setDevicesError("");
+  // Every open, close and successful read starts from no Media, device or inspection choice.
+  const resetChoices = () => {
     setDevicesLoading(false);
     setMedia([]);
     setDevices(null);
@@ -94,6 +89,22 @@ export const ReadMediaDialog = ({
     setScanResultPolicy(undefined);
     setDeviceReport(null);
     inspection.reset();
+  };
+  const dismiss = () => {
+    request.current++;
+    policyRequest.current++;
+    setOpen(false);
+    setBackend("volume");
+    resetChoices();
+  };
+  const show = async () => {
+    const current = ++request.current;
+    const currentPolicy = ++policyRequest.current;
+    setOpen(true);
+    setLoading(true);
+    setError("");
+    setDevicesError("");
+    resetChoices();
     try {
       if (!mediaIDs.length) throw new Error("This Job has no pending Media.");
       const mediaReply = await mediaCli.list({ param: { oneofKind: "ids", ids: { ids: mediaIDs } } }).response;
@@ -137,21 +148,7 @@ export const ReadMediaDialog = ({
     }
   };
   const close = () => {
-    if (submitting) return;
-    request.current += 1;
-    policyRequest.current++;
-    setOpen(false);
-    setBackend("volume");
-    setDevices(null);
-    setDevicesLoading(false);
-    setMedia([]);
-    setDevice("");
-    setVolumeUUID("");
-    setTapeID("");
-    setRefreshPositionMap(false);
-    setScanResultPolicy(undefined);
-    setDeviceReport(null);
-    inspection.reset();
+    if (!submitting) dismiss();
   };
   const submit = async () => {
     if (!canSubmit) return;
@@ -163,19 +160,7 @@ export const ReadMediaDialog = ({
           : { backend: { oneofKind: "tape" as const, tape: { device, refreshPositionMap, ...(tapeID ? { mediaId: BigInt(tapeID) } : {}) } } };
       const selected = backend === "volume" ? selectedVolume : useLTFS ? inspection.reply?.media : undefined;
       await onRead(ReadMediaTarget.create({ ...target, ...(selected ? { expectedMediaId: selected.id, expectedIdentity: selected.identity } : {}) }));
-      request.current++;
-      policyRequest.current++;
-      setOpen(false);
-      setBackend("volume");
-      setDevices(null);
-      setMedia([]);
-      setDevice("");
-      setVolumeUUID("");
-      setTapeID("");
-      setRefreshPositionMap(false);
-      setScanResultPolicy(undefined);
-      setDeviceReport(null);
-      inspection.reset();
+      dismiss();
       runUIAction(refresh, "Media reading started, but the Job list could not refresh");
     } catch (error) {
       setError(errorMessage(error, `Could not start ${operation}`));
