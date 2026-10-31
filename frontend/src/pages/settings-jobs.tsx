@@ -7,7 +7,7 @@ import { JobExecutionSettings, JobSettings, SettingsGroup } from "@/entity";
 /** The Executor's pipeline limits: what an attempt batches, buffers and flushes while it runs. */
 export const JobSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.JOB, JobSettings, "Job");
-  const { cancel, dirty, draft, error, loading, reload, save: saveDraft, saved, saving, setDraft, setError } = editor;
+  const { cancel, dirty, draft, error, invalid, loading, reload, reject, save: saveDraft, saved, saving, setDraft } = editor;
   const execution = draft?.execution;
   const changeExecution = (changes: Partial<JobExecutionSettings>) =>
     setDraft((value) => (value?.execution ? { ...value, execution: { ...value.execution, ...changes } } : value));
@@ -15,7 +15,7 @@ export const JobSettingsBrowser = () => {
     if (!execution || saving || loading) return;
     const validation = validateExecution(execution);
     if (validation) {
-      setError(validation);
+      reject(validation);
       return;
     }
     await saveDraft();
@@ -23,19 +23,28 @@ export const JobSettingsBrowser = () => {
 
   return (
     <>
-      <SettingsEditorFeedback label="Job" loading={loading} saving={saving} error={error} saved={saved} dirty={dirty} hasDraft={!!draft} onReload={reload} />
-      {execution && (
-        <Stack
-          component="form"
-          noValidate
-          useFlexGap
-          spacing={2}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <p>Pipeline limits for running Archive, Restore and Scan Jobs.</p>
+      <SettingsEditorFeedback
+        label="Job"
+        loading={loading}
+        saving={saving}
+        error={error}
+        invalid={invalid}
+        saved={saved}
+        dirty={dirty}
+        hasDraft={!!draft}
+        onReload={reload}
+      />
+      <Stack
+        component="form"
+        noValidate
+        useFlexGap
+        spacing={2}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        {execution && (
           <SettingsSection
             title="Advanced"
             collapsible
@@ -94,9 +103,9 @@ export const JobSettingsBrowser = () => {
               </Grid>
             </Grid>
           </SettingsSection>
-          <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
-        </Stack>
-      )}
+        )}
+        <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
+      </Stack>
     </>
   );
 };

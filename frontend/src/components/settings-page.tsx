@@ -127,6 +127,7 @@ export const SettingsEditorFeedback = ({
   loading,
   saving,
   error,
+  invalid = "",
   saved,
   dirty,
   hasDraft,
@@ -136,6 +137,7 @@ export const SettingsEditorFeedback = ({
   loading: boolean;
   saving: boolean;
   error: string;
+  invalid?: string;
   saved: boolean;
   dirty: boolean;
   hasDraft: boolean;
@@ -156,6 +158,7 @@ export const SettingsEditorFeedback = ({
         {error}
       </Feedback>
     )}
+    {invalid && <Feedback severity="error">{invalid}</Feedback>}
     {saved && !dirty && <Alert severity="success">{label} settings saved.</Alert>}
   </>
 );

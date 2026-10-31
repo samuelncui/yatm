@@ -26,6 +26,8 @@ describe("Job Settings", () => {
     const page = render(<JobSettingsBrowser />);
     expect(screen.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    // Every editor keeps the same page action row while its values load.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     await act(async () => finish({ value: value() }));
     await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     const batch = screen.getByRole("spinbutton", { name: "Manifest batch (items)" });
@@ -67,6 +69,8 @@ describe("Job Settings", () => {
     await userEvent.type(batch, "8192");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText(/Results per update must not exceed the queued results limit/)).toBeInTheDocument();
+    // A rejected draft is corrected in place; reloading would discard it.
+    expect(screen.queryByRole("button", { name: /Reload saved settings|Retry/ })).not.toBeInTheDocument();
     expect(update).not.toHaveBeenCalled();
   });
 

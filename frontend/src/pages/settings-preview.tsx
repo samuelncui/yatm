@@ -22,7 +22,7 @@ import { usePreviewGeneration } from "@/components/preview-policy-select";
 
 export const PreviewSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.PREVIEW, PreviewSettings, "Preview");
-  const { cancel, dirty, draft, error, loading, reload, save: saveDraft, saved, saving, setDraft, setError, settings } = editor;
+  const { cancel, dirty, draft, error, invalid, loading, reload, reject, save: saveDraft, saved, saving, setDraft, settings } = editor;
   const [selected, setSelected] = useState(0);
   const generation = usePreviewGeneration(!!draft, draft);
   const commandChanged = !!draft && draft.command !== settings?.command;
@@ -30,7 +30,7 @@ export const PreviewSettingsBrowser = () => {
     if (!draft || saving || loading) return;
     const validation = validatePreview(draft);
     if (validation) {
-      setError(validation.message);
+      reject(validation.message);
       setSelected(validation.index);
       return;
     }
@@ -44,163 +44,168 @@ export const PreviewSettingsBrowser = () => {
         loading={loading}
         saving={saving}
         error={error}
+        invalid={invalid}
         saved={saved}
         dirty={dirty}
         hasDraft={!!draft}
         onReload={reload}
       />
-      {draft && (
-        <Stack
-          component="form"
-          noValidate
-          useFlexGap
-          spacing={2}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <SettingsSection title="Generation" description="Enablement changes apply when the next file starts. Existing Preview assets remain available.">
-            <SettingsField
-              label="Enable generation"
-              control={<Switch checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
-            />
-            {!generation.loading && (generation.error || !generation.capabilities?.available) && (
-              <Feedback
-                severity="warning"
-                action={
-                  generation.error ? (
-                    <Button disabled={generation.loading || loading || saving || commandChanged} onClick={generation.reload}>
-                      Retry
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {generation.error || generation.capabilities?.reason || generation.reason}
-              </Feedback>
-            )}
-          </SettingsSection>
-          {draft.generators.length === 0 && <Alert severity="info">No Preview generators are configured.</Alert>}
-          {draft.generators.length > 0 && (
-            <SettingsSection title="Output" description="File routes, dimensions, format and quality are captured by new Jobs.">
-              <Stack useFlexGap spacing={2}>
-                <Autocomplete
-                  disableClearable
-                  openOnFocus
-                  size="small"
-                  disabled={loading || saving}
-                  options={draft.generators.map((_, index) => index)}
-                  value={activeSelected}
-                  getOptionLabel={(index) => generatorLabel(draft, index)}
-                  filterOptions={createFilterOptions<number>({
-                    stringify: (index) => generatorLabel(draft, index) + " " + draft.generators[index].extensions.map((entry) => entry.name).join(" "),
-                  })}
-                  onChange={(_, index) => setSelected(index)}
-                  renderInput={(params) => <TextField {...params} label="Type" />}
-                />
-                {draft.generators[activeSelected] && (
-                  <GeneratorForm
-                    key={activeSelected}
-                    generator={draft.generators[activeSelected]}
-                    label={generatorLabel(draft, activeSelected)}
-                    supportedExtensions={generation.capabilities?.inputExtensionsByKind?.[draft.generators[activeSelected].options.oneofKind ?? ""]?.extensions}
+      <Stack
+        component="form"
+        noValidate
+        useFlexGap
+        spacing={2}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        {draft && (
+          <>
+            <SettingsSection title="Generation" description="Enablement changes apply when the next file starts. Existing Preview assets remain available.">
+              <SettingsField
+                label="Enable generation"
+                control={<Switch checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
+              />
+              {!generation.loading && (generation.error || !generation.capabilities?.available) && (
+                <Feedback
+                  severity="warning"
+                  action={
+                    generation.error ? (
+                      <Button disabled={generation.loading || loading || saving || commandChanged} onClick={generation.reload}>
+                        Retry
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {generation.error || generation.capabilities?.reason || generation.reason}
+                </Feedback>
+              )}
+            </SettingsSection>
+            {draft.generators.length === 0 && <Alert severity="info">No Preview generators are configured.</Alert>}
+            {draft.generators.length > 0 && (
+              <SettingsSection title="Output" description="File routes, dimensions, format and quality are captured by new Jobs.">
+                <Stack useFlexGap spacing={2}>
+                  <Autocomplete
+                    disableClearable
+                    openOnFocus
+                    size="small"
                     disabled={loading || saving}
-                    hasError={validateGenerators(draft)?.index === activeSelected}
-                    onChange={(value) => {
-                      setDraft({ ...draft, generators: draft.generators.map((existing, item) => (item === activeSelected ? value : existing)) });
-                    }}
+                    options={draft.generators.map((_, index) => index)}
+                    value={activeSelected}
+                    getOptionLabel={(index) => generatorLabel(draft, index)}
+                    filterOptions={createFilterOptions<number>({
+                      stringify: (index) => generatorLabel(draft, index) + " " + draft.generators[index].extensions.map((entry) => entry.name).join(" "),
+                    })}
+                    onChange={(_, index) => setSelected(index)}
+                    renderInput={(params) => <TextField {...params} label="Type" />}
                   />
+                  {draft.generators[activeSelected] && (
+                    <GeneratorForm
+                      key={activeSelected}
+                      generator={draft.generators[activeSelected]}
+                      label={generatorLabel(draft, activeSelected)}
+                      supportedExtensions={
+                        generation.capabilities?.inputExtensionsByKind?.[draft.generators[activeSelected].options.oneofKind ?? ""]?.extensions
+                      }
+                      disabled={loading || saving}
+                      hasError={validateGenerators(draft)?.index === activeSelected}
+                      onChange={(value) => {
+                        setDraft({ ...draft, generators: draft.generators.map((existing, item) => (item === activeSelected ? value : existing)) });
+                      }}
+                    />
+                  )}
+                </Stack>
+              </SettingsSection>
+            )}
+            <SettingsSection
+              title="Advanced runtime"
+              collapsible
+              hasError={!!validateRuntime(draft)}
+              description={`Concurrency ${draft.concurrency} · timeout ${draft.timeoutSeconds} seconds · maximum input ${draft.maxInputPixels} pixels`}
+            >
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, lg: 8 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Executable"
+                    helperText={
+                      commandChanged
+                        ? "Save to check this executable. Current capability results describe the saved executable."
+                        : "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+                    }
+                    value={draft.command}
+                    disabled={loading || saving}
+                    onChange={(event) => setDraft({ ...draft, command: event.target.value })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                  <SettingsNumberField
+                    label="Concurrency"
+                    helperText="Maximum files generating Previews at the same time. Higher values use more memory."
+                    value={draft.concurrency}
+                    max={16}
+                    disabled={loading || saving}
+                    onChange={(concurrency) => setDraft({ ...draft, concurrency })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                  <SettingsNumberField
+                    label="Timeout (seconds)"
+                    helperText="Maximum generation time per file, after it acquires a slot."
+                    value={draft.timeoutSeconds}
+                    max={86400}
+                    disabled={loading || saving}
+                    onChange={(timeoutSeconds) => setDraft({ ...draft, timeoutSeconds })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+                  <SettingsNumberField
+                    label="Maximum input pixels"
+                    helperText="Larger inputs are rejected before decoding; this is not the output size."
+                    value={Number(draft.maxInputPixels)}
+                    max={64000000}
+                    disabled={loading || saving}
+                    onChange={(value) => setDraft({ ...draft, maxInputPixels: BigInt(Number.isFinite(value) ? Math.trunc(value) : 0) })}
+                  />
+                </Grid>
+              </Grid>
+            </SettingsSection>
+            <SettingsSection title="Supported formats" collapsible hasError={!!generation.error} description="Capabilities of the saved Preview executable.">
+              <Stack useFlexGap spacing={1}>
+                {generation.capabilities && (
+                  <>
+                    <div>
+                      Helper {generation.capabilities.version || "unavailable"}
+                      {generation.capabilities.ffmpegVersion && ` · FFmpeg ${generation.capabilities.ffmpegVersion}`}
+                      {generation.capabilities.librawVersion && ` · LibRaw ${generation.capabilities.librawVersion}`}
+                    </div>
+                    {Object.entries(generation.capabilities.inputExtensionsByKind ?? {})
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([kind, formats]) => (
+                        <div key={kind}>
+                          {kind === "image" ? "Image" : kind === "video" ? "Video" : kind}: {formats.extensions.join(", ")}
+                        </div>
+                      ))}
+                    <div>Output: {generation.capabilities.outputFormats?.join(", ")}</div>
+                  </>
                 )}
+                {generation.loading && <LinearProgress aria-label="Checking Preview helper" />}
+                <Button
+                  type="button"
+                  sx={{ alignSelf: "flex-start" }}
+                  disabled={loading || saving || generation.loading || commandChanged}
+                  onClick={generation.reload}
+                >
+                  Check saved executable again
+                </Button>
               </Stack>
             </SettingsSection>
-          )}
-          <SettingsSection
-            title="Advanced runtime"
-            collapsible
-            hasError={!!validateRuntime(draft)}
-            description={`Concurrency ${draft.concurrency} · timeout ${draft.timeoutSeconds} seconds · maximum input ${draft.maxInputPixels} pixels`}
-          >
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, lg: 8 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Executable"
-                  helperText={
-                    commandChanged
-                      ? "Save to check this executable. Current capability results describe the saved executable."
-                      : "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
-                  }
-                  value={draft.command}
-                  disabled={loading || saving}
-                  onChange={(event) => setDraft({ ...draft, command: event.target.value })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Concurrency"
-                  helperText="Maximum files generating Previews at the same time. Higher values use more memory."
-                  value={draft.concurrency}
-                  max={16}
-                  disabled={loading || saving}
-                  onChange={(concurrency) => setDraft({ ...draft, concurrency })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Timeout (seconds)"
-                  helperText="Maximum generation time per file, after it acquires a slot."
-                  value={draft.timeoutSeconds}
-                  max={86400}
-                  disabled={loading || saving}
-                  onChange={(timeoutSeconds) => setDraft({ ...draft, timeoutSeconds })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-                <SettingsNumberField
-                  label="Maximum input pixels"
-                  helperText="Larger inputs are rejected before decoding; this is not the output size."
-                  value={Number(draft.maxInputPixels)}
-                  max={64000000}
-                  disabled={loading || saving}
-                  onChange={(value) => setDraft({ ...draft, maxInputPixels: BigInt(Number.isFinite(value) ? Math.trunc(value) : 0) })}
-                />
-              </Grid>
-            </Grid>
-          </SettingsSection>
-          <SettingsSection title="Supported formats" collapsible hasError={!!generation.error} description="Capabilities of the saved Preview executable.">
-            <Stack useFlexGap spacing={1}>
-              {generation.capabilities && (
-                <>
-                  <div>
-                    Helper {generation.capabilities.version || "unavailable"}
-                    {generation.capabilities.ffmpegVersion && ` · FFmpeg ${generation.capabilities.ffmpegVersion}`}
-                    {generation.capabilities.librawVersion && ` · LibRaw ${generation.capabilities.librawVersion}`}
-                  </div>
-                  {Object.entries(generation.capabilities.inputExtensionsByKind ?? {})
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([kind, formats]) => (
-                      <div key={kind}>
-                        {kind === "image" ? "Image" : kind === "video" ? "Video" : kind}: {formats.extensions.join(", ")}
-                      </div>
-                    ))}
-                  <div>Output: {generation.capabilities.outputFormats?.join(", ")}</div>
-                </>
-              )}
-              {generation.loading && <LinearProgress aria-label="Checking Preview helper" />}
-              <Button
-                type="button"
-                sx={{ alignSelf: "flex-start" }}
-                disabled={loading || saving || generation.loading || commandChanged}
-                onClick={generation.reload}
-              >
-                Check saved executable again
-              </Button>
-            </Stack>
-          </SettingsSection>
-          <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
-        </Stack>
-      )}
+          </>
+        )}
+        <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel} />
+      </Stack>
     </>
   );
 };

@@ -124,6 +124,8 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
   const [loading, setLoading] = useState(!settings && !store.getState().settings[group]?.error);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(store.getState().settings[group]?.error ?? "");
+  // A draft the page rejected before saving; correcting it needs no reload.
+  const [invalid, setInvalid] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -158,15 +160,18 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
   const dirty = !!draft && !message.equals(draft, settings);
   const reload = () => {
     setSaved(false);
+    setInvalid("");
     setAttempt((value) => value + 1);
   };
   const cancel = () => {
     if (settings) setDraft(message.clone(settings));
     setError("");
+    setInvalid("");
     setSaved(false);
   };
   const save = async (): Promise<boolean> => {
     if (!draft || saving || loading) return false;
+    setInvalid("");
     setSaving(true);
     setSaved(false);
     try {
@@ -190,6 +195,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     dirty,
     draft,
     error,
+    invalid,
     loading,
     reload,
     save,
@@ -197,6 +203,6 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     saving,
     settings,
     setDraft: setDraft as Dispatch<SetStateAction<T | undefined>>,
-    setError,
+    reject: setInvalid,
   };
 };

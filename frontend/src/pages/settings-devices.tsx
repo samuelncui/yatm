@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from "@mui/material";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
 import { mediaCli } from "@/api";
 import {
   DeviceConfig,
@@ -102,7 +102,7 @@ export const DeviceSettingsBrowser = () => {
       keys.add(entry.device);
       if (error) {
         if (entry.device !== device) selectDevice(entry.device);
-        editor.setError(error);
+        editor.reject(error);
         return;
       }
       if (entry.options.oneofKind === "tape") {
@@ -115,7 +115,7 @@ export const DeviceSettingsBrowser = () => {
       }
       if (!error) continue;
       if (entry.device !== device) selectDevice(entry.device);
-      editor.setError("");
+      editor.reject("");
       return;
     }
     await editor.save();
@@ -128,13 +128,14 @@ export const DeviceSettingsBrowser = () => {
         loading={editor.loading}
         saving={editor.saving}
         error={editor.error}
+        invalid={editor.invalid}
         saved={editor.saved}
         dirty={editor.dirty || parametersDirty}
         hasDraft={!!editor.draft}
         onReload={editor.reload}
       />
       {listError && <Feedback severity="error">{listError}</Feedback>}
-      {listing && <p role="status">Loading devices…</p>}
+      {listing && <LinearProgress aria-label="Loading devices" />}
       <Stack
         component="form"
         noValidate

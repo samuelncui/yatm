@@ -280,7 +280,7 @@ const App = () => {
                         key="jobs"
                         title="Jobs"
                         label="Job"
-                        description="These limits are captured when the next attempt starts. Running attempts keep their current limits."
+                        description="Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
                       >
                         <JobSettingsBrowser />
                       </SettingsEditorPage>
