@@ -71,7 +71,7 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 		`<bytecount>7</bytecount><fileoffset>0</fileoffset>` +
 		`</extent></extentinfo></file></contents></directory>` +
 		`</contents></directory></ltfsindex>`
-	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "abc010.schema"), []byte(index), 0o644))
 	legacyMarker := filepath.Join(root, "jobs", "11", "state.db")
 	require.NoError(t, os.MkdirAll(filepath.Dir(legacyMarker), 0o755))
 	require.NoError(t, os.WriteFile(legacyMarker, []byte("legacy"), 0o644))
@@ -400,8 +400,8 @@ func TestPrepareOmitsCapturedLTFSIndexSizeMismatch(t *testing.T) {
 		ID: 20, Name: "file.txt", Mode: 0o644, Size: 8, Hash: hash[:],
 	}).Error)
 	require.NoError(t, db.Create([]*legacyLibraryTape{
-		{ID: 10, Barcode: "ABC010", WritenBytes: 8},
-		{ID: 11, Barcode: "ABC011", WritenBytes: 8},
+		{ID: 10, Barcode: "abc010", WritenBytes: 8},
+		{ID: 11, Barcode: " ABC011 ", WritenBytes: 8},
 	}).Error)
 	require.NoError(t, db.Create([]*legacyLibraryPosition{
 		{ID: 30, FileID: 20, TapeID: 10, Path: "file.txt", Mode: 0o644, Size: 8, Hash: hash[:]},
@@ -462,6 +462,7 @@ func TestPrepareOmitsCapturedLTFSIndexSizeMismatch(t *testing.T) {
 	require.NoError(t, db.Order("id").Find(&tapes).Error)
 	require.Zero(t, tapes[0].WrittenBytes)
 	require.Equal(t, int64(8), tapes[1].WrittenBytes)
+	require.Equal(t, []string{"ABC010", "ABC011"}, []string{tapes[0].Identity, tapes[1].Identity})
 	restoreDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
 	require.NoError(t, err)
 	var copies []*restore.Copy

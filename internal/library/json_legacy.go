@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/fs"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
@@ -253,7 +252,7 @@ func legacyTapeToMedia(value *legacyLibraryTape) (*Media, error) {
 	}
 	return &Media{
 		ID: value.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE,
-		Identity: strings.ToUpper(strings.TrimSpace(value.Barcode)), Name: value.Name,
+		Identity: NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, value.Barcode), Name: value.Name,
 		Profile: (&entity.TapeMediaProfile{
 			Encryption: value.Encryption, Format: TapeFormatLTFSV0,
 		}).Pack(),

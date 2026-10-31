@@ -184,7 +184,7 @@ func (l *Library) GetMediaByIdentity(
 	// Use Find so a normal identity miss does not emit GORM's record-not-found error log.
 	result := new(Media)
 	query := l.readDB().WithContext(ctx).Where(
-		"kind = ? AND identity = ?", kind, normalizeMediaIdentity(kind, identity),
+		"kind = ? AND identity = ?", kind, NormalizeMediaIdentity(kind, identity),
 	).Limit(1).Find(result)
 	if query.Error != nil {
 		return nil, fmt.Errorf("get Media by identity failed, kind=%s identity=%q, %w", kind, identity, query.Error)
@@ -539,7 +539,7 @@ func validateMedia(value *Media) error {
 	if value == nil {
 		return fmt.Errorf("Media is nil")
 	}
-	value.Identity = normalizeMediaIdentity(value.Kind, value.Identity)
+	value.Identity = NormalizeMediaIdentity(value.Kind, value.Identity)
 	if value.Identity == "" {
 		return fmt.Errorf("Media identity is empty")
 	}
@@ -583,7 +583,8 @@ func validateMedia(value *Media) error {
 	return ValidateTapePositionMap(value, value.TapePositionMap)
 }
 
-func normalizeMediaIdentity(kind entity.MediaKind, identity string) string {
+// NormalizeMediaIdentity returns the stored form of a Media identity.
+func NormalizeMediaIdentity(kind entity.MediaKind, identity string) string {
 	identity = strings.TrimSpace(identity)
 	if kind == entity.MediaKind_MEDIA_KIND_TAPE {
 		return strings.ToUpper(identity)

@@ -196,8 +196,22 @@ func indexLibraryPositions(ctx context.Context, db *gorm.DB, root string) (int, 
 		if len(tapes) == 0 {
 			return total, warnings, nil
 		}
+
+		// Legacy scripts named captured indexes with the barcode as recorded, before normalization.
+		ids := make([]int64, 0, len(tapes))
 		for _, tape := range tapes {
-			indexed, tapeWarnings, err := indexLibraryTape(ctx, db, root, tape)
+			ids = append(ids, tape.ID)
+		}
+		var legacy []*legacyLibraryTape
+		if err := db.WithContext(ctx).Select("id", "barcode").Where("id IN ?", ids).Find(&legacy).Error; err != nil {
+			return 0, nil, fmt.Errorf("read legacy Tape barcodes failed, cursor=%d, %w", cursor, err)
+		}
+		barcodes := make(map[int64]string, len(legacy))
+		for _, tape := range legacy {
+			barcodes[tape.ID] = tape.Barcode
+		}
+		for _, tape := range tapes {
+			indexed, tapeWarnings, err := indexLibraryTape(ctx, db, root, tape, barcodes[tape.ID])
 			if err != nil {
 				return 0, nil, err
 			}
@@ -213,9 +227,10 @@ func indexLibraryTape(
 	db *gorm.DB,
 	root string,
 	tape *stagedLibraryMedia,
+	barcode string,
 ) (int, []string, error) {
 	// Treat a missing or empty captured index as a legacy path-ordered Tape.
-	filename := filepath.Join(root, tape.Identity+".schema")
+	filename := filepath.Join(root, barcode+".schema")
 	file, err := os.Open(filename)
 	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil, nil
@@ -518,8 +533,9 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 				destroyedAtNS = &stamp
 			}
 			rows = append(rows, &stagedLibraryMedia{
-				ID: tape.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: tape.Barcode,
-				Name: tape.Name, Profile: (&entity.TapeMediaProfile{
+				ID: tape.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE,
+				Identity: library.NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, tape.Barcode),
+				Name:     tape.Name, Profile: (&entity.TapeMediaProfile{
 					Encryption: tape.Encryption, Format: library.TapeFormatLTFSV0,
 				}).Pack(),
 				CreatedAtNS: createdAtNS, DestroyedAtNS: destroyedAtNS,
