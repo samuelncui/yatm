@@ -2,7 +2,7 @@ import { Alert } from "@mui/material";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import { MediaKind, PositionHealth, VolumeType, TapeRecordMode, type Media, type Position } from "@/entity";
 import { ContentCopies, ContentPreview, copyHealthLabel } from "@/components/file-content";
-import { contentHex, contentMode, contentTime } from "@/components/content-status";
+import { archiveColors, contentHex, contentMode, contentTime } from "@/components/content-status";
 import { accessLabel, isArchivePosition, isMediaFile, mediaAvailabilityLabel, type MediaFileData, type MediaPositionFileData } from "@/api";
 import { formatFilesize } from "@/tools";
 import { DetailSurface } from "./detail-surface";
@@ -24,9 +24,9 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
       icon={<StorageRoundedIcon fontSize="small" />}
       status={
         selected
-          ? { label: mediaAvailabilityLabel(selected), color: selected.mounted ? "#16a34a" : "#94a3b8" }
+          ? { label: mediaAvailabilityLabel(selected), color: selected.mounted ? archiveColors.success : archiveColors.info }
           : position
-            ? { label: copyHealthLabel(health), color: health === PositionHealth.HEALTHY ? "#16a34a" : "#94a3b8" }
+            ? { label: copyHealthLabel(health), color: health === PositionHealth.HEALTHY ? archiveColors.success : archiveColors.info }
             : undefined
       }
       preview={position?.signature.length ? <ContentPreview signature={position.signature} label="Preview · archived content" reserveSpace /> : undefined}

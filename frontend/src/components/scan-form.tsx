@@ -194,7 +194,7 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
   return (
     <div className="job-create-page">
       <div className="short-form-page">
-        <Card className="job-create-card" sx={{ borderRadius: "12px" }}>
+        <Card className="job-create-card">
           {initial.priority !== undefined && (
             <Feedback severity="info">
               Review the original selections and options, then submit to create a new Job. Priority: {String(initial.priority)}.

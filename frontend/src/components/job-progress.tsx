@@ -189,7 +189,7 @@ export const JobCard = ({
   const creationRoute = job.kind === JobKind.ARCHIVE ? "archive" : job.kind === JobKind.RESTORE ? "restore" : job.kind === JobKind.SCAN ? "scan" : undefined;
 
   return (
-    <Card sx={{ overflow: "hidden", textAlign: "left", borderRadius: "12px" }} className="job-detail" ref={containerRef}>
+    <Card sx={{ overflow: "hidden", textAlign: "left" }} className="job-detail" ref={containerRef}>
       <CardContent sx={{ p: "18px 20px 16px" }}>
         <div className="job-card-header">
           <Typography className="job-title" component="h2" sx={{ fontSize: 19, fontWeight: 700 }}>
