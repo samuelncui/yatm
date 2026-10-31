@@ -8,8 +8,6 @@ import {
   FilesEntry,
   FilesDetail,
   GetFileResponse,
-  FilesArchive,
-  FilesCoverage,
   ListFilesResponse,
   RemoveFilesResponse,
   FileScope,
@@ -36,14 +34,6 @@ export function libraryEntry(file: File): FilesEntry {
     path: file.name,
     kind: file.kind === FileKind.DIRECTORY || ((file.mode ?? 0n) & 0x80000000n) !== 0n ? EntryKind.DIRECTORY : EntryKind.FILE,
     sizeBytes: file.sizeBytes,
-    status: file.contentSummary
-      ? {
-          original: file.contentSummary.originalAvailability,
-          archive: file.contentSummary.restorableVersionCopyCount ? FilesArchive.AVAILABLE : FilesArchive.NONE,
-          current: file.contentSummary.currentObservationValid ? FilesCoverage.COVERED : FilesCoverage.UNSPECIFIED,
-          issues: [],
-        }
-      : undefined,
     operations,
   });
 }

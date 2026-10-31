@@ -149,85 +149,6 @@ export interface File {
      * @generated from protobuf field: int64 updated_at_ns = 26
      */
     updatedAtNs: bigint;
-    /**
-     * Catalog coverage and explicitly timed original observations, never a health guarantee.
-     *
-     * @generated from protobuf field: yatm.v1.FileContentSummary content_summary = 27
-     */
-    contentSummary?: FileContentSummary;
-}
-/**
- * @generated from protobuf message yatm.v1.FileContentSummary
- */
-export interface FileContentSummary {
-    /**
-     * @generated from protobuf field: bool has_original = 1
-     */
-    hasOriginal: boolean;
-    /**
-     * @generated from protobuf field: bool has_versions = 2
-     */
-    hasVersions: boolean;
-    /**
-     * @generated from protobuf field: bool signature_known = 3
-     */
-    signatureKnown: boolean;
-    /**
-     * @generated from protobuf field: int64 archived_copy_count = 4
-     */
-    archivedCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 healthy_copy_count = 5
-     */
-    healthyCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 unchecked_copy_count = 6
-     */
-    uncheckedCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 unhealthy_copy_count = 7
-     */
-    unhealthyCopyCount: bigint;
-    /**
-     * @generated from protobuf field: yatm.v1.OriginalAvailability original_availability = 8
-     */
-    originalAvailability: OriginalAvailability;
-    /**
-     * @generated from protobuf field: int64 observed_at_ns = 9
-     */
-    observedAtNs: bigint;
-    /**
-     * Signature-linked history counts deduplicate physical Positions across versions.
-     *
-     * @generated from protobuf field: int64 version_copy_count = 10
-     */
-    versionCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 restorable_version_copy_count = 11
-     */
-    restorableVersionCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 unhealthy_version_copy_count = 12
-     */
-    unhealthyVersionCopyCount: bigint;
-    /**
-     * @generated from protobuf field: int64 latest_version_id = 13
-     */
-    latestVersionId: bigint;
-    /**
-     * @generated from protobuf field: int64 latest_version_restorable_copy_count = 14
-     */
-    latestVersionRestorableCopyCount: bigint;
-    /**
-     * Current content counts require a valid binding and matching live object facts.
-     *
-     * @generated from protobuf field: bool current_observation_valid = 15
-     */
-    currentObservationValid: boolean;
-    /**
-     * @generated from protobuf field: int64 restorable_current_copy_count = 16
-     */
-    restorableCurrentCopyCount: bigint;
 }
 /**
  * An immutable archived content state owned by one independently organized File.
@@ -649,8 +570,7 @@ class File$Type extends MessageType<File> {
             { no: 22, name: "note", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 24, name: "kind", kind: "enum", T: () => ["yatm.v1.FileKind", FileKind, "FILE_KIND_"] },
             { no: 25, name: "created_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 26, name: "updated_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 27, name: "content_summary", kind: "message", T: () => FileContentSummary }
+            { no: 26, name: "updated_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<File>): File {
@@ -712,9 +632,6 @@ class File$Type extends MessageType<File> {
                 case /* int64 updated_at_ns */ 26:
                     message.updatedAtNs = reader.int64().toBigInt();
                     break;
-                case /* yatm.v1.FileContentSummary content_summary */ 27:
-                    message.contentSummary = FileContentSummary.internalBinaryRead(reader, reader.uint32(), options, message.contentSummary);
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -763,9 +680,6 @@ class File$Type extends MessageType<File> {
         /* int64 updated_at_ns = 26; */
         if (message.updatedAtNs !== 0n)
             writer.tag(26, WireType.Varint).int64(message.updatedAtNs);
-        /* yatm.v1.FileContentSummary content_summary = 27; */
-        if (message.contentSummary)
-            FileContentSummary.internalBinaryWrite(message.contentSummary, writer.tag(27, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -776,173 +690,6 @@ class File$Type extends MessageType<File> {
  * @generated MessageType for protobuf message yatm.v1.File
  */
 export const File = new File$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class FileContentSummary$Type extends MessageType<FileContentSummary> {
-    constructor() {
-        super("yatm.v1.FileContentSummary", [
-            { no: 1, name: "has_original", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 2, name: "has_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 3, name: "signature_known", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 4, name: "archived_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 5, name: "healthy_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 6, name: "unchecked_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 7, name: "unhealthy_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 8, name: "original_availability", kind: "enum", T: () => ["yatm.v1.OriginalAvailability", OriginalAvailability, "ORIGINAL_AVAILABILITY_"] },
-            { no: 9, name: "observed_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 10, name: "version_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 11, name: "restorable_version_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 12, name: "unhealthy_version_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 13, name: "latest_version_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 14, name: "latest_version_restorable_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 15, name: "current_observation_valid", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 16, name: "restorable_current_copy_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<FileContentSummary>): FileContentSummary {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.hasOriginal = false;
-        message.hasVersions = false;
-        message.signatureKnown = false;
-        message.archivedCopyCount = 0n;
-        message.healthyCopyCount = 0n;
-        message.uncheckedCopyCount = 0n;
-        message.unhealthyCopyCount = 0n;
-        message.originalAvailability = 0;
-        message.observedAtNs = 0n;
-        message.versionCopyCount = 0n;
-        message.restorableVersionCopyCount = 0n;
-        message.unhealthyVersionCopyCount = 0n;
-        message.latestVersionId = 0n;
-        message.latestVersionRestorableCopyCount = 0n;
-        message.currentObservationValid = false;
-        message.restorableCurrentCopyCount = 0n;
-        if (value !== undefined)
-            reflectionMergePartial<FileContentSummary>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: FileContentSummary): FileContentSummary {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* bool has_original */ 1:
-                    message.hasOriginal = reader.bool();
-                    break;
-                case /* bool has_versions */ 2:
-                    message.hasVersions = reader.bool();
-                    break;
-                case /* bool signature_known */ 3:
-                    message.signatureKnown = reader.bool();
-                    break;
-                case /* int64 archived_copy_count */ 4:
-                    message.archivedCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 healthy_copy_count */ 5:
-                    message.healthyCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 unchecked_copy_count */ 6:
-                    message.uncheckedCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 unhealthy_copy_count */ 7:
-                    message.unhealthyCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* yatm.v1.OriginalAvailability original_availability */ 8:
-                    message.originalAvailability = reader.int32();
-                    break;
-                case /* int64 observed_at_ns */ 9:
-                    message.observedAtNs = reader.int64().toBigInt();
-                    break;
-                case /* int64 version_copy_count */ 10:
-                    message.versionCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 restorable_version_copy_count */ 11:
-                    message.restorableVersionCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 unhealthy_version_copy_count */ 12:
-                    message.unhealthyVersionCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* int64 latest_version_id */ 13:
-                    message.latestVersionId = reader.int64().toBigInt();
-                    break;
-                case /* int64 latest_version_restorable_copy_count */ 14:
-                    message.latestVersionRestorableCopyCount = reader.int64().toBigInt();
-                    break;
-                case /* bool current_observation_valid */ 15:
-                    message.currentObservationValid = reader.bool();
-                    break;
-                case /* int64 restorable_current_copy_count */ 16:
-                    message.restorableCurrentCopyCount = reader.int64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: FileContentSummary, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* bool has_original = 1; */
-        if (message.hasOriginal !== false)
-            writer.tag(1, WireType.Varint).bool(message.hasOriginal);
-        /* bool has_versions = 2; */
-        if (message.hasVersions !== false)
-            writer.tag(2, WireType.Varint).bool(message.hasVersions);
-        /* bool signature_known = 3; */
-        if (message.signatureKnown !== false)
-            writer.tag(3, WireType.Varint).bool(message.signatureKnown);
-        /* int64 archived_copy_count = 4; */
-        if (message.archivedCopyCount !== 0n)
-            writer.tag(4, WireType.Varint).int64(message.archivedCopyCount);
-        /* int64 healthy_copy_count = 5; */
-        if (message.healthyCopyCount !== 0n)
-            writer.tag(5, WireType.Varint).int64(message.healthyCopyCount);
-        /* int64 unchecked_copy_count = 6; */
-        if (message.uncheckedCopyCount !== 0n)
-            writer.tag(6, WireType.Varint).int64(message.uncheckedCopyCount);
-        /* int64 unhealthy_copy_count = 7; */
-        if (message.unhealthyCopyCount !== 0n)
-            writer.tag(7, WireType.Varint).int64(message.unhealthyCopyCount);
-        /* yatm.v1.OriginalAvailability original_availability = 8; */
-        if (message.originalAvailability !== 0)
-            writer.tag(8, WireType.Varint).int32(message.originalAvailability);
-        /* int64 observed_at_ns = 9; */
-        if (message.observedAtNs !== 0n)
-            writer.tag(9, WireType.Varint).int64(message.observedAtNs);
-        /* int64 version_copy_count = 10; */
-        if (message.versionCopyCount !== 0n)
-            writer.tag(10, WireType.Varint).int64(message.versionCopyCount);
-        /* int64 restorable_version_copy_count = 11; */
-        if (message.restorableVersionCopyCount !== 0n)
-            writer.tag(11, WireType.Varint).int64(message.restorableVersionCopyCount);
-        /* int64 unhealthy_version_copy_count = 12; */
-        if (message.unhealthyVersionCopyCount !== 0n)
-            writer.tag(12, WireType.Varint).int64(message.unhealthyVersionCopyCount);
-        /* int64 latest_version_id = 13; */
-        if (message.latestVersionId !== 0n)
-            writer.tag(13, WireType.Varint).int64(message.latestVersionId);
-        /* int64 latest_version_restorable_copy_count = 14; */
-        if (message.latestVersionRestorableCopyCount !== 0n)
-            writer.tag(14, WireType.Varint).int64(message.latestVersionRestorableCopyCount);
-        /* bool current_observation_valid = 15; */
-        if (message.currentObservationValid !== false)
-            writer.tag(15, WireType.Varint).bool(message.currentObservationValid);
-        /* int64 restorable_current_copy_count = 16; */
-        if (message.restorableCurrentCopyCount !== 0n)
-            writer.tag(16, WireType.Varint).int64(message.restorableCurrentCopyCount);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.FileContentSummary
- */
-export const FileContentSummary = new FileContentSummary$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class FileVersion$Type extends MessageType<FileVersion> {
     constructor() {

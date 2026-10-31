@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { convertFiles, convertMedia, convertPositions, convertSourceFiles, MODE_DIR } from "@/api";
-import { File, Media, MediaAccess, MediaKind, OriginalAvailability, Position, SourceFile, VolumeType } from "@/entity";
+import { File, Media, MediaAccess, MediaKind, Position, SourceFile, VolumeType } from "@/entity";
 
 it("keeps original ns for row sorting and converts File, source, Media and Position dates only for display", () => {
   const ns = 1_700_000_000_123_999_999n;
@@ -15,28 +15,6 @@ it("keeps original ns for row sorting and converts File, source, Media and Posit
     expect(row.modDateNs).toBe(ns);
     expect(row.modDate).toEqual(new Date("2023-11-14T22:13:20.123Z"));
   }
-});
-
-describe("Library row status", () => {
-  it("projects supplied summaries to small accessible dots for folder and search rows", () => {
-    const file = File.create({
-      id: 1n,
-      name: "notes.txt",
-      contentSummary: {
-        hasOriginal: true,
-        signatureKnown: true,
-        currentObservationValid: true,
-        originalAvailability: OriginalAvailability.PRESENT,
-        hasVersions: true,
-        restorableVersionCopyCount: 1n,
-        archivedCopyCount: 0n,
-      },
-    });
-    const result = convertFiles([file])[0];
-    expect(result.status).toMatchObject({ color: "#15803d", label: expect.stringContaining("Changes not archived") });
-    expect(convertFiles([File.create({ id: 2n, mode: MODE_DIR, contentSummary: file.contentSummary })])[0].status).toBeUndefined();
-    expect(convertFiles([File.create({ id: 3n })])[0].status).toBeUndefined();
-  });
 });
 
 describe("convertMedia", () => {

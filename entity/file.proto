@@ -60,8 +60,6 @@ message File {
     FileKind kind = 24;
     int64 created_at_ns = 25;
     int64 updated_at_ns = 26;
-    // Catalog coverage and explicitly timed original observations, never a health guarantee.
-    FileContentSummary content_summary = 27;
 }
 
 enum OriginalAvailability {
@@ -71,27 +69,6 @@ enum OriginalAvailability {
     ORIGINAL_AVAILABILITY_MISSING = 3;
     ORIGINAL_AVAILABILITY_UNLINKED = 4;
     ORIGINAL_AVAILABILITY_UNAVAILABLE = 5;
-}
-
-message FileContentSummary {
-    bool has_original = 1;
-    bool has_versions = 2;
-    bool signature_known = 3;
-    int64 archived_copy_count = 4;
-    int64 healthy_copy_count = 5;
-    int64 unchecked_copy_count = 6;
-    int64 unhealthy_copy_count = 7;
-    OriginalAvailability original_availability = 8;
-    int64 observed_at_ns = 9;
-    // Signature-linked history counts deduplicate physical Positions across versions.
-    int64 version_copy_count = 10;
-    int64 restorable_version_copy_count = 11;
-    int64 unhealthy_version_copy_count = 12;
-    int64 latest_version_id = 13;
-    int64 latest_version_restorable_copy_count = 14;
-    // Current content counts require a valid binding and matching live object facts.
-  bool current_observation_valid = 15;
-  int64 restorable_current_copy_count = 16;
 }
 
 // An immutable archived content state owned by one independently organized File.

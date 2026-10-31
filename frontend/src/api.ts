@@ -19,7 +19,6 @@ import type { File, Media, Position, SourceFile } from "@/entity";
 
 import { dateFromNs } from "@/tools/time";
 import { formatFilesize } from "@/tools/tools";
-import { archiveIndicator } from "@/components/content-status";
 
 export const MODE_DIR = 2147483648n; // d: is a directory
 
@@ -115,8 +114,6 @@ export function convertFiles(files: Array<File>, dirWithSize: boolean = false): 
       tags: file.tags,
       note: file.note,
       detailsAvailable: true,
-      contentSummary: file.contentSummary,
-      status: !isDir && file.contentSummary ? archiveIndicator(file.contentSummary) : undefined,
     };
   });
 }
