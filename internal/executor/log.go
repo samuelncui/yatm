@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -89,6 +91,43 @@ func (w *JobLogWriter) Close() error {
 	err := w.file.Close()
 	w.file = nil
 	return err
+}
+
+// RunnerFiles are the Job bundle handles a runner owns from creation until its Close.
+type RunnerFiles struct {
+	DB  *gorm.DB
+	Log *JobLogWriter
+	// Logger writes the runner's diagnostics to both stderr and the Job log.
+	Logger *logrus.Logger
+}
+
+// OpenRunnerFiles opens the Job's append log and its existing state database for a new runner.
+// A failure releases whatever it already opened, so the caller owns handles only on success.
+func (e *Executor) OpenRunnerFiles(ctx context.Context, jobID int64) (*RunnerFiles, error) {
+	log, err := e.NewLogWriter(ctx, jobID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Opening existing state never migrates the bundle's schema.
+	db, err := e.NewStateDB(ctx, jobID)
+	if err != nil {
+		_ = log.Close()
+		return nil, err
+	}
+
+	logger := logrus.New()
+	logger.SetOutput(io.MultiWriter(os.Stderr, log))
+	return &RunnerFiles{DB: db, Log: log, Logger: logger}, nil
+}
+
+// CloseRunnerFiles releases a runner's state database and log independently, reporting each failure.
+func CloseRunnerFiles(db *gorm.DB, log *JobLogWriter) error {
+	dbErr := closeGORMDB(db)
+	if err := log.Close(); err != nil {
+		return errors.Join(dbErr, fmt.Errorf("close job log failed, %w", err))
+	}
+	return dbErr
 }
 
 // SetRunnerFilesActive changes descriptor retention without replacing the runner

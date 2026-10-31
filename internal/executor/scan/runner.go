@@ -2,10 +2,7 @@ package scan
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,16 +52,12 @@ func prepareSchema(db *gorm.DB) error {
 }
 
 func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (executor.Runner, error) {
-	// Open all bundle resources before exposing the runner, closing acquired handles on failure.
-	logFile, err := exe.NewLogWriter(ctx, job.ID)
+	// Open all bundle resources before exposing the runner.
+	files, err := exe.OpenRunnerFiles(ctx, job.ID)
 	if err != nil {
 		return nil, err
 	}
-	db, err := exe.NewStateDB(ctx, job.ID)
-	if err != nil {
-		_ = logFile.Close()
-		return nil, err
-	}
+
 	// A new runner has no live stage of its own; an attached attempt observes one.
 	phase := entity.JobPhase_JOB_PHASE_INDEXING
 	if job.CheckpointState() == entity.JobStatus_JOB_STATUS_READY {
@@ -73,9 +66,9 @@ func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (
 	if job.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
 		phase = entity.JobPhase_JOB_PHASE_COMPLETED
 	}
-	logger := logrus.New()
-	logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
-	return &runner{phase: phase, exe: exe, job: job, db: db, progress: executor.NewProgress(), logFile: logFile, logger: logger}, nil
+	return &runner{
+		phase: phase, exe: exe, job: job, db: files.DB, progress: executor.NewProgress(), logFile: files.Log, logger: files.Logger,
+	}, nil
 }
 
 func (r *runner) Index(ctx context.Context) (returnErr error) {
@@ -251,10 +244,5 @@ func (r *runner) resetAttemptProgress() {
 	r.inflightBytes.Store(0)
 }
 func (r *runner) Close() error {
-	// Close both independently owned bundle handles.
-	db, err := r.db.DB()
-	if err != nil {
-		return errors.Join(err, r.logFile.Close())
-	}
-	return errors.Join(db.Close(), r.logFile.Close())
+	return executor.CloseRunnerFiles(r.db, r.logFile)
 }

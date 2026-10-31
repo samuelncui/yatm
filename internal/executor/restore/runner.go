@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"sync"
 
 	"github.com/samuelncui/yatm/entity"
@@ -35,42 +33,28 @@ type jobRestoreRunner struct {
 }
 
 func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (executor.Runner, error) {
-	// Open this Job's diagnostic writer before constructing its runner.
-	logFile, err := exe.NewLogWriter(ctx, job.ID)
+	files, err := exe.OpenRunnerFiles(ctx, job.ID)
 	if err != nil {
-		return nil, fmt.Errorf("open restore log failed, %w", err)
+		return nil, err
 	}
+	db := files.DB
 
-	// Bind diagnostics while opening the existing bundle without migrating its schema.
-	logger := logrus.New()
-	logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
-	db, err := exe.NewStateDB(ctx, job.ID)
-	if err != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("open restore Job DB failed, %w", err)
-	}
 	// Existing Alpha bundles must carry the current candidate schema; opening never migrates them.
 	if !db.Migrator().HasColumn(&Copy{}, "storage_metadata") {
-		if sqlDB, dbErr := db.DB(); dbErr == nil {
-			_ = sqlDB.Close()
-		}
-		_ = logFile.Close()
+		_ = executor.CloseRunnerFiles(db, files.Log)
 		return nil, fmt.Errorf("unsupported Restore Job schema: copies.storage_metadata is missing")
 	}
 
 	// Recover the frozen creation options only after admitting the current candidate schema.
 	var config Config
 	if err := db.WithContext(ctx).First(&config, 1).Error; err != nil {
-		if sqlDB, dbErr := db.DB(); dbErr == nil {
-			_ = sqlDB.Close()
-		}
-		_ = logFile.Close()
+		_ = executor.CloseRunnerFiles(db, files.Log)
 		return nil, err
 	}
 
 	// Build the typed runner from the complete Job schema created with its bundle.
 	runner := &jobRestoreRunner{
-		state: newRestoreState(job.CheckpointState()), exe: exe, job: job, db: db, logFile: logFile, logger: logger,
+		state: newRestoreState(job.CheckpointState()), exe: exe, job: job, db: db, logFile: files.Log, logger: files.Logger,
 		destination: config.Spec.GetDestination(), allowDamaged: config.Spec.GetAllowDamagedCopies(),
 	}
 	if config.LegacyRoot != "" && runner.destination == nil {
@@ -169,16 +153,7 @@ func (a *jobRestoreRunner) restore(ctx context.Context, param *entity.RestoreMed
 }
 
 func (a *jobRestoreRunner) Close() error {
-	var closeErr error
-	if sqlDB, err := a.db.DB(); err != nil {
-		closeErr = fmt.Errorf("get restore SQL DB failed, %w", err)
-	} else if err := sqlDB.Close(); err != nil {
-		closeErr = fmt.Errorf("close restore SQL DB failed, %w", err)
-	}
-	if err := a.logFile.Close(); err != nil && closeErr == nil {
-		closeErr = fmt.Errorf("close restore log failed, %w", err)
-	}
-	return closeErr
+	return executor.CloseRunnerFiles(a.db, a.logFile)
 }
 
 func (a *jobRestoreRunner) Logger() *logrus.Logger {

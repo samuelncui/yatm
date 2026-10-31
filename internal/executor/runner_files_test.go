@@ -2,11 +2,14 @@ package executor
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 )
@@ -89,4 +92,33 @@ func TestJobLogWriterSerializesWritesAndActivityChanges(t *testing.T) {
 	require.Len(t, content, 200*len("entry\n"))
 	_, err = writer.Write([]byte("closed"))
 	require.ErrorIs(t, err, os.ErrClosed)
+}
+
+func TestRunnerFilesOpenAndCloseBothBundleHandles(t *testing.T) {
+	// A published bundle supplies the state database the runner opens beside its log.
+	exe := New(nil, nil, nil, Paths{Work: t.TempDir()}, Scripts{}, nil)
+	dir := exe.jobWorkPath(1)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "state.db"), nil, 0o644))
+	metadata, err := json.Marshal(dataformat.NewBundle(1, int64(time.Second)))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "job.json"), metadata, 0o644))
+
+	// The runner logger reaches the Job log, and Close releases both handles.
+	files, err := exe.OpenRunnerFiles(context.Background(), 1)
+	require.NoError(t, err)
+	files.Logger.Info("opened")
+	require.NoError(t, CloseRunnerFiles(files.DB, files.Log))
+	content, err := os.ReadFile(exe.logPath(1))
+	require.NoError(t, err)
+	require.Contains(t, string(content), "opened")
+	_, err = files.Log.Write([]byte("closed"))
+	require.ErrorIs(t, err, os.ErrClosed)
+	connections, err := files.DB.DB()
+	require.NoError(t, err)
+	require.Error(t, connections.Ping())
+
+	// A missing state database fails without leaving the caller any handle to release.
+	_, err = exe.OpenRunnerFiles(context.Background(), 2)
+	require.Error(t, err)
 }

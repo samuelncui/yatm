@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"sync"
 
 	"github.com/samuelncui/yatm/entity"
@@ -33,29 +31,18 @@ type jobArchiveRunner struct {
 }
 
 func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (executor.Runner, error) {
-	logFile, err := exe.NewLogWriter(ctx, job.ID)
+	files, err := exe.OpenRunnerFiles(ctx, job.ID)
 	if err != nil {
-		return nil, fmt.Errorf("open archive log failed, %w", err)
-	}
-
-	logger := logrus.New()
-	logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
-	db, err := exe.NewStateDB(ctx, job.ID)
-	if err != nil {
-		_ = logFile.Close()
-		return nil, fmt.Errorf("open archive Job DB failed, %w", err)
+		return nil, err
 	}
 	// Build the typed runner from the schema created with this Job bundle.
 	runner := &jobArchiveRunner{
-		state: newArchiveState(job.CheckpointState()), exe: exe, job: job, db: db, logFile: logFile, logger: logger,
+		state: newArchiveState(job.CheckpointState()), exe: exe, job: job, db: files.DB, logFile: files.Log, logger: files.Logger,
 	}
 
 	// Discard any uncommitted per-file observations from a prior process.
 	if err := runner.resetStagedItems(ctx); err != nil {
-		if sqlDB, dbErr := db.DB(); dbErr == nil {
-			_ = sqlDB.Close()
-		}
-		_ = logFile.Close()
+		_ = executor.CloseRunnerFiles(files.DB, files.Log)
 		return nil, fmt.Errorf("reset archive staged items failed, %w", err)
 	}
 	return runner, nil
@@ -127,16 +114,7 @@ func (a *jobArchiveRunner) writeMedia(ctx context.Context, param *entity.WriteAr
 }
 
 func (a *jobArchiveRunner) Close() error {
-	var closeErr error
-	if sqlDB, err := a.db.DB(); err != nil {
-		closeErr = fmt.Errorf("get archive SQL DB failed, %w", err)
-	} else if err := sqlDB.Close(); err != nil {
-		closeErr = fmt.Errorf("close archive SQL DB failed, %w", err)
-	}
-	if err := a.logFile.Close(); err != nil && closeErr == nil {
-		closeErr = fmt.Errorf("close archive log failed, %w", err)
-	}
-	return closeErr
+	return executor.CloseRunnerFiles(a.db, a.logFile)
 }
 
 func (a *jobArchiveRunner) Logger() *logrus.Logger {
