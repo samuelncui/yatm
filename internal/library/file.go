@@ -49,8 +49,7 @@ type File struct {
 	Note    string    `json:"note,omitempty"`
 	Tags    []string  `json:"tags,omitempty"`
 
-	Signature      []byte                     `json:"-"`
-	ContentSummary *entity.FileContentSummary `json:"-"`
+	Signature []byte `json:"-"`
 }
 
 type FileTag struct {

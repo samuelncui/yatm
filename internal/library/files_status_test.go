@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFileContentSummariesAndOriginalDuplicates(t *testing.T) {
+func TestFileStatusFactsAndOriginalDuplicates(t *testing.T) {
 	// Give two Locations independent originals, including unknown and history-only content.
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -35,20 +35,23 @@ func TestFileContentSummariesAndOriginalDuplicates(t *testing.T) {
 	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 2, Path: "second", Signature: signature}))
 	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 1, Path: "folder/", IsDir: true, Signature: signature}))
 
-	// Summaries count actual non-directory copies without substituting history for unknown originals.
-	require.NoError(t, lib.HydrateFileContent(ctx, append(files, nil, files[0])...))
-	require.Equal(t, int64(2), files[0].ContentSummary.ArchivedCopyCount)
-	require.True(t, files[0].ContentSummary.SignatureKnown)
-	require.True(t, files[0].ContentSummary.HasVersions)
-	require.True(t, files[3].ContentSummary.HasVersions)
-	require.False(t, files[3].ContentSummary.SignatureKnown)
-	require.Zero(t, files[3].ContentSummary.ArchivedCopyCount)
-	require.False(t, files[4].ContentSummary.HasOriginal)
-	require.True(t, files[4].ContentSummary.HasVersions)
-	require.True(t, files[6].ContentSummary.HasVersions)
-	require.Zero(t, files[6].ContentSummary.ArchivedCopyCount)
-	require.Nil(t, files[7].ContentSummary)
-	require.False(t, db.Migrator().HasColumn(ModelFile, "content_summary"))
+	// Status facts see actual non-directory copies without substituting history for unknown originals.
+	ids := make([]int64, 0, len(files))
+	for _, file := range files {
+		ids = append(ids, file.ID)
+	}
+	facts, err := lib.ReadFileFacts(ctx, ids, true, true)
+	require.NoError(t, err)
+	require.True(t, facts[files[0].ID].CurrentCopies)
+	require.NotNil(t, facts[files[0].ID].Original.Signature)
+	require.True(t, facts[files[0].ID].HasVersions)
+	require.True(t, facts[files[3].ID].HasVersions)
+	require.Nil(t, facts[files[3].ID].Original.Signature)
+	require.False(t, facts[files[3].ID].CurrentCopies)
+	require.Nil(t, facts[files[4].ID].Original)
+	require.True(t, facts[files[4].ID].HasVersions)
+	require.True(t, facts[files[6].ID].HasVersions)
+	require.False(t, facts[files[6].ID].CurrentCopies)
 
 	// Every original in a duplicate group appears exactly once across bounded search pages.
 	var found []int64
@@ -84,17 +87,17 @@ func TestFileContentSummariesAndOriginalDuplicates(t *testing.T) {
 	require.Empty(t, page.Results, "equal historical signatures alone do not make online duplicates")
 }
 
-func TestRestorableSummaryMatchesPreparation(t *testing.T) {
+func TestRestorableStatusMatchesPreparation(t *testing.T) {
 	for _, test := range []struct {
 		name       string
 		health     entity.PositionHealth
 		conflict   bool
 		noMedia    bool
 		noBaseline bool
-		want       int64
+		want       bool
 	}{
-		{name: "unchecked", want: 1},
-		{name: "old successful check", health: entity.PositionHealth_POSITION_HEALTH_HEALTHY, want: 1},
+		{name: "unchecked", want: true},
+		{name: "old successful check", health: entity.PositionHealth_POSITION_HEALTH_HEALTHY, want: true},
 		{name: "damaged", health: entity.PositionHealth_POSITION_HEALTH_DAMAGED},
 		{name: "missing", health: entity.PositionHealth_POSITION_HEALTH_MISSING},
 		{name: "unreadable", health: entity.PositionHealth_POSITION_HEALTH_UNREADABLE},
@@ -125,19 +128,20 @@ func TestRestorableSummaryMatchesPreparation(t *testing.T) {
 			if test.conflict {
 				require.NoError(t, db.Create(&Position{MediaID: 1, Path: "conflicting", Signature: version.Signature, Hash: hash[:], Size: 8}).Error)
 			}
-			require.NoError(t, lib.HydrateFileContent(ctx, file))
-			summary := file.ContentSummary
-			require.Equal(t, test.want, summary.RestorableCurrentCopyCount)
-			require.Equal(t, test.want, summary.RestorableVersionCopyCount)
-			require.Equal(t, test.want, summary.LatestVersionRestorableCopyCount)
+			facts, err := lib.ReadFileFacts(ctx, []int64{file.ID}, false, true)
+			require.NoError(t, err)
+			status := facts[file.ID]
+			require.Equal(t, test.want, status.CurrentArchive)
+			require.Equal(t, test.want, status.HasArchive)
+			require.Equal(t, !test.want, status.LatestUnavailable)
 			selection, err := lib.InspectSelection(ctx, &entity.SelectionInspection{Restore: true, FileVersionIds: []int64{version.ID}})
 			require.NoError(t, err)
-			require.Equal(t, test.want == 0, selection.MissingCopyCount > 0)
+			require.Equal(t, !test.want, selection.MissingCopyCount > 0)
 		})
 	}
 }
 
-func TestSummaryRetainsOlderRestorableVersion(t *testing.T) {
+func TestStatusRetainsOlderRestorableVersion(t *testing.T) {
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
 	one, two := &File{Name: "one"}, &File{Name: "two"}
@@ -152,15 +156,16 @@ func TestSummaryRetainsOlderRestorableVersion(t *testing.T) {
 		require.NoError(t, db.Create(&FileVersion{FileID: file.ID, Signature: []byte("lost"), Hash: hash[:], Size: 7, LastArchivedAtNS: &latest}).Error)
 	}
 	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "shared", Signature: []byte("shared"), Hash: hash[:], Size: 7}).Error)
-	require.NoError(t, lib.HydrateFileContent(ctx, one, two))
+	facts, err := lib.ReadFileFacts(ctx, []int64{one.ID, two.ID}, false, true)
+	require.NoError(t, err)
 	for _, file := range []*File{one, two} {
-		require.Equal(t, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNLINKED, file.ContentSummary.OriginalAvailability)
-		require.EqualValues(t, 1, file.ContentSummary.RestorableVersionCopyCount, "shared physical copies count once per File")
-		require.Zero(t, file.ContentSummary.LatestVersionRestorableCopyCount)
+		require.Nil(t, facts[file.ID].Original)
+		require.True(t, facts[file.ID].HasArchive, "a shared physical copy serves each File")
+		require.True(t, facts[file.ID].LatestUnavailable)
 	}
 }
 
-func TestFileContentSummariesCrossBatches(t *testing.T) {
+func TestFileStatusFactsCrossBatches(t *testing.T) {
 	// Enough identities force multiple fixed-size reads without individual state calls.
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -169,8 +174,14 @@ func TestFileContentSummariesCrossBatches(t *testing.T) {
 		files[index] = &File{Name: fmt.Sprintf("file-%04d", index)}
 	}
 	createFileRows(t, db, files...)
-	require.NoError(t, lib.HydrateFileContent(ctx, files...))
+	ids := make([]int64, 0, len(files))
 	for _, file := range files {
-		require.NotNil(t, file.ContentSummary)
+		require.NoError(t, db.Create(&FileVersion{FileID: file.ID, Signature: []byte(file.Name)}).Error)
+		ids = append(ids, file.ID)
+	}
+	facts, err := lib.ReadFileFacts(ctx, ids, false, true)
+	require.NoError(t, err)
+	for _, file := range files {
+		require.True(t, facts[file.ID].HasVersions)
 	}
 }

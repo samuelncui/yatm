@@ -234,3 +234,14 @@ func (l *Library) ReadFilePaths(ctx context.Context, files []*File) (map[int64]s
 
 // FileRowTime uses the metadata timestamp only for logical directories.
 func FileRowTime(file *File) int64 { return file.UpdatedAtNS }
+
+// Match Restore preparation: an incomplete baseline or contradictory eligible
+// copy cannot be advertised as restorable, even when another Position matches.
+// The aliases are internal query identifiers, never user input.
+func consistentRestoreContentSQL(alias string) string {
+	return fmt.Sprintf(`LENGTH(%[1]s.hash) = 32 AND %[1]s.size >= 0 AND NOT EXISTS (
+		SELECT 1 FROM positions candidate LEFT JOIN media ON media.id = candidate.media_id
+		WHERE candidate.signature = %[1]s.signature AND candidate.is_dir = @directory
+		AND candidate.health IN (@healthy, @unchecked)
+		AND (candidate.size != %[1]s.size OR candidate.hash IS NULL OR candidate.hash != %[1]s.hash OR media.id IS NULL))`, alias)
+}

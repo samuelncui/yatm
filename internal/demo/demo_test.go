@@ -296,8 +296,9 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, latest)
 	require.NotEqual(t, original.Signature, latest.Signature)
-	require.NoError(t, lib.HydrateFileContent(context.Background(), current))
-	require.Zero(t, current.ContentSummary.ArchivedCopyCount)
+	facts, err := lib.ReadFileFacts(context.Background(), []int64{current.ID}, false, true)
+	require.NoError(t, err)
+	require.False(t, facts[current.ID].CurrentCopies)
 	requireDatedRestoreFixtures(t, lib, current.ID, previewFile.ID)
 	extra, err := lib.GetByPath(context.Background(), library.Root.ID, "Unforged/Documents/mutable (1).txt")
 	require.NoError(t, err)
@@ -338,13 +339,12 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	requireReviewDuplicates(t, lib, documents.ID, unavailable.ID)
 	requireReviewIdenticalHistory(t, lib)
 	requireReviewIdenticalPaging(t, lib)
-	require.NoError(t, lib.HydrateFileContent(
-		context.Background(), current, page.Results[0].File, unknown.Results[0].File,
-	))
-	require.True(t, current.ContentSummary.HasVersions)
-	require.Zero(t, current.ContentSummary.ArchivedCopyCount)
-	require.Positive(t, page.Results[0].File.ContentSummary.ArchivedCopyCount)
-	require.False(t, unknown.Results[0].File.ContentSummary.SignatureKnown)
+	facts, err = lib.ReadFileFacts(context.Background(), []int64{current.ID, page.Results[0].File.ID, unknown.Results[0].File.ID}, false, true)
+	require.NoError(t, err)
+	require.True(t, facts[current.ID].HasVersions)
+	require.False(t, facts[current.ID].CurrentCopies)
+	require.True(t, facts[page.Results[0].File.ID].CurrentCopies)
+	require.Nil(t, facts[unknown.Results[0].File.ID].Original.Signature)
 	requireReviewVersionHistory(t, lib, root, current.ID, budget.ID)
 
 	// Exercise the normal Trash allocation without colliding with the visible dot-directory fixture.

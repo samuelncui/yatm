@@ -130,7 +130,6 @@ func TestSelectionStageAndCaptureReuseBatchFacts(t *testing.T) {
 	require.NoError(t, exe.yieldStagedSelections(ctx, staged.DB, func(file *library.File, target string) error {
 		require.Equal(t, file.Name, target)
 		require.Zero(t, file.Size)
-		require.Nil(t, file.ContentSummary)
 		selected = append(selected, file.ID)
 		return nil
 	}))
