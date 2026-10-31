@@ -155,11 +155,11 @@ patch -p1 < "$REPOSITORY/previewworker/build/ffmpeg-sysctl-header.patch"
   --disable-network --disable-indevs --disable-outdevs \
   --disable-encoders --enable-encoder=libwebp --disable-muxers --disable-filters
 # Public runtime metadata must be set before any library compiles; config.mak still owns real build paths.
-node "$REPOSITORY/build/release/sanitize-native.mjs" header config.h "$BUILD_DIRECTORY"
+node "$REPOSITORY/previewworker/build/sanitize-native.mjs" header config.h "$BUILD_DIRECTORY"
 make -j "$JOBS"
 make install
 cp COPYING.LGPLv2.1 LICENSE.md "$PACKAGE/licenses/"
-node "$REPOSITORY/build/release/sanitize-native.mjs" copy ffbuild/config.mak "$PACKAGE/sources/ffmpeg-config.mak" "$BUILD_DIRECTORY"
+node "$REPOSITORY/previewworker/build/sanitize-native.mjs" copy ffbuild/config.mak "$PACKAGE/sources/ffmpeg-config.mak" "$BUILD_DIRECTORY"
 
 # go-astiav links avdevice even though this worker never opens devices.
 # Keep that ABI library while disabling its device implementations.

@@ -13,12 +13,11 @@ export const nativeSources = new Map([
 export const yatmSourceFiles = [
   'LICENSE', 'go.mod', 'go.sum', 'internal/previewprotocol/protocol.go',
   'build/release/committed-inputs.mjs', 'build/release/check-preview-sources.mjs', 'build/release/archive-members.mjs',
-  'build/release/sanitize-native.mjs',
   'build/release/check-preview-fixtures.mjs',
   'build/release/native-notices.mjs',
   ...['README.md', 'go.mod', 'go.sum', 'main.go', 'decode.go', 'generate.go', 'generate_test.go',
     'render.go', 'raw.go', 'raw_test.go', 'native.go', 'build/build.sh', 'build/README.md',
-    'build/ffmpeg-sysctl-header.patch', 'build/compiler-cache.sh', 'build/package-sources.mjs', 'build/native-notices.mjs',
+    'build/ffmpeg-sysctl-header.patch', 'build/compiler-cache.sh', 'build/package-sources.mjs', 'build/native-notices.mjs', 'build/sanitize-native.mjs',
     'build/fetch-raw-fixtures.mjs', 'testdata/raw-fixtures.json'].map(name => `previewworker/${name}`),
 ];
 

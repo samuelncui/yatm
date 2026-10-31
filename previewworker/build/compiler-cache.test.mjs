@@ -7,7 +7,7 @@ import test from 'node:test';
 
 const repository = path.resolve(import.meta.dirname, '../..');
 const script = path.join(import.meta.dirname, 'compiler-cache.sh');
-const recipes = ['previewworker/build/build.sh', 'previewworker/build/compiler-cache.sh', 'previewworker/build/ffmpeg-sysctl-header.patch', 'build/release/sanitize-native.mjs'];
+const recipes = ['previewworker/build/build.sh', 'previewworker/build/compiler-cache.sh', 'previewworker/build/ffmpeg-sysctl-header.patch', 'previewworker/build/sanitize-native.mjs'];
 const run = (args, env = {}, cwd) => {
   const result = spawnSync('bash', args, { cwd, env: { ...process.env, ...env }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);

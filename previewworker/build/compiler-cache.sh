@@ -11,7 +11,7 @@ native_cache_key() {
       xcrun --sdk macosx --show-sdk-version
       xcrun --sdk macosx --show-sdk-build-version
     fi
-    for recipe in previewworker/build/build.sh previewworker/build/compiler-cache.sh previewworker/build/ffmpeg-sysctl-header.patch build/release/sanitize-native.mjs; do
+    for recipe in previewworker/build/build.sh previewworker/build/compiler-cache.sh previewworker/build/ffmpeg-sysctl-header.patch previewworker/build/sanitize-native.mjs; do
       shasum -a 256 "$REPOSITORY/$recipe" | cut -d ' ' -f 1
     done
   } | shasum -a 256 | cut -d ' ' -f 1
