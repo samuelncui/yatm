@@ -1,3 +1,4 @@
+import { ActionRow } from "@/components/action-row";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
@@ -39,17 +40,7 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
   }, [load]);
   return (
     <section className="related-jobs-panel">
-      <div className="section-heading">
-        <h2>Recent Jobs</h2>
-        <div>
-          <Button disabled={busy} onClick={() => void load()}>
-            Refresh
-          </Button>
-          <Button component={Link} to={`/jobs?${query}`}>
-            All related Jobs
-          </Button>
-        </div>
-      </div>
+      <h2>Recent Jobs</h2>
       {error && <Feedback severity="error">{error}</Feedback>}
       <Table size="small" aria-label="Related Jobs">
         <TableHead>
@@ -80,6 +71,14 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
           )}
         </TableBody>
       </Table>
+      <ActionRow>
+        <Button component={Link} to={`/jobs?${query}`}>
+          All related Jobs
+        </Button>
+        <Button disabled={busy} onClick={() => void load()}>
+          Refresh
+        </Button>
+      </ActionRow>
     </section>
   );
 };
