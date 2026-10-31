@@ -2,11 +2,13 @@ package apis
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strconv"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/executor/fileops"
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -233,6 +235,28 @@ func (s *filesService) memberEntries(ctx context.Context, members []library.Iden
 		entries = append(entries, entry)
 	}
 	return entries, observations, nil
+}
+
+func (s *filesService) KeepIdentical(req *entity.KeepIdenticalRequest, stream entity.FilesService_KeepIdenticalServer) error {
+	// Scope and survivor are explicit; fileops admits every Location before validating the group.
+	scope, err := identicalScope(req.GetScope())
+	if err != nil {
+		return err
+	}
+	if scope.Source != library.IdenticalLocations || req.GetKeep().GetLocation() == nil || req.GetFingerprint() == "" {
+		return status.Error(codes.InvalidArgument, "keep requires Locations, one selected survivor and a group fingerprint")
+	}
+	seed, err := strconv.ParseInt(req.GetGroupId(), 10, 64)
+	if err != nil || seed <= 0 {
+		return status.Error(codes.InvalidArgument, "invalid identical group ID")
+	}
+	err = fileops.KeepIdentical(s.api.exe, scope, seed, req, fileOperationStream{context: stream.Context(), send: func(result *entity.FileOperationResult) error {
+		return stream.Send(&entity.KeepIdenticalResponse{Result: result})
+	}})
+	if errors.Is(err, fileops.ErrKeepNotMember) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	return apiError(err)
 }
 
 func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIdenticalRequest) (*entity.MergeIdenticalResponse, error) {

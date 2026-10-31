@@ -1,19 +1,19 @@
-package apis
+package fileops
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor/fileops"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 )
+
+// ErrKeepNotMember reports a Keep request whose selected copy is not in the group.
+var ErrKeepNotMember = errors.New("survivor is not a group member")
 
 // keepMember stages validated physical identities without retaining a large group in memory.
 type keepMember struct {
@@ -22,40 +22,26 @@ type keepMember struct {
 	Reference  *entity.LocationEntryRef `gorm:"serializer:json"`
 }
 
-func (s *filesService) KeepIdentical(req *entity.KeepIdenticalRequest, stream entity.FilesService_KeepIdenticalServer) error {
-	// Scope and survivor are explicit; every Location is admitted before validating the group.
-	scope, err := identicalScope(req.GetScope())
-	if err != nil {
-		return err
-	}
-	keep := req.GetKeep().GetLocation()
-	if scope.Source != library.IdenticalLocations || keep == nil || req.GetFingerprint() == "" {
-		return status.Error(codes.InvalidArgument, "keep requires Locations, one selected survivor and a group fingerprint")
-	}
-	seed, err := strconv.ParseInt(req.GetGroupId(), 10, 64)
-	if err != nil || seed <= 0 {
-		return status.Error(codes.InvalidArgument, "invalid identical group ID")
-	}
+// KeepIdentical keeps one Location copy of an Identical group and removes the others
+// through ordinary Remove batches scoped to the group's Locations.
+func KeepIdentical(exe *executor.Executor, scope library.IdenticalScope, seed int64, req *entity.KeepIdenticalRequest, stream ResultStream) error {
 	ids := make([]int64, 0, len(scope.Roots))
 	for _, root := range scope.Roots {
 		ids = append(ids, root.LocationID)
 	}
-	err = fileops.WithLocationRemovals(s.api.exe, ids, func(removals *fileops.LocationRemovals) error {
-		return s.keepAdmitted(req, scope, seed, removals, fileOperationStream{context: stream.Context(), send: func(result *entity.FileOperationResult) error {
-			return stream.Send(&entity.KeepIdenticalResponse{Result: result})
-		}})
+	return WithLocationRemovals(exe, ids, func(removals *LocationRemovals) error {
+		return keepAdmitted(exe, req, scope, seed, removals, stream)
 	})
-	return apiError(err)
 }
 
-func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope library.IdenticalScope, seed int64, removals *fileops.LocationRemovals, stream fileops.ResultStream) (rerr error) {
+func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scope library.IdenticalScope, seed int64, removals *LocationRemovals, stream ResultStream) (rerr error) {
 	// Validate the complete authoritative snapshot before any physical work starts.
 	ctx := stream.Context()
-	snapshot, err := s.api.lib.OpenIdenticalComponent(ctx, scope, seed)
+	snapshot, err := exe.Lib().OpenIdenticalComponent(ctx, scope, seed)
 	if err != nil {
 		return err
 	}
-	defer closeIdenticalSnapshot(snapshot)
+	defer func() { rerr = errors.Join(rerr, snapshot.Close()) }()
 	group, err := snapshot.Group(req.GroupId)
 	if err != nil {
 		return library.ErrLocationConflict
@@ -63,7 +49,7 @@ func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope libr
 	if group.Fingerprint != req.Fingerprint {
 		return library.ErrLocationConflict
 	}
-	stage, closeStage, err := s.openKeepStage(ctx)
+	stage, closeStage, err := openKeepStage(ctx, exe)
 	if err != nil {
 		return err
 	}
@@ -71,7 +57,15 @@ func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope libr
 	summary := &entity.FileOperationSummary{TotalItemCount: group.Count - 1, UnprocessedCount: group.Count - 1, Dryrun: req.GetDryrun()}
 	found := false
 	err = snapshot.WalkMembers(group.ID, func(members []library.IdenticalMember) error {
-		_, observations, err := s.memberEntries(ctx, members)
+		ids := make([]int64, 0, len(members))
+		for _, member := range members {
+			ids = append(ids, member.FileID)
+		}
+		facts, err := exe.Lib().ReadFileFacts(ctx, ids, true, true)
+		if err != nil {
+			return err
+		}
+		observations, err := exe.ObserveFileRows(ctx, facts)
 		if err != nil {
 			return err
 		}
@@ -98,7 +92,7 @@ func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope libr
 		return err
 	}
 	if !found {
-		return status.Error(codes.InvalidArgument, "survivor is not a group member")
+		return ErrKeepNotMember
 	}
 	if err := stream.Send(&entity.FileOperationResult{Summary: summary}); err != nil {
 		return err
@@ -154,7 +148,7 @@ func (s *filesService) keepAdmitted(req *entity.KeepIdenticalRequest, scope libr
 }
 
 // reportKeepPlan streams the staged non-survivor copies as a report, never as removed entries.
-func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOperationSummary, stream fileops.ResultStream) error {
+func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOperationSummary, stream ResultStream) error {
 	var afterLocation, afterFile int64
 	for {
 		var rows []keepMember
@@ -179,9 +173,9 @@ func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOpe
 	return stream.Send(&entity.FileOperationResult{Summary: summary})
 }
 
-func (s *filesService) openKeepStage(ctx context.Context) (*gorm.DB, func() error, error) {
+func openKeepStage(ctx context.Context, exe *executor.Executor) (*gorm.DB, func() error, error) {
 	// Request-owned staging is disposable and never part of Library backup or Job recovery.
-	stage, err := resource.OpenTemporaryDB(s.api.exe.Paths().Work, "yatm-keep-")
+	stage, err := resource.OpenTemporaryDB(exe.Paths().Work, "yatm-keep-")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -193,7 +187,7 @@ func (s *filesService) openKeepStage(ctx context.Context) (*gorm.DB, func() erro
 }
 
 type keepResults struct {
-	fileops.ResultStream
+	ResultStream
 	summary *entity.FileOperationSummary
 	emitted int
 	fileIDs map[string]int64
