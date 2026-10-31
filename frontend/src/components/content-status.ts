@@ -1,9 +1,13 @@
 import { OriginalAvailability } from "@/entity";
-import type { FileContentSummary } from "@/entity";
+import type { FileContentSummary, FileVersion } from "@/entity";
 import { dateFromNs } from "@/tools/time";
 
 export const contentTime = (value?: bigint, fallback = "Date unknown") =>
   dateFromNs(value)?.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) ?? fallback;
+
+export const versionArchiveTime = (version: FileVersion) => version.lastArchivedAtNs ?? version.firstArchivedAtNs;
+/** A saved version's display date; every version list uses the same unrecorded wording. */
+export const versionArchiveLabel = (version: FileVersion) => contentTime(versionArchiveTime(version), "Date not recorded");
 
 export const contentHex = (value: Uint8Array) => Array.from(value, (byte) => byte.toString(16).padStart(2, "0")).join("");
 

@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { filesCli } from "@/api";
 import type { FileVersion } from "@/entity";
 
-export const versionArchiveTime = (version: FileVersion) => version.lastArchivedAtNs ?? version.firstArchivedAtNs;
-
 /** Match Library: last archive date descending, absent last dates last, then ID descending. */
 export const compareVersionDates = (left: FileVersion, right: FileVersion) => {
   const a = left.lastArchivedAtNs;

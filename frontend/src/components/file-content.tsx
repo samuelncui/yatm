@@ -31,7 +31,7 @@ import {
   type FilesDetail,
   type FileVersion,
 } from "@/entity";
-import { contentHex, contentTime } from "@/components/content-status";
+import { contentHex, contentTime, versionArchiveLabel, versionArchiveTime as archiveTime } from "@/components/content-status";
 import { errorMessage, formatFilesize } from "@/tools";
 import { DetailSurface } from "./detail-surface";
 import { ActionRow } from "./action-row";
@@ -57,7 +57,7 @@ import { InlineFileMetadata } from "./file-inline-metadata";
 import { allowsFileOperation, filesEntryData, filesEntryLibraryID } from "./files-browser";
 import { archiveEntryForDetail, restoreVersionEntry, selectionAddMessage, type SelectionKind } from "./selection-waitlist-state";
 import { useContentPreview } from "./use-content-preview";
-import { compareVersionDates, useFileVersionPages, useLatestSavedVersion, versionArchiveTime as archiveTime } from "./use-file-versions";
+import { compareVersionDates, useFileVersionPages, useLatestSavedVersion } from "./use-file-versions";
 
 const sortVersions = (versions: FileVersion[]) => [...versions].sort(compareVersionDates);
 
@@ -394,7 +394,7 @@ const Versions = ({
               selected={selected?.id === version.id}
               onClick={() => setSelectedID(version.id)}
             >
-              <strong>{date !== undefined ? contentTime(date) : "Date not recorded"}</strong>
+              <strong>{versionArchiveLabel(version)}</strong>
               <small>{formatFilesize(version.sizeBytes)}</small>
             </SavedVersionChoice>
           );

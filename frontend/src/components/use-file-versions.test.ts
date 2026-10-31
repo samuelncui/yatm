@@ -1,7 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { FileVersion } from "@/entity";
-import { compareVersionDates, useLatestSavedVersion, versionArchiveTime } from "./use-file-versions";
+import { versionArchiveTime } from "./content-status";
+import { compareVersionDates, useLatestSavedVersion } from "./use-file-versions";
 
 const { versions } = vi.hoisted(() => ({ versions: vi.fn() }));
 vi.mock("@/api", () => ({ filesCli: { listVersions: versions } }));

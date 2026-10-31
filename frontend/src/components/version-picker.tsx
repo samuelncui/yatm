@@ -5,10 +5,10 @@ import type { FileData } from "@samuelncui/chonky";
 import { restoreJobCli } from "@/api";
 import { EstimateRestoreJobRequest, type FileVersion } from "@/entity";
 import { errorMessage, formatFilesize } from "@/tools";
-import { contentTime } from "@/components/content-status";
 import { PreviewMedia } from "@/components/file-preview";
 import { SavedVersionChoice } from "@/components/saved-version-choice";
 import { useContentPreview } from "./use-content-preview";
+import { versionArchiveLabel } from "@/components/content-status";
 import { useFileVersionPages } from "./use-file-versions";
 export const ChooseVersionDialog = ({
   file,
@@ -83,7 +83,7 @@ export const ChooseVersionDialog = ({
           {choices.map((version) => (
             <SavedVersionChoice key={String(version.id)} selected={version.id === selectedID} disabled={saving} onClick={() => setSelectedID(version.id)}>
               <span>
-                {contentTime(version.lastArchivedAtNs ?? version.firstArchivedAtNs, "Archive date unknown")} · {formatFilesize(version.sizeBytes)}
+                {versionArchiveLabel(version)} · {formatFilesize(version.sizeBytes)}
                 <small>
                   Version #{String(version.id)}
                   {version.id === selectedVersionID ? " · Current selection" : ""}

@@ -1,5 +1,5 @@
 import { FileScope, FileSelection, RestoreVersionMatch, type RestoreVersionResolution } from "@/entity";
-import { contentTime } from "@/components/content-status";
+import { contentTime, versionArchiveLabel } from "@/components/content-status";
 import type { SelectionEntry } from "@/components/selection-waitlist";
 import { dateToNs, parseUnixNs } from "@/tools/time";
 
@@ -36,9 +36,8 @@ export const followRestorePolicy = (entries: SelectionEntry[]): SelectionEntry[]
 export const restoreVersionLabel = (entry: SelectionEntry, resolution?: RestoreVersionResolution, cutoff?: bigint): string => {
   if (entry.isDir) return cutoff !== undefined ? `Latest archives at or before ${contentTime(cutoff)}` : "Latest saved versions";
   if (entry.version) {
-    const time = entry.version.lastArchivedAtNs ?? entry.version.firstArchivedAtNs;
     const outside = cutoff !== undefined && entry.version.firstArchivedAtNs !== undefined && entry.version.firstArchivedAtNs > cutoff;
-    return `Custom version · ${contentTime(time)}${outside ? " · After selected time" : ""}`;
+    return `Custom version · ${versionArchiveLabel(entry.version)}${outside ? " · After selected time" : ""}`;
   }
   if (!resolution) return "Finding version…";
   switch (resolution.match) {
