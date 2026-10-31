@@ -90,8 +90,8 @@ class PerformanceFixtureTests(unittest.TestCase):
     def test_deterministic_fixture_and_batched_restore_check(self):
         with tempfile.TemporaryDirectory() as root, mock.patch.dict(fixture.MATRIX, {"tiny": (2, 256 * 1024, True)}):
             first, second = Path(root) / "one", Path(root) / "two"
-            manifest = fixture.generate(first, "tiny")
-            self.assertEqual(fixture.generate(second, "tiny"), manifest)
+            manifest = {row["name"]: {"size": row["size"], "sha256": row["sha256"]} for row in fixture.fixture_records(first, "tiny")}
+            self.assertEqual([row["sha256"] for row in fixture.fixture_records(second, "tiny")], [value["sha256"] for value in manifest.values()])
             for name, expected in manifest.items():
                 data = (first / name).read_bytes()
                 self.assertEqual(len(data), expected["size"])

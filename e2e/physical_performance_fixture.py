@@ -48,12 +48,6 @@ def fixture_records(directory, case, size_gib=4):
         yield {"name": path.name, "size": size, "sha256": digest.hexdigest()}
 
 
-def generate(directory, case):
-    # Compatibility for the original four-GiB helper; long runs use JSON Lines.
-    return {row["name"]: {"size": row["size"], "sha256": row["sha256"]}
-            for row in fixture_records(directory, case)}
-
-
 def generate_jsonl(directory, case, size_gib, manifest):
     if Path(directory).resolve() in Path(manifest).resolve().parents:
         raise ValueError("Fixture manifest must remain outside the selected source directory")
@@ -241,9 +235,7 @@ def sample(tape_directory, pages=("34", "0C")):
 
 if __name__ == "__main__":
     command, *arguments = sys.argv[1:]
-    if command == "generate":
-        output = generate(*arguments)
-    elif command == "generate-jsonl":
+    if command == "generate-jsonl":
         output = generate_jsonl(*arguments)
     elif command == "capacity-reflink":
         output = capacity_reflink(arguments[0], json.loads(arguments[1]))
