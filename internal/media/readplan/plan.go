@@ -359,21 +359,11 @@ func validRanges(ranges []Range) bool {
 	}
 	for _, interval := range ranges {
 		if interval.Start == nil || interval.End == nil || interval.Start.Partition != interval.End.Partition ||
-			comparePosition(interval.Start, interval.End) >= 0 {
+			entity.CompareTapeBytePosition(interval.Start, interval.End) >= 0 {
 			return false
 		}
 	}
 	return true
-}
-
-func comparePosition(a, b *entity.TapeBytePosition) int {
-	if a.LogicalObject < b.LogicalObject || a.LogicalObject == b.LogicalObject && a.OffsetBytes < b.OffsetBytes {
-		return -1
-	}
-	if a.LogicalObject == b.LogicalObject && a.OffsetBytes == b.OffsetBytes {
-		return 0
-	}
-	return 1
 }
 
 func (s *Sequence) insert(ctx context.Context, rows []row, candidates []candidate) error {

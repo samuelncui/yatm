@@ -51,7 +51,7 @@ func (s *tarReadSession) readRange(locator *entity.TarMetadata) (readplan.Range,
 func (s *tarReadSession) validReadRange(interval readplan.Range) bool {
 	if interval.Start == nil || interval.End == nil || interval.Start.Partition != 0 || interval.End.Partition != 0 ||
 		uint64(interval.Start.OffsetBytes) >= uint64(s.options.Mode.MaximumBytes) ||
-		uint64(interval.End.OffsetBytes) >= uint64(s.options.Mode.MaximumBytes) || comparePosition(interval.Start, interval.End) >= 0 {
+		uint64(interval.End.OffsetBytes) >= uint64(s.options.Mode.MaximumBytes) || entity.CompareTapeBytePosition(interval.Start, interval.End) >= 0 {
 		return false
 	}
 	if _, ok := tarReadStreamFile(interval.Stream); !ok {

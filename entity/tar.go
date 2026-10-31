@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -37,8 +38,7 @@ func ValidateTarMetadata(value *TarMetadata, recordBytes uint32) error {
 	if recordBytes == 0 || header.OffsetBytes >= recordBytes || end.OffsetBytes >= recordBytes {
 		return fmt.Errorf("tar member physical offset exceeds the record bound")
 	}
-	if header.Partition != end.Partition || header.LogicalObject > end.LogicalObject ||
-		(header.LogicalObject == end.LogicalObject && header.OffsetBytes >= end.OffsetBytes) {
+	if header.Partition != end.Partition || CompareTapeBytePosition(header, end) >= 0 {
 		return fmt.Errorf("tar member physical positions are not ordered in one partition")
 	}
 	return nil
@@ -86,4 +86,12 @@ func ValidateTarRecordPolicy(mode TapeRecordMode, size uint32) error {
 		return fmt.Errorf("tar record bytes must be a positive multiple of 512")
 	}
 	return nil
+}
+
+// CompareTapeBytePosition orders positions within one partition by logical object, then offset.
+func CompareTapeBytePosition(a, b *TapeBytePosition) int {
+	if a.LogicalObject != b.LogicalObject {
+		return cmp.Compare(a.LogicalObject, b.LogicalObject)
+	}
+	return cmp.Compare(a.OffsetBytes, b.OffsetBytes)
 }

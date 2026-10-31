@@ -29,16 +29,6 @@ type OrderedReadSession interface {
 	ReadOrderPlanned(entity.TapeReadOrder, string)
 }
 
-func comparePosition(a, b *entity.TapeBytePosition) int {
-	if a.LogicalObject < b.LogicalObject || a.LogicalObject == b.LogicalObject && a.OffsetBytes < b.OffsetBytes {
-		return -1
-	}
-	if a.LogicalObject == b.LogicalObject && a.OffsetBytes == b.OffsetBytes {
-		return 0
-	}
-	return 1
-}
-
 type readBoundary struct{ opened, settled bool }
 
 // ReadBatch waits for physical source boundaries while output publication remains independent.

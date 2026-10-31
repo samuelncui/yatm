@@ -184,7 +184,7 @@ func (p *ltfsReadOrderProvider) covers(interval readplan.Range) bool {
 	// Partial records retain their exact byte anchors while geometry covers every consumed block.
 	if !p.options.Model.Valid() || interval.Stream != "ltfs" || interval.Start == nil || interval.End == nil ||
 		interval.Start.Partition != p.options.DataEnd.Partition || interval.Start.Partition != interval.End.Partition || interval.Start.OffsetBytes >= p.options.BlockBytes ||
-		interval.End.OffsetBytes >= p.options.BlockBytes || comparePosition(interval.Start, interval.End) >= 0 ||
+		interval.End.OffsetBytes >= p.options.BlockBytes || entity.CompareTapeBytePosition(interval.Start, interval.End) >= 0 ||
 		interval.End.LogicalObject == math.MaxUint64 && interval.End.OffsetBytes != 0 {
 		return false
 	}
