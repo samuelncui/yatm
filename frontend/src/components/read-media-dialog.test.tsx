@@ -22,7 +22,10 @@ const { mediaList, deviceList, mediaInspect, deviceInspect } = vi.hoisted(() => 
   mediaInspect: vi.fn(),
   deviceInspect: vi.fn(),
 }));
-vi.mock("@/api", () => ({ mediaCli: { list: mediaList, listDevices: deviceList, inspect: mediaInspect, inspectDevice: deviceInspect } }));
+vi.mock("@/api", async (importOriginal) => ({
+  volumeSpaceLabel: (await importOriginal<typeof import("@/api")>()).volumeSpaceLabel,
+  mediaCli: { list: mediaList, listDevices: deviceList, inspect: mediaInspect, inspectDevice: deviceInspect },
+}));
 vi.mock("@/pages/jobs", async () => {
   const { createContext } = await import("react");
   return { RefreshContext: createContext(async () => {}) };

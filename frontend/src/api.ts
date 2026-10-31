@@ -18,6 +18,7 @@ import {
 import type { File, Media, Position, SourceFile } from "@/entity";
 
 import { dateFromNs } from "@/tools/time";
+import { formatFilesize } from "@/tools/tools";
 import { archiveIndicator } from "@/components/content-status";
 
 export const MODE_DIR = 2147483648n; // d: is a directory
@@ -176,6 +177,10 @@ function mediaCapabilityLabel(media: Media): string {
   const availability = mediaAvailabilityLabel(media);
   return `${kind} · ${read} read · ${write} write · ${availability}`;
 }
+
+/** A Volume's free space while mounted; otherwise the same mount requirement as its availability. */
+export const volumeSpaceLabel = (volume: Media): string =>
+  volume.mounted ? `${formatFilesize(volume.filesystemAvailableBytes ?? 0n)} available` : "Mount required";
 
 export function mediaAvailabilityLabel(media: Media): string {
   if (media.capabilities?.read !== MediaAccess.CONCURRENT_RANDOM) return "Restore required";

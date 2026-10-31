@@ -14,7 +14,7 @@ import {
   Checkbox,
   FormControlLabel,
 } from "@mui/material";
-import { mediaCli } from "@/api";
+import { mediaCli, volumeSpaceLabel } from "@/api";
 import {
   type DeviceSummary,
   type Media,
@@ -31,7 +31,7 @@ import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect"
 import { TapeDeviceChoice, soleAvailableDevice, DeviceInspectionResult } from "@/components/tape-device-choice";
 import { tapeEncryption } from "@/components/media-inspector";
 import { RefreshContext } from "@/pages/jobs";
-import { errorMessage, formatFilesize, runUIAction } from "@/tools";
+import { errorMessage, runUIAction } from "@/tools";
 
 export const ReadMediaDialog = ({
   mediaIDs,
@@ -323,8 +323,7 @@ export const ReadMediaDialog = ({
                     >
                       {volumes.map((volume) => (
                         <MenuItem key={volume.id.toString()} value={volume.identity} disabled={volume.mounted !== true}>
-                          {volume.name || volume.identity} ·{" "}
-                          {volume.mounted ? `${formatFilesize(volume.filesystemAvailableBytes ?? 0n)} available` : "Mount required"}
+                          {volume.name || volume.identity} · {volumeSpaceLabel(volume)}
                         </MenuItem>
                       ))}
                     </TextField>

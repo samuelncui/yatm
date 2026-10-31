@@ -6,7 +6,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import { contentTime } from "@/components/content-status";
 
-import { mediaCli } from "@/api";
+import { mediaCli, volumeSpaceLabel } from "@/api";
 import { MediaKind } from "@/entity";
 import type { InspectMediaResponse, InspectMediaRequest } from "@/entity";
 import { formatFilesize, errorMessage } from "@/tools";
@@ -74,9 +74,7 @@ export const MediaInspectResult = ({ reply, loading, error }: { reply: InspectMe
           </span>
           <span>Created {contentTime(media.createdAtNs)}</span>
           {reply.lastWrittenAtNs !== undefined && <span>Last written {contentTime(reply.lastWrittenAtNs)}</span>}
-          {media.kind === MediaKind.VOLUME && (
-            <span>{media.mounted ? `Online · ${formatFilesize(media.filesystemAvailableBytes ?? 0n)} available` : "Mount required"}</span>
-          )}
+          {media.kind === MediaKind.VOLUME && <span>{media.mounted ? `Online · ${volumeSpaceLabel(media)}` : volumeSpaceLabel(media)}</span>}
         </>
       ) : (
         <Alert severity="info">This Media is not registered in the Library.</Alert>

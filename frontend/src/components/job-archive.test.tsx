@@ -40,7 +40,8 @@ const { deviceList, mediaInspect, mediaList, getProgress, writeMedia, listFiles,
   listFiles: vi.fn(),
 }));
 
-vi.mock("@/api", () => ({
+vi.mock("@/api", async (importOriginal) => ({
+  volumeSpaceLabel: (await importOriginal<typeof import("@/api")>()).volumeSpaceLabel,
   mediaCli: { listDevices: deviceList, inspect: mediaInspect, list: mediaList, inspectDevice: deviceInspect },
   settingsCli: { get: settingsGet },
   archiveJobCli: { getProgress, writeMedia, listFiles },

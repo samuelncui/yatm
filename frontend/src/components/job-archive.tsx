@@ -11,7 +11,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 
-import { archiveJobCli, mediaCli } from "@/api";
+import { archiveJobCli, mediaCli, volumeSpaceLabel } from "@/api";
 import {
   ArchiveItem,
   ArchiveTapeWriteMode,
@@ -33,7 +33,7 @@ import { FileRow } from "@/components/job-file-list-item";
 import { JobResultsDialog, type JobItemViews } from "@/components/job-results-dialog";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { RefreshContext } from "@/pages/jobs";
-import { errorMessage, formatFilesize, runUIAction } from "@/tools";
+import { errorMessage, runUIAction } from "@/tools";
 import { TapeDeviceChoice, soleAvailableDevice } from "@/components/tape-device-choice";
 import { getSettingsGroup } from "@/components/settings-editor";
 import { SettingsSection } from "@/components/settings-page";
@@ -449,7 +449,7 @@ const WriteMediaDialog = ({ job }: { job: Job }) => {
                 >
                   {volumes.map((value) => (
                     <MenuItem key={value.id.toString()} value={value.identity} disabled={value.mounted !== true}>
-                      {value.name || value.identity} · {value.mounted ? `${formatFilesize(value.filesystemAvailableBytes ?? 0n)} available` : "Mount required"}
+                      {value.name || value.identity} · {volumeSpaceLabel(value)}
                     </MenuItem>
                   ))}
                 </TextField>
