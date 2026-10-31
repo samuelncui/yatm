@@ -126,14 +126,8 @@ func streamLibrary(ctx context.Context, configPath string, output io.Writer, typ
 			returnErr = errors.Join(returnErr, fmt.Errorf("close export database failed, %w", err))
 		}
 	}()
-	empty, err := dataformat.CheckCatalog(db)
-	if err != nil {
+	if err := dataformat.CheckAdmission(db, conf.Paths.Work); err != nil {
 		return err
-	}
-	if !empty {
-		if err := dataformat.CheckBundles(db, conf.Paths.Work); err != nil {
-			return err
-		}
 	}
 
 	// Initialize only the validated release format before streaming the export.

@@ -131,3 +131,13 @@ func MarkCatalog(db *gorm.DB) error {
 	}
 	return nil
 }
+
+// CheckAdmission rejects an unsupported Catalog and, when it holds data, unsupported Job bundles,
+// before a program opens the stores for use.
+func CheckAdmission(db *gorm.DB, workRoot string) error {
+	empty, err := CheckCatalog(db)
+	if err != nil || empty {
+		return err
+	}
+	return CheckBundles(db, workRoot)
+}
