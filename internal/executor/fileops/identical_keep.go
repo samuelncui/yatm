@@ -9,6 +9,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -41,7 +42,12 @@ func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scop
 	if err != nil {
 		return err
 	}
-	defer func() { rerr = errors.Join(rerr, snapshot.Close()) }()
+	defer func() {
+		// Result cleanup cannot change already accepted file-operation outcomes.
+		if err := snapshot.Close(); err != nil {
+			logrus.WithContext(ctx).WithError(err).Warn("clean up identical result failed")
+		}
+	}()
 	group, err := snapshot.Group(req.GroupId)
 	if err != nil {
 		return library.ErrLocationConflict
