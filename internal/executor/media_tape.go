@@ -207,7 +207,7 @@ func (b *mediaBackend) newTapeWriteSession(
 	if device == "" {
 		return nil, fmt.Errorf("archive Tape device is empty")
 	}
-	barcode, err := NormalizeTapeBarcode(target.GetBarcode())
+	barcode, err := entity.NormalizeTapeBarcode(target.GetBarcode())
 	if err != nil {
 		return nil, err
 	}

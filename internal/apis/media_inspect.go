@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/tools"
 )
@@ -41,7 +40,7 @@ func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequ
 				return fmt.Errorf("inspect Tape identity failed, %w", err)
 			}
 			if barcode == "" && req.Identity != nil {
-				barcode, err = executor.NormalizeTapeBarcode(*req.Identity)
+				barcode, err = entity.NormalizeTapeBarcode(*req.Identity)
 				if err != nil {
 					return fmt.Errorf("invalid inspected Tape identity, %w", err)
 				}

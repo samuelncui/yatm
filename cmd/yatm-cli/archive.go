@@ -289,14 +289,9 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 	if strings.TrimSpace(c.Name) == "" {
 		return usageError(fmt.Errorf("Tape name is empty"))
 	}
-	barcode := strings.ToUpper(strings.TrimSpace(c.Barcode))
-	if len(barcode) != 6 {
-		return usageError(fmt.Errorf("Tape barcode must contain 6 characters"))
-	}
-	for _, character := range barcode {
-		if (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
-			return usageError(fmt.Errorf("Tape barcode contains an invalid character, barcode=%q", barcode))
-		}
+	barcode, err := entity.NormalizeTapeBarcode(c.Barcode)
+	if err != nil {
+		return usageError(err)
 	}
 
 	// Confirm destructive initialization before format resolution or physical inspection.

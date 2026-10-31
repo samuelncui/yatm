@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/samuelncui/yatm/entity"
+
 	"github.com/samuelncui/yatm/internal/tools"
 	"github.com/sirupsen/logrus"
 )
@@ -46,7 +48,7 @@ func normalizeReportedTapeBarcode(value string) (string, error) {
 	if len(value) > 6 {
 		value = value[:6]
 	}
-	barcode, err := NormalizeTapeBarcode(value)
+	barcode, err := entity.NormalizeTapeBarcode(value)
 	if err != nil {
 		return "", fmt.Errorf("invalid tape barcode, %w", err)
 	}

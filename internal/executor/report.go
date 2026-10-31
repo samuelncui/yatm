@@ -5,21 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-)
 
-func NormalizeTapeBarcode(value string) (string, error) {
-	barcode := strings.ToUpper(strings.TrimSpace(value))
-	if len(barcode) != 6 {
-		return "", fmt.Errorf("tape barcode must contain 6 characters")
-	}
-	for _, character := range barcode {
-		if (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
-			return "", fmt.Errorf("tape barcode contains an invalid character, barcode=%q", barcode)
-		}
-	}
-	return barcode, nil
-}
+	"github.com/samuelncui/yatm/entity"
+)
 
 func (e *Executor) EnsureTapeWorkPath(ctx context.Context, jobID int64, barcode string) (string, error) {
 	// Resolve both untrusted path components before creating Tape artifacts.
@@ -27,7 +15,7 @@ func (e *Executor) EnsureTapeWorkPath(ctx context.Context, jobID int64, barcode 
 	if err != nil {
 		return "", fmt.Errorf("ensure job work path failed, job_id=%d, %w", jobID, err)
 	}
-	barcode, err = NormalizeTapeBarcode(barcode)
+	barcode, err = entity.NormalizeTapeBarcode(barcode)
 	if err != nil {
 		return "", err
 	}

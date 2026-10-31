@@ -61,7 +61,7 @@ func (b *mediaBackend) resolveTapeWrite(ctx context.Context, target *entity.Arch
 	if !b.executor.configuredDevice(resolved.Device) {
 		return nil, fmt.Errorf("Tape device is not configured, device=%q", resolved.Device)
 	}
-	barcode, err := NormalizeTapeBarcode(resolved.Barcode)
+	barcode, err := entity.NormalizeTapeBarcode(resolved.Barcode)
 	if err != nil {
 		return nil, err
 	}

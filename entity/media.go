@@ -3,6 +3,8 @@ package entity
 import (
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
+	"strings"
 )
 
 var (
@@ -32,4 +34,18 @@ func (x *TapePositionMap) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return Value(x)
+}
+
+// NormalizeTapeBarcode returns the six-character upper-case form of a user-supplied Tape barcode.
+func NormalizeTapeBarcode(value string) (string, error) {
+	barcode := strings.ToUpper(strings.TrimSpace(value))
+	if len(barcode) != 6 {
+		return "", fmt.Errorf("Tape barcode must contain 6 characters")
+	}
+	for _, character := range barcode {
+		if (character < 'A' || character > 'Z') && (character < '0' || character > '9') {
+			return "", fmt.Errorf("Tape barcode contains an invalid character, barcode=%q", barcode)
+		}
+	}
+	return barcode, nil
 }

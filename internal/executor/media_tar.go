@@ -734,7 +734,7 @@ func crossCheckTarBarcode(ctx context.Context, prepared *tape.Device, expected s
 // assignTarBarcode gives a FORMAT cartridge without a cartridge memory barcode the requested identity, as mkltfs does.
 // An existing barcode was already cross-checked and is never rewritten; failure precedes any data write.
 func assignTarBarcode(ctx context.Context, prepared *tape.Device, expected string) error {
-	barcode, err := NormalizeTapeBarcode(expected)
+	barcode, err := entity.NormalizeTapeBarcode(expected)
 	if err != nil {
 		return err
 	}
