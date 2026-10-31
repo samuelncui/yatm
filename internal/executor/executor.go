@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/ignore"
@@ -49,6 +50,19 @@ func JobExecutionSettings(ctx context.Context) (*entity.JobExecutionSettings, er
 		return nil, fmt.Errorf("Job execution Settings are not configured")
 	}
 	return proto.Clone(settings).(*entity.JobExecutionSettings), nil
+}
+
+// ACPOptions maps the attempt's Job execution settings onto ACP's read buffer, result queue, result
+// batch and result flush interval. ACP owns the queue and the delivery cadence, so a runner's result
+// writer only persists the batches the engine hands over. read_batch is not an ACP option: it is
+// the manifest page size each runner's own pager reads.
+func ACPOptions(settings *entity.JobExecutionSettings) []acp.Option {
+	return []acp.Option{
+		acp.WithReadBuffer(int(settings.GetReadBufferMax())),
+		acp.WithResultBuffer(int(settings.GetWriteBufferMax())),
+		acp.WithResultBatch(int(settings.GetWriteBatchSize())),
+		acp.WithResultFlushInterval(time.Duration(settings.GetFlushIntervalMs()) * time.Millisecond),
+	}
 }
 
 func (e *Executor) withJobExecutionSettings(ctx context.Context) (context.Context, error) {

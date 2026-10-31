@@ -220,7 +220,7 @@ func (a *jobArchiveRunner) commitStagedMedia(
 
 func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapkg.WriteSession) error {
 	// One attempt reads its pipeline tunables from the Library settings that own them.
-	settings, err := a.copyExecutionSettings(ctx)
+	settings, err := executor.JobExecutionSettings(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,19 +234,14 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 	// The writer is drained on every return path; Close is idempotent, so the run path below reads
 	// its terminal error again.
 	defer func() { _ = reporter.Close() }()
-	source := &copySource{runner: a, session: session, pageSize: settings.page}
-	engine, err := acp.NewStream(
-		ctx,
-		reporter.onResults,
+	source := &copySource{runner: a, session: session, pageSize: int(settings.GetReadBatch())}
+	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashReadRefresh),
-		acp.WithReadBuffer(settings.readBuffer),
-		acp.WithResultBuffer(settings.resultBuffer),
-		acp.WithResultBatch(settings.resultBatch),
-		acp.WithResultFlushInterval(settings.resultFlushInterval),
 		acp.SetToDevice(mediapkg.DeviceOptions(session.Capabilities().Write)...),
 		acp.WithLogger(a.logger),
 		acp.WithEventHandler(a.archiveEventHandler(ctx)),
-	)
+	}
+	engine, err := acp.NewStream(ctx, reporter.onResults, append(options, executor.ACPOptions(settings)...)...)
 	if err != nil {
 		return err
 	}
@@ -268,27 +263,6 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 		return nil
 	}
 	return fmt.Errorf("stream Archive copy failed, %w", copyErr)
-}
-
-// copyExecutionSettings resolves the Job pipeline tunables that ACP and the result writer use.
-// Every setting maps onto one ACP option: the manifest page size, the read buffer, the result
-// queue, the result batch and the result flush interval.
-func (a *jobArchiveRunner) copyExecutionSettings(ctx context.Context) (*copySettings, error) {
-	settings, err := executor.JobExecutionSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return copySettingsFrom(settings), nil
-}
-
-func copySettingsFrom(settings *entity.JobExecutionSettings) *copySettings {
-	return &copySettings{
-		page:                int(settings.ReadBatch),
-		readBuffer:          int(settings.ReadBufferMax),
-		resultBuffer:        int(settings.WriteBufferMax),
-		resultBatch:         int(settings.WriteBatchSize),
-		resultFlushInterval: time.Duration(settings.FlushIntervalMs) * time.Millisecond,
-	}
 }
 
 func (a *jobArchiveRunner) stagedMediaFiles(ctx context.Context, yield func(*library.MediaFile) error) error {

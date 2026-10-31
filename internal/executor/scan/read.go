@@ -176,11 +176,10 @@ func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, 
 	}
 	options := []acp.Option{
 		acp.WithHashPolicy(contentHashPolicy(config, session)),
-		acp.WithReadBuffer(int(settings.GetReadBufferMax())),
 		acp.WithLogger(r.logger),
 		acp.WithEventHandler(stream.eventHandler()),
 	}
-	options = append(options, resultOptions(settings)...)
+	options = append(options, executor.ACPOptions(settings)...)
 	if session != nil {
 		options = append(options, acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...))
 	} else if local != nil && local.source.Config.GetUseMmap() {
@@ -218,16 +217,6 @@ func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, 
 		return multierror.Append(ctx.Err(), runErr).ErrorOrNil()
 	}
 	return runErr
-}
-
-// resultOptions maps the operator's write limits onto ACP's result path. ACP owns the result queue
-// and the result batch, so the shared writer only persists the batches the engine hands over.
-func resultOptions(settings *entity.JobExecutionSettings) []acp.Option {
-	return []acp.Option{
-		acp.WithResultBuffer(int(settings.GetWriteBufferMax())),
-		acp.WithResultBatch(int(settings.GetWriteBatchSize())),
-		acp.WithResultFlushInterval(time.Duration(settings.GetFlushIntervalMs()) * time.Millisecond),
-	}
 }
 
 // contentHashPolicy maps Scan's signature and result policies onto ACP's single content

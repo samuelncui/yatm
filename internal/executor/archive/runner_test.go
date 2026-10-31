@@ -979,15 +979,3 @@ func TestArchiveCompletedItemLogsOneTerminalOutcome(t *testing.T) {
 	require.Equal(t, int64(1), failures)
 	require.Contains(t, output.String(), "reason=no_space")
 }
-
-func TestArchiveCopySettingsMapToACPOptions(t *testing.T) {
-	// Every validated Job execution setting maps onto one ACP or result-writer option.
-	settings := copySettingsFrom(&entity.JobExecutionSettings{
-		ReadBatch: 4, ReadBufferMax: 16, WriteBufferMax: 8, WriteBatchSize: 4, FlushIntervalMs: 500,
-	})
-	require.Equal(t, 4, settings.page)
-	require.Equal(t, 16, settings.readBuffer)
-	require.Equal(t, 500*time.Millisecond, settings.resultFlushInterval)
-	require.Equal(t, 8, settings.resultBuffer)
-	require.Equal(t, 4, settings.resultBatch)
-}

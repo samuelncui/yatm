@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
@@ -386,6 +387,28 @@ func TestAttemptsFreezeJobSettingsAtAdmission(t *testing.T) {
 	}))
 	require.EqualValues(t, 8, <-started)
 	waitJobReleased(t, exe, job.ID)
+}
+
+func TestACPOptionsCarryEveryExecutionLimit(t *testing.T) {
+	// The default settings form a runnable ACP configuration.
+	discard := func([]acp.Result) error { return nil }
+	engine, err := acp.NewStream(context.Background(), discard, ACPOptions(settingspkg.DefaultJobExecution())...)
+	require.NoError(t, err)
+	require.NoError(t, engine.Close())
+	require.NoError(t, engine.Wait())
+
+	// Clearing one limit is rejected by its own ACP option, so each setting reaches the engine.
+	for name, unset := range map[string]func(*entity.JobExecutionSettings){
+		"read buffer":           func(s *entity.JobExecutionSettings) { s.ReadBufferMax = 0 },
+		"result buffer":         func(s *entity.JobExecutionSettings) { s.WriteBufferMax = 0 },
+		"result batch":          func(s *entity.JobExecutionSettings) { s.WriteBatchSize = 0 },
+		"result flush interval": func(s *entity.JobExecutionSettings) { s.FlushIntervalMs = 0 },
+	} {
+		settings := settingspkg.DefaultJobExecution()
+		unset(settings)
+		_, err := acp.NewStream(context.Background(), discard, ACPOptions(settings)...)
+		require.ErrorContains(t, err, name)
+	}
 }
 
 func TestIndexFailureSettlesAsFailedPreparation(t *testing.T) {

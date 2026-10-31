@@ -242,11 +242,10 @@ func openContentRun(ctx context.Context, t *testing.T, r *runner, stream *conten
 	settings := settingspkg.DefaultJobExecution()
 	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashRead),
-		acp.WithReadBuffer(int(settings.GetReadBufferMax())),
 		acp.WithLogger(r.logger),
 		acp.WithEventHandler(stream.eventHandler()),
 	}
-	engine, err := acp.NewStream(ctx, stream.onResults, append(options, resultOptions(settings)...)...)
+	engine, err := acp.NewStream(ctx, stream.onResults, append(options, executor.ACPOptions(settings)...)...)
 	require.NoError(t, err)
 	return engine
 }
@@ -453,7 +452,6 @@ func TestContentCancellationAccountsForEveryAcceptedItem(t *testing.T) {
 	settings := flushSettings(2, 16, 100)
 	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashRead),
-		acp.WithReadBuffer(int(settings.GetReadBufferMax())),
 		acp.WithLogger(r.logger),
 		acp.WithEventHandler(func(event acp.Event) {
 			if value, ok := event.(*acp.EventUpdateCount); ok {
@@ -462,7 +460,7 @@ func TestContentCancellationAccountsForEveryAcceptedItem(t *testing.T) {
 			handler(event)
 		}),
 	}
-	engine, err := acp.NewStream(ctx, stream.onResults, append(options, resultOptions(settings)...)...)
+	engine, err := acp.NewStream(ctx, stream.onResults, append(options, executor.ACPOptions(settings)...)...)
 	require.NoError(t, err)
 	runErr := stream.consume(ctx, engine)
 	require.NoError(t, stream.writer.Close(), "the drain still persists the results the stopped run accepted")

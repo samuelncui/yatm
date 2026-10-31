@@ -8,6 +8,7 @@ import (
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"google.golang.org/protobuf/proto"
@@ -85,7 +86,7 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	// Run the shared transfer stream with capabilities owned by the read Session. The runner
 	// owns the items, the callback only hands finished ones to the writer, and the shared writer
 	// completes and stages each batch outside the feed.
-	settings, err := a.executionSettings(ctx)
+	settings, err := executor.JobExecutionSettings(ctx)
 	if err != nil {
 		return err
 	}
@@ -96,23 +97,17 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	// The writer is drained on every return path; Close is idempotent, so the run path below reads
 	// its terminal error again.
 	defer func() { _ = buffer.Close() }()
-	source := &copyItems{runner: a, mediaID: selected.ID, session: session, batch: settings.BatchSize}
+	source := &copyItems{runner: a, mediaID: selected.ID, session: session, batch: int(settings.GetReadBatch())}
 
-	engine, err := acp.NewStream(
-		ctx,
-		buffer.onResults,
+	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashReadRefresh),
 		// A Restore never replaces an existing output, which stays a run-level option.
 		acp.Overwrite(false),
 		acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...),
-		acp.WithReadBuffer(settings.ReadBufferMax),
-		// ACP owns the result queue and the batch; the shared writer only persists what it hands over.
-		acp.WithResultBuffer(settings.ResultBufferMax),
-		acp.WithResultBatch(settings.ResultBatchSize),
-		acp.WithResultFlushInterval(settings.ResultFlushInterval),
 		acp.WithLogger(a.logger),
 		acp.WithEventHandler(a.restoreEventHandler(ctx)),
-	)
+	}
+	engine, err := acp.NewStream(ctx, buffer.onResults, append(options, executor.ACPOptions(settings)...)...)
 	if err != nil {
 		return err
 	}
