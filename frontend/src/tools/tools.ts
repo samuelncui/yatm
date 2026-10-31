@@ -49,10 +49,7 @@ export const chonkyI18n: I18nConfig = {
     ...defaultFormatters,
     formatFileSize: (_intl: IntlShape, file: Nullable<FileData>): Nullable<string> => {
       if (!file || typeof file.size !== "number") return null;
-      return filesize(file.size, {
-        base: 2,
-        standard: "jedec",
-      });
+      return formatFilesize(file.size);
     },
   },
 };

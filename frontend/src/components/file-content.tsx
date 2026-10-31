@@ -31,7 +31,7 @@ import {
   type FilesDetail,
   type FileVersion,
 } from "@/entity";
-import { contentHex, contentTime, versionArchiveLabel, versionArchiveTime as archiveTime } from "@/components/content-status";
+import { contentHex, contentMode, contentTime, versionArchiveLabel, versionArchiveTime as archiveTime } from "@/components/content-status";
 import { errorMessage, formatFilesize } from "@/tools";
 import { DetailSurface } from "./detail-surface";
 import { ActionRow } from "./action-row";
@@ -291,7 +291,7 @@ const OverviewTechnical = ({ detail }: { detail: FilesDetail }) => {
       <summary>Technical details</summary>
       <dl className="file-detail-summary">
         <dt>Permission</dt>
-        <dd>{live?.facts ? (live.facts.mode & 0o777).toString(8).padStart(3, "0") : "Not recorded"}</dd>
+        <dd>{live?.facts ? contentMode(live.facts.mode) : "Not recorded"}</dd>
         <dt>Signature</dt>
         <dd className="file-detail-hash">{contentHex(detail.contentSignature) || "Not recorded"}</dd>
         <dt>SHA-256</dt>
@@ -456,7 +456,7 @@ const SavedVersion = ({ version }: { version: FileVersion }) => {
         <summary>Technical details</summary>
         <dl className="file-detail-summary">
           <dt>Permission</dt>
-          <dd>{(version.mode & 0o777).toString(8).padStart(3, "0")}</dd>
+          <dd>{contentMode(version.mode)}</dd>
           <dt>SHA-256</dt>
           <dd className="file-detail-hash">{contentHex(version.sha256) || "Not checked"}</dd>
           <dt>Signature</dt>

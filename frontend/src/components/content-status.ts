@@ -9,6 +9,9 @@ export const versionArchiveTime = (version: FileVersion) => version.lastArchived
 /** A saved version's display date; every version list uses the same unrecorded wording. */
 export const versionArchiveLabel = (version: FileVersion) => contentTime(versionArchiveTime(version), "Date not recorded");
 
+/** Permission bits in the familiar three-digit octal form. */
+export const contentMode = (mode: number | bigint) => (BigInt(mode) & 0o777n).toString(8).padStart(3, "0");
+
 export const contentHex = (value: Uint8Array) => Array.from(value, (byte) => byte.toString(16).padStart(2, "0")).join("");
 
 export type ArchiveTone = "success" | "warning" | "archive" | "error" | "info";

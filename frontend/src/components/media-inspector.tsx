@@ -2,7 +2,7 @@ import { Alert } from "@mui/material";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import { MediaKind, PositionHealth, VolumeType, TapeRecordMode, type Media, type Position } from "@/entity";
 import { ContentCopies, ContentPreview, copyHealthLabel } from "@/components/file-content";
-import { contentHex, contentTime } from "@/components/content-status";
+import { contentHex, contentMode, contentTime } from "@/components/content-status";
 import { accessLabel, isArchivePosition, isMediaFile, mediaAvailabilityLabel, type MediaFileData, type MediaPositionFileData } from "@/api";
 import { formatFilesize } from "@/tools";
 import { DetailSurface } from "./detail-surface";
@@ -197,7 +197,7 @@ const PositionContent = ({ position, media }: { position: Position; media?: Medi
         <summary>Technical details</summary>
         <dl className="file-detail-summary">
           <dt>Permission</dt>
-          <dd>{(position.mode & 0o777n).toString(8).padStart(3, "0")}</dd>
+          <dd>{contentMode(position.mode)}</dd>
           <dt>SHA-256</dt>
           <dd className="file-detail-hash">{contentHex(position.sha256) || "Not checked"}</dd>
           <dt>Signature</dt>
