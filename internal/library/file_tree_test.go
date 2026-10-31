@@ -69,7 +69,7 @@ func TestListParentsRetainsDeepRootAndRejectsInvalidAncestry(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds")
 }
 
-func TestMoveFileToPathRollsBackNestedDirectories(t *testing.T) {
+func TestMoveFileToNestedPathRollsBackNestedDirectories(t *testing.T) {
 	// A nested rename may allocate directories before discovering the final destination is a descendant.
 	ctx := context.Background()
 	lib := newJSONLTestLibrary(t)
@@ -79,7 +79,8 @@ func TestMoveFileToPathRollsBackNestedDirectories(t *testing.T) {
 	require.NoError(t, err)
 
 	// Keep the failed allocation, original root and child inside one rollback boundary.
-	require.Error(t, lib.MoveFileToPath(ctx, root, "root/new/renamed"))
+	root.Name = "root/new/renamed"
+	require.Error(t, lib.MoveFile(ctx, root))
 	created, err := lib.GetByName(ctx, root.ID, "new")
 	require.NoError(t, err)
 	require.Nil(t, created)
@@ -92,14 +93,15 @@ func TestMoveFileToPathRollsBackNestedDirectories(t *testing.T) {
 	require.Equal(t, root.ID, storedChild.ParentID)
 }
 
-func TestMoveFileToPathCreatesValidNestedDestination(t *testing.T) {
+func TestMoveFileToNestedPathCreatesValidNestedDestination(t *testing.T) {
 	// A normal nested move keeps the File identity and user metadata while allocating its target directories.
 	ctx := context.Background()
 	lib := newJSONLTestLibrary(t)
 	file := &File{Name: "before.txt", Note: "keep organization"}
 	require.NoError(t, lib.SaveFile(ctx, file))
 	id := file.ID
-	require.NoError(t, lib.MoveFileToPath(ctx, file, "folder/sub/after.txt"))
+	file.Name = "folder/sub/after.txt"
+	require.NoError(t, lib.MoveFile(ctx, file))
 	require.Equal(t, id, file.ID)
 	require.Equal(t, "after.txt", file.Name)
 
@@ -113,13 +115,14 @@ func TestMoveFileToPathCreatesValidNestedDestination(t *testing.T) {
 	require.Nil(t, old)
 }
 
-func TestMoveFileToPathPreservesWhitespaceInsideComponents(t *testing.T) {
+func TestMoveFileToNestedPathPreservesWhitespaceInsideComponents(t *testing.T) {
 	// Whitespace inside a validated full target path belongs to the logical name component.
 	ctx := context.Background()
 	lib := newJSONLTestLibrary(t)
 	file := &File{Name: "before.txt"}
 	require.NoError(t, lib.SaveFile(ctx, file))
-	require.NoError(t, lib.MoveFileToPath(ctx, file, "folder /after.txt"))
+	file.Name = "folder /after.txt"
+	require.NoError(t, lib.MoveFile(ctx, file))
 
 	// Resolving the directory directly avoids any presentation-level path normalization.
 	parent, err := lib.GetFile(ctx, file.ParentID)
@@ -136,7 +139,8 @@ func TestMoveFileRequiresExistingSource(t *testing.T) {
 	lib := newJSONLTestLibrary(t)
 	file := &File{ID: 99999, Name: "missing.txt"}
 	require.ErrorIs(t, lib.MoveFile(ctx, file), ErrFileNotFound)
-	require.ErrorIs(t, lib.MoveFileToPath(ctx, file, "new/missing.txt"), ErrFileNotFound)
+	file.Name = "new/missing.txt"
+	require.ErrorIs(t, lib.MoveFile(ctx, file), ErrFileNotFound)
 
 	// Both entry points leave an empty catalog rather than inventing the requested source identity.
 	rows, err := lib.List(ctx, 0)

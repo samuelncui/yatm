@@ -9,15 +9,6 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-// MatchFileRows applies Library catalog predicates to one bounded traversal batch.
-func (l *Library) MatchFileRows(ctx context.Context, ids []int64, scope entity.FileScope, query string) (map[int64]bool, error) {
-	compiled, err := l.CompileFilesQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	return l.MatchFileQueryRows(ctx, ids, scope, compiled)
-}
-
 // MatchFileQueryRows shares catalog filtering with Search without recompiling each traversal batch.
 func (l *Library) MatchFileQueryRows(ctx context.Context, ids []int64, scope entity.FileScope, query *FilesQuery) (map[int64]bool, error) {
 	// Empty traversal batches require no catalog read.

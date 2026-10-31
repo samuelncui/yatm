@@ -102,8 +102,9 @@ func TestSingleAndBatchObservationPreserveTrackingDecisions(t *testing.T) {
 			entry.TrackingKeys = nil
 			_, err = admit()
 			require.NoError(t, err)
-			keys, err := lib.ReadFileTracking(ctx, original.FileID)
+			tracking, err := lib.ReadFileTrackingKeys(ctx, []int64{original.FileID})
 			require.NoError(t, err)
+			keys := tracking[original.FileID]
 			require.Len(t, keys, 1)
 			after, err := lib.GetLocation(ctx, location.ID)
 			require.NoError(t, err)
@@ -114,8 +115,9 @@ func TestSingleAndBatchObservationPreserveTrackingDecisions(t *testing.T) {
 			cleared, err := admit()
 			require.NoError(t, err)
 			require.Equal(t, original.FileID, cleared.FileID)
-			keys, err = lib.ReadFileTracking(ctx, original.FileID)
+			tracking, err = lib.ReadFileTrackingKeys(ctx, []int64{original.FileID})
 			require.NoError(t, err)
+			keys = tracking[original.FileID]
 			require.Empty(t, keys)
 		})
 	}

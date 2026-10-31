@@ -248,8 +248,9 @@ func TestLocationConfigurationKeepsTrackingEvidence(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	fileID := rows[0].FileID
-	before, err := l.ReadFileTracking(ctx, fileID)
+	tracking, err := l.ReadFileTrackingKeys(ctx, []int64{fileID})
 	require.NoError(t, err)
+	before := tracking[fileID]
 	require.Len(t, before, 1)
 
 	// Both a rule change and a root change keep the evidence and the association.
@@ -259,8 +260,9 @@ func TestLocationConfigurationKeepsTrackingEvidence(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s.RootPath, updated.RootPath)
 	require.Equal(t, "/future", updated.Config.Ignore.Text)
-	after, err := l.ReadFileTracking(ctx, fileID)
+	tracking, err = l.ReadFileTrackingKeys(ctx, []int64{fileID})
 	require.NoError(t, err)
+	after := tracking[fileID]
 	require.Len(t, after, 1)
 	require.Equal(t, before[0].KeyValue, after[0].KeyValue)
 	remaining, err := l.LocationOriginalsPage(ctx, s.ID, "", 10)

@@ -47,12 +47,6 @@ type FileTrackingKey struct {
 	LocationID   int64           `gorm:"index" json:"location_id"`
 }
 
-// ReadFileTracking reads only identity evidence for an explicitly selected original.
-func (l *Library) ReadFileTracking(ctx context.Context, fileID int64) ([]*FileTrackingKey, error) {
-	keys, err := l.ReadFileTrackingKeys(ctx, []int64{fileID})
-	return keys[fileID], err
-}
-
 // ReadFileTrackingKeys reads the retained evidence of several Files at once, keyed by File ID, so a
 // caller that already holds recorded associations does not query once per row.
 func (l *Library) ReadFileTrackingKeys(ctx context.Context, fileIDs []int64) (map[int64][]*FileTrackingKey, error) {
@@ -68,18 +62,4 @@ func (l *Library) ReadFileTrackingKeys(ctx context.Context, fileIDs []int64) (ma
 		result[key.FileID] = append(result[key.FileID], key)
 	}
 	return result, nil
-}
-
-// TrackingCandidatesPage excludes every original still bound to another Location.
-// A retained key without a FileLocation is eligible only after a successful removal.
-func (l *Library) TrackingCandidatesPage(ctx context.Context, location *Location, after int64, limit int) ([]*FileTrackingKey, error) {
-	ids := l.readDB().WithContext(ctx).Model(&FileTrackingKey{}).Select("file_tracking_keys.file_id").
-		Joins("JOIN locations ON locations.id = file_tracking_keys.location_id").
-		Joins("LEFT JOIN file_locations ON file_locations.file_id = file_tracking_keys.file_id").
-		Where("file_tracking_keys.file_id > ? AND locations.executor_id = ?", after, location.ExecutorID).
-		Where("file_locations.file_id IS NULL OR file_locations.location_id = ?", location.ID).
-		Group("file_tracking_keys.file_id").Order("file_tracking_keys.file_id").Limit(limit)
-	var keys []*FileTrackingKey
-	err := l.readDB().WithContext(ctx).Where("file_id IN (?)", ids).Order("file_id, kind").Find(&keys).Error
-	return keys, err
 }

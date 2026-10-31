@@ -186,8 +186,9 @@ func TestConcurrentFirstRemoveInitializesTrashWithoutSerializingPhysicalMoves(t 
 	for index, file := range files {
 		original, err := f.exe.Lib().GetFileLocation(ctx, file.ID)
 		require.NoError(t, err)
-		tracking, err := f.exe.Lib().ReadFileTracking(ctx, file.ID)
+		keys, err := f.exe.Lib().ReadFileTrackingKeys(ctx, []int64{file.ID})
 		require.NoError(t, err)
+		tracking := keys[file.ID]
 		if index < 2 {
 			require.Nil(t, original)
 			require.Empty(t, tracking)

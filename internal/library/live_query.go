@@ -112,22 +112,6 @@ func (l *Library) CompileFilesQuery(query string) (*FilesQuery, error) {
 	return result, nil
 }
 
-// ValidateFilesQuery shares the predicate compiler with every Files read.
-func (l *Library) ValidateFilesQuery(query string) error {
-	_, err := l.CompileFilesQuery(query)
-	return err
-}
-
-// MatchLiveFiles evaluates the ordinary query compiler over bound observations, not a cached tree.
-// It returns matching input indexes without persisting the rows or reading the filesystem.
-func (l *Library) MatchLiveFiles(ctx context.Context, query string, rows []LiveQueryRow) ([]int, error) {
-	compiled, err := l.CompileFilesQuery(query)
-	if err != nil {
-		return nil, err
-	}
-	return l.MatchLiveQuery(ctx, compiled, rows)
-}
-
 // MatchLiveQuery evaluates one compiled predicate over a bounded batch of observations.
 func (l *Library) MatchLiveQuery(ctx context.Context, query *FilesQuery, rows []LiveQueryRow) ([]int, error) {
 	// An empty predicate accepts the observed batch without an extra Catalog read.

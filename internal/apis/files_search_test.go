@@ -206,7 +206,9 @@ func TestLibrarySearchCatalogContentAndPagination(t *testing.T) {
 				allIDs = append(allIDs, file.ID)
 			}
 			require.Equal(t, test.want, allIDs)
-			matches, err := api.lib.MatchFileRows(ctx, idsToMatch, entity.FileScope_FILE_SCOPE_ALL, test.query)
+			compiled, err := api.lib.CompileFilesQuery(test.query)
+			require.NoError(t, err)
+			matches, err := api.lib.MatchFileQueryRows(ctx, idsToMatch, entity.FileScope_FILE_SCOPE_ALL, compiled)
 			require.NoError(t, err)
 			require.Len(t, matches, len(test.want))
 			for _, id := range test.want {

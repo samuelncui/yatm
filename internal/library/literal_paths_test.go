@@ -30,7 +30,8 @@ func TestLibraryPathsPreserveLiteralUTF8(t *testing.T) {
 			// A replacement name is literal too; it never denotes a backslash-separated path.
 			file := &File{ParentID: directory.ID, Name: "before", Kind: entity.FileKind_FILE_KIND_REGULAR}
 			require.NoError(t, lib.SaveFile(ctx, file))
-			require.NoError(t, lib.MoveFileToPath(ctx, file, name))
+			file.Name = name
+			require.NoError(t, lib.MoveFile(ctx, file))
 			require.Equal(t, name, file.Name)
 			require.Equal(t, directory.ID, file.ParentID)
 			found, err = lib.GetByPath(ctx, directory.ID, name)

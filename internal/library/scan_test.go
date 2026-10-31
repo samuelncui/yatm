@@ -36,7 +36,10 @@ func TestApplyScanUpdatesPhysicalPositionsAtomically(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	require.NoError(t, lib.ImportArchivedInventory(ctx))
+	var archived []int64
+	require.NoError(t, lib.db.Model(ModelPosition).Where("is_dir = ? AND signature IS NOT NULL", false).Order("id").Pluck("id", &archived).Error)
+	_, err = lib.ImportArchivePositions(ctx, archived)
+	require.NoError(t, err)
 	oldFile, err := lib.GetByPath(ctx, Root.ID, "Unforged/Volume/changed.txt")
 	require.NoError(t, err)
 
@@ -75,9 +78,9 @@ func TestApplyScanUpdatesPhysicalPositionsAtomically(t *testing.T) {
 	parents, err := lib.ListParents(ctx, preserved.ID)
 	require.NoError(t, err)
 	require.NotEqual(t, int64(TrashFileID), parents[0].ID)
-	copies, err := lib.GetPositionByFileID(ctx, oldFile.ID)
+	copies, err := lib.MGetPositionByFileID(ctx, oldFile.ID)
 	require.NoError(t, err)
-	require.Empty(t, copies)
+	require.Empty(t, copies[oldFile.ID])
 }
 
 func TestApplyScanRollsBackInvalidDiff(t *testing.T) {

@@ -85,14 +85,6 @@ func (l *Library) SavePosition(ctx context.Context, position *Position) error {
 	})
 }
 
-func (l *Library) GetPositionByFileID(ctx context.Context, fileID int64) ([]*Position, error) {
-	results, err := l.MGetPositionByFileID(ctx, fileID)
-	if err != nil {
-		return nil, err
-	}
-	return results[fileID], nil
-}
-
 // GetPosition returns one physical Position by its Library identity.
 func (l *Library) GetPosition(ctx context.Context, id int64) (*Position, error) {
 	position := new(Position)
@@ -183,13 +175,6 @@ func (l *Library) ListMediaFilePositions(
 		)
 	}
 	return positions, nil
-}
-
-func (l *Library) DeletePositions(ctx context.Context, ids ...int64) error {
-	if err := l.db.WithContext(ctx).Where("id IN (?)", ids).Delete(ModelPosition).Error; err != nil {
-		return fmt.Errorf("delete positions failed, %w", err)
-	}
-	return nil
 }
 
 // BuildPositionTree adds directly queryable parent paths and derived directory rows to a sorted manifest.

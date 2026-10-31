@@ -199,11 +199,6 @@ func (l *Library) MoveFile(ctx context.Context, file *File) error {
 	return l.moveTree(ctx, file, file.Name)
 }
 
-// MoveFileToPath resolves a shared relative shortcut without pre-creating directories.
-func (l *Library) MoveFileToPath(ctx context.Context, file *File, targetPath string) error {
-	return l.moveTree(ctx, file, targetPath)
-}
-
 func validateFileParent(tx *gorm.DB, parentID, movingID int64) error {
 	// Follow only the bounded destination ancestry; no whole-tree query or filesystem access is needed.
 	seen := make(map[int64]struct{})
@@ -301,10 +296,6 @@ func (l *Library) newTrash(ctx context.Context, tx *gorm.DB) (*File, error) {
 		}
 		return checkpoint, nil
 	}
-}
-
-func (l *Library) MGetFile(ctx context.Context, ids ...int64) (map[int64]*File, error) {
-	return l.mGetFile(ctx, l.readDB().WithContext(ctx), ids...)
 }
 
 func (l *Library) mGetFile(ctx context.Context, tx *gorm.DB, ids ...int64) (map[int64]*File, error) {

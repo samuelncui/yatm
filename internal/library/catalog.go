@@ -313,27 +313,6 @@ func archiveDirectoryPrefix(directory string) string {
 	return directory + "/"
 }
 
-// ImportArchivedInventory is reserved for explicit inventory-import workflows and fixtures.
-// Archive and Volume Scan must not invoke this to infer logical identity from signatures.
-// Each invocation creates new organization; callers select this one-shot import explicitly.
-func (l *Library) ImportArchivedInventory(ctx context.Context) error {
-	var after int64
-	for {
-		var ids []int64
-		if err := l.readDB().WithContext(ctx).Model(ModelPosition).Where("id > ? AND is_dir = ?", after, false).
-			Where("signature IS NOT NULL").Order("id").Limit(batchSize).Pluck("id", &ids).Error; err != nil {
-			return err
-		}
-		if len(ids) == 0 {
-			return nil
-		}
-		if _, err := l.ImportArchivePositions(ctx, ids); err != nil {
-			return err
-		}
-		after = ids[len(ids)-1]
-	}
-}
-
 // CreateArchiveFile allocates a raw input's logical identity before any physical transfer.
 func (l *Library) CreateArchiveFile(ctx context.Context, targetPath string) (*File, error) {
 	if err := entity.ValidateRelativePath(targetPath); err != nil {

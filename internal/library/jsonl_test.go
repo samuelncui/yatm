@@ -292,7 +292,7 @@ func TestLibraryLegacyImportConvertsDirectoryModeAtTheBoundary(t *testing.T) {
 	require.NoError(t, lib.Import(ctx, bytes.NewReader(backup), false))
 
 	// The current catalog persists explicit types and keeps the original hierarchy.
-	files, err := lib.MGetFile(ctx, TrashFileID, 9, 10)
+	files, err := lib.ReadFileRows(ctx, []int64{TrashFileID, 9, 10})
 	require.NoError(t, err)
 	require.Equal(t, entity.FileKind_FILE_KIND_DIRECTORY, files[TrashFileID].Kind)
 	require.Equal(t, entity.FileKind_FILE_KIND_DIRECTORY, files[9].Kind)

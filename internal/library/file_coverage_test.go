@@ -67,7 +67,7 @@ func TestOriginalPublicationRetainsExistingCoverageAsOwnVersion(t *testing.T) {
 	require.NoError(t, err)
 	_, err = lib.DeleteLocation(ctx, location.ID, false)
 	require.NoError(t, err)
-	require.NoError(t, lib.DeletePositions(ctx, copy.ID))
+	require.NoError(t, lib.db.Delete(&Position{}, copy.ID).Error)
 	versions, _, err = lib.ListFileVersions(ctx, file.ID, 0, 10)
 	require.NoError(t, err)
 	require.Equal(t, []*FileVersion{saved}, versions)

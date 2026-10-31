@@ -46,7 +46,7 @@ func TestFileVersionOwnsArchivedFactsWithoutCopyOwnership(t *testing.T) {
 	require.Len(t, copies[one.ID], 1)
 	require.Len(t, copies[two.ID], 1)
 	require.Equal(t, copy.ID, copies[one.ID][0].ID)
-	require.NoError(t, lib.DeletePositions(ctx, copy.ID))
+	require.NoError(t, lib.db.Delete(&Position{}, copy.ID).Error)
 	kept, err := lib.GetFileVersion(ctx, version.ID)
 	require.NoError(t, err)
 	require.Equal(t, signature, kept.Signature)

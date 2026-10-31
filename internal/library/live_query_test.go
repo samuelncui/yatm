@@ -38,13 +38,17 @@ func TestLiveQueriesShareCatalogGrammarWithoutAdmission(t *testing.T) {
 		{"location:9", []int{}},
 	} {
 		t.Run(test.query, func(t *testing.T) {
-			matched, err := lib.MatchLiveFiles(ctx, test.query, rows)
+			compiled, err := lib.CompileFilesQuery(test.query)
+			require.NoError(t, err)
+			matched, err := lib.MatchLiveQuery(ctx, compiled, rows)
 			require.NoError(t, err)
 			require.Equal(t, test.want, matched)
 		})
 	}
-	require.Error(t, lib.ValidateFilesQuery("unsupported:value"))
-	require.Error(t, lib.ValidateFilesQuery("has:invalid"))
+	_, err := lib.CompileFilesQuery("unsupported:value")
+	require.Error(t, err)
+	_, err = lib.CompileFilesQuery("has:invalid")
+	require.Error(t, err)
 	var count int64
 	require.NoError(t, db.Model(ModelFile).Count(&count).Error)
 	require.Equal(t, int64(1), count)
@@ -56,7 +60,9 @@ func TestLiveQueryAcrossProjectionBatches(t *testing.T) {
 	for index := range rows {
 		rows[index] = LiveQueryRow{Name: fmt.Sprintf("item-%d", index), Size: int64(index), MtimeNS: time.Now().UnixNano()}
 	}
-	matched, err := lib.MatchLiveFiles(context.Background(), "size:[128 TO 130]", rows)
+	compiled, err := lib.CompileFilesQuery("size:[128 TO 130]")
+	require.NoError(t, err)
+	matched, err := lib.MatchLiveQuery(context.Background(), compiled, rows)
 	require.NoError(t, err)
 	require.Equal(t, []int{128, 129, 130}, matched)
 }

@@ -437,8 +437,9 @@ func TestScanDetachedMatchingRequiresEarlierObservedAbsence(t *testing.T) {
 			ctx := context.Background()
 			old, err := f.exe.Lib().LocationOriginalsPage(ctx, f.locations[0].ID, "", 10)
 			require.NoError(t, err)
-			keys, err := f.exe.Lib().ReadFileTracking(ctx, old[0].FileID)
+			tracking, err := f.exe.Lib().ReadFileTrackingKeys(ctx, []int64{old[0].FileID})
 			require.NoError(t, err)
+			keys := tracking[old[0].FileID]
 			if len(keys) == 0 {
 				t.Skip("filesystem provides no native tracking identity")
 			}

@@ -127,7 +127,9 @@ func TestFileQueryNumericNegationFactsAndUnknowns(t *testing.T) {
 
 			// An observed linked entry has no regular-file size, independently of Catalog membership.
 			t.Run("Location", func(t *testing.T) {
-				indexes, err := lib.MatchLiveFiles(ctx, test.query, rows)
+				compiled, err := lib.CompileFilesQuery(test.query)
+				require.NoError(t, err)
+				indexes, err := lib.MatchLiveQuery(ctx, compiled, rows)
 				require.NoError(t, err)
 				var names []string
 				for _, index := range indexes {

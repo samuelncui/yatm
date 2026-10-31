@@ -81,9 +81,10 @@ func TestNativeRelocationPreservesOpaqueObservedSignature(t *testing.T) {
 	require.NoError(t, err)
 	rows, err := exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)
 	require.NoError(t, err)
-	keys, err := exe.Lib().TrackingCandidatesPage(ctx, source, 0, 10)
-	require.NoError(t, err)
 	row := rows[0]
+	tracking, err := exe.Lib().ReadFileTrackingKeys(ctx, []int64{row.FileID})
+	require.NoError(t, err)
+	keys := tracking[row.FileID]
 	row.Signature = []byte{0, 255, 42}
 	observation := &library.ObservedEntry{Path: row.Path, FileID: row.FileID, Size: row.Size, Mode: row.Mode,
 		MtimeNS: row.MtimeNS, Hash: row.Hash, Signature: row.Signature, TrackingKeys: keys}
