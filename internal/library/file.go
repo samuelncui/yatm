@@ -402,26 +402,6 @@ func (l *Library) List(ctx context.Context, parentID int64) ([]*File, error) {
 	return l.list(ctx, l.readDB().WithContext(ctx), parentID)
 }
 
-func (l *Library) ListPage(ctx context.Context, parentID int64, after string, limit int) ([]*File, error) {
-	if limit <= 0 {
-		return nil, fmt.Errorf("list files page limit must be positive, limit=%d", limit)
-	}
-
-	// Read the bounded persisted page before attaching compatibility projections.
-	rows := make([]*fileRow, 0, limit)
-	result := l.readDB().WithContext(ctx).
-		Where("parent_id = ? AND name > ?", parentID, after).
-		Order("name").Limit(limit).Find(&rows)
-	if result.Error != nil {
-		return nil, fmt.Errorf("list files page failed, parent_id=%d, %w", parentID, result.Error)
-	}
-	files := fileViews(rows)
-	if err := hydrateFileViews(l.readDB().WithContext(ctx), files...); err != nil {
-		return nil, fmt.Errorf("hydrate files page failed, parent_id=%d, %w", parentID, err)
-	}
-	return files, nil
-}
-
 func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*File, error) {
 	// Read the complete persisted directory before attaching compatibility projections.
 	rows := make([]*fileRow, 0, 4)

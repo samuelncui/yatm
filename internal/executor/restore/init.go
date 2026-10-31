@@ -201,19 +201,3 @@ func (a *jobRestoreRunner) resetManifest(ctx context.Context, db *gorm.DB) error
 	}
 	return db.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&File{}).Error
 }
-
-func uniquePositiveIDs(ids []int64) []int64 {
-	seen := make(map[int64]struct{}, len(ids))
-	result := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		if _, found := seen[id]; found {
-			continue
-		}
-		seen[id] = struct{}{}
-		result = append(result, id)
-	}
-	return result
-}

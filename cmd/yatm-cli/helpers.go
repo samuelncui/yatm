@@ -46,13 +46,6 @@ func validateLimit(name string, value *int64) error {
 	return nil
 }
 
-func validateLimit32(name string, value *int32) error {
-	if value != nil && *value <= 0 {
-		return usageError(fmt.Errorf("%s must be positive, value=%d", name, *value))
-	}
-	return nil
-}
-
 func validateOffset(name string, value *int64) error {
 	if value != nil && *value < 0 {
 		return usageError(fmt.Errorf("%s must not be negative, value=%d", name, *value))

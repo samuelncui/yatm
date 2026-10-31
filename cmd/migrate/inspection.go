@@ -352,8 +352,8 @@ func inspectLegacyScripts(conf *config.Config, report *installationReport) error
 			return err
 		}
 		if legacyEncryptTemplates[sum] {
-		return fmt.Errorf("configured encrypt script %s is the unmodified v0.1.x template, which exits successfully when every stenc attempt fails; "+
-			"make it exit nonzero as described in docs/operations/migration.md, Tape Script Adaptation, then rerun", conf.Scripts.Encrypt)
+			return fmt.Errorf("configured encrypt script %s is the unmodified v0.1.x template, which exits successfully when every stenc attempt fails; "+
+				"make it exit nonzero as described in docs/operations/migration.md, Tape Script Adaptation, then rerun", conf.Scripts.Encrypt)
 		}
 	}
 	if conf.Scripts.ReadInfo == "" {

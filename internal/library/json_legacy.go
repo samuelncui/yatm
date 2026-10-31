@@ -315,18 +315,6 @@ func decodeLegacyLibrary(decoder *json.Decoder, decoders legacyLibraryDecoders) 
 	return positions, nil
 }
 
-func validateLegacyArray[Value any](decoder *json.Decoder) error {
-	if err := expectJSONDelimiter(decoder, '['); err != nil {
-		return err
-	}
-	for decoder.More() {
-		if err := decoder.Decode(new(Value)); err != nil {
-			return err
-		}
-	}
-	return expectJSONDelimiter(decoder, ']')
-}
-
 func importLegacyArray[Legacy any, Current any](
 	decoder *json.Decoder,
 	tx *gorm.DB,

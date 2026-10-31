@@ -64,6 +64,3 @@ func hydrateFileViews(tx *gorm.DB, files ...*File) error {
 	}
 	return nil
 }
-
-// hydrateFileFacts retains the single-row boundary using the same projection semantics.
-func hydrateFileFacts(tx *gorm.DB, file *File) error { return hydrateFileViews(tx, file) }

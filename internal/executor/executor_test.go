@@ -142,17 +142,6 @@ func jobState(t *testing.T, exe *Executor, id int64) entity.JobStatus {
 	return stored.Status
 }
 
-func jobAttemptStartedAt(t *testing.T, exe *Executor, id int64) int64 {
-	t.Helper()
-	db, closeDB, err := exe.openStateDB(id)
-	require.NoError(t, err)
-	defer closeDB()
-	var record JobRecord
-	require.NoError(t, db.First(&record, singletonJobID).Error)
-	require.NotNil(t, record.LatestAttemptStartedAtNS)
-	return *record.LatestAttemptStartedAtNS
-}
-
 func waitJobReleased(t *testing.T, exe *Executor, id int64) {
 	t.Helper()
 	require.Eventually(t, func() bool { return !exe.IsRunning(id) }, 5*time.Second, time.Millisecond)

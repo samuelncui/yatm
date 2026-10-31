@@ -145,18 +145,6 @@ func (r *runner) prepareLogicalInputs(ctx context.Context, selections []*entity.
 	})
 }
 
-func (r *runner) resolveIndexedSource(ctx context.Context, expected *entity.ExpectedFile) (string, error) {
-	// Preserve frozen and actually used resource history when a File is relocated before it is read.
-	filename, locationID, err := r.exe.ResolveOriginal(ctx, expected)
-	if err != nil {
-		return "", err
-	}
-	if err := r.exe.AddJobProperties(ctx, r.job.ID, executor.JobProperty{Key: executor.JobPropertyLocation, Value: locationID}); err != nil {
-		return "", err
-	}
-	return filename, nil
-}
-
 func (r *runner) freezeMedia(ctx context.Context, config *Config) error {
 	// Freeze the expected catalog before physical observation, including explicit Tape selection.
 	if _, err := r.validateMedia(ctx, config); err != nil {

@@ -18,10 +18,6 @@ type readScenarioCost struct {
 	UncertaintyNS int64 `json:"uncertaintyNS"`
 }
 
-func scenarioCost(value time.Duration) readScenarioCost {
-	return readScenarioCost{EstimateNS: int64(value)}
-}
-
 func (s readScenario) logical() []int64 {
 	ids := make([]int64, len(s.Spans))
 	for i, span := range s.Spans {

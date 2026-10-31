@@ -133,12 +133,10 @@ type Executor struct {
 	jobRevisionLock sync.Mutex
 	jobRevision     int64
 
-	paths              Paths
-	access             []compiledAccessRange
-	scripts            Scripts
-	previews           Previewer
-	temporaryNamesLock sync.RWMutex
-	temporaryNames     map[string]struct{}
+	paths    Paths
+	access   []compiledAccessRange
+	scripts  Scripts
+	previews Previewer
 	// readRefits serializes passive read learning refits per device; values are *sync.Mutex.
 	readRefits sync.Map
 	// Protected by deviceLock; one last prepared observation per configured device, never live I/O state.

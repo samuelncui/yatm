@@ -19,23 +19,6 @@ func listFiles(t *testing.T, ctx context.Context, service *filesService, request
 	return server.reply, nil
 }
 
-// listBatches drains one listing and reports the batches it arrived in.
-func listBatches(t *testing.T, ctx context.Context, service *filesService, request *entity.ListFilesRequest) (batchSummary, error) {
-	t.Helper()
-	server := &filesListRecorder{ctx: ctx}
-	if err := service.List(request, server); err != nil {
-		return batchSummary{}, err
-	}
-	return batchSummary{sizes: server.sizes, entries: server.reply.Entries, first: server.first}, nil
-}
-
-// batchSummary is how one listing arrived, batch by batch.
-type batchSummary struct {
-	sizes   []int
-	entries []*entity.FilesEntry
-	first   *entity.ListFilesResponse
-}
-
 // filesListRecorder collects one listing's batches.
 type filesListRecorder struct {
 	ctx   context.Context

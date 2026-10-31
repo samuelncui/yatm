@@ -11,15 +11,10 @@ import (
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/media/readplan"
 )
 
 func readOrderPosition(object uint64) *entity.TapeBytePosition {
 	return &entity.TapeBytePosition{LogicalObject: object}
-}
-
-func readOrderSpan(id int64, start, end uint64) readplan.Span {
-	return readplan.Span{ID: id, Ranges: []readplan.Range{{Start: readOrderPosition(start), End: readOrderPosition(end)}}}
 }
 
 type batchTestSource func(context.Context) (fs.File, error)

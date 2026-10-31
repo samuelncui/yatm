@@ -100,8 +100,8 @@ type readScenarioResult struct {
 
 type readScenarioObservedProvider struct {
 	ReadOrderProvider
-	started, indexed time.Time
-	evaluations      uint64
+	indexed     time.Time
+	evaluations uint64
 }
 
 func (p *readScenarioObservedProvider) Current(ctx context.Context) (readplan.State, bool, error) {
@@ -138,16 +138,6 @@ func (p *readScenarioObservedProvider) ReadCostVariants() ([6]ReadOrderProvider,
 		return capability.ReadCostVariants()
 	}
 	return [6]ReadOrderProvider{}, false
-}
-
-func readScenarioDiagnosticTime(diagnostic any, name string) *int64 {
-	// Optional diagnostics keep this exact harness source-compatible with the frozen old implementation.
-	value := reflect.ValueOf(diagnostic).FieldByName(name)
-	if !value.IsValid() || value.Kind() != reflect.Int64 && value.Kind() != reflect.Int {
-		return nil
-	}
-	ns := value.Int()
-	return &ns
 }
 
 func readScenarioDiagnosticCount(diagnostic any, name string) *uint64 {

@@ -37,30 +37,6 @@ func (p *FileLocation) Observation() *entity.ObservedEntry {
 // ObservationManifest supplies a complete validated observation in strict physical path order.
 type ObservationManifest func(context.Context, func(*ObservedEntry) error) error
 
-func (l *Library) bindObservedFile(ctx context.Context, tx *gorm.DB, location *Location, p *ObservedEntry) (*File, error) {
-	// A matched File may change content, but cannot acquire a second original.
-	if p.FileID > 0 {
-		var row fileRow
-		if err := tx.First(&row, p.FileID).Error; err != nil {
-			return nil, err
-		}
-		if row.Kind != entity.FileKind_FILE_KIND_REGULAR {
-			return nil, fmt.Errorf("original cannot bind a directory")
-		}
-		var count int64
-		if err := tx.Model(&FileLocation{}).Where("file_id = ?", p.FileID).Count(&count).Error; err != nil {
-			return nil, err
-		}
-		if count != 0 {
-			return nil, fmt.Errorf("File %d already has an original", p.FileID)
-		}
-		return row.file(), nil
-	}
-
-	// New leaves receive collision suffixes; prior organization and annotations never move.
-	return createImportedFile(tx, "Unforged/"+location.Name+"/"+p.Path)
-}
-
 func createImportedFile(tx *gorm.DB, logicalPath string) (*File, error) {
 	// Create only missing directory nodes and a new independently organized leaf.
 	parentID := int64(0)

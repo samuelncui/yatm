@@ -3,7 +3,6 @@ package library
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -18,35 +17,6 @@ func (l *Library) AdmitObservation(ctx context.Context, locationID int64, p *Obs
 		return nil, err
 	}
 	return originals[0], nil
-}
-
-// MatchesObservation checks whether the existing content basis remains applicable to new facts.
-func (l *Library) MatchesObservation(ctx context.Context, location *Location, p *ObservedEntry) (bool, error) {
-	previous, err := matchingObservation(l.readDB().WithContext(ctx), location, p)
-	return previous != nil, err
-}
-
-func matchingObservation(tx *gorm.DB, location *Location, p *ObservedEntry) (*FileLocation, error) {
-	if p == nil {
-		return nil, fmt.Errorf("missing observation")
-	}
-	var previous FileLocation
-	if err := tx.Where("location_id = ? AND path = ?", location.ID, p.Path).Limit(1).Find(&previous).Error; err != nil {
-		return nil, err
-	}
-	if !matchesObservationContent(&previous, p) {
-		return nil, nil
-	}
-	var keys []*FileTrackingKey
-	if p.TrackingKeys != nil {
-		if err := tx.Where("file_id = ?", previous.FileID).Find(&keys).Error; err != nil {
-			return nil, err
-		}
-	}
-	if !MatchesOriginalObservation(&previous, p, keys) {
-		return nil, nil
-	}
-	return &previous, nil
 }
 
 // MatchesOriginalObservation applies the same content-basis rule to already batched facts.

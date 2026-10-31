@@ -1,7 +1,6 @@
 package apis
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
@@ -10,28 +9,6 @@ import (
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"google.golang.org/protobuf/proto"
 )
-
-func (api *API) hydrateFileTags(ctx context.Context, files ...*library.File) error {
-	// Load all requested relations in one bounded Library MGet.
-	ids := make([]int64, 0, len(files))
-	for _, file := range files {
-		if file != nil {
-			ids = append(ids, file.ID)
-		}
-	}
-	tags, err := api.lib.MGetFileTags(ctx, ids...)
-	if err != nil {
-		return fmt.Errorf("load File Tags failed, %w", err)
-	}
-
-	// Attach stable sorted Tags to the response models only.
-	for _, file := range files {
-		if file != nil {
-			file.Tags = tags[file.ID]
-		}
-	}
-	return nil
-}
 
 func convertPositions(positions ...*library.Position) []*entity.Position {
 	// Persisted instants are already exact signed nanoseconds; no display-time conversion is needed.
