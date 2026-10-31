@@ -74,6 +74,44 @@ parse_options() {
   done
 }
 
+# Checks a present one-line SHA-256 file, then member names and entry types before extraction.
+# The Preview package can only replace its three owned resources, never configuration or main executables.
+verify_archive() {
+  local kind="$1" archive="$2" checksum="$3"
+  local prefix= count_error='Expected one SHA-256 checksum.' format_error='Expected one SHA-256 checksum.' unsafe_error='Unsafe archive member.'
+  if [[ "$kind" == Preview ]]; then
+    prefix=preview- count_error='Expected one Preview checksum.' format_error='Invalid Preview checksum.' unsafe_error='Unsafe Preview archive member.'
+  fi
+  if [[ -f "$checksum" ]]; then
+    local expected actual extra
+    local -a lines
+    mapfile -t lines < "$checksum"
+    [[ "${#lines[@]}" == 1 ]] || { fail "$count_error"; return 1; }
+    read -r expected extra <<< "${lines[0]}"
+    [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || { fail "$format_error"; return 1; }
+    actual="$(sha256sum "$archive")"; actual="${actual%% *}"
+    [[ "${expected,,}" == "$actual" ]] || { fail "$kind checksum mismatch."; return 1; }
+  fi
+
+  tar -tzf "$archive" > "$TMP_DIRECTORY/${prefix}members"
+  local member
+  while IFS= read -r member; do
+    [[ "$kind" == Release ]] || member="${member#./}"
+    [[ "$member" != /* && "$member" != '..' && "$member" != ../* && "$member" != */../* && "$member" != */.. ]] || {
+      fail "$unsafe_error"; return 1;
+    }
+    if [[ "$kind" == Preview ]]; then
+      case "$member" in ''|yatm-preview|preview-lib|preview-lib/*|preview-support|preview-support/*) ;;
+        *) fail "Unexpected Preview archive member: $member"; return 1 ;;
+      esac
+    fi
+  done < "$TMP_DIRECTORY/${prefix}members"
+  tar -tvzf "$archive" > "$TMP_DIRECTORY/${prefix}member-types"
+  if LC_ALL=C grep -qvE '^[-d]' "$TMP_DIRECTORY/${prefix}member-types"; then
+    fail "$kind archives may only contain ordinary files and directories."; return 1
+  fi
+}
+
 prepare_preview() {
   # Optional dependencies are reviewed and staged before service admission or a complete backup.
   [[ "$LEGACY" == 0 ]] || return 0
@@ -96,30 +134,7 @@ prepare_preview() {
     fetch "$url" -o "$archive"
   fi
   if [[ -n "$PREVIEW_CHECKSUM" ]]; then cp "$PREVIEW_CHECKSUM" "$checksum"; else fetch "$url.sha256" -o "$checksum"; fi
-  local -a lines
-  local expected actual ignored member
-  mapfile -t lines < "$checksum"
-  [[ "${#lines[@]}" == 1 ]] || { fail 'Expected one Preview checksum.'; return 1; }
-  read -r expected ignored <<< "${lines[0]}"
-  [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || { fail 'Invalid Preview checksum.'; return 1; }
-  actual="$(sha256sum "$archive")"; actual="${actual%% *}"
-  [[ "${expected,,}" == "$actual" ]] || { fail 'Preview checksum mismatch.'; return 1; }
-
-  # This package can only replace its three owned resources, never configuration or main executables.
-  tar -tzf "$archive" > "$TMP_DIRECTORY/preview-members"
-  while IFS= read -r member; do
-    member="${member#./}"
-    [[ "$member" != /* && "$member" != '..' && "$member" != ../* && "$member" != */../* && "$member" != */.. ]] || {
-      fail 'Unsafe Preview archive member.'; return 1;
-    }
-    case "$member" in ''|yatm-preview|preview-lib|preview-lib/*|preview-support|preview-support/*) ;;
-      *) fail "Unexpected Preview archive member: $member"; return 1 ;;
-    esac
-  done < "$TMP_DIRECTORY/preview-members"
-  tar -tvzf "$archive" > "$TMP_DIRECTORY/preview-member-types"
-  if LC_ALL=C grep -qvE '^[-d]' "$TMP_DIRECTORY/preview-member-types"; then
-    fail 'Preview archives may only contain ordinary files and directories.'; return 1
-  fi
+  verify_archive Preview "$archive" "$checksum"
   tar -xzf "$archive" --no-same-owner --preserve-permissions -C "$RELEASE_DIRECTORY"
   [[ -x "$RELEASE_DIRECTORY/yatm-preview" && -d "$RELEASE_DIRECTORY/preview-lib" && -f "$RELEASE_DIRECTORY/preview-support/VERSION" ]] || {
     fail 'Incomplete Preview package.'; return 1;
@@ -272,29 +287,7 @@ download_release() {
   else
     echo "Manual check: legacy release $RELEASE_VERSION has no publisher checksum. Source: $url"
   fi
-  if [[ -f "$TMP_DIRECTORY/checksum" ]]; then
-    local expected actual extra
-    local -a checksum_lines
-    mapfile -t checksum_lines < "$TMP_DIRECTORY/checksum"
-    [[ "${#checksum_lines[@]}" == 1 ]] || { fail 'Expected one SHA-256 checksum.'; return 1; }
-    read -r expected extra <<< "${checksum_lines[0]}"
-    [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || { fail 'Expected one SHA-256 checksum.'; return 1; }
-    actual="$(sha256sum "$ARCHIVE")"; actual="${actual%% *}"
-    [[ "${expected,,}" == "$actual" ]] || { fail 'Release checksum mismatch.'; return 1; }
-  fi
-
-  # Inspect names and entry types before extracting or executing candidate programs.
-  tar -tzf "$ARCHIVE" > "$TMP_DIRECTORY/members"
-  local member
-  while IFS= read -r member; do
-    [[ "$member" != /* && "$member" != '..' && "$member" != ../* && "$member" != */../* && "$member" != */.. ]] || {
-      fail 'Unsafe archive member.'; return 1;
-    }
-  done < "$TMP_DIRECTORY/members"
-  tar -tvzf "$ARCHIVE" > "$TMP_DIRECTORY/member-types"
-  if LC_ALL=C grep -qvE '^[-d]' "$TMP_DIRECTORY/member-types"; then
-    fail 'Release archives may only contain ordinary files and directories.'; return 1
-  fi
+  verify_archive Release "$ARCHIVE" "$TMP_DIRECTORY/checksum"
   mkdir "$RELEASE_DIRECTORY"
   tar -xzf "$ARCHIVE" --no-same-owner --preserve-permissions -C "$RELEASE_DIRECTORY"
   local archive_version
