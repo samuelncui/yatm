@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { ListPlaceholder } from "@/components/list-placeholder";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, List, ListItemButton, ListItemIcon, ListItemText, Stack, Typography } from "@mui/material";
 import FolderOutlined from "@mui/icons-material/FolderOutlined";
 import { locationCli } from "@/api";
 import type { BrowsePathsResponse } from "@/entity";
@@ -80,7 +68,7 @@ export const LocationPathPicker = ({ initialPath, onChoose, onClose }: { initial
           </Button>
         </Stack>
         {path && <Typography sx={{ overflowWrap: "anywhere", my: 1 }}>{page?.path ?? path}</Typography>}
-        {loading && <CircularProgress size={20} aria-label="Loading directories" />}
+        {loading && !page?.directories.length && <ListPlaceholder loading label="Loading directories…" />}
         {error && <Feedback action={<Button onClick={() => void load(error.cursor, error.path)}>Retry</Button>}>{error.message}</Feedback>}
         <List aria-label="Directories" disablePadding>
           {page?.directories.map((directory) => (
@@ -92,7 +80,7 @@ export const LocationPathPicker = ({ initialPath, onChoose, onClose }: { initial
             </ListItemButton>
           ))}
         </List>
-        {!loading && !error && page?.directories.length === 0 && <Typography>No directories.</Typography>}
+        {!loading && !error && page?.directories.length === 0 && <ListPlaceholder label="No directories." />}
         {page?.nextCursor && (
           <Button disabled={loading || !!error} onClick={() => void load(page.nextCursor, page.path)}>
             Load more directories

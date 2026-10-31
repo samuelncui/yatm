@@ -1,4 +1,5 @@
 import { useSelectionActions } from "@/state/react";
+import { ListPlaceholder } from "@/components/list-placeholder";
 import { Feedback } from "@/components/feedback";
 import { toast } from "react-toastify";
 import { useActionDialog } from "./action-dialog";
@@ -377,8 +378,8 @@ const Versions = ({
           {error}
         </Feedback>
       )}
-      {loading && !versions.length && <p role="status">Loading saved versions…</p>}
-      {!loading && !error && !versions.length && <p className="product-muted">No saved versions are available to add to the Restore list.</p>}
+      {loading && !versions.length && <ListPlaceholder loading label="Loading saved versions…" />}
+      {!loading && !error && !versions.length && <ListPlaceholder label="No saved versions are available to add to the Restore list." />}
       <p className="version-list-label">Last archived</p>
       <div className="version-list" aria-label="Saved content versions">
         {displayed.map((version) => {

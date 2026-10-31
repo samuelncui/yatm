@@ -1,4 +1,5 @@
 import { Feedback } from "@/components/feedback";
+import { ListPlaceholder } from "@/components/list-placeholder";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack } from "@mui/material";
 import type { FileData } from "@samuelncui/chonky";
@@ -59,7 +60,7 @@ export const ChooseVersionDialog = ({
     <Dialog open onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
       <DialogTitle>Choose a version of {file.name}</DialogTitle>
       <DialogContent dividers>
-        {loading && <LinearProgress />}
+        {loading && (choices.length ? <LinearProgress /> : <ListPlaceholder loading label="Loading saved versions…" />)}
         {(error || loadError) && (
           <Feedback
             severity="error"
@@ -78,7 +79,7 @@ export const ChooseVersionDialog = ({
             {error || loadError}
           </Feedback>
         )}
-        {!loading && !error && !loadError && choices.length === 0 && <p>No saved versions.</p>}
+        {!loading && !error && !loadError && choices.length === 0 && <ListPlaceholder label="No saved versions." />}
         <Stack spacing={1}>
           {choices.map((version) => (
             <SavedVersionChoice key={String(version.id)} selected={version.id === selectedID} disabled={saving} onClick={() => setSelectedID(version.id)}>
