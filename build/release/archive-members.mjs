@@ -1,11 +1,25 @@
 // Read ordinary package members, including paths carried by tar metadata records.
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 
 export function checkMemberPath(name) {
   assert(name && !name.startsWith('/') && !/[\\\x00-\x1f]/.test(name)
     && name.split('/').every(part => part && part !== '.' && part !== '..'), `Unsafe archive path: ${name}`);
+}
+
+// Hash in bounded chunks so a large archive is never held in memory for its digest.
+export function sha256File(file) {
+  const hash = crypto.createHash('sha256');
+  const buffer = Buffer.allocUnsafe(1 << 20);
+  const descriptor = fs.openSync(file, 'r');
+  try {
+    for (let size; (size = fs.readSync(descriptor, buffer)) > 0;) hash.update(buffer.subarray(0, size));
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return hash.digest('hex');
 }
 
 export function readArchive(archive) {

@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readArchive, checkDirectories, checkMemberPath } from './archive-members.mjs';
+import { readArchive, checkDirectories, checkMemberPath, sha256File } from './archive-members.mjs';
+import { checkRelease } from './check-release.mjs';
 import { validatePreviewSources, privateSourcePath } from './check-preview-sources.mjs';
 
 export const mainTargets = ['linux-amd64', 'linux-386-experimental', 'linux-arm64-experimental', 'linux-arm6-experimental', 'linux-arm7-experimental', 'linux-s390x-experimental', 'darwin-amd64-experimental', 'darwin-arm64-experimental', 'freebsd-amd64-experimental'];
@@ -19,8 +18,9 @@ export function checkArchiveNames(names, version) {
   assert.deepEqual(names.filter(name => name.endsWith('.tar.gz')).sort(), expectedArchives(version), 'Candidate set must contain exactly nine main, three helper and three source archives; ARMv5 is unsupported');
 }
 
-function checksum(archive) {
-  const digest = crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+// Digests already computed by the caller are reused so each archive is hashed once per run.
+function checksum(archive, digests) {
+  const digest = digests.get(path.basename(archive)) ?? sha256File(archive);
   assert.equal(fs.readFileSync(`${archive}.sha256`, 'utf8').trim(), `${digest}  ${path.basename(archive)}`, `Checksum mismatch: ${path.basename(archive)}`);
   return digest;
 }
@@ -79,14 +79,14 @@ export function checkPreviewMembers(members, version, commit, target) {
   return dependencies;
 }
 
-export function checkPreviewPackage(archive, version, commit) {
-  checksum(archive);
+export function checkPreviewPackage(archive, version, commit, digests = new Map()) {
+  checksum(archive, digests);
   const target = path.basename(archive).match(/^yatm-preview-(linux-amd64|darwin-amd64|darwin-arm64)-/)?.[1];
   assert(target, 'Invalid helper archive target');
   const members = readArchive(archive);
   const dependencies = checkPreviewMembers(members, version, commit, target);
   const source = path.join(path.dirname(archive), path.basename(archive).replace('yatm-preview-', 'yatm-preview-source-'));
-  const digest = checksum(source);
+  const digest = checksum(source, digests);
   const offer = read(members.files, 'preview-support/SOURCE.txt');
   assert(offer.includes(`Corresponding source archive: ${path.basename(source)}\n`), 'Source offer filename mismatch');
   assert(offer.includes(`SHA-256: ${digest}\n`), 'Source offer checksum mismatch');
@@ -95,16 +95,16 @@ export function checkPreviewPackage(archive, version, commit) {
   checkDirectories(sourceMembers);
 }
 
-export function checkCandidateSet(directory, version, commit) {
+export function checkCandidateSet(directory, version, commit, digests = new Map()) {
   checkArchiveNames(fs.readdirSync(directory), version);
   for (const target of mainTargets) {
     const archive = path.join(directory, `yatm-${target}-${version}.tar.gz`);
-    execFileSync(process.execPath, [fileURLToPath(new URL('./check-release.mjs', import.meta.url)), archive], { stdio: 'inherit' });
+    checkRelease(archive, digests.get(path.basename(archive)));
     const { files } = readArchive(archive);
     assert.equal(read(files, 'VERSION'), version);
     assert.equal(read(files, 'COMMIT'), commit);
   }
-  for (const target of previewTargets) checkPreviewPackage(path.join(directory, `yatm-preview-${target}-${version}.tar.gz`), version, commit);
+  for (const target of previewTargets) checkPreviewPackage(path.join(directory, `yatm-preview-${target}-${version}.tar.gz`), version, commit, digests);
   console.log('Validated 15 candidate archives, identities, helper boundaries and corresponding sources.');
 }
 

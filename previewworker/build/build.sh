@@ -237,7 +237,7 @@ mv "$PACKAGE/sources" "$BUILD_DIRECTORY/distributed-sources"
 cd "$RELEASE_DIRECTORY"
 shasum -a 256 "$(basename "$SOURCE_ARCHIVE")" > "$SOURCE_ARCHIVE.sha256"
 printf 'Corresponding source archive: %s\nSHA-256: %s\nDownload: https://github.com/samuelncui/yatm/releases/download/%s/%s\n' \
-  "$(basename "$SOURCE_ARCHIVE")" "$(shasum -a 256 "$SOURCE_ARCHIVE" | cut -d ' ' -f 1)" "$RELEASE_VERSION" "$(basename "$SOURCE_ARCHIVE")" > "$PACKAGE/SOURCE.txt"
+  "$(basename "$SOURCE_ARCHIVE")" "$(cut -d ' ' -f 1 "$SOURCE_ARCHIVE.sha256")" "$RELEASE_VERSION" "$(basename "$SOURCE_ARCHIVE")" > "$PACKAGE/SOURCE.txt"
 mkdir -p "$PACKAGE/preview-support"
 for item in VERSION COMMIT licenses SOURCE.txt README.md VALIDATION CAPABILITIES.json; do
   [[ ! -e "$PACKAGE/$item" ]] || mv "$PACKAGE/$item" "$PACKAGE/preview-support/"

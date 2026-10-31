@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { sha256File } from './archive-members.mjs';
 import { checkCandidateSet, expectedArchives } from './check-candidate-set.mjs';
 
 export function checkInputs({ repository, version, publish, runId }) {
@@ -79,14 +79,16 @@ export function checkCandidateFiles(directory, version, commit, validate = check
   assert.deepEqual(fs.readdirSync(directory).sort(), names, 'Unexpected or missing accepted candidate files');
   const files = names.map(name => path.resolve(directory, name));
   for (const file of files) assert(fs.lstatSync(file).isFile(), `Candidate must be an ordinary file: ${file}`);
+  const digests = new Map();
   const checksums = archives.map(name => {
-    const digest = crypto.createHash('sha256').update(fs.readFileSync(path.join(directory, name))).digest('hex');
+    const digest = sha256File(path.join(directory, name));
+    digests.set(name, digest);
     const line = `${digest}  ${name}`;
     assert.equal(fs.readFileSync(path.join(directory, `${name}.sha256`), 'utf8').trim(), line, `Checksum mismatch: ${name}`);
     return line;
   }).sort();
   assert.equal(fs.readFileSync(path.join(directory, 'SHA256SUMS'), 'utf8'), `${checksums.join('\n')}\n`, 'SHA256SUMS mismatch');
-  validate(directory, version, commit);
+  validate(directory, version, commit, digests);
   return files;
 }
 

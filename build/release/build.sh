@@ -61,5 +61,5 @@ node build/release/build-licenses.mjs "$OUTPUT_DIRECTORY/licenses" backend
 # Each archive has a portable companion checksum; CI aggregates only complete target sets.
 TARGET_FILE="$RELEASE_DIRECTORY/yatm-${TARGET_NAME}-${RELEASE_VERSION}.tar.gz"
 COPYFILE_DISABLE=1 tar --no-xattrs --no-acls -czf "$TARGET_FILE" -C "$OUTPUT_DIRECTORY" .
-node -e 'const fs=require("node:fs"),crypto=require("node:crypto");const p=process.argv[1];fs.writeFileSync(p+".sha256",crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex")+"  "+require("node:path").basename(p)+"\n")' "$TARGET_FILE"
+node --input-type=module -e 'import fs from "node:fs";import path from "node:path";import { sha256File } from "./build/release/archive-members.mjs";const p=process.argv[1];fs.writeFileSync(p+".sha256",sha256File(p)+"  "+path.basename(p)+"\n")' "$TARGET_FILE"
 node build/release/check-release.mjs "$TARGET_FILE"
