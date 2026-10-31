@@ -657,7 +657,8 @@ func waitForCompletedJob(t *testing.T, ctx context.Context, client entity.JobSer
 		if job.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
 			return
 		}
-		if !isActivePhase(job.Phase) {
+		// An idle Job reports no phase; every working phase, including QUEUED, keeps waiting.
+		if job.Phase == entity.JobPhase_JOB_PHASE_UNSPECIFIED {
 			logs, logErr := client.GetLog(ctx, &entity.GetJobLogRequest{Id: id})
 			require.NoError(t, logErr)
 			t.Fatalf("job %d stopped at %s:\n%s", id, job.Status, logs.Logs)
@@ -692,19 +693,5 @@ func waitForReadyJob(t *testing.T, ctx context.Context, client entity.JobService
 			t.Fatal(ctx.Err())
 		case <-ticker.C:
 		}
-	}
-}
-
-func isActivePhase(phase entity.JobPhase) bool {
-	switch phase {
-	case entity.JobPhase_JOB_PHASE_INDEXING,
-		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
-		entity.JobPhase_JOB_PHASE_PREPARING_MEDIA,
-		entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA,
-		entity.JobPhase_JOB_PHASE_COPYING_FROM_MEDIA,
-		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA:
-		return true
-	default:
-		return false
 	}
 }
