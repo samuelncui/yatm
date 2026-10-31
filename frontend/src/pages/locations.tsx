@@ -218,7 +218,7 @@ const LocationDetail = () => {
   }, [load]);
   const source = reply?.location;
   const failure = error && <Feedback action={<Button onClick={() => void load()}>Retry</Button>}>{error}</Feedback>;
-  if (!source) return failure || <Alert severity="info">Loading location…</Alert>;
+  if (!source) return <SettingsPage title="Location">{failure || <SettingsLoading label="Location" loading />}</SettingsPage>;
   return (
     <Stack useFlexGap spacing={2} sx={{ width: "100%", height: "100%", minHeight: 0, p: 3, textAlign: "left" }}>
       <PageHeading

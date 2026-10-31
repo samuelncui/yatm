@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from "@mui/material";
 import { mediaCli } from "@/api";
 import {
   DeviceConfig,
@@ -125,7 +125,7 @@ export const DeviceSettingsBrowser = () => {
     <>
       <SettingsEditorFeedback
         label="Device"
-        loading={editor.loading}
+        loading={editor.loading || listing}
         saving={editor.saving}
         error={editor.error}
         invalid={editor.invalid}
@@ -135,7 +135,6 @@ export const DeviceSettingsBrowser = () => {
         onReload={editor.reload}
       />
       {listError && <Feedback severity="error">{listError}</Feedback>}
-      {listing && <LinearProgress aria-label="Loading devices" />}
       <Stack
         component="form"
         noValidate
