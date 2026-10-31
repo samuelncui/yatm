@@ -83,6 +83,8 @@ const ApplyCreation = ({
   useEffect(() => {
     if (applied || approved === undefined) return;
     if (store.getState().selections[creation.kind].revision !== approved) {
+      // The dialog stays open for another decision, so Cancel must leave again.
+      confirmed.current = false;
       setApproved(undefined);
       setChanged(true);
       return;

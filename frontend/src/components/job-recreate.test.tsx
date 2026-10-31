@@ -244,6 +244,23 @@ it("retains concurrent selection edits while the read is pending and requires ex
   expect(mocks.archiveCreate).not.toHaveBeenCalled();
 });
 
+it("keeps Cancel working after selections change during a confirmed replacement", async () => {
+  mocks.archiveRead.mockReturnValue(call({ request: CreateArchiveJobRequest.create({ spec: { selections: [selection(7n)] } }), unavailableReason: "" }));
+  const store = createAppStore();
+  addSelectionEntries(store, "archive", [{ selection: selection(55n), name: "Unsent", path: "Unsent", key: "unsent" }]);
+  show("/archive?recreate=1", store);
+  const replace = await screen.findByRole("button", { name: "Replace selections" });
+  // The confirmation carries the rendered revision while the store has already moved on.
+  act(() => {
+    addSelectionEntries(store, "archive", [{ selection: selection(56n), name: "Concurrent", path: "Concurrent", key: "concurrent" }]);
+    replace.click();
+  });
+  await screen.findByText(/The selections changed while this form was opening/);
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Replace unsent selections?" })).not.toBeInTheDocument());
+  expect(store.getState().selections.archive.entries.map((entry) => entry.name)).toEqual(["Unsent", "Concurrent"]);
+});
+
 it("aborts obsolete reads across repeated opens without replacing the newer draft", async () => {
   let resolve!: (value: unknown) => void;
   mocks.archiveRead.mockReturnValueOnce({
