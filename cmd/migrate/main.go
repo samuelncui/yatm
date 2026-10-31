@@ -11,6 +11,7 @@ import (
 	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
 	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 var (
@@ -38,6 +39,8 @@ func main() {
 		}
 		return
 	}
+	// Operators watch this output during an upgrade; query errors are already returned and reported.
+	gormlogger.Default = gormlogger.Default.LogMode(gormlogger.Silent)
 	if *phase == "commit" || *phase == "abort" || *phase == "cleanup" || *phase == "repair-job" || *phase == "quiesce" || *phase == "config-apply" {
 		requireConfirmation()
 	}

@@ -276,8 +276,9 @@ main --check
 `, "", root)
 	require.NoError(t, err, output)
 	require.Contains(t, output, "Read-only installation checks passed")
-	require.Contains(t, output, "Migration guide from the verified release")
-	require.Contains(t, output, "Read this guide before the mutating run")
+	// The extracted package is removed on exit, so the check names durable copies of the guide.
+	require.Contains(t, output, "docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/v1.0.0-alpha.1/docs/operations/migration.md")
+	require.NotContains(t, output, "Migration guide from the verified release")
 	require.NotContains(t, output, "Candidate guide\n")
 	require.NotContains(t, output, "unexpected-")
 	require.NoDirExists(t, filepath.Join(root, "yatm"))
@@ -1061,4 +1062,23 @@ prune_backups
 	require.NoDirExists(t, filepath.Join(backups, "20261001000000.aaaaaa"))
 	require.DirExists(t, filepath.Join(backups, "20260901000000.failed"))
 	require.DirExists(t, filepath.Join(backups, "replaced-20261020000000.dddddd"))
+}
+
+func TestInstallerReportsFailureOnceFromSubshells(t *testing.T) {
+	// set -E runs the trap inside subshells such as run_migrator; only the main shell reports.
+	for _, test := range []struct{ check, want, absent string }{
+		{"1", "Check failed; nothing was changed.", "Installation did not complete"},
+		{"0", "Installation did not complete. Stage: preflight", "Check failed"},
+	} {
+		output, err := installerShell(t, `
+CHECK_ONLY="$1"
+trap 'on_failure "$?"' ERR
+(false)
+echo unexpected
+`, "", test.check)
+		require.Error(t, err)
+		require.Equal(t, 1, strings.Count(output, test.want), output)
+		require.NotContains(t, output, test.absent)
+		require.NotContains(t, output, "unexpected")
+	}
 }

@@ -485,11 +485,13 @@ show_migration_guide() {
   }
   local guide="$RELEASE_DIRECTORY/docs/operations/migration.md"
   [[ -s "$guide" && ! -L "$guide" ]] || { fail 'The verified release is missing its migration guide.'; return 1; }
-  echo "Migration guide from the verified release: $guide"
   if [[ "$CHECK_ONLY" == 1 ]]; then
-    echo 'Read this guide before the mutating run; that run displays it once before consent.'
+    # The extracted package is removed when the check exits; point at durable copies instead.
+    echo "Read the migration guide before upgrading: docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/$RELEASE_VERSION/docs/operations/migration.md"
+    echo 'The upgrade run displays it once more before asking to stop the service.'
     return 0
   fi
+  echo "Migration guide from the verified release: $guide"
   command cat "$guide"
 }
 
@@ -923,6 +925,12 @@ prune_backups() {
 on_failure() {
   local status="$1"
   trap - ERR
+  # Subshells inherit the trap (set -E); only the main shell reports and recovers.
+  [[ "$BASHPID" == "$$" ]] || exit "$status"
+  if [[ "$CHECK_ONLY" == 1 ]]; then
+    echo 'Check failed; nothing was changed.' >&2
+    exit "$status"
+  fi
   if [[ "$INSTALLATION_CHANGED" == 1 ]]; then
     systemctl stop "$SERVICE_NAME" || true
   elif [[ "$SERVICE_STOPPED" == 1 ]]; then

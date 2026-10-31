@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
@@ -353,7 +354,7 @@ func inspectLegacyScripts(conf *config.Config, report *installationReport) error
 		}
 		if legacyEncryptTemplates[sum] {
 			return fmt.Errorf("configured encrypt script %s is the unmodified v0.1.x template, which exits successfully when every stenc attempt fails; "+
-				"make it exit nonzero as described in docs/operations/migration.md, Tape Script Adaptation, then rerun", conf.Scripts.Encrypt)
+				"make it exit nonzero as shown in %s, then rerun", conf.Scripts.Encrypt, migrationGuide("tape-script-adaptation"))
 		}
 	}
 	if conf.Scripts.ReadInfo == "" {
@@ -364,10 +365,18 @@ func inspectLegacyScripts(conf *config.Config, report *installationReport) error
 		return err
 	}
 	if legacyReadInfoTemplates[sum] {
-		report.Warnings = append(report.Warnings, fmt.Sprintf("Action required after upgrade: configured readinfo script %s is the unmodified v0.1.x template, "+
-			"which reports an empty barcode when the probe fails. Replace it with templates/scripts/readinfo before the first Tape Job.", conf.Scripts.ReadInfo))
+		report.Warnings = append(report.Warnings, fmt.Sprintf("after upgrading, replace the configured readinfo script %s with templates/scripts/readinfo before the first Tape Job; "+
+			"it is the unmodified v0.1.x template, which reports an empty barcode when the probe fails (%s)", conf.Scripts.ReadInfo, migrationGuide("tape-script-adaptation")))
 	}
 	return nil
+}
+
+// migrationGuide links the upgrade guide of this release; the installed copy does not exist yet during preflight.
+func migrationGuide(anchor string) string {
+	if buildinfo.Version == "development" {
+		return "docs/operations/migration.md#" + anchor
+	}
+	return "https://github.com/samuelncui/yatm/blob/" + buildinfo.Version + "/docs/operations/migration.md#" + anchor
 }
 
 func fileSHA256(path string) (string, error) {
