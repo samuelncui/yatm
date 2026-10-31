@@ -221,7 +221,7 @@ it("requires confirmation before replacing unsent selections and cancellation re
   show("/archive?recreate=1", store);
   await screen.findByRole("dialog", { name: "Replace unsent selections?" });
   expect(store.getState().selections.archive.entries[0].name).toBe("Unsent");
-  await userEvent.click(screen.getByRole("link", { name: "Cancel" }));
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByText("Unsent")).toBeInTheDocument();
   expect(mocks.archiveCreate).not.toHaveBeenCalled();
 });

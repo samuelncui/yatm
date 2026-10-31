@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack } from "@mui/material";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
+import { Stack } from "@mui/material";
+import { ActionDialog } from "./action-dialog";
 import { archiveJobCli, restoreJobCli, locationCli, filesCli } from "@/api";
 import type { CreateArchiveJobRequest, CreateRestoreJobRequest } from "@/entity";
 import { errorMessage } from "@/tools";
@@ -75,6 +76,8 @@ const ApplyCreation = ({
   const store = useAppStore();
   const { entries, revision } = useSelections(creation.kind);
   const [approved, setApproved] = useState<number | undefined>(() => (!entries.length && revision === startingRevision ? revision : undefined));
+  const confirmed = useRef(false);
+  const navigate = useNavigate();
   const [applied, setApplied] = useState(false);
   const [changed, setChanged] = useState(false);
   useEffect(() => {
@@ -96,26 +99,27 @@ const ApplyCreation = ({
   }, [approved, applied, creation, store]);
   if (applied) return children(creation);
   return (
-    <Dialog open fullWidth maxWidth="sm" aria-labelledby="replace-job-selections">
-      <DialogTitle id="replace-job-selections">Replace unsent selections?</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2}>
-          <span>
-            Replace the current {entries.length} {creation.kind === "archive" ? "Archive" : "Restore"} selections with {creation.entries.length} selections from
-            this Job?
-          </span>
-          <span>Review the creation form before submitting.</span>
-          {creation.reason && <Feedback severity="warning">{creation.reason}</Feedback>}
-          {changed && <Feedback severity="warning">The selections changed while this form was opening. Review them before replacing.</Feedback>}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setApproved(revision)}>Replace selections</Button>
-        <Button component={Link} to={`/${creation.kind}`}>
-          Cancel
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <ActionDialog
+      title="Replace unsent selections?"
+      confirmLabel="Replace selections"
+      onConfirm={() => {
+        confirmed.current = true;
+        setApproved(revision);
+      }}
+      onClose={() => {
+        if (!confirmed.current) navigate(`/${creation.kind}`);
+      }}
+    >
+      <Stack spacing={2}>
+        <span>
+          Replace the current {entries.length} {creation.kind === "archive" ? "Archive" : "Restore"} selections with {creation.entries.length} selections from
+          this Job?
+        </span>
+        <span>Review the creation form before submitting.</span>
+        {creation.reason && <Feedback severity="warning">{creation.reason}</Feedback>}
+        {changed && <Feedback severity="warning">The selections changed while this form was opening. Review them before replacing.</Feedback>}
+      </Stack>
+    </ActionDialog>
   );
 };
 
