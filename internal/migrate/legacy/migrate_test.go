@@ -545,6 +545,14 @@ func TestPrepareOmitsCapturedLTFSIndexMissingLibraryPosition(t *testing.T) {
 	require.ErrorIs(t, db.Where("id = ?", 31).First(new(stagedLibraryPosition)).Error, gorm.ErrRecordNotFound)
 }
 
+func TestPrepareRejectsBarcodesThatNormalizeAlike(t *testing.T) {
+	// Two legacy Tapes differing only by case and spacing cannot share one current identity.
+	db := newLegacyTestDB(t)
+	require.NoError(t, db.Create([]*legacyLibraryTape{{ID: 10, Barcode: "abc010"}, {ID: 11, Barcode: "ABC010 "}}).Error)
+	_, err := Prepare(context.Background(), db, t.TempDir())
+	require.ErrorContains(t, err, `legacy Tapes "abc010" and "ABC010 " both normalize to barcode ABC010`)
+}
+
 func TestPrepareMigratesEmptyJobsAsCompleted(t *testing.T) {
 	ctx := context.Background()
 	db := newLegacyTestDB(t)

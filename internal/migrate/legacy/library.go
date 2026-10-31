@@ -508,6 +508,7 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 	// Read legacy Media in bounded batches; optional destruction remains optional.
 	var cursor int64
 	count := 0
+	barcodes := make(map[string]string)
 	for {
 		var source []*legacyLibraryTape
 		if err := db.WithContext(ctx).Where("id > ?", cursor).Order("id").Limit(256).Find(&source).Error; err != nil {
@@ -532,9 +533,15 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 				}
 				destroyedAtNS = &stamp
 			}
+			// Barcodes that differ only by case or spacing would collide as one Tape identity.
+			identity := library.NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, tape.Barcode)
+			if previous, ok := barcodes[identity]; ok {
+				return 0, fmt.Errorf("legacy Tapes %q and %q both normalize to barcode %s; rename one in the legacy Library before migrating", previous, tape.Barcode, identity)
+			}
+			barcodes[identity] = tape.Barcode
 			rows = append(rows, &stagedLibraryMedia{
 				ID: tape.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE,
-				Identity: library.NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, tape.Barcode),
+				Identity: identity,
 				Name:     tape.Name, Profile: (&entity.TapeMediaProfile{
 					Encryption: tape.Encryption, Format: library.TapeFormatLTFSV0,
 				}).Pack(),
