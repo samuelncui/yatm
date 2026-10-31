@@ -19,10 +19,6 @@ func NewDebugServer(addr string) {
 	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	if err := http.ListenAndServe(addr, debugMux); err != nil {
-		if err == nil {
-			return
-		}
-
 		if strings.Contains(err.Error(), "interrupt") {
 			return
 		}

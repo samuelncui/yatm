@@ -37,42 +37,6 @@ func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-func SQLEscape(str string) string {
-	runes := []rune(str)
-	result := make([]rune, 0, len(runes))
-
-	var escape rune
-	for i := 0; i < len(runes); i++ {
-		r := runes[i]
-
-		escape = 0
-		switch r {
-		case 0: /* Must be escaped for 'mysql' */
-			escape = '0'
-		case '\n': /* Must be escaped for logs */
-			escape = 'n'
-		case '\r':
-			escape = 'r'
-		case '\\':
-			escape = '\\'
-		case '\'':
-			escape = '\''
-		case '"': /* Better safe than sorry */
-			escape = '"'
-		case '\032': // This gives problems on Win32
-			escape = 'Z'
-		}
-
-		if escape != 0 {
-			result = append(result, '\\', escape)
-		} else {
-			result = append(result, r)
-		}
-	}
-
-	return string(result)
-}
-
 func OpenSQLite(filename string) (*gorm.DB, error) {
 	return NewDBConn("sqlite", filename)
 }

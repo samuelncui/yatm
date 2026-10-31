@@ -8,8 +8,6 @@ require (
 	github.com/benmcclelland/mtio v0.0.0-20170506231306-f929531fb4fe
 	github.com/benmcclelland/sgio v0.0.0-20180629175614-f710aebf64c1
 	github.com/bytedance/go-querystring-parser v0.0.0-20230310053818-dcfffcaee797
-	github.com/davecgh/go-spew v1.1.1
-	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/gin-gonic/gin v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
@@ -43,6 +41,8 @@ require (
 	github.com/bytedance/sonic v1.8.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/deckarep/golang-set/v2 v2.3.1 // indirect
 	github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -79,7 +79,6 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.39.0 // indirect
-	google.golang.org/genproto v0.0.0-20230526203410-71b5a4ffd15e // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

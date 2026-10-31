@@ -24,7 +24,7 @@ func WrapWithLogger(ctx context.Context, logger *logrus.Logger, f func()) {
 		case error:
 			err = v
 		default:
-			err = fmt.Errorf("%v", err)
+			err = fmt.Errorf("%v", e)
 		}
 
 		logger.WithContext(ctx).WithError(err).Errorf("panic: %s", debug.Stack())
