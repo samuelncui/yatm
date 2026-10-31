@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -128,8 +128,15 @@ it("keeps read order visible and page actions together while encryption belongs 
       .getAllByRole("button")
       .map((button) => button.textContent),
   ).toEqual(["Save", "Cancel", "Refresh devices"]);
+  // Refreshing the device list reports itself, not a reload of saved Device settings.
+  let listed!: (value: unknown) => void;
+  listDevices.mockReturnValueOnce({ response: new Promise((resolve) => (listed = resolve)) });
   await userEvent.click(refresh);
-  await waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("progressbar", { name: "Loading devices" })).toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading Device settings" })).not.toBeInTheDocument();
+  await act(async () => listed({ devices: [{ device: "drive", kind: 1, busy: false, detail: "" }] }));
+  expect(screen.queryByRole("progressbar", { name: "Loading devices" })).not.toBeInTheDocument();
+  expect(listDevices).toHaveBeenCalledTimes(2);
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 

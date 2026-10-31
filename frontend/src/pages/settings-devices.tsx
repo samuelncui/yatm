@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isWritableTapeFormat } from "@/components/tape-format";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from "@mui/material";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
 import { mediaCli } from "@/api";
 import {
   DeviceConfig,
@@ -110,7 +110,7 @@ export const DeviceSettingsBrowser = () => {
     <>
       <SettingsEditorFeedback
         label="Device"
-        loading={editor.loading || listing}
+        loading={editor.loading}
         saving={editor.saving}
         error={editor.error}
         invalid={editor.invalid}
@@ -119,6 +119,8 @@ export const DeviceSettingsBrowser = () => {
         hasDraft={!!editor.draft}
         onReload={editor.reload}
       />
+      {/* Listing devices is not loading saved settings, so it neither relabels nor blocks their reload. */}
+      {listing && !editor.loading && <LinearProgress aria-label="Loading devices" />}
       {listError && <Feedback severity="error">{listError}</Feedback>}
       <Stack
         component="form"
