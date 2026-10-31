@@ -89,16 +89,16 @@ func TestReadInfoScriptWaitsForExplicitBarcode(t *testing.T) {
 		wantErr    bool
 	}{
 		{name: "six characters", deviceData: "ABC001", want: "ABC001"},
-		{name: "media suffix", deviceData: "ABC001L5", want: "ABC001"},
+		{name: "media suffix", deviceData: "ABC001L5", want: "ABC001L5"},
 		{name: "invalid length preserved", deviceData: "ABC0017", want: "ABC0017"},
-		{name: "delayed MAM", deviceData: "ABC001L5", emptyReads: 2, want: "ABC001"},
+		{name: "delayed MAM", deviceData: "ABC001L5", emptyReads: 2, want: "ABC001L5"},
 		{name: "unassigned barcode", want: ""},
 		{name: "MAM unavailable", emptyReads: 1, expire: true, wantErr: true},
 		{name: "failed probe output rejected", deviceData: "ABC001", probeFails: true, expire: true, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Probe stand-ins distinguish an explicit empty field from unavailable MAM and command failure.
+			// Probe stand-ins distinguish an explicit empty field from an unreadable field and command failure.
 			root := t.TempDir()
 			bin := filepath.Join(root, "bin")
 			require.NoError(t, os.Mkdir(bin, 0o755))
@@ -138,10 +138,11 @@ if [ -f "$READINFO_PROBE_COUNT" ]; then
 fi
 count=$((count + 1))
 printf '%s\n' "$count" > "$READINFO_PROBE_COUNT"
-printf 'NotBarcode : BAD999L5\n'
-if [ "$count" -gt "$READINFO_EMPTY_READS" ]; then
-    printf '  Barcode       : %s\n' "$READINFO_DEVICE_DATA"
+test "$3" = --barcode
+if [ "$count" -le "$READINFO_EMPTY_READS" ]; then
+    exit 1
 fi
+printf '%s\n' "$READINFO_DEVICE_DATA"
 if [ "$READINFO_PROBE_FAILS" = "true" ]; then
     exit 1
 fi

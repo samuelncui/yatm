@@ -13,10 +13,10 @@ import (
 )
 
 type OptionsStruct struct {
-	Device string `short:"f" long:"device" value-name:"DEV" description:"Tape device (default: /dev/nst0, or TAPE envvar)"`
-	Mock   bool   `long:"mock" description:"Use a mocked tape drive (for tests only)"`
-	Debug  bool   `short:"d" long:"debug" description:"Print debug information"`
-	Dump   string `long:"dump" value-name:"FILE" description:"Dump SCSI raw data to a file"`
+	Device  string `short:"f" long:"device" value-name:"DEV" description:"Tape device (default: /dev/nst0, or TAPE envvar)"`
+	Mock    bool   `long:"mock" description:"Use a mocked tape drive (for tests only)"`
+	Dump    string `long:"dump" value-name:"FILE" description:"Dump SCSI raw data to a file"`
+	Barcode bool   `long:"barcode" description:"Print only the cartridge memory barcode; fail when it is unreadable"`
 
 	Man bool `hidden:"1" long:"man"`
 }
@@ -46,6 +46,12 @@ func main() {
 		return
 	}
 
+	// Barcode output keeps stdout to the value alone; progress goes to stderr.
+	progress := os.Stdout
+	if options.Barcode {
+		progress = os.Stderr
+	}
+
 	var drive *TapeDrive
 
 	syncerr := make(chan error)
@@ -67,7 +73,7 @@ waitfor:
 		select {
 		case openerr = <-syncerr:
 			if openerr != nil {
-				fmt.Println("Failed")
+				fmt.Fprintln(progress, "Failed")
 				os.Exit(1)
 			} else {
 				// openerr
@@ -75,21 +81,32 @@ waitfor:
 			}
 		default:
 			if time.Since(lastprint) > time.Second {
-				fmt.Printf("Still trying to open the device, aborting in %s...\n", time.Until(waitupto).Round(time.Second))
+				fmt.Fprintf(progress, "Still trying to open the device, aborting in %s...\n", time.Until(waitupto).Round(time.Second))
 				lastprint = time.Now()
 			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	if openerr != nil {
-		fmt.Println("Timed out opening device, is a tape inserted?")
+		fmt.Fprintln(progress, "Timed out opening device, is a tape inserted?")
 		os.Exit(1)
 	} else {
-		fmt.Printf("Device %s opened\n", drive.DeviceName)
+		fmt.Fprintf(progress, "Device %s opened\n", drive.DeviceName)
 	}
 
 	if options.Dump != "" {
 		drive.SetDumpFile(options.Dump)
+	}
+
+	// An empty value is a readable attribute without an assigned barcode.
+	if options.Barcode {
+		attr := drive.CmList.Barcode
+		if err := drive.GetAttribute(attr); err != nil || !attr.IsValid {
+			fmt.Fprintln(os.Stderr, "Barcode is unavailable")
+			os.Exit(1)
+		}
+		fmt.Println(attr.DataStr)
+		return
 	}
 
 	drive.ScsiInquiry()

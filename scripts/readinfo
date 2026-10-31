@@ -9,21 +9,10 @@ while true; do
         break
     fi
     remaining=$((deadline - now))
-    if info=$(timeout "${remaining}s" ./yatm-lto-info -f "${DEVICE}"); then
-        # A present, empty field is readable MAM without an assigned barcode.
-        # The prefix distinguishes it from a missing field or failed probe.
-        barcode=$(awk '$1 == "Barcode" && $2 == ":" {
-            value = $3
-            if (length(value) == 8) {
-                value = substr(value, 1, 6)
-            }
-            print ":" value
-            exit
-        }' <<< "${info}")
-        if [[ -n ${barcode} ]]; then
-            printf '{"barcode":"%s"}\n' "${barcode#:}" > "${OUT}"
-            exit 0
-        fi
+    # --barcode exits nonzero when the field is unreadable; an empty line is an unassigned barcode.
+    if barcode=$(timeout "${remaining}s" ./yatm-lto-info -f "${DEVICE}" --barcode); then
+        printf '{"barcode":"%s"}\n' "${barcode}" > "${OUT}"
+        exit 0
     fi
     now=$(date +%s)
     if ((now >= deadline)); then

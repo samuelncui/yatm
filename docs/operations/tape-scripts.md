@@ -28,7 +28,8 @@ require an existing device identity. An unreadable field or failed probe exits n
 reporting an unassigned barcode. FORMAT still erases existing content regardless of barcode state.
 Check this distinction in customized probes: historical shell pipelines can hide a failed helper
 and return an empty barcode with exit status zero. Preserve local device/helper choices while
-propagating failures; the [bundled probe](../../scripts/readinfo) shows an explicit field check.
+propagating failures; the [bundled probe](../../scripts/readinfo) uses `yatm-lto-info --barcode`, which prints only the
+barcode and exits nonzero when the field is unreadable.
 Scripts run from the service working directory. Migration resolves literal relative capture options
 from that same directory, independently of `paths.work`; offline backup validation maps this path
 into the preserved installation.
