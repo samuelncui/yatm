@@ -10,13 +10,13 @@ import {
   TapeReadOrder,
   TapeReadParameters,
   TarWriteOptions,
-  type DeviceSummary,
   type InspectDeviceResponse,
 } from "@/entity";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { DeviceInspectionResult } from "@/components/tape-device-choice";
 import { TarWriteOptionsFields, validateTarWriteOptions } from "@/components/tar-write-options";
+import { useTapeDevices } from "@/components/use-tape-devices";
 import { Feedback } from "@/components/feedback";
 import { ActionDialog } from "@/components/action-dialog";
 import { ActionRow } from "@/components/action-row";
@@ -25,38 +25,22 @@ import { captureTapeReadConditions, importTapeReadParameters, validateTapeReadPa
 
 export const DeviceSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.DEVICE, DeviceSettings, "Device");
-  const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
+  const { devices, loading: listing, error: listError, load: loadDevices } = useTapeDevices("Could not list devices");
   const [selected, setSelected] = useState("");
   const [deviceError, setDeviceError] = useState("");
-  const [listError, setListError] = useState("");
   const [report, setReport] = useState<InspectDeviceResponse | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const [parametersDirty, setParametersDirty] = useState(false);
   const sequence = useRef(0);
-  const listSequence = useRef(0);
-  const [listing, setListing] = useState(false);
   const refreshDevices = useCallback(async () => {
-    const current = ++listSequence.current;
-    setListing(true);
-    setListError("");
-    try {
-      const reply = await mediaCli.listDevices({}).response;
-      if (current !== listSequence.current) return;
-      setDevices(reply.devices);
-      setSelected((value) => value || reply.devices[0]?.device || "");
-    } catch (reason) {
-      if (current === listSequence.current) setListError(errorMessage(reason, "Could not list devices"));
-    } finally {
-      if (current === listSequence.current) setListing(false);
-    }
-  }, []);
+    const listed = await loadDevices();
+    if (listed) setSelected((value) => value || listed[0]?.device || "");
+  }, [loadDevices]);
   useEffect(() => {
     void refreshDevices();
     const current = sequence;
-    const currentList = listSequence;
     return () => {
       current.current++;
-      currentList.current++;
     };
   }, [refreshDevices]);
   const names = [...new Set([...(devices ?? []).map((value) => value.device), ...(editor.draft?.devices ?? []).map((value) => value.device)])];

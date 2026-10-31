@@ -202,7 +202,7 @@ portals, narrow layouts and nested browsers without depending on import order.
 
 `pnpm styles:check` and ESLint reject known boundary violations. Direct configured-Location
 list reads and Settings Get/Update calls are restricted to their shared owners, as are Job result
-page reads. Visual acceptance still checks
+page reads and Tape device list reads ([`useTapeDevices`](src/components/use-tape-devices.ts)). Visual acceptance still checks
 alignment, wrapping, focus, disabled/loading states and both browser panes; a static guard cannot
 prove rendered appearance.
 

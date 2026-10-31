@@ -17,7 +17,6 @@ import {
 } from "@mui/material";
 import { mediaCli, volumeSpaceLabel } from "@/api";
 import {
-  type DeviceSummary,
   type Media,
   MediaKind,
   ReadMediaTarget,
@@ -30,6 +29,7 @@ import {
 } from "@/entity";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { TapeDeviceChoice, soleAvailableDevice, DeviceInspectionResult } from "@/components/tape-device-choice";
+import { useTapeDevices } from "@/components/use-tape-devices";
 import { tapeEncryption } from "@/components/media-inspector";
 import { RefreshContext } from "@/pages/jobs";
 import { errorMessage, runUIAction } from "@/tools";
@@ -48,7 +48,6 @@ export const ReadMediaDialog = ({
   const refresh = useContext(RefreshContext);
   const [open, setOpen] = useState(false);
   const [backend, setBackend] = useState<"tape" | "volume">("volume");
-  const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [media, setMedia] = useState<Media[]>([]);
   const [device, setDevice] = useState("");
   const [volumeUUID, setVolumeUUID] = useState("");
@@ -57,8 +56,8 @@ export const ReadMediaDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [devicesError, setDevicesError] = useState("");
-  const [devicesLoading, setDevicesLoading] = useState(false);
+  const tapeDevices = useTapeDevices();
+  const { devices } = tapeDevices;
   const [scanResultPolicy, setScanResultPolicy] = useState<ScanResultPolicy>();
   const [refreshPositionMap, setRefreshPositionMap] = useState(false);
   const inspection = useMediaInspect();
@@ -79,9 +78,8 @@ export const ReadMediaDialog = ({
 
   // Every open, close and successful read starts from no Media, device or inspection choice.
   const resetChoices = () => {
-    setDevicesLoading(false);
+    tapeDevices.reset();
     setMedia([]);
-    setDevices(null);
     setDevice("");
     setVolumeUUID("");
     setTapeID("");
@@ -103,7 +101,6 @@ export const ReadMediaDialog = ({
     setOpen(true);
     setLoading(true);
     setError("");
-    setDevicesError("");
     resetChoices();
     try {
       if (!mediaIDs.length) throw new Error("This Job has no pending Media.");
@@ -126,20 +123,15 @@ export const ReadMediaDialog = ({
           // An unavailable policy leaves the optional preparation action hidden instead of blocking the read.
           .catch(() => undefined);
       }
-      try {
-        const deviceReply = await mediaCli.listDevices({}).response;
-        if (current !== request.current) return;
-        setDevices(deviceReply.devices);
-        const available = soleAvailableDevice(deviceReply.devices);
-        if (!pendingVolumes.length && available) {
-          setDevice(available);
-          inspectTape(
-            available,
-            required.filter((value) => value.kind === MediaKind.TAPE),
-          );
-        }
-      } catch (error) {
-        if (current === request.current) setDevicesError(errorMessage(error, "Could not load Tape devices"));
+      const listed = await tapeDevices.load();
+      if (!listed || current !== request.current) return;
+      const available = soleAvailableDevice(listed);
+      if (!pendingVolumes.length && available) {
+        setDevice(available);
+        inspectTape(
+          available,
+          required.filter((value) => value.kind === MediaKind.TAPE),
+        );
       }
     } catch (error) {
       if (current === request.current) setError(errorMessage(error, "Could not load archive storage"));
@@ -208,20 +200,13 @@ export const ReadMediaDialog = ({
   };
   const refreshDevices = async () => {
     const current = request.current;
-    setDevicesLoading(true);
-    try {
-      const reply = await mediaCli.listDevices({}).response;
-      if (current !== request.current) return;
-      setDevices(reply.devices);
-      setDevicesError("");
-      if (!reply.devices?.some((value) => value.device === device && !value.busy)) {
-        deviceRequest.current++;
-        setDevice("");
-        setDeviceReport(null);
-        inspection.reset();
-      }
-    } finally {
-      if (current === request.current) setDevicesLoading(false);
+    const listed = await tapeDevices.refresh();
+    if (!listed || current !== request.current) return;
+    if (!listed.some((value) => value.device === device && !value.busy)) {
+      deviceRequest.current++;
+      setDevice("");
+      setDeviceReport(null);
+      inspection.reset();
     }
   };
   const canSubmit =
@@ -230,7 +215,7 @@ export const ReadMediaDialog = ({
     (!refreshPositionMap || (refreshApplicable && refreshAvailable)) &&
     (backend === "volume"
       ? selectedVolume?.mounted === true
-      : !devicesLoading && devices?.some((value) => value.device === device && !value.busy) && (!useLTFS || (tapeMatches && !inspection.loading)));
+      : !tapeDevices.loading && devices?.some((value) => value.device === device && !value.busy) && (!useLTFS || (tapeMatches && !inspection.loading)));
 
   return (
     <Fragment>
@@ -319,7 +304,7 @@ export const ReadMediaDialog = ({
                   <DialogContentText>Load the required Tape and select its drive.</DialogContentText>
                   <TapeDeviceChoice
                     devices={devices}
-                    loading={devicesLoading}
+                    loading={tapeDevices.loading}
                     value={device}
                     disabled={submitting}
                     onRefresh={refreshDevices}
@@ -331,7 +316,7 @@ export const ReadMediaDialog = ({
                       inspectTape(value);
                     }}
                   />
-                  {devicesError && <Feedback severity="error">{devicesError}</Feedback>}
+                  {tapeDevices.error && <Feedback severity="error">{tapeDevices.error}</Feedback>}
                   <TextField
                     select
                     fullWidth

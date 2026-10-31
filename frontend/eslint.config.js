@@ -42,6 +42,11 @@ const readOwners = [
     selector: "MemberExpression[object.name='settingsCli'][property.name=/^(get|update)$/]",
     message: "Committed Settings use the shared Settings editor/cache so reads, saves and stale responses have one owner.",
   },
+  {
+    file: "src/components/use-tape-devices.ts",
+    selector: "MemberExpression[object.name='mediaCli'][property.name='listDevices']",
+    message: "Tape device lists use useTapeDevices so loading, failure and stale replies have one owner.",
+  },
 ];
 const syntaxRules = (owner) => [
   "error",

@@ -31,7 +31,7 @@ import {
   MediaJobsAction,
 } from "@/actions";
 import { TapeDeviceChoice, soleAvailableDevice } from "@/components/tape-device-choice";
-import type { DeviceSummary } from "@/entity";
+import { useTapeDevices } from "@/components/use-tape-devices";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { MediaKind, VolumeCandidateState, VolumeType, type VolumeCandidate } from "@/entity";
 import { chonkyI18n, errorMessage, runUIAction } from "@/tools";
@@ -618,57 +618,32 @@ const volumeStateLabel = (candidate: VolumeCandidate): string => {
 
 export const InspectMediaDialog = ({ media, onClose }: { media: MediaFileData; onClose: () => void }) => {
   const { reply, loading, error, inspect, reset } = useMediaInspect();
-  const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
-  const [devicesLoading, setDevicesLoading] = useState(false);
-  const [devicesError, setDevicesError] = useState("");
+  const { devices, loading: devicesLoading, error: devicesError, load: loadDevices, refresh, reset: resetDevices } = useTapeDevices();
   const [device, setDevice] = useState("");
   const titleId = useId();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
-  const deviceRequest = useRef(0);
 
   useEffect(() => {
-    const pending = deviceRequest;
-    const sequence = ++pending.current;
-    setDevices(null);
+    resetDevices();
     setDevice("");
-    setDevicesError("");
     reset();
     if (media.media.kind === MediaKind.VOLUME) {
       runUIAction(() => inspect({ oneofKind: "volume", volume: { uuid: media.media.identity ?? "" } }), "Inspect Volume failed");
       return;
     }
-    let active = true;
-    setDevicesLoading(true);
     void (async () => {
-      try {
-        const reply = await mediaCli.listDevices({}).response;
-        if (!active || sequence !== pending.current) return;
-        setDevices(reply.devices);
-        const available = soleAvailableDevice(reply.devices);
-        if (available) {
-          setDevice(available);
-          await inspect({ oneofKind: "tape", tape: { device: available } });
-        }
-      } catch (error) {
-        if (active && sequence === pending.current) setDevicesError(errorMessage(error, "Could not load Tape devices"));
-      } finally {
-        if (active && sequence === pending.current) setDevicesLoading(false);
-      }
+      const listed = await loadDevices();
+      const available = listed ? soleAvailableDevice(listed) : "";
+      if (!available) return;
+      setDevice(available);
+      await inspect({ oneofKind: "tape", tape: { device: available } });
     })();
-    return () => {
-      active = false;
-      pending.current++;
-    };
-  }, [inspect, reset, media.media]);
+  }, [inspect, reset, resetDevices, loadDevices, media.media]);
 
   const refreshDevices = async () => {
-    const sequence = ++deviceRequest.current;
-    const result = await mediaCli.listDevices({}).response;
-    if (sequence !== deviceRequest.current) return;
-    setDevices(result.devices);
-    setDevicesError("");
-    if (!result.devices.some((value) => value.device === device && !value.busy)) {
+    const listed = await refresh();
+    if (listed && !listed.some((value) => value.device === device && !value.busy)) {
       setDevice("");
       reset();
     }
