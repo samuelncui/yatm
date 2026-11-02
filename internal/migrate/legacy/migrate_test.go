@@ -71,7 +71,7 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 		`<bytecount>7</bytecount><fileoffset>0</fileoffset>` +
 		`</extent></extentinfo></file></contents></directory>` +
 		`</contents></directory></ltfsindex>`
-	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "abc010.schema"), []byte(index), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
 	legacyMarker := filepath.Join(root, "jobs", "11", "state.db")
 	require.NoError(t, os.MkdirAll(filepath.Dir(legacyMarker), 0o755))
 	require.NoError(t, os.WriteFile(legacyMarker, []byte("legacy"), 0o644))
@@ -429,7 +429,8 @@ func TestPrepareOmitsCapturedLTFSIndexSizeMismatch(t *testing.T) {
 		`<partition>b</partition><startblock>40</startblock><byteoffset>0</byteoffset>` +
 		`<bytecount>7</bytecount><fileoffset>0</fileoffset>` +
 		`</extent></extentinfo></file></contents></directory></ltfsindex>`
-	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
+	// Legacy scripts named the capture after the barcode as recorded, before normalization.
+	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "abc010.schema"), []byte(index), 0o644))
 
 	// Keep the File and its valid copy while removing the physically inconsistent Position.
 	report, err := Prepare(ctx, db, root)
