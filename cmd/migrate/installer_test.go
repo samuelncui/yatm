@@ -268,7 +268,7 @@ func TestInstallerReadOnlyCheckDoesNotInterrupt(t *testing.T) {
 INSTALL_DIRECTORY="$1/yatm"
 identify_platform() { :; }
 resolve_version() { CURRENT_VERSION=v0.1.21; RELEASE_VERSION=v1.0.0-alpha.1; }
-download_release() { mkdir -p "$RELEASE_DIRECTORY/docs/operations"; printf 'Candidate guide\n' > "$RELEASE_DIRECTORY/docs/operations/migration.md"; }
+download_release() { mkdir -p "$RELEASE_DIRECTORY/docs/operations"; printf 'Candidate guide\n' > "$RELEASE_DIRECTORY/docs/operations/migration.md"; printf 'abc123\n' > "$RELEASE_DIRECTORY/COMMIT"; }
 inspect_installation() { echo read-only-inspection; }
 plan_configuration() { :; }
 systemctl() { echo unexpected-service-operation; return 1; }
@@ -277,7 +277,7 @@ main --check
 	require.NoError(t, err, output)
 	require.Contains(t, output, "Read-only installation checks passed")
 	// The extracted package is removed on exit, so the check names durable copies of the guide.
-	require.Contains(t, output, "docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/v1.0.0-alpha.1/docs/operations/migration.md")
+	require.Contains(t, output, "docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/abc123/docs/operations/migration.md")
 	require.NotContains(t, output, "Migration guide from the verified release")
 	require.NotContains(t, output, "Candidate guide\n")
 	require.NotContains(t, output, "unexpected-")

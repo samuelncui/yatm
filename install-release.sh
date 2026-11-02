@@ -487,7 +487,7 @@ show_migration_guide() {
   [[ -s "$guide" && ! -L "$guide" ]] || { fail 'The verified release is missing its migration guide.'; return 1; }
   if [[ "$CHECK_ONLY" == 1 ]]; then
     # The extracted package is removed when the check exits; point at durable copies instead.
-    echo "Read the migration guide before upgrading: docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/$RELEASE_VERSION/docs/operations/migration.md"
+    echo "Read the migration guide before upgrading: docs/operations/migration.md in the release package, or https://github.com/samuelncui/yatm/blob/$(< "$RELEASE_DIRECTORY/COMMIT")/docs/operations/migration.md"
     echo 'The upgrade run displays it once more before asking to stop the service.'
     return 0
   fi

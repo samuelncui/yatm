@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/resource"
@@ -302,4 +303,15 @@ func TestInspectionFlagsUnmodifiedLegacyTapeScripts(t *testing.T) {
 	require.NoError(t, os.WriteFile(conf.Scripts.Encrypt, []byte(legacyEncrypt), 0o700))
 	_, err = inspectInstallation(context.Background(), nil, conf, filepath.Join(root, "config.yaml"), root, true, 0)
 	require.NoError(t, err)
+}
+
+func TestMigrationGuideLinksTheBuildCommit(t *testing.T) {
+	// A candidate's guide exists at its commit even before a release tag does.
+	commit := buildinfo.Commit
+	t.Cleanup(func() { buildinfo.Commit = commit })
+	buildinfo.Commit = "unknown"
+	require.Equal(t, "docs/operations/migration.md#tape-script-adaptation", migrationGuide("tape-script-adaptation"))
+	buildinfo.Commit = "44402cfd571b3d554662860c25d3501d6decd608"
+	require.Equal(t, "https://github.com/samuelncui/yatm/blob/44402cfd571b3d554662860c25d3501d6decd608/docs/operations/migration.md#tape-script-adaptation",
+		migrationGuide("tape-script-adaptation"))
 }

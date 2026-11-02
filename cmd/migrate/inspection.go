@@ -371,12 +371,13 @@ func inspectLegacyScripts(conf *config.Config, report *installationReport) error
 	return nil
 }
 
-// migrationGuide links the upgrade guide of this release; the installed copy does not exist yet during preflight.
+// migrationGuide links the upgrade guide of this build's commit, which also covers unreleased candidates;
+// the installed copy does not exist yet during preflight.
 func migrationGuide(anchor string) string {
-	if buildinfo.Version == "development" {
+	if buildinfo.Commit == "unknown" {
 		return "docs/operations/migration.md#" + anchor
 	}
-	return "https://github.com/samuelncui/yatm/blob/" + buildinfo.Version + "/docs/operations/migration.md#" + anchor
+	return "https://github.com/samuelncui/yatm/blob/" + buildinfo.Commit + "/docs/operations/migration.md#" + anchor
 }
 
 func fileSHA256(path string) (string, error) {
