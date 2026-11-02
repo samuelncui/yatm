@@ -7,10 +7,12 @@ implementation details, contributor instructions and research have a separate
 
 ## Install and Configure
 
-- [Installation and service configuration](install.md): supported environments, installation,
-  updates, service settings and the optional operating Skill for agents.
-- [Upgrade from v0.1.x](migration.md): data import, Tape-script adaptation and recovery from an
-  interrupted upgrade.
+- [Install YATM](install.md): supported environments, step-by-step installation, service
+  settings and the optional operating Skill for agents.
+- [Upgrade a v1 installation](upgrade.md): step-by-step upgrade, restoring a backup and removing
+  old backups.
+- [Upgrade from v0.1.x](migration.md): step-by-step upgrade of a v0.1.x installation, data import
+  and Tape-script adaptation.
 - [Offline migration and repair](offline-migration.md): run migration phases outside the installer
   when the upgrade guide or a maintainer directs it, and repair historical Jobs.
 - [Locations](locations.md): register original directories and Restore destinations, browse live

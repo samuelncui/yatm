@@ -1,6 +1,8 @@
-# Installation and Service Configuration
+# Install YATM
 
-This guide describes the current installer. The examples select `v1.0.0-alpha.3`; the same installer accepts an explicitly supplied, checksum-verified local candidate. Existing installations follow the [migration guide](migration.md).
+Follow these steps for a new installation. To upgrade an existing v1 installation, follow the
+[upgrade guide](upgrade.md); to upgrade from v0.1.x, follow the [v0.1.x upgrade guide](migration.md).
+The examples install `v1.0.0-alpha.3` into `/opt/yatm` as the `yatm-httpd.service` unit.
 
 ## Requirements
 
@@ -15,24 +17,70 @@ Tape device access, raw tar protocol requirements and device diagnostics are des
 hardware qualification, and public-tool recovery needs its own
 [reader qualification](tar-tape-recovery.md).
 
-## Install or Update
+## Step-by-Step Installation
 
-The [release installer](../../install-release.sh) supports Linux amd64 with systemd and Bash 4.4 or newer; `--help` lists the command-line tools it needs. Run it with `sudo`, or an account that can write the installation directory and manage system-level systemd units; it does not manage `systemctl --user` units. The default selects the latest stable release; Alpha requires an explicit version. Download that revision's installer, run the read-only check, then install:
+1. **Download the installer** for the version you want. Alpha releases need an explicit version:
 
-```shell
-curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.3 --check
-sudo bash install-release.sh --version v1.0.0-alpha.3
-```
+   ```shell
+   curl --fail --location --output install-release.sh \
+     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
+   bash install-release.sh --help
+   ```
 
-`--check` verifies the package and the installation without changing anything. The second command asks for confirmation before it changes anything.
+   `--help` lists the command-line tools the installer needs. On Debian, a missing tool is usually
+   one `sudo apt install` away (for example `jq` or `psmisc`).
 
-**Fresh installation.** The installer opens the configuration template in `$EDITOR` (default `vi`); `--config FILE` supplies a reviewed file instead and is required without a terminal. Review the listener, database and access roots. To open the UI from another computer, set `listen` to a reachable address such as `0.0.0.0:8080`, or put a [reverse proxy](#reverse-proxy) in front; the default `domain: ""` follows the page's own address. Volume-only users leave `tape_devices: []`. The installer then installs the programs, Tape script templates and systemd unit, starts the service and checks that it answers.
+2. **Run the read-only check.** It downloads and verifies the package and reports missing tools or
+   an unusable installation directory. It changes nothing:
 
-**Existing installation.** Upgrades keep `config.yaml`, Tape scripts, helpers, the service unit and other local files, and reject `--config`. Before stopping the service, the installer shows configuration and Settings changes and how each configured Tape script differs from the bundled template; it never replaces a script. Each upgrade keeps a backup of the installation, without Previews, under `.backup/<datetime>/`; [Recovery](migration.md#failure-and-complete-backup-recovery) restores one and removes old ones. Upgrades from v0.1.x follow the [upgrade guide](migration.md), which the installer displays before stopping the service.
+   ```shell
+   sudo bash install-release.sh --version v1.0.0-alpha.3 --check
+   ```
 
-**Options.** `--install-dir` and `--service` select a dedicated installation and unit. For a local candidate, supply its archive and companion checksum:
+3. **Install.** Run the same command without `--check`:
+
+   ```shell
+   sudo bash install-release.sh --version v1.0.0-alpha.3
+   ```
+
+   The installer asks, in order:
+   - whether to install the optional [Preview helper](#preview-helper) (`--with-preview` or
+     `--without-preview` answers in advance);
+   - to edit the configuration template in `$EDITOR` (default `vi`). Set at least:
+     - `listen`: `127.0.0.1:8080` serves only this machine. Use `0.0.0.0:8080` to open the UI from
+       another computer, or keep it local behind a [reverse proxy](#reverse-proxy). Leave
+       `domain: ""`; it follows the page's own address.
+     - `paths.access`: the directories YATM may read and restore into, such as `/srv/files`.
+     - `paths.volumes`: where archive disks are mounted, if you use Volumes.
+     - `tape_devices`: your drive's non-rewinding device such as `/dev/nst0`, or `[]` without Tape.
+   - to confirm the installation.
+
+   It then installs the programs, the bundled Tape scripts and the systemd unit, starts the service
+   and checks that it answers. Without a terminal, pass a reviewed file with `--config FILE`.
+
+4. **Check the service.**
+
+   ```shell
+   systemctl status yatm-httpd.service
+   /opt/yatm/yatm-cli --server http://127.0.0.1:8080 status
+   ```
+
+   Open `http://<host>:8080` in a browser. `journalctl -u yatm-httpd.service` shows the service log.
+
+5. **Set up what you use.**
+   - Register original directories and Restore destinations under **Settings → Locations**; see
+     [Locations](locations.md).
+   - For mounted archive disks, see [Library and mounted Volumes](library.md).
+   - For Tape, review **Settings → Devices** ([Devices](devices.md)) and adapt the configured
+     scripts to your LTFS distribution and drive ([Tape scripts](tape-scripts.md)) before the
+     first Tape Job. Installation never runs Tape scripts.
+
+6. **Optional.** Add `/opt/yatm` to `PATH` for the bare `yatm-cli` commands in these guides
+   (`export PATH="/opt/yatm:$PATH"`), and install the [agent Skill](#optional-agent-skill).
+
+Use `--install-dir` and `--service` for a different directory and unit. For a local candidate
+package, add `--archive FILE --checksum FILE`, plus `--preview-archive FILE --preview-checksum FILE`
+for its Preview helper:
 
 ```shell
 sudo bash install-release.sh --version v1.0.0-alpha.3 \
@@ -42,7 +90,7 @@ sudo bash install-release.sh --version v1.0.0-alpha.3 \
 
 v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official `v0.1.x` releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Alpha, Beta and RC versions accept dot-separated numeric revisions, such as `alpha.2.1`; revisions compare numerically and a patch follows its parent. Lower-version installation is rejected; rollback restores a matching complete backup.
 
-Installation never runs Tape scripts. A successful installation does not certify customized scripts or physical hardware.
+## Manual Installation
 
 For a fresh manual installation from a downloaded archive, verify its companion checksum before extraction. Then install the package and bind acceptance to the versioned programs and the systemd-owned process:
 
@@ -64,20 +112,11 @@ sudo systemctl show yatm-httpd.service --property MainPID,WorkingDirectory,Fragm
 /opt/yatm/yatm-cli --server http://127.0.0.1:8080 --timeout 3s status
 ```
 
-The installer keeps programs inside the chosen installation directory. For the bare `yatm-cli`
-commands in the daily guides, add that directory to the current shell's PATH:
-
-```shell
-export PATH="/opt/yatm:$PATH"
-yatm-cli --version
-```
-
-Use the directory selected by `--install-dir` when different, or invoke its full `yatm-cli` path.
-Persist that PATH setting in your shell profile if desired.
-
-Compare each program's reported version/commit with the package `VERSION` and `COMMIT`, and confirm that the readiness endpoint belongs to the unit's `MainPID`; the automatic installer performs [these checks](migration.md#readiness-checks). Review paths, database settings, listener/domain, optional Tape devices/scripts, and Preview settings before starting. Manual commands above are for a new installation only. If installing elsewhere, update the service and scripts for that location. The configuration supports SQLite and an untested MySQL option; per-Job state uses SQLite bundles.
+Compare each program's reported version/commit with the package `VERSION` and `COMMIT`, and confirm that the readiness endpoint belongs to the unit's `MainPID`; the automatic installer performs [these checks](upgrade.md#readiness-checks). Review paths, database settings, listener/domain, optional Tape devices/scripts, and Preview settings before starting. Manual commands above are for a new installation only. If installing elsewhere, update the service and scripts for that location. The configuration supports SQLite and an untested MySQL option; per-Job state uses SQLite bundles.
 
 Automatic upgrade and the documented offline migration cover standard SQLite layouts contained in the installation backup. External databases, Job storage, scripts or captured indexes need a layout-specific migration procedure and coordinated backup before Prepare or Commit; the contained-layout command sequence does not cover them. See the [offline migration scope](offline-migration.md#offline-migration-and-repair). Other platform archives use manual installation and carry explicit runtime-validation or experimental labels.
+
+## Service Configuration
 
 `database.sqlite_wal: true` optionally permits Catalog reads during a write; it defaults to false.
 Keep the SQLite database on a local disk even when the service runs on a NAS. Do not place it on an
@@ -100,7 +139,7 @@ Two things are called a backup:
 
 | Backup | Contains | Owner |
 | --- | --- | --- |
-| Installation backup | The installation directory except Previews, taken by the installer before an upgrade | [Backup layout](migration.md#backup-layout-and-upgrade-phases) |
+| Installation backup | The installation directory except Previews, taken by the installer before an upgrade | [Installation backups](upgrade.md#installation-backups) |
 | Library metadata backup | Library, Locations, original links and saved Media keys, as JSONL; no file contents or global Settings | [Metadata backup](library.md#metadata-backup) |
 
 File contents on Tape or Volume Media are archived copies, not backups; see

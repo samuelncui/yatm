@@ -32,6 +32,7 @@ function fixture(t, change = () => {}) {
     ["docs/operations/devices.md", "# Devices and Tape Operations\n"],
     ["docs/operations/tar-tape-recovery.md", "# Recover Tar Tape with Public Tools\n"],
     ["docs/operations/install.md", "# Installation\n"],
+    ["docs/operations/upgrade.md", "# Upgrade a v1 Installation\n"],
     ["docs/operations/migration.md", "# Upgrade from v0.1.x to v1\n"],
     ["docs/operations/library.md", "# Library\n"],
     ["docs/operations/locations.md", "# Locations\n"],

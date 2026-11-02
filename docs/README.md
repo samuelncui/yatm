@@ -52,6 +52,7 @@ published stable upgrade policy.
 
 - [User Guide entry](operations/index.md)
 - [Installation and service configuration](operations/install.md)
+- [Upgrade a v1 installation](operations/upgrade.md)
 - [Upgrade from v0.1.x](operations/migration.md)
 - [Offline migration and repair](operations/offline-migration.md)
 - [Locations](operations/locations.md)

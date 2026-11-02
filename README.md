@@ -36,7 +36,7 @@ sudo bash install-release.sh --version v1.0.0-alpha.3 --check
 sudo bash install-release.sh --version v1.0.0-alpha.3
 ```
 
-Run with permission to manage the installation and systemd service. See [Installation and Configuration](docs/operations/install.md) for prerequisites and fresh-install configuration. Existing `v0.1.x` installations follow the [upgrade guide](docs/operations/migration.md); review it before proceeding. The installer displays that guide from the verified release package and asks for approval before stopping the service.
+Run with permission to manage the installation and systemd service. The [installation guide](docs/operations/install.md) walks through a new installation step by step. Existing v1 installations follow the [v1 upgrade guide](docs/operations/upgrade.md); `v0.1.x` installations follow the [v0.1.x upgrade guide](docs/operations/migration.md); review it before proceeding. The installer displays that guide from the verified release package and asks for approval before stopping the service.
 
 For an isolated local review environment from a source checkout, run:
 

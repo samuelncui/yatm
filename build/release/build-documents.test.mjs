@@ -23,7 +23,7 @@ test("packaged user entry and Tape procedures stay local while developer referen
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "yatm-user-guides-"));
   t.after(() => fs.rmSync(target, { recursive: true, force: true }));
   const source = path.resolve(import.meta.dirname, "../..");
-  const guides = ["index", "install", "migration", "locations", "library", "jobs", "devices", "tape-scripts", "read-order", "cli", "tar-tape-recovery", "offline-migration"];
+  const guides = ["index", "install", "upgrade", "migration", "locations", "library", "jobs", "devices", "tape-scripts", "read-order", "cli", "tar-tape-recovery", "offline-migration"];
   fs.mkdirSync(path.join(target, "docs/operations"), { recursive: true });
   for (const guide of guides) {
     fs.copyFileSync(path.join(source, `docs/operations/${guide}.md`), path.join(target, `docs/operations/${guide}.md`));
