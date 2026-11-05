@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	//"encoding/json"
 	"errors"
 	"fmt"
@@ -32,8 +33,8 @@ type TapeDrive struct {
 	dumpFd      *os.File
 }
 
-func TapeDriveNewFake() (*TapeDrive, error) {
-	return TapeDriveNew("FAKE")
+func TapeDriveNewFake(progress io.Writer) (*TapeDrive, error) {
+	return TapeDriveNew("FAKE", progress)
 }
 
 func (drive TapeDrive) IsFake() bool {
@@ -62,7 +63,8 @@ func OpenScsiDeviceRO(fname string) (*os.File, error) {
 	return f, nil
 }
 
-func TapeDriveNew(devicename string) (*TapeDrive, error) {
+// TapeDriveNew reports opening progress to progress, so --barcode can keep stdout to the value alone.
+func TapeDriveNew(devicename string, progress io.Writer) (*TapeDrive, error) {
 	if devicename == "" {
 		if os.Getenv("TAPE") != "" {
 			devicename = os.Getenv("TAPE")
@@ -73,25 +75,25 @@ func TapeDriveNew(devicename string) (*TapeDrive, error) {
 
 	drive := &TapeDrive{DeviceName: devicename, CmList: CmNew()}
 	if drive.IsFake() {
-		fmt.Println("Will use a fake tape drive")
+		fmt.Fprintln(progress, "Will use a fake tape drive")
 		return drive, nil
 	}
 
-	fmt.Printf("Opening device %s\n", devicename)
+	fmt.Fprintf(progress, "Opening device %s\n", devicename)
 	dev, err := OpenScsiDeviceRO(devicename)
 	if err != nil {
-		fmt.Println("Failed to open:", err)
+		fmt.Fprintln(progress, "Failed to open:", err)
 		return nil, err
 	}
 
-	fmt.Println("Checking whether device is ready")
+	fmt.Fprintln(progress, "Checking whether device is ready")
 	err = sgio.TestUnitReady(dev)
 	if err != nil {
-		fmt.Println("Unit is not ready:", err)
+		fmt.Fprintln(progress, "Unit is not ready:", err)
 		return nil, err
 	}
 
-	fmt.Println("Unit is ready")
+	fmt.Fprintln(progress, "Unit is ready")
 	drive.Dev = dev
 	return drive, nil
 }

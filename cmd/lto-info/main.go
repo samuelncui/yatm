@@ -57,9 +57,9 @@ func main() {
 	syncerr := make(chan error)
 	go func() {
 		if options.Mock {
-			drive, err = TapeDriveNewFake()
+			drive, err = TapeDriveNewFake(progress)
 		} else {
-			drive, err = TapeDriveNew(options.Device)
+			drive, err = TapeDriveNew(options.Device, progress)
 		}
 		syncerr <- err
 	}()
