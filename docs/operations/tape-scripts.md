@@ -54,7 +54,7 @@ TAPE_DIR=$(cd -- "${TAPE_DIR}" && pwd -P)
 
 The [bundled mount template](../../scripts/mount) illustrates this contract; its flags are not universal across LTFS distributions.
 
-Unmount must return only after final Index output is complete, the mount has ended, and the Tape device has been released. A successful `umount` invocation alone may precede background LTFS cleanup. An ejecting setup must also wait for its configured eject completion condition. The [bundled unmount template](../../scripts/umount) shows one bounded wait implementation; retain the equivalent behavior appropriate to the local environment. Nonzero exit or timeout reports failure rather than claiming successful publication.
+Unmount must return only after final Index output is complete, the mount has ended, and the Tape device has been released. A successful `umount` invocation alone may precede background LTFS cleanup. An ejecting setup must also wait for its configured eject completion condition. The [bundled unmount template](../../scripts/umount) shows one bounded wait implementation; retain the equivalent behavior appropriate to the local environment. Check that a customized wait really waits: psmisc `fuser` rejects a `--` separator and exits nonzero, so `while fuser -s -- "${SG_DEVICE}"` ends at once and skips the wait. Do not open the Tape device, for example with `mt status`, until LTFS has released it. Nonzero exit or timeout reports failure rather than claiming successful publication.
 
 ## Bundled Templates
 
