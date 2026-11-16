@@ -98,6 +98,23 @@ export function useIdenticalSparse(
     };
   }, [resultId]);
 
+  // Reads bound to the retained result share one expiry check: only an expired current result
+  // becomes unavailable, while every other failure stays with its caller.
+  const expired = useCallback((id: string, failure: unknown): never => {
+    if (failure instanceof RpcError && failure.code === "OUT_OF_RANGE" && id === previousResult.current) setUnavailable(true);
+    throw failure;
+  }, []);
+  const listRows = useCallback(
+    (...call: Parameters<typeof filesCli.listIdenticalRows>) =>
+      filesCli.listIdenticalRows(...call).response.catch((failure: unknown) => expired(call[0].resultId, failure)),
+    [expired],
+  );
+  const lookupPositions = useCallback(
+    (...call: Parameters<typeof filesCli.lookupIdenticalPositions>) =>
+      filesCli.lookupIdenticalPositions(...call).response.catch((failure: unknown) => expired(call[0].resultId, failure)),
+    [expired],
+  );
+
   const projectionExclusions = useCallback(
     (positions: Map<string, IdenticalPosition>, collapsedGroups = collapsed, groupIntervals = removedGroupIntervals, showHidden = includeHidden) => {
       const intervals: Interval[] = [...collapsedGroups.values()];
@@ -138,14 +155,14 @@ export function useIdenticalSparse(
             let fileId = interval.fileId;
             if (fileId === undefined) {
               // A header can be collapsed before any of its members have loaded.
-              const reply = await filesCli.listIdenticalRows({
+              const reply = await listRows({
                 resultId,
                 offset: BigInt(interval.start),
                 limit: 1,
                 includeHidden,
                 sortKey,
                 sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-              }).response;
+              });
               if (request !== epoch.current) throw new Error("The result changed. Find again.");
               fileId = rowFileID(reply.rows[0]);
             }
@@ -158,12 +175,12 @@ export function useIdenticalSparse(
           (id): id is bigint => id !== undefined && !positions.has(String(id)),
         );
         for (let offset = 0; offset < ids.length; offset += pageSize) {
-          const reply = await filesCli.lookupIdenticalPositions({
+          const reply = await lookupPositions({
             resultId,
             fileIds: ids.slice(offset, offset + pageSize),
             sortKey: nextSortKey,
             sortOrder: nextDescending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-          }).response;
+          });
           if (request !== epoch.current) throw new Error("The result changed. Find again.");
           for (const position of reply.positions) positions.set(String(position.fileId), position);
         }
@@ -207,7 +224,7 @@ export function useIdenticalSparse(
         if (nextPages) {
           for (const page of pageNumbers(...nextRange, total, nextExclusions)) {
             if (nextPages.has(page)) continue;
-            const reply = await filesCli.listIdenticalRows(
+            const reply = await listRows(
               {
                 resultId,
                 offset: BigInt(page * pageSize),
@@ -217,7 +234,7 @@ export function useIdenticalSparse(
                 sortOrder: nextDescending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
               },
               {},
-            ).response;
+            );
             if (request !== epoch.current) throw new Error("The result changed. Find again.");
             nextPages.set(page, reply.rows);
             while (nextPages.size > maxPages) nextPages.delete(nextPages.keys().next().value!);
@@ -238,7 +255,7 @@ export function useIdenticalSparse(
         };
       }
     },
-    [resultId, result, sortKey, descending, includeHidden, removed, removedGroupIntervals, projectionExclusions],
+    [resultId, result, sortKey, descending, includeHidden, removed, removedGroupIntervals, projectionExclusions, listRows, lookupPositions],
   );
   const useProjection = useCallback((next: Projection) => {
     epoch.current++;
@@ -295,19 +312,18 @@ export function useIdenticalSparse(
         const controller = new AbortController();
         const request = epoch.current;
         pending.current.set(page, controller);
-        void filesCli
-          .listIdenticalRows(
-            {
-              resultId: result.id,
-              offset: BigInt(page * pageSize),
-              limit: pageSize,
-              includeHidden,
-              sortKey,
-              sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-            },
-            { abort: controller.signal },
-          )
-          .response.then((reply) => {
+        void listRows(
+          {
+            resultId: result.id,
+            offset: BigInt(page * pageSize),
+            limit: pageSize,
+            includeHidden,
+            sortKey,
+            sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+          },
+          { abort: controller.signal },
+        )
+          .then((reply) => {
             if (request !== epoch.current || controller.signal.aborted) return;
             setPages((current) => {
               const next = new Map(current);
@@ -324,15 +340,13 @@ export function useIdenticalSparse(
           })
           .catch((failure) => {
             if (request !== epoch.current || controller.signal.aborted) return;
-            if (failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") setUnavailable(true);
-            else
-              setErrors((current) => {
-                const next = new Map(current);
-                next.delete(page);
-                next.set(page, errorMessage(failure, "Could not load rows"));
-                while (next.size > maxPages) next.delete(next.keys().next().value!);
-                return next;
-              });
+            setErrors((current) => {
+              const next = new Map(current);
+              next.delete(page);
+              next.set(page, errorMessage(failure, "Could not load rows"));
+              while (next.size > maxPages) next.delete(next.keys().next().value!);
+              return next;
+            });
           })
           .finally(() => {
             if (pending.current.get(page) !== controller) return;
@@ -342,7 +356,7 @@ export function useIdenticalSparse(
       }
       setLoading(pending.current.size > 0);
     },
-    [errors, exclusions, includeHidden, sortKey, descending, pages, result, totalCount, unavailable],
+    [errors, exclusions, includeHidden, sortKey, descending, listRows, pages, result, totalCount, unavailable],
   );
   useEffect(() => {
     if (result) requestRange(...range.current);
@@ -440,6 +454,8 @@ export function useIdenticalSparse(
     loading: !unavailable && loading,
     unavailable,
     invalidate,
+    listRows,
+    lookupPositions,
     retry,
     groupRows,
     fileRows,

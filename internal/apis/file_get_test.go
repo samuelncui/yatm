@@ -26,7 +26,7 @@ func TestFileGetDistinguishesMissingFilesFromVirtualRoot(t *testing.T) {
 	require.Len(t, root.Entries, 1)
 	require.Equal(t, file.ID, root.Entries[0].Reference.GetFileId())
 	_, err = service.Get(ctx, &entity.GetFileRequest{Reference: ref(file.ID + 1)})
-	require.Equal(t, codes.NotFound, status.Code(err))
+	require.Equal(t, codes.NotFound, status.Code(StatusError(err)))
 
 	// Invalid requests fail at admission instead of panicking or fabricating root data.
 	for _, request := range []*entity.GetFileRequest{nil, {Reference: ref(-2)}} {
@@ -36,7 +36,7 @@ func TestFileGetDistinguishesMissingFilesFromVirtualRoot(t *testing.T) {
 
 	// Trash is a persisted reserved identity, not a second virtual-root sentinel.
 	_, err = service.Get(ctx, &entity.GetFileRequest{Reference: ref(library.TrashFileID)})
-	require.Equal(t, codes.NotFound, status.Code(err))
+	require.Equal(t, codes.NotFound, status.Code(StatusError(err)))
 	require.NoError(t, api.lib.Delete(ctx, []int64{file.ID}))
 	trash, err := listFiles(t, ctx, service, &entity.ListFilesRequest{Directory: ref(library.TrashFileID), Include: []entity.FilesInclude{entity.FilesInclude_FILES_INCLUDE_NAVIGATION}})
 	require.NoError(t, err)

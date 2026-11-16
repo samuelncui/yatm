@@ -20,8 +20,8 @@ import (
 )
 
 func TestSettingsErrorsUseActionableStatus(t *testing.T) {
-	require.Equal(t, codes.InvalidArgument, status.Code(apiError(settingspkg.ErrInvalid)))
-	require.Equal(t, codes.FailedPrecondition, status.Code(apiError(settingspkg.ErrStored)))
+	require.Equal(t, codes.InvalidArgument, status.Code(StatusError(settingspkg.ErrInvalid)))
+	require.Equal(t, codes.FailedPrecondition, status.Code(StatusError(settingspkg.ErrStored)))
 }
 
 func TestSettingsBrowseEnforcesAdministratorRulesBeforePagination(t *testing.T) {
@@ -56,7 +56,7 @@ func TestSettingsBrowseEnforcesAdministratorRulesBeforePagination(t *testing.T) 
 	// Explicit navigation cannot bypass a denied parent, symlink or out-of-range root.
 	for _, denied := range []string{filepath.Join(root, "secret", "visible"), filepath.Join(root, "symlink"), t.TempDir()} {
 		_, err := service.BrowsePaths(ctx, &entity.BrowsePathsRequest{Path: denied})
-		require.Equal(t, codes.PermissionDenied, status.Code(err), denied)
+		require.Equal(t, codes.PermissionDenied, status.Code(StatusError(err)), denied)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestLocationIgnoreCannotExpandAccessAndRestoreNeedsNoScanOrRecommendation(t
 	require.Equal(t, entity.EntryKind_ENTRY_KIND_DIRECTORY, ignored.Detail.Entry.Kind)
 	denied := &entity.FileOperationRef{Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: location.ID, Path: "secret"}}}
 	_, err = listFiles(t, ctx, browser, &entity.ListFilesRequest{Directory: denied})
-	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.Equal(t, codes.PermissionDenied, status.Code(StatusError(err)))
 
 	// Restore destinations are usable immediately, while their index Ignore never authorizes writes.
 	frozen, err := api.exe.FreezeRestoreDestination(ctx, &entity.RestoreDestination{LocationId: location.ID})
@@ -222,7 +222,7 @@ func TestSettingsJobExecutionDefaultsRoundTripAndRejections(t *testing.T) {
 			rejected := proto.Clone(&valid).(*entity.JobExecutionSettings)
 			test.change(rejected)
 			_, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: &entity.JobSettings{Execution: rejected}}}})
-			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.Equal(t, codes.InvalidArgument, status.Code(StatusError(err)))
 		})
 	}
 	afterValue, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_JOB})
@@ -276,7 +276,7 @@ func TestSettingsDeviceUsesExistingTypedReplacement(t *testing.T) {
 	// Saving a preference cannot authorize a removed device and malformed edits cannot replace it.
 	value.Devices[0].Device = ""
 	_, err = service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}})
-	require.Equal(t, codes.InvalidArgument, status.Code(err))
+	require.Equal(t, codes.InvalidArgument, status.Code(StatusError(err)))
 	after, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_DEVICE})
 	require.NoError(t, err)
 	require.True(t, proto.Equal(saved.GetValue().GetDevice(), after.GetValue().GetDevice()))

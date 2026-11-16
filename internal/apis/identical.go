@@ -2,7 +2,6 @@ package apis
 
 import (
 	"context"
-	"errors"
 	"path"
 	"strconv"
 
@@ -75,7 +74,7 @@ func (s *filesService) ListIdenticalGroups(ctx context.Context, req *entity.List
 	snapshot := result.snapshot
 	page, err := snapshot.Groups(req.GetCursor(), int64(limit))
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	reply := &entity.ListIdenticalGroupsResponse{NextCursor: page.NextCursor, ResultId: result.id}
 	for _, group := range page.Groups {
@@ -87,7 +86,7 @@ func (s *filesService) ListIdenticalGroups(ctx context.Context, req *entity.List
 		for _, group := range page.Groups {
 			membersPage, err := snapshot.Members(group.ID, "", int64(req.MemberLimit))
 			if err != nil {
-				return nil, apiError(err)
+				return nil, err
 			}
 			pages = append(pages, membersPage)
 			members = append(members, membersPage.Members...)
@@ -136,11 +135,11 @@ func (s *filesService) ListIdenticalMembers(ctx context.Context, req *entity.Lis
 	snapshot := result.snapshot
 	group, err := snapshot.Group(req.GetGroupId())
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	page, err := snapshot.Members(req.GetGroupId(), req.GetCursor(), int64(limit))
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	entries, observations, err := s.memberEntries(ctx, page.Members)
 	if err != nil {
@@ -250,13 +249,9 @@ func (s *filesService) KeepIdentical(req *entity.KeepIdenticalRequest, stream en
 	if err != nil || seed <= 0 {
 		return status.Error(codes.InvalidArgument, "invalid identical group ID")
 	}
-	err = fileops.KeepIdentical(s.api.exe, scope, seed, req, fileOperationStream{context: stream.Context(), send: func(result *entity.FileOperationResult) error {
+	return fileops.KeepIdentical(s.api.exe, scope, seed, req, fileOperationStream{context: stream.Context(), send: func(result *entity.FileOperationResult) error {
 		return stream.Send(&entity.KeepIdenticalResponse{Result: result})
 	}})
-	if errors.Is(err, fileops.ErrKeepNotMember) {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	return apiError(err)
 }
 
 func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIdenticalRequest) (*entity.MergeIdenticalResponse, error) {
@@ -292,14 +287,14 @@ func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIden
 
 	snapshot, err = s.api.lib.OpenIdenticalComponent(ctx, scope, seed)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	group, err := snapshot.Group(req.GroupId)
 	if err != nil {
-		return nil, apiError(library.ErrLocationConflict)
+		return nil, library.ErrLocationConflict
 	}
 	if group.Fingerprint != req.Fingerprint {
-		return nil, apiError(library.ErrLocationConflict)
+		return nil, library.ErrLocationConflict
 	}
 	found, err := snapshot.HasMember(group.ID, req.TargetFileId)
 	if err != nil {
@@ -311,7 +306,7 @@ func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIden
 
 	merged, err := s.api.lib.MergeFileMembers(ctx, req.TargetFileId, visit, req.GetDryrun())
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.MergeIdenticalResponse{TargetFileId: req.TargetFileId, RemovedFileCount: merged}, nil
 }
@@ -319,7 +314,7 @@ func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIden
 func (s *filesService) RemoveVersion(ctx context.Context, req *entity.RemoveFileVersionRequest) (*entity.RemoveFileVersionResponse, error) {
 	removed, err := s.api.lib.RemoveFileVersion(ctx, req.GetFileId(), req.GetVersionId(), req.GetDryrun())
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.RemoveFileVersionResponse{RemovedVersionCount: removed}, nil
 }

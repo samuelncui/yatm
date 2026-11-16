@@ -22,7 +22,7 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	}
 	location, _, info, err := s.api.exe.ResolveLocationEntry(ctx, req.Reference)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	if !info.Mode().IsRegular() {
 		return nil, status.Error(codes.InvalidArgument, "select an ordinary file")
@@ -36,7 +36,7 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	keys := executor.ObserveTracking(location, info)
 	observation := &library.ObservedEntry{Path: req.Reference.Path, Size: info.Size(), Mode: uint32(info.Mode()), MtimeNS: mtime, TrackingKeys: keys}
 	if err := s.api.lib.RelocateOriginal(ctx, req.FileId, location.ID, observation); err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Return the refreshed File detail after the association changes.

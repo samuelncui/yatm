@@ -108,10 +108,10 @@ func TestIdenticalContinuationsRequireRetainedResult(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.ListIdenticalGroups(context.Background(), &entity.ListIdenticalGroupsRequest{
 		Scope: scope, ResultId: groups.ResultId, Cursor: groups.NextCursor, Limit: 1})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 	_, err = s.ListIdenticalMembers(context.Background(), &entity.ListIdenticalMembersRequest{
 		Scope: scope, GroupId: groups.Groups[0].Id, ResultId: groups.ResultId, Cursor: members.NextCursor, Limit: 1})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 	entries, err = os.ReadDir(temp)
 	require.NoError(t, err)
 	require.Empty(t, entries)
@@ -181,7 +181,7 @@ func TestIdenticalFindRowsLookupAndClose(t *testing.T) {
 	_, err = s.CloseIdenticalResult(context.Background(), &entity.CloseIdenticalResultRequest{ResultId: found.ResultId})
 	require.NoError(t, err)
 	_, err = s.ListIdenticalRows(context.Background(), &entity.ListIdenticalRowsRequest{ResultId: found.ResultId})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 }
 
 func TestIdenticalSortedRowsAndLookupShareRequestedOrder(t *testing.T) {
@@ -247,13 +247,13 @@ func TestIdenticalResultExpiryAndActiveReader(t *testing.T) {
 	require.Len(t, rows, 1)
 	s.api.identicalResults.release(reader)
 	_, err = s.api.identicalResults.acquire(result.ResultId)
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 
 	result, err = s.FindIdentical(context.Background(), &entity.FindIdenticalRequest{Scope: scope})
 	require.NoError(t, err)
 	now = base.Add(identicalResultIdle + time.Second)
 	_, err = s.ListIdenticalRows(context.Background(), &entity.ListIdenticalRowsRequest{ResultId: result.ResultId})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 }
 
 func TestIdenticalResultLimitAndLegacyResultIDs(t *testing.T) {
@@ -270,7 +270,7 @@ func TestIdenticalResultLimitAndLegacyResultIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, third.ResultId)
 	_, err = s.ListIdenticalRows(context.Background(), &entity.ListIdenticalRowsRequest{ResultId: first.ResultId})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.OutOfRange, status.Code(err))
 	_, err = s.CloseIdenticalResult(context.Background(), &entity.CloseIdenticalResultRequest{ResultId: second.ResultId})
 	require.NoError(t, err)
 	_, err = s.CloseIdenticalResult(context.Background(), &entity.CloseIdenticalResultRequest{ResultId: third.ResultId})

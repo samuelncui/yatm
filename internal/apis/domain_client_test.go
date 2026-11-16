@@ -16,7 +16,7 @@ import (
 func domainConnection(t *testing.T, api *apis.API) *grpc.ClientConn {
 	t.Helper()
 	listener := bufconn.Listen(1 << 20)
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(apis.UnaryServerInterceptor), grpc.ChainStreamInterceptor(apis.StreamServerInterceptor))
 	api.RegisterLocations(server)
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)

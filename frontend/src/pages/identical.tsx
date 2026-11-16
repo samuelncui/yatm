@@ -181,7 +181,7 @@ export const IdenticalFiles = () => {
     groupActionIds,
     source === IdenticalSource.LIBRARY ? "Related content" : "Matching content",
   );
-  const { fileRows, invalidate } = sparse;
+  const { fileRows, invalidate, listRows, lookupPositions } = sparse;
   useEffect(() => {
     unavailableRef.current = sparse.unavailable;
   }, [sparse.unavailable]);
@@ -285,18 +285,18 @@ export const IdenticalFiles = () => {
       if (!current) return;
       for (let offset = 0; offset < ids.length; offset += 100) {
         const batch = ids.slice(offset, offset + 100);
-        const reply = await filesCli.lookupIdenticalPositions({
+        const reply = await lookupPositions({
           resultId: current.id,
           fileIds: batch,
           sortKey: sortRef.current.key,
           sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-        }).response;
+        });
         const found = new Set(reply.positions.map((position) => String(position.fileId)));
         if (batch.some((id) => !found.has(String(id)))) throw new Error("Could not locate updated files in this result. Find again.");
         if (resultRef.current?.id === current.id) applyPositions(reply.positions);
       }
     },
-    [applyPositions],
+    [applyPositions, lookupPositions],
   );
 
   const enqueueReconciliation = useCallback(
@@ -315,12 +315,12 @@ export const IdenticalFiles = () => {
           while (reconciliation.current === queue && queue.ids.size) {
             const batch = [...queue.ids].slice(0, 100);
             for (const id of batch) queue.ids.delete(id);
-            const reply = await filesCli.lookupIdenticalPositions({
+            const reply = await lookupPositions({
               resultId: current.id,
               fileIds: batch,
               sortKey: sortRef.current.key,
               sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-            }).response;
+            });
             // A new Find may already reflect the physical operation, so missing IDs are expected.
             if (resultRef.current?.id === current.id) applyPositions(reply.positions);
           }
@@ -334,7 +334,7 @@ export const IdenticalFiles = () => {
         }
       })();
     },
-    [applyPositions, invalidate],
+    [applyPositions, invalidate, lookupPositions],
   );
   const noteMoved = useCallback(
     (id: bigint, operationResult: IdenticalResult) => {
@@ -393,7 +393,6 @@ export const IdenticalFiles = () => {
         setIncludeHidden(next);
       } catch (failure) {
         if (request !== hiddenRequest.current || resultRef.current?.id !== snapshotId) return;
-        if (snapshotId && failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") sparse.invalidate();
         toast.error(errorMessage(failure, "Could not switch hidden files"));
       } finally {
         if (request === hiddenRequest.current) setSwitchingHidden(false);
@@ -418,12 +417,12 @@ export const IdenticalFiles = () => {
       const ids = [...removed.keys()].map(BigInt);
       for (let offset = 0; offset < ids.length; offset += 100) {
         const batch = ids.slice(offset, offset + 100);
-        const reply = await filesCli.lookupIdenticalPositions({
+        const reply = await lookupPositions({
           resultId: snapshot.id,
           fileIds: batch,
           sortKey: next.key,
           sortOrder: next.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-        }).response;
+        });
         for (const position of reply.positions) positions.set(String(position.fileId), position);
       }
       if (positions.size !== ids.length) throw new Error("Could not locate updated files in this result. Find again.");
@@ -438,7 +437,6 @@ export const IdenticalFiles = () => {
       setPreferences({ ...initialPreferences, descending: next.descending });
     } catch (failure) {
       if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
-      if (failure instanceof RpcError && failure.code === "FAILED_PRECONDITION") sparse.invalidate();
       toast.error(errorMessage(failure, "Could not sort identical files"));
     } finally {
       if (request === hiddenRequest.current) {
@@ -446,7 +444,7 @@ export const IdenticalFiles = () => {
         setSwitchingSort(false);
       }
     }
-  }, [includeHidden, removed, sort, sparse, switchingHidden, setPreferences]);
+  }, [includeHidden, lookupPositions, removed, sort, sparse, switchingHidden, setPreferences]);
 
   const stream = useCallback(
     async (
@@ -803,25 +801,25 @@ export const IdenticalFiles = () => {
           mergeActive.current++;
           setMergeBusy(true);
           try {
-            const positions = await filesCli.lookupIdenticalPositions({
+            const positions = await lookupPositions({
               resultId: snapshot.id,
               fileIds: [reference.fileId],
               sortKey: sortRef.current.key,
               sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-            }).response;
+            });
             const targetPosition = positions.positions[0];
             if (!targetPosition) throw new Error("Could not locate this group. Find again.");
             const otherHeader = includeHidden ? targetPosition.visibleGroupHeaderPosition : targetPosition.allGroupHeaderPosition;
             let otherInterval: { start: number; end: number } | undefined;
             if (otherHeader !== undefined) {
-              const other = await filesCli.listIdenticalRows({
+              const other = await listRows({
                 resultId: snapshot.id,
                 offset: otherHeader,
                 limit: 1,
                 includeHidden: !includeHidden,
                 sortKey: sortRef.current.key,
                 sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-              }).response;
+              });
               const count = other.rows[0]?.displayMemberCount;
               if (count === undefined) throw new Error("Could not read the other hidden-file view. Find again.");
               otherInterval = { start: Number(otherHeader), end: Number(otherHeader + count) };
@@ -846,9 +844,6 @@ export const IdenticalFiles = () => {
             setRemovedGroups((current) => new Set(current).add(group.id));
             setRevision((value) => value + 1);
             toast.success("Merged into " + target.name);
-          } catch (failure) {
-            if (failure instanceof RpcError && failure.code === "FAILED_PRECONDITION" && resultRef.current?.id === snapshot.id) sparse.invalidate();
-            throw failure;
           } finally {
             mergeActive.current--;
             setMergeBusy(mergeActive.current > 0);

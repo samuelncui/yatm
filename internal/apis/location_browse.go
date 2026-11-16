@@ -56,7 +56,7 @@ func (s *locationService) BrowsePaths(ctx context.Context, req *entity.BrowsePat
 	}
 	root, err = s.api.exe.LocationRoot(root)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Decode a cursor bound to exactly this authorized directory.

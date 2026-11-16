@@ -44,7 +44,7 @@ func (s *filesService) ListIdenticalRows(ctx context.Context, req *entity.ListId
 	defer s.api.identicalResults.release(result)
 	rows, total, err := result.snapshot.SortedRows(req.GetOffset(), limit, req.GetIncludeHidden(), req.GetSortKey(), req.GetSortOrder())
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	reply := &entity.ListIdenticalRowsResponse{TotalRowCount: total}
 	if len(rows) == 0 {
@@ -60,7 +60,7 @@ func (s *filesService) ListIdenticalRows(ctx context.Context, req *entity.ListId
 	}
 	members, err := result.snapshot.MembersByIDs(ids)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	byID := make(map[int64]*entity.IdenticalMember, len(members))
 	if len(members) > 0 {
@@ -111,7 +111,7 @@ func (s *filesService) LookupIdenticalPositions(_ context.Context, req *entity.L
 	defer s.api.identicalResults.release(result)
 	positions, err := result.snapshot.LookupSortedPositions(req.GetFileIds(), req.GetSortKey(), req.GetSortOrder())
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Preserve the lookup's caller order and optional visible positions.

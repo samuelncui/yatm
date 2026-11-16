@@ -124,7 +124,7 @@ type cliConnection struct {
 func serveCLI(t *testing.T, api *apis.API, exe *executor.Executor) *cliConnection {
 	t.Helper()
 	// Fault-injection fixtures retain server ownership, but use the production HTTP transport.
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(apis.UnaryServerInterceptor), grpc.ChainStreamInterceptor(apis.StreamServerInterceptor))
 	entity.RegisterJobServiceServer(server, api)
 	api.RegisterLocations(server)
 	exe.RegisterJobServices(server)

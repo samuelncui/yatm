@@ -66,6 +66,26 @@ the caller continues until the corresponding `has_older` or `has_newer` flag is 
 
 Files.Get supplies organization, original navigation and applicable content references for explicit workflows without opening file bytes in the browser. User Ignore hides an entry from browsing, measurement and Location selection but does not prevent explicit admission. Physical mutations accept typed relative references, never shell commands or unrestricted absolute paths.
 
+## Status codes
+
+One [server interceptor](../../internal/apis/errors.go), chained after panic recovery, maps
+handler errors for every gRPC service, including the Job services registered by the Executor.
+Handlers return domain errors; the interceptor matches these sentinels with `errors.Is`, so a
+`%w`-wrapped sentinel maps as well:
+
+| Sentinel | Code |
+| --- | --- |
+| Access excluded by administrator rules | PermissionDenied |
+| Location busy, Location unverified, stored Settings unusable | FailedPrecondition |
+| Location conflict | Aborted |
+| Invalid Settings, Keep survivor not a group member | InvalidArgument |
+| Missing catalog record, File or Job | NotFound |
+
+An error that already carries a gRPC status, directly or wrapped with `%w`, keeps its code.
+Other errors remain Unknown. A missing or expired identical result ID returns OutOfRange, which no other
+identical-result or Merge path returns, so a client discards its result only when the server no
+longer retains it.
+
 ## Device Discovery
 
 MediaService.ListDevices returns all configured Tape entries as DeviceSummary values with the

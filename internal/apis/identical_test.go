@@ -174,7 +174,7 @@ func TestIdenticalKeepRejectsStaleComponent(t *testing.T) {
 	stream := &identicalTestStream{}
 	err = s.KeepIdentical(&entity.KeepIdenticalRequest{Scope: scope, GroupId: group.Id,
 		Fingerprint: group.Fingerprint, Keep: page.Members[0].Entry.Reference}, stream)
-	require.Equal(t, codes.Aborted, status.Code(err))
+	require.Equal(t, codes.Aborted, status.Code(StatusError(err)))
 	require.Empty(t, stream.updates)
 	for _, name := range []string{"a.txt", "b.txt", "c.txt", "new.txt"} {
 		require.FileExists(t, filepath.Join(dir, name))

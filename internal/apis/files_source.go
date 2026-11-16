@@ -72,7 +72,7 @@ func (s *librarySource) enumerate(ctx context.Context, req files.ListRequest, pr
 	}
 	page, err := s.service.api.lib.ListAllFileRows(ctx, parentID, req.Scope, false, "")
 	if err != nil {
-		return nil, nil, nil, apiError(err)
+		return nil, nil, nil, err
 	}
 	directory, breadcrumbs, err := s.navigation(ctx, parentID, projection)
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *librarySource) readDirectory(ctx context.Context, req files.ListRequest
 	// Catalog facts determine membership before pagination; observations only project returned rows.
 	page, err := s.service.api.lib.ListFileQueryRows(ctx, parentID, req.Scope, req.Recursive, s.query, cursor, int64(req.BatchSize))
 	if err != nil {
-		return nil, nil, nil, 0, "", apiError(err)
+		return nil, nil, nil, 0, "", err
 	}
 	entries, _, _, err := s.service.libraryEntries(ctx, page.Files, projection, req.Recursive)
 	if err != nil {
@@ -229,7 +229,7 @@ func (s *locationSource) List(ctx context.Context, req files.ListRequest, emit f
 	// Enumerate once for the exact total, then observe and project only the batch being sent.
 	read, err := s.service.api.exe.EnumerateLocationDirectory(ctx, req.Directory.ID, req.Directory.Path)
 	if err != nil {
-		return apiError(err)
+		return err
 	}
 	directory, breadcrumbs := locationNavigation(read.Location, read.Parent, projection)
 	total := int64(read.Len())
@@ -239,7 +239,7 @@ func (s *locationSource) List(ctx context.Context, req files.ListRequest, emit f
 		}
 		rows, infos, err := read.Read(ctx, start, end)
 		if err != nil {
-			return apiError(err)
+			return err
 		}
 		entries, err := s.service.locationDirectoryEntries(ctx, rows, projection, read.Location, infos)
 		if err != nil {
@@ -300,7 +300,7 @@ func (s *locationSource) Search(ctx context.Context, req files.SearchRequest) (*
 	}
 	read, err := s.service.api.exe.ReadLocationEntriesMatching(ctx, &entity.LocationEntriesQuery{LocationId: req.Directory.ID, ParentPath: req.Directory.Path, Limit: int32(req.Limit)}, provider, match)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Reuse matching observations and content projections; omitted groups remain absent on the wire.
@@ -378,7 +378,7 @@ func (s *locationSource) Get(ctx context.Context, entry files.Entry) (*files.Det
 	projection := filesProjection{entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES: true, entity.FilesInclude_FILES_INCLUDE_STATUS: true, entity.FilesInclude_FILES_INCLUDE_OPERATIONS: true, entity.FilesInclude_FILES_INCLUDE_NAVIGATION: true}
 	live, err := s.service.api.exe.ObserveLocationEntry(ctx, entry.ID, entry.Path)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	entries, facts, observations, err := s.service.locationEntries(ctx, []*entity.LocationEntry{live}, projection)
 	if err != nil {

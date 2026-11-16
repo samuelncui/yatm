@@ -28,7 +28,7 @@ func (s *filesService) Measure(req *entity.MeasureFilesRequest, stream entity.Fi
 	}
 	scope, err := s.api.lib.ResolveFileScope(ctx, req.Scope)
 	if err != nil {
-		return apiError(err)
+		return err
 	}
 	send := func(item *entity.FilesMeasurement) error {
 		return stream.Send(&entity.MeasureFilesResponse{Result: &entity.MeasureFilesResponse_Item{Item: item}})
@@ -57,14 +57,14 @@ func (s *filesService) Measure(req *entity.MeasureFilesRequest, stream entity.Fi
 		}
 		location, loadErr := s.api.lib.GetLocation(ctx, source.Location.LocationId)
 		if loadErr != nil {
-			return apiError(loadErr)
+			return loadErr
 		}
 		_, info, checkErr := s.api.exe.CheckLocationPath(location, source.Location.Path)
 		if checkErr != nil {
-			return apiError(checkErr)
+			return checkErr
 		}
 		if !info.IsDir() {
-			return apiError(library.ErrLocationConflict)
+			return library.ErrLocationConflict
 		}
 		// Location Ignore excludes this Location's content, so it also excludes a measured root.
 		if location.Excluded(source.Location.Path, true) {

@@ -14,7 +14,7 @@ func (s *filesService) GetVersion(ctx context.Context, req *entity.GetFileVersio
 	}
 	version, err := s.api.lib.GetFileVersion(ctx, req.Id)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.GetFileVersionResponse{Version: version.ToEntity()}, nil
 }
@@ -29,7 +29,7 @@ func (s *filesService) ListVersions(ctx context.Context, req *entity.ListFileVer
 	}
 	rows, more, err := s.api.lib.ListFileVersions(ctx, req.FileId, req.AfterId, limit)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	reply := &entity.ListFileVersionsResponse{HasMore: more}
 	for _, row := range rows {
@@ -48,7 +48,7 @@ func (s *filesService) ListCopies(ctx context.Context, req *entity.ListContentCo
 	}
 	rows, more, err := s.api.lib.ListContentCopies(ctx, req.Signature, req.AfterId, limit)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.ListContentCopiesResponse{Positions: convertPositions(rows...), HasMore: more}, nil
 }
@@ -63,7 +63,7 @@ func (s *filesService) ListDuplicates(ctx context.Context, req *entity.ListConte
 	}
 	rows, more, err := s.api.lib.ListContentDuplicates(ctx, req.Signature, req.AfterFileId, limit)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	entries, _, _, err := s.libraryEntries(ctx, rows, filesProjection{entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES: true, entity.FilesInclude_FILES_INCLUDE_STATUS: true, entity.FilesInclude_FILES_INCLUDE_OPERATIONS: true}, true)
 	if err != nil {
@@ -81,7 +81,7 @@ func (s *filesService) ImportPositions(ctx context.Context, req *entity.ImportPo
 	}
 	result, err := s.api.lib.ImportArchivePositionSelection(ctx, req.PositionIds, req.MediaId, req.Dryrun)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.ImportPositionsResponse{FileCount: result.Files, DirectoryCount: result.Directories, SkippedFileCount: result.SkippedFiles,
 		ExistingCount: result.ExistingFiles, SkippedUnsignedCount: result.SkippedUnsigned}, nil

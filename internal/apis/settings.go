@@ -22,25 +22,25 @@ func (s *settingsService) Get(ctx context.Context, req *entity.GetSettingsReques
 	case entity.SettingsGroup_SETTINGS_GROUP_LIBRARY:
 		value, err := s.api.lib.Settings().Library.Current(ctx)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_PREVIEW:
 		value, err := s.api.lib.Settings().Preview.Current(ctx)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Preview{Preview: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_JOB:
 		value, err := s.api.lib.Settings().Job.Current(ctx)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_DEVICE:
 		value, err := s.api.lib.Settings().Device.Current(ctx)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}}, nil
 	default:
@@ -57,25 +57,25 @@ func (s *settingsService) Update(ctx context.Context, req *entity.UpdateSettings
 	case *entity.SettingsValue_Library:
 		saved, err := s.api.lib.Settings().Library.Save(ctx, value.Library)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: saved}}}, nil
 	case *entity.SettingsValue_Preview:
 		saved, err := s.api.lib.Settings().Preview.Save(ctx, value.Preview)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Preview{Preview: saved}}}, nil
 	case *entity.SettingsValue_Job:
 		saved, err := s.api.lib.Settings().Job.Save(ctx, value.Job)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: saved}}}, nil
 	case *entity.SettingsValue_Device:
 		saved, err := s.api.lib.Settings().Device.Save(ctx, value.Device)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: saved}}}, nil
 	default:

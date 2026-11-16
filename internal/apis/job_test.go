@@ -87,5 +87,5 @@ func TestJobAPICatalogPollingAndDelete(t *testing.T) {
 	require.Len(t, changed.Jobs, 1)
 	require.Positive(t, changed.Jobs[0].DeletedAtNs)
 	_, err = api.Get(ctx, &entity.GetJobRequest{Id: job.ID})
-	require.Equal(t, codes.NotFound, status.Code(err), "deleted Jobs need a typed absence signal, not a transport failure")
+	require.Equal(t, codes.NotFound, status.Code(apis.StatusError(err)), "deleted Jobs need a typed absence signal, not a transport failure")
 }

@@ -128,7 +128,8 @@ func main() {
 		panic(err)
 	}
 
-	// Register typed handlers and recover request panics without terminating the service.
+	// Register typed handlers, recover request panics without terminating the service and map
+	// domain errors to gRPC status codes for every service, including Executor-registered Jobs.
 	grpcPanicRecoveryHandler := func(p any) (err error) {
 		logrus.Errorf("recovered from panic, %v, stack= %s", p, debug.Stack())
 		return status.Errorf(codes.Internal, "%s", p)
@@ -136,9 +137,11 @@ func main() {
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
+			apis.UnaryServerInterceptor,
 		),
 		grpc.ChainStreamInterceptor(
 			recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
+			apis.StreamServerInterceptor,
 		),
 	)
 	api := apis.New(lib, exe)

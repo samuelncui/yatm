@@ -2,19 +2,12 @@ package apis
 
 import (
 	"context"
-	"errors"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func (api *API) Get(ctx context.Context, req *entity.GetJobRequest) (*entity.GetJobResponse, error) {
 	job, err := api.exe.GetJob(ctx, req.Id)
-	if errors.Is(err, executor.ErrJobNotFound) {
-		return nil, status.Error(codes.NotFound, err.Error())
-	}
 	if err != nil {
 		return nil, err
 	}

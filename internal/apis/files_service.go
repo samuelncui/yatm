@@ -2,7 +2,6 @@ package apis
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
@@ -198,7 +197,7 @@ func (s *filesService) readFile(ctx context.Context, fileID int64) (*library.Fil
 	}
 	file := rows[fileID]
 	if file == nil {
-		return nil, apiError(library.ErrFileNotFound)
+		return nil, library.ErrFileNotFound
 	}
 	return file, nil
 }
@@ -250,14 +249,14 @@ func (s *filesService) UpdateMetadata(ctx context.Context, req *entity.UpdateFil
 	for _, refs := range groups {
 		originals, err := s.api.exe.AdmitLocationEntries(ctx, refs)
 		if err != nil {
-			return nil, apiError(err)
+			return nil, err
 		}
 		for _, original := range originals {
 			ids = append(ids, original.FileID)
 		}
 	}
 	if err := s.api.lib.EditFileMetadata(ctx, ids, library.FileMetadataEdit{Note: req.Note, AddTags: req.AddTags, RemoveTags: req.RemoveTags}); err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Return settled details for this explicit write; ordinary list reads never enter this path.
@@ -265,7 +264,8 @@ func (s *filesService) UpdateMetadata(ctx context.Context, req *entity.UpdateFil
 	for _, ref := range req.References {
 		entry, err := s.Get(ctx, &entity.GetFileRequest{Reference: ref})
 		if err != nil {
-			return nil, fmt.Errorf("metadata saved; refresh details failed: %w", err)
+			failure := status.Convert(StatusError(err))
+			return nil, status.Errorf(failure.Code(), "metadata saved; refresh details failed: %s", failure.Message())
 		}
 		reply.Entries = append(reply.Entries, entry.Detail)
 	}

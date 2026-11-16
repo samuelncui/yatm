@@ -142,7 +142,7 @@ func (m *identicalResultManager) acquire(id string) (*identicalResult, error) {
 	m.mu.Unlock()
 	closeIdenticalSnapshots(closed)
 	if result == nil {
-		return nil, status.Error(codes.FailedPrecondition, "identical result expired or unknown")
+		return nil, status.Error(codes.OutOfRange, "identical result expired or unknown")
 	}
 	return result, nil
 }
@@ -186,7 +186,7 @@ func (m *identicalResultManager) close(id string) error {
 	m.mu.Unlock()
 	closeIdenticalSnapshots(closed)
 	if result == nil {
-		return status.Error(codes.FailedPrecondition, "identical result expired or unknown")
+		return status.Error(codes.OutOfRange, "identical result expired or unknown")
 	}
 	return nil
 }
@@ -225,7 +225,7 @@ func (s *filesService) identicalSnapshot(ctx context.Context, id string, scope l
 		snapshot, err := s.api.lib.OpenIdenticalSnapshot(ctx, scope)
 		if err != nil {
 			s.api.identicalResults.cancelReservation()
-			return nil, apiError(err)
+			return nil, err
 		}
 		return s.api.identicalResults.addReserved(snapshot, scope), nil
 	}

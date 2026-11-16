@@ -416,7 +416,7 @@ it("repositions removed and selected members when sorting the retained result", 
 });
 
 it("asks for an explicit Find when the retained result expires", async () => {
-  state.rows.mockImplementation(() => ({ response: Promise.reject(new RpcError("result expired", "FAILED_PRECONDITION")) }));
+  state.rows.mockImplementation(() => ({ response: Promise.reject(new RpcError("result expired", "OUT_OF_RANGE")) }));
   mount();
   await find();
   expect(await screen.findByRole("button", { name: "Find again" })).toBeInTheDocument();
@@ -427,7 +427,7 @@ it("blocks actions on cached rows after the result expires", async () => {
   state.rows.mockImplementation(({ offset }: { offset: bigint }) =>
     offset === 0n
       ? reply({ rows: [header(), fileRow(1n, 1n, true)], totalRowCount: 502n })
-      : { response: Promise.reject(new RpcError("result expired", "FAILED_PRECONDITION")) },
+      : { response: Promise.reject(new RpcError("result expired", "OUT_OF_RANGE")) },
   );
   mount("/tools/identical?source=locations&location=1");
   await find();
@@ -1116,7 +1116,7 @@ it("does not Merge when the other projection cannot be read", async () => {
   expect(sparse().sparse.totalCount).toBe(502);
 });
 it("blocks old rows when a Merge position read reports an expired result", async () => {
-  state.lookup.mockImplementation(() => ({ response: Promise.reject(new RpcError("result expired", "FAILED_PRECONDITION")) }));
+  state.lookup.mockImplementation(() => ({ response: Promise.reject(new RpcError("result expired", "OUT_OF_RANGE")) }));
   mount();
   await find();
   await screen.findByText("copy-1.txt");
@@ -1125,6 +1125,20 @@ it("blocks old rows when a Merge position read reports an expired result", async
   expect(await screen.findByText(/This identical result needs a new Find/)).toBeInTheDocument();
   expect(state.merge).not.toHaveBeenCalled();
   expect(state.props!.files).toHaveLength(0);
+});
+it("keeps the result when Merge reports a busy Location", async () => {
+  state.merge.mockImplementation(() => ({
+    response: Promise.reject(new RpcError("Library maintenance conflicts with another operation", "FAILED_PRECONDITION")),
+  }));
+  mount();
+  await find();
+  await screen.findByText("copy-1.txt");
+  act(() => dispatch("identical-merge", state.props!.files.filter(Boolean).slice(0, 1) as FileData[]));
+  await userEvent.click(screen.getByRole("button", { name: "Merge" }));
+  expect(await screen.findByText("Library maintenance conflicts with another operation")).toBeInTheDocument();
+  expect(screen.queryByText(/This identical result needs a new Find/)).not.toBeInTheDocument();
+  expect(sparse().sparse.totalCount).toBe(502);
+  expect(state.find).toHaveBeenCalledTimes(1);
 });
 it("keeps a merged group excluded after its header page is evicted", async () => {
   state.find.mockReturnValue(reply({ resultId: "result", allRowCount: 1500n, visibleRowCount: 1500n, groupCount: 1n }));

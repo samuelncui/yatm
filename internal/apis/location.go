@@ -2,21 +2,17 @@ package apis
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"gorm.io/gorm"
 )
 
 type locationService struct {
@@ -31,33 +27,6 @@ func (api *API) RegisterLocations(server grpc.ServiceRegistrar) {
 	entity.RegisterLibraryServiceServer(server, &libraryService{api: api})
 	entity.RegisterPreviewServiceServer(server, &previewService{api: api})
 	entity.RegisterSettingsServiceServer(server, &settingsService{api: api})
-}
-
-func apiError(err error) error {
-	// Preserve actionable catalog conflicts independently from malformed configuration.
-	if err == nil {
-		return nil
-	}
-	switch {
-	case errors.Is(err, executor.ErrAccessExcluded):
-		return status.Error(codes.PermissionDenied, err.Error())
-	case errors.Is(err, library.ErrLocationBusy):
-		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, library.ErrLocationConflict):
-		return status.Error(codes.Aborted, err.Error())
-	case errors.Is(err, library.ErrLocationUnverified):
-		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, settingspkg.ErrInvalid):
-		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, settingspkg.ErrStored):
-		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	case errors.Is(err, library.ErrFileNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	default:
-		return err
-	}
 }
 
 func pageLimit(value int32) (int, error) {
@@ -98,7 +67,7 @@ func (s *locationService) Create(ctx context.Context, req *entity.CreateLocation
 
 	// Unique root conflicts cannot overwrite an existing registration or index.
 	if err := s.api.lib.CreateLocation(ctx, source); err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	reply := s.reply(ctx, source)
 	return &entity.CreateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility, Warnings: reply.Warnings}, nil
@@ -117,7 +86,7 @@ func (s *locationService) List(ctx context.Context, req *entity.ListLocationsReq
 		AfterID: req.AfterId, Limit: limit, RestoreTarget: req.RestoreTarget, Query: req.Query,
 	})
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 
 	// Preserve ID order for a stable list cursor.
@@ -135,7 +104,7 @@ func (s *locationService) Get(ctx context.Context, req *entity.GetLocationReques
 	}
 	source, err := s.api.lib.GetLocation(ctx, req.Id)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return s.reply(ctx, source), nil
 }
@@ -147,7 +116,7 @@ func (s *locationService) Update(ctx context.Context, req *entity.UpdateLocation
 	}
 	stored, err := s.api.lib.GetLocation(ctx, req.Location.Id)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	exclusions, err := library.NormalizeIgnoreRules(locationIgnore(req.Location.Config.GetIgnore()))
 	if err != nil {
@@ -167,7 +136,7 @@ func (s *locationService) Update(ctx context.Context, req *entity.UpdateLocation
 	stored.RestoreTarget = req.Location.RestoreTarget
 	updated, err := s.api.lib.UpdateLocation(ctx, stored)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	reply := s.reply(ctx, updated)
 	return &entity.UpdateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility, Warnings: reply.Warnings}, nil
@@ -179,7 +148,7 @@ func (s *locationService) Delete(ctx context.Context, req *entity.DeleteLocation
 	}
 	result, err := s.api.lib.DeleteLocation(ctx, req.Id, req.Dryrun)
 	if err != nil {
-		return nil, apiError(err)
+		return nil, err
 	}
 	return &entity.DeleteLocationResponse{LocationCount: result.Locations, OriginalCount: result.Originals}, nil
 }
