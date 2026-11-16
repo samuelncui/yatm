@@ -12,6 +12,7 @@ import {
   GetJobResponse,
   GetLocationResponse,
   GetPreviewCapabilitiesResponse,
+  GetScanJobCreationRequest,
   GetScanJobCreationResponse,
   GetScanJobProgressResponse,
   GetSettingsRequest,
@@ -103,6 +104,7 @@ const fixture = async (page: Page) => {
   const media = Media.create({ id: 7n, name: "Fixture Volume", kind: MediaKind.VOLUME, identity: "fixture", capabilities: { read: MediaAccess.RANDOM } });
   const state = {
     preview: preview(),
+    library: LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true }),
     updates: 0,
     capabilityReads: 0,
     creationReads: 0,
@@ -160,12 +162,13 @@ const fixture = async (page: Page) => {
             ? { oneofKind: "preview" as const, preview: state.preview }
             : request.group === SettingsGroup.DEVICE
               ? { oneofKind: "device" as const, device: DeviceSettings.create() }
-              : { oneofKind: "library" as const, library: LibrarySettings.create({ includeFilesWithoutVersions: true }) };
+              : { oneofKind: "library" as const, library: state.library };
         return fulfill(route, GetSettingsResponse.toBinary(GetSettingsResponse.create({ value: { value } })));
       }
       case "yatm.v1.SettingsService/Update": {
         const request = UpdateSettingsRequest.fromBinary(bytes);
         if (request.value?.value.oneofKind === "preview") state.preview = PreviewSettings.clone(request.value.value.preview);
+        if (request.value?.value.oneofKind === "library") state.library = LibrarySettings.clone(request.value.value.library);
         state.updates++;
         return fulfill(route, UpdateSettingsResponse.toBinary(UpdateSettingsResponse.create({ value: request.value })));
       }
@@ -208,7 +211,12 @@ const fixture = async (page: Page) => {
           route,
           GetScanJobProgressResponse.toBinary(GetScanJobProgressResponse.create({ progress: { totalKnown: true, totalFileCount: 2n, copiedFileCount: 2n } })),
         );
+      // A new form asks for the latest Job of its kind; this fixture has none.
+      case "yatm.v1.ArchiveJobService/GetCreation":
+      case "yatm.v1.RestoreJobService/GetCreation":
+        return fulfill(route, new Uint8Array());
       case "yatm.v1.ScanJobService/GetCreation":
+        if (GetScanJobCreationRequest.fromBinary(bytes).latest) return fulfill(route, new Uint8Array());
         state.creationReads++;
         return fulfill(route, GetScanJobCreationResponse.toBinary(GetScanJobCreationResponse.create({ request: { spec: { compareLibrary: true } } })));
       case "yatm.v1.ScanJobService/ListEntries":
@@ -273,7 +281,8 @@ for (const viewport of [
   test(`Scan policies, inventory review and matching counts remain explicit on ${viewport.name}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     const state = await fixture(page);
-    await page.addInitScript(() => localStorage.setItem("files:import-positions-without-prompt", "1"));
+    // The operator turned this confirmation off earlier; Library settings record it.
+    state.library.skipAddMediaConfirmation = true;
     await page.goto("/scan?location=2&previews=1");
     await page.getByRole("button", { name: /^Advanced/ }).click();
     await select(page, page, "Signatures", "Reuse known signatures only");
@@ -296,7 +305,7 @@ for (const viewport of [
     await expect(dialog.getByRole("button", { name: "Show confirmation next time" })).toBeVisible();
     expect(state.admissions).toEqual([true]);
     await dialog.getByRole("button", { name: "Show confirmation next time" }).click();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem("files:import-positions-without-prompt"))).toBeNull();
+    await expect.poll(() => state.library.skipAddMediaConfirmation).toBe(false);
     await expectFits(dialog);
     await expect(dialog).toHaveCSS("opacity", "1");
     await page.screenshot({ animations: "disabled", path: info.outputPath(`inventory-review-${viewport.name}.png`) });

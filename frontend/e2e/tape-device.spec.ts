@@ -8,8 +8,10 @@ import {
   DeviceKind,
   DeviceReason,
   DeviceSummary,
+  GetSettingsResponse,
   InspectDeviceRequest,
   InspectDeviceResponse,
+  LibrarySettings,
   ListDevicesResponse,
   ListLocationsResponse,
   ListMediaResponse,
@@ -45,6 +47,16 @@ test("Media device details preserve passive diagnostics and usable desktop/narro
         return fulfill(route, ListLocationsResponse.toBinary(ListLocationsResponse.create()));
       case "yatm.v1.MediaService/List":
         return fulfill(route, ListMediaResponse.toBinary(ListMediaResponse.create({ media: [tape] })));
+      case "yatm.v1.SettingsService/Get":
+        // The Media page reads Library settings for its advisory confirmations.
+        return fulfill(
+          route,
+          GetSettingsResponse.toBinary(
+            GetSettingsResponse.create({
+              value: { value: { oneofKind: "library", library: LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true }) } },
+            }),
+          ),
+        );
       case "yatm.v1.MediaService/ListDevices":
         deviceLists++;
         return fulfill(route, ListDevicesResponse.toBinary(ListDevicesResponse.create({ devices })));
