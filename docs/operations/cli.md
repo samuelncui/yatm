@@ -173,6 +173,9 @@ same command without `--dryrun` performs the resolved work.
 
 `archive create`, `scan create`, `scan media`, `analyze create` and `preview create` write the
 signature cache onto files they read unless `--no-signature-cache` records the Job's choice not to.
+`restore create` records its two sides separately: `--no-source-signature-cache` for the Media files
+it reads (use it to read an LTFS Tape without rewriting its Index) and `--no-target-signature-cache`
+for restored files.
 Omitting the flag sends no choice, and the server writes the cache. The
 [Jobs guide](jobs.md#scan-signatures-and-previews) explains the cache.
 

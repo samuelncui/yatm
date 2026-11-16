@@ -121,6 +121,11 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 						reply.ResolvedVersions = append(reply.ResolvedVersions, item.Resolution)
 					}
 					if item.Version == nil {
+						// A File never saved is always left out; a missing policy match needs consent.
+						if item.Resolution.Match == entity.RestoreVersionMatch_RESTORE_VERSION_MATCH_NO_SAVED_VERSION {
+							reply.SkippedVersionCount++
+							return nil
+						}
 						reply.UnmatchedVersionCount++
 						if request.SkipUnmatchedVersions {
 							reply.SkippedVersionCount++

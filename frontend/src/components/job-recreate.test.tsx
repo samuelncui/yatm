@@ -176,8 +176,11 @@ it.each([1700000000789123456n, -1n, 0n, minUnixNs, maxUnixNs])(
         allowDamagedCopies: true,
         versionPolicy: { beforeAtNs: cutoff },
         skipUnmatchedVersions: true,
+        writeSourceSignatureCache: false,
+        writeTargetSignatureCache: true,
       },
     });
+    localStorage.setItem("restore:last-options", JSON.stringify({ writeSourceSignatureCache: true, writeTargetSignatureCache: false }));
     mocks.restoreRead.mockReturnValue(call({ request, unavailableReason: "" }));
     const { store } = show("/restore?recreate=1");
     await screen.findByText("File 7");
@@ -187,6 +190,8 @@ it.each([1700000000789123456n, -1n, 0n, minUnixNs, maxUnixNs])(
     await screen.findByText("Location 5 / chosen");
     await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     expect(screen.getByRole("checkbox", { name: "Allow damaged copies" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto Media" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto restored files" })).toBeChecked();
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
     expect(mocks.location.mock.calls.map(([arg]) => arg.id)).toEqual([5n]);
     expect(mocks.restoreEstimate.mock.calls.at(-1)![0].versionPolicy.beforeAtNs).toBe(cutoff);

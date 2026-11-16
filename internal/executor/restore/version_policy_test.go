@@ -102,9 +102,11 @@ func TestRestoreTimePolicySkipNeverAcceptsMissingCopiesOrEmptyManifest(t *testin
 		skip     bool
 		explicit bool
 		remove   bool
+		unsaved  bool
 		ready    bool
 	}{
 		{name: "latest", cutoff: -1, ready: true},
+		{name: "never saved sibling is left out", cutoff: -1, unsaved: true, ready: true},
 		{name: "later only", cutoff: 50},
 		{name: "skip all", cutoff: 50, skip: true},
 		{name: "explicit later override", cutoff: 50, explicit: true, ready: true},
@@ -128,6 +130,11 @@ func TestRestoreTimePolicySkipNeverAcceptsMissingCopiesOrEmptyManifest(t *testin
 			}
 			if scenario.explicit {
 				spec.FileVersionIds = []int64{version.ID}
+			}
+			if scenario.unsaved {
+				pending := &library.File{Name: "pending.txt", Kind: entity.FileKind_FILE_KIND_REGULAR}
+				require.NoError(t, lib.SaveFile(ctx, pending))
+				spec.Selections = append(spec.Selections, policyFileSelection(pending.ID))
 			}
 
 			// Only nonempty, matched versions with available physical candidates become executable.

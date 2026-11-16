@@ -85,8 +85,9 @@ func TestRestoreSelectionUnmatchedIsNotMissingCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, reply.FileCount)
 	require.EqualValues(t, 5, reply.TotalBytes)
-	require.EqualValues(t, 2, reply.UnmatchedVersionCount)
-	require.Zero(t, reply.SkippedVersionCount)
+	// The File never saved is left out without consent; the date mismatch still blocks.
+	require.EqualValues(t, 1, reply.UnmatchedVersionCount)
+	require.EqualValues(t, 1, reply.SkippedVersionCount)
 	require.EqualValues(t, 1, reply.MissingCopyCount)
 	require.Equal(t, entity.RestoreVersionMatch_RESTORE_VERSION_MATCH_NO_SAVED_VERSION, reply.ResolvedVersions[0].Match)
 	require.Equal(t, entity.RestoreVersionMatch_RESTORE_VERSION_MATCH_AFTER_CUTOFF, reply.ResolvedVersions[1].Match)
@@ -95,7 +96,7 @@ func TestRestoreSelectionUnmatchedIsNotMissingCopy(t *testing.T) {
 	request.SkipUnmatchedVersions = true
 	reply, err = lib.InspectSelection(ctx, request)
 	require.NoError(t, err)
-	require.EqualValues(t, 2, reply.UnmatchedVersionCount)
+	require.EqualValues(t, 1, reply.UnmatchedVersionCount)
 	require.EqualValues(t, 2, reply.SkippedVersionCount)
 	require.EqualValues(t, 1, reply.MissingCopyCount)
 	require.EqualValues(t, 1, reply.FileCount)
@@ -119,7 +120,7 @@ func TestRestoreSelectionBoundsExpandedResolutionReply(t *testing.T) {
 	// Overlap counts once, skipped files have no executable content, and descendants remain server-side.
 	reply, err := lib.InspectSelection(ctx, request)
 	require.NoError(t, err)
-	require.EqualValues(t, 125, reply.UnmatchedVersionCount)
+	require.Zero(t, reply.UnmatchedVersionCount)
 	require.EqualValues(t, 125, reply.SkippedVersionCount)
 	require.Zero(t, reply.FileCount)
 	require.Zero(t, reply.TotalBytes)

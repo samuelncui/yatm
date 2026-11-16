@@ -12,6 +12,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -84,4 +85,15 @@ func TestRestoreMediaPreservesItemAndLateCheckpointFailures(t *testing.T) {
 			require.False(t, output.Completed)
 		}
 	})
+}
+
+func TestRestoreSignatureCacheChoicesAreIndependent(t *testing.T) {
+	source, target := signatureCacheSides(&entity.RestoreJobSpec{})
+	require.True(t, source && target, "unset choices write both sides")
+	source, target = signatureCacheSides(&entity.RestoreJobSpec{WriteSourceSignatureCache: proto.Bool(false)})
+	require.False(t, source)
+	require.True(t, target)
+	source, target = signatureCacheSides(&entity.RestoreJobSpec{WriteTargetSignatureCache: proto.Bool(false)})
+	require.True(t, source)
+	require.False(t, target)
 }

@@ -344,13 +344,13 @@ describe("Version Restore selection", () => {
     await screen.findByText("1 item has no version matching this policy.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Skip 1 item" }));
-    await screen.findByText("1 item skipped.");
+    await screen.findByText("1 item has no version to restore and is left out.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled();
     await before("2026-09-02T12:00");
     await screen.findByText("1 item has no version matching this policy.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Skip 1 item" }));
-    await screen.findByText("1 item skipped.");
+    await screen.findByText("1 item has no version to restore and is left out.");
     await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Allow damaged copies" }));
     await screen.findByText("1 item has no usable archived copy.");
@@ -370,7 +370,7 @@ describe("Version Restore selection", () => {
     await target();
     await before("2026-09-01T12:00");
     await userEvent.click(await screen.findByRole("button", { name: "Skip 1 item" }));
-    await screen.findByText("1 item skipped.");
+    await screen.findByText("1 item has no version to restore and is left out.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
     expect(create).not.toHaveBeenCalled();
   });
@@ -425,6 +425,22 @@ describe("Version Restore selection", () => {
     expect(screen.getByText(/Complete damaged output may be retained/)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ allowDamagedCopies: true }) }));
+  });
+  it("chooses the signature cache for Media and restored files separately and remembers both", async () => {
+    show();
+    await target();
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+    const media = screen.getByRole("checkbox", { name: "Write signature cache onto Media" });
+    expect(media).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto restored files" })).toBeChecked();
+    await userEvent.click(media);
+    expect(screen.getByRole("button", { name: /^Advanced/ })).toHaveTextContent("No signature cache on Media");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ spec: expect.objectContaining({ writeSourceSignatureCache: false, writeTargetSignatureCache: true }) }),
+    );
+    expect(JSON.parse(localStorage.getItem("restore:last-options")!)).toEqual({ writeSourceSignatureCache: false, writeTargetSignatureCache: true });
   });
   it("submits an explicit version with a restore-only destination that needs no scan", async () => {
     show();

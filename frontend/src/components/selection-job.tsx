@@ -42,6 +42,7 @@ import { libraryDirectoryReference } from "@/components/files-browser";
 import { useSelections } from "@/state/react";
 import { SelectionJobRecreate, type SelectionCreation } from "./selection-job-recreate";
 import { loadArchivePreferences, parseTargetMediaCount, saveArchivePreferences } from "./archive-preferences";
+import { loadRestorePreferences, saveRestorePreferences } from "./restore-preferences";
 
 const AddSelection = defineFileAction({ id: "add_job_selection", requiresSelection: true, button: { name: "Add to list", toolbar: true, contextMenu: true } });
 const labels = { archive: "Archive", restore: "Restore" };
@@ -85,6 +86,11 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   const [writeSignatureCache, setWriteSignatureCache] = useState(() =>
     initial?.kind === "archive" ? (initial.request.spec?.writeSignatureCache ?? true) : (loadArchivePreferences()?.writeSignatureCache ?? true),
   );
+  // A Restore chooses the Media files it reads and the restored files separately, under the same rule.
+  const [restoreCache, setRestoreCache] = useState(() => {
+    const stored = initial?.kind === "restore" ? initial.request.spec : loadRestorePreferences();
+    return { source: stored?.writeSourceSignatureCache ?? true, target: stored?.writeTargetSignatureCache ?? true };
+  });
   // The target Media count follows the same rule; empty is off.
   const [targetMedia, setTargetMedia] = useState(() =>
     String((initial?.kind === "archive" ? initial.request.spec?.targetMediaCount : loadArchivePreferences()?.targetMediaCount) ?? ""),
@@ -217,10 +223,13 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                 allowDamagedCopies,
                 versionPolicy: { beforeAtNs: cutoff },
                 skipUnmatchedVersions,
+                writeSourceSignatureCache: restoreCache.source,
+                writeTargetSignatureCache: restoreCache.target,
               }),
             }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
       if (kind === "archive") saveArchivePreferences({ writeSignatureCache, targetMediaCount });
+      else saveRestorePreferences({ writeSourceSignatureCache: restoreCache.source, writeTargetSignatureCache: restoreCache.target });
       submitted(revision);
       navigate(`/jobs/${reply.job.id}`);
     } catch (error) {
@@ -380,11 +389,45 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                 )}
                 <RestoreDestinationPicker value={destination} onChange={chooseDestination} disabled={busy} usePreference={!initial} />
                 {destinationError && <Feedback severity="error">{destinationError}</Feedback>}
-                <SettingsSection title="Advanced" collapsible description={allowDamagedCopies ? "Damaged copies allowed" : undefined}>
+                <SettingsSection
+                  title="Advanced"
+                  collapsible
+                  description={
+                    [
+                      allowDamagedCopies && "Damaged copies allowed",
+                      !restoreCache.source && "No signature cache on Media",
+                      !restoreCache.target && "No signature cache on restored files",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                >
                   <FormControlLabel
                     control={<Checkbox checked={allowDamagedCopies} disabled={busy} onChange={(_, checked) => setAllowDamagedCopies(checked)} />}
                     label="Allow damaged copies"
                   />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={restoreCache.source}
+                        disabled={busy}
+                        onChange={(_, source) => setRestoreCache((current) => ({ ...current, source }))}
+                      />
+                    }
+                    label="Write signature cache onto Media"
+                  />
+                  <span>Stores the signature of each file read from a Volume or LTFS Tape on that file. On an LTFS Tape this rewrites its Index.</span>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={restoreCache.target}
+                        disabled={busy}
+                        onChange={(_, target) => setRestoreCache((current) => ({ ...current, target }))}
+                      />
+                    }
+                    label="Write signature cache onto restored files"
+                  />
+                  <span>Stores each restored file&apos;s signature in an extended attribute so later reads can reuse it. File content is unchanged.</span>
                 </SettingsSection>
                 {allowDamagedCopies && (
                   <Alert severity="warning">
@@ -452,14 +495,17 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
             )}
             {kind === "restore" && summary && summary.skippedVersionCount > 0n && (
               <Feedback
-                severity="info"
+                severity="warning"
                 action={
-                  <Button disabled={busy} onClick={() => setSkipConsent("")}>
-                    Include again
-                  </Button>
+                  skipUnmatchedVersions && (
+                    <Button disabled={busy} onClick={() => setSkipConsent("")}>
+                      Include again
+                    </Button>
+                  )
                 }
               >
-                {String(summary.skippedVersionCount)} {summary.skippedVersionCount === 1n ? "item" : "items"} skipped.
+                {String(summary.skippedVersionCount)}{" "}
+                {summary.skippedVersionCount === 1n ? "item has no version to restore and is" : "items have no version to restore and are"} left out.
               </Feedback>
             )}
             {kind === "archive" && summary && targetMediaCount !== undefined && (

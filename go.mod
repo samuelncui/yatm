@@ -19,7 +19,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5
-	github.com/samuelncui/acp v0.2.8
+	github.com/samuelncui/acp v0.2.9
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/image v0.36.0

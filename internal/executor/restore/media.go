@@ -93,11 +93,18 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	defer func() { _ = buffer.Close() }()
 	source := &copyItems{runner: a, mediaID: selected.ID, session: session, batch: int(settings.GetReadBatch())}
 
+	// The Job's frozen choices decide which side of the copy also receives the signature cache.
+	var config Config
+	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
+		return fmt.Errorf("read Restore config failed, %w", err)
+	}
+	cacheSource, cacheTarget := signatureCacheSides(config.Spec)
 	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashReadRefresh),
 		// ACP replaces only the empty output this Job created exclusively before submitting the item.
 		acp.Overwrite(true),
-		acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...),
+		acp.SetFromDevice(append(mediapkg.DeviceOptions(session.Capabilities().Read), acp.RefreshSignatureCache(cacheSource))...),
+		acp.SetToDevice(acp.RefreshSignatureCache(cacheTarget)),
 		acp.WithLogger(a.logger),
 		acp.WithEventHandler(a.restoreEventHandler(ctx)),
 	}
@@ -324,4 +331,12 @@ func (a *jobRestoreRunner) publishHealth(ctx context.Context, mediaID int64) err
 			after = copy.ID
 		}
 	}
+}
+
+// signatureCacheSides reads the Job's two frozen choices: whether the copy writes the signature
+// cache onto the Media files it reads, such as those of a mounted LTFS Tape whose Index a write
+// rewrites, and onto the restored files. An unset choice writes.
+func signatureCacheSides(spec *entity.RestoreJobSpec) (source, target bool) {
+	write := func(choice *bool) bool { return choice == nil || *choice }
+	return write(spec.WriteSourceSignatureCache), write(spec.WriteTargetSignatureCache)
 }

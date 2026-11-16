@@ -12,11 +12,13 @@ type restoreCreateCommand struct {
 	runtime *runtime
 	selectionOptions
 	restorePolicyOptions
-	Priority           int64  `long:"priority" default:"1" description:"Job priority"`
-	TargetLocation     int64  `long:"target-location" required:"yes" description:"Confirmed destination Location ID"`
-	Directory          string `long:"directory" description:"Destination subdirectory relative to the Location root"`
-	AllowDamagedCopies bool   `long:"allow-damaged-copies" description:"Permit damaged copies and retain completely read mismatched output without linking"`
-	Args               struct {
+	Priority               int64  `long:"priority" default:"1" description:"Job priority"`
+	TargetLocation         int64  `long:"target-location" required:"yes" description:"Confirmed destination Location ID"`
+	Directory              string `long:"directory" description:"Destination subdirectory relative to the Location root"`
+	AllowDamagedCopies     bool   `long:"allow-damaged-copies" description:"Permit damaged copies and retain completely read mismatched output without linking"`
+	NoSourceSignatureCache bool   `long:"no-source-signature-cache" description:"Do not write the signature cache onto the Media files this Job reads, such as the files of an LTFS Tape"`
+	NoTargetSignatureCache bool   `long:"no-target-signature-cache" description:"Do not write the signature cache onto restored files"`
+	Args                   struct {
 		IDs []int64 `positional-arg-name:"VERSION_ID"`
 	} `positional-args:"yes"`
 }
@@ -108,7 +110,9 @@ func (c *restoreCreateCommand) Execute(_ []string) error {
 				FileVersionIds: c.Args.IDs, Selections: selections,
 				AllowDamagedCopies: c.AllowDamagedCopies,
 				VersionPolicy:      policy, SkipUnmatchedVersions: c.SkipUnmatchedVersions,
-				Destination: &entity.RestoreDestination{LocationId: c.TargetLocation, Path: c.Directory},
+				Destination:               &entity.RestoreDestination{LocationId: c.TargetLocation, Path: c.Directory},
+				WriteSourceSignatureCache: signatureCacheChoice(c.NoSourceSignatureCache),
+				WriteTargetSignatureCache: signatureCacheChoice(c.NoTargetSignatureCache),
 			},
 		},
 	)

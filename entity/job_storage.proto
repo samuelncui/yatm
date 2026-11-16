@@ -30,6 +30,10 @@ message RestoreJobSpec {
   RestoreVersionPolicy version_policy = 6;
   // Explicit consent to omit automatic selections with no matching dated version.
   bool skip_unmatched_versions = 7;
+  // Unset writes the signature cache onto the Media files this Job reads, where they can hold it.
+  optional bool write_source_signature_cache = 8;
+  // Unset writes the signature cache onto restored files.
+  optional bool write_target_signature_cache = 9;
 }
 
 // Unset cutoff selects the latest saved version. Explicit version IDs override this policy.

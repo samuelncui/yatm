@@ -63,6 +63,18 @@ export interface RestoreJobSpec {
      * @generated from protobuf field: bool skip_unmatched_versions = 7
      */
     skipUnmatchedVersions: boolean;
+    /**
+     * Unset writes the signature cache onto the Media files this Job reads, where they can hold it.
+     *
+     * @generated from protobuf field: optional bool write_source_signature_cache = 8
+     */
+    writeSourceSignatureCache?: boolean;
+    /**
+     * Unset writes the signature cache onto restored files.
+     *
+     * @generated from protobuf field: optional bool write_target_signature_cache = 9
+     */
+    writeTargetSignatureCache?: boolean;
 }
 /**
  * Unset cutoff selects the latest saved version. Explicit version IDs override this policy.
@@ -276,7 +288,9 @@ class RestoreJobSpec$Type extends MessageType<RestoreJobSpec> {
             { no: 4, name: "destination", kind: "message", T: () => RestoreDestination },
             { no: 5, name: "allow_damaged_copies", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 6, name: "version_policy", kind: "message", T: () => RestoreVersionPolicy },
-            { no: 7, name: "skip_unmatched_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+            { no: 7, name: "skip_unmatched_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 8, name: "write_source_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 9, name: "write_target_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<RestoreJobSpec>): RestoreJobSpec {
@@ -316,6 +330,12 @@ class RestoreJobSpec$Type extends MessageType<RestoreJobSpec> {
                 case /* bool skip_unmatched_versions */ 7:
                     message.skipUnmatchedVersions = reader.bool();
                     break;
+                case /* optional bool write_source_signature_cache */ 8:
+                    message.writeSourceSignatureCache = reader.bool();
+                    break;
+                case /* optional bool write_target_signature_cache */ 9:
+                    message.writeTargetSignatureCache = reader.bool();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -350,6 +370,12 @@ class RestoreJobSpec$Type extends MessageType<RestoreJobSpec> {
         /* bool skip_unmatched_versions = 7; */
         if (message.skipUnmatchedVersions !== false)
             writer.tag(7, WireType.Varint).bool(message.skipUnmatchedVersions);
+        /* optional bool write_source_signature_cache = 8; */
+        if (message.writeSourceSignatureCache !== undefined)
+            writer.tag(8, WireType.Varint).bool(message.writeSourceSignatureCache);
+        /* optional bool write_target_signature_cache = 9; */
+        if (message.writeTargetSignatureCache !== undefined)
+            writer.tag(9, WireType.Varint).bool(message.writeTargetSignatureCache);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

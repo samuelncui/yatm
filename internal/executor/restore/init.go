@@ -63,9 +63,14 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 		return nil
 	}
 	appendVersion := func(item *library.RestoreSelectionItem) error {
-		// Missing policy matches require explicit omission; unavailable physical copies never do.
+		// A File never saved has nothing to restore and is left out with a notice. Missing policy
+		// matches require explicit omission; unavailable physical copies never do.
 		version := item.Version
 		if version == nil {
+			if item.Resolution.Match == entity.RestoreVersionMatch_RESTORE_VERSION_MATCH_NO_SAVED_VERSION {
+				a.logger.Warnf("Leaving out File %d (%s): it has no saved version", item.File.ID, item.Path)
+				return nil
+			}
 			if spec.SkipUnmatchedVersions {
 				a.logger.Infof("Skipping File %d: no version matches the restore cutoff (%s)", item.File.ID, item.Resolution.Match)
 				return nil
