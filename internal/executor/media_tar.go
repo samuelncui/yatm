@@ -105,16 +105,14 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		return nil, err
 	}
 
-	// One session owns release and the lifetime of its optional learning observations.
+	// One session owns release and invalidates its position map.
 	valid := new(atomic.Bool)
 	valid.Store(true)
-	finishLearning := func() {}
 	release := func(ctx context.Context, complete bool) error {
 		if prepared == nil {
 			return nil
 		}
 		err := b.executor.releaseRawTape(ctx, b.jobID, device, prepared, complete)
-		finishLearning()
 		valid.Store(false)
 		return err
 	}
@@ -168,11 +166,10 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 	}
 
 	// Optional estimates use the admitted settings and the actual prepared drive, never its path.
-	parameters, parameterSource := selectTarReadParameters(deviceSettings, device, prepared.Report(), media.Profile.GetTape())
-	parameterReason := tarReadParametersReason(parameters, prepared.Report(), media.Profile.GetTape())
+	parameters, parameterSource, parameterReason := selectTapeReadParameters(deviceSettings, device, prepared.Report())
 	var timing *entity.TapeReadTiming
 	var initialPosition *entity.TapeBytePosition
-	if parameterReason == "" {
+	if parameters != nil {
 		timing = parameters.GetReading()
 		if timing != nil && timing.BytesPerSecond != nil && navigator != nil {
 			position, err := navigator.Position(ctx)
@@ -196,11 +193,9 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 
 	// Both read orders share action costing; only AUTO exposes the optional ordering provider.
 	var readModel *mediapkg.ReadCostModel
-	var learningModel *mediapkg.ReadCostModel
-	var learningMap *entity.TapePositionMap
 	positionSource := ""
 	readReason := parameterReason
-	if parameterReason == "" && navigator != nil {
+	if parameters != nil && navigator != nil {
 		started := time.Now()
 		geometry, err := prepared.Geometry(ctx)
 		if err != nil {
@@ -208,22 +203,10 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		}
 		b.logReadDirectoryPreparation(ctx, device, started, prepared.Report(), "Tape read directory preparation")
 
-		var observed *entity.TapePositionMap
-		readModel, observed, readReason = compileTarMediaReadModel(parameters, media, geometry, valid.Load)
-		learningMap = media.TapePositionMap
-		positionSource = media.TapePositionMap.GetSource()
-		if observed != nil {
-			learningMap = observed
-			positionSource = observed.Source
-			// The Job persists the observed map this Session returns.
-			selected := *media
-			selected.TapePositionMap = observed
-			media = &selected
-		}
-		if readModel != nil {
-			// Completed-command learning may drain after unload invalidates the live Device map.
-			// Its immutable geometry remains limited to this identified read-only Session.
-			learningModel, _ = compileTarPositionMap(parameters, profile, learningMap, valid.Load)
+		var positionMap *tapePositionMap
+		readModel, positionMap, readReason = compileTarMediaReadModel(parameters, media, geometry, valid.Load)
+		if positionMap != nil {
+			positionSource = positionMap.source
 		}
 	} else if navigator == nil {
 		readReason = "An eligible standard READ POSITION/LOCATE pairing is unavailable"
@@ -249,22 +232,9 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		ParametersSource: parameterSource, ParametersReference: parameters.GetSourceReference(),
 		ApplicabilityReason: parameterReason, PositionSource: positionSource, CoverageDetail: readReason,
 	}
-	if parameterSource == "learned" {
-		for _, learned := range deviceSettings.GetLearnedReadParameters() {
-			if learned.GetDevice() == device && proto.Equal(learned.GetParameters().GetAppliesTo(), parameters.GetAppliesTo()) {
-				optimization.LearnedMaeSeconds = proto.Float64(learned.MaeSeconds)
-				optimization.LearnedMaxErrorSeconds = proto.Float64(learned.MaxErrorSeconds)
-				break
-			}
-		}
-	}
 	b.executor.recordPreparedRead(device, optimization)
 
-	// Transfer the prepared reader and its observation lifetime to the content session.
-	if parameterReason == "" {
-		finishLearning = b.startTarReadLearning(ctx, prepared, device, media.Identity, deviceSettings, parameters,
-			learningModel, learningMap, initialPosition)
-	}
+	// Transfer the prepared reader to the content session.
 	return mediapkg.NewTarReadSession(records, mediapkg.TarSessionOptions{
 		Media: media, Mode: records.Mode, TapeFile: 1, Cleanup: cleanup, Navigator: navigator,
 		Finish:    func(ctx context.Context) error { return release(ctx, true) },

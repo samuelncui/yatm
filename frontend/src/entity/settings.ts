@@ -11,7 +11,6 @@ import { UnknownFieldHandler } from "@protobuf-ts/runtime";
 import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
-import { TapeRecordMode } from "./media";
 import { TarWriteOptions } from "./media";
 /**
  * Device settings attach to deployment-configured names and do not authorize device access.
@@ -23,12 +22,6 @@ export interface DeviceSettings {
      * @generated from protobuf field: repeated yatm.v1.DeviceConfig devices = 1
      */
     devices: DeviceConfig[];
-    /**
-     * Read-only results of passive read learning. Update ignores client-supplied values.
-     *
-     * @generated from protobuf field: repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters = 2
-     */
-    learnedReadParameters: TapeLearnedReadParameters[];
 }
 /**
  * @generated from protobuf message yatm.v1.DeviceConfig
@@ -74,63 +67,18 @@ export interface TapeDeviceSettings {
      */
     capacityPollIntervalSeconds?: number;
     /**
-     * Optional manual read parameters. Missing fields stay unknown; saving does not establish their applicability.
+     * At most one set per recorded density code. A read uses the set for the loaded cartridge's density,
+     * otherwise the built-in values; missing fields stay unknown.
      *
-     * @generated from protobuf field: optional yatm.v1.TapeReadParameters read_parameters = 5
+     * @generated from protobuf field: repeated yatm.v1.TapeReadParameters read_parameters = 5
      */
-    readParameters?: TapeReadParameters;
-    /**
-     * Absent enables observation of ordinary completed I/O; never issues additional measurement commands.
-     *
-     * @generated from protobuf field: optional bool passive_read_learning = 6
-     */
-    passiveReadLearning?: boolean;
+    readParameters: TapeReadParameters[];
     /**
      * Absent allows 300 seconds. Explicit values must be positive; no 600-second upper limit.
      *
      * @generated from protobuf field: optional uint32 read_planning_seconds = 7
      */
     readPlanningSeconds?: number;
-}
-/**
- * The latest refit for an exact observed device/configuration. Its raw observations live in each
- * Job bundle as read-observations.jsonl and are not part of this message.
- *
- * @generated from protobuf message yatm.v1.TapeLearnedReadParameters
- */
-export interface TapeLearnedReadParameters {
-    /**
-     * @generated from protobuf field: string device = 1
-     */
-    device: string;
-    /**
-     * @generated from protobuf field: yatm.v1.TapeReadParameters parameters = 2
-     */
-    parameters?: TapeReadParameters;
-    /**
-     * @generated from protobuf field: string fit_version = 3
-     */
-    fitVersion: string;
-    /**
-     * Retained observations for this device/configuration when the parameters were fitted.
-     *
-     * @generated from protobuf field: uint32 training_observations = 4
-     */
-    trainingObservations: number;
-    /**
-     * Unweighted residuals of the fitted parameters over those observations.
-     *
-     * @generated from protobuf field: double mae_seconds = 6
-     */
-    maeSeconds: number;
-    /**
-     * @generated from protobuf field: double max_error_seconds = 7
-     */
-    maxErrorSeconds: number;
-    /**
-     * @generated from protobuf field: int64 updated_at_ns = 8
-     */
-    updatedAtNs: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeReadParameters
@@ -166,6 +114,7 @@ export interface TapeReadParameters {
 /**
  * Native synchronous unload timing is independent of the LOCATE regression. Full span means
  * one physical longitudinal tape length, not the complete serpentine logical address space.
+ * LTFS completion adds ltfs_unmount_seconds for the unmount adapter and Session finalization.
  *
  * @generated from protobuf message yatm.v1.TapeReadCompletion
  */
@@ -178,41 +127,29 @@ export interface TapeReadCompletion {
      * @generated from protobuf field: optional double fixed_seconds = 2
      */
     fixedSeconds?: number;
+    /**
+     * @generated from protobuf field: optional double ltfs_unmount_seconds = 3
+     */
+    ltfsUnmountSeconds?: number;
 }
 /**
+ * The cartridge generation and, optionally, the drive a parameter set applies to.
+ *
  * @generated from protobuf message yatm.v1.TapeReadApplicability
  */
 export interface TapeReadApplicability {
     /**
+     * When set, the set does not apply to a drive reporting another serial number.
+     *
      * @generated from protobuf field: optional string drive_serial = 1
      */
     driveSerial?: string;
     /**
-     * @generated from protobuf field: optional string firmware = 2
-     */
-    firmware?: string;
-    /**
+     * Required recorded density code that selects the set.
+     *
      * @generated from protobuf field: optional uint32 density_code = 3
      */
     densityCode?: number;
-    /**
-     * @generated from protobuf field: optional yatm.v1.TapeRecordMode record_mode = 4
-     */
-    recordMode?: TapeRecordMode;
-    /**
-     * @generated from protobuf field: optional uint32 record_bytes = 5
-     */
-    recordBytes?: number;
-    /**
-     * @generated from protobuf field: optional bool hardware_compression = 6
-     */
-    hardwareCompression?: boolean;
-    /**
-     * Explicit empty means plaintext; absent means unknown. Never contains a key.
-     *
-     * @generated from protobuf field: optional string encryption_algorithm = 7
-     */
-    encryptionAlgorithm?: string;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeReadGeometry
@@ -222,55 +159,45 @@ export interface TapeReadGeometry {
      * @generated from protobuf field: optional uint32 nominal_wraps = 1
      */
     nominalWraps?: number;
-    /**
-     * @generated from protobuf field: optional uint64 min_lpos = 2
-     */
-    minLpos?: bigint;
-    /**
-     * @generated from protobuf field: optional uint64 max_lpos = 3
-     */
-    maxLpos?: bigint;
 }
 /**
- * The seven CERN positioning terms use seconds and seconds per LPOS, including signed terms.
+ * Nonnegative LOCATE terms in seconds. A target within buffer_bytes ahead costs the skipped objects
+ * at reading speed plus approach_reversal_seconds per wrap turn crossed. A same-wrap forward move that
+ * stays in one half costs base_seconds plus that reading-speed time, priced from record bytes and
+ * TapeReadTiming.bytes_per_second rather than a field here. Every other move, including a same-wrap
+ * backward move, a forward move across the middle and every wrap change, costs base_seconds plus
+ * seek travel, plus approach_reversal_seconds when it arrives against the target wrap's read direction.
  *
  * @generated from protobuf message yatm.v1.TapeReadPositioning
  */
 export interface TapeReadPositioning {
     /**
+     * Fixed time of every LOCATE the drive does not stream through.
+     *
      * @generated from protobuf field: optional double base_seconds = 1
      */
     baseSeconds?: number;
     /**
-     * @generated from protobuf field: optional double wrap_change_seconds = 2
-     */
-    wrapChangeSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double band_change_seconds = 3
-     */
-    bandChangeSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double landing_zone_change_seconds = 4
-     */
-    landingZoneChangeSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double direction_change_seconds = 5
-     */
-    directionChangeSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double step_back_seconds = 6
-     */
-    stepBackSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double longitudinal_seconds_per_lpos = 7
-     */
-    longitudinalSecondsPerLpos?: number;
-    /**
-     * Seconds for one complete longitudinal span, not transfer time. Exclusive with seconds per LPOS.
+     * Added in full when the tape arrives moving against the target wrap's read direction, and once per
+     * wrap turn crossed while streaming or reading.
      *
-     * @generated from protobuf field: optional double longitudinal_seconds_per_wrap = 9
+     * @generated from protobuf field: optional double approach_reversal_seconds = 10
      */
-    longitudinalSecondsPerWrap?: number;
+    approachReversalSeconds?: number;
+    /**
+     * Seek-speed seconds for one complete longitudinal span, not transfer time.
+     *
+     * @generated from protobuf field: optional double seek_seconds_per_wrap = 12
+     */
+    seekSecondsPerWrap?: number;
+    /**
+     * How far logically ahead the drive reaches by continuing to read instead of positioning: such a
+     * target costs the skipped objects at reading speed plus approach_reversal_seconds per wrap turn
+     * crossed, and no other positioning term. Absent or zero never applies.
+     *
+     * @generated from protobuf field: optional uint64 buffer_bytes = 14
+     */
+    bufferBytes?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeReadTiming
@@ -280,12 +207,6 @@ export interface TapeReadTiming {
      * @generated from protobuf field: optional double bytes_per_second = 1
      */
     bytesPerSecond?: number;
-    /**
-     * Additional first nonempty READ latency after settled LOCATE, excluding transferred bytes/rate.
-     *
-     * @generated from protobuf field: optional double post_locate_read_overhead_seconds = 2
-     */
-    postLocateReadOverheadSeconds?: number;
     /**
      * Additional latency per crossed filemark and following READ; absent leaves that action unpriced.
      *
@@ -613,14 +534,12 @@ export enum TapeReadOrder {
 class DeviceSettings$Type extends MessageType<DeviceSettings> {
     constructor() {
         super("yatm.v1.DeviceSettings", [
-            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceConfig },
-            { no: 2, name: "learned_read_parameters", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapeLearnedReadParameters }
+            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceConfig }
         ]);
     }
     create(value?: PartialMessage<DeviceSettings>): DeviceSettings {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.devices = [];
-        message.learnedReadParameters = [];
         if (value !== undefined)
             reflectionMergePartial<DeviceSettings>(this, message, value);
         return message;
@@ -632,9 +551,6 @@ class DeviceSettings$Type extends MessageType<DeviceSettings> {
             switch (fieldNo) {
                 case /* repeated yatm.v1.DeviceConfig devices */ 1:
                     message.devices.push(DeviceConfig.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters */ 2:
-                    message.learnedReadParameters.push(TapeLearnedReadParameters.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -651,9 +567,6 @@ class DeviceSettings$Type extends MessageType<DeviceSettings> {
         /* repeated yatm.v1.DeviceConfig devices = 1; */
         for (let i = 0; i < message.devices.length; i++)
             DeviceConfig.internalBinaryWrite(message.devices[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
-        /* repeated yatm.v1.TapeLearnedReadParameters learned_read_parameters = 2; */
-        for (let i = 0; i < message.learnedReadParameters.length; i++)
-            TapeLearnedReadParameters.internalBinaryWrite(message.learnedReadParameters[i], writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -730,14 +643,14 @@ class TapeDeviceSettings$Type extends MessageType<TapeDeviceSettings> {
             { no: 2, name: "tar_write_options", kind: "message", T: () => TarWriteOptions },
             { no: 3, name: "read_order", kind: "enum", T: () => ["yatm.v1.TapeReadOrder", TapeReadOrder, "TAPE_READ_ORDER_"] },
             { no: 4, name: "capacity_poll_interval_seconds", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 5, name: "read_parameters", kind: "message", T: () => TapeReadParameters },
-            { no: 6, name: "passive_read_learning", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 5, name: "read_parameters", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapeReadParameters },
             { no: 7, name: "read_planning_seconds", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<TapeDeviceSettings>): TapeDeviceSettings {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.readOrder = 0;
+        message.readParameters = [];
         if (value !== undefined)
             reflectionMergePartial<TapeDeviceSettings>(this, message, value);
         return message;
@@ -759,11 +672,8 @@ class TapeDeviceSettings$Type extends MessageType<TapeDeviceSettings> {
                 case /* optional uint32 capacity_poll_interval_seconds */ 4:
                     message.capacityPollIntervalSeconds = reader.uint32();
                     break;
-                case /* optional yatm.v1.TapeReadParameters read_parameters */ 5:
-                    message.readParameters = TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options, message.readParameters);
-                    break;
-                case /* optional bool passive_read_learning */ 6:
-                    message.passiveReadLearning = reader.bool();
+                case /* repeated yatm.v1.TapeReadParameters read_parameters */ 5:
+                    message.readParameters.push(TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 case /* optional uint32 read_planning_seconds */ 7:
                     message.readPlanningSeconds = reader.uint32();
@@ -792,12 +702,9 @@ class TapeDeviceSettings$Type extends MessageType<TapeDeviceSettings> {
         /* optional uint32 capacity_poll_interval_seconds = 4; */
         if (message.capacityPollIntervalSeconds !== undefined)
             writer.tag(4, WireType.Varint).uint32(message.capacityPollIntervalSeconds);
-        /* optional yatm.v1.TapeReadParameters read_parameters = 5; */
-        if (message.readParameters)
-            TapeReadParameters.internalBinaryWrite(message.readParameters, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
-        /* optional bool passive_read_learning = 6; */
-        if (message.passiveReadLearning !== undefined)
-            writer.tag(6, WireType.Varint).bool(message.passiveReadLearning);
+        /* repeated yatm.v1.TapeReadParameters read_parameters = 5; */
+        for (let i = 0; i < message.readParameters.length; i++)
+            TapeReadParameters.internalBinaryWrite(message.readParameters[i], writer.tag(5, WireType.LengthDelimited).fork(), options).join();
         /* optional uint32 read_planning_seconds = 7; */
         if (message.readPlanningSeconds !== undefined)
             writer.tag(7, WireType.Varint).uint32(message.readPlanningSeconds);
@@ -811,100 +718,6 @@ class TapeDeviceSettings$Type extends MessageType<TapeDeviceSettings> {
  * @generated MessageType for protobuf message yatm.v1.TapeDeviceSettings
  */
 export const TapeDeviceSettings = new TapeDeviceSettings$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class TapeLearnedReadParameters$Type extends MessageType<TapeLearnedReadParameters> {
-    constructor() {
-        super("yatm.v1.TapeLearnedReadParameters", [
-            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "parameters", kind: "message", T: () => TapeReadParameters },
-            { no: 3, name: "fit_version", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "training_observations", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 6, name: "mae_seconds", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 7, name: "max_error_seconds", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 8, name: "updated_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<TapeLearnedReadParameters>): TapeLearnedReadParameters {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.device = "";
-        message.fitVersion = "";
-        message.trainingObservations = 0;
-        message.maeSeconds = 0;
-        message.maxErrorSeconds = 0;
-        message.updatedAtNs = 0n;
-        if (value !== undefined)
-            reflectionMergePartial<TapeLearnedReadParameters>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeLearnedReadParameters): TapeLearnedReadParameters {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* string device */ 1:
-                    message.device = reader.string();
-                    break;
-                case /* yatm.v1.TapeReadParameters parameters */ 2:
-                    message.parameters = TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options, message.parameters);
-                    break;
-                case /* string fit_version */ 3:
-                    message.fitVersion = reader.string();
-                    break;
-                case /* uint32 training_observations */ 4:
-                    message.trainingObservations = reader.uint32();
-                    break;
-                case /* double mae_seconds */ 6:
-                    message.maeSeconds = reader.double();
-                    break;
-                case /* double max_error_seconds */ 7:
-                    message.maxErrorSeconds = reader.double();
-                    break;
-                case /* int64 updated_at_ns */ 8:
-                    message.updatedAtNs = reader.int64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: TapeLearnedReadParameters, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string device = 1; */
-        if (message.device !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.device);
-        /* yatm.v1.TapeReadParameters parameters = 2; */
-        if (message.parameters)
-            TapeReadParameters.internalBinaryWrite(message.parameters, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* string fit_version = 3; */
-        if (message.fitVersion !== "")
-            writer.tag(3, WireType.LengthDelimited).string(message.fitVersion);
-        /* uint32 training_observations = 4; */
-        if (message.trainingObservations !== 0)
-            writer.tag(4, WireType.Varint).uint32(message.trainingObservations);
-        /* double mae_seconds = 6; */
-        if (message.maeSeconds !== 0)
-            writer.tag(6, WireType.Bit64).double(message.maeSeconds);
-        /* double max_error_seconds = 7; */
-        if (message.maxErrorSeconds !== 0)
-            writer.tag(7, WireType.Bit64).double(message.maxErrorSeconds);
-        /* int64 updated_at_ns = 8; */
-        if (message.updatedAtNs !== 0n)
-            writer.tag(8, WireType.Varint).int64(message.updatedAtNs);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.TapeLearnedReadParameters
- */
-export const TapeLearnedReadParameters = new TapeLearnedReadParameters$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class TapeReadParameters$Type extends MessageType<TapeReadParameters> {
     constructor() {
@@ -992,7 +805,8 @@ class TapeReadCompletion$Type extends MessageType<TapeReadCompletion> {
     constructor() {
         super("yatm.v1.TapeReadCompletion", [
             { no: 1, name: "full_span_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 2, name: "fixed_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+            { no: 2, name: "fixed_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 3, name: "ltfs_unmount_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
         ]);
     }
     create(value?: PartialMessage<TapeReadCompletion>): TapeReadCompletion {
@@ -1012,6 +826,9 @@ class TapeReadCompletion$Type extends MessageType<TapeReadCompletion> {
                 case /* optional double fixed_seconds */ 2:
                     message.fixedSeconds = reader.double();
                     break;
+                case /* optional double ltfs_unmount_seconds */ 3:
+                    message.ltfsUnmountSeconds = reader.double();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1030,6 +847,9 @@ class TapeReadCompletion$Type extends MessageType<TapeReadCompletion> {
         /* optional double fixed_seconds = 2; */
         if (message.fixedSeconds !== undefined)
             writer.tag(2, WireType.Bit64).double(message.fixedSeconds);
+        /* optional double ltfs_unmount_seconds = 3; */
+        if (message.ltfsUnmountSeconds !== undefined)
+            writer.tag(3, WireType.Bit64).double(message.ltfsUnmountSeconds);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1045,12 +865,7 @@ class TapeReadApplicability$Type extends MessageType<TapeReadApplicability> {
     constructor() {
         super("yatm.v1.TapeReadApplicability", [
             { no: 1, name: "drive_serial", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "firmware", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "density_code", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 4, name: "record_mode", kind: "enum", opt: true, T: () => ["yatm.v1.TapeRecordMode", TapeRecordMode, "TAPE_RECORD_MODE_"] },
-            { no: 5, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 6, name: "hardware_compression", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 7, name: "encryption_algorithm", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
+            { no: 3, name: "density_code", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<TapeReadApplicability>): TapeReadApplicability {
@@ -1067,23 +882,8 @@ class TapeReadApplicability$Type extends MessageType<TapeReadApplicability> {
                 case /* optional string drive_serial */ 1:
                     message.driveSerial = reader.string();
                     break;
-                case /* optional string firmware */ 2:
-                    message.firmware = reader.string();
-                    break;
                 case /* optional uint32 density_code */ 3:
                     message.densityCode = reader.uint32();
-                    break;
-                case /* optional yatm.v1.TapeRecordMode record_mode */ 4:
-                    message.recordMode = reader.int32();
-                    break;
-                case /* optional uint32 record_bytes */ 5:
-                    message.recordBytes = reader.uint32();
-                    break;
-                case /* optional bool hardware_compression */ 6:
-                    message.hardwareCompression = reader.bool();
-                    break;
-                case /* optional string encryption_algorithm */ 7:
-                    message.encryptionAlgorithm = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1100,24 +900,9 @@ class TapeReadApplicability$Type extends MessageType<TapeReadApplicability> {
         /* optional string drive_serial = 1; */
         if (message.driveSerial !== undefined)
             writer.tag(1, WireType.LengthDelimited).string(message.driveSerial);
-        /* optional string firmware = 2; */
-        if (message.firmware !== undefined)
-            writer.tag(2, WireType.LengthDelimited).string(message.firmware);
         /* optional uint32 density_code = 3; */
         if (message.densityCode !== undefined)
             writer.tag(3, WireType.Varint).uint32(message.densityCode);
-        /* optional yatm.v1.TapeRecordMode record_mode = 4; */
-        if (message.recordMode !== undefined)
-            writer.tag(4, WireType.Varint).int32(message.recordMode);
-        /* optional uint32 record_bytes = 5; */
-        if (message.recordBytes !== undefined)
-            writer.tag(5, WireType.Varint).uint32(message.recordBytes);
-        /* optional bool hardware_compression = 6; */
-        if (message.hardwareCompression !== undefined)
-            writer.tag(6, WireType.Varint).bool(message.hardwareCompression);
-        /* optional string encryption_algorithm = 7; */
-        if (message.encryptionAlgorithm !== undefined)
-            writer.tag(7, WireType.LengthDelimited).string(message.encryptionAlgorithm);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1132,9 +917,7 @@ export const TapeReadApplicability = new TapeReadApplicability$Type();
 class TapeReadGeometry$Type extends MessageType<TapeReadGeometry> {
     constructor() {
         super("yatm.v1.TapeReadGeometry", [
-            { no: 1, name: "nominal_wraps", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 2, name: "min_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "max_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 1, name: "nominal_wraps", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<TapeReadGeometry>): TapeReadGeometry {
@@ -1151,12 +934,6 @@ class TapeReadGeometry$Type extends MessageType<TapeReadGeometry> {
                 case /* optional uint32 nominal_wraps */ 1:
                     message.nominalWraps = reader.uint32();
                     break;
-                case /* optional uint64 min_lpos */ 2:
-                    message.minLpos = reader.uint64().toBigInt();
-                    break;
-                case /* optional uint64 max_lpos */ 3:
-                    message.maxLpos = reader.uint64().toBigInt();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1172,12 +949,6 @@ class TapeReadGeometry$Type extends MessageType<TapeReadGeometry> {
         /* optional uint32 nominal_wraps = 1; */
         if (message.nominalWraps !== undefined)
             writer.tag(1, WireType.Varint).uint32(message.nominalWraps);
-        /* optional uint64 min_lpos = 2; */
-        if (message.minLpos !== undefined)
-            writer.tag(2, WireType.Varint).uint64(message.minLpos);
-        /* optional uint64 max_lpos = 3; */
-        if (message.maxLpos !== undefined)
-            writer.tag(3, WireType.Varint).uint64(message.maxLpos);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1193,13 +964,9 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
     constructor() {
         super("yatm.v1.TapeReadPositioning", [
             { no: 1, name: "base_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 2, name: "wrap_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 3, name: "band_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 4, name: "landing_zone_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 5, name: "direction_change_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 6, name: "step_back_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 7, name: "longitudinal_seconds_per_lpos", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 9, name: "longitudinal_seconds_per_wrap", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+            { no: 10, name: "approach_reversal_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 12, name: "seek_seconds_per_wrap", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 14, name: "buffer_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<TapeReadPositioning>): TapeReadPositioning {
@@ -1216,26 +983,14 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
                 case /* optional double base_seconds */ 1:
                     message.baseSeconds = reader.double();
                     break;
-                case /* optional double wrap_change_seconds */ 2:
-                    message.wrapChangeSeconds = reader.double();
+                case /* optional double approach_reversal_seconds */ 10:
+                    message.approachReversalSeconds = reader.double();
                     break;
-                case /* optional double band_change_seconds */ 3:
-                    message.bandChangeSeconds = reader.double();
+                case /* optional double seek_seconds_per_wrap */ 12:
+                    message.seekSecondsPerWrap = reader.double();
                     break;
-                case /* optional double landing_zone_change_seconds */ 4:
-                    message.landingZoneChangeSeconds = reader.double();
-                    break;
-                case /* optional double direction_change_seconds */ 5:
-                    message.directionChangeSeconds = reader.double();
-                    break;
-                case /* optional double step_back_seconds */ 6:
-                    message.stepBackSeconds = reader.double();
-                    break;
-                case /* optional double longitudinal_seconds_per_lpos */ 7:
-                    message.longitudinalSecondsPerLpos = reader.double();
-                    break;
-                case /* optional double longitudinal_seconds_per_wrap */ 9:
-                    message.longitudinalSecondsPerWrap = reader.double();
+                case /* optional uint64 buffer_bytes */ 14:
+                    message.bufferBytes = reader.uint64().toBigInt();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1252,27 +1007,15 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
         /* optional double base_seconds = 1; */
         if (message.baseSeconds !== undefined)
             writer.tag(1, WireType.Bit64).double(message.baseSeconds);
-        /* optional double wrap_change_seconds = 2; */
-        if (message.wrapChangeSeconds !== undefined)
-            writer.tag(2, WireType.Bit64).double(message.wrapChangeSeconds);
-        /* optional double band_change_seconds = 3; */
-        if (message.bandChangeSeconds !== undefined)
-            writer.tag(3, WireType.Bit64).double(message.bandChangeSeconds);
-        /* optional double landing_zone_change_seconds = 4; */
-        if (message.landingZoneChangeSeconds !== undefined)
-            writer.tag(4, WireType.Bit64).double(message.landingZoneChangeSeconds);
-        /* optional double direction_change_seconds = 5; */
-        if (message.directionChangeSeconds !== undefined)
-            writer.tag(5, WireType.Bit64).double(message.directionChangeSeconds);
-        /* optional double step_back_seconds = 6; */
-        if (message.stepBackSeconds !== undefined)
-            writer.tag(6, WireType.Bit64).double(message.stepBackSeconds);
-        /* optional double longitudinal_seconds_per_lpos = 7; */
-        if (message.longitudinalSecondsPerLpos !== undefined)
-            writer.tag(7, WireType.Bit64).double(message.longitudinalSecondsPerLpos);
-        /* optional double longitudinal_seconds_per_wrap = 9; */
-        if (message.longitudinalSecondsPerWrap !== undefined)
-            writer.tag(9, WireType.Bit64).double(message.longitudinalSecondsPerWrap);
+        /* optional double approach_reversal_seconds = 10; */
+        if (message.approachReversalSeconds !== undefined)
+            writer.tag(10, WireType.Bit64).double(message.approachReversalSeconds);
+        /* optional double seek_seconds_per_wrap = 12; */
+        if (message.seekSecondsPerWrap !== undefined)
+            writer.tag(12, WireType.Bit64).double(message.seekSecondsPerWrap);
+        /* optional uint64 buffer_bytes = 14; */
+        if (message.bufferBytes !== undefined)
+            writer.tag(14, WireType.Varint).uint64(message.bufferBytes);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1288,7 +1031,6 @@ class TapeReadTiming$Type extends MessageType<TapeReadTiming> {
     constructor() {
         super("yatm.v1.TapeReadTiming", [
             { no: 1, name: "bytes_per_second", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 2, name: "post_locate_read_overhead_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
             { no: 3, name: "filemark_overhead_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
         ]);
     }
@@ -1305,9 +1047,6 @@ class TapeReadTiming$Type extends MessageType<TapeReadTiming> {
             switch (fieldNo) {
                 case /* optional double bytes_per_second */ 1:
                     message.bytesPerSecond = reader.double();
-                    break;
-                case /* optional double post_locate_read_overhead_seconds */ 2:
-                    message.postLocateReadOverheadSeconds = reader.double();
                     break;
                 case /* optional double filemark_overhead_seconds */ 3:
                     message.filemarkOverheadSeconds = reader.double();
@@ -1327,9 +1066,6 @@ class TapeReadTiming$Type extends MessageType<TapeReadTiming> {
         /* optional double bytes_per_second = 1; */
         if (message.bytesPerSecond !== undefined)
             writer.tag(1, WireType.Bit64).double(message.bytesPerSecond);
-        /* optional double post_locate_read_overhead_seconds = 2; */
-        if (message.postLocateReadOverheadSeconds !== undefined)
-            writer.tag(2, WireType.Bit64).double(message.postLocateReadOverheadSeconds);
         /* optional double filemark_overhead_seconds = 3; */
         if (message.filemarkOverheadSeconds !== undefined)
             writer.tag(3, WireType.Bit64).double(message.filemarkOverheadSeconds);

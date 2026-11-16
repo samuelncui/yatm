@@ -175,6 +175,8 @@ message InspectDeviceResponse {
 }
 
 message TapePreparedRead {
+  reserved 12, 13;
+  reserved "learned_mae_seconds", "learned_max_error_seconds";
   int64 prepared_at_ns = 1;
   int64 job_id = 2;
   int64 media_id = 3;
@@ -186,9 +188,6 @@ message TapePreparedRead {
   string applicability_reason = 9;
   string position_source = 10;
   string coverage_detail = 11;
-  // Residuals of the selected learned read parameters over their retained observations.
-  optional double learned_mae_seconds = 12;
-  optional double learned_max_error_seconds = 13;
 }
 
 enum DeviceFeatureKind {

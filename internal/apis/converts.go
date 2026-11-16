@@ -40,12 +40,6 @@ func convertMedia(value *library.Media) (*entity.Media, error) {
 		return nil, fmt.Errorf("convert Media capabilities failed, media_id=%d, %w", value.ID, err)
 	}
 
-	// Give the response its own mutable geometry.
-	var positionMap *entity.TapePositionMap
-	if value.TapePositionMap != nil {
-		positionMap = proto.Clone(value.TapePositionMap).(*entity.TapePositionMap)
-	}
-
 	// The saved key never leaves the Library through the API; only its presence is reported.
 	profile := proto.Clone(value.Profile).(*entity.MediaProfile)
 	keySaved := false
@@ -58,9 +52,9 @@ func convertMedia(value *library.Media) (*entity.Media, error) {
 			Read: mediapkg.AccessToEntity(capabilities.Read), Write: mediapkg.AccessToEntity(capabilities.Write),
 		},
 		Profile: profile, CreatedAtNs: value.CreatedAtNS,
-		TapePositionMap: positionMap, EncryptionKeySaved: keySaved,
-		CapacityBytes: value.CapacityBytes,
-		WrittenBytes:  value.WrittenBytes,
+		EncryptionKeySaved: keySaved,
+		CapacityBytes:      value.CapacityBytes,
+		WrittenBytes:       value.WrittenBytes,
 	}, nil
 }
 

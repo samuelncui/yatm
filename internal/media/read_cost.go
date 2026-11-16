@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
-	"math/bits"
 	"sort"
 	"strings"
 	"time"
@@ -32,47 +30,50 @@ type ReadModelWrap struct {
 	// EstimatedSpanObjects supplies only the final partial wrap's interpolation denominator.
 	// Endpoint remains its actual exclusive EOD, never an extrapolated address boundary.
 	EstimatedSpanObjects *uint64
-	// EndpointUncertaintyObjects is a symmetric observed/estimated boundary allowance in logical objects.
-	EndpointUncertaintyObjects *uint64
 }
 
-// ReadModelCoefficients use signed seconds for setup and nonnegative seconds per LPOS for motion.
-// They retain all seven terms of CERN CTA's positioning regression.
+// ReadModelCoefficients are nonnegative positioning terms: the positioning intercept, the seek-speed
+// time for one complete longitudinal span and the approach reversal, all in seconds.
 type ReadModelCoefficients struct {
-	Base, Wrap, Band, LandingZone, Direction, StepBack, Longitudinal float64
+	Base, Seek, ApproachReversal float64
 }
 
 // ReadModelProfile supplies explicit geometry and timing facts for one owned snapshot.
 // BOT anchors the first declared wrap. A final partial estimate changes only the coordinate scale.
 type ReadModelProfile struct {
-	ID               string
-	SnapshotValid    func() bool
-	BOT              map[uint32]uint64
-	Wraps            []ReadModelWrap
-	MinLPOS, MaxLPOS uint64
-	Coefficients     ReadModelCoefficients
-	// FullWrapSeconds selects continuous normalized coordinates instead of absolute LPOS units.
-	FullWrapSeconds *float64
+	ID            string
+	SnapshotValid func() bool
+	BOT           map[uint32]uint64
+	Wraps         []ReadModelWrap
+	Coefficients  ReadModelCoefficients
+	// ReadObjectSeconds is the time to pass one logical object at reading speed: record bytes divided
+	// by the read rate. It is derived from the read timing, never fitted as a positioning term.
+	ReadObjectSeconds float64
+	// BufferObjects is how far ahead, in logical objects, the drive reaches by continuing to read;
+	// zero never applies.
+	BufferObjects uint64
+	// MinimumGainSeconds is a floor under the minimum gain, which is otherwise Coefficients.Base, so
+	// that a zero configured intercept cannot remove it.
+	MinimumGainSeconds float64
 }
 
 type readModelInterval struct {
-	low, high                      uint64
-	span                           uint64
-	index, wrap                    uint32
-	band                           uint32
-	direction                      ReadWrapDirection
-	lowError, highError, spanError uint64
+	low, high   uint64
+	span        uint64
+	index, wrap uint32
+	band        uint32
+	direction   ReadWrapDirection
 }
 
 // ReadCostModel owns immutable interpolation and empirical cost facts for one supplied profile.
 // It does not establish freshness, fit coefficients, issue commands or publish a provider.
 type ReadCostModel struct {
-	snapshotValid    func() bool
-	coefficients     ReadModelCoefficients
-	minLPOS, maxLPOS uint64
-	normalized       bool
-	fullWrapSeconds  float64
-	intervals        map[uint32][]readModelInterval
+	snapshotValid     func() bool
+	coefficients      ReadModelCoefficients
+	readObjectSeconds float64
+	bufferObjects     uint64
+	minimumGain       float64
+	intervals         map[uint32][]readModelInterval
 }
 
 // NewReadCostModel validates and copies a profile without certifying its physical evidence.
@@ -85,33 +86,18 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 		return nil, errors.New("read cost profile has no representable traversal")
 	}
 
-	// Validate finite signed setup terms and explicitly selected longitudinal units before compiling geometry.
-	if profile.FullWrapSeconds == nil && profile.MaxLPOS <= profile.MinLPOS {
-		return nil, errors.New("read cost profile requires longitudinal coordinates")
-	}
-	bound := 0.0
-	for _, value := range []float64{profile.Coefficients.Base, profile.Coefficients.Wrap,
-		profile.Coefficients.Band, profile.Coefficients.LandingZone, profile.Coefficients.Direction,
-		profile.Coefficients.StepBack} {
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, errors.New("read cost profile has a nonfinite coefficient")
+	// Validate finite nonnegative terms before compiling geometry; a prediction that still overflows
+	// is refused where it is quoted.
+	for _, value := range []float64{profile.Coefficients.Base, profile.Coefficients.Seek,
+		profile.Coefficients.ApproachReversal, profile.ReadObjectSeconds, profile.MinimumGainSeconds} {
+		if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+			return nil, errors.New("read cost profile has a negative or nonfinite term")
 		}
-		bound += math.Abs(value)
-	}
-	slope := profile.Coefficients.Longitudinal
-	extent := float64(profile.MaxLPOS - profile.MinLPOS)
-	if profile.FullWrapSeconds != nil {
-		if slope != 0 {
-			return nil, errors.New("read cost profile mixes longitudinal units")
-		}
-		slope, extent = *profile.FullWrapSeconds, 1
-	}
-	if slope < 0 || math.IsNaN(slope) || math.IsInf(slope, 0) || math.IsInf(bound+extent*slope, 0) {
-		return nil, errors.New("read cost profile has unbounded longitudinal cost")
 	}
 	model := &ReadCostModel{snapshotValid: profile.SnapshotValid, coefficients: profile.Coefficients,
-		minLPOS: profile.MinLPOS, maxLPOS: profile.MaxLPOS,
-		normalized: profile.FullWrapSeconds != nil, fullWrapSeconds: slope, intervals: make(map[uint32][]readModelInterval)}
+		readObjectSeconds: profile.ReadObjectSeconds, bufferObjects: profile.BufferObjects,
+		minimumGain: max(profile.Coefficients.Base, profile.MinimumGainSeconds),
+		intervals:   make(map[uint32][]readModelInterval)}
 
 	// Only a declared full predecessor supplies a lower boundary; a final estimate cannot bridge a gap.
 	seen := make(map[[2]uint32]bool, len(profile.Wraps))
@@ -119,12 +105,8 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 	indices := make(map[uint32]uint32)
 	endpoints := make(map[uint32]uint64)
 	last := make(map[uint32]int)
-	maxError := uint64(0)
 	for i, wrap := range profile.Wraps {
 		last[wrap.Partition] = i
-		if wrap.EndpointUncertaintyObjects != nil {
-			maxError = max(maxError, *wrap.EndpointUncertaintyObjects)
-		}
 	}
 	for i, wrap := range profile.Wraps {
 		key := [2]uint32{wrap.Partition, wrap.Wrap}
@@ -149,9 +131,8 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 		high, covered := readWrapEnd(wrap)
 		span := uint64(0)
 		if wrap.EstimatedSpanObjects != nil {
-			if !model.normalized || wrap.Full || wrap.Endpoint == nil || last[wrap.Partition] != i ||
-				*wrap.EstimatedSpanObjects == 0 {
-				return nil, errors.New("read cost estimated span requires a normalized final partial wrap")
+			if wrap.Full || wrap.Endpoint == nil || last[wrap.Partition] != i || *wrap.EstimatedSpanObjects == 0 {
+				return nil, errors.New("read cost estimated span requires a final partial wrap")
 			}
 			high, covered, span = *wrap.Endpoint, true, *wrap.EstimatedSpanObjects
 			if known && (high < low || span < high-low) {
@@ -165,24 +146,9 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 			if span == 0 {
 				span = high - low
 			}
-			lowError, highError := uint64(0), uint64(0)
-			if exists && before.EndpointUncertaintyObjects != nil {
-				lowError = *before.EndpointUncertaintyObjects
-			}
-			if wrap.EndpointUncertaintyObjects != nil {
-				highError = *wrap.EndpointUncertaintyObjects
-			}
-			spanError, carry := bits.Add64(lowError, highError, 0)
-			if wrap.EstimatedSpanObjects != nil {
-				// The final full-span denominator inherits two uncertain inferred boundaries.
-				spanError, carry = bits.Add64(maxError, maxError, 0)
-			}
-			if carry != 0 || spanError >= span {
-				return nil, errors.New("read cost spatial uncertainty exceeds its interpolation span")
-			}
 			model.intervals[wrap.Partition] = append(model.intervals[wrap.Partition], readModelInterval{
 				low: low, high: high, span: span, index: indices[wrap.Partition], wrap: wrap.Wrap, band: wrap.Band,
-				direction: wrap.Direction, lowError: lowError, highError: highError, spanError: spanError,
+				direction: wrap.Direction,
 			})
 		}
 		previous[wrap.Partition] = wrap
@@ -241,11 +207,6 @@ func (m *ReadCostModel) position(position *entity.TapeBytePosition) (readModelIn
 	if position.LogicalObject < interval.low {
 		return readModelInterval{}, 0, false
 	}
-	// A boundary allowance cannot assert which side of a wrap this object occupies.
-	if interval.lowError != 0 && position.LogicalObject-interval.low <= interval.lowError ||
-		interval.highError != 0 && interval.high-position.LogicalObject <= interval.highError {
-		return readModelInterval{}, 0, false
-	}
 	numerator := position.LogicalObject - interval.low
 	if interval.direction == ReadWrapReverse {
 		numerator = interval.span - numerator
@@ -253,58 +214,45 @@ func (m *ReadCostModel) position(position *entity.TapeBytePosition) (readModelIn
 	return interval, numerator, true
 }
 
-func readLPOS(unit ReadLongitudinal, offset, span uint64) uint64 {
-	high, low := bits.Mul64(offset, unit.MaxLPOS-unit.MinLPOS)
-	quotient, _ := bits.Div64(high, low, span)
-	return unit.MinLPOS + quotient
-}
-
-func readLPOSZone(unit ReadLongitudinal, lpos uint64) byte {
-	// Classify against the physical midpoint, including a nonzero LPOS origin without overflow.
-	if lpos < unit.MinLPOS+(unit.MaxLPOS-unit.MinLPOS)/2 {
-		return 0
+// covers reports whether contiguous wrap intervals of partition hold every object from start up to
+// the exclusive end. Both endpoints alone cannot establish coverage across a missing interior interval.
+func (m *ReadCostModel) covers(partition uint32, start, end uint64) bool {
+	wraps := m.intervals[partition]
+	at := sort.Search(len(wraps), func(i int) bool { return wraps[i].high > start })
+	if at == len(wraps) || start < wraps[at].low {
+		return false
 	}
-	return 1
+	covered := wraps[at].high
+	for covered < end && at+1 < len(wraps) {
+		at++
+		if wraps[at].low != covered {
+			return false
+		}
+		covered = wraps[at].high
+	}
+	return end <= covered
 }
 
-// AccessScore retains the signed seven-term CERN prediction for candidate ranking.
-// A negative regression prediction is meaningful only as a ranking result, never elapsed time.
+// AccessScore is the nonnegative positioning prediction in seconds for candidate ranking.
 func (m *ReadCostModel) AccessScore(from, to *entity.TapeBytePosition) (float64, bool) {
-	// Learning and route costing share one feature definition and the same coordinate units.
-	features, known := m.AccessFeatures(from, to)
+	return m.accessScore(from, to, ReadAhead(from, to))
+}
+
+func (m *ReadCostModel) accessScore(from, to *entity.TapeBytePosition, ahead int64) (float64, bool) {
+	access, known := m.accessFeatures(from, to, ahead)
 	if !known {
 		return 0, false
 	}
-	c := m.coefficients
-	slope := c.Longitudinal
-	if m.normalized {
-		slope = m.fullWrapSeconds
-	}
-	coefficients := [7]float64{c.Base, c.Wrap, c.Band, c.LandingZone, c.Direction, c.StepBack, slope}
-	score := 0.0
-	for i, feature := range features {
-		score += feature * coefficients[i]
-	}
+	score := access.Seconds(m.coefficients, m.readObjectSeconds)
 	return score, !math.IsNaN(score) && !math.IsInf(score, 0)
 }
 
 // ReadPoint is one physical coordinate resolved through a position map. Offset is the longitudinal
 // distance from the wrap's BOT-side end, measured in logical objects of the wrap's interpolation Span.
 type ReadPoint struct {
-	Partition, Wrap, Band uint32
-	Direction             ReadWrapDirection
-	Offset, Span          uint64
-}
-
-// ReadLongitudinal selects normalized whole-span units, or absolute LPOS interpolated between explicit bounds.
-type ReadLongitudinal struct {
-	Normalized       bool
-	MinLPOS, MaxLPOS uint64
-}
-
-// Longitudinal returns the unit and LPOS frame this model's access features use.
-func (m *ReadCostModel) Longitudinal() ReadLongitudinal {
-	return ReadLongitudinal{Normalized: m.normalized, MinLPOS: m.minLPOS, MaxLPOS: m.maxLPOS}
+	Partition, Wrap uint32
+	Direction       ReadWrapDirection
+	Offset, Span    uint64
 }
 
 // Point resolves one logical anchor to its physical wrap and longitudinal offset in this snapshot.
@@ -316,79 +264,165 @@ func (m *ReadCostModel) Point(position *entity.TapeBytePosition) (ReadPoint, boo
 	if !known {
 		return ReadPoint{}, false
 	}
-	return ReadPoint{Partition: position.Partition, Wrap: interval.wrap, Band: interval.band,
+	return ReadPoint{Partition: position.Partition, Wrap: interval.wrap,
 		Direction: interval.direction, Offset: numerator, Span: interval.span}, true
 }
 
-// AccessFeatures returns intercept, wrap, band, landing-zone, direction, same-wrap step-back,
-// and longitudinal distance. The last feature uses complete-span units in normalized models,
-// or LPOS units in absolute models; observations must retain that model's applicability.
-func (m *ReadCostModel) AccessFeatures(from, to *entity.TapeBytePosition) ([7]float64, bool) {
+func (m *ReadCostModel) accessFeatures(from, to *entity.TapeBytePosition, ahead int64) (ReadAccess, bool) {
 	// Resolve both explicit coordinates within the same valid snapshot and partition.
 	if from == nil || to == nil || from.Partition != to.Partition {
-		return [7]float64{}, false
+		return ReadAccess{}, false
 	}
 	a, known := m.Point(from)
 	if !known {
-		return [7]float64{}, false
+		return ReadAccess{}, false
 	}
 	b, known := m.Point(to)
 	if !known {
-		return [7]float64{}, false
+		return ReadAccess{}, false
 	}
-	return ReadAccessFeatures(a, b, m.Longitudinal())
+	return ReadAccessFeatures(a, b, ahead, m.bufferObjects)
 }
 
-// ReadAccessFeatures computes the seven access features from two resolved physical points.
-// Learning applies it to retained points, so route costing and refits share one definition.
-func ReadAccessFeatures(a, b ReadPoint, unit ReadLongitudinal) ([7]float64, bool) {
-	// Points must share a partition and lie within their wraps; absolute units need an LPOS frame.
+// ReadAhead returns how many logical objects b lies ahead of a in one partition, or -1 when b is
+// behind a, in another partition or unknown.
+func ReadAhead(a, b *entity.TapeBytePosition) int64 {
+	if a == nil || b == nil || a.Partition != b.Partition || b.LogicalObject < a.LogicalObject ||
+		b.LogicalObject-a.LogicalObject > math.MaxInt64 {
+		return -1
+	}
+	return int64(b.LogicalObject - a.LogicalObject)
+}
+
+// ReadAccess holds one LOCATE's positioning features: the positioning intercept, the seek-speed
+// longitudinal distance in complete spans and the approach reversals, either one for arriving against
+// the target wrap's read direction or the wrap turns a streamed move crosses. ReadObjects counts the
+// logical objects passed at reading speed. A streamed move has only ReadObjects and its wrap turns; a
+// read-speed locate has the intercept and ReadObjects.
+type ReadAccess struct {
+	Features    [3]float64
+	ReadObjects uint64
+}
+
+// Streamed reports a target reached by continuing to read, without the positioning intercept; its
+// only positioning feature is the wrap turns it crosses.
+func (a ReadAccess) Streamed() bool {
+	return a.Features[0] == 0
+}
+
+// Seconds prices the features with nonnegative terms and the time to pass one object at reading speed.
+func (a ReadAccess) Seconds(c ReadModelCoefficients, readObjectSeconds float64) float64 {
+	f := a.Features
+	return c.Base*f[0] + c.Seek*f[1] + c.ApproachReversal*f[2] + float64(a.ReadObjects)*readObjectSeconds
+}
+
+// ReadAccessFeatures computes the positioning features of a move from a to b, two resolved physical
+// points that lie ahead logical objects apart (-1 when b is not logically ahead).
+//
+// A target at most bufferObjects ahead, in any wrap, is reached by continuing to read: it costs the
+// skipped objects at reading speed plus one approach reversal for each wrap turn crossed, and no
+// other positioning term; a zero buffer never applies. A move in the same wrap interval that stays
+// within one half and does not go behind (b is at or after a in the wrap's read direction) is a
+// read-speed locate: the positioning intercept plus |Δobjects| at reading speed. Halves split the span
+// at its physical midpoint; the midpoint itself belongs to the second half. Every other move travels
+// the physical longitudinal distance |Δx| at seek speed and adds the positioning intercept, plus a
+// full approach reversal when the signed distance along b's wrap read direction is negative (forward
+// wraps read toward increasing x, reverse wraps toward decreasing x).
+func ReadAccessFeatures(a, b ReadPoint, ahead int64, bufferObjects uint64) (ReadAccess, bool) {
+	// Points must share a partition and lie within their wraps.
 	if a.Partition != b.Partition || a.Span == 0 || b.Span == 0 || a.Offset > a.Span || b.Offset > b.Span ||
-		!readDirection(a.Direction) || !readDirection(b.Direction) || !unit.Normalized && unit.MaxLPOS <= unit.MinLPOS {
-		return [7]float64{}, false
-	}
-	x, y := uint64(0), uint64(0)
-	if !unit.Normalized {
-		x, y = readLPOS(unit, a.Offset, a.Span), readLPOS(unit, b.Offset, b.Span)
-	}
-	movement := 0.0
-	zoneChange := readLPOSZone(unit, x) != readLPOSZone(unit, y)
-	backward := a.Direction == ReadWrapForward && y < x || a.Direction == ReadWrapReverse && y > x
-	if unit.Normalized {
-		movement = readNormalizedDistance(a.Offset, a.Span, b.Offset, b.Span)
-		zoneChange = readNormalizedZone(a.Offset, a.Span) != readNormalizedZone(b.Offset, b.Span)
-		backward = a.Direction == ReadWrapForward && b.Offset < a.Offset || a.Direction == ReadWrapReverse && b.Offset > a.Offset
-	} else {
-		distance := x - y
-		if x < y {
-			distance = y - x
-		}
-		movement = float64(distance)
+		!readDirection(a.Direction) || !readDirection(b.Direction) {
+		return ReadAccess{}, false
 	}
 
-	// Preserve the six CERN setup terms; the selected coordinate path owns its zone classification.
-	features := [7]float64{1, 0, 0, 0, 0, 0, movement}
-	if a.Wrap != b.Wrap {
-		features[1] = 1
+	// The drive keeps streaming toward a target close enough ahead, turning at each wrap end on the way.
+	if bufferObjects != 0 && ahead >= 0 && uint64(ahead) <= bufferObjects {
+		return ReadAccess{Features: [3]float64{2: readTurns(a, b)}, ReadObjects: uint64(ahead)}, true
 	}
-	if a.Band != b.Band {
-		features[2] = 1
+
+	// Resolve the physical distance in complete spans, the motion direction and halves.
+	delta := readFraction(b.Offset, b.Span) - readFraction(a.Offset, a.Span)
+	sameHalf := readNormalizedZone(a.Offset, a.Span) == readNormalizedZone(b.Offset, b.Span)
+
+	// Reading speed covers forward moves within one half of the same wrap interval.
+	access := ReadAccess{Features: [3]float64{1}}
+	if a.Wrap == b.Wrap && a.Span == b.Span && sameHalf {
+		if a.Direction == ReadWrapForward && b.Offset >= a.Offset {
+			access.ReadObjects = b.Offset - a.Offset
+			return access, true
+		}
+		if a.Direction == ReadWrapReverse && b.Offset <= a.Offset {
+			access.ReadObjects = a.Offset - b.Offset
+			return access, true
+		}
 	}
-	if zoneChange {
-		features[3] = 1
+
+	// Every other move seeks; arriving against b's read direction reverses once more.
+	access.Features[1] = math.Abs(delta)
+	along := delta
+	if b.Direction == ReadWrapReverse {
+		along = -delta
 	}
-	if a.Direction != b.Direction {
-		features[4] = 1
+	if along < 0 {
+		access.Features[2] = 1
 	}
-	if a.Wrap == b.Wrap && backward {
-		features[5] = 1
+	return access, true
+}
+
+// readTurns counts the wrap turns continuous reading crosses from a to b: logical order runs through
+// a partition's wraps in increasing number.
+func readTurns(a, b ReadPoint) float64 {
+	if b.Wrap <= a.Wrap {
+		return 0
 	}
-	return features, true
+	return float64(b.Wrap - a.Wrap)
+}
+
+// ReadingSeconds prices reading objects logical objects continuously from the object at first up to
+// the host-next position next in one partition: each at reading speed, plus one approach reversal
+// for each wrap turn between first and next. A read that ends with a wrap's last object leaves next
+// in the following wrap and so pays that turn, which a move starting at next never pays again. An
+// endpoint the position map does not resolve leaves the time unknown.
+func (m *ReadCostModel) ReadingSeconds(first, next *entity.TapeBytePosition, objects uint64) (float64, bool) {
+	if first == nil || next == nil || first.Partition != next.Partition || next.LogicalObject <= first.LogicalObject {
+		return 0, false
+	}
+	a, known := m.Point(first)
+	if !known {
+		return 0, false
+	}
+	b, known := m.Point(next)
+	if !known {
+		return 0, false
+	}
+	seconds := float64(objects)*m.readObjectSeconds + readTurns(a, b)*m.coefficients.ApproachReversal
+	return seconds, !math.IsNaN(seconds) && !math.IsInf(seconds, 0)
+}
+
+// MinimumGain is one positioning base time, the fixed cost every LOCATE pays, and never less than the
+// profile's floor. A planned route must save at least that much over LOGICAL: a smaller saving
+// removes less than one LOCATE and lies within the estimate's accumulated per-move error.
+func (m *ReadCostModel) MinimumGain() time.Duration {
+	if m == nil {
+		return 0
+	}
+	gain, _ := readSeconds(m.minimumGain)
+	return gain
 }
 
 // AccessCost quotes only nonnegative, representable positioning time.
 func (m *ReadCostModel) AccessCost(from, to *entity.TapeBytePosition) (time.Duration, bool) {
 	score, known := m.AccessScore(from, to)
+	if !known {
+		return 0, false
+	}
+	return readSeconds(score)
+}
+
+// UnbufferedAccessCost quotes a move from a position the drive has not read up to, so it cannot reach
+// any target by continuing to read.
+func (m *ReadCostModel) UnbufferedAccessCost(from, to *entity.TapeBytePosition) (time.Duration, bool) {
+	score, known := m.accessScore(from, to, -1)
 	if !known {
 		return 0, false
 	}
@@ -412,32 +446,7 @@ func readNormalizedZone(numerator, denominator uint64) byte {
 	return 1
 }
 
-func readNormalizedDistance(an, ad, bn, bd uint64) float64 {
-	// Common tape lengths keep exact products below float's integer precision without allocations.
-	var numerator, denominator uint64
-	if ad == bd {
-		denominator = ad
-		numerator = an - bn
-		if an < bn {
-			numerator = bn - an
-		}
-	} else if hi, product := bits.Mul64(ad, bd); hi == 0 {
-		denominator = product
-		left, right := an*bd, bn*ad
-		numerator = left - right
-		if left < right {
-			numerator = right - left
-		}
-	}
-	if denominator != 0 && numerator <= 1<<53 && denominator <= 1<<53 {
-		return float64(numerator) / float64(denominator)
-	}
-
-	// Wide unequal lengths retain correctly rounded exact rational distance and monotone nearest scores.
-	var a, b big.Rat
-	a.SetFrac(new(big.Int).SetUint64(an), new(big.Int).SetUint64(ad))
-	b.SetFrac(new(big.Int).SetUint64(bn), new(big.Int).SetUint64(bd))
-	a.Sub(&a, &b).Abs(&a)
-	value, _ := a.Float64()
-	return value
+// readFraction is a point's longitudinal coordinate as a fraction of its span.
+func readFraction(numerator, denominator uint64) float64 {
+	return float64(numerator) / float64(denominator)
 }

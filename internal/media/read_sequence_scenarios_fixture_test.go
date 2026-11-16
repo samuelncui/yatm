@@ -24,6 +24,10 @@ const readScenarioVersion = "restore-scenarios-v1"
 const readScenarioRecord = uint64(512 << 10)
 const readScenarioPlanningBudget = 300 * time.Second
 
+// readScenarioCoefficients freeze one nonnegative positioning prior for every scenario, including the
+// historical 308-file fixture whose stored coefficients predate the current terms.
+var readScenarioCoefficients = ReadModelCoefficients{Base: 3.223942631933043, ApproachReversal: 5.965091877336342}
+
 var readScenarioSeeds = map[string][]uint64{
 	"development": {11, 23, 37, 53, 71},
 	"acceptance":  {101, 131, 167, 199, 233},
@@ -50,15 +54,14 @@ func readScenarioInput(spans []readplan.Span) iter.Seq2[readplan.Span, error] {
 }
 
 type readScenarioModel struct {
-	BOT               map[uint32]uint64     `json:"bot"`
-	Wraps             []ReadModelWrap       `json:"wraps"`
-	FullWrapSeconds   float64               `json:"fullWrapSeconds"`
-	UncertaintyNS     int64                 `json:"uncertaintyNS"`
-	Coefficients      ReadModelCoefficients `json:"coefficients"`
-	BytesPerSecond    float64               `json:"bytesPerSecond"`
-	PostLocateSeconds float64               `json:"postLocateSeconds"`
-	Completion        ReadCompletion        `json:"completion"`
-	DataEnd           uint64                `json:"dataEnd"`
+	BOT             map[uint32]uint64     `json:"bot"`
+	Wraps           []ReadModelWrap       `json:"wraps"`
+	FullWrapSeconds float64               `json:"fullWrapSeconds"`
+	UncertaintyNS   int64                 `json:"uncertaintyNS"`
+	Coefficients    ReadModelCoefficients `json:"coefficients"`
+	BytesPerSecond  float64               `json:"bytesPerSecond"`
+	Completion      ReadCompletion        `json:"completion"`
+	DataEnd         uint64                `json:"dataEnd"`
 }
 
 type readScenario struct {
@@ -198,7 +201,9 @@ func makeReadScenario(recipe readScenarioRecipe, backend, split string, seed uin
 			case "threshold-below":
 				gap = 800 * readScenarioRecord
 			case "threshold-above":
-				gap = 900 * readScenarioRecord
+				// Within one half, reading through always beats a reading-speed LOCATE; this gap
+				// carries the second member across the wrap midpoint, where seek speed applies.
+				gap = 300_000 * readScenarioRecord
 			}
 		case "cost", "layout", "difficult":
 			if recipe.Name != "uneven-groups" {
@@ -252,16 +257,14 @@ func makeReadScenario(recipe readScenarioRecipe, backend, split string, seed uin
 	}
 	scenario.Model = readScenarioModel{BOT: map[uint32]uint64{partition: 0},
 		FullWrapSeconds: 92.69041838827268, UncertaintyNS: 9_121_917_392,
-		Coefficients: ReadModelCoefficients{Base: 3.223942631933043, Wrap: 6.252332019046645, Band: -.8279789490339896,
-			LandingZone: .6469527733076674, Direction: 1.2685235350999264, StepBack: 5.965091877336342},
-		BytesPerSecond: 140e6, PostLocateSeconds: .011400702694972826,
+		Coefficients: readScenarioCoefficients, BytesPerSecond: 140e6,
 		Completion: ReadCompletion{FullSpanSeconds: 96, FixedSeconds: 19}, DataEnd: end}
 	for wrap := 0; wrap < 80; wrap++ {
 		direction := ReadWrapForward
 		if wrap%2 != 0 {
 			direction = ReadWrapReverse
 		}
-		scenario.Model.Wraps = append(scenario.Model.Wraps, ReadModelWrap{Partition: partition, Wrap: uint32(wrap), Band: uint32(wrap / 20), Direction: direction, Full: true, Endpoint: proto.Uint64(uint64(wrap+1) * end / 80), EndpointUncertaintyObjects: proto.Uint64(0)})
+		scenario.Model.Wraps = append(scenario.Model.Wraps, ReadModelWrap{Partition: partition, Wrap: uint32(wrap), Band: uint32(wrap / 20), Direction: direction, Full: true, Endpoint: proto.Uint64(uint64(wrap+1) * end / 80)})
 	}
 	if recipe.Name == "partial-tail" {
 		last := &scenario.Model.Wraps[len(scenario.Model.Wraps)-1]
@@ -301,17 +304,18 @@ func (s readScenario) provider(tb testing.TB) ReadOrderProvider {
 	}
 	// Production evaluators receive the same immutable metadata on both source revisions.
 	m, budget := s.Model, time.Duration(s.PlanningBudgetNS)
+	coefficients := m.Coefficients
+	coefficients.Seek = m.FullWrapSeconds
 	model, err := NewReadCostModel(ReadModelProfile{ID: readScenarioVersion, SnapshotValid: func() bool { return true },
-		BOT: m.BOT, Wraps: m.Wraps, FullWrapSeconds: proto.Float64(m.FullWrapSeconds),
-		Coefficients: m.Coefficients})
+		BOT: m.BOT, Wraps: m.Wraps, Coefficients: coefficients, ReadObjectSeconds: float64(readScenarioRecord) / m.BytesPerSecond})
 	if err != nil {
 		tb.Fatal(err)
 	}
-	timing := &entity.TapeReadTiming{BytesPerSecond: proto.Float64(m.BytesPerSecond), PostLocateReadOverheadSeconds: proto.Float64(m.PostLocateSeconds),
+	timing := &entity.TapeReadTiming{BytesPerSecond: proto.Float64(m.BytesPerSecond),
 		FilemarkOverheadSeconds: proto.Float64(.001)}
 	if s.Backend == "ltfs" {
 		provider, reason := NewLTFSReadOrderProvider(LTFSReadOptions{BlockBytes: uint32(readScenarioRecord), Compression: proto.Bool(false),
-			Partitions: map[string]uint32{"b": 1}, Model: model, Timing: timing, Completion: &m.Completion,
+			Partitions: map[string]uint32{"b": 1}, Model: model, Completion: &m.Completion,
 			DataEnd: &entity.TapeBytePosition{Partition: 1, LogicalObject: m.DataEnd}, PlanningBudget: budget})
 		if provider == nil {
 			tb.Fatal(reason)
@@ -344,6 +348,7 @@ func loadReadScenario308(tb testing.TB) readScenario {
 	if err := json.Unmarshal(data, &fixture); err != nil {
 		tb.Fatal(err)
 	}
+	fixture.Model.Coefficients = readScenarioCoefficients
 
 	// Keep the historical fixture untouched; its fixed route is a feasible reference under today's evaluator.
 	scenario := readScenario{ID: "ltfs/frozen/mixed308", Family: "frozen", Backend: "ltfs", Split: "fixed", Model: fixture.Model, PlanningBudgetNS: int64(readScenarioPlanningBudget),

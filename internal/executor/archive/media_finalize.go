@@ -226,8 +226,7 @@ func libraryMedia(value *mediapkg.Descriptor) (*library.Media, error) {
 	}
 	return &library.Media{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
-		TapePositionMap: value.TapePositionMap,
-		CreatedAtNS:     created,
-		CapacityBytes:   value.CapacityBytes, WrittenBytes: value.WrittenBytes,
+		CreatedAtNS:   created,
+		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}, nil
 }

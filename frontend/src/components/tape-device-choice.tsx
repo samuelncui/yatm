@@ -160,10 +160,6 @@ export const DeviceInspectionResult = ({ reply }: { reply: InspectDeviceResponse
         <span>Applicability: {reply.preparedRead.applicabilityReason || "Matched the prepared conditions"}</span>
         <span>Position source: {reply.preparedRead.positionSource || "Unavailable"}</span>
         {reply.preparedRead.coverageDetail && <span>{reply.preparedRead.coverageDetail}</span>}
-        {reply.preparedRead.learnedMaeSeconds !== undefined && <span>Learned read parameters mean error: {reply.preparedRead.learnedMaeSeconds} seconds</span>}
-        {reply.preparedRead.learnedMaxErrorSeconds !== undefined && (
-          <span>Learned read parameters maximum error: {reply.preparedRead.learnedMaxErrorSeconds} seconds</span>
-        )}
       </Stack>
     )}
     {reply.report.oneofKind === "tape" && (

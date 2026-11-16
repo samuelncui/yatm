@@ -52,8 +52,10 @@ distance 1,000 predicts `4.29 - 6.04 + 0.6192 = -1.1308` seconds. This is an inv
 duration, not evidence that crossing the boundary takes negative time. The presentation itself
 notes that short-distance and seek-to-read behavior need better modeling. Retaining the signed
 prediction for candidate ranking, constraining/refitting it or adding a measured latency floor
-are different choices that require review before integration. Treating it as a nonnegative
-elapsed duration or silently omitting the two troublesome terms is not justified.
+are different choices. Merely clamping it to a nonnegative duration or silently omitting the two
+troublesome terms is not justified; the [two-speed positioning study](#two-speed-positioning-priors)
+replaces the landing-zone and direction terms with the reading/seek speed switch the same
+presentation describes.
 
 With all seven terms, same-wrap step-back can be more expensive than changing wrap;
 an own-wrap neighbour can hide a cheaper candidate in an aggregated band/direction group.
@@ -128,9 +130,11 @@ wraps and native rates from
 LTO-4 to 6 rates from [HP LTO-6 Volume 4](https://docs.oracle.com/cd/E38452_01/en/LTO6_Vol4_E1/LTO6_Vol4_E1.pdf),
 LTO-7 and Type M wraps from IBM's recorded tracks divided by 32 channels (3,584 and 5,376,
 [GA32-0928-06 table 113](https://www.ibm.com/support/pages/system/files/inline-files/%5BAPPROVED%5D%20LTO%20SCSI%20Reference%20GA32-0928-06.pdf)),
-and LTO-7 to 9 half-height rates from
-[Quantum TB00068A](https://cdn.allbound.com/iq-ab/2022/12/LTO-9-TB00068A.pdf); full-height rates
-differ. Full-span rewind is 96 seconds except LTO-3 (78) and LTO-4 (93), per HP Volume 4 above.
+LTO-7 to 9 half-height rates from
+[Quantum TB00068A](https://cdn.allbound.com/iq-ab/2022/12/LTO-9-TB00068A.pdf) (full-height rates
+differ), and LTO-10 densities `62h` and `63h` (Premium) with 15,104 tracks over 32 channels and
+400 MB/s from
+[GA32-0928-08 tables 3, 114 and 318](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-08%20(EXTERNAL).pdf). Full-span rewind is 96 seconds except LTO-3 (78) and LTO-4 (93), per HP Volume 4 above.
 
 The existing HP5 LOCATE regression yields 92.690 seconds per longitudinal span; this is not a
 directly measured full-length REWIND duration. A post-hoc sensitivity
@@ -166,9 +170,8 @@ bounded observations during ordinary operations, separate native LOCATE from sub
 check support for short movement, backward movement and boundaries. AUTO preferentially observes
 its chosen transitions, so low residuals on those routes do not validate alternatives it never
 executes. Evaluate proposed updates on later observations and apply them to subsequent attempts;
-keep an admitted attempt's parameters frozen. The current native passive-learning path instead
-records observations in each Job bundle and refits with equal Job weight after each Job; the coverage and
-physical-identifiability limits above still apply. Separate LTFS whole-file learning is not implemented.
+keep an admitted attempt's parameters frozen. YATM currently records no ordinary-read observations
+and refits nothing; read parameters are manual or built-in.
 
 ### Position Sources and Coverage
 
@@ -425,9 +428,9 @@ records; excluding ambiguous boundary neighborhoods retained stable wrap classif
 90.009% of the logical address range. These are same-cartridge post-hoc results, not independent
 qualification or a specified physical tolerance. A periodic supply bottleneck or continuously
 slow/backhitching source can leave no usable signal, and must not produce invented endpoints.
-The [read planning contract](../architecture/read-planning.md#software-read-ordering) describes current production
-observation, Media map persistence and uncertainty propagation. Estimated maps affect costs;
-the recorded logical locators still determine actual reads.
+The [read planning contract](../architecture/read-planning.md#position-maps) describes the current
+position maps, derived per Session from REOWP or cartridge memory without a boundary allowance.
+Maps affect costs; the recorded logical locators still determine actual reads.
 
 ### Reading Through Small Gaps
 
@@ -567,8 +570,8 @@ final extent. This is an inferred planning state, not an observed head or cache;
 observed-state interface must not silently claim otherwise. Fragmented files retain all their
 internal transitions. Cache or read-through actions specific to the raw tar reader cannot be
 credited to ordinary LTFS reads without corresponding behavior. The current provider normalizes
-extents, requires compatible partition geometry and fixes that common first file. Pre-mount paired
-Labels can establish physical partition mapping; mounted role letters alone cannot. The
+extents, requires compatible partition geometry and fixes that common first file. The mounted
+partition map `I:a,D:b` establishes the conventional physical mapping a=0, b=1; other maps are not mapped. The
 [read planning contract](../architecture/read-planning.md#software-read-ordering) defines those boundaries.
 
 HPE's LTO-7 unload description specifies rewind, unthread and eject. A shared destination is not
@@ -579,8 +582,7 @@ must follow the actual adapter and reader policy, rather than treating every com
 identical LOCATE to block zero. These sources establish lifecycle behavior, not a measured terminal
 cost function. Native tar now unloads after successful normal Archive, Restore and Scan completion,
 and its planner includes a separate fixed-plus-physical-distance terminal estimate. Built-in values
-borrow the provisional HP references above; they are not measured bounds. Successful ordinary UNLOAD
-commands supply separate passive learning observations. The current LTFS read model assumes no Index rewrite and prices only the
+borrow the provisional HP references above; they are not measured bounds. The current LTFS read model assumes no Index rewrite and prices only the
 direct rewind/unload from the final forecast position. That assumption matches reading a cartridge
 kept read-only after writing; it is not inferred from a mounted dirty flag or a drive write-protect
 observation. Writable or unknown mounts use the same assumption. Source-cache refresh may change
@@ -747,7 +749,7 @@ timing trials, rather than before writing. No held-out refitting or observation 
 Two repetitions on one cartridge do not control internal drive cache or prove physical LPOS,
 layout assumptions, portable coefficients, compressed-media behavior or LTFS benefit. The observed
 uncompressed benefit supports this implementation's tested use; broader cost-model, prospective
-cartridge and LTFS qualification remain open. Passive read learning does not require user measurement.
+cartridge and LTFS qualification remain open.
 
 ## Fixed Half-Cartridge Selected Restore
 
@@ -781,6 +783,212 @@ read the selection, so this is not a claim that total experiment I/O was 5% of t
 This one pair does not establish statistical confidence, global optimality or behavior on other
 drives, compressed media or unwritten wraps. No model refit or repeated search selected a faster
 reported result.
+
+## Two-Speed Positioning Priors
+
+CERN's 2018 presentation observes that drives position at reading speed (about 5.25 m/s) unless
+they cross the midpoint between LTO's two high-speed positioning areas, and then at 8.5–9 m/s
+([slides 6 and 24](https://indico.cern.ch/event/730908/contributions/3153156/attachments/1732268/2800425/LTO-CERN-HEPiX-Oct-2018-germancancio.pdf)).
+Its constant landing-zone term is a linear stand-in for that switch. HP's LTO-5 reference gives a
+6.04 m/s reading speed, 9 m/s high-speed search and wrap-end turnaround of at most 1.5 seconds
+([HP Volume 4](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol4_E4/LTO5_Vol4_E4.pdf)).
+
+Later HP LTO-5/Z6ED observations of one uncompressed, hardware-encrypted cartridge, all within
+band 0, supplied 23 and 16 native LOCATEs from two tar Restore sets (512 and 256 KiB records)
+and 48 clean LTFS file reads each from one selection restored in LOGICAL and AUTO order (first
+byte at least 0.5 seconds, not adjacent, both blocks resolved through the recorded map). Same-half
+forward moves within one wrap cost 135–138 seconds per full span, matching HP's reading speed;
+every other move cost about 95 seconds per span, matching high-speed search. The previous
+seven-term fit predicted moves to a nearby point of another wrap at 0–5 seconds where they took
+15–22 seconds, and its learned refit published impossible negative landing-zone (−12.1 s) and
+direction (−3.4 s) terms. All 17 cross-wrap moves arriving against the target wrap's direction ran
+long, by 5.0 seconds on average, while 10 of 14 mirrored moves had near-zero error.
+
+The current model prices reading-speed moves from record bytes and the read rate, fits a shared
+positioning base, a seek-speed slope, wrap change and approach reversal with nonnegative least
+squares, and adds a read-ahead buffer and a run-up distance found by a threshold search;
+the [next section](#read-ahead-buffer-run-up-and-ltfs-tail) gives their evidence. The built-in
+priors are 5.299 seconds base, 96.20 seconds per seek span, 1.358 seconds wrap change, 4.146
+seconds approach reversal, a 902,905,650-byte (861 MiB) buffer and a run-up distance of 0.02 span;
+band change keeps CERN's 3.2 seconds because no sample changed band. Over the four sets above their
+mean absolute errors are 0.87, 1.93 (held out), 0.46 and 1.11 seconds. Refitting from the first tar
+set alone, shrunk toward the earlier full-cartridge fit, predicts the second tar set with 2.03
+seconds and the LTFS LOGICAL and AUTO sets with 1.50 and 2.41 seconds mean absolute error; adding
+the LTFS LOGICAL samples identifies approach reversal (3.10 seconds) and lowers the AUTO error to
+1.54 seconds.
+
+The features were chosen after seeing the larger tar set and both LTFS sets, so only the second tar
+set is unseen by that choice. The 2026-10-21 full-cartridge observations were not retained and are
+not part of this fit. One drive, one cartridge and band 0 do not establish band-change cost,
+other generations or a portable model; per-source residuals of further measurements remain the check
+for a systematic LTFS offset.
+
+## Read-Ahead Buffer, Run-Up and LTFS Tail
+
+Two further LTFS measurements on the same HP LTO-5/Z6ED drive and cartridge (512 KiB blocks,
+uncompressed, hardware-encrypted, band 0) were added to the replay fixture. The first restored
+selections of 1, 2, 3, 9 and 52 files in LOGICAL order and the 9 and 52-file selections in AUTO
+order, the 52-file AUTO twice. The second restored three LOGICAL selections chosen to exercise
+forward skips and short wrap changes, then the 9 and 52-file selections in both orders, the
+52-file AUTO twice. Their 456 file reads, resolved through each Session's position map, and the 16
+tails from the last file's last byte to the unmount adapter's return or Job completion are in the
+fixture. The first file of each Restore starts from the assumed post-mount position, block 0 of the
+Data partition, which resolves to offset 0 of wrap 4.
+
+Forward moves logically ahead by up to 1,668 blocks (875 MB) took exactly their bytes at about
+140 MB/s (0.78 seconds for 112 MB, 6.06 seconds for 875 MB) with no fixed cost, whatever their wrap:
+the drive keeps reading toward the target instead of positioning. None of them crossed a wrap turn;
+[file reads](#reading-through-wrap-turns) price turns. The
+next longer same-wrap forward move, 1,842 blocks (966 MB), took 12.7–12.9 seconds, about six seconds
+more than its bytes at reading speed, and longer ones keep that fixed cost. The data therefore bound
+the reach between 875 and 966 MB; the threshold search places it at 861 MiB. The fixed cost of
+these read-speed locates fits the same value as the seek base, so the model shares one base term.
+Streaming within the buffer is priced with a mean absolute residual of 0.06 seconds over 67
+samples, and read-speed locates beyond it with 0.33 seconds over 90 samples.
+
+Wrap changes along the target wrap's direction took 10–11.8 seconds when the move was under 0.0015
+span, about 9.2 seconds near 0.006 span and 7.7–8.8 seconds from 0.011 to 0.02 span; beyond that
+the seek slope dominates. Arriving against the target direction cost a reversal of about 4.1–4.5
+seconds. Both fit one mechanism: the drive starts reading at least a run-up distance upstream of
+the target, so a move that falls short of it pays the missing share of the reversal, falling
+linearly from a full reversal at no distance to none at the run-up distance, which the search
+places at 0.02 span. The drive's times do not fall monotonically inside that ramp (moves of
+0.0125 span took 7.8 seconds while those of 0.0145 span took 9.6), so the class keeps a 0.64-second
+mean absolute residual over 123 samples, and the 92 approach reversals keep 0.79 seconds. One sample
+from the earlier LTFS AUTO Restore took 0.12 seconds after a long move.
+
+First files confirm the assumed post-mount position. Targets in the first half of wrap 4 took
+135–138 seconds per span, reading speed without a measurable base, and those beyond its midpoint
+98–101 seconds per span, seek speed. Pricing those at reading speed with the fitted base overprices
+them by about 4.5 seconds each, so the planner still prices every route's first file from the
+post-mount position, but the fit leaves those moves out.
+
+The fit, a threshold search with Job-weighted nonnegative least squares, uses the earlier tar and
+LTFS sets, the first five Restores of the first measurement (1, 2 and 3-file LOGICAL, 9-file AUTO and LOGICAL) and the three LOGICAL
+learning Restores of the second, shrunk toward the previous priors, with reading speed fixed at the
+LTO-5 density rate. Held out are the 256 KiB tar set, the first measurement's three 52-file
+Restores and the second measurement's 9 and 52-file Restores. Their mean absolute positioning errors
+are 1.93 seconds over 16 tar samples (1.88 with the previous model), 0.44 seconds over 153 LTFS
+samples (0.52) and 0.51 seconds over 169 LTFS samples (0.60). Each held-out Restore's total of first
+access, positioning and tail is within 1% of the measured time.
+
+Fixed unload work and full-span rewind are identifiable only from tar tails: with LTFS tails alone
+they are collinear with the unmount time, and a joint fit drifted the fixed term from 19 to 25.8
+seconds, which would also change tar's completion estimate. The completion terms therefore stay at
+19 and 96 seconds, and the eight training tails exceed them by 12.61 seconds on average, which
+became `ltfs_unmount_seconds`. Held-out tails ending near BOT are predicted 3.3–4.6 seconds short, and
+the others within 4 seconds. The first measurement's tails run to Job completion and so include
+YATM's finalization after unmount; the second's end when the unmount adapter returns.
+
+The limits remain one drive, one cartridge and band 0. No same-wrap backward move was observed, so
+the reversal of a move behind the head within one wrap rests on the cross-wrap samples. Passive tar
+observations cannot test the read-speed locate either: continuing to read is priced at least one
+base time below a forward LOCATE in the same half of a wrap, so tar never issues one, and whether
+other drives cover such moves at reading speed remains a hypothesis that only the LTFS file-to-file
+samples of this drive support. The
+earlier LTFS Restores recorded no post-mount origin, so their first files are not samples, and the
+features were chosen after seeing every set except the second measurement's held-out Restores.
+
+## Reading Through Wrap Turns
+
+A third LTFS measurement on the same drive and cartridge repeated the second's design. The replay
+fixture keeps bytes and read time for the file reads of all three measurements. Measured from
+first to last byte against each file's whole 512 KiB blocks, reads within one wrap ran at about
+144.3 MB/s, and every file whose blocks crossed a wrap turn took about 4.7–4.8 seconds more per
+turn. That is close to the approach reversal term (4.146 seconds built in): pricing each turn as
+one approach reversal and fitting only the rate on the first two measurements (143.8 MB/s) predicts
+the third measurement's 296 reads with a 0.067-second mean absolute error, 0.31 seconds for the 12
+that cross a turn. Ignoring turns fits 140.3 MB/s and errs by 0.26 seconds, 2.2 seconds for those
+12. A separate per-turn term predicted no better beyond the routes' own variation. The model
+therefore prices every wrap turn crossed while streaming or reading as one approach reversal, and
+the tar READ fit subtracts it so the read rate stays the in-wrap rate. LTFS read times stay out of
+the rate fit because they also include FUSE and destination throughput.
+
+The 256 KiB tar Restores were written with a different layout, so their turns fall at other places
+on the tape. Their 24 READ segments also keep their elapsed time. Segments of at least 100 MB
+within one wrap matched their bytes at 144.33 MB/s within 0.25 seconds, except one 3.45 GB segment
+that took 3.7 seconds more after a wrap turn. Three segments crossed five more turns: two crossed
+two turns each and took 9.96 and 9.87 seconds more, and one crossed one turn and took 4.79 seconds
+more, so 4.8–5.0 seconds per turn. A rate fitted over all 24 segments is 138.5 MB/s with the turns
+included and 143.2 MB/s once each turn is subtracted at the built-in reversal. The 512 KiB tar
+Restores cross no turn.
+
+The reads crossed eight distinct physical wrap turns on one drive, so the per-turn cost is
+provisional. Turns measured 4.7–5.0 seconds, above the 4.146-second reversal that prices them, so
+pricing a turn as an approach reversal is an approximation rather than an established drive
+mechanism. The [replay
+test](../../internal/executor/media_tar_defaults_test.go) keeps the held-out read error bound.
+
+## LOCATE Time Shape and a Fixed Calibration Sequence
+
+Scope: one HP LTO-5 half-height drive, one LTO-5 cartridge written uncompressed over 79 wraps with
+512 KiB records, November 2026. The drive received only LOCATE(10) and READ POSITION; no data was
+read. Positions are a wrap and the longitudinal fraction `u` of one span, taken from the wrap
+endpoints. Other drives and generations are unmeasured.
+
+### Shape (sourced measurement)
+
+336 individual LOCATEs covered same-wrap moves from 1 MiB to 95% of a wrap, wrap changes of 1 to 60
+wraps across every band pair, and near-zero wrap changes. Every time is linear in the longitudinal
+distance; a quadratic term lowers the residual of the wrap-changing fit only from 1.86 s to 1.73 s.
+
+| Move | Time | Residual (rms) |
+| --- | --- | --- |
+| Forward in one wrap, up to about 0.046 span (0.83 GiB) | distance at reading speed, no fixed part | — |
+| Forward in one wrap beyond that, origin and target in the same half of the tape | 6 s + distance at reading speed | 0.5 s |
+| Forward in one wrap across the middle of the tape | 7 s + 93 s per span | 1.6 s |
+| Backward in one wrap | 11 s + 93 s per span | 0.9 s |
+| Wrap change | 7.5 s + 93 s per span, + 4.3 s when arriving against the target wrap's read direction | 1.9 s |
+
+- The number of wraps crossed and a band change add nothing (fitted −0.7 s and −0.9 s).
+- Reading speed is about 132 s per span, 145 MB/s. A forward LOCATE that the drive streams through
+  takes the time of reading the skipped data; the drive buffers no time.
+- Eight same-wrap forward moves agree with the rule that the drive seeks only when the target lies
+  in the other half of the tape. They agree equally with a distance threshold near 7.5 GiB; the
+  data does not separate the two.
+- A LOCATE to an object visited by a recent LOCATE, or within about 64 MiB ahead of the physical
+  position, completes in under 0.1 s without tape motion. The next move then starts from the
+  physical position. This only matters to a measurement that revisits a target.
+- The time of a move depends on how the previous move arrived by about 2 s: one move with identical
+  endpoints took 48.7 s after one predecessor and 50.9 s after another, each repeatable to 0.1 s.
+  No term describes this; it bounds the residual of any fit of this form.
+- One LOCATE over zero longitudinal distance took 54 s, unexplained and excluded.
+
+One base time serves all rows: the backward fixed part equals base plus reversal, and the
+same-half and seek-speed fixed parts agree within 1 s. Three terms and the reading speed fit all
+226 moves that left the streaming zone with an rms error of 1.75 s.
+
+### Fixed sequence (sourced measurement)
+
+A sequence of 22 LOCATEs in wraps 0 and 1 measures the same terms: two same-half forward moves,
+three backward moves, five forward probes that bisect the streaming distance between 0.01 and
+0.12 span, and ten wrap changes of which five span about half the tape. No target repeats a recent
+one. It takes 466 s of tape motion, about 8.9 minutes with load and unload.
+
+| Term | Five runs of the sequence | All 336 moves |
+| --- | --- | --- |
+| Base | 6.1–6.4 s | 7.1 s |
+| Seek, one span | 93.3–94.6 s | 94.2 s |
+| Approach reversal | 4.3–4.8 s | 3.9 s |
+| Reading, one span | 130.7–132.6 s | 129.9 s |
+| Streaming distance | 0.044–0.048 span | between 0.028 and 0.056 span |
+
+- Steps repeat within 0.11 s across runs, including across an unload and load.
+- Terms fitted from one run predict the 226 independent moves with an rms error of 1.80–1.89 s.
+- Fixing the seek time per span instead of measuring it raises that error to 2.2 s at 3% off and
+  3.8 s at 10% off. Vendor data sheets, not the LTO format, state locate and rewind times.
+- The reading speed seen while streaming (132.6 s per span) and the slope of the same-half LOCATEs
+  (131 s per span) agree within 1.5%; a drive that seeks on short forward moves would separate them.
+- Unload took 31.9 s from `u` = 0.03 and 82.1 s from `u` = 0.60: about 29 s plus 88 s per span.
+
+### Other generations (vendor data, unverified here)
+
+Published average rewind times for LTO-7 to LTO-9 drives are 52–62 s, and HP states 96 s from end
+to beginning of an LTO-5 tape, so the seek time for one span stays within about 20% across
+generations. The reading time for one span follows from wrap capacity and native rate and is longer
+on newer generations (about 134 s for LTO-5, 160–215 s for LTO-9 depending on the drive's rate).
+The sequence is defined in span fractions and is expected to stay under ten minutes; this is an
+estimate.
 
 ## Reading Position Through SG
 

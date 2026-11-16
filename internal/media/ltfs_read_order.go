@@ -20,14 +20,17 @@ type LTFSReadOptions struct {
 	Compression    *bool
 	Partitions     map[string]uint32
 	Model          *ReadCostModel
-	Timing         *entity.TapeReadTiming
 	Completion     *ReadCompletion
 	DataEnd        *entity.TapeBytePosition
 	PlanningBudget time.Duration
 	ReadIndex      func(context.Context, func(*LTFSIndexEntry) error) error
 }
 
-type ltfsReadOrderProvider struct{ options LTFSReadOptions }
+type ltfsReadOrderProvider struct {
+	options LTFSReadOptions
+	// origin is the assumed post-mount position, or nil when the position map cannot resolve it.
+	origin *entity.TapeBytePosition
+}
 
 // WalkReadRanges provides current Index extents only when the planner needs missing locations.
 func (p *ltfsReadOrderProvider) WalkReadRanges(ctx context.Context, yield func(readplan.RangeEntry) error) error {
@@ -50,16 +53,6 @@ func NewLTFSReadOrderProvider(options LTFSReadOptions) (ReadOrderProvider, strin
 	if options.BlockBytes == 0 || len(options.Partitions) == 0 || !options.Model.Valid() {
 		return nil, "LTFS label block size, physical partition mapping or geometry is unavailable"
 	}
-	if options.Timing == nil || options.Timing.BytesPerSecond == nil || options.Timing.GetBytesPerSecond() <= 0 ||
-		options.Timing.PostLocateReadOverheadSeconds == nil {
-		return nil, "LTFS read timing is incomplete"
-	}
-	for _, value := range []float64{options.Timing.GetBytesPerSecond(), options.Timing.GetPostLocateReadOverheadSeconds()} {
-		if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-			return nil, "LTFS read timing is invalid"
-		}
-	}
-
 	// Actual Data EOD bounds complete reads, independently of the previous Index's start block.
 	if options.DataEnd == nil || options.DataEnd.OffsetBytes != 0 {
 		return nil, "LTFS Data partition EOD is unavailable"
@@ -68,7 +61,8 @@ func NewLTFSReadOrderProvider(options LTFSReadOptions) (ReadOrderProvider, strin
 	if len(intervals) == 0 || intervals[len(intervals)-1].high != options.DataEnd.LogicalObject {
 		return nil, "LTFS Data partition EOD does not match the position map"
 	}
-	if options.Completion == nil || options.Completion.FullSpanSeconds >= float64(math.MaxInt64)/float64(time.Second) {
+	if options.Completion == nil || options.Completion.FullSpanSeconds >= float64(math.MaxInt64)/float64(time.Second) ||
+		!(options.Completion.LTFSUnmountSeconds >= 0) || options.Completion.LTFSUnmountSeconds >= float64(math.MaxInt64)/float64(time.Second) {
 		return nil, "LTFS completion timing is unavailable or unrepresentable"
 	}
 	if _, known := options.Model.UnloadCost(options.DataEnd, options.Completion); !known {
@@ -89,18 +83,33 @@ func NewLTFSReadOrderProvider(options LTFSReadOptions) (ReadOrderProvider, strin
 		return nil, "LTFS Data partition EOD has no label mapping"
 	}
 	options.Partitions = partitions
-	options.Timing = proto.Clone(options.Timing).(*entity.TapeReadTiming)
 	completion := *options.Completion
 	options.Completion = &completion
 	options.DataEnd = proto.Clone(options.DataEnd).(*entity.TapeBytePosition)
-	return &ltfsReadOrderProvider{options: options}, "LTFS route comparison assumes no Index rewrite and includes rewind/unload; common initial access is unquoted"
+
+	// Mount reads the Index near BOT, so the first file is priced from the Data partition's first
+	// object when the map resolves it; otherwise the common first file stays fixed and unquoted.
+	provider := &ltfsReadOrderProvider{options: options}
+	origin := &entity.TapeBytePosition{Partition: options.DataEnd.Partition}
+	if _, known := options.Model.Point(origin); !known {
+		return provider, "LTFS route comparison assumes no Index rewrite and includes rewind/unload; the post-mount position is unresolved, so common initial access is unquoted"
+	}
+	provider.origin = origin
+	return provider, "LTFS route comparison assumes no Index rewrite and includes rewind/unload; initial access is priced from the Data partition start"
 }
 
 func (p *ltfsReadOrderProvider) ReadPlanningBudget() time.Duration { return p.options.PlanningBudget }
 
+func (p *ltfsReadOrderProvider) MinimumGain() time.Duration { return p.options.Model.MinimumGain() }
+
+// Current returns the assumed post-mount position, not an observed cursor: mount reads the Index
+// from the Index partition near BOT, which leaves the Data partition's first object closest.
 func (p *ltfsReadOrderProvider) Current(ctx context.Context) (readplan.State, bool, error) {
-	// Neither the captured Index location nor a pre-mount observation describes the mounted cursor.
-	return readplan.State{}, false, ctx.Err()
+	if p.origin == nil {
+		return readplan.State{}, false, ctx.Err()
+	}
+	return readplan.State{Position: &entity.TapeBytePosition{Partition: p.origin.Partition,
+		LogicalObject: p.origin.LogicalObject}, Stream: "ltfs"}, true, ctx.Err()
 }
 
 func (p *ltfsReadOrderProvider) Ranges(request ReadRequest) ([]readplan.Range, bool) {
@@ -187,21 +196,7 @@ func (p *ltfsReadOrderProvider) covers(interval readplan.Range) bool {
 		interval.End.LogicalObject == math.MaxUint64 && interval.End.OffsetBytes != 0 {
 		return false
 	}
-	end := ltfsRangeEnd(interval).Position.LogicalObject
-	wraps := p.options.Model.intervals[interval.Start.Partition]
-	at := sort.Search(len(wraps), func(i int) bool { return wraps[i].high > interval.Start.LogicalObject })
-	if at == len(wraps) || interval.Start.LogicalObject < wraps[at].low {
-		return false
-	}
-	covered := wraps[at].high
-	for covered < end && at+1 < len(wraps) {
-		at++
-		if wraps[at].low != covered {
-			return false
-		}
-		covered = wraps[at].high
-	}
-	return end <= covered
+	return p.options.Model.covers(interval.Start.Partition, interval.Start.LogicalObject, ltfsRangeEnd(interval).Position.LogicalObject)
 }
 
 func (p *ltfsReadOrderProvider) Evaluate(from readplan.State, interval readplan.Range) (readplan.Transition, bool) {
@@ -221,24 +216,28 @@ func (p *ltfsReadOrderProvider) Evaluate(from readplan.State, interval readplan.
 	case from.Position.LogicalObject == start:
 		method = readplan.MethodContinue
 	default:
-		setup, known := p.options.Model.AccessCost(from.Position, ltfsContainingBlock(interval.Start))
+		// Only a completed read leaves a cached block and fills the read-ahead buffer; the post-mount
+		// origin has neither, because mount leaves the head on the Index partition.
+		access := p.options.Model.AccessCost
+		if from.Cache == nil {
+			access = p.options.Model.UnbufferedAccessCost
+		}
+		setup, known := access(from.Position, ltfsContainingBlock(interval.Start))
 		if !known {
 			return readplan.Transition{}, false
 		}
-		overhead, known := readSeconds(p.options.Timing.GetPostLocateReadOverheadSeconds())
-		if !known {
-			return readplan.Transition{}, false
-		}
-		cost = setup + overhead
+		cost = setup
 	}
 
-	// Every extent is priced in whole blocks, including a final short record.
+	// Every extent is priced in whole blocks, including a final short record, with each wrap turn up
+	// to the host-next block.
 	if blocks != 0 {
-		high, bytes := bits.Mul64(blocks, uint64(p.options.BlockBytes))
-		if high != 0 {
+		first := &entity.TapeBytePosition{Partition: end.Cache.Partition, LogicalObject: end.Position.LogicalObject - blocks}
+		seconds, known := p.options.Model.ReadingSeconds(first, end.Position, blocks)
+		if !known {
 			return readplan.Transition{}, false
 		}
-		duration, known := readSeconds(float64(bytes) / p.options.Timing.GetBytesPerSecond())
+		duration, known := readSeconds(seconds)
 		if !known {
 			return readplan.Transition{}, false
 		}
@@ -247,14 +246,23 @@ func (p *ltfsReadOrderProvider) Evaluate(from readplan.State, interval readplan.
 	return readplan.Transition{Cost: cost, Next: end, Method: method}, true
 }
 
-// Finish quotes rewind/unload under the no-Index-rewrite assumption used for LTFS reads.
+// Finish quotes rewind/unload plus the LTFS unmount time under the no-Index-rewrite assumption used
+// for LTFS reads.
 // This is model policy, not an observation that the mounted volume is read-only or clean.
 func (p *ltfsReadOrderProvider) Finish(from readplan.State) (time.Duration, bool) {
 	// The forecast exit remains in the qualified Data partition and keeps its physical wrap scale.
 	if from.Position == nil || from.Position.Partition != p.options.DataEnd.Partition {
 		return 0, false
 	}
-	return p.options.Model.UnloadCost(from.Position, p.options.Completion)
+	unload, known := p.options.Model.UnloadCost(from.Position, p.options.Completion)
+	if !known {
+		return 0, false
+	}
+	unmount, known := readSeconds(p.options.Completion.LTFSUnmountSeconds)
+	if !known || unload > math.MaxInt64-unmount {
+		return 0, false
+	}
+	return unload + unmount, true
 }
 
 func ltfsContainingBlock(position *entity.TapeBytePosition) *entity.TapeBytePosition {

@@ -151,6 +151,7 @@ func registerCommands(root *flags.Command, commandRuntime *runtime) error {
 		registerScanCommands,
 		registerJobCreationCommands,
 		registerVerifyCommands,
+		registerCalibrationCommands,
 		registerFileOperationCommands,
 		registerLocationCommands,
 		registerCatalogCommands,

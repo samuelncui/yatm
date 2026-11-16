@@ -22,7 +22,7 @@ type jobListCommand struct {
 type jobQueryOptions struct {
 	LocationID *int64 `long:"location-id" description:"Only Jobs associated with this Location"`
 	MediaID    *int64 `long:"media-id" description:"Only Jobs associated with this Media"`
-	Kind       string `long:"kind" description:"ARCHIVE, RESTORE, or SCAN"`
+	Kind       string `long:"kind" description:"ARCHIVE, RESTORE, SCAN, or CALIBRATION"`
 }
 
 type jobChangesCommand struct {
@@ -329,6 +329,15 @@ func (c *jobProgressCommand) Execute(_ []string) error {
 		reply, err := callRPC[entity.GetScanJobProgressRequest, entity.GetScanJobProgressResponse](
 			ctx, c.runtime, entity.ScanJobService_GetProgress_FullMethodName,
 			&entity.GetScanJobProgressRequest{Id: c.Args.ID},
+		)
+		if err != nil {
+			return err
+		}
+		return writeProto(c.runtime.stdout, reply)
+	case entity.JobKind_JOB_KIND_CALIBRATION:
+		reply, err := callRPC[entity.GetCalibrationJobProgressRequest, entity.GetCalibrationJobProgressResponse](
+			ctx, c.runtime, entity.CalibrationJobService_GetProgress_FullMethodName,
+			&entity.GetCalibrationJobProgressRequest{Id: c.Args.ID},
 		)
 		if err != nil {
 			return err

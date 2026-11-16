@@ -9,38 +9,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadCompletionPhysicalCoordinatesAndUnits(t *testing.T) {
+func TestReadCompletionPhysicalCoordinates(t *testing.T) {
 	parameters := &ReadCompletion{FullSpanSeconds: 100, FixedSeconds: 3}
-	for _, normalized := range []bool{false, true} {
-		profile, _ := readModelFixture()
-		profile.MinLPOS, profile.MaxLPOS = 2696, 171097
-		// Deliberately unrelated LOCATE coefficients and uncertainty must not price unload.
-		profile.Coefficients = ReadModelCoefficients{Base: -9, Wrap: 23, Band: -3, Direction: 99, Longitudinal: .3}
-		if normalized {
-			profile.FullWrapSeconds = readModelFloat(7)
-			profile.Coefficients.Longitudinal = 0
-		}
-		model, err := NewReadCostModel(profile)
-		require.NoError(t, err)
-		for _, test := range []struct {
-			object uint64
-			want   time.Duration
-		}{
-			{0, 3 * time.Second}, {10, 13 * time.Second}, {90, 93 * time.Second},
-			{100, 103 * time.Second}, {110, 93 * time.Second}, {190, 13 * time.Second},
-			{200, 3 * time.Second}, {290, 93 * time.Second}, {300, 103 * time.Second},
-		} {
-			cost, known := model.UnloadCost(readModelPosition(test.object), parameters)
-			require.True(t, known, "normalized=%t object=%d", normalized, test.object)
-			require.Equal(t, test.want, cost)
-		}
+	profile, _ := readModelFixture()
+	// Deliberately unrelated LOCATE coefficients must not price unload.
+	profile.Coefficients = ReadModelCoefficients{Base: 9, Seek: 7, ApproachReversal: 99}
+	profile.ReadObjectSeconds = 11
+	model, err := NewReadCostModel(profile)
+	require.NoError(t, err)
+	for _, test := range []struct {
+		object uint64
+		want   time.Duration
+	}{
+		{0, 3 * time.Second}, {10, 13 * time.Second}, {90, 93 * time.Second},
+		{100, 103 * time.Second}, {110, 93 * time.Second}, {190, 13 * time.Second},
+		{200, 3 * time.Second}, {290, 93 * time.Second}, {300, 103 * time.Second},
+	} {
+		cost, known := model.UnloadCost(readModelPosition(test.object), parameters)
+		require.True(t, known, "object=%d", test.object)
+		require.Equal(t, test.want, cost)
 	}
 }
 
 func TestReadCompletionFinalPartialEODPreservesScaleAndDirection(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
 		profile, _ := readModelFixture()
-		profile.FullWrapSeconds, profile.Coefficients.Longitudinal = readModelFloat(1), 0
+		profile.Coefficients.Seek = 1
 		last, eod, want := 2, uint64(225), 25*time.Second
 		if reverse {
 			profile.Wraps = profile.Wraps[:2]
@@ -59,20 +53,6 @@ func TestReadCompletionFinalPartialEODPreservesScaleAndDirection(t *testing.T) {
 		require.Equal(t, uint64(100), model.intervals[0][last].span)
 		require.Equal(t, eod, model.intervals[0][last].high)
 	}
-}
-
-func TestReadCompletionAmbiguousWrapBoundary(t *testing.T) {
-	profile, _ := readModelFixture()
-	profile.Wraps[0].EndpointUncertaintyObjects = readModelEndpoint(2)
-	profile.Wraps[1].EndpointUncertaintyObjects = readModelEndpoint(2)
-	model, err := NewReadCostModel(profile)
-	require.NoError(t, err)
-	parameters := &ReadCompletion{FullSpanSeconds: 100}
-	cost, known := model.UnloadCost(readModelPosition(150), parameters)
-	require.True(t, known)
-	require.Equal(t, 50*time.Second, cost)
-	_, known = model.UnloadCost(readModelPosition(100), parameters)
-	require.False(t, known, "an ambiguous wrap boundary cannot supply a physical coordinate")
 }
 
 func TestReadCompletionRejectsUnknownOrInvalidInputs(t *testing.T) {

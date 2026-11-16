@@ -75,6 +75,7 @@ func (s *orderedScanSession) Source(r media.ReadRequest) (media.SourceRef, error
 	return media.SourceRef{Content: &orderedScanSource{session: s, path: r.Path}}, nil
 }
 func (s *orderedScanSession) ReadPlanningBudget() time.Duration { return s.planningBudget }
+func (s *orderedScanSession) MinimumGain() time.Duration        { return 0 }
 func (s *orderedScanSession) Ranges(r media.ReadRequest) ([]readplan.Range, bool) {
 	s.rangeCalls++
 	if s.rangeCancel != nil {

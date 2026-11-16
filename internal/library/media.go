@@ -30,54 +30,37 @@ const (
 
 // Media is the common Library identity for Tape and mounted offline Volumes.
 type Media struct {
-	ID              int64                   `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
-	Kind            entity.MediaKind        `gorm:"not null;index:idx_media_kind_identity,unique,priority:1" json:"kind,omitempty"`
-	Identity        string                  `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2" json:"identity,omitempty"`
-	Name            string                  `gorm:"type:varchar(256)" json:"name,omitempty"`
-	Profile         *entity.MediaProfile    `gorm:"type:blob;not null" json:"profile,omitempty"`
-	CreatedAtNS     int64                   `json:"created_at_ns,string"`
-	CapacityBytes   int64                   `json:"capacity_bytes,omitempty"`
-	WrittenBytes    int64                   `json:"written_bytes,omitempty"`
-	TapePositionMap *entity.TapePositionMap `gorm:"type:blob" json:"tape_position_map,omitempty"`
+	ID            int64                `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
+	Kind          entity.MediaKind     `gorm:"not null;index:idx_media_kind_identity,unique,priority:1" json:"kind,omitempty"`
+	Identity      string               `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2" json:"identity,omitempty"`
+	Name          string               `gorm:"type:varchar(256)" json:"name,omitempty"`
+	Profile       *entity.MediaProfile `gorm:"type:blob;not null" json:"profile,omitempty"`
+	CreatedAtNS   int64                `json:"created_at_ns,string"`
+	CapacityBytes int64                `json:"capacity_bytes,omitempty"`
+	WrittenBytes  int64                `json:"written_bytes,omitempty"`
 }
 
 type mediaJSON struct {
-	ID              int64            `json:"id,omitempty"`
-	Kind            entity.MediaKind `json:"kind,omitempty"`
-	Identity        string           `json:"identity,omitempty"`
-	Name            string           `json:"name,omitempty"`
-	Profile         json.RawMessage  `json:"profile"`
-	CreatedAtNS     int64            `json:"created_at_ns,string"`
-	CapacityBytes   int64            `json:"capacity_bytes,omitempty"`
-	WrittenBytes    int64            `json:"written_bytes,omitempty"`
-	TapePositionMap json.RawMessage  `json:"tape_position_map,omitempty"`
+	ID            int64            `json:"id,omitempty"`
+	Kind          entity.MediaKind `json:"kind,omitempty"`
+	Identity      string           `json:"identity,omitempty"`
+	Name          string           `json:"name,omitempty"`
+	Profile       json.RawMessage  `json:"profile"`
+	CreatedAtNS   int64            `json:"created_at_ns,string"`
+	CapacityBytes int64            `json:"capacity_bytes,omitempty"`
+	WrittenBytes  int64            `json:"written_bytes,omitempty"`
 }
 
 func (value Media) MarshalJSON() ([]byte, error) {
-	// Invalid geometry cannot become a metadata backup that cannot be restored.
-	if err := ValidateTapePositionMap(&value, value.TapePositionMap); err != nil {
-		return nil, err
-	}
-
 	// Keep the typed profile encoding while writing exact decimal-string instants.
 	profile, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(value.Profile)
 	if err != nil {
 		return nil, fmt.Errorf("encode Media profile failed, %w", err)
 	}
-
-	// Optional derived geometry uses the same lossless protobuf JSON encoding as the profile.
-	var positionMap json.RawMessage
-	if value.TapePositionMap != nil {
-		positionMap, err = protojson.MarshalOptions{UseProtoNames: true}.Marshal(value.TapePositionMap)
-		if err != nil {
-			return nil, fmt.Errorf("encode Media Tape position map failed, %w", err)
-		}
-	}
 	return json.Marshal(&mediaJSON{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: profile,
 		CreatedAtNS:   value.CreatedAtNS,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
-		TapePositionMap: positionMap,
 	})
 }
 
@@ -95,21 +78,10 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 	if err := protojson.Unmarshal(decoded.Profile, profile); err != nil {
 		return fmt.Errorf("decode Media profile failed, %w", err)
 	}
-
-	// Decode mutable geometry separately so it never becomes an immutable profile fact.
-	// Catalog import validates it through validateMedia.
-	var positionMap *entity.TapePositionMap
-	if len(decoded.TapePositionMap) > 0 && !bytes.Equal(decoded.TapePositionMap, []byte("null")) {
-		positionMap = new(entity.TapePositionMap)
-		if err := protojson.Unmarshal(decoded.TapePositionMap, positionMap); err != nil {
-			return fmt.Errorf("decode Media Tape position map failed, %w", err)
-		}
-	}
 	*value = Media{
 		ID: decoded.ID, Kind: decoded.Kind, Identity: decoded.Identity, Name: decoded.Name, Profile: profile,
 		CreatedAtNS:   decoded.CreatedAtNS,
 		CapacityBytes: decoded.CapacityBytes, WrittenBytes: decoded.WrittenBytes,
-		TapePositionMap: positionMap,
 	}
 	return nil
 }
@@ -600,7 +572,7 @@ func validateMedia(value *Media) error {
 	default:
 		return fmt.Errorf("unsupported Media kind, kind=%s", value.Kind)
 	}
-	return ValidateTapePositionMap(value, value.TapePositionMap)
+	return nil
 }
 
 // NormalizeMediaIdentity returns the stored form of a Media identity.

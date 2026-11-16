@@ -16,7 +16,7 @@ import unittest
 from unittest import mock
 
 from package_physical_cases import check_cleanup_state
-from package_physical_tar import TarCases, fill_restore_sample, model_change, parse_mam_barcode, read_observations, run_stage
+from package_physical_tar import TarCases, fill_restore_sample, parse_mam_barcode, run_stage
 from physical_package_acceptance import PhysicalAcceptance, physical_arguments, public_tape_data, validate_state
 from physical_tar_recovery import (MAX_RECORD_BYTES, PublicReader, check, check_boundary, check_extracted, check_fill,
                                    check_fill_members, generate, main as recovery_main, parse_status)
@@ -258,12 +258,12 @@ class TarWorkflowTests(unittest.TestCase):
     def test_restart_reuses_all_readback_paths(self):
         self.state.update(format_items={"format/one": {}, "format/two": {}}, append_items={"append/one": {}})
         self.cases.restore_selection, self.cases.scan, self.cases.public_recovery = mock.Mock(), mock.Mock(), mock.Mock()
-        self.cases.device_settings, self.cases.learning = mock.Mock(), mock.Mock()
+        self.cases.device_settings, self.cases.read_orders = mock.Mock(), mock.Mock()
         self.cases.restore()
         self.assertEqual(self.cases.restore_selection.call_args_list, [
             mock.call("restore-full", ["append/one", "format/one", "format/two"]),
             mock.call("restore-selected", ["append/one", "format/two"])])
-        self.cases.learning.assert_called_once_with(["append/one", "format/one", "format/two"])
+        self.cases.read_orders.assert_called_once_with(["append/one", "format/one", "format/two"])
         self.assertEqual(self.cases.scan.call_args_list, [mock.call(verify=False), mock.call(verify=True)])
         self.cases.public_recovery.assert_called_once()
         self.assertTrue(self.state["restore_complete"])
@@ -325,21 +325,12 @@ class TarWorkflowTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.cases.check_positions({}, items)
 
-    def test_tar_artifact_capture_collects_only_read_observations(self):
+    def test_tar_artifact_capture_collects_no_tape_evidence(self):
         self.cases.copy_evidence = mock.Mock()
-        path = "/owned/install/work/jobs/7/tapes/TST001/read-observations.jsonl"
-        self.test.remote.return_value = SimpleNamespace(returncode=1, stdout=b"")
         self.cases.tape_evidence("7")
         self.cases.tape_evidence("7", verify=True)
         self.cases.copy_evidence.assert_not_called()
-        self.assertEqual({tuple(call.args[0]) for call in self.test.remote.call_args_list}, {("test", "-f", path)})
-        self.test.remote.return_value = SimpleNamespace(returncode=0, stdout=b"")
-        self.cases.tape_evidence("7")
-        self.cases.copy_evidence.assert_called_once_with(path, "jobs/7/tapes/TST001/read-observations.jsonl")
-        self.cases.keep("jobs/8/tapes/TST001/read-observations.jsonl", b"{}\n")
-        self.test.remote.return_value = SimpleNamespace(returncode=1, stdout=b"")
-        with self.assertRaisesRegex(RuntimeError, "disappeared"):
-            self.cases.tape_evidence("8", verify=True)
+        self.test.remote.assert_not_called()
 
     def test_media_and_library_evidence_never_save_encoded_key(self):
         key = "v1:" + "ab" * 32
@@ -1053,7 +1044,7 @@ class TarMamTests(unittest.TestCase):
             self.cases.check_append_log(self.directory, 1)
 
 
-class TarLearningTests(unittest.TestCase):
+class TarReadOrderTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -1065,82 +1056,24 @@ class TarLearningTests(unittest.TestCase):
         self.state = {"media_id": "9"}
         self.cases = TarCases(self.test, self.state, mock.Mock())
 
-    def test_read_observation_jsonl_needs_one_parseable_object(self):
-        path = self.directory / "read-observations.jsonl"
-        path.write_bytes(b'{"action":"READ","bytes":262144}\n\n{"action":"LOCATE"}\n{truncated\n')
-        self.assertEqual(read_observations(path), {"records": 2, "unparseable_lines": 1})
-        for data in (b"", b"\n\n", b"[1]\n", b"not json\n"):
-            path.write_bytes(data)
-            with self.subTest(data=data), self.assertRaisesRegex(RuntimeError, "no parseable read observation"):
-                read_observations(path)
-
-    def test_job_observations_wait_boundedly_then_copy_the_bundle_file(self):
-        self.state["inventory_job_id"] = "5"
-        path = "/owned/install/work/jobs/5/tapes/TST001/read-observations.jsonl"
-        data = b'{"action":"READ"}\n'
-        self.test.remote.side_effect = [done(returncode=1), done(), done(hashlib.sha256(data).hexdigest().encode() + b"  x\n"),
-                                        done(data)]
-        with mock.patch("package_physical_tar.time.sleep") as sleep:
-            result = self.cases.job_observations("inventory")
-        sleep.assert_called_once_with(5)
-        self.assertEqual(result["records"], 1)
-        self.assertEqual(self.test.remote.call_args_list[0].args[0], ["test", "-s", path])
-        clock = iter([0, 0, 200])
-        self.test.remote.side_effect = None
-        self.test.remote.return_value = done(returncode=1)
-        with mock.patch("package_physical_tar.time.monotonic", side_effect=lambda: next(clock)), \
-                mock.patch("package_physical_tar.time.sleep"), \
-                self.assertRaisesRegex(RuntimeError, "no read-observations.jsonl"):
-            self.cases.job_observations("inventory")
-
-    def settings(self, order="TAPE_READ_ORDER_LOGICAL", learning=True, models=()):
+    def settings(self, order="TAPE_READ_ORDER_LOGICAL"):
         return {"devices": [{"device": "/dev/other", "tape": {"read_order": "TAPE_READ_ORDER_AUTO"}},
-                            {"device": "/dev/nst0", "tape": {"read_order": order, "passive_read_learning": learning,
-                                                             "read_planning_seconds": 30}}],
-                "learned_read_parameters": list(models)}
+                            {"device": "/dev/nst0", "tape": {"read_order": order, "read_planning_seconds": 30}}]}
 
-    def test_read_order_settings_keep_learning_on_and_other_devices_unchanged(self):
+    def test_read_order_settings_keep_other_devices_unchanged(self):
         written = {}
         self.test.write.side_effect = lambda path, data: written.__setitem__(path, json.loads(data))
         self.test.one.side_effect = [self.settings(), self.settings("TAPE_READ_ORDER_AUTO")]
         self.cases.set_read_order("AUTO")
         value = written["/owned/tmp/device-settings-auto.json"]
-        self.assertNotIn("learned_read_parameters", value)
         self.assertEqual(value["devices"][0], {"device": "/dev/other", "tape": {"read_order": "TAPE_READ_ORDER_AUTO"}})
-        self.assertEqual(value["devices"][1]["tape"], {"read_order": "TAPE_READ_ORDER_AUTO", "passive_read_learning": True,
-                                                       "read_planning_seconds": 30})
+        self.assertEqual(value["devices"][1]["tape"], {"read_order": "TAPE_READ_ORDER_AUTO", "read_planning_seconds": 30})
         self.assertEqual(self.test.one.call_args_list[-1].args,
                          ("settings", "devices", "--device-json", "/owned/tmp/device-settings-auto.json"))
-        for reply in (self.settings("TAPE_READ_ORDER_LOGICAL"), self.settings("TAPE_READ_ORDER_AUTO", learning=None)):
+        for reply in (self.settings("TAPE_READ_ORDER_LOGICAL"), {"devices": self.settings()["devices"][:1]}):
             self.test.one.side_effect = [self.settings(), reply]
             with self.subTest(reply=reply), self.assertRaises(RuntimeError):
                 self.cases.set_read_order("AUTO")
-
-    def test_learned_read_parameters_poll_is_bounded_and_later_changes_are_report_only(self):
-        model = {"device": "/dev/nst0", "training_observations": 12, "updated_at_ns": "10", "parameters": {"a": 1}}
-        other = {"device": "/dev/other", "training_observations": 1, "updated_at_ns": "99"}
-        self.test.one.side_effect = [self.settings(models=[other]), self.settings(models=[other, model])]
-        with mock.patch("package_physical_tar.time.sleep") as sleep:
-            first = self.cases.learned_read_parameters()
-        sleep.assert_called_once_with(10)
-        self.assertEqual(first["models"], [model])
-        clock = iter([0, 0, 700])
-        self.test.one.side_effect = None
-        self.test.one.return_value = self.settings(models=[model])
-        with mock.patch("package_physical_tar.time.monotonic", side_effect=lambda: next(clock)), \
-                mock.patch("package_physical_tar.time.sleep"):
-            unchanged = self.cases.learned_read_parameters(first, required=False)
-        self.assertEqual(unchanged["unchanged_after_seconds"], 600)
-        self.assertFalse(model_change(first, unchanged)["updated"])
-        clock = iter([0, 0, 700])
-        self.test.one.return_value = self.settings(models=[other])
-        with mock.patch("package_physical_tar.time.monotonic", side_effect=lambda: next(clock)), \
-                mock.patch("package_physical_tar.time.sleep"), self.assertRaisesRegex(RuntimeError, "bounded wait"):
-            self.cases.learned_read_parameters()
-        newer = {**model, "updated_at_ns": "20", "training_observations": 30, "parameters": {"a": 2}}
-        change = model_change(first, {"models": [newer]})
-        self.assertEqual((change["updated"], change["parameters_changed"], change["training_observations"]),
-                         (True, True, [[12], [30]]))
 
     def test_auto_and_logical_arms_record_duration_and_planner_reason(self):
         orders = []
@@ -1173,24 +1106,13 @@ class TarLearningTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "requested AUTO"):
             self.cases.read_order_arm("AUTO", ["format/one"])
 
-    def test_learning_checks_each_read_job_and_deletes_one_restore_bundle(self):
-        self.state.update({"restore-selected_job_id": "6"})
-        self.cases.job_observations = mock.Mock(side_effect=lambda key: {"key": key, "records": 1})
-        first = {"models": [{"updated_at_ns": "1"}]}
-        self.cases.learned_read_parameters = mock.Mock(side_effect=[first, first, {"models": [{"updated_at_ns": "2"}]}])
+    def test_read_orders_compare_both_arms_then_restore_logical(self):
         self.cases.read_order_arm = mock.Mock(side_effect=lambda order, names: {"order": order})
         self.cases.set_read_order = mock.Mock()
-        self.cases.learning(["format/one"])
-        self.assertEqual([call.args[0] for call in self.cases.job_observations.call_args_list],
-                         ["restore-full", "restore-selected", "inventory", "verify"])
-        self.assertEqual(self.cases.learned_read_parameters.call_args_list[1:],
-                         [mock.call(first, required=False), mock.call(first, required=False)])
+        self.cases.read_orders(["format/one"])
+        self.assertEqual([call.args[0] for call in self.cases.read_order_arm.call_args_list], ["LOGICAL", "AUTO"])
         self.cases.set_read_order.assert_called_once_with("LOGICAL")
-        self.test.cli.assert_called_once_with("job", "delete", "6")
-        self.assertEqual(self.test.remote.call_args_list[-1].args[0], ["test", "!", "-e", "/owned/install/work/jobs/6"])
-        self.assertEqual(self.state["deleted_job_ids"], ["6"])
-        report = json.loads((self.directory / "physical-evidence/learning.json").read_text())
-        self.assertEqual(report["deleted_restore_job"], "6")
+        self.test.cli.assert_not_called()
         comparison = json.loads((self.directory / "physical-evidence/read-order-comparison.json").read_text())
         self.assertEqual(set(comparison["arms"]), {"LOGICAL", "AUTO"})
 

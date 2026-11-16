@@ -12,8 +12,7 @@ import type { GetSettingsRequest } from "./settings";
 import type { UnaryCall } from "@protobuf-ts/runtime-rpc";
 import type { RpcOptions } from "@protobuf-ts/runtime-rpc";
 /**
- * Settings groups use typed reads and updates. Device updates replace user-owned Device settings while
- * retaining server-owned learned read parameters from the latest stored value.
+ * Settings groups use typed reads and updates. Device updates replace the stored Device settings.
  *
  * @generated from protobuf service yatm.v1.SettingsService
  */
@@ -28,8 +27,7 @@ export interface ISettingsServiceClient {
     update(input: UpdateSettingsRequest, options?: RpcOptions): UnaryCall<UpdateSettingsRequest, UpdateSettingsResponse>;
 }
 /**
- * Settings groups use typed reads and updates. Device updates replace user-owned Device settings while
- * retaining server-owned learned read parameters from the latest stored value.
+ * Settings groups use typed reads and updates. Device updates replace the stored Device settings.
  *
  * @generated from protobuf service yatm.v1.SettingsService
  */

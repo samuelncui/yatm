@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -17,15 +18,13 @@ import (
 )
 
 type ltfsReadSnapshot struct {
-	settings    *entity.DeviceSettings
-	defaults    *entity.TapeDeviceSettings
-	report      *entity.InspectDeviceResponse
-	labels      *mediapkg.LTFSLabelFacts
-	labelReason string
-	endpoints   []tape.WrapEndpoint
-	source      string
-	observedAt  time.Time
-	reason      string
+	settings   *entity.DeviceSettings
+	defaults   *entity.TapeDeviceSettings
+	report     *entity.InspectDeviceResponse
+	endpoints  []tape.WrapEndpoint
+	source     string
+	observedAt time.Time
+	reason     string
 }
 
 var _ mediapkg.OrderedReadSession = (*tapeReadSession)(nil)
@@ -71,25 +70,6 @@ func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 		snapshot.endpoints = append([]tape.WrapEndpoint(nil), geometry.Endpoints...)
 		snapshot.source, snapshot.observedAt = geometry.Source, geometry.ObservedAt
 	}
-	if observeErr == nil {
-		// Reading both Labels establishes physical-to-symbolic partition identities without an adapter change.
-		started := time.Now()
-		labels, err := prepared.ReadLTFSLabels(ctx)
-		if err == nil {
-			snapshot.labels, err = mediapkg.ParseLTFSLabels(labels)
-		} else if !tape.CleanUnsupported(err) {
-			observeErr = err
-		}
-		if err != nil {
-			snapshot.labelReason = fmt.Sprintf("LTFS pre-mount Label mapping is unavailable: %v", err)
-		}
-		b.logger.WithContext(ctx).WithFields(map[string]any{
-			"device": device, "elapsed_ms": time.Since(started).Milliseconds(),
-			"label_0_bytes": len(labels[0]), "label_1_bytes": len(labels[1]),
-			"labels_available": snapshot.labels != nil, "label_reason": snapshot.labelReason,
-		}).Info("LTFS pre-mount Label observation")
-	}
-
 	// Close the raw owner even after a failed observation; no mount may overlap its commands or cleanup.
 	if err := errors.Join(observeErr, b.executor.cleanupRawTape(ctx, b.jobID, device, prepared)); err != nil {
 		return nil, err
@@ -121,8 +101,13 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsRe
 		EffectiveOrder: entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL.String(), ParametersSource: "unavailable",
 		CoverageDetail: "Initial access is unknown; every route retains the same first file"}
 	s.readOrder.prepared = optimization.PreparedAtNs
+	parameterReason := ""
 	defer func() {
+		// A configured set that does not apply stays visible beside the read-order reason.
 		optimization.ApplicabilityReason = s.readOrder.reason
+		if parameterReason != "" {
+			optimization.ApplicabilityReason = strings.TrimSuffix(parameterReason+"; "+s.readOrder.reason, "; ")
+		}
 		s.backend.executor.recordPreparedRead(s.device, optimization)
 		s.backend.logger.WithContext(ctx).WithFields(map[string]any{
 			"device": s.device, "requested_read_order": optimization.RequestedOrder,
@@ -133,7 +118,7 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsRe
 	if snapshot.reason != "" {
 		return nil
 	}
-	facts, err := readLTFSReadFacts(ctx, snapshot.labels, func(name string, limit int) ([]byte, error) {
+	facts, err := readLTFSReadFacts(ctx, func(name string, limit int) ([]byte, error) {
 		return mountedLTFSAttribute(s.mountPoint, name, limit)
 	})
 	if err != nil {
@@ -141,22 +126,25 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsRe
 			return ctx.Err()
 		}
 		s.readOrder.reason = err.Error()
-		if snapshot.labels == nil && snapshot.labelReason != "" {
-			s.readOrder.reason = snapshot.labelReason + "; " + s.readOrder.reason
-		}
 		return nil
 	}
 
-	// Model timing keeps its observed record/drive applicability; no LTFS file latency is fabricated.
-	scope := ltfsReadScope(snapshot.report, s.media.Profile.GetTape(), facts)
-	parameters, source := selectTapeReadParameters(snapshot.settings, s.device, snapshot.report, scope)
+	// Model timing uses the volume's block size; no LTFS file latency is fabricated.
+	parameters, source, reason := selectTapeReadParameters(snapshot.settings, s.device, snapshot.report)
 	optimization.ParametersSource, optimization.ParametersReference = source, parameters.GetSourceReference()
-	if reason := tapeReadParametersReason(parameters, scope); reason != "" {
+	if parameters == nil {
 		s.readOrder.reason = reason
 		return nil
 	}
-	value, observed, reason := ltfsReadPositionMap(parameters, s.media, facts, snapshot)
+	parameterReason = reason
+	value, reason := ltfsReadPositionMap(parameters, facts, snapshot)
 	if value == nil {
+		s.readOrder.reason = reason
+		return nil
+	}
+	optimization.PositionSource = value.source
+	model, reason := compileTapePositionMap(parameters, facts.blockBytes, value, s.readOrder.valid.Load)
+	if model == nil {
 		s.readOrder.reason = reason
 		return nil
 	}
@@ -167,15 +155,9 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsRe
 		s.readOrder.reason = reason
 		return ctx.Err()
 	}
-	optimization.PositionSource = value.Source
-	model, reason := compileTapePositionMap(parameters, value, s.readOrder.valid.Load)
-	if model == nil {
-		s.readOrder.reason = reason
-		return nil
-	}
 	s.readOrder.provider, s.readOrder.reason = mediapkg.NewLTFSReadOrderProvider(mediapkg.LTFSReadOptions{
 		BlockBytes: facts.blockBytes, Compression: proto.Bool(facts.compression), Partitions: facts.partitions,
-		Model: model, Timing: parameters.GetReading(), PlanningBudget: settingspkg.TapeReadPlanningBudget(snapshot.defaults),
+		Model: model, PlanningBudget: settingspkg.TapeReadPlanningBudget(snapshot.defaults),
 		Completion: tapeReadCompletion(parameters), DataEnd: dataEnd,
 		ReadIndex: func(ctx context.Context, yield func(*mediapkg.LTFSIndexEntry) error) error {
 			return s.readCurrentIndex(ctx, facts.uuid, facts.generation, yield)
@@ -185,15 +167,12 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsRe
 		return nil
 	}
 	optimization.EffectiveOrder = entity.TapeReadOrder_TAPE_READ_ORDER_AUTO.String()
-	optimization.CoverageDetail = fmt.Sprintf("%d partition maps, %d reported wraps; route comparison assumes no Index rewrite and includes rewind/unload; mounted read-only and clean state are not observed; common initial access is unquoted; cross-partition routes retain LOGICAL order; native Tape timing estimates do not validate LTFS whole-file latency",
-		len(value.Partitions), len(value.Wraps))
-
-	// Geometry is owned by this mounted UUID/index; the Job persists the map this Session returns.
-	if observed {
-		selected := *s.media
-		selected.TapePositionMap = value
-		s.media = &selected
+	initial := "common initial access is unquoted"
+	if _, assumed, _ := s.readOrder.provider.Current(ctx); assumed {
+		initial = "initial access is priced from the assumed post-mount Data partition start"
 	}
+	optimization.CoverageDetail = fmt.Sprintf("%d partition maps, %d reported wraps; route comparison assumes no Index rewrite and includes rewind/unload; mounted read-only and clean state are not observed; %s; cross-partition routes retain LOGICAL order; native Tape timing estimates do not validate LTFS whole-file latency",
+		len(value.eod), len(value.wraps), initial)
 	return ctx.Err()
 }
 
@@ -235,37 +214,4 @@ func (s *tapeReadSession) ReadOrderPlanned(order entity.TapeReadOrder, reason st
 	if s.readOrder != nil {
 		s.backend.executor.settlePreparedRead(s.device, s.readOrder.prepared, order, reason)
 	}
-}
-
-func ltfsReadScope(report *entity.InspectDeviceResponse, profile *entity.TapeMediaProfile,
-	facts *ltfsReadFacts,
-) *entity.TapeReadApplicability {
-	// The label supplies written record/compression policy; preparation supplies current drive identity.
-	scope := &entity.TapeReadApplicability{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(),
-		RecordBytes: proto.Uint32(facts.blockBytes), HardwareCompression: proto.Bool(facts.compression)}
-	if report != nil {
-		scope.DriveSerial, scope.Firmware = report.SerialNumber, report.Firmware
-		if report.GetTape() != nil {
-			scope.DensityCode = report.GetTape().DensityCode
-		}
-	}
-	if profile.GetEncryption() == "" {
-		scope.EncryptionAlgorithm = proto.String("")
-		return scope
-	}
-
-	// A configured encrypted reader needs an observed algorithm; a key string alone cannot name one.
-	for _, feature := range report.GetTape().GetFeatures() {
-		limits := feature.GetEncryption()
-		if limits == nil || limits.CurrentAlgorithmIndex == nil {
-			continue
-		}
-		for _, algorithm := range limits.Algorithms {
-			if algorithm.Index == limits.GetCurrentAlgorithmIndex() {
-				scope.EncryptionAlgorithm = proto.String(algorithm.Name)
-				return scope
-			}
-		}
-	}
-	return scope
 }

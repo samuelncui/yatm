@@ -182,7 +182,10 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
   );
 };
 
-export const MediaSearchSelect = (props: SelectionProps<Media>) => {
+const allMediaKinds = [MediaKind.VOLUME, MediaKind.TAPE];
+
+/** Searches registered Media; `kinds` must be a stable array, restricting the search to those kinds. */
+export const MediaSearchSelect = ({ kinds = allMediaKinds, ...props }: SelectionProps<Media> & { kinds?: MediaKind[] }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<Media[]>([]);
@@ -210,7 +213,7 @@ export const MediaSearchSelect = (props: SelectionProps<Media>) => {
     const timer = window.setTimeout(async () => {
       try {
         const reply = await mediaCli.list(
-          { param: { oneofKind: "list", list: { kinds: [MediaKind.VOLUME, MediaKind.TAPE], query: query.trim(), afterId, limit: BigInt(pageSize) } } },
+          { param: { oneofKind: "list", list: { kinds, query: query.trim(), afterId, limit: BigInt(pageSize) } } },
           { abort: controller.signal },
         ).response;
         if (pending.current !== generation) return;
@@ -230,7 +233,7 @@ export const MediaSearchSelect = (props: SelectionProps<Media>) => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, disabled, query, afterId, retry]);
+  }, [open, disabled, query, afterId, retry, kinds]);
   return (
     <CatalogSearchSelect
       {...props}

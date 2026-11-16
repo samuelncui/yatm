@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
@@ -22,11 +23,11 @@ import (
 func tarTestReadModel(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
 	geometry *tape.WrapMap,
 ) (*mediapkg.ReadCostModel, string) {
-	// Both live observations and retained geometry use the same derived traversal and cost compiler.
+	// Tests use the same derived traversal and cost compiler as a read Session.
 	if reason := tarReportedWrapsReason(geometry); reason != "" {
 		return nil, reason
 	}
-	value, reason := deriveTarPositionMap(parameters, profile, geometry)
+	value, reason := deriveTarPositionMap(parameters, geometry)
 	if value == nil {
 		return nil, reason
 	}
@@ -35,9 +36,7 @@ func tarTestReadModel(parameters *entity.TapeReadParameters, profile *entity.Tar
 
 func tarReadParametersFixture() (*entity.TapeReadParameters, *entity.InspectDeviceResponse, *entity.TarMediaProfile) {
 	return &entity.TapeReadParameters{AppliesTo: &entity.TapeReadApplicability{
-			DriveSerial: proto.String("SN1"), Firmware: proto.String("0001"), DensityCode: proto.Uint32(0),
-			RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(), RecordBytes: proto.Uint32(262144),
-			HardwareCompression: proto.Bool(false), EncryptionAlgorithm: proto.String("AES-256-GCM-128"),
+			DriveSerial: proto.String("SN1"), DensityCode: proto.Uint32(0),
 		}, Reading: &entity.TapeReadTiming{BytesPerSecond: proto.Float64(90_000_000)},
 			Completion: &entity.TapeReadCompletion{FullSpanSeconds: proto.Float64(10), FixedSeconds: proto.Float64(0)}},
 		&entity.InspectDeviceResponse{SerialNumber: proto.String("SN1"), Firmware: proto.String("0001"),
@@ -121,11 +120,9 @@ func (h *tarReadMapHandle) Execute(ctx context.Context, command tape.Command) (t
 func tarNormalizedParameters() *entity.TapeReadParameters {
 	parameters, _, _ := tarReadParametersFixture()
 	parameters.Geometry = &entity.TapeReadGeometry{NominalWraps: proto.Uint32(8)}
-	parameters.Positioning = &entity.TapeReadPositioning{BaseSeconds: proto.Float64(0), WrapChangeSeconds: proto.Float64(0),
-		BandChangeSeconds: proto.Float64(0), LandingZoneChangeSeconds: proto.Float64(0), DirectionChangeSeconds: proto.Float64(0),
-		StepBackSeconds: proto.Float64(0), LongitudinalSecondsPerWrap: proto.Float64(10)}
-	parameters.Reading = &entity.TapeReadTiming{BytesPerSecond: proto.Float64(1e9), PostLocateReadOverheadSeconds: proto.Float64(0),
-		FilemarkOverheadSeconds: proto.Float64(0)}
+	parameters.Positioning = &entity.TapeReadPositioning{BaseSeconds: proto.Float64(0),
+		ApproachReversalSeconds: proto.Float64(0), SeekSecondsPerWrap: proto.Float64(10)}
+	parameters.Reading = &entity.TapeReadTiming{BytesPerSecond: proto.Float64(1e9), FilemarkOverheadSeconds: proto.Float64(0)}
 	return parameters
 }
 
@@ -152,9 +149,10 @@ func TestTarReadModelCompilesObservedCoverageAndPartialMedian(t *testing.T) {
 		from, to  uint64
 		seconds   float64
 	}{
-		{"full record", []uint64{10, 20, 24}, 0, 9, 9},
-		{"short final coverage", []uint64{10, 20, 24}, 20, 24, 4},
-		{"even median", []uint64{10, 30, 33}, 30, 33, 2},
+		// Moves behind the head or across the midpoint price the seek-speed span.
+		{"full record", []uint64{10, 20, 24}, 9, 0, 9},
+		{"short final coverage", []uint64{10, 20, 24}, 24, 20, 4},
+		{"even median", []uint64{10, 30, 33}, 33, 30, 2},
 		{"long final constrained denominator", []uint64{10, 20, 45}, 20, 45, 10},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -183,6 +181,40 @@ func TestTarReadModelCompilesObservedCoverageAndPartialMedian(t *testing.T) {
 	}
 }
 
+func TestTarReadModelMapsBuffer(t *testing.T) {
+	// The buffer converts to whole records; a read-speed locate uses the positioning intercept.
+	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Wrap: 0, Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
+	_, _, profile := tarReadParametersFixture()
+	parameters := tarNormalizedParameters()
+	parameters.Positioning.BaseSeconds = proto.Float64(7)
+	parameters.Positioning.BufferBytes = proto.Uint64(2*262144 + 1)
+	point := func(object uint64) *entity.TapeBytePosition { return &entity.TapeBytePosition{LogicalObject: object} }
+	model, reason := tarTestReadModel(parameters, profile, geometry)
+	require.NotNil(t, model, reason)
+	score, known := model.AccessScore(point(1), point(3))
+	require.True(t, known)
+	require.InDelta(t, 2*262144/1e9, score, 1e-12)
+	score, known = model.AccessScore(point(1), point(4))
+	require.True(t, known)
+	require.InDelta(t, 7+3*262144/1e9, score, 1e-12)
+
+	// The minimum gain is the applied base time, floored at the built-in one.
+	require.Equal(t, 7*time.Second, model.MinimumGain())
+	parameters.Positioning.BaseSeconds = proto.Float64(0)
+	model, reason = tarTestReadModel(parameters, profile, geometry)
+	require.NotNil(t, model, reason)
+	require.Equal(t, time.Duration(tarSeedBaseSeconds*float64(time.Second)), model.MinimumGain())
+	parameters.Positioning.BaseSeconds = proto.Float64(7)
+
+	// A motionless wrap change pays no approach reversal.
+	parameters.Positioning.ApproachReversalSeconds = proto.Float64(5)
+	model, reason = tarTestReadModel(parameters, profile, geometry)
+	require.NotNil(t, model, reason)
+	score, known = model.AccessScore(point(8), point(12))
+	require.True(t, known)
+	require.InDelta(t, 7, score, 1e-12)
+}
+
 func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
 	for name, change := range map[string]func(*entity.TapeReadParameters, *entity.TarMediaProfile, *tape.WrapMap){
@@ -190,13 +222,13 @@ func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 			p.HardwareCompression = true
 		},
 		"missing coefficient": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
-			p.Positioning.StepBackSeconds = nil
+			p.Positioning.ApproachReversalSeconds = nil
 		},
 		"missing units": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
-			p.Positioning.LongitudinalSecondsPerWrap = nil
+			p.Positioning.SeekSecondsPerWrap = nil
 		},
-		"absolute units without bounds": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
-			p.Positioning.LongitudinalSecondsPerWrap, p.Positioning.LongitudinalSecondsPerLpos = nil, proto.Float64(0)
+		"missing read rate": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
+			p.Reading.BytesPerSecond = nil
 		},
 		"unknown layout": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
 			p.Geometry.NominalWraps = nil
@@ -232,17 +264,6 @@ func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 			require.NotEmpty(t, reason)
 		})
 	}
-
-	// Absolute units still compile with their original coordinate range, without reinterpretation.
-	parameters := tarNormalizedParameters()
-	parameters.Positioning.LongitudinalSecondsPerWrap, parameters.Positioning.LongitudinalSecondsPerLpos = nil, proto.Float64(.5)
-	parameters.Geometry.MinLpos, parameters.Geometry.MaxLpos = proto.Uint64(100), proto.Uint64(200)
-	_, _, profile := tarReadParametersFixture()
-	model, reason := tarTestReadModel(parameters, profile, geometry)
-	require.NotNil(t, model, reason)
-	score, known := model.AccessScore(&entity.TapeBytePosition{}, &entity.TapeBytePosition{LogicalObject: 9})
-	require.True(t, known)
-	require.Equal(t, float64(45), score)
 }
 
 func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T) {
@@ -280,15 +301,12 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 			stored, err := exe.Lib().CreateMedia(ctx, &library.Media{Kind: result.Media.Kind, Identity: result.Media.Identity, Profile: result.Media.Profile})
 			require.NoError(t, err)
 			parameters := tarNormalizedParameters()
-			parameters.AppliesTo.RecordBytes = proto.Uint32(stored.Profile.GetTape().Tar.RecordBytes)
-			parameters.AppliesTo.EncryptionAlgorithm = proto.String("AES-256-GCM-128")
 			require.NotEmpty(t, stored.Profile.GetTape().Encryption)
-			require.Equal(t, parameters.AppliesTo.GetEncryptionAlgorithm(), stored.Profile.GetTape().Tar.GetEncryptionAlgorithm())
-			parameters.Positioning.BaseSeconds, parameters.Positioning.WrapChangeSeconds = proto.Float64(.001), proto.Float64(.001)
-			parameters.Positioning.LongitudinalSecondsPerWrap = proto.Float64(0)
+			parameters.Positioning.BaseSeconds = proto.Float64(.001)
+			parameters.Positioning.SeekSecondsPerWrap = proto.Float64(0)
 			parameters.Reading.BytesPerSecond = proto.Float64(1e6) // The known gap costs more than the synthetic millisecond seek.
 			settings := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
-				Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadOrder: order, ReadParameters: parameters}},
+				Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadOrder: order, ReadParameters: []*entity.TapeReadParameters{parameters}}},
 			}}}
 			_, err = exe.settings.Device.Save(ctx, settings)
 			require.NoError(t, err)
@@ -367,72 +385,68 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 			if test.cm {
 				require.Equal(t, 3, deviceProvider.cmCalls)
 				require.Contains(t, exe.lastPreparedRead("/dev/nst0").PositionSource, "LTO-CM")
-				updated, err := exe.Lib().GetMedia(ctx, stored.ID)
-				require.NoError(t, err)
-				require.NotNil(t, updated.TapePositionMap)
 			}
 		})
 	}
 }
 
-func TestTarReadParametersRequireObservedAndFrozenApplicability(t *testing.T) {
-	// Current write controls are not substitutes for the immutable cartridge's written conditions.
-	parameters, report, profile := tarReadParametersFixture()
+func TestTapeReadParametersSelectByDensityAndDriveSerial(t *testing.T) {
+	// The set for the loaded density applies; current write controls and the Media profile take no part.
+	parameters, report, _ := tarReadParametersFixture()
 	report.GetTape().CompressionEnabled = proto.Bool(true)
-	report.GetTape().EncryptionEnabled = proto.Bool(true)
 	report.GetTape().FixedRecords = proto.Bool(true)
 	report.GetTape().RecordBytes = proto.Uint32(512)
-	require.Empty(t, tarReadParametersReason(parameters, report, &entity.TapeMediaProfile{Tar: profile}))
-	require.Nil(t, parameters.Reading.PostLocateReadOverheadSeconds, "matching does not fill unmeasured action inputs")
+	other := proto.Clone(parameters).(*entity.TapeReadParameters)
+	other.AppliesTo.DensityCode, other.SourceReference = proto.Uint32(0x58), "other density"
+	settings := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
+		Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadParameters: []*entity.TapeReadParameters{other, parameters}}},
+	}}}
+	selected, source, reason := selectTapeReadParameters(settings, "/dev/nst0", report)
+	require.Equal(t, "configured", source)
+	require.Empty(t, reason)
+	require.True(t, proto.Equal(parameters, selected))
+	require.Nil(t, selected.Reading.FilemarkOverheadSeconds, "selection does not fill unmeasured action inputs")
 
-	// Unknown and mismatched conditions independently withdraw estimates, not ordinary content access.
-	for name, change := range map[string]func(*entity.TapeReadParameters, *entity.InspectDeviceResponse){
-		"missing scope":  func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) { p.AppliesTo = nil },
-		"unknown serial": func(_ *entity.TapeReadParameters, r *entity.InspectDeviceResponse) { r.SerialNumber = nil },
-		"blank observed serial": func(_ *entity.TapeReadParameters, r *entity.InspectDeviceResponse) {
-			r.SerialNumber = proto.String(" ")
+	// A set without a drive serial applies to any drive.
+	parameters.AppliesTo.DriveSerial = nil
+	report.SerialNumber = nil
+	_, source, reason = selectTapeReadParameters(settings, "/dev/nst0", report)
+	require.Equal(t, "configured", source)
+	require.Empty(t, reason)
+
+	// Another drive serial, another density or an unknown density uses the built-in values.
+	for name, change := range map[string]func(*entity.InspectDeviceResponse){
+		"different serial": func(r *entity.InspectDeviceResponse) {
+			parameters.AppliesTo.DriveSerial = proto.String("SN1")
+			r.SerialNumber = proto.String("SN2")
 		},
-		"different serial": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.DriveSerial = proto.String("other")
+		"unknown serial": func(r *entity.InspectDeviceResponse) {
+			parameters.AppliesTo.DriveSerial = proto.String("SN1")
+			r.SerialNumber = nil
 		},
-		"unknown firmware":       func(_ *entity.TapeReadParameters, r *entity.InspectDeviceResponse) { r.Firmware = nil },
-		"missing firmware scope": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) { p.AppliesTo.Firmware = nil },
-		"different firmware": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.Firmware = proto.String("other")
-		},
-		"unknown density": func(_ *entity.TapeReadParameters, r *entity.InspectDeviceResponse) { r.GetTape().DensityCode = nil },
-		"different density": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.DensityCode = proto.Uint32(1)
-		},
-		"missing record mode": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) { p.AppliesTo.RecordMode = nil },
-		"different record mode": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.RecordMode = entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED.Enum()
-		},
-		"missing record bytes": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) { p.AppliesTo.RecordBytes = nil },
-		"different record bytes": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.RecordBytes = proto.Uint32(512)
-		},
-		"unknown written compression": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.HardwareCompression = nil
-		},
-		"different written compression": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.HardwareCompression = proto.Bool(true)
-		},
-		"unknown encryption": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.EncryptionAlgorithm = nil
-		},
-		"different encryption": func(p *entity.TapeReadParameters, _ *entity.InspectDeviceResponse) {
-			p.AppliesTo.EncryptionAlgorithm = proto.String("another algorithm")
-		},
+		"other density":   func(r *entity.InspectDeviceResponse) { r.GetTape().DensityCode = proto.Uint32(0x46) },
+		"unknown density": func(r *entity.InspectDeviceResponse) { r.GetTape().DensityCode = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
-			parameters, report, profile := tarReadParametersFixture()
-			change(parameters, report)
-			require.NotEmpty(t, tarReadParametersReason(parameters, report, &entity.TapeMediaProfile{Tar: profile}))
+			_, report, _ := tarReadParametersFixture()
+			parameters.AppliesTo.DriveSerial = nil
+			change(report)
+			selected, source, reason := selectTapeReadParameters(settings, "/dev/nst0", report)
+			require.Equal(t, "builtin", source)
+			require.Equal(t, tarBuiltinSourceReference, selected.GetSourceReference())
+			if parameters.AppliesTo.DriveSerial != nil {
+				require.Contains(t, reason, "drive serial")
+			} else {
+				require.Empty(t, reason)
+			}
 		})
 	}
-	require.NotEmpty(t, tarReadParametersReason(nil, report, &entity.TapeMediaProfile{Tar: profile}))
-	require.NotEmpty(t, tarReadParametersReason(parameters, nil, &entity.TapeMediaProfile{Tar: profile}))
+
+	// Without a Tape report no parameters are available.
+	selected, source, reason = selectTapeReadParameters(settings, "/dev/nst0", &entity.InspectDeviceResponse{})
+	require.Nil(t, selected)
+	require.Equal(t, "unavailable", source)
+	require.NotEmpty(t, reason)
 }
 
 func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
@@ -441,7 +455,7 @@ func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
 	exe := setupTestExecutor(t)
 	parameters, _, _ := tarReadParametersFixture()
 	settings := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
-		Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadParameters: parameters}},
+		Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadParameters: []*entity.TapeReadParameters{parameters}}},
 	}}}
 	_, err := exe.settings.Device.Save(ctx, settings)
 	require.NoError(t, err)
@@ -457,7 +471,7 @@ func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			observed <- defaults.ReadParameters
+			observed <- defaults.ReadParameters[0]
 			if attempt == 0 {
 				<-release
 			}
@@ -480,12 +494,12 @@ func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
 	waitJobReleased(t, exe, job.ID)
 	fresh, err := exe.tapeDefaults(ctx, "/dev/nst0")
 	require.NoError(t, err)
-	require.Equal(t, "replacement-drive", fresh.ReadParameters.AppliesTo.GetDriveSerial())
-	require.Equal(t, float64(123), fresh.ReadParameters.Reading.GetBytesPerSecond())
+	require.Equal(t, "replacement-drive", fresh.ReadParameters[0].AppliesTo.GetDriveSerial())
+	require.Equal(t, float64(123), fresh.ReadParameters[0].Reading.GetBytesPerSecond())
 }
 
 func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T) {
-	for _, condition := range []string{"matched frozen settings", "different drive", "unknown drive", "unknown encrypted algorithm"} {
+	for _, condition := range []string{"configured", "different drive", "no drive serial", "unknown encrypted algorithm"} {
 		t.Run(condition, func(t *testing.T) {
 			// A real writer provides two members sharing one physical record and frozen read conditions.
 			ctx := context.Background()
@@ -513,25 +527,19 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 			require.NoError(t, err)
 			parameters, _, _ := tarReadParametersFixture()
 			profile := stored.Profile.GetTape().Tar
-			parameters.AppliesTo.RecordMode = profile.RecordMode.Enum()
-			parameters.AppliesTo.RecordBytes = proto.Uint32(profile.RecordBytes)
-			parameters.AppliesTo.HardwareCompression = proto.Bool(profile.HardwareCompression)
-			parameters.AppliesTo.EncryptionAlgorithm = proto.String("AES-256-GCM-128")
 			require.NotEmpty(t, stored.Profile.GetTape().Encryption)
 			if fixture.hideAlgorithm {
 				require.Nil(t, profile.EncryptionAlgorithm, "the saved key does not establish a public algorithm")
-			} else {
-				require.Equal(t, parameters.AppliesTo.GetEncryptionAlgorithm(), profile.GetEncryptionAlgorithm())
 			}
 			switch condition {
 			case "different drive":
 				parameters.AppliesTo.DriveSerial = proto.String("another drive")
-			case "unknown drive":
+			case "no drive serial":
 				parameters.AppliesTo.DriveSerial = nil
 			}
 			settings := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
 				Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{
-					ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL, ReadParameters: parameters,
+					ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL, ReadParameters: []*entity.TapeReadParameters{parameters},
 				}},
 			}}}
 			_, err = exe.settings.Device.Save(ctx, settings)
@@ -542,7 +550,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 			_, err = exe.settings.Device.Save(ctx, settings)
 			require.NoError(t, err)
 
-			// Reading policy is independent of AUTO: a matching admitted rate prices Continue without seek timing.
+			// Reading policy is independent of AUTO: the admitted or built-in rate prices Continue without seek timing.
 			read, err := openRead(admitted, backend, tarEncryptedReadTarget(stored))
 			require.NoError(t, err)
 			finalize := sync.OnceValue(func() error { return read.Finalize(ctx, nil) })
@@ -550,8 +558,13 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 			order, _, err := read.(mediapkg.OrderedReadSession).ReadOrder(ctx)
 			require.NoError(t, err)
 			require.Nil(t, order, "LOGICAL does not expose candidate ranking")
-			if fixture.hideAlgorithm {
-				require.Contains(t, exe.lastPreparedRead("/dev/nst0").ApplicabilityReason, "encryption algorithm applicability is unknown")
+			prepared := exe.lastPreparedRead("/dev/nst0")
+			if condition == "different drive" {
+				require.Equal(t, "builtin", prepared.ParametersSource)
+				require.Contains(t, prepared.ApplicabilityReason, "another drive")
+			} else {
+				require.Equal(t, "configured", prepared.ParametersSource)
+				require.Empty(t, prepared.ApplicabilityReason)
 			}
 			beforeReads, beforeLocates := len(fixture.readCompression), len(fixture.locateCommands)
 			for _, index := range []int{0, 1, 0} {
@@ -566,11 +579,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 				require.Equal(t, contents[index], data)
 				require.Len(t, fixture.readCompression, beforeReads+1, "later and repeated members reuse the actual retained record")
 			}
-			locates := 1
-			if condition == "matched frozen settings" {
-				locates = 0
-			}
-			require.Len(t, fixture.locateCommands, beforeLocates+locates)
+			require.Len(t, fixture.locateCommands, beforeLocates)
 			require.NoError(t, finalize())
 			require.Equal(t, fixture.opens, fixture.closes)
 		})
@@ -648,14 +657,9 @@ func TestTarFactoryPostLabelPositionChecksKnownFile(t *testing.T) {
 			})
 			require.NoError(t, err)
 			parameters, _, _ := tarReadParametersFixture()
-			profile := stored.Profile.GetTape().Tar
-			parameters.AppliesTo.RecordBytes = proto.Uint32(profile.RecordBytes)
-			parameters.AppliesTo.HardwareCompression = proto.Bool(profile.HardwareCompression)
-			parameters.AppliesTo.EncryptionAlgorithm = proto.String("AES-256-GCM-128")
 			require.NotEmpty(t, stored.Profile.GetTape().Encryption)
-			require.Equal(t, parameters.AppliesTo.GetEncryptionAlgorithm(), profile.GetEncryptionAlgorithm())
 			_, err = exe.settings.Device.Save(ctx, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
-				Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadParameters: parameters}},
+				Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadParameters: []*entity.TapeReadParameters{parameters}}},
 			}}})
 			require.NoError(t, err)
 			exe.tapeProvider = &tarReadInitialProvider{tarDeviceFixture: fixture, position: test.position}

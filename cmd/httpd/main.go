@@ -13,6 +13,7 @@ import (
 	"time"
 
 	_ "github.com/samuelncui/yatm/internal/executor/archive"
+	_ "github.com/samuelncui/yatm/internal/executor/calibration"
 	_ "github.com/samuelncui/yatm/internal/executor/restore"
 	_ "github.com/samuelncui/yatm/internal/executor/scan"
 

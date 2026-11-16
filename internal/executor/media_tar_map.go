@@ -4,83 +4,30 @@ import (
 	"sort"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/dataformat"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/tape"
 	"google.golang.org/protobuf/proto"
 )
 
-// compileTarMediaReadModel uses a current report first, or retained coverage owned by this initialization.
-// The returned observation is independently publishable even when elapsed-time inputs are incomplete.
+// compileTarMediaReadModel derives this Session's map from a current complete report only.
+// The returned map reports its source even when elapsed-time inputs are incomplete.
 func compileTarMediaReadModel(parameters *entity.TapeReadParameters, media *mediapkg.Descriptor,
 	geometry *tape.WrapMap, valid func() bool,
-) (*mediapkg.ReadCostModel, *entity.TapePositionMap, string) {
+) (*mediapkg.ReadCostModel, *tapePositionMap, string) {
 	// The caller proves the label and validated frozen profile before accepting geometry into this session.
-	profile := media.Profile.GetTape().Tar
-	current := geometry.Complete()
-	if current {
-		if reason := tarReportedWrapsReason(geometry); reason != "" {
-			return nil, nil, reason
-		}
+	if !geometry.Complete() {
+		return nil, nil, "No current Tape position map is available"
 	}
-	if layout := parameters.GetGeometry(); current && layout != nil && layout.NominalWraps != nil {
-		observed, reason := deriveTarPositionMap(parameters, profile, geometry)
-		if observed == nil {
-			return nil, nil, reason
-		}
-		if err := validatePositionMap(media, observed); err != nil {
-			return nil, nil, err.Error()
-		}
-		model, reason := compileTarPositionMap(parameters, profile, observed,
-			func() bool { return valid() && geometry.Valid() })
-		return model, observed, reason
+	if reason := tarReportedWrapsReason(geometry); reason != "" {
+		return nil, nil, reason
 	}
-
-	// A saved map supplies no lifetime of its own and cannot change this read attempt's immutable owner.
-	value := media.TapePositionMap
-	if value == nil {
-		return nil, nil, "No current or retained Tape position map is available"
+	observed, reason := deriveTarPositionMap(parameters, geometry)
+	if observed == nil {
+		return nil, nil, reason
 	}
-	if err := validatePositionMap(media, value); err != nil {
-		return nil, nil, err.Error()
-	}
-	modelValid := valid
-	if current {
-		// Missing drive layout cannot discard a self-described map or override contradictory current coverage.
-		if reason := tarPositionMapReportReason(value, geometry); reason != "" {
-			return nil, nil, reason
-		}
-		modelValid = func() bool { return valid() && geometry.Valid() }
-	}
-	model, reason := compileTarPositionMap(parameters, profile, value, modelValid)
-	return model, nil, reason
-}
-
-func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.WrapMap) string {
-	// Compare coverage only; the validated retained map continues to own its orientation and coordinate scale.
-	if len(value.Wraps) > len(geometry.Endpoints) ||
-		value.Partitions[0].Eod != nil && *value.Partitions[0].Eod > geometry.Endpoints[len(geometry.Endpoints)-1].Object {
-		return "Current reported EOD does not cover the retained Tape position map"
-	}
-	for index, endpoint := range geometry.Endpoints {
-		last, high := index == len(geometry.Endpoints)-1, endpoint.Object
-		if index >= len(value.Wraps) {
-			continue
-		}
-
-		// Full boundaries must agree exactly; an earlier partial EOD may remain a bounded prefix of this wrap.
-		wrap := value.Wraps[index]
-		if wrap.Partition != 0 || wrap.Wrap != uint32(index) {
-			return "Retained Tape position coverage does not match reported wrap traversal"
-		}
-		if wrap.Endpoint == nil {
-			continue
-		}
-		if retained := *wrap.Endpoint; retained > high || wrap.Full && (last || retained != high) {
-			return "Current reported wrap boundaries contradict the retained Tape position map"
-		}
-	}
-	return ""
+	model, reason := compileTarPositionMap(parameters, media.Profile.GetTape().Tar, observed,
+		func() bool { return valid() && geometry.Valid() })
+	return model, observed, reason
 }
 
 // tarReportedWrapsReason qualifies the current report's contiguous, increasing partition-zero traversal.
@@ -98,9 +45,41 @@ func tarReportedWrapsReason(geometry *tape.WrapMap) string {
 	return ""
 }
 
-func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
-	geometry *tape.WrapMap,
-) (*entity.TapePositionMap, string) {
+// tapePositionMap is the derived geometry of the cartridge loaded for one read Session; it is never stored.
+type tapePositionMap struct {
+	source string
+	wraps  []mediapkg.ReadModelWrap
+	// eod is each mapped partition's actual end of data.
+	eod map[uint32]uint64
+}
+
+// tapePartitionWraps lays one partition's consecutive reported endpoints out under the four-band
+// model. Reported logical addresses remain exact; the layout supplies only orientation and bands.
+// It returns the sorted full-wrap object counts; with at least one, the final wrap's interpolation
+// denominator is the greater of its observed length and their median, never extending actual EOD.
+func tapePartitionWraps(nominalWraps uint32, endpoints []tape.WrapEndpoint) ([]mediapkg.ReadModelWrap, []uint64) {
+	wraps := make([]mediapkg.ReadModelWrap, len(endpoints))
+	lengths := make([]uint64, 0, len(endpoints)-1)
+	low := uint64(0)
+	for index, endpoint := range endpoints {
+		last := index == len(endpoints)-1
+		band, direction := tapeWrapLayout(endpoint.Wrap, nominalWraps)
+		wraps[index] = mediapkg.ReadModelWrap{Partition: endpoint.Partition, Wrap: endpoint.Wrap, Band: band,
+			Direction: direction, Full: !last, Endpoint: proto.Uint64(endpoint.Object)}
+		if !last {
+			lengths = append(lengths, endpoint.Object-low)
+			low = endpoint.Object
+		}
+	}
+	if len(lengths) != 0 {
+		sort.Slice(lengths, func(i, j int) bool { return lengths[i] < lengths[j] })
+		eod := endpoints[len(endpoints)-1].Object
+		wraps[len(wraps)-1].EstimatedSpanObjects = proto.Uint64(max(eod-low, ltfsMedian(lengths)))
+	}
+	return wraps, lengths
+}
+
+func deriveTarPositionMap(parameters *entity.TapeReadParameters, geometry *tape.WrapMap) (*tapePositionMap, string) {
 	// Assigning bands requires the explicit four-band layout rather than the number of populated wraps.
 	// The caller qualifies the complete reported traversal before deriving its map.
 	layout := parameters.GetGeometry()
@@ -110,53 +89,16 @@ func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity
 	if len(geometry.Endpoints) < 2 || uint64(len(geometry.Endpoints)) > uint64(layout.GetNominalWraps()) {
 		return nil, "A current complete reported-wrap map with a full interval is unavailable"
 	}
-
-	// Reported logical addresses remain exact; the layout hypothesis supplies only orientation and bands.
-	wraps := make([]*entity.TapePositionWrap, len(geometry.Endpoints))
-	lengths := make([]uint64, 0, len(wraps)-1)
-	low := uint64(0)
-	for index, endpoint := range geometry.Endpoints {
-		last, high := index == len(wraps)-1, endpoint.Object
-		band, direction := tapeWrapLayout(endpoint.Wrap, layout.GetNominalWraps())
-		wraps[index] = &entity.TapePositionWrap{Partition: endpoint.Partition, Wrap: endpoint.Wrap,
-			Band: band, Direction: direction,
-			Full: !last, Endpoint: proto.Uint64(endpoint.Object), EndpointUncertaintyObjects: proto.Uint64(0)}
-		if !last {
-			lengths = append(lengths, high-low)
-			low = high
-		}
-	}
-
-	// The final interpolation denominator never extends actual EOD or becomes a synthetic address.
-	sort.Slice(lengths, func(i, j int) bool { return lengths[i] < lengths[j] })
-	median := lengths[len(lengths)/2]
-	if len(lengths)%2 == 0 {
-		before := lengths[len(lengths)/2-1]
-		median = before + (median-before)/2
-	}
-	eod := geometry.Endpoints[len(wraps)-1].Object
-	wraps[len(wraps)-1].EstimatedSpanObjects = proto.Uint64(max(eod-low, median))
-	observedAtNS, err := dataformat.Nanoseconds(geometry.ObservedAt)
-	if err != nil {
-		return nil, err.Error()
-	}
-	value := &entity.TapePositionMap{InitializationId: profile.InitializationId,
-		Partitions: []*entity.TapePositionPartition{{Eod: proto.Uint64(eod)}}, Wraps: wraps,
-		Source: geometry.Source, ObservedAtNs: observedAtNS}
-	if layout.MinLpos != nil {
-		value.MinLpos = proto.Uint64(*layout.MinLpos)
-	}
-	if layout.MaxLpos != nil {
-		value.MaxLpos = proto.Uint64(*layout.MaxLpos)
-	}
-	return value, ""
+	wraps, _ := tapePartitionWraps(layout.GetNominalWraps(), geometry.Endpoints)
+	return &tapePositionMap{source: geometry.Source, wraps: wraps,
+		eod: map[uint32]uint64{0: geometry.Endpoints[len(wraps)-1].Object}}, ""
 }
 
 // tapeWrapLayout derives a wrap's band and direction from the generation's nominal wrap count:
 // four equal bands, and even wraps written forward. Callers ensure at least four nominal wraps.
-func tapeWrapLayout(wrap, nominalWraps uint32) (uint32, entity.TapePositionDirection) {
+func tapeWrapLayout(wrap, nominalWraps uint32) (uint32, mediapkg.ReadWrapDirection) {
 	if wrap%2 != 0 {
-		return wrap / (nominalWraps / 4), entity.TapePositionDirection_TAPE_POSITION_DIRECTION_REVERSE
+		return wrap / (nominalWraps / 4), mediapkg.ReadWrapReverse
 	}
-	return wrap / (nominalWraps / 4), entity.TapePositionDirection_TAPE_POSITION_DIRECTION_FORWARD
+	return wrap / (nominalWraps / 4), mediapkg.ReadWrapForward
 }

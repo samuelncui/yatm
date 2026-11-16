@@ -8,6 +8,8 @@ export * from "./job.client";
 export * from "./job";
 export * from "./job_archive.client";
 export * from "./job_archive";
+export * from "./job_calibration.client";
+export * from "./job_calibration";
 export * from "./job_restore.client";
 export * from "./job_restore";
 export * from "./job_scan.client";

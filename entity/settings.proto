@@ -4,8 +4,7 @@ option go_package = "github.com/samuelncui/yatm/entity;entity";
 
 import "media.proto";
 
-// Settings groups use typed reads and updates. Device updates replace user-owned Device settings while
-// retaining server-owned learned read parameters from the latest stored value.
+// Settings groups use typed reads and updates. Device updates replace the stored Device settings.
 service SettingsService {
   rpc Get(GetSettingsRequest) returns (GetSettingsResponse) {}
   rpc Update(UpdateSettingsRequest) returns (UpdateSettingsResponse) {}
@@ -21,40 +20,27 @@ enum SettingsGroup {
 
 // Device settings attach to deployment-configured names and do not authorize device access.
 message DeviceSettings {
+  reserved 2, 3;
+  reserved "learned_read_parameters", "clear_learned_read_parameters";
   repeated DeviceConfig devices = 1;
-  // Read-only results of passive read learning. Update ignores client-supplied values.
-  repeated TapeLearnedReadParameters learned_read_parameters = 2;
 }
 message DeviceConfig {
   string device = 1;
   oneof options { TapeDeviceSettings tape = 2; }
 }
 message TapeDeviceSettings {
+  reserved 6, 8;
+  reserved "passive_read_learning", "ltfs_passive_read_learning";
   optional string default_format = 1;
   optional TarWriteOptions tar_write_options = 2;
   TapeReadOrder read_order = 3;
   // Absent uses five seconds; explicit zero disables capacity polling; enabled intervals are at least five seconds.
   optional uint32 capacity_poll_interval_seconds = 4;
-  // Optional manual read parameters. Missing fields stay unknown; saving does not establish their applicability.
-  optional TapeReadParameters read_parameters = 5;
-  // Absent enables observation of ordinary completed I/O; never issues additional measurement commands.
-  optional bool passive_read_learning = 6;
+  // At most one set per recorded density code. A read uses the set for the loaded cartridge's density,
+  // otherwise the built-in values; missing fields stay unknown.
+  repeated TapeReadParameters read_parameters = 5;
   // Absent allows 300 seconds. Explicit values must be positive; no 600-second upper limit.
   optional uint32 read_planning_seconds = 7;
-}
-
-// The latest refit for an exact observed device/configuration. Its raw observations live in each
-// Job bundle as read-observations.jsonl and are not part of this message.
-message TapeLearnedReadParameters {
-  string device = 1;
-  TapeReadParameters parameters = 2;
-  string fit_version = 3;
-  // Retained observations for this device/configuration when the parameters were fitted.
-  uint32 training_observations = 4;
-  // Unweighted residuals of the fitted parameters over those observations.
-  double mae_seconds = 6;
-  double max_error_seconds = 7;
-  int64 updated_at_ns = 8;
 }
 
 message TapeReadParameters {
@@ -68,41 +54,54 @@ message TapeReadParameters {
 }
 // Native synchronous unload timing is independent of the LOCATE regression. Full span means
 // one physical longitudinal tape length, not the complete serpentine logical address space.
+// LTFS completion adds ltfs_unmount_seconds for the unmount adapter and Session finalization.
 message TapeReadCompletion {
   optional double full_span_seconds = 1;
   optional double fixed_seconds = 2;
+  optional double ltfs_unmount_seconds = 3;
 }
+// The cartridge generation and, optionally, the drive a parameter set applies to.
 message TapeReadApplicability {
+  reserved 2, 4, 5, 6, 7;
+  reserved "firmware", "record_mode", "record_bytes", "hardware_compression", "encryption_algorithm";
+  // When set, the set does not apply to a drive reporting another serial number.
   optional string drive_serial = 1;
-  optional string firmware = 2;
+  // Required recorded density code that selects the set.
   optional uint32 density_code = 3;
-  optional TapeRecordMode record_mode = 4;
-  optional uint32 record_bytes = 5;
-  optional bool hardware_compression = 6;
-  // Explicit empty means plaintext; absent means unknown. Never contains a key.
-  optional string encryption_algorithm = 7;
 }
 message TapeReadGeometry {
+  reserved 2, 3;
+  reserved "min_lpos", "max_lpos";
   optional uint32 nominal_wraps = 1;
-  optional uint64 min_lpos = 2;
-  optional uint64 max_lpos = 3;
 }
-// The seven CERN positioning terms use seconds and seconds per LPOS, including signed terms.
+// Nonnegative LOCATE terms in seconds. A target within buffer_bytes ahead costs the skipped objects
+// at reading speed plus approach_reversal_seconds per wrap turn crossed. A same-wrap forward move that
+// stays in one half costs base_seconds plus that reading-speed time, priced from record bytes and
+// TapeReadTiming.bytes_per_second rather than a field here. Every other move, including a same-wrap
+// backward move, a forward move across the middle and every wrap change, costs base_seconds plus
+// seek travel, plus approach_reversal_seconds when it arrives against the target wrap's read direction.
 message TapeReadPositioning {
+  reserved 2, 3, 4, 5, 6, 7, 9, 11, 13, 15, 16;
+  reserved "wrap_change_seconds", "band_change_seconds", "landing_zone_change_seconds",
+      "direction_change_seconds", "step_back_seconds", "longitudinal_seconds_per_lpos",
+      "longitudinal_seconds_per_wrap", "read_locate_base_seconds", "run_up_seconds",
+      "run_up_spans", "seek_seconds_per_lpos";
+  // Fixed time of every LOCATE the drive does not stream through.
   optional double base_seconds = 1;
-  optional double wrap_change_seconds = 2;
-  optional double band_change_seconds = 3;
-  optional double landing_zone_change_seconds = 4;
-  optional double direction_change_seconds = 5;
-  optional double step_back_seconds = 6;
-  optional double longitudinal_seconds_per_lpos = 7;
-  // Seconds for one complete longitudinal span, not transfer time. Exclusive with seconds per LPOS.
-  optional double longitudinal_seconds_per_wrap = 9;
+  // Added in full when the tape arrives moving against the target wrap's read direction, and once per
+  // wrap turn crossed while streaming or reading.
+  optional double approach_reversal_seconds = 10;
+  // Seek-speed seconds for one complete longitudinal span, not transfer time.
+  optional double seek_seconds_per_wrap = 12;
+  // How far logically ahead the drive reaches by continuing to read instead of positioning: such a
+  // target costs the skipped objects at reading speed plus approach_reversal_seconds per wrap turn
+  // crossed, and no other positioning term. Absent or zero never applies.
+  optional uint64 buffer_bytes = 14;
 }
 message TapeReadTiming {
+  reserved 2;
+  reserved "post_locate_read_overhead_seconds";
   optional double bytes_per_second = 1;
-  // Additional first nonempty READ latency after settled LOCATE, excluding transferred bytes/rate.
-  optional double post_locate_read_overhead_seconds = 2;
   // Additional latency per crossed filemark and following READ; absent leaves that action unpriced.
   optional double filemark_overhead_seconds = 3;
 }

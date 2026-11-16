@@ -57,6 +57,7 @@ const activePhases = new Set([
   JobPhase.VERIFYING_MEDIA,
   JobPhase.PROCESSING_CONTENT,
   JobPhase.COMPARING_CONTENT,
+  JobPhase.CALIBRATING,
 ]);
 
 // One phase classification owns the status label, the action buttons and the bar, including live
@@ -75,6 +76,7 @@ export const jobLabel = (kind: JobKind) => {
     [JobKind.ARCHIVE]: "Archive",
     [JobKind.RESTORE]: "Restore",
     [JobKind.SCAN]: "Scan",
+    [JobKind.CALIBRATION]: "Calibration",
   };
   return labels[kind] ?? "Job";
 };

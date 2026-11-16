@@ -111,13 +111,16 @@ const fixture = async (page: Page) => {
       devices: [
         {
           device: "drive-a",
-          options: { oneofKind: "tape", tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "tar_pax_v1", tarWriteOptions: baseline } },
+          options: {
+            oneofKind: "tape",
+            tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "tar_pax_v1", tarWriteOptions: baseline, readParameters: [] },
+          },
         },
         {
           device: "drive-b",
           options: {
             oneofKind: "tape",
-            tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "ltfs_v1", tarWriteOptions: { ...baseline, recordBytes: 131072 } },
+            tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "ltfs_v1", tarWriteOptions: { ...baseline, recordBytes: 131072 }, readParameters: [] },
           },
         },
       ],
@@ -307,53 +310,59 @@ for (const viewport of [
     expect(state.unexpected).toEqual([]);
   });
 
-  test(`Device model JSON stays in its Apply dialog until saved on ${viewport.name}`, async ({ page }, testInfo) => {
+  test(`Device read parameters stay in their Apply dialog until saved on ${viewport.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     const state = await fixture(page);
     await page.goto("/settings/devices");
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name: "Locations", exact: true }).click();
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name: "Devices", exact: true }).click();
-    const section = page.getByRole("button", { name: "Manual read parameters", exact: true });
+    const section = page.getByRole("button", { name: "Read parameters", exact: true });
     await section.focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("button", { name: "Edit read parameters", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Edit manual read parameters", exact: true });
-    const field = dialog.getByRole("textbox", { name: "Read parameters JSON" });
-    await field.fill('{"reading":{"filemarkOverheadSeconds":-1}}');
+    await page.getByRole("button", { name: "Add read parameters", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add read parameters", exact: true });
+    await dialog.getByRole("combobox", { name: /^Density code/ }).click();
+    await page.getByRole("option", { name: "0x58 LTO-5", exact: true }).click();
+    const field = dialog.getByRole("textbox", { name: "Filemark overhead (s)", exact: true });
+    await field.fill("-1");
     await page.goBack();
     const backPrompt = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
     await expect(backPrompt).toBeVisible();
     await backPrompt.getByRole("button", { name: "Keep editing" }).click();
-    await expect(field).toHaveValue('{"reading":{"filemarkOverheadSeconds":-1}}');
+    await expect(field).toHaveValue("-1");
     await dialog.getByRole("button", { name: "Apply", exact: true }).click();
-    await expect(dialog.getByText("Read parameters filemark overhead must be nonnegative.")).toBeVisible();
+    await expect(dialog.getByText("Must be nonnegative.")).toBeVisible();
     await expectFits(dialog);
     await expect(dialog).toHaveCSS("opacity", "1");
-    await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`model-json-error-${viewport.name}.png`) });
+    await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`read-parameters-error-${viewport.name}.png`) });
     await field.press("Escape");
     const discard = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
     await expect(discard.getByRole("button", { name: "Keep editing" })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(discard).toHaveCount(0);
-    await expect(field).toHaveValue('{"reading":{"filemarkOverheadSeconds":-1}}');
+    await expect(field).toHaveValue("-1");
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await discard.getByRole("button", { name: "Discard", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(state.settingsUpdates).toBe(0);
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "Edit read parameters", exact: true }).click();
-    await field.fill('{"reading":{"bytesPerSecond":93000000}}');
+    await page.getByRole("button", { name: "Add read parameters", exact: true }).click();
+    await dialog.getByRole("combobox", { name: /^Density code/ }).click();
+    await page.getByRole("option", { name: "0x58 LTO-5", exact: true }).click();
+    await dialog.getByRole("textbox", { name: "Read rate (MB/s)", exact: true }).fill("93");
     await dialog.getByRole("button", { name: "Apply", exact: true }).click();
     expect(state.settingsUpdates).toBe(0);
+    await expect(page.getByRole("table", { name: "Read parameter sets" })).toContainText("93.0 MB/s");
+    await expectFits(page.locator(".app-page"));
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Device settings saved.")).toBeVisible();
     expect(state.settingsUpdates).toBe(1);
-    await page.getByRole("button", { name: "Use automatic parameters", exact: true }).click();
+    await page.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in", exact: true }).click();
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name: "Jobs", exact: true }).click();
     await expect(discard).toBeVisible();
     await discard.getByRole("button", { name: "Keep editing" }).click();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Use automatic parameters", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in", exact: true })).toBeEnabled();
     expect(state.settingsUpdates).toBe(1);
     expect(state.inspections).toEqual([]);
     expect(state.unexpected).toEqual([]);

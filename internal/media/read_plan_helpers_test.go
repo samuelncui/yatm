@@ -36,8 +36,6 @@ func sequenceTestIDs(t *testing.T, sequence *readplan.Sequence, batch int) []int
 	}
 }
 
-func readModelFloat(value float64) *float64 { return &value }
-
 type readScoreProvider interface {
 	AccessScore(from, to *entity.TapeBytePosition) (float64, bool)
 }

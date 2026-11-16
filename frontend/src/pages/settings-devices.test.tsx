@@ -17,10 +17,18 @@ const value = () =>
             device: "drive",
             options: {
               oneofKind: "tape",
-              tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "ltfs_v1", tarWriteOptions: { recordBytes: 262144, hardwareCompression: false } },
+              tape: {
+                readOrder: TapeReadOrder.UNSPECIFIED,
+                defaultFormat: "ltfs_v1",
+                tarWriteOptions: { recordBytes: 262144, hardwareCompression: false },
+                readParameters: [],
+              },
             },
           },
-          { device: "removed", options: { oneofKind: "tape", tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "tar_pax_v1" } } },
+          {
+            device: "removed",
+            options: { oneofKind: "tape", tape: { readOrder: TapeReadOrder.UNSPECIFIED, defaultFormat: "tar_pax_v1", readParameters: [] } },
+          },
         ],
       }),
     },
@@ -31,17 +39,14 @@ beforeEach(() => {
   update.mockImplementation(({ value }: { value: SettingsValue }) => ({ response: Promise.resolve({ value }) }));
   listDevices.mockReturnValue({ response: Promise.resolve({ devices: [{ device: "drive", kind: 1, busy: false, detail: "" }] }) });
 });
-it("saves explicit learning Off and a planning budget above 600 seconds without hardware access", async () => {
+it("saves a planning budget above 600 seconds without hardware access", async () => {
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   fireEvent.change(screen.getByRole("spinbutton", { name: "Read planning budget (seconds)" }), { target: { value: "1800" } });
-  await userEvent.click(screen.getByRole("combobox", { name: "Tar passive read learning" }));
-  await userEvent.click(screen.getByRole("option", { name: "Off" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const tape = update.mock.calls[0][0].value.value.device.devices[0].options.tape;
-  expect(tape.passiveReadLearning).toBe(false);
   expect(tape.readPlanningSeconds).toBe(1800);
   expect(inspectDevice).not.toHaveBeenCalled();
 });
@@ -64,7 +69,6 @@ it("rejects a zero planning budget and preserves unspecified defaults when clear
   await screen.findByText("Device settings saved.");
   const tape = update.mock.calls[0][0].value.value.device.devices[0].options.tape;
   expect(tape.readPlanningSeconds).toBeUndefined();
-  expect(tape.passiveReadLearning).toBeUndefined();
 });
 it("retains inactive tar settings and explicit false without hardware access on Save", async () => {
   renderPage(<DeviceSettingsBrowser />);
@@ -117,9 +121,8 @@ it("keeps read order visible and page actions together while encryption belongs 
   await screen.findByText(/Tar settings are inactive for LTFS/);
   expect(screen.getByRole("combobox", { name: "Read order" })).toBeVisible();
   expect(screen.getByRole("button", { name: /Advanced/ })).toHaveAttribute("aria-expanded", "false");
-  expect(screen.getByRole("button", { name: "Manual read parameters" })).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("button", { name: "Read parameters" })).toHaveAttribute("aria-expanded", "false");
   expect(screen.getByRole("button", { name: /Device details/ })).toHaveAttribute("aria-expanded", "false");
-  expect(screen.queryByRole("textbox", { name: "Read parameters JSON" })).not.toBeInTheDocument();
   expect(screen.queryByRole("combobox", { name: "Tar hardware encryption" })).not.toBeInTheDocument();
   expect(screen.getByText(/The configured Encrypt script handles encryption/)).toBeVisible();
   const refresh = screen.getByRole("button", { name: "Refresh devices" });
@@ -270,87 +273,163 @@ it("keeps the custom polling interval and save error for a retry without hardwar
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 
-const editParameters = async () => {
-  const section = screen.getByRole("button", { name: "Manual read parameters" });
+// editParameters opens the dialog for the set of a density, or adds a set without one.
+const editParameters = async (density?: string) => {
+  const section = screen.getByRole("button", { name: "Read parameters" });
   if (section.getAttribute("aria-expanded") !== "true") await userEvent.click(section);
-  await userEvent.click(screen.getByRole("button", { name: "Edit read parameters" }));
-  return within(screen.getByRole("dialog", { name: "Edit manual read parameters" }));
+  if (density === undefined) {
+    await userEvent.click(screen.getByRole("button", { name: "Add read parameters" }));
+    return within(screen.getByRole("dialog", { name: "Add read parameters" }));
+  }
+  await userEvent.click(screen.getByRole("button", { name: `Edit read parameters for ${density}` }));
+  return within(screen.getByRole("dialog", { name: "Edit read parameters" }));
 };
 
-it("applies partial parameters only to the page draft, and Save persists them without hardware access", async () => {
+const chooseDensity = async (dialog: ReturnType<typeof within>, name: string) => {
+  await userEvent.click(dialog.getByRole("combobox", { name: /Density code/ }));
+  await userEvent.click(screen.getByRole("option", { name }));
+};
+
+const savedParameters = (call = 0) => update.mock.calls[call][0].value.value.device.devices[0].options.tape.readParameters;
+
+it("adds a set through the form only to the page draft, lists it, and Save persists bytes without hardware access", async () => {
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const dialog = await editParameters();
   expect(dialog.getByText(/Incomplete parameters may keep Logical order/)).toBeVisible();
-  fireEvent.change(dialog.getByRole("textbox", { name: "Read parameters JSON" }), {
-    target: {
-      value: JSON.stringify({
-        geometry: { minLpos: "0", maxLpos: "18446744073709551615" },
-        positioning: { landingZoneChangeSeconds: -6.04 },
-        reading: { bytesPerSecond: 93000000 },
-        sourceReference: "Measured stream only",
-      }),
-    },
-  });
-  expect(update).not.toHaveBeenCalled();
+  expect(dialog.queryByRole("textbox", { name: /JSON/ })).not.toBeInTheDocument();
+  await chooseDensity(dialog, "0x58 LTO-5");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Nominal wraps" }), { target: { value: "80" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Added time when arriving against the wrap direction (s)" }), { target: { value: "4.3" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Read-ahead buffer (MB)" }), { target: { value: "18446744073709.551615" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Source reference" }), { target: { value: "Measured stream only" } });
   await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(update).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  const table = within(screen.getByRole("table", { name: "Read parameter sets" }));
+  expect(
+    within(table.getAllByRole("row")[1])
+      .getAllByRole("cell")
+      .map((cell) => cell.textContent),
+  ).toEqual(["0x58 LTO-5", "Any drive", "Measured stream only", "Unknown", "Unknown", "93.0 MB/s", "EditReset to built-in"]);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
-  const parameters = update.mock.calls[0][0].value.value.device.devices[0].options.tape.readParameters;
-  expect(parameters.geometry).toEqual({ minLpos: 0n, maxLpos: 18446744073709551615n });
-  expect(parameters.positioning.landingZoneChangeSeconds).toBe(-6.04);
-  expect(parameters.reading.postLocateReadOverheadSeconds).toBeUndefined();
-  expect(parameters.reading.filemarkOverheadSeconds).toBeUndefined();
-  expect(update.mock.calls[0][0].value.value.device.devices[1].options.tape.readParameters).toBeUndefined();
+  const [parameters] = savedParameters();
+  expect(parameters.appliesTo).toEqual({ densityCode: 88 });
+  expect(parameters.geometry).toEqual({ nominalWraps: 80 });
+  expect(parameters.positioning).toEqual({ approachReversalSeconds: 4.3, bufferBytes: 18446744073709551615n });
+  expect(parameters.reading).toEqual({ bytesPerSecond: 93000000 });
+  expect(parameters.completion).toBeUndefined();
+  expect(parameters.sourceReference).toBe("Measured stream only");
+  expect(update.mock.calls[0][0].value.value.device.devices[1].options.tape.readParameters).toEqual([]);
   expect(inspectDevice).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: "Use automatic parameters" }));
+
+  // A second set for the same density code is refused, whether chosen or typed.
+  const repeated = await editParameters();
+  await userEvent.click(repeated.getByRole("combobox", { name: /Density code/ }));
+  expect(screen.getByRole("option", { name: "0x58 LTO-5 · already set" })).toHaveAttribute("aria-disabled", "true");
+  await userEvent.click(screen.getByRole("option", { name: "Other density code" }));
+  fireEvent.change(repeated.getByRole("textbox", { name: "Other density code" }), { target: { value: "0x58" } });
+  expect(repeated.getByText(/already has read parameters for 0x58 LTO-5/)).toBeVisible();
+  await userEvent.click(repeated.getByRole("button", { name: "Apply" }));
+  expect(screen.getByRole("dialog", { name: "Add read parameters" })).toBeVisible();
+  await userEvent.click(repeated.getByRole("button", { name: "Cancel" }));
+  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+  // Reset removes the set from the draft; page Cancel restores it.
+  await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
+  expect(screen.queryByRole("table", { name: "Read parameter sets" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  const restored = await editParameters();
-  expect((restored.getByRole("textbox", { name: "Read parameters JSON" }) as HTMLTextAreaElement).value).toContain("Measured stream only");
+  const restored = await editParameters("0x58 LTO-5");
+  expect(restored.getByRole("textbox", { name: "Source reference" })).toHaveValue("Measured stream only");
+  expect(restored.getByRole("textbox", { name: "Read-ahead buffer (MB)" })).toHaveValue("18446744073709.551615");
+  expect(restored.getByRole("textbox", { name: "Density code" })).toBeDisabled();
   await userEvent.click(restored.getByRole("button", { name: "Cancel" }));
-  await userEvent.click(screen.getByRole("button", { name: "Use automatic parameters" }));
+  await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
   expect(update).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
-  expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.readParameters).toBeUndefined();
+  expect(savedParameters(1)).toEqual([]);
 });
 
-it.each(["cancel", "escape"])("protects unapplied JSON on %s and discards it without changing the page draft", async (close) => {
+it("edits only the changed values of a stored set and keeps the others exactly", async () => {
+  const saved = value();
+  if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
+  const stored = TapeReadParameters.create({
+    appliesTo: { driveSerial: "HU1", densityCode: 0x99 },
+    geometry: { nominalWraps: 80 },
+    positioning: { baseSeconds: 4.291234, approachReversalSeconds: 2.5, seekSecondsPerWrap: 96.12, bufferBytes: 1234567n },
+    reading: { bytesPerSecond: 93123456.7, filemarkOverheadSeconds: 0.01 },
+    completion: { fullSpanSeconds: 107, fixedSeconds: 3, ltfsUnmountSeconds: 12 },
+    sourceReference: "Calibration Job 12",
+  });
+  saved.value.device.devices[0].options.tape.readParameters = [stored, TapeReadParameters.create({ appliesTo: { densityCode: 0x5a } })];
+  get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
+  expect(screen.getAllByRole("row")[1]).toHaveTextContent("0x99HU1Calibration Job 124.29 s96.12 s93.1 MB/s");
+  const dialog = await editParameters("0x99");
+  expect(dialog.getByRole("textbox", { name: "Density code" })).toHaveValue("0x99");
+  expect(dialog.getByRole("textbox", { name: "Read-ahead buffer (MB)" })).toHaveValue("1.234567");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93.1234567");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "4.5" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "LTFS unmount time (s)" }), { target: { value: "" } });
+  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  const [parameters, other] = savedParameters();
+  expect(parameters).toEqual({
+    ...stored,
+    positioning: { ...stored.positioning, baseSeconds: 4.5 },
+    completion: { fullSpanSeconds: 107, fixedSeconds: 3, ltfsUnmountSeconds: undefined },
+  });
+  expect(other.appliesTo).toEqual({ densityCode: 0x5a });
+});
+
+it.each(["cancel", "escape"])("shows inline errors, protects unapplied edits on %s and discards them without changing the page draft", async (close) => {
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const dialog = await editParameters();
-  const field = dialog.getByRole("textbox", { name: "Read parameters JSON" });
-  fireEvent.change(field, { target: { value: '{"reading":{"filemarkOverheadSeconds":-1}}' } });
   await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
-  expect(dialog.getByText("Read parameters filemark overhead must be nonnegative.")).toBeVisible();
+  expect(dialog.getByText("Choose a density code.")).toBeVisible();
+  await chooseDensity(dialog, "0x58 LTO-5");
+  const field = dialog.getByRole("textbox", { name: "Filemark overhead (s)" });
+  fireEvent.change(field, { target: { value: "-1" } });
+  expect(dialog.getByText("Must be nonnegative.")).toBeVisible();
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Full-span time (s)" }), { target: { value: "0" } });
+  expect(dialog.getByText("Must be above 0.")).toBeVisible();
+  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  expect(screen.getByRole("dialog", { name: "Add read parameters" })).toBeVisible();
   if (close === "cancel") await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
   else await userEvent.keyboard("{Escape}");
   const discard = within(screen.getByRole("dialog", { name: "Discard unsaved changes?" }));
   await userEvent.click(discard.getByRole("button", { name: "Keep editing" }));
-  expect(field).toHaveValue('{"reading":{"filemarkOverheadSeconds":-1}}');
+  expect(field).toHaveValue("-1");
   await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
   await userEvent.click(screen.getByRole("button", { name: "Discard" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   const reopened = await editParameters();
-  expect(reopened.getByRole("textbox", { name: "Read parameters JSON" })).toHaveValue("");
+  expect(reopened.getByRole("textbox", { name: "Filemark overhead (s)" })).toHaveValue("");
   expect(update).not.toHaveBeenCalled();
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 
-it("fills JSON from the existing report without activating it or retargeting old measurements", async () => {
+it("fills the form from the existing report without activating it or retargeting old measurements", async () => {
   const saved = value();
   if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
-  saved.value.device.devices[0].options.tape.readParameters = TapeReadParameters.create({
-    appliesTo: { driveSerial: "previous-drive", hardwareCompression: true, encryptionAlgorithm: "AES-256-GCM-128" },
-    geometry: { nominalWraps: 80, minLpos: 0n, maxLpos: 171144n },
-    positioning: { baseSeconds: 4.29 },
-    reading: { bytesPerSecond: 93000000 },
-    sourceReference: "Previous drive measurement",
-  });
+  saved.value.device.devices[0].options.tape.readParameters = [
+    TapeReadParameters.create({
+      appliesTo: { driveSerial: "previous-drive", densityCode: 88 },
+      geometry: { nominalWraps: 80 },
+      positioning: { baseSeconds: 4.29 },
+      reading: { bytesPerSecond: 93000000 },
+      sourceReference: "Previous drive measurement",
+    }),
+  ];
   get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
   inspectDevice.mockReturnValue({
     response: Promise.resolve(
@@ -372,42 +451,43 @@ it("fills JSON from the existing report without activating it or retargeting old
   });
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  let dialog = await editParameters();
+  let dialog = await editParameters("0x58 LTO-5");
   expect(dialog.getByRole("button", { name: "From device details" })).toBeDisabled();
   await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  expect(screen.getAllByRole("row")[1]).toHaveTextContent("previous-drive");
   await userEvent.click(screen.getByRole("button", { name: /Device details/ }));
   await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
   await screen.findByText(/Last device details: encryption off/);
-  dialog = await editParameters();
+  dialog = await editParameters("0x58 LTO-5");
   await userEvent.click(dialog.getByRole("button", { name: "From device details" }));
-  const draft = JSON.parse((dialog.getByRole("textbox", { name: "Read parameters JSON" }) as HTMLTextAreaElement).value);
-  expect(draft.appliesTo.driveSerial).toBe("actual-drive");
-  expect(draft.reading).toBeUndefined();
-  expect(draft.geometry).toBeUndefined();
-  expect(draft.positioning).toBeUndefined();
-  expect(draft.sourceReference).toBeUndefined();
+  expect(dialog.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("actual-drive");
+  expect(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+  expect(dialog.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("");
+  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
   expect(update).not.toHaveBeenCalled();
   expect(inspectDevice).toHaveBeenCalledTimes(1);
   await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  dialog = await editParameters();
-  const restored = JSON.parse((dialog.getByRole("textbox", { name: "Read parameters JSON" }) as HTMLTextAreaElement).value);
-  expect(restored.appliesTo.driveSerial).toBe("previous-drive");
-  expect(restored.reading.bytesPerSecond).toBe(93000000);
-  expect(restored.sourceReference).toBe("Previous drive measurement");
+  dialog = await editParameters("0x58 LTO-5");
+  expect(dialog.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("previous-drive");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93");
+  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("Previous drive measurement");
   await userEvent.click(dialog.getByRole("button", { name: "From device details" }));
   await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
-  const parameters = update.mock.calls[0][0].value.value.device.devices[0].options.tape.readParameters;
-  expect(parameters.appliesTo).toEqual({ driveSerial: "actual-drive", firmware: "FW1", densityCode: 88, recordMode: TapeRecordMode.VARIABLE });
+  const [parameters] = savedParameters();
+  expect(parameters.appliesTo).toEqual({ driveSerial: "actual-drive", densityCode: 88 });
   expect(parameters.reading).toBeUndefined();
   expect(parameters.geometry).toBeUndefined();
   expect(parameters.positioning).toBeUndefined();
   expect(parameters.sourceReference).toBe("");
-  expect(parameters.appliesTo.recordBytes).toBeUndefined();
-  expect(parameters.appliesTo.hardwareCompression).toBeUndefined();
-  expect(parameters.appliesTo.encryptionAlgorithm).toBeUndefined();
+  // A new set takes the reported density code as well.
+  const added = await editParameters();
+  await userEvent.click(added.getByRole("button", { name: "From device details" }));
+  expect(added.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("0x58 LTO-5");
+  expect(added.getByText(/already has read parameters for 0x58 LTO-5/)).toBeVisible();
   expect(inspectDevice).toHaveBeenCalledTimes(1);
 });
 
@@ -443,15 +523,15 @@ it("opens Device details for an inspection error even when collapsed while the r
   expect(update).not.toHaveBeenCalled();
 });
 
-it("protects unapplied JSON on browser back and unload without making it a savable page draft", async () => {
+it("protects unapplied edits on browser back and unload without making it a savable page draft", async () => {
   const router = createMemoryRouter([{ path: "*", element: <DeviceSettingsBrowser /> }], {
     initialEntries: ["/settings/devices?previous=1", "/settings/devices"],
   });
   render(<RouterProvider router={router} />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const dialog = await editParameters();
-  const field = dialog.getByRole("textbox", { name: "Read parameters JSON" });
-  fireEvent.change(field, { target: { value: '{"reading":{"bytesPerSecond":93000000}}' } });
+  const field = dialog.getByRole("textbox", { name: "Read rate (MB/s)" });
+  fireEvent.change(field, { target: { value: "93" } });
   const unload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unload);
   expect(unload.defaultPrevented).toBe(true);
@@ -460,7 +540,7 @@ it("protects unapplied JSON on browser back and unload without making it a savab
   });
   const leave = within(screen.getByRole("dialog", { name: "Discard unsaved changes?" }));
   await userEvent.click(leave.getByRole("button", { name: "Keep editing" }));
-  expect(field).toHaveValue('{"reading":{"bytesPerSecond":93000000}}');
+  expect(field).toHaveValue("93");
   expect(router.state.location.search).toBe("");
   expect(update).not.toHaveBeenCalled();
   await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
@@ -469,4 +549,70 @@ it("protects unapplied JSON on browser back and unload without making it a savab
   const cleanUnload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(cleanUnload);
   expect(cleanUnload.defaultPrevented).toBe(false);
+});
+
+it("offers Calibration beside the read parameters of an active device and shows a linked device", async () => {
+  const router = createMemoryRouter([{ path: "/settings/devices", element: <DeviceSettingsBrowser /> }], {
+    initialEntries: ["/settings/devices?device=removed"],
+  });
+  render(<RouterProvider router={router} />);
+  await screen.findByText(/This saved entry is inactive/);
+  expect(screen.getByRole("combobox", { name: "Device" })).toHaveTextContent("removed");
+  await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
+  expect(screen.getByRole("button", { name: "Calibrate…" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("combobox", { name: "Device" }));
+  await userEvent.click(screen.getByRole("option", { name: "drive" }));
+  expect(screen.getByRole("button", { name: "Calibrate…" })).toBeEnabled();
+  expect(inspectDevice).not.toHaveBeenCalled();
+});
+
+it("offers exactly LTFS and Tar, shows an unset format as LTFS and stores the chosen format explicitly", async () => {
+  const saved = value();
+  if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
+  saved.value.device.devices[0].options.tape.defaultFormat = undefined;
+  get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  const format = screen.getByRole("combobox", { name: "Default Tape format" });
+  expect(format).toHaveTextContent("LTFS");
+  await userEvent.click(format);
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["LTFS", "Tar"]);
+  await userEvent.click(screen.getByRole("option", { name: "Tar" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("tar_pax_v1");
+  await userEvent.click(format);
+  await userEvent.click(screen.getByRole("option", { name: "LTFS" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("ltfs_v1");
+  expect(inspectDevice).not.toHaveBeenCalled();
+});
+
+it("keeps an unsupported stored format visible with its warning", async () => {
+  const saved = value();
+  if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
+  saved.value.device.devices[0].options.tape.defaultFormat = "ltfs_v0";
+  get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
+  renderPage(<DeviceSettingsBrowser />);
+  expect(await screen.findByText("Choose LTFS or Tar before using this default.")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Default Tape format" })).toHaveTextContent("ltfs_v0 · unsupported");
+});
+
+it("offers exactly Fixed and Variable record modes, shows unset as Variable and stores the choice", async () => {
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+  const mode = screen.getByRole("combobox", { name: "Record mode" });
+  expect(mode).toHaveTextContent("Variable");
+  await userEvent.click(mode);
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Fixed", "Variable"]);
+  await userEvent.click(screen.getByRole("option", { name: "Fixed" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.tarWriteOptions).toEqual({
+    recordMode: TapeRecordMode.FIXED,
+    recordBytes: 262144,
+    hardwareCompression: false,
+  });
 });

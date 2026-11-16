@@ -26,6 +26,8 @@ type lineProvider struct {
 	unknown   func(from, start uint64) bool
 	entries   []RangeEntry
 	walkErr   error
+	gain      time.Duration
+	budget    time.Duration
 }
 
 func newLineProvider(current uint64) *lineProvider {
@@ -78,7 +80,9 @@ func (p *lineProvider) Finish(state State) (time.Duration, bool) {
 	return time.Duration(state.Position.LogicalObject) * time.Millisecond, true
 }
 
-func (p *lineProvider) ReadPlanningBudget() time.Duration { return 0 }
+func (p *lineProvider) ReadPlanningBudget() time.Duration { return p.budget }
+
+func (p *lineProvider) MinimumGain() time.Duration { return p.gain }
 
 type indexedLineProvider struct{ *lineProvider }
 
@@ -188,6 +192,12 @@ func TestPlanKeepsEveryMemberAndNeverExceedsLogical(t *testing.T) {
 			require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, sequence.Order(), sequence.Reason())
 			require.Less(t, routeCost(t, provider, spans, ids), routeCost(t, provider, spans, logicalIDs(spans)))
 		}
+
+		// The reported estimates are the complete LOGICAL and delivered route costs.
+		logical, planned, known := sequence.Estimates()
+		require.True(t, known)
+		require.Equal(t, routeCost(t, provider, spans, logicalIDs(spans)), logical)
+		require.Equal(t, routeCost(t, provider, spans, ids), planned)
 	}
 }
 
@@ -317,4 +327,98 @@ func TestPlanFillsMissingRangesFromCurrentIndex(t *testing.T) {
 		require.Contains(t, sequence.Reason(), "LOGICAL: current read ranges")
 		require.Equal(t, logicalIDs(spans), ids)
 	}
+}
+
+func TestPlanRequiresMinimumGain(t *testing.T) {
+	// A route predicted to save less than the provider's minimum keeps LOGICAL with its reason.
+	spans := shuffledSpans(40, 40)
+	provider := newLineProvider(0)
+	sequence, _ := planIDs(t, provider, spans, fixedClock())
+	logical, planned, known := sequence.Estimates()
+	require.True(t, known)
+	saving := logical - planned
+	require.Positive(t, saving)
+
+	provider.gain = saving + time.Nanosecond
+	sequence, ids := planIDs(t, provider, spans, fixedClock())
+	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL, sequence.Order())
+	require.Contains(t, sequence.Reason(), "below one positioning base time")
+	require.Equal(t, logicalIDs(spans), ids)
+	logicalAgain, plannedAgain, known := sequence.Estimates()
+	require.True(t, known)
+	require.Equal(t, logical, logicalAgain)
+	require.Equal(t, logical, plannedAgain)
+
+	// A saving exactly at the minimum adopts the planned route.
+	provider.gain = saving
+	sequence, _ = planIDs(t, provider, spans, fixedClock())
+	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, sequence.Order(), sequence.Reason())
+}
+
+func TestPlanKeepsLogicalWhenRouteEstimateIsInconsistent(t *testing.T) {
+	// A changed-edge prediction that disagrees with the complete score withdraws an adopted route.
+	spans := shuffledSpans(20, 20)
+	provider := newLineProvider(0)
+	sequence, err := plan(t.Context(), t.TempDir(), provider, lineInput(spans), fixedClock())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sequence.Close()) })
+	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, sequence.Order(), sequence.Reason())
+
+	statements := newStatements(sequence.stage.DB.Statement.ConnPool)
+	t.Cleanup(func() { require.NoError(t, statements.Close()) })
+	r := make(route, len(spans)+1)
+	for rank := int64(1); rank <= int64(len(spans)); rank++ {
+		r[rank] = link{previous: rank - 1, next: rank + 1}
+	}
+	r[len(spans)].next = 0
+	r[0] = link{previous: int64(len(spans)), next: 1}
+	initial, _, err := provider.Current(t.Context())
+	require.NoError(t, err)
+	logical, _, _ := sequence.Estimates()
+	_, err = sequence.confirm(t.Context(), r, initial, newCache(statements), time.Nanosecond, logical+time.Second)
+	require.ErrorIs(t, err, errInconsistent)
+	require.NoError(t, sequence.stop(err))
+
+	// The attempt continues with the complete LOGICAL manifest and reports why.
+	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL, sequence.Order())
+	require.Equal(t, ReasonInconsistent+": a changed-edge estimate disagrees with its complete score", sequence.Reason())
+	_, planned, known := sequence.Estimates()
+	require.True(t, known)
+	require.Equal(t, logical, planned)
+	ids, err := sequence.Next(t.Context(), len(spans))
+	require.NoError(t, err)
+	require.Equal(t, logicalIDs(spans), ids)
+
+	// A route that no longer covers the selection breaks the same kind of invariant; storage and
+	// cancellation errors stay fatal.
+	r[1].next = 1
+	_, _, err = sequence.score(t.Context(), r, initial, newCache(statements))
+	require.ErrorIs(t, err, errInconsistent)
+	require.NoError(t, sequence.stop(err))
+	require.Equal(t, ReasonInconsistent+": the route has an invalid or duplicate rank", sequence.Reason())
+	require.ErrorIs(t, sequence.stop(context.Canceled), context.Canceled)
+}
+
+func TestPlanStopsWhenPlanningCannotPayBack(t *testing.T) {
+	// Each clock reading advances by step; the budget never expires, so only payback can stop early.
+	spans := shuffledSpans(60, 60)
+	run := func(step time.Duration) (*Sequence, []int64, int) {
+		provider := newLineProvider(0)
+		provider.budget = 100000 * time.Hour
+		calls, at := 0, time.Unix(1, 0)
+		sequence, ids := planIDs(t, provider, spans, func() time.Time {
+			calls++
+			return at.Add(time.Duration(calls) * step)
+		})
+		return sequence, ids, calls
+	}
+	_, _, complete := run(time.Nanosecond)
+	sequence, ids, stopped := run(time.Hour)
+
+	// Planning that already cost more than it saved stops after its first round with a complete route.
+	require.Less(t, stopped, complete)
+	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, sequence.Order(), sequence.Reason())
+	require.ElementsMatch(t, logicalIDs(spans), ids)
+	provider := newLineProvider(0)
+	require.Less(t, routeCost(t, provider, spans, ids), routeCost(t, provider, spans, logicalIDs(spans)))
 }

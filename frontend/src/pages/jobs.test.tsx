@@ -31,6 +31,9 @@ vi.mock("@/components/job-archive", () => ({
 vi.mock("@/components/job-restore", () => ({
   RestoreCard: ({ job }: { job: Job }) => <div data-testid="job-card">{`job-${job.id}-${job.revision}-${job.status}`}</div>,
 }));
+vi.mock("@/components/job-calibration", () => ({
+  CalibrationCard: ({ job }: { job: Job }) => <div data-testid="job-card">{`calibration-${job.id}`}</div>,
+}));
 vi.mock("@/components/job-preview", () => ({
   PreviewCard: ({ job }: { job: Job }) => <div data-testid="job-card">{`job-${job.id}-${job.revision}-${job.status}`}</div>,
 }));
@@ -349,6 +352,16 @@ describe("JobsBrowser", () => {
     expect(await screen.findByText("job-2-5-2")).toBeInTheDocument();
     expect(screen.getByText("job-1-4-2")).toBeInTheDocument();
     expect(listJobs).toHaveBeenCalledWith({ filter: { limit: 20n } });
+  });
+
+  it("shows a Calibration through its own card", async () => {
+    listJobs.mockReturnValueOnce(call({ jobs: [{ ...job(3n, 300n, 6n, JobStatus.PREPARING), kind: JobKind.CALIBRATION }], revision: 6n, hasMore: false }));
+    render(
+      <MemoryRouter>
+        <JobsBrowser />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("calibration-3")).toBeInTheDocument();
   });
 
   it("loads the next snapshot page when the end becomes visible", async () => {

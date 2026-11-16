@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
@@ -48,9 +47,9 @@ func (p *tarBaselineProvider) Open(identity tape.Identity) (tape.Transport, erro
 }
 
 func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t *testing.T) {
-	for _, source := range []string{"builtin", "learned"} {
+	for _, source := range []string{"builtin", "configured"} {
 		t.Run(source, func(t *testing.T) {
-			// Admit AUTO and ordinary passive read learning while optional hardware facts remain unavailable; MAM identity is required.
+			// Admit AUTO while optional hardware facts remain unavailable; MAM identity is required.
 			exe, backend, fixture, jobID := tarFactoryFixture(t)
 			unsupported := byte(1)
 			fixture.navigationSupport = &unsupported
@@ -59,23 +58,18 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 			originalMode := append([]byte(nil), fixture.mode...)
 			provider := &tarBaselineProvider{tarDeviceFixture: fixture}
 			exe.tapeProvider = provider
-			_, err := exe.settings.Device.Save(t.Context(), &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
-				Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{
-					ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, PassiveReadLearning: proto.Bool(true),
-				}},
-			}}})
-			require.NoError(t, err)
-			if source == "learned" {
+			defaults := &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}
+			if source == "configured" {
 				parameters := tarNormalizedParameters()
-				parameters.AppliesTo.DensityCode, parameters.AppliesTo.RecordBytes = proto.Uint32(0x58), proto.Uint32(4096)
-				parameters.AppliesTo.EncryptionAlgorithm = proto.String("AES-256-GCM-128")
+				parameters.AppliesTo.DensityCode = proto.Uint32(0x58)
 				parameters.Geometry.NominalWraps = proto.Uint32(80)
 				parameters.SourceReference = "Synthetic independently validated timing fixture"
-				require.NoError(t, exe.settings.Device.PublishTapeReadModel(t.Context(), &entity.TapeLearnedReadParameters{
-					Device: "/dev/nst0", Parameters: parameters, FitVersion: "native-linear-1", UpdatedAtNs: time.Now().UnixNano(),
-					TrainingObservations: 32, MaeSeconds: 1, MaxErrorSeconds: 2,
-				}))
+				defaults.ReadParameters = []*entity.TapeReadParameters{parameters}
 			}
+			_, err := exe.settings.Device.Save(t.Context(), &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
+				Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: defaults},
+			}}})
+			require.NoError(t, err)
 			ctx, err := exe.withDeviceSettings(t.Context())
 			require.NoError(t, err)
 
@@ -89,7 +83,6 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 			require.Equal(t, "ABC001", formatted.Media.Identity)
 			require.NotEmpty(t, formatted.Media.Profile.GetTape().Encryption)
 			require.Equal(t, "AES-256-GCM-128", formatted.Media.Profile.GetTape().Tar.GetEncryptionAlgorithm())
-			require.Nil(t, formatted.Media.TapePositionMap)
 			stored, err := exe.Lib().CreateMedia(ctx, &library.Media{Kind: formatted.Media.Kind,
 				Identity: formatted.Media.Identity, Profile: formatted.Media.Profile})
 			require.NoError(t, err)
@@ -171,7 +164,6 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 			}
 			reloaded, err := exe.Lib().GetMedia(ctx, stored.ID)
 			require.NoError(t, err)
-			require.Nil(t, reloaded.TapePositionMap)
 			require.True(t, proto.Equal(stored.Profile, reloaded.Profile))
 			require.Equal(t, originalMode, fixture.mode)
 			require.Equal(t, fixture.opens, fixture.closes)

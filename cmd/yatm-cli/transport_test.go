@@ -174,6 +174,24 @@ func (s *stubRestoreJobService) GetProgress(
 	return &entity.GetRestoreJobProgressResponse{}, nil
 }
 
+type stubCalibrationJobService struct {
+	entity.UnimplementedCalibrationJobServiceServer
+	create func(context.Context, *entity.CreateCalibrationJobRequest) (*entity.CreateCalibrationJobResponse, error)
+}
+
+func (s *stubCalibrationJobService) Create(
+	ctx context.Context,
+	request *entity.CreateCalibrationJobRequest,
+) (*entity.CreateCalibrationJobResponse, error) {
+	return s.create(ctx, request)
+}
+
+func (s *stubCalibrationJobService) GetProgress(
+	context.Context, *entity.GetCalibrationJobProgressRequest,
+) (*entity.GetCalibrationJobProgressResponse, error) {
+	return &entity.GetCalibrationJobProgressResponse{}, nil
+}
+
 type stubScanJobService struct {
 	entity.UnimplementedScanJobServiceServer
 	getProgress func(context.Context, *entity.GetScanJobProgressRequest) (*entity.GetScanJobProgressResponse, error)
@@ -355,6 +373,7 @@ func TestJobProgressDispatchesByKind(t *testing.T) {
 		{name: "archive", kind: entity.JobKind_JOB_KIND_ARCHIVE, progressMethod: entity.ArchiveJobService_GetProgress_FullMethodName},
 		{name: "restore", kind: entity.JobKind_JOB_KIND_RESTORE, progressMethod: entity.RestoreJobService_GetProgress_FullMethodName},
 		{name: "scan", kind: entity.JobKind_JOB_KIND_SCAN, progressMethod: entity.ScanJobService_GetProgress_FullMethodName},
+		{name: "calibration", kind: entity.JobKind_JOB_KIND_CALIBRATION, progressMethod: entity.CalibrationJobService_GetProgress_FullMethodName},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -369,6 +388,7 @@ func TestJobProgressDispatchesByKind(t *testing.T) {
 				entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{})
 				entity.RegisterRestoreJobServiceServer(server, &stubRestoreJobService{})
 				entity.RegisterScanJobServiceServer(server, &stubScanJobService{})
+				entity.RegisterCalibrationJobServiceServer(server, &stubCalibrationJobService{})
 			}, nil, nil)
 
 			// Verify one common lookup leads to exactly one typed progress request.
@@ -378,6 +398,36 @@ func TestJobProgressDispatchesByKind(t *testing.T) {
 			require.Equal(t, 1, recorder.count(entity.JobService_Get_FullMethodName))
 			require.Equal(t, 1, recorder.count(test.progressMethod))
 		})
+	}
+}
+
+func TestCalibrationCreateSendsDeviceAndMedia(t *testing.T) {
+	var received *entity.CalibrationJobSpec
+	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		entity.RegisterCalibrationJobServiceServer(server, &stubCalibrationJobService{create: func(
+			_ context.Context, request *entity.CreateCalibrationJobRequest,
+		) (*entity.CreateCalibrationJobResponse, error) {
+			received = request.Spec
+			return &entity.CreateCalibrationJobResponse{Job: &entity.Job{Id: 9, Kind: entity.JobKind_JOB_KIND_CALIBRATION}}, nil
+		}})
+	}, nil, nil)
+	exit, _, stderr := executeTestCLI(server.URL, "", "calibration", "create", "--device", " /dev/nst0 ", "--media-id", "4")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, 1, recorder.count(entity.CalibrationJobService_Create_FullMethodName))
+	require.Equal(t, "/dev/nst0", received.Device)
+	require.Equal(t, int64(4), received.GetMediaId())
+	require.False(t, received.WriteTestData)
+
+	exit, _, stderr = executeTestCLI(server.URL, "", "calibration", "create", "--device", "/dev/nst0", "--write-test-data")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.True(t, received.WriteTestData)
+	require.Nil(t, received.MediaId)
+
+	for _, args := range [][]string{
+		{"--media-id", "0"}, {}, {"--media-id", "4", "--write-test-data"},
+	} {
+		exit, _, _ = executeTestCLI(server.URL, "", append([]string{"calibration", "create", "--device", "/dev/nst0"}, args...)...)
+		require.Equal(t, exitUsage, exit, args)
 	}
 }
 

@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"iter"
@@ -22,44 +21,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ltfsMAMFixture(capacity, indexBlock uint64) []byte {
-	// SSC 0001 is partition maximum capacity; LTFS 080c coherency retains the partition's Index block.
-	value := make([]byte, 4+5+8+5+70)
-	binary.BigEndian.PutUint32(value, uint32(len(value)-4))
-	binary.BigEndian.PutUint16(value[4:], 0x0001)
-	binary.BigEndian.PutUint16(value[7:], 8)
-	binary.BigEndian.PutUint64(value[9:], capacity)
-	coherency := value[17:]
-	binary.BigEndian.PutUint16(coherency, 0x080c)
-	binary.BigEndian.PutUint16(coherency[3:], 70)
-	coherency[5] = 8
-	binary.BigEndian.PutUint64(coherency[6:], 12)
-	binary.BigEndian.PutUint64(coherency[14:], 7)
-	binary.BigEndian.PutUint64(coherency[22:], indexBlock)
-	binary.BigEndian.PutUint16(coherency[30:], 43)
-	copy(coherency[32:], "LTFS\x00")
-	copy(coherency[37:], "204d1c2f-c755-44cf-ac70-8541ded5f005\x00")
-	coherency[74] = 1
-	return value
-}
-
 func ltfsAttributeFixture() map[string][]byte {
-	index, data := ltfsMAMFixture(37500, 8), ltfsMAMFixture(1425000, 180)
 	return map[string][]byte{
 		"ltfs.volumeBlocksize": []byte("262144"), "ltfs.volumeCompression": []byte("false"),
 		"ltfs.volumeUUID": []byte("204d1c2f-c755-44cf-ac70-8541ded5f005"), "ltfs.indexGeneration": []byte("7"),
-		"ltfs.indexLocation":          []byte("z:8"),
-		"ltfs.partitionMap":           []byte("I:z,D:q"),
-		"ltfs.vendor.IBM.mediaMAM.IP": index, "ltfs.vendor.IBM.mediaMAM.DP": data,
-		"ltfs.vendor.IBM.mediaMAM.00": data, "ltfs.vendor.IBM.mediaMAM.01": index,
+		"ltfs.indexLocation": []byte("a:8"), "ltfs.partitionMap": []byte("I:a,D:b"),
 	}
 }
 
-func TestLTFSReadOrderFactsUseLabelAndNumericPartitionEvidence(t *testing.T) {
-	// Reversed physical roles and arbitrary symbols must not acquire the common a=0/b=1 assumption.
+func TestLTFSReadOrderFactsUseConventionalPartitionMap(t *testing.T) {
 	values := ltfsAttributeFixture()
 	var calls []string
-	facts, err := readLTFSReadFacts(t.Context(), nil, func(name string, limit int) ([]byte, error) {
+	facts, err := readLTFSReadFacts(t.Context(), func(name string, limit int) ([]byte, error) {
 		calls = append(calls, name)
 		require.LessOrEqual(t, len(values[name]), limit)
 		return values[name], nil
@@ -68,13 +41,13 @@ func TestLTFSReadOrderFactsUseLabelAndNumericPartitionEvidence(t *testing.T) {
 	require.Equal(t, uint32(262144), facts.blockBytes)
 	require.False(t, facts.compression)
 	require.Equal(t, uint64(7), facts.generation)
-	require.Equal(t, map[string]uint32{"q": 0, "z": 1}, facts.partitions)
-	require.Equal(t, "z", facts.indexSymbol)
-	require.Equal(t, "q", facts.dataSymbol)
-	require.Len(t, calls, 9)
+	require.Equal(t, map[string]uint32{"a": 0, "b": 1}, facts.partitions)
+	require.Equal(t, "a", facts.indexSymbol)
+	require.Equal(t, "b", facts.dataSymbol)
+	require.Len(t, calls, 5)
 }
 
-func TestLTFSReadOrderFactsRejectAmbiguousAndUnsupportedObservations(t *testing.T) {
+func TestLTFSReadOrderFactsRejectUnsupportedObservations(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		edit func(map[string][]byte)
@@ -84,28 +57,41 @@ func TestLTFSReadOrderFactsRejectAmbiguousAndUnsupportedObservations(t *testing.
 		{"missing compression", func(v map[string][]byte) { delete(v, "ltfs.volumeCompression") }, "compression"},
 		{"block size absent", func(v map[string][]byte) { delete(v, "ltfs.volumeBlocksize") }, "block size"},
 		{"bad UUID", func(v map[string][]byte) { v["ltfs.volumeUUID"] = []byte("barcode") }, "UUID"},
-		{"truncated MAM", func(v map[string][]byte) { v["ltfs.vendor.IBM.mediaMAM.IP"] = []byte{0, 0, 0, 5} }, "incomplete"},
-		{"identical physical snapshots", func(v map[string][]byte) {
-			v["ltfs.vendor.IBM.mediaMAM.01"] = v["ltfs.vendor.IBM.mediaMAM.00"]
-		}, "indistinguishable"},
-		{"equal partition capacities with differing other attributes", func(v map[string][]byte) {
-			v["ltfs.vendor.IBM.mediaMAM.00"] = ltfsMAMFixture(37500, 180)
-			v["ltfs.vendor.IBM.mediaMAM.DP"] = v["ltfs.vendor.IBM.mediaMAM.00"]
-		}, "indistinguishable"},
-		{"changed role observation", func(v map[string][]byte) {
-			v["ltfs.vendor.IBM.mediaMAM.DP"] = ltfsMAMFixture(1425000, 181)
-		}, "do not match"},
-		{"two roles claim same physical partition", func(v map[string][]byte) {
-			v["ltfs.vendor.IBM.mediaMAM.DP"] = v["ltfs.vendor.IBM.mediaMAM.IP"]
-		}, "one-to-one"},
+		{"reversed partition map", func(v map[string][]byte) { v["ltfs.partitionMap"] = []byte("I:b,D:a") }, "convention"},
+		{"other partition letters", func(v map[string][]byte) { v["ltfs.partitionMap"] = []byte("I:z,D:q") }, "convention"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			values := ltfsAttributeFixture()
 			test.edit(values)
-			_, err := readLTFSReadFacts(t.Context(), nil, func(name string, _ int) ([]byte, error) { return values[name], nil })
+			_, err := readLTFSReadFacts(t.Context(), func(name string, _ int) ([]byte, error) { return values[name], nil })
 			require.ErrorContains(t, err, test.want)
 		})
 	}
+}
+
+func TestLTFSReadOrderNonConventionalPartitionMapStaysLogical(t *testing.T) {
+	point := t.TempDir()
+	for name, value := range ltfsAttributeFixture() {
+		if name == "ltfs.partitionMap" {
+			value = []byte("I:b,D:a")
+		}
+		if runtime.GOOS != "darwin" {
+			name = "user." + name
+		}
+		if err := unix.Setxattr(point, name, value, 0); err != nil {
+			t.Skipf("fixture filesystem does not support LTFS attribute fixtures: %v", err)
+		}
+	}
+	exe := New(nil, nil, []string{"fixture"}, Paths{}, Scripts{}, nil)
+	stored := &library.Media{ID: 1, Identity: "ABC001", Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack()}
+	session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend),
+		media: describeMedia(stored), mountPoint: point, device: "fixture"}
+	snapshot := &ltfsReadSnapshot{defaults: &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}}
+	require.NoError(t, session.prepareReadOrder(t.Context(), snapshot))
+	provider, reason, err := session.ReadOrder(t.Context())
+	require.NoError(t, err)
+	require.Nil(t, provider)
+	require.Contains(t, reason, "convention")
 }
 
 func TestLTFSReadOrderObservationClosesRawAccessBeforeMount(t *testing.T) {
@@ -147,10 +133,31 @@ func TestLTFSReadOrderObservationClosesRawAccessBeforeMount(t *testing.T) {
 	}
 }
 
+func TestLTFSReadOrderLogicalSkipsGeometry(t *testing.T) {
+	// LOGICAL never opens the raw descriptor before mount.
+	exe := setupTestExecutor(t)
+	fixture := &tarReadMapProvider{tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()},
+		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180}}}
+	exe.tapeProvider = fixture
+	require.NoError(t, exe.beginAttempt(1, func(error) {}))
+	t.Cleanup(func() { exe.endAttempt(1) })
+	ctx := context.WithValue(t.Context(), deviceSettingsKey{}, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
+		Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{
+			ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL,
+		}},
+	}}})
+	require.NoError(t, exe.AcquireTapeDevice(ctx, 1, "/dev/nst0", nil))
+	backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
+	snapshot, err := backend.observeLTFSReadOrder(ctx, "/dev/nst0", &entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1})
+	require.NoError(t, err)
+	require.Equal(t, "LOGICAL read order selected", snapshot.reason)
+	require.Zero(t, fixture.opens)
+}
+
 func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T) {
 	for _, format := range []string{library.TapeFormatLTFSV0, library.TapeFormatLTFSV1} {
 		t.Run(format, func(t *testing.T) {
-			// A mounted filesystem supplies label/MAM facts through its normal xattr interface.
+			// A mounted filesystem supplies LTFS facts through its normal xattr interface.
 			exe := setupTestExecutor(t)
 			require.NoError(t, exe.Lib().AutoMigrate())
 			stored, err := exe.Lib().CreateMedia(t.Context(), &library.Media{Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "ABC001",
@@ -173,8 +180,8 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			snapshot := &ltfsReadSnapshot{report: report, defaults: defaults,
 				settings: &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
 					Options: &entity.DeviceConfig_Tape{Tape: defaults}}}},
-				endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
-					{Partition: 1, Wrap: 4, Object: 8}}, source: "A3/1F/45", observedAt: time.Now()}
+				endpoints: []tape.WrapEndpoint{{Partition: 1, Object: 100}, {Partition: 1, Wrap: 1, Object: 180},
+					{Partition: 0, Wrap: 4, Object: 8}}, source: "A3/1F/45", observedAt: time.Now()}
 			exe.scripts.Umount = writeExecutorTestScript(t, "unmounted", ":")
 			session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend), media: describeMedia(stored),
 				device: "/dev/nst0", mountPoint: point, tapeDir: t.TempDir(), recycleKey: func() {}}
@@ -184,13 +191,13 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			require.NoError(t, err)
 			require.NotNil(t, provider, reason)
 			request := mediapkg.ReadRequest{Path: "native name.txt", Storage: &entity.StoragePosition{Metadata: (&entity.LtfsMetadata{
-				Extents: []*entity.LtfsExtent{{Partition: "q", StartBlock: 10, ByteCount: 19}},
+				Extents: []*entity.LtfsExtent{{Partition: "b", StartBlock: 10, ByteCount: 19}},
 			}).Pack()}}
 			ranges, known := provider.Ranges(request)
 			require.True(t, known)
-			require.Equal(t, uint32(0), ranges[0].Start.Partition)
+			require.Equal(t, uint32(1), ranges[0].Start.Partition)
 			_, known = provider.(readplan.Provider).Finish(readplan.State{
-				Position: &entity.TapeBytePosition{LogicalObject: 11}, Stream: "ltfs",
+				Position: &entity.TapeBytePosition{Partition: 1, LogicalObject: 11}, Stream: "ltfs",
 			})
 			require.True(t, known, "the prepared provider must price its normal terminal action")
 			source, err := session.Source(request)
@@ -203,7 +210,7 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			// Missing historical extents are supplied from this mount's captured Index, with matching UUID/generation.
 			index := `<ltfsindex><volumeuuid>204d1c2f-c755-44cf-ac70-8541ded5f005</volumeuuid><generationnumber>7</generationnumber><directory><name>ABC001</name><contents>`
 			for i, name := range []string{"native name.txt", "another.txt"} {
-				index += fmt.Sprintf(`<file><name>%s</name><length>19</length><extentinfo><extent><partition>q</partition><startblock>%d</startblock><bytecount>19</bytecount></extent></extentinfo></file>`, name, 10+i*100)
+				index += fmt.Sprintf(`<file><name>%s</name><length>19</length><extentinfo><extent><partition>b</partition><startblock>%d</startblock><bytecount>19</bytecount></extent></extentinfo></file>`, name, 10+i*100)
 			}
 			index += `</contents></directory></ltfsindex>`
 			require.NoError(t, os.WriteFile(session.indexPath, []byte(index), 0600))
@@ -218,13 +225,11 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			require.NotContains(t, sequence.Reason(), "unavailable")
 			ids, err := sequence.Next(t.Context(), 10)
 			require.NoError(t, err)
-			require.Equal(t, []int64{1, 2}, ids, "the unknown initial position keeps the common first file")
+			require.Equal(t, []int64{1, 2}, ids, "the route from the assumed post-mount position reads the nearer file first")
 			require.NoError(t, sequence.Close())
 
-			// The returned map has the mounted UUID/index owner, and finalization withdraws that snapshot.
-			updated := session.Media()
-			require.Equal(t, "204d1c2f-c755-44cf-ac70-8541ded5f005", updated.TapePositionMap.LtfsUuid)
-			require.Equal(t, uint64(7), updated.TapePositionMap.GetLtfsIndexGeneration())
+			// The Session's map stays in memory, and finalization withdraws that snapshot.
+			require.Contains(t, exe.lastPreparedRead("/dev/nst0").PositionSource, "A3/1F/45")
 			require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO.String(), exe.lastPreparedRead("/dev/nst0").EffectiveOrder)
 			require.Equal(t, "builtin", exe.lastPreparedRead("/dev/nst0").ParametersSource)
 			require.Equal(t, tarBuiltinSourceReference, exe.lastPreparedRead("/dev/nst0").ParametersReference)

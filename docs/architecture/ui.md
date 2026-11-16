@@ -42,7 +42,7 @@ Every YATM file browser uses the list view through the shared application FileBr
 
 File selection uses row highlighting without a selection checkbox column. Rows are focusable and named by the file; a plain click replaces the selection, Ctrl/Cmd-click toggles a member, Shift-click selects a range, and Space toggles the focused row. Enter opens the selection, or the focused file when nothing is selected; the row's context menu remains available. Functional fixes and shared-library updates preserve the reviewed layout, spacing and selection appearance; visual changes require explicit approval.
 
-[Frontend routes](../../frontend/src/app.tsx) retain Library Files/Media, Jobs All/New, and Settings. Job creation happens at `/archive`, `/restore` and `/scan`. Every horizontal tab row renders through one [page navigation](../../frontend/src/components/page-navigation.tsx) component with a documented placement - the module strip above a page, its compact secondary row, a row inside a page, or the compact Inspector row - so a row cannot take its own spacing, sizing or selected treatment on one page and a different one on another. The [Library browser](../../frontend/src/pages/file.tsx) supports compact dual-pane and Inspector modes, metadata editing, active-pane search, and locating a result in the other pane. The [Media page](../../frontend/src/pages/media.tsx) exposes Inspect, candidate-driven Volume initialization/registration, mounted state, physical browsing, and Tape/Volume Job targets. It pairs its browser with a panel the way Files pairs its own: selecting a row details the [row the list already read](../../frontend/src/components/media-inspector.tsx) beside the list - a Media by its identity, access, availability, capacity and written bytes, or one Position by its Media, path, size, both timestamps, permission and its own verification result, together with the **Archived copies** of that Position's content. Interactions inside the detail panel do not clear the selected Media or Position row. Neither needs a dialog, and a Position needs no File identity: its Preview is the content-addressed read of its Signature, and one that records none says its copies cannot be matched. **Add Volume** lists discovered disks with their registration state instead of requiring a typed path; registered, conflicting and invalid candidates stay visible but cannot be submitted, and manual entry remains available.
+[Frontend routes](../../frontend/src/app.tsx) retain Library Files/Media, Jobs All/New, and Settings. Job creation happens at `/archive`, `/restore` and `/scan`, and a Calibration starts from Device settings. Every horizontal tab row renders through one [page navigation](../../frontend/src/components/page-navigation.tsx) component with a documented placement - the module strip above a page, its compact secondary row, a row inside a page, or the compact Inspector row - so a row cannot take its own spacing, sizing or selected treatment on one page and a different one on another. The [Library browser](../../frontend/src/pages/file.tsx) supports compact dual-pane and Inspector modes, metadata editing, active-pane search, and locating a result in the other pane. The [Media page](../../frontend/src/pages/media.tsx) exposes Inspect, candidate-driven Volume initialization/registration, mounted state, physical browsing, and Tape/Volume Job targets. It pairs its browser with a panel the way Files pairs its own: selecting a row details the [row the list already read](../../frontend/src/components/media-inspector.tsx) beside the list - a Media by its identity, access, availability, capacity and written bytes, or one Position by its Media, path, size, both timestamps, permission and its own verification result, together with the **Archived copies** of that Position's content. Interactions inside the detail panel do not clear the selected Media or Position row. Neither needs a dialog, and a Position needs no File identity: its Preview is the content-addressed read of its Signature, and one that records none says its copies cannot be matched. **Add Volume** lists discovered disks with their registration state instead of requiring a typed path; registered, conflicting and invalid candidates stay visible but cannot be submitted, and manual entry remains available.
 
 Files refresh only on navigation, query changes, explicit Refresh, or completion of an operation affecting that visible page. Timers, focus, visibility and Job completion do not refresh Files; hidden panes do not read. Job lists load an initial snapshot, poll revision changes and tombstones, and fetch older pages on scroll. Per-Job revisions prevent older pages from overwriting newer observations; retained tombstones prevent resurrection. Failed loads/refreshes show an error with retry, preserving cached cards. A typed NotFound response clears a deleted Job's action card. Paging stops after errors until explicit retry. Current transfer speed, historical average and server-derived stage ETA are distinct; the [shared progress contract](jobs.md) owns sampling and estimate availability. Clients render one coherent stage snapshot rather than independently estimating its remaining time.
 
@@ -85,7 +85,9 @@ Settings Get/Update group and shared committed cache/editor. Configured devices 
 entries remain distinct; inactive Device settings grant no access. FORMAT defaults are resolved for the
 selected drive in an existing Archive Job's **Choose archive storage** dialog after selecting
 **Storage type → Tape**, following manifest preparation. The absent
-format means LTFS; explicit operation edits override saved defaults and remain when the drive changes.
+format means LTFS, so the Device editor's format select offers only LTFS and Tar and shows an unset
+value as LTFS; its Record mode select likewise offers only Fixed and Variable and shows unset as
+Variable, while the FORMAT dialog keeps its distinct inherit-the-device-default entry; explicit operation edits override saved defaults and remain when the drive changes.
 APPEND and reads use the cartridge's immutable stored profile. **Read order** is an ordinary field beside FORMAT defaults and edits the selected device's
 LOGICAL/AUTO preference; unspecified resolves to LOGICAL and remains unspecified
 through unrelated edits. Saving validates the enum without hardware access and retains inactive
@@ -98,21 +100,38 @@ separate from Save. Unknown observations stay unknown; omitted tar record option
 actual admission checks current device/driver bounds without clamping. The
 [Device guide](../operations/devices.md) owns operator instructions.
 
-The separate collapsed **Manual read parameters** section opens a JSON dialog copied from the page draft.
-Apply validates it and updates only that draft; the page Save persists it. Cancel leaves the page
-unchanged, using the existing discard confirmation for edits. Starting from device details uses
-only the displayed report and performs no new query; it creates fresh applicable identity fields
-instead of relabeling previous timings. Clearing manual read parameters is also a draft edit and
-returns selection to automatic parameters only after Save. Partial manual read parameters retain priority
-and may leave insufficient costs for AUTO; absence stays unknown rather than zero. Variable-record
-maximum size and written compression/encryption conditions cannot be inferred from current controls.
+The separate collapsed **Read parameters** section lists the device's sets in a compact table, one
+row per density code: the code with its LTO generation name from a local table of the standard
+codes, the optional drive serial, the source reference, fixed positioning time, seek time for one
+span and read rate, with **Edit** and **Reset to built-in**; **Add read parameters** and
+**Calibrate…** follow. Edit and Add open a form copied from the page draft, with one labelled field
+per stored value, its unit and one line of helper text. The density code is a select of the named
+codes plus another code, refuses a code another set of the device uses, and is fixed when editing.
+Rates and the read-ahead buffer are entered in decimal MB/s and MB and stored in bytes. Field
+errors mirror the server's validation and show inline. Apply rebuilds the set from the original
+message, replacing only fields whose text changed, and updates only that draft; the page Save
+persists it. Cancel leaves the page unchanged, using the existing discard confirmation for edits.
+A new set starts empty: the page has no source for built-in values. Starting from device details
+uses only the displayed report and performs no new query; it fills only the drive serial and, for
+a new set, the density code, and clears the other values instead of relabeling previous timings. Reset to built-in removes the set from the draft, so that density code uses the built-in
+values only after Save. A partial set retains priority for its density code and may leave
+insufficient costs for AUTO; absence stays unknown rather than zero.
 
-Advanced also owns passive read learning (omitted means enabled) and the complete-selection
-planning budget (omitted means 300 seconds; explicit values are positive). Learned
-models are server-owned Device Settings facts; a form Save cannot erase or replace them.
-Manual read parameters take precedence over matching learned read parameters and source-labelled initial
-values. Device details show the last prepared read's identity, parameter/position sources,
-coverage gaps and the learned read parameters' mean and maximum error when available. This historical snapshot does not certify
+**Calibrate…** in that section's action row opens the [Calibration](jobs.md#calibration) form for a
+device in service; it is disabled for an inactive entry. Opening it inspects the loaded cartridge
+passively, as the Media read dialog does, and **Check Tape** repeats that. **Calibrate on** is an
+explicit choice with no default. **Tar Media in the drive** uses the cartridge's registered Media
+and refuses one that is not tar; an unidentified or unregistered cartridge instead offers the Media
+search restricted to Tape, which accepts only tar Media. **Write test data** shows FORMAT's warning
+style and is blocked for a registered barcode. Like FORMAT, an unregistered barcode must be typed;
+a cartridge without a readable barcode, including a failed or empty inspection, instead requires the
+**Overwrite the cartridge in** *device* checkbox. Successful creation navigates to the Job's detail; failures stay in the dialog, and its
+submission never submits the surrounding Settings form. `?device=` selects the named device when the
+page opens, which the Calibration Job's link uses.
+
+Advanced also owns the complete-selection planning budget (omitted means 300 seconds; explicit values
+are positive). A device's set for the loaded density code takes precedence over source-labelled initial values. Device
+details show the last prepared read's identity, parameter/position sources and coverage gaps. This historical snapshot does not certify
 the currently loaded cartridge or report the final read order; Inspect does not start
 measurement or extra planning queries.
 
@@ -266,6 +285,14 @@ Jobs filters use labeled, wrapping fields with explicit all-values and applicati
 Related Jobs use compact type/status/date/result rows and a resource-filtered **View all** link. Jobs supports kind, Location and Media filters before pagination; `job_properties` search values come from frozen selections and actual operations. Media actions are contextual: **Properties** inspects identity/capabilities, **Scan** configures content and inventory policies, **Add to Library** admits selected archive entries without copying bytes, **Check integrity** presets recorded-copy verification, and **View jobs** opens its history. Inventory and verification share SCAN progress and results; health observations remain independent of accessibility and Job completion.
 
 All Job kinds use the same card title/status/body/footer spacing and one shared virtualized result list. Archive, Restore and Scan results and their unloaded placeholders use one [row frame](../../frontend/src/components/job-file-list-item.tsx) with one fixed 54-pixel height, insets, separators and text spacing; each Job supplies its own content. The list spans the whole result set from its first load, which requests its size through `include_total`, so the scrollbar covers every row and there is no page counter or Previous/Next control. Loaded pages form a sparse window cache bounded to 1,200 nearby rows. A visible range continues forwards or backwards from a nearby edge through the order key cursor; distant jumps use an offset request. Ten rows of viewport overscan fetch ahead without retaining the entire manifest. Cached scrolling does not start another request or loading indicator, and closing the dialog aborts its pending read. Long paths and details use ellipsis with their full text available on hover; actions remain visible. Placeholders and populated rows have the same height, so resolving a page cannot change the scrollbar geometry. Unloaded positions render as placeholders, a failed window keeps its already loaded rows, and each Job kind declares only its listing, order key, empty label and row renderer. Paging a Job manifest listing outside the shared module fails `pnpm lint`. Scan uses one file findings view for both Location and Media inputs; its per-file rows retain the Scan finding alongside Preview generation failures.
+
+A Calibration card uses the shared card shell, status label, failure alert, Cancel, View Log and
+Delete Job; it has no result list and no Recreate. Its frame shows the current phase, the shared
+elapsed time and **Measured Moves** as measured out of the sequence's total, which is also the bar's
+percentage while `CALIBRATING`; writing test data has no denominator. A compact table lists the
+measured moves in order, and fitted parameters appear with units under the labels of the Read
+parameters form and their stored field names, with a link to that device's Read parameters. A card that observes its Job
+complete reads the DEVICE Settings group again, because the Job replaced a set there.
 
 Job cards keep their bodies mounted while offscreen; visibility gates only a shared serialized progress hook. One shared progress card owns the frame, its counter wording and the waiting/active/terminal classification that the status label and the action buttons read, so the three kinds render the same frame for the same phase and counter set. `QUEUED` displays **Queued — waiting for Media**, keeps **Cancel** available and suppresses another start and **Delete Job**; active attempts also suppress deletion. Live working phases take precedence over `COMPLETED` and `FAILED` while cleanup is active. An idle `UNSPECIFIED` stage displays **--** as its current phase. Counter wording names the phase's own work: discovery reports **Found**, Preview reports **Generated**, comparison reports **Compared**, content, verification and publication report **Processed**, and copy reports **Copied**. An idle Scan keeps **Processed** for its retained counters; Archive and Restore keep **Copied**. A phase measured in items alone reports no byte counter, because the bytes beside a decoder count describe the source rather than the stage; the Job's own total rows stay visible beside it. The bar animates only while the Job is active on a stage of unknown length. An idle completed Job shows 100%, including before its counters load or when the workload is empty; active cleanup still uses its live stage progress. Other waiting or settled Jobs show a still bar at the percentage they have. The failure alert keeps its own space under the title. A settled attempt that carries a reason is shown as a failure whatever settled it, including the operator's own cancellation. Leaving a Job or hiding its card aborts its current read and prevents late publication, while completed snapshots remain visible. The Jobs list owns the bounded flex scroll region and pagination observer. Chonky synchronizes controlled rows before paint so loading completion cannot briefly show an empty folder.
 

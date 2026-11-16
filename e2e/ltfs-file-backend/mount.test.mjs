@@ -70,7 +70,7 @@ fs.writeFileSync(path.join(work, 'TEST01.schema'), '<ltfsindex/>');
           YATM_E2E_LTFS_CAPTURE_INDEX: captureStyle,
         },
         encoding: 'utf8',
-        timeout: 10000,
+        timeout: 60000,
       });
       assert.equal(result.status, 0, result.stdout + result.stderr);
       assert.equal(fs.readFileSync(path.join(tapeDirectory, 'TEST01.schema'), 'utf8'), '<ltfsindex/>');

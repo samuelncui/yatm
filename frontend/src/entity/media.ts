@@ -129,108 +129,6 @@ export interface MediaProfile {
     };
 }
 /**
- * Logical coverage is partition-scoped; absent EOD remains unknown.
- *
- * @generated from protobuf message yatm.v1.TapePositionPartition
- */
-export interface TapePositionPartition {
-    /**
-     * @generated from protobuf field: uint32 partition = 1
-     */
-    partition: number;
-    /**
-     * @generated from protobuf field: optional uint64 eod = 3
-     */
-    eod?: bigint;
-}
-/**
- * Wraps retain declared traversal order and missing endpoints rather than filling gaps.
- *
- * @generated from protobuf message yatm.v1.TapePositionWrap
- */
-export interface TapePositionWrap {
-    /**
-     * @generated from protobuf field: uint32 partition = 1
-     */
-    partition: number;
-    /**
-     * @generated from protobuf field: uint32 wrap = 2
-     */
-    wrap: number;
-    /**
-     * @generated from protobuf field: uint32 band = 3
-     */
-    band: number;
-    /**
-     * @generated from protobuf field: yatm.v1.TapePositionDirection direction = 4
-     */
-    direction: TapePositionDirection;
-    /**
-     * @generated from protobuf field: bool full = 5
-     */
-    full: boolean;
-    /**
-     * Exclusive end: the first logical object after this wrap, or actual EOD for a partial wrap.
-     *
-     * @generated from protobuf field: optional uint64 endpoint = 6
-     */
-    endpoint?: bigint;
-    /**
-     * A partial wrap keeps its actual EOD; this is only its interpolation denominator.
-     *
-     * @generated from protobuf field: optional uint64 estimated_span_objects = 7
-     */
-    estimatedSpanObjects?: bigint;
-    /**
-     * @generated from protobuf field: optional uint64 endpoint_uncertainty_objects = 8
-     */
-    endpointUncertaintyObjects?: bigint;
-}
-/**
- * Mutable derived geometry belongs to Media, independently of its immutable profile.
- * Exactly one initialization binding is present: tar initialization_id, or LTFS UUID/index.
- *
- * @generated from protobuf message yatm.v1.TapePositionMap
- */
-export interface TapePositionMap {
-    /**
-     * @generated from protobuf field: string initialization_id = 1
-     */
-    initializationId: string;
-    /**
-     * @generated from protobuf field: string ltfs_uuid = 2
-     */
-    ltfsUuid: string;
-    /**
-     * @generated from protobuf field: optional uint64 ltfs_index_generation = 3
-     */
-    ltfsIndexGeneration?: bigint;
-    /**
-     * @generated from protobuf field: repeated yatm.v1.TapePositionPartition partitions = 4
-     */
-    partitions: TapePositionPartition[];
-    /**
-     * @generated from protobuf field: repeated yatm.v1.TapePositionWrap wraps = 5
-     */
-    wraps: TapePositionWrap[];
-    /**
-     * @generated from protobuf field: string source = 7
-     */
-    source: string;
-    /**
-     * @generated from protobuf field: optional uint64 min_lpos = 8
-     */
-    minLpos?: bigint;
-    /**
-     * @generated from protobuf field: optional uint64 max_lpos = 9
-     */
-    maxLpos?: bigint;
-    /**
-     * @generated from protobuf field: int64 observed_at_ns = 10
-     */
-    observedAtNs: bigint;
-}
-/**
  * @generated from protobuf message yatm.v1.Media
  */
 export interface Media {
@@ -278,10 +176,6 @@ export interface Media {
      * @generated from protobuf field: optional int64 filesystem_available_bytes = 22
      */
     filesystemAvailableBytes?: bigint;
-    /**
-     * @generated from protobuf field: optional yatm.v1.TapePositionMap tape_position_map = 23
-     */
-    tapePositionMap?: TapePositionMap;
     /**
      * Responses omit profile.tape.encryption; this reports whether the Library retains that key.
      *
@@ -528,23 +422,6 @@ export enum TapeRecordMode {
      * @generated from protobuf enum value: TAPE_RECORD_MODE_VARIABLE = 2;
      */
     VARIABLE = 2
-}
-/**
- * @generated from protobuf enum yatm.v1.TapePositionDirection
- */
-export enum TapePositionDirection {
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_DIRECTION_UNSPECIFIED = 0;
-     */
-    UNSPECIFIED = 0,
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_DIRECTION_FORWARD = 1;
-     */
-    FORWARD = 1,
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_DIRECTION_REVERSE = 2;
-     */
-    REVERSE = 2
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class Capabilities$Type extends MessageType<Capabilities> {
@@ -925,268 +802,6 @@ class MediaProfile$Type extends MessageType<MediaProfile> {
  */
 export const MediaProfile = new MediaProfile$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class TapePositionPartition$Type extends MessageType<TapePositionPartition> {
-    constructor() {
-        super("yatm.v1.TapePositionPartition", [
-            { no: 1, name: "partition", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 3, name: "eod", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<TapePositionPartition>): TapePositionPartition {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.partition = 0;
-        if (value !== undefined)
-            reflectionMergePartial<TapePositionPartition>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapePositionPartition): TapePositionPartition {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* uint32 partition */ 1:
-                    message.partition = reader.uint32();
-                    break;
-                case /* optional uint64 eod */ 3:
-                    message.eod = reader.uint64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: TapePositionPartition, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* uint32 partition = 1; */
-        if (message.partition !== 0)
-            writer.tag(1, WireType.Varint).uint32(message.partition);
-        /* optional uint64 eod = 3; */
-        if (message.eod !== undefined)
-            writer.tag(3, WireType.Varint).uint64(message.eod);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.TapePositionPartition
- */
-export const TapePositionPartition = new TapePositionPartition$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class TapePositionWrap$Type extends MessageType<TapePositionWrap> {
-    constructor() {
-        super("yatm.v1.TapePositionWrap", [
-            { no: 1, name: "partition", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 2, name: "wrap", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 3, name: "band", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 4, name: "direction", kind: "enum", T: () => ["yatm.v1.TapePositionDirection", TapePositionDirection, "TAPE_POSITION_DIRECTION_"] },
-            { no: 5, name: "full", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 6, name: "endpoint", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 7, name: "estimated_span_objects", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 8, name: "endpoint_uncertainty_objects", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<TapePositionWrap>): TapePositionWrap {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.partition = 0;
-        message.wrap = 0;
-        message.band = 0;
-        message.direction = 0;
-        message.full = false;
-        if (value !== undefined)
-            reflectionMergePartial<TapePositionWrap>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapePositionWrap): TapePositionWrap {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* uint32 partition */ 1:
-                    message.partition = reader.uint32();
-                    break;
-                case /* uint32 wrap */ 2:
-                    message.wrap = reader.uint32();
-                    break;
-                case /* uint32 band */ 3:
-                    message.band = reader.uint32();
-                    break;
-                case /* yatm.v1.TapePositionDirection direction */ 4:
-                    message.direction = reader.int32();
-                    break;
-                case /* bool full */ 5:
-                    message.full = reader.bool();
-                    break;
-                case /* optional uint64 endpoint */ 6:
-                    message.endpoint = reader.uint64().toBigInt();
-                    break;
-                case /* optional uint64 estimated_span_objects */ 7:
-                    message.estimatedSpanObjects = reader.uint64().toBigInt();
-                    break;
-                case /* optional uint64 endpoint_uncertainty_objects */ 8:
-                    message.endpointUncertaintyObjects = reader.uint64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: TapePositionWrap, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* uint32 partition = 1; */
-        if (message.partition !== 0)
-            writer.tag(1, WireType.Varint).uint32(message.partition);
-        /* uint32 wrap = 2; */
-        if (message.wrap !== 0)
-            writer.tag(2, WireType.Varint).uint32(message.wrap);
-        /* uint32 band = 3; */
-        if (message.band !== 0)
-            writer.tag(3, WireType.Varint).uint32(message.band);
-        /* yatm.v1.TapePositionDirection direction = 4; */
-        if (message.direction !== 0)
-            writer.tag(4, WireType.Varint).int32(message.direction);
-        /* bool full = 5; */
-        if (message.full !== false)
-            writer.tag(5, WireType.Varint).bool(message.full);
-        /* optional uint64 endpoint = 6; */
-        if (message.endpoint !== undefined)
-            writer.tag(6, WireType.Varint).uint64(message.endpoint);
-        /* optional uint64 estimated_span_objects = 7; */
-        if (message.estimatedSpanObjects !== undefined)
-            writer.tag(7, WireType.Varint).uint64(message.estimatedSpanObjects);
-        /* optional uint64 endpoint_uncertainty_objects = 8; */
-        if (message.endpointUncertaintyObjects !== undefined)
-            writer.tag(8, WireType.Varint).uint64(message.endpointUncertaintyObjects);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.TapePositionWrap
- */
-export const TapePositionWrap = new TapePositionWrap$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class TapePositionMap$Type extends MessageType<TapePositionMap> {
-    constructor() {
-        super("yatm.v1.TapePositionMap", [
-            { no: 1, name: "initialization_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "ltfs_uuid", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "ltfs_index_generation", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 4, name: "partitions", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapePositionPartition },
-            { no: 5, name: "wraps", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapePositionWrap },
-            { no: 7, name: "source", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 8, name: "min_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 9, name: "max_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 10, name: "observed_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<TapePositionMap>): TapePositionMap {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.initializationId = "";
-        message.ltfsUuid = "";
-        message.partitions = [];
-        message.wraps = [];
-        message.source = "";
-        message.observedAtNs = 0n;
-        if (value !== undefined)
-            reflectionMergePartial<TapePositionMap>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapePositionMap): TapePositionMap {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* string initialization_id */ 1:
-                    message.initializationId = reader.string();
-                    break;
-                case /* string ltfs_uuid */ 2:
-                    message.ltfsUuid = reader.string();
-                    break;
-                case /* optional uint64 ltfs_index_generation */ 3:
-                    message.ltfsIndexGeneration = reader.uint64().toBigInt();
-                    break;
-                case /* repeated yatm.v1.TapePositionPartition partitions */ 4:
-                    message.partitions.push(TapePositionPartition.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* repeated yatm.v1.TapePositionWrap wraps */ 5:
-                    message.wraps.push(TapePositionWrap.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* string source */ 7:
-                    message.source = reader.string();
-                    break;
-                case /* optional uint64 min_lpos */ 8:
-                    message.minLpos = reader.uint64().toBigInt();
-                    break;
-                case /* optional uint64 max_lpos */ 9:
-                    message.maxLpos = reader.uint64().toBigInt();
-                    break;
-                case /* int64 observed_at_ns */ 10:
-                    message.observedAtNs = reader.int64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: TapePositionMap, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string initialization_id = 1; */
-        if (message.initializationId !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.initializationId);
-        /* string ltfs_uuid = 2; */
-        if (message.ltfsUuid !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.ltfsUuid);
-        /* optional uint64 ltfs_index_generation = 3; */
-        if (message.ltfsIndexGeneration !== undefined)
-            writer.tag(3, WireType.Varint).uint64(message.ltfsIndexGeneration);
-        /* repeated yatm.v1.TapePositionPartition partitions = 4; */
-        for (let i = 0; i < message.partitions.length; i++)
-            TapePositionPartition.internalBinaryWrite(message.partitions[i], writer.tag(4, WireType.LengthDelimited).fork(), options).join();
-        /* repeated yatm.v1.TapePositionWrap wraps = 5; */
-        for (let i = 0; i < message.wraps.length; i++)
-            TapePositionWrap.internalBinaryWrite(message.wraps[i], writer.tag(5, WireType.LengthDelimited).fork(), options).join();
-        /* string source = 7; */
-        if (message.source !== "")
-            writer.tag(7, WireType.LengthDelimited).string(message.source);
-        /* optional uint64 min_lpos = 8; */
-        if (message.minLpos !== undefined)
-            writer.tag(8, WireType.Varint).uint64(message.minLpos);
-        /* optional uint64 max_lpos = 9; */
-        if (message.maxLpos !== undefined)
-            writer.tag(9, WireType.Varint).uint64(message.maxLpos);
-        /* int64 observed_at_ns = 10; */
-        if (message.observedAtNs !== 0n)
-            writer.tag(10, WireType.Varint).int64(message.observedAtNs);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.TapePositionMap
- */
-export const TapePositionMap = new TapePositionMap$Type();
-// @generated message type with reflection information, may provide speed optimized methods
 class Media$Type extends MessageType<Media> {
     constructor() {
         super("yatm.v1.Media", [
@@ -1201,7 +816,6 @@ class Media$Type extends MessageType<Media> {
             { no: 20, name: "written_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 21, name: "mounted", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 22, name: "filesystem_available_bytes", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 23, name: "tape_position_map", kind: "message", T: () => TapePositionMap },
             { no: 24, name: "encryption_key_saved", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
@@ -1257,9 +871,6 @@ class Media$Type extends MessageType<Media> {
                 case /* optional int64 filesystem_available_bytes */ 22:
                     message.filesystemAvailableBytes = reader.int64().toBigInt();
                     break;
-                case /* optional yatm.v1.TapePositionMap tape_position_map */ 23:
-                    message.tapePositionMap = TapePositionMap.internalBinaryRead(reader, reader.uint32(), options, message.tapePositionMap);
-                    break;
                 case /* bool encryption_key_saved */ 24:
                     message.encryptionKeySaved = reader.bool();
                     break;
@@ -1308,9 +919,6 @@ class Media$Type extends MessageType<Media> {
         /* optional int64 filesystem_available_bytes = 22; */
         if (message.filesystemAvailableBytes !== undefined)
             writer.tag(22, WireType.Varint).int64(message.filesystemAvailableBytes);
-        /* optional yatm.v1.TapePositionMap tape_position_map = 23; */
-        if (message.tapePositionMap)
-            TapePositionMap.internalBinaryWrite(message.tapePositionMap, writer.tag(23, WireType.LengthDelimited).fork(), options).join();
         /* bool encryption_key_saved = 24; */
         if (message.encryptionKeySaved !== false)
             writer.tag(24, WireType.Varint).bool(message.encryptionKeySaved);

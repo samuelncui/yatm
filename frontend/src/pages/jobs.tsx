@@ -18,6 +18,7 @@ import { errorMessage } from "@/tools";
 import { ArchiveCard } from "@/components/job-archive";
 import { RestoreCard } from "@/components/job-restore";
 import { ScanCard } from "@/components/job-scan";
+import { CalibrationCard } from "@/components/job-calibration";
 import { RefreshContext, useJobListState } from "@/components/job-list-state";
 
 const catalogPageSize = 20n;
@@ -296,6 +297,8 @@ const GetJobCard = memo(({ job }: { job: Job }) => {
       return <RestoreCard job={job} />;
     case JobKind.SCAN:
       return <ScanCard job={job} />;
+    case JobKind.CALIBRATION:
+      return <CalibrationCard job={job} />;
     default:
       return <JobCard job={job} />;
   }

@@ -10,7 +10,6 @@ import (
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/tools"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 type mediaBackend struct {
@@ -115,11 +114,6 @@ func registeredMedia(media *mediapkg.Descriptor, kind entity.MediaKind, identity
 	return nil
 }
 
-// validatePositionMap applies the Library's structural map rules to a boundary descriptor.
-func validatePositionMap(media *mediapkg.Descriptor, value *entity.TapePositionMap) error {
-	return library.ValidateTapePositionMap(&library.Media{Kind: media.Kind, Profile: media.Profile}, value)
-}
-
 func describeMedia(value *library.Media) *mediapkg.Descriptor {
 	if value == nil {
 		return nil
@@ -130,16 +124,9 @@ func describeMedia(value *library.Media) *mediapkg.Descriptor {
 	if value.CreatedAtNS != 0 {
 		created = time.Unix(0, value.CreatedAtNS)
 	}
-
-	// Mutable geometry belongs to this request even when the Library row was cached.
-	var positionMap *entity.TapePositionMap
-	if value.TapePositionMap != nil {
-		positionMap = proto.Clone(value.TapePositionMap).(*entity.TapePositionMap)
-	}
 	return &mediapkg.Descriptor{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
-		TapePositionMap: positionMap,
-		CreateTime:      created,
-		CapacityBytes:   value.CapacityBytes, WrittenBytes: value.WrittenBytes,
+		CreateTime:    created,
+		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}
 }

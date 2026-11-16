@@ -54,19 +54,18 @@ type Backend interface {
 	NewWriteSession(context.Context, *entity.ArchiveMediaTarget, *Descriptor) (WriteSession, error)
 }
 
-// Descriptor contains the Library identity, immutable profile and derived geometry for one physical session.
+// Descriptor contains the Library identity and immutable profile for one physical session.
 // It is a boundary value, not a Library persistence row.
 // Runtime times stay as time.Time; Library converts them to checked persisted nanoseconds.
 type Descriptor struct {
-	ID              int64
-	Kind            entity.MediaKind
-	Identity        string
-	Name            string
-	Profile         *entity.MediaProfile
-	TapePositionMap *entity.TapePositionMap
-	CreateTime      time.Time
-	CapacityBytes   int64
-	WrittenBytes    int64
+	ID            int64
+	Kind          entity.MediaKind
+	Identity      string
+	Name          string
+	Profile       *entity.MediaProfile
+	CreateTime    time.Time
+	CapacityBytes int64
+	WrittenBytes  int64
 }
 
 // Session describes one prepared physical Media.

@@ -61,7 +61,6 @@ func (r Records) Read(ctx context.Context, data []byte) (result RecordResult, er
 	if err != nil {
 		return RecordResult{}, err
 	}
-	command.readDiscard, _ = ctx.Value(readDiscardContextKey{}).(bool)
 	command.validate = func(response Response) error { _, err := decodeRecord(response, len(data), r.Mode, false); return err }
 	response, commandErr := r.Transport.Execute(ctx, command)
 	if !response.Completed && commandErr != nil {

@@ -73,7 +73,8 @@ func TestTarFactoryNavigationFallbackAndIssuedFailures(t *testing.T) {
 			// prepared first record is already known and no new position/LOCATE command is needed.
 			_, err := exe.settings.Device.Save(ctx, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
 				Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{
-					ReadParameters: &entity.TapeReadParameters{SourceReference: "Explicit incomplete inputs for unknown-cursor fault checks"},
+					ReadParameters: []*entity.TapeReadParameters{{AppliesTo: &entity.TapeReadApplicability{DensityCode: proto.Uint32(0)},
+						SourceReference: "Explicit incomplete inputs for unknown-cursor fault checks"}},
 				}},
 			}}})
 			require.NoError(t, err)

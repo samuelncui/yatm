@@ -1,7 +1,7 @@
 """Installed-package tar acceptance through the service and CLI; no LTFS mount, Index or Preview.
 
-Stages: cartridge memory barcode preparation, FORMAT/APPEND identity, restarted reads with passive read learning and
-AUTO/LOGICAL records, an EW fill through ordinary Archive, and independent public-tool recovery.
+Stages: cartridge memory barcode preparation, FORMAT/APPEND identity, restarted reads with AUTO/LOGICAL records,
+an EW fill through ordinary Archive, and independent public-tool recovery.
 """
 
 from contextlib import closing
@@ -23,10 +23,6 @@ MAM_BARCODE = 0x0806
 CLEAR_BARCODE_CDB = ("8D", "00", "00", "00", "00", "00", "00", "00", "00", "00", "00", "00", "00", "09", "00", "00")
 CLEAR_BARCODE_PARAMETERS = bytes.fromhex("00 00 00 05 08 06 01 00 00")
 SEQUENTIAL_SCAN = re.compile(r"sequential[ -]scan", re.I)
-# The learned read parameters refit is asynchronous after drive release; waits are bounded and report-only after the first.
-LEARNING_WAIT_SECONDS = 600
-LEARNING_POLL_SECONDS = 10
-OBSERVATION_WAIT_SECONDS = 120
 # Explicit fill budget: a quarter of nominal LTO-5 native rate plus one hour, for each Job wait.
 FILL_BUDGET_BYTES_PER_SECOND = 35 * 1000**2
 FILL_RESTORE_SAMPLES = 3
@@ -77,38 +73,6 @@ def capacity_remaining(reply):
 def idle(job):
     return (job.get("status") in ("JOB_STATUS_READY", "JOB_STATUS_FAILED", "JOB_STATUS_COMPLETED")
             and job.get("phase", "JOB_PHASE_UNSPECIFIED") in ("JOB_PHASE_UNSPECIFIED", "JOB_PHASE_COMPLETED"))
-
-
-def read_observations(path):
-    """Count parseable JSON object lines; at least one is required."""
-    parsed = invalid = 0
-    for line in path.read_bytes().splitlines():
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except ValueError:
-            invalid += 1
-            continue
-        if isinstance(value, dict):
-            parsed += 1
-        else:
-            invalid += 1
-    require(parsed > 0, "Job bundle has no parseable read observation")
-    return {"records": parsed, "unparseable_lines": invalid}
-
-
-def model_change(before, after):
-    """Report-only differences between two learned read parameters snapshots."""
-    def parameters(snapshot):
-        return {json.dumps(model.get("parameters", {}), sort_keys=True): model for model in snapshot.get("models", [])}
-    old, new = parameters(before), parameters(after)
-    return {"updated": max((int(m.get("updated_at_ns", 0)) for m in after.get("models", [])), default=0)
-            > max((int(m.get("updated_at_ns", 0)) for m in before.get("models", [])), default=0),
-            "parameters_changed": set(old) != set(new),
-            "training_observations": [[int(m.get("training_observations", 0)) for m in snapshot.get("models", [])]
-                                      for snapshot in (before, after)],
-            "mae_seconds": [[m.get("mae_seconds") for m in snapshot.get("models", [])] for snapshot in (before, after)]}
 
 
 def find_value(value, key):
@@ -172,23 +136,8 @@ class TarCases(PhysicalEvidence):
         return self.page("archive", job)
 
     def tape_evidence(self, identifier, verify=False):
-        # Tar keeps no recovery descriptor or key artifact; only passive read observations are collected.
-        path = self.observations_path(identifier)
-        destination = "jobs/" + identifier + "/tapes/" + self.barcode + "/read-observations.jsonl"
-        if self.test.remote(["test", "-f", path], expected=None).returncode != 0:
-            require(not (verify and (self.evidence / destination).exists()), "Sealed read observations disappeared")
-            return
-        self.test.remote(["test", "!", "-L", path])
-        if verify:
-            preserved = self.evidence / destination
-            require(preserved.is_file() and sha256(preserved) ==
-                    self.test.remote(["sha256sum", "--", path]).stdout.decode().split()[0],
-                    "Live read observations differ from their sealed copy; retain all Jobs.")
-        else:
-            self.copy_evidence(path, destination)
-
-    def observations_path(self, identifier):
-        return self.test.install + "/work/jobs/" + identifier + "/tapes/" + self.barcode + "/read-observations.jsonl"
+        # Tar keeps no recovery descriptor, key artifact or other Tape evidence in its Job bundle.
+        return
 
     def export(self, name):
         records = public_tape_data(self.test.cli("library", "export", "--output", "-"))
@@ -230,8 +179,7 @@ class TarCases(PhysicalEvidence):
     def device_settings(self, settings=None, order=None):
         settings = settings if settings is not None else self.test.one("settings", "devices")
         entries = [row for row in settings.get("devices", []) if row.get("device") == self.test.args.physical_device]
-        require(len(entries) == 1 and entries[0].get("tape", {}).get("passive_read_learning") is True,
-                "Passive read learning is not explicitly enabled for the selected device")
+        require(len(entries) == 1, "Device settings do not configure the selected device")
         require(order is None or entries[0]["tape"].get("read_order") == "TAPE_READ_ORDER_" + order,
                 "Device read order differs from the selected arm")
         return settings
@@ -240,44 +188,16 @@ class TarCases(PhysicalEvidence):
         return self.set_tape(order.lower(), {"read_order": "TAPE_READ_ORDER_" + order}, order)
 
     def set_tape(self, name, changes, order=None):
-        # Replace only this device's settings; server-owned learned read parameters are ignored on update.
-        # A None value removes that preference so the service default applies again.
+        # Replace only this device's settings. A None value removes that preference so the service default applies again.
         current = self.test.one("settings", "devices")
         device = self.test.args.physical_device
         others = [row for row in current.get("devices", []) if row.get("device") != device]
         entry = next((row for row in current.get("devices", []) if row.get("device") == device), {})
-        tape = {**entry.get("tape", {}), **changes, "passive_read_learning": True}
+        tape = {**entry.get("tape", {}), **changes}
         tape = {key: value for key, value in tape.items() if value is not None}
         path = self.test.root + "/tmp/device-settings-" + name + ".json"
         self.test.write(path, json.dumps({"devices": others + [{"device": device, "tape": tape}]}).encode())
         return self.device_settings(self.test.one("settings", "devices", "--device-json", path), order)
-
-    def learned_read_parameters(self, previous=None, required=True):
-        """Poll Device settings after release until newer learned read parameters appear, within a bound."""
-        baseline = max((int(m.get("updated_at_ns", 0)) for m in (previous or {}).get("models", [])), default=0)
-        deadline = time.monotonic() + LEARNING_WAIT_SECONDS
-        while True:
-            settings = self.device_settings()
-            models = [model for model in settings.get("learned_read_parameters", [])
-                      if model.get("device") == self.test.args.physical_device]
-            if models and max(int(m.get("updated_at_ns", 0)) for m in models) > baseline:
-                require(all(int(m.get("training_observations", 0)) > 0 for m in models),
-                        "Learned read parameters have no training observations")
-                return {"models": models, "observed_at_ns": time.time_ns()}
-            if time.monotonic() >= deadline:
-                require(not required, "No learned read parameters appeared in Device settings within the bounded wait")
-                return {**(previous or {}), "unchanged_after_seconds": LEARNING_WAIT_SECONDS}
-            time.sleep(LEARNING_POLL_SECONDS)
-
-    def job_observations(self, key):
-        job = self.job(key + "_job_id")
-        path = self.observations_path(job["id"])
-        deadline = time.monotonic() + OBSERVATION_WAIT_SECONDS
-        while self.test.remote(["test", "-s", path], expected=None).returncode != 0:
-            require(time.monotonic() < deadline, "Job bundle has no read-observations.jsonl: " + key)
-            time.sleep(5)
-        destination = "jobs/" + job["id"] + "/tapes/" + self.barcode + "/read-observations.jsonl"
-        return {"job_id": job["id"], **read_observations(self.copy_evidence(path, destination))}
 
     def prepare(self):
         jobs = self.test.one("job", "list", "--limit", "1")
@@ -309,7 +229,7 @@ class TarCases(PhysicalEvidence):
                                    *(["--restore-target"] if name == "restored" else []))
             self.save(**{name + "_location": str(result["location"]["id"])})
         self.source, self.restored = self.state["source_location"], self.state["restored_location"]
-        # Every later stage runs with explicit passive read learning; LOGICAL is the baseline read order.
+        # LOGICAL is the baseline read order of every later stage.
         self.keep_json("device-settings.json", self.set_read_order("LOGICAL"))
         # The mismatch Job reuses the APPEND selection and must stay unwritten.
         for key, group in (("format", "format"), ("append", "append"), ("mismatch", "append")):
@@ -635,27 +555,9 @@ class TarCases(PhysicalEvidence):
         self.keep_json("read-order/" + key.removeprefix("restore-") + ".json", record)
         return record
 
-    def learning(self, names):
-        observed = {key: self.job_observations(key) for key in ("restore-full", "restore-selected", "inventory", "verify")}
-        first = self.learned_read_parameters()
-        arms = {}
-        models = [first]
-        for order in ("LOGICAL", "AUTO"):
-            arms[order] = self.read_order_arm(order, names)
-            models.append(self.learned_read_parameters(models[-1], required=False))
+    def read_orders(self, names):
+        arms = {order: self.read_order_arm(order, names) for order in ("LOGICAL", "AUTO")}
         self.set_read_order("LOGICAL")
-        # Job deletion is the only observation retention control; capture already preserved this bundle.
-        deleted = self.job("restore-selected_job_id")
-        bundle = self.test.install + "/work/jobs/" + deleted["id"]
-        self.test.remote(["test", "-d", bundle])
-        self.test.cli("job", "delete", deleted["id"])
-        self.test.remote(["test", "!", "-e", bundle])
-        self.save(deleted_job_ids=self.state.get("deleted_job_ids", []) + [deleted["id"]])
-        self.keep_json("learning.json", {
-            "observations": observed, "first_model": first, "after_logical": models[1], "after_auto": models[2],
-            "second_restore_change": model_change(models[0], models[1]),
-            "deleted_restore_job": deleted["id"], "bundle_removed": True,
-            "scope": "Model changes are report-only observations of this run."})
         self.keep_json("read-order-comparison.json", {
             "selection": names, "arms": arms,
             "scope": "Report only; no duration threshold. AUTO is effective only when the Job log reports it."})
@@ -738,7 +640,7 @@ class TarCases(PhysicalEvidence):
         self.restore_selection("restore-selected", [names[0], names[-1]])
         self.scan(verify=False)
         self.scan(verify=True)
-        self.learning(names)
+        self.read_orders(names)
         self.public_recovery()
         self.save(restore_complete=True)
 

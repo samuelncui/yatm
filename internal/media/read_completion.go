@@ -8,8 +8,10 @@ import (
 )
 
 // ReadCompletion describes synchronous unload timing independently of LOCATE regression terms.
+// LTFSUnmountSeconds is the additional LTFS unmount and finalization time, which only LTFS
+// completion adds; absent is zero.
 type ReadCompletion struct {
-	FullSpanSeconds, FixedSeconds float64
+	FullSpanSeconds, FixedSeconds, LTFSUnmountSeconds float64
 }
 
 // UnloadCost quotes return to physical BOT and fixed unload work without issuing a command.
@@ -25,7 +27,7 @@ func (m *ReadCostModel) UnloadCost(from *entity.TapeBytePosition, parameters *Re
 		return 0, false
 	}
 
-	// The reflected fraction is independent of LPOS origin and never stretches a partial wrap to EOD.
+	// The reflected fraction never stretches a partial wrap to EOD.
 	coordinate := float64(numerator) / float64(interval.span)
 	return readSeconds(parameters.FixedSeconds + coordinate*parameters.FullSpanSeconds)
 }

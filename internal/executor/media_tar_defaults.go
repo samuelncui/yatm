@@ -5,21 +5,20 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Initial positioning, reading and completion terms, measured on HP LTO-5 and corrected by passive
-// learning on each drive. The research document lists the measurement and every layout reference.
+// Built-in positioning and reading terms come from the fixed calibration sequence on one HP LTO-5
+// drive. Fixed and full-span completion come from tar tails; the LTFS unmount time is the mean LTFS
+// tail beyond them. The research document lists the measurements and every layout reference.
 const (
-	tarSeedBaseSeconds                   = 3.223942631933043
-	tarSeedWrapChangeSeconds             = 6.252332019046645
-	tarSeedBandChangeSeconds             = -0.8279789490339896
-	tarSeedLandingZoneChangeSeconds      = 0.6469527733076674
-	tarSeedDirectionChangeSeconds        = 1.2685235350999264
-	tarSeedStepBackSeconds               = 5.965091877336342
-	tarSeedLongitudinalSecondsPerWrap    = 92.69041838827268
-	tarSeedBytesPerSecond                = 144180427.70319828
-	tarSeedPostLocateReadOverheadSeconds = 0.011400702694972826
-	tarSeedFullSpanSeconds               = 96
-	tarSeedFixedCompletionSeconds        = 19
-	tarBuiltinSourceReference            = "built-in (HP LTO-5 measurement)"
+	tarSeedBaseSeconds             = 6.15
+	tarSeedApproachReversalSeconds = 4.78
+	tarSeedSeekSecondsPerWrap      = 93.3
+	tarSeedBufferBytes             = 888.8e6
+	// The measured HP LTO-5 rate prices reads only on a density without a native rate in tarDensities.
+	tarSeedBytesPerSecond         = 145.4e6
+	tarSeedFullSpanSeconds        = 96
+	tarSeedFixedCompletionSeconds = 19
+	tarSeedLTFSUnmountSeconds     = 12.61
+	tarBuiltinSourceReference     = "built-in (HP LTO-5 calibration sequence)"
 )
 
 // tarDensity is the nominal layout of one recorded density: wrap count, native read rate and the
@@ -43,26 +42,24 @@ var tarDensities = map[uint32]tarDensity{
 	0x5d: {wraps: 168, bytesPerSecond: 300e6},
 	0x5e: {wraps: 208, bytesPerSecond: 300e6},
 	0x60: {wraps: 280, bytesPerSecond: 300e6},
+	0x62: {wraps: 472, bytesPerSecond: 400e6},
+	0x63: {wraps: 472, bytesPerSecond: 400e6},
 }
 
-func builtinTapeReadParameters(report *entity.InspectDeviceResponse, scope *entity.TapeReadApplicability) *entity.TapeReadParameters {
-	if report.GetTape() == nil || scope == nil || scope.HardwareCompression == nil || scope.GetHardwareCompression() ||
-		scope.GetRecordMode() == entity.TapeRecordMode_TAPE_RECORD_MODE_UNSPECIFIED || scope.GetRecordBytes() == 0 {
-		return nil
+// builtinTapeReadParameters binds the built-in values to the loaded cartridge's recorded density.
+func builtinTapeReadParameters(report *entity.InspectDeviceResponse) *entity.TapeReadParameters {
+	applies := &entity.TapeReadApplicability{}
+	if density := report.GetTape().DensityCode; density != nil {
+		applies.DensityCode = proto.Uint32(*density)
 	}
-	// Bind this disposable prior to observed conditions without retaining request/shared-object pointers.
-	applies := proto.Clone(scope).(*entity.TapeReadApplicability)
 	parameters := &entity.TapeReadParameters{AppliesTo: applies,
 		Positioning: &entity.TapeReadPositioning{
-			BaseSeconds: proto.Float64(tarSeedBaseSeconds), WrapChangeSeconds: proto.Float64(tarSeedWrapChangeSeconds),
-			BandChangeSeconds: proto.Float64(tarSeedBandChangeSeconds), LandingZoneChangeSeconds: proto.Float64(tarSeedLandingZoneChangeSeconds),
-			DirectionChangeSeconds: proto.Float64(tarSeedDirectionChangeSeconds), StepBackSeconds: proto.Float64(tarSeedStepBackSeconds),
-			LongitudinalSecondsPerWrap: proto.Float64(tarSeedLongitudinalSecondsPerWrap),
+			BaseSeconds: proto.Float64(tarSeedBaseSeconds), ApproachReversalSeconds: proto.Float64(tarSeedApproachReversalSeconds),
+			SeekSecondsPerWrap: proto.Float64(tarSeedSeekSecondsPerWrap), BufferBytes: proto.Uint64(tarSeedBufferBytes),
 		},
-		Reading: &entity.TapeReadTiming{
-			BytesPerSecond: proto.Float64(tarSeedBytesPerSecond), PostLocateReadOverheadSeconds: proto.Float64(tarSeedPostLocateReadOverheadSeconds),
-		},
-		Completion:      &entity.TapeReadCompletion{FullSpanSeconds: proto.Float64(tarSeedFullSpanSeconds), FixedSeconds: proto.Float64(tarSeedFixedCompletionSeconds)},
+		Reading: &entity.TapeReadTiming{BytesPerSecond: proto.Float64(tarSeedBytesPerSecond)},
+		Completion: &entity.TapeReadCompletion{FullSpanSeconds: proto.Float64(tarSeedFullSpanSeconds), FixedSeconds: proto.Float64(tarSeedFixedCompletionSeconds),
+			LtfsUnmountSeconds: proto.Float64(tarSeedLTFSUnmountSeconds)},
 		SourceReference: tarBuiltinSourceReference,
 	}
 

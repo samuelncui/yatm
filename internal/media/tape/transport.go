@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -25,13 +24,12 @@ const (
 
 // Command owns its buffers until Execute returns, including after context cancellation.
 type Command struct {
-	CDB         []byte
-	Direction   Direction
-	Data        []byte
-	Timeout     time.Duration
-	validate    func(Response) error
-	onIssue     func() error
-	readDiscard bool
+	CDB       []byte
+	Direction Direction
+	Data      []byte
+	Timeout   time.Duration
+	validate  func(Response) error
+	onIssue   func() error
 }
 
 // Response preserves native status and residual evidence; residuals alone do not prove write acceptance.
@@ -66,16 +64,15 @@ func (e *UncertainError) Unwrap() []error { return []error{ErrUncertain, e.Cause
 // serializedTransport owns admission, synchronous command lifetime and terminal cleanup.
 // The syscall remains synchronous: no cancellation goroutine can release an active descriptor.
 type serializedTransport struct {
-	lane         chan struct{}
-	execute      func(Command) (Response, error)
-	close        func() error
-	closed       bool
-	uncertain    error
-	closeOnce    sync.Once
-	closeErr     error
-	grant        func() error
-	finish       func(Command, Response, error) error
-	observations atomic.Pointer[CommandObservations]
+	lane      chan struct{}
+	execute   func(Command) (Response, error)
+	close     func() error
+	closed    bool
+	uncertain error
+	closeOnce sync.Once
+	closeErr  error
+	grant     func() error
+	finish    func(Command, Response, error) error
 }
 
 func newSerializedTransport(execute func(Command) (Response, error), close func() error) *serializedTransport {
@@ -160,16 +157,7 @@ func (t *serializedTransport) executeCommand(ctx context.Context, command Comman
 			return Response{}, false, err
 		}
 	}
-	observations := t.observations.Load()
-	var started time.Time
-	if observations != nil {
-		started = time.Now()
-	}
 	response, err := t.execute(command)
-	var elapsed time.Duration
-	if observations != nil {
-		elapsed = time.Since(started)
-	}
 	if !response.Completed && err == nil {
 		err = &UncertainError{Cause: fmt.Errorf("Tape completion status is absent")}
 	}
@@ -192,9 +180,6 @@ func (t *serializedTransport) executeCommand(ctx context.Context, command Comman
 	}
 	if errors.Is(err, ErrUncertain) {
 		t.uncertain = err
-	}
-	if observations != nil {
-		observations.record(command, response, err, started, elapsed)
 	}
 	return response, true, errors.Join(err, ctx.Err())
 }

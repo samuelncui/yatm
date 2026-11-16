@@ -246,7 +246,7 @@ class PhysicalAcceptance(Acceptance):
         self.report["physical_barcode"] = args.physical_barcode
         self.report["physical_format"] = args.physical_format
         self.report["limits"].append(
-            "Tar stages run the installed service and CLI with the configured encryption adapter and passive read learning; "
+            "Tar stages run the installed service and CLI with the configured encryption adapter; "
             "they cover cartridge memory barcode preparation, FORMAT/APPEND identity, restarted reads, AUTO/LOGICAL records, EW fill "
             "and public-tool recovery. Fault, crash and reload/seek qualification are separate."
             if args.physical_format == "tar_pax_v1" else

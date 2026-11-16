@@ -42,9 +42,8 @@ describe("Tape device choices", () => {
             identity: "ABC123",
             requestedOrder: "AUTO",
             effectiveOrder: "LOGICAL",
-            parametersSource: "learned",
-            coverageDetail: "No retained position map",
-            learnedMaeSeconds: 0.5,
+            parametersSource: "builtin",
+            coverageDetail: "No current Tape position map is available",
           }),
         })}
       />,
@@ -52,9 +51,8 @@ describe("Tape device choices", () => {
     expect(screen.getByText("Observed: Unknown")).toBeInTheDocument();
     expect(screen.getByText("Last prepared read")).toBeInTheDocument();
     expect(screen.getByText(/does not identify the currently loaded cartridge/)).toBeInTheDocument();
-    expect(screen.getByText("Parameters: learned")).toBeInTheDocument();
-    expect(screen.getByText("No retained position map")).toBeInTheDocument();
-    expect(screen.getByText("Learned read parameters mean error: 0.5 seconds")).toBeInTheDocument();
+    expect(screen.getByText("Parameters: builtin")).toBeInTheDocument();
+    expect(screen.getByText("No current Tape position map is available")).toBeInTheDocument();
   });
   it("keeps failed or unobserved lists unknown and permits explicit refresh", () => {
     render(<TapeDeviceChoice devices={null} value="" onChange={vi.fn()} onRefresh={vi.fn()} />);

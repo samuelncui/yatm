@@ -5,7 +5,7 @@ import { Button } from "@mui/material";
 import { MemoryRouter } from "react-router";
 
 import { Job, JobKind, JobPhase, JobStatus } from "@/entity";
-import { JobCard, jobStatusLabel } from "@/components/job-progress";
+import { JobCard, isJobRunning, jobLabel, jobStatusLabel } from "@/components/job-progress";
 import { RefreshContext } from "./job-list-state";
 
 const { deleteJob, toastError } = vi.hoisted(() => ({ deleteJob: vi.fn(), toastError: vi.fn() }));
@@ -43,6 +43,13 @@ describe("Job status labels", () => {
     expect(label({ kind: JobKind.SCAN, status: JobStatus.PREPARING, phase: JobPhase.PROCESSING_CONTENT })).toBe("processing content");
     expect(label({ kind: JobKind.ARCHIVE, status: JobStatus.READY, phase: JobPhase.COPYING_TO_MEDIA })).toBe("copying to media");
     expect(label({ kind: JobKind.ARCHIVE, status: JobStatus.READY, phase: JobPhase.QUEUED })).toBe("Queued — waiting for Media");
+  });
+
+  it("names a Calibration and treats its calibrating phase as live work", () => {
+    expect(jobLabel(JobKind.CALIBRATION)).toBe("Calibration");
+    expect(label({ kind: JobKind.CALIBRATION, status: JobStatus.PREPARING, phase: JobPhase.CALIBRATING })).toBe("calibrating");
+    expect(isJobRunning(Job.create({ kind: JobKind.CALIBRATION, status: JobStatus.PREPARING, phase: JobPhase.CALIBRATING }))).toBe(true);
+    expect(label({ kind: JobKind.CALIBRATION, status: JobStatus.COMPLETED, phase: JobPhase.UNSPECIFIED })).toBe("Completed");
   });
 
   it("never shows a settled failure without a reason", () => {

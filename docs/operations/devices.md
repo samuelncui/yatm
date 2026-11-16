@@ -47,15 +47,19 @@ passive diagnostics do not replace it for LTFS.
 ## Save Device Settings
 
 In **Settings → Devices**, choose **Default Tape format** and **Read order**. Expand **Advanced**
-for tar records, hardware compression, capacity polling, planning budget and Tar passive read learning.
-**Manual read parameters** has its own collapsed section. Save, Cancel and **Refresh devices**
+for tar records, hardware compression, capacity polling and the planning budget.
+**Default Tape format** offers LTFS and Tar, and **Record mode** offers Fixed and Variable; an unset
+value shows as the one used when unset (LTFS, Variable), and choosing an entry stores it.
+**Read parameters** has its own collapsed section: a table with one set per density code, edited
+in a form, and, for a device in service, **Calibrate…**, which starts a [Calibration](read-order.md#calibration). Save, Cancel and **Refresh devices**
 are below the fields; Refresh devices updates device availability without changing the saved
 Device settings or draft. **Device details** follows in a separate collapsed section. Saving changes
 only persisted Device settings; it performs no hardware operation. Entries removed from service configuration remain editable as inactive Device settings and do not authorize
 access to those devices. Validation errors retain the edited values and reveal the affected fields.
 
-Read order, passive read learning, the planning budget and manual read parameters are explained in
-[Faster Restores with Auto read order](read-order.md).
+Read order, the planning budget and read parameters are explained in
+[Faster Restores with Auto read order](read-order.md), which also describes how a
+[Calibration](read-order.md#calibration) measures and stores a drive's read parameters.
 
 The CLI reads or replaces the complete DeviceSettings group using protobuf JSON. Read the current
 group before editing; replacement must retain every entry you want to keep:
@@ -205,10 +209,9 @@ reason. Geometry diagnostics retain unknown freshness; a reported all-wrap comma
 proof of a fresh complete map or an ordering recommendation. A reported-wrap count requires a
 decoded response; command-form support alone leaves that count unknown.
 
-LTFS Auto preparation can read both partition Labels through SG before mounting. This adds two
-partition-start seeks; the Job log records that preparation time separately from planning.
-YATM checks the Labels against mounted volume facts and lets LTFS own all subsequent reads.
-Missing partition, geometry or timing evidence retains the normal logical order.
+LTFS Auto preparation reads the drive's geometry before mounting and maps the LTFS partitions by
+convention (`I:a,D:b` is physical 0 and 1), checked against the mounted partition map; LTFS owns all
+subsequent reads. Missing partition, geometry or timing evidence retains the normal logical order.
 
 Media details display the stored format and record profile. Retain the independent
 [tar recovery parameters and guide](tar-tape-recovery.md) before relying on a cartridge.

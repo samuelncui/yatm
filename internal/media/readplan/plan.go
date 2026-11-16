@@ -98,6 +98,8 @@ type Provider interface {
 	// Finish quotes the completion action from the final host state without I/O.
 	Finish(State) (time.Duration, bool)
 	ReadPlanningBudget() time.Duration
+	// MinimumGain is the least predicted saving over the LOGICAL route that adopts a planned route.
+	MinimumGain() time.Duration
 }
 
 // Planning reasons recorded by callers; LOGICAL ones mean the original manifest order is kept.
@@ -110,6 +112,14 @@ const (
 	reasonNoGain     = "LOGICAL: no lower complete-route estimate"
 	reasonPlanned    = "AUTO: complete-selection directed planning improves the estimated route"
 )
+
+// ReasonInconsistent begins the reason that keeps LOGICAL after the search broke one of its route
+// invariants; the broken invariant follows it, and callers report it as a warning.
+const ReasonInconsistent = "LOGICAL: read route estimates are inconsistent"
+
+// errInconsistent marks a broken route invariant: the provider or the search contradicted itself.
+// Ordering is optional, so the attempt keeps LOGICAL instead of failing.
+var errInconsistent = errors.New("read route estimates are inconsistent")
 
 // row belongs only to the disposable planning database. Baseline ranks and CopyIDs never change;
 // Planned is a completely scored execution permutation, never a Tape address.
@@ -142,6 +152,10 @@ type Sequence struct {
 	after         int64
 	planned       bool
 	reason        string
+	priced        bool
+	logicalCost   time.Duration
+	plannedCost   time.Duration
+	started       time.Time
 	deadline      time.Time
 	now           func() time.Time
 	fixedFirst    *State
@@ -170,7 +184,8 @@ func plan(ctx context.Context, root string, provider Provider, input iter.Seq2[S
 	if err != nil {
 		return nil, err
 	}
-	s := &Sequence{stage: stage, provider: provider, now: now, deadline: now().Add(budget)}
+	started := now()
+	s := &Sequence{stage: stage, provider: provider, now: now, started: started, deadline: started.Add(budget)}
 	defer func() {
 		if rerr != nil {
 			rerr = errors.Join(rerr, s.Close())
@@ -242,7 +257,18 @@ func plan(ctx context.Context, root string, provider Provider, input iter.Seq2[S
 	if err := s.optimize(ctx, current, count); err != nil {
 		return nil, err
 	}
+	s.requireGain(provider.MinimumGain())
 	return s, nil
+}
+
+// requireGain keeps LOGICAL when the best route's predicted saving is below the provider's minimum.
+func (s *Sequence) requireGain(minimum time.Duration) {
+	saving := s.logicalCost - s.plannedCost
+	if !s.planned || saving >= minimum {
+		return
+	}
+	s.planned, s.plannedCost = false, s.logicalCost
+	s.reason = fmt.Sprintf("LOGICAL: predicted saving %s is below one positioning base time (%s)", saving, minimum)
 }
 
 func (s *Sequence) check(ctx context.Context) error {
@@ -431,6 +457,13 @@ func (s *Sequence) Next(ctx context.Context, limit int) ([]int64, error) {
 
 // Reason describes the strategy selected for this complete attempt.
 func (s *Sequence) Reason() string { return s.reason }
+
+// Estimates reports the estimated cost of the complete LOGICAL route and of the selected route.
+// known is false when the LOGICAL route could not be priced; planned equals logical when no lower
+// route replaced it.
+func (s *Sequence) Estimates() (logical, planned time.Duration, known bool) {
+	return s.logicalCost, s.plannedCost, s.priced
+}
 
 // Order reports AUTO only when a lower complete route replaced the LOGICAL manifest.
 func (s *Sequence) Order() entity.TapeReadOrder {

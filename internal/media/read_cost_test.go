@@ -2,10 +2,10 @@ package media
 
 import (
 	"math"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
@@ -20,94 +20,237 @@ func readModelFixture() (ReadModelProfile, *atomic.Bool) {
 	valid := new(atomic.Bool)
 	valid.Store(true)
 	return ReadModelProfile{ID: "software-only geometry and timing", SnapshotValid: valid.Load,
-		BOT: map[uint32]uint64{0: 0}, MinLPOS: 0, MaxLPOS: 100,
+		BOT: map[uint32]uint64{0: 0},
 		Wraps: []ReadModelWrap{
 			{Wrap: 3, Band: 0, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(100)},
 			{Wrap: 8, Band: 0, Direction: ReadWrapReverse, Full: true, Endpoint: readModelEndpoint(200)},
 			{Wrap: 11, Band: 1, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(300)},
-		}, Coefficients: ReadModelCoefficients{Base: 10e-9, Longitudinal: 1e-9, Wrap: 20e-9, Band: 30e-9, Direction: 40e-9}}, valid
+		}, Coefficients: ReadModelCoefficients{Base: 10e-9, Seek: 100e-9, ApproachReversal: 40e-9}}, valid
 }
 
-func TestReadCostModelSevenSignedTerms(t *testing.T) {
-	// Integer geometry isolates every published feature without asserting physical qualification.
+// readCostMoves covers the reading/seek speed boundary and approach reversal in the fixture, whose
+// wraps 3 (forward), 8 (reverse) and 11 (forward, band 1) each span 100 objects; a seek's
+// features are the intercept, seek distance in objects (a hundredth of a span each) and approach
+// reversal, and a read-speed locate has only the intercept and its objects.
+var readCostMoves = []struct {
+	name     string
+	from, to uint64
+	seek     float64
+	reversal float64
+	reads    bool
+	read     uint64
+}{
+	{name: "same half ahead reads", from: 10, to: 20, reads: true, read: 10},
+	{name: "same position reads nothing", from: 20, to: 20, reads: true},
+	{name: "behind reverses", from: 20, to: 10, seek: 10, reversal: 1},
+	{name: "crossing the midpoint ahead seeks", from: 40, to: 60, seek: 20},
+	{name: "one object across the midpoint seeks", from: 49, to: 50, seek: 1},
+	{name: "other wrap without motion", from: 20, to: 180},
+	{name: "other wrap against its direction", from: 20, to: 170, seek: 10, reversal: 1},
+	{name: "other wrap along its direction", from: 20, to: 190, seek: 10},
+	{name: "other band without motion", from: 20, to: 220},
+	{name: "reverse wrap ahead reads", from: 180, to: 190, reads: true, read: 10},
+	{name: "reverse wrap behind reverses", from: 190, to: 180, seek: 10, reversal: 1},
+	{name: "reverse wrap crossing the midpoint seeks", from: 130, to: 180, seek: 50},
+}
+
+func readCostAccess(reads bool, seek, reversal float64, read uint64) ReadAccess {
+	if reads {
+		return ReadAccess{Features: [3]float64{1}, ReadObjects: read}
+	}
+	return ReadAccess{Features: [3]float64{1, seek / 100, reversal}}
+}
+
+func TestReadCostModelPositioningTerms(t *testing.T) {
+	// A 100-second full span costs one second per object of distance and prices every term independently.
 	profile, _ := readModelFixture()
-	profile.MaxLPOS = 100000
-	profile.Coefficients = ReadModelCoefficients{Base: 4.29, Wrap: 6.69, Band: 3.2, LandingZone: -6.04,
-		Direction: 5.22, StepBack: 11.32, Longitudinal: .0006192}
+	profile.Coefficients = ReadModelCoefficients{Base: 4, Seek: 100, ApproachReversal: 5}
+	profile.ReadObjectSeconds = .2
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	for _, test := range []struct {
-		from, to uint64
-		want     float64
-	}{
-		{10, 20, 4.29 + 10000*.0006192},
-		{20, 10, 4.29 + 11.32 + 10000*.0006192},
-		{49, 50, 4.29 - 6.04 + 1000*.0006192},
-		{20, 180, 4.29 + 6.69 + 5.22},
-		{20, 220, 4.29 + 6.69 + 3.2},
-		{180, 190, 4.29 + 10000*.0006192},
-		{190, 180, 4.29 + 11.32 + 10000*.0006192},
-	} {
-		score, known := model.AccessScore(readModelPosition(test.from), readModelPosition(test.to))
-		require.True(t, known)
-		require.InDelta(t, test.want, score, 1e-12)
-		cost, priced := model.AccessCost(readModelPosition(test.from), readModelPosition(test.to))
-		require.Equal(t, test.want >= 0, priced)
-		if priced {
-			require.InDelta(t, test.want, cost.Seconds(), 1e-9)
+	for _, test := range readCostMoves {
+		want := 4 + test.seek + 5*test.reversal
+		if test.reads {
+			want = 4 + float64(test.read)*.2
 		}
+		score, known := model.AccessScore(readModelPosition(test.from), readModelPosition(test.to))
+		require.True(t, known, test.name)
+		require.InDelta(t, want, score, 1e-9, test.name)
+		cost, priced := model.AccessCost(readModelPosition(test.from), readModelPosition(test.to))
+		require.True(t, priced, test.name)
+		require.InDelta(t, want, cost.Seconds(), 2e-9, test.name, "quotes round up to whole nanoseconds")
+	}
+
+	// Every term is nonnegative, including the derived reading-speed time.
+	for _, change := range []func(*ReadModelProfile){
+		func(p *ReadModelProfile) { p.Coefficients.Base = -1 },
+		func(p *ReadModelProfile) { p.Coefficients.Seek = math.Inf(1) },
+		func(p *ReadModelProfile) { p.Coefficients.ApproachReversal = -1 },
+		func(p *ReadModelProfile) { p.ReadObjectSeconds = -1 },
+		func(p *ReadModelProfile) { p.ReadObjectSeconds = math.NaN() },
+	} {
+		profile, _ := readModelFixture()
+		change(&profile)
+		_, err := NewReadCostModel(profile)
+		require.Error(t, err)
 	}
 }
 
-func TestReadCostModelLandingZoneIncludesCoordinateOrigin(t *testing.T) {
-	// A nonzero LPOS origin must translate the midpoint as well as both interpolated positions.
+func TestReadCostModelBuffer(t *testing.T) {
+	// Wrap 3 ends at object 100 where reverse wrap 8 starts, so 90 and 110 share one longitudinal place.
+	{
+		profile, _ := readModelFixture()
+		profile.Coefficients.Seek = 96
+		profile.BufferObjects, profile.ReadObjectSeconds = 20, 1e-9
+		model, err := NewReadCostModel(profile)
+		require.NoError(t, err)
+		unit := .01
+		for _, test := range []struct {
+			name     string
+			from, to uint64
+			want     ReadAccess
+		}{
+			{name: "streaming at the buffer limit", from: 10, to: 30, want: ReadAccess{ReadObjects: 20}},
+			{name: "same position streams nothing", from: 20, to: 20, want: ReadAccess{}},
+			{name: "beyond the buffer is a read-speed locate", from: 10, to: 31, want: ReadAccess{Features: [3]float64{1}, ReadObjects: 21}},
+			{name: "behind never streams", from: 20, to: 10, want: ReadAccess{Features: [3]float64{1, 10 * unit, 1}}},
+			{name: "short move along the target wrap", from: 20, to: 190, want: ReadAccess{Features: [3]float64{1, 10 * unit}}},
+			{name: "motionless wrap change", from: 89, to: 111, want: ReadAccess{Features: [3]float64{1}}},
+			{name: "short move against the target wrap", from: 20, to: 170,
+				want: ReadAccess{Features: [3]float64{1, 10 * unit, 1}}},
+			{name: "long move along the target wrap", from: 60, to: 190,
+				want: ReadAccess{Features: [3]float64{1, 50 * unit}}},
+		} {
+			access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+			require.True(t, known, test.name)
+			require.Equal(t, test.want.ReadObjects, access.ReadObjects, test.name)
+			require.InDeltaSlice(t, test.want.Features[:], access.Features[:], 1e-12, test.name)
+		}
+
+		// Streaming costs the skipped objects at reading speed; the unbuffered quote seeks instead.
+		c := profile.Coefficients
+		score, known := model.AccessScore(readModelPosition(10), readModelPosition(30))
+		require.True(t, known)
+		require.InDelta(t, 20e-9, score, 1e-18)
+		cost, known := model.UnbufferedAccessCost(readModelPosition(90), readModelPosition(110))
+		require.True(t, known)
+		require.InDelta(t, c.Base, cost.Seconds(), 1e-9)
+		score, known = model.AccessScore(readModelPosition(10), readModelPosition(31))
+		require.True(t, known)
+		require.InDelta(t, c.Base+21e-9, score, 1e-18)
+		score, known = model.AccessScore(readModelPosition(20), readModelPosition(170))
+		require.True(t, known)
+		require.InDelta(t, c.Base+c.Seek*10*unit+c.ApproachReversal, score, 1e-12)
+	}
+
+	// An absent buffer never streams.
 	profile, _ := readModelFixture()
-	profile.MinLPOS, profile.MaxLPOS = 2696, 171097
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	require.Equal(t, byte(0), readLPOSZone(model.Longitudinal(), 84199))
-	require.Equal(t, byte(0), readLPOSZone(model.Longitudinal(), 84200))
-	require.Equal(t, byte(0), readLPOSZone(model.Longitudinal(), 86895))
-	require.Equal(t, byte(1), readLPOSZone(model.Longitudinal(), 86896))
-
-	// Addition stays inside the coordinate range even when min+max would overflow.
-	profile.MinLPOS, profile.MaxLPOS = math.MaxUint64-100, math.MaxUint64
-	model, err = NewReadCostModel(profile)
-	require.NoError(t, err)
-	require.Equal(t, byte(0), readLPOSZone(model.Longitudinal(), math.MaxUint64-51))
-	require.Equal(t, byte(1), readLPOSZone(model.Longitudinal(), math.MaxUint64-50))
+	access, known := model.accessFeatures(readModelPosition(90), readModelPosition(110), ReadAhead(readModelPosition(90), readModelPosition(110)))
+	require.True(t, known)
+	require.False(t, access.Streamed())
+	require.Equal(t, int64(-1), ReadAhead(readModelPosition(2), readModelPosition(1)))
+	require.Equal(t, int64(-1), ReadAhead(readModelPosition(1), &entity.TapeBytePosition{Partition: 1, LogicalObject: 2}))
 }
 
-func TestReadCostFeaturesRetainPhysicalFactorsAndUnits(t *testing.T) {
-	// Movement and binary setup factors remain independently observable for passive fitting.
+// readTurnFixture declares three consecutive 100-object wraps with a 150-object buffer, 0.01 seconds
+// per object and a 4-second approach reversal.
+func readTurnFixture(t *testing.T) *ReadCostModel {
+	t.Helper()
+	model, err := NewReadCostModel(ReadModelProfile{ID: "software-only wrap turns", SnapshotValid: func() bool { return true },
+		BOT: map[uint32]uint64{0: 0}, ReadObjectSeconds: .01, BufferObjects: 150,
+		Coefficients: ReadModelCoefficients{Base: 5, Seek: 100, ApproachReversal: 4},
+		Wraps: []ReadModelWrap{
+			{Wrap: 0, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(100)},
+			{Wrap: 1, Direction: ReadWrapReverse, Full: true, Endpoint: readModelEndpoint(200)},
+			{Wrap: 2, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(300)},
+		}})
+	require.NoError(t, err)
+	return model
+}
+
+func TestReadCostModelStreamingCrossesWrapTurns(t *testing.T) {
+	// Streaming keeps no positioning intercept; each wrap turn crossed costs one approach reversal.
+	model := readTurnFixture(t)
+	for _, test := range []struct {
+		name     string
+		from, to uint64
+		turns    float64
+	}{{"within one wrap", 40, 90, 0}, {"across one turn", 90, 110, 1}, {"across two turns", 90, 210, 2}} {
+		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+		require.True(t, known, test.name)
+		require.True(t, access.Streamed(), test.name)
+		require.Equal(t, ReadAccess{Features: [3]float64{2: test.turns}, ReadObjects: test.to - test.from}, access, test.name)
+		score, known := model.AccessScore(readModelPosition(test.from), readModelPosition(test.to))
+		require.True(t, known, test.name)
+		require.InDelta(t, float64(test.to-test.from)*.01+test.turns*4, score, 1e-12, test.name)
+	}
+}
+
+func TestReadCostModelReadingSecondsPricesWrapTurns(t *testing.T) {
+	// Objects read at reading speed, plus one approach reversal per wrap turn between the endpoints.
+	model := readTurnFixture(t)
+	for _, test := range []struct {
+		name        string
+		first, next uint64
+		objects     uint64
+		seconds     float64
+	}{
+		{"within one wrap", 10, 60, 50, .5}, {"across one turn", 90, 110, 20, 4.2},
+		{"across two turns", 50, 250, 200, 10}, {"actual EOD", 299, 300, 1, .01},
+		{"ending with a wrap's last object", 90, 100, 10, 4.1},
+	} {
+		seconds, known := model.ReadingSeconds(readModelPosition(test.first), readModelPosition(test.next), test.objects)
+		require.True(t, known, test.name)
+		require.InDelta(t, test.seconds, seconds, 1e-12, test.name)
+	}
+
+	// The turn paid by a read ending at a wrap's last object is not paid again by streaming from next.
+	split, _ := model.ReadingSeconds(readModelPosition(90), readModelPosition(100), 10)
+	streamed, _ := model.AccessScore(readModelPosition(100), readModelPosition(110))
+	whole, _ := model.ReadingSeconds(readModelPosition(90), readModelPosition(110), 20)
+	require.InDelta(t, whole, split+streamed, 1e-12)
+
+	// An unresolved, reversed, empty or cross-partition endpoint leaves the time unknown.
+	for _, next := range []*entity.TapeBytePosition{readModelPosition(301), readModelPosition(5), readModelPosition(10),
+		{Partition: 1, LogicalObject: 20}, nil} {
+		_, known := model.ReadingSeconds(readModelPosition(10), next, 1)
+		require.False(t, known)
+	}
+}
+
+func TestReadAccessReversalOnlyAgainstTargetDirection(t *testing.T) {
+	// A full reversal is added only when the signed distance along the target wrap's direction is negative.
+	from := ReadPoint{Wrap: 0, Direction: ReadWrapForward, Offset: 5000, Span: 10000}
+	for _, test := range []struct {
+		name   string
+		offset uint64
+		want   float64
+	}{{"against the direction", 4000, 1}, {"motionless", 5000, 0}, {"slightly along", 5050, 0}, {"along", 6000, 0}} {
+		to := ReadPoint{Wrap: 2, Direction: ReadWrapForward, Offset: test.offset, Span: 10000}
+		access, known := ReadAccessFeatures(from, to, -1, 0)
+		require.True(t, known, test.name)
+		require.InDelta(t, test.want, access.Features[2], 1e-12, test.name)
+	}
+}
+
+func TestReadCostFeaturesRetainPhysicalFactors(t *testing.T) {
+	// Movement and reversal factors remain independently observable.
 	profile, valid := readModelFixture()
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	for _, test := range []struct {
-		from, to uint64
-		want     [7]float64
-	}{
-		{10, 20, [7]float64{1, 0, 0, 0, 0, 0, 10}},
-		{20, 10, [7]float64{1, 0, 0, 0, 0, 1, 10}},
-		{20, 180, [7]float64{1, 1, 0, 0, 1, 0, 0}},
-		{20, 270, [7]float64{1, 1, 1, 1, 0, 0, 50}},
-	} {
-		features, known := model.AccessFeatures(readModelPosition(test.from), readModelPosition(test.to))
-		require.True(t, known)
-		require.Equal(t, test.want, features)
+	for _, test := range readCostMoves {
+		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+		require.True(t, known, test.name)
+		want := readCostAccess(test.reads, test.seek, test.reversal, test.read)
+		require.Equal(t, want.ReadObjects, access.ReadObjects, test.name)
+		require.InDeltaSlice(t, want.Features[:], access.Features[:], 1e-12, test.name)
 	}
 
-	// Normalized distance changes units without changing setup factors or authorizing stale maps.
-	seconds := 96.0
-	profile.FullWrapSeconds = &seconds
-	profile.Coefficients.Longitudinal = 0
-	model, err = NewReadCostModel(profile)
-	require.NoError(t, err)
-	features, known := model.AccessFeatures(readModelPosition(20), readModelPosition(270))
-	require.True(t, known)
-	require.Equal(t, [7]float64{1, 1, 1, 1, 0, 0, .5}, features)
+	// A stale map authorizes no features.
 	valid.Store(false)
-	_, known = model.AccessFeatures(readModelPosition(20), readModelPosition(270))
+	_, known := model.accessFeatures(readModelPosition(20), readModelPosition(270), ReadAhead(readModelPosition(20), readModelPosition(270)))
 	require.False(t, known)
 }
 
@@ -191,9 +334,8 @@ func TestReadCostModelRejectsMalformedProfiles(t *testing.T) {
 		func(p *ReadModelProfile) { p.ID = " " }, func(p *ReadModelProfile) { p.SnapshotValid = nil },
 		func(p *ReadModelProfile) { p.Wraps = nil },
 		func(p *ReadModelProfile) { p.Coefficients.Base = math.NaN() },
-		func(p *ReadModelProfile) { p.Coefficients.StepBack = math.Inf(1) },
-		func(p *ReadModelProfile) { p.Coefficients.Longitudinal = -1 },
-		func(p *ReadModelProfile) { p.Coefficients.Longitudinal = math.MaxFloat64 },
+		func(p *ReadModelProfile) { p.Coefficients.ApproachReversal = math.Inf(1) },
+		func(p *ReadModelProfile) { p.Coefficients.Seek = -1 },
 		func(p *ReadModelProfile) { p.Wraps[1].Wrap = p.Wraps[0].Wrap },
 		func(p *ReadModelProfile) { p.Wraps[0].Direction = 0 },
 		func(p *ReadModelProfile) { p.Wraps[1].Endpoint = readModelEndpoint(50) },
@@ -206,26 +348,27 @@ func TestReadCostModelRejectsMalformedProfiles(t *testing.T) {
 	}
 }
 
-func TestReadCostModelExactLargeLPOSAndDurationLimits(t *testing.T) {
-	// Exact integer interpolation survives products larger than uint64 and nonzero coordinate origins.
+func TestReadCostModelMinimumGainKeepsItsFloor(t *testing.T) {
+	// The minimum gain is the positioning base time, but never below the profile's floor.
 	profile, _ := readModelFixture()
-	profile.MinLPOS, profile.MaxLPOS = 17, math.MaxUint64
-	profile.Wraps = profile.Wraps[:1]
-	profile.Wraps[0].Endpoint = readModelEndpoint(math.MaxUint64)
+	profile.Coefficients.Base, profile.MinimumGainSeconds = 7, 5
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	for _, object := range []uint64{0, 1, math.MaxUint64 / 2, math.MaxUint64 - 1, math.MaxUint64} {
-		interval, n, known := model.position(readModelPosition(object))
-		require.True(t, known)
-		want := new(big.Int).Mul(new(big.Int).SetUint64(object), new(big.Int).SetUint64(math.MaxUint64-17))
-		want.Quo(want, new(big.Int).SetUint64(math.MaxUint64)).Add(want, big.NewInt(17))
-		require.Equal(t, want.Uint64(), readLPOS(model.Longitudinal(), n, interval.span))
-	}
-
-	// Finite signed ranking survives a duration overflow; physical quotes never fabricate a time.
-	profile, _ = readModelFixture()
-	profile.Coefficients = ReadModelCoefficients{Base: 1e20}
+	require.Equal(t, 7*time.Second, model.MinimumGain())
+	profile.Coefficients.Base = 0
 	model, err = NewReadCostModel(profile)
+	require.NoError(t, err)
+	require.Equal(t, 5*time.Second, model.MinimumGain())
+	profile.MinimumGainSeconds = -1
+	_, err = NewReadCostModel(profile)
+	require.Error(t, err)
+}
+
+func TestReadCostModelDurationLimits(t *testing.T) {
+	// A finite ranking survives a duration overflow; physical quotes never fabricate a time.
+	profile, _ := readModelFixture()
+	profile.Coefficients = ReadModelCoefficients{Base: 1e20}
+	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
 	_, known := model.AccessScore(readModelPosition(25), readModelPosition(75))
 	require.True(t, known)
@@ -268,47 +411,17 @@ func TestReadCostModelUnavailableGeometryDoesNotObserveSnapshot(t *testing.T) {
 	require.False(t, known)
 }
 
-func normalizedReadModelFixture(seconds float64) ReadModelProfile {
+func readModelSeekFixture(seconds float64) ReadModelProfile {
 	profile, _ := readModelFixture()
-	profile.FullWrapSeconds = &seconds
-	profile.MinLPOS, profile.MaxLPOS = 0, 0
-	profile.Coefficients.Longitudinal = 0
+	profile.Coefficients.Seek = seconds
 	return profile
-}
-
-func TestReadCostModelNormalizedUnitsAndSevenTerms(t *testing.T) {
-	// Continuous full-span seconds need no absolute LPOS and keep the six signed setup features.
-	profile := normalizedReadModelFixture(100)
-	profile.Coefficients = ReadModelCoefficients{Base: 4.29, Wrap: 6.69, Band: 3.2, LandingZone: -6.04,
-		Direction: 5.22, StepBack: 11.32}
-	model, err := NewReadCostModel(profile)
-	require.NoError(t, err)
-	for _, test := range []struct {
-		from, to uint64
-		want     float64
-	}{
-		{10, 20, 4.29 + 10}, {20, 10, 4.29 + 11.32 + 10}, {49, 50, 4.29 - 6.04 + 1},
-		{20, 180, 4.29 + 6.69 + 5.22}, {20, 220, 4.29 + 6.69 + 3.2},
-		{180, 190, 4.29 + 10}, {190, 180, 4.29 + 11.32 + 10},
-	} {
-		score, known := model.AccessScore(readModelPosition(test.from), readModelPosition(test.to))
-		require.True(t, known)
-		require.InDelta(t, test.want, score, 1e-12)
-	}
-
-	// Zero is a valid explicitly selected full-span coefficient; no guessed bounds are introduced.
-	*profile.FullWrapSeconds = 0
-	model, err = NewReadCostModel(profile)
-	require.NoError(t, err)
-	require.True(t, model.Valid())
-	require.Equal(t, uint64(0), model.maxLPOS)
 }
 
 func TestReadCostModelNormalizedPartialSeparatesCoverageAndScale(t *testing.T) {
 	for _, direction := range []ReadWrapDirection{ReadWrapForward, ReadWrapReverse} {
 		// Actual EOD150 bounds addresses while an estimated100-object span sets partial progress.
-		profile := normalizedReadModelFixture(100)
-		profile.Coefficients = ReadModelCoefficients{}
+		profile := readModelSeekFixture(100)
+		profile.Coefficients = ReadModelCoefficients{Seek: 100}
 		profile.Wraps = profile.Wraps[:2]
 		profile.Wraps[1].Full = false
 		profile.Wraps[1].Direction = direction
@@ -335,7 +448,7 @@ func TestReadCostModelNormalizedPartialSeparatesCoverageAndScale(t *testing.T) {
 		// Compiled scalar values cannot be altered by later caller mutation, and EOD is never overwritten.
 		require.Equal(t, uint64(150), *profile.Wraps[1].Endpoint)
 		*profile.Wraps[1].EstimatedSpanObjects = 999
-		*profile.FullWrapSeconds = 999
+		profile.Coefficients.Seek = 999
 		*profile.Wraps[1].Endpoint = 999
 		after, n, known := model.position(readModelPosition(125))
 		require.True(t, known)
@@ -349,10 +462,9 @@ func TestReadCostModelNormalizedPartialSeparatesCoverageAndScale(t *testing.T) {
 
 func TestReadCostModelNormalizedPartialRejectsInventedCoverage(t *testing.T) {
 	for _, change := range []func(*ReadModelProfile){
-		func(p *ReadModelProfile) { p.Coefficients.Longitudinal = 1 },
-		func(p *ReadModelProfile) { *p.FullWrapSeconds = -1 },
-		func(p *ReadModelProfile) { *p.FullWrapSeconds = math.NaN() },
-		func(p *ReadModelProfile) { *p.FullWrapSeconds = math.Inf(1) },
+		func(p *ReadModelProfile) { p.Coefficients.Seek = -1 },
+		func(p *ReadModelProfile) { p.Coefficients.Seek = math.NaN() },
+		func(p *ReadModelProfile) { p.Coefficients.Seek = math.Inf(1) },
 		func(p *ReadModelProfile) { p.Wraps[1].Full = true },
 		func(p *ReadModelProfile) { p.Wraps[1].Endpoint = nil },
 		func(p *ReadModelProfile) { *p.Wraps[1].EstimatedSpanObjects = 0 },
@@ -361,7 +473,7 @@ func TestReadCostModelNormalizedPartialRejectsInventedCoverage(t *testing.T) {
 			p.Wraps = append(p.Wraps, ReadModelWrap{Wrap: 99, Direction: ReadWrapForward})
 		},
 	} {
-		profile := normalizedReadModelFixture(1)
+		profile := readModelSeekFixture(1)
 		profile.Wraps = profile.Wraps[:2]
 		profile.Wraps[1].Full = false
 		profile.Wraps[1].Endpoint = readModelEndpoint(150)
@@ -372,7 +484,7 @@ func TestReadCostModelNormalizedPartialRejectsInventedCoverage(t *testing.T) {
 	}
 
 	// An estimate cannot manufacture the missing lower anchor of a partial successor.
-	profile := normalizedReadModelFixture(1)
+	profile := readModelSeekFixture(1)
 	profile.Wraps = profile.Wraps[:2]
 	profile.Wraps[0].Endpoint = nil
 	profile.Wraps[1].Full = false
@@ -382,30 +494,23 @@ func TestReadCostModelNormalizedPartialRejectsInventedCoverage(t *testing.T) {
 	require.False(t, model.Valid())
 }
 
-func TestReadCostModelNormalizedDistanceRetainsTinyDifferences(t *testing.T) {
-	// Subtract before float conversion, including exact rational fallback for huge unequal spans.
-	profile := normalizedReadModelFixture(1e18)
-	profile.Coefficients = ReadModelCoefficients{}
+func TestReadCostModelNormalizedDistanceResolvesOneObject(t *testing.T) {
+	// One object of a wrap far longer than any recorded one still prices its own seek distance.
+	profile := readModelSeekFixture(1e9)
+	profile.Coefficients = ReadModelCoefficients{Seek: 1e9}
 	profile.Wraps = profile.Wraps[:1]
-	profile.Wraps[0].Endpoint = readModelEndpoint(math.MaxUint64)
+	profile.Wraps[0].Endpoint = readModelEndpoint(1 << 32)
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	score, known := model.AccessScore(readModelPosition(math.MaxUint64-2), readModelPosition(math.MaxUint64-1))
+	// Moving back one object seeks; reading ahead would not exercise the distance.
+	score, known := model.AccessScore(readModelPosition(1<<32-1), readModelPosition(1<<32-2))
 	require.True(t, known)
-	require.InDelta(t, 1e18/float64(uint64(math.MaxUint64)), score, 1e-17)
-	for _, values := range [][4]uint64{{1, 3, 2, 5}, {math.MaxUint64 - 1, math.MaxUint64, math.MaxUint64 - 2, math.MaxUint64 - 1},
-		{math.MaxUint64 / 2, math.MaxUint64, math.MaxUint64/2 + 1, math.MaxUint64}} {
-		a := new(big.Rat).SetFrac(new(big.Int).SetUint64(values[0]), new(big.Int).SetUint64(values[1]))
-		b := new(big.Rat).SetFrac(new(big.Int).SetUint64(values[2]), new(big.Int).SetUint64(values[3]))
-		a.Sub(a, b).Abs(a)
-		want, _ := a.Float64()
-		require.Equal(t, want, readNormalizedDistance(values[0], values[1], values[2], values[3]))
-	}
+	require.InDelta(t, 1e9/float64(1<<32), score, 1e-6)
 }
 
 func TestReadCostModelNormalizedFullEndpointAndEOD(t *testing.T) {
 	// Complete wrap endpoint101 starts the next wrap; the final EOD150 denotes the next unwritten object.
-	profile := normalizedReadModelFixture(100)
+	profile := readModelSeekFixture(100)
 	profile.Wraps = profile.Wraps[:2]
 	profile.Wraps[0].Endpoint = readModelEndpoint(101)
 	profile.Wraps[1].Full = false

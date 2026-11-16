@@ -185,9 +185,8 @@ skipped.
 
 ## Tape Commands
 
-- `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the user-owned
-  Device settings without device access. Server-owned `learned_read_parameters` are preserved and
-  incoming values for them are ignored. [Device settings](devices.md#save-device-settings) and
+- `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the Device
+  settings without device access. [Device settings](devices.md#save-device-settings) and
   [Auto read order](read-order.md) explain the fields and give JSON examples.
 - `archive write tape format` resolves the selected device's defaults at this Media operation.
   `--format ltfs_v1|tar_pax_v1`, `--record-mode`, `--record-bytes` and
@@ -203,6 +202,12 @@ skipped.
   hint. Without a hint, the server identifies the Tape by its
   cartridge memory barcode; a hint never bypasses physical verification.
   [Load Tape for Restore or Scan](devices.md#load-tape-for-restore-or-scan) describes both options.
+- `calibration create --device DEVICE --media-id ID` creates and immediately runs a
+  [Calibration](read-order.md#calibration) on the loaded tar Media without changing its data.
+  `--write-test-data` instead of `--media-id` overwrites the loaded cartridge from the beginning of
+  tape with test data and calibrates on it; never use it on a cartridge holding data, and initialize
+  the cartridge with FORMAT before using it for anything else. Follow either with `job wait` and
+  `job progress`, which lists the measured moves and, once fitted, the stored read parameters.
 - No command sets encryption: the configured `encrypt` script owns it, and Media output carries
   `encryption_key_saved`, never the key. The Device's read order applies to each read attempt, and
   the Job log records the requested and effective order with any fallback reason.

@@ -334,11 +334,7 @@ func readScenarioSensitivities(tb testing.TB, original readScenario, route []int
 			case "locate":
 				c := &scenario.Model.Coefficients
 				c.Base *= multiplier
-				c.Wrap *= multiplier
-				c.Band *= multiplier
-				c.LandingZone *= multiplier
-				c.Direction *= multiplier
-				c.StepBack *= multiplier
+				c.ApproachReversal *= multiplier
 			case "longitudinal":
 				scenario.Model.FullWrapSeconds *= multiplier
 			case "read":

@@ -368,7 +368,7 @@ their configured adapter flow without requiring SG permissions.
 Preparation captures touched non-secret session controls before the first mutation, uses MODE SELECT
 with SP clear and verifies readback. Both session and partition selection preserve buffering and speed.
 Cleanup restores captured record/compression controls and uncommitted pending partition controls after
-commands settle; it never saves defaults or resets. Normal tar Archive, Restore and Scan completion
+commands settle; it never saves defaults or resets. Normal tar Archive, Restore, Scan and Calibration completion
 then issues one synchronous UNLOAD, which owns rewind/unthread/eject; no extra REWIND is added.
 Failed or canceled work and transport Close do not issue that motion. Restoration failure prevents
 unload. Required release failure or preserved command uncertainty retains device unavailability.
@@ -418,7 +418,7 @@ algorithm remains partially observed, rather than unsupported. Malformed optiona
 reports retain their diagnostic reason without preventing script-prepared record access. A script-prepared session is not subjected to a second
 native key setup/verification/clearing state machine. Optional `TarMediaProfile.encryption_algorithm`
 is an observed public fact, not a user control; a saved key does not require this observation, and
-an unknown algorithm leaves read-parameter applicability unknown.
+read parameters do not depend on it.
 
 The adapter runs under the attempt lease with raw descriptors closed. FORMAT first finishes
 its partition initialization and barcode assignment on the raw descriptor, closes it, invokes Encrypt,

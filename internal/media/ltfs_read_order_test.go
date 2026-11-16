@@ -14,9 +14,16 @@ import (
 
 func ltfsOrderFixture(t testing.TB) *ltfsReadOrderProvider {
 	t.Helper()
+	return ltfsOrderFixtureFrom(t, 0)
+}
+
+// ltfsOrderFixtureFrom declares the first wrap from bot; a nonzero bot leaves the Data partition's
+// first object, the assumed post-mount position, outside the position map.
+func ltfsOrderFixtureFrom(t testing.TB, bot uint64) *ltfsReadOrderProvider {
+	t.Helper()
 	// Two full wraps expose opposite longitudinal directions in an explicitly mapped physical partition.
 	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-test", SnapshotValid: func() bool { return true },
-		BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+		BOT: map[uint32]uint64{1: bot}, Coefficients: ReadModelCoefficients{Seek: 1000}, ReadObjectSeconds: 1,
 		Wraps: []ReadModelWrap{
 			{Partition: 1, Wrap: 4, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
 			{Partition: 1, Wrap: 5, Full: true, Endpoint: proto.Uint64(200), Direction: ReadWrapReverse},
@@ -25,8 +32,7 @@ func ltfsOrderFixture(t testing.TB) *ltfsReadOrderProvider {
 	provider, reason := NewLTFSReadOrderProvider(LTFSReadOptions{BlockBytes: 4, Compression: proto.Bool(false),
 		Partitions: map[string]uint32{"z": 1}, Model: model, PlanningBudget: time.Minute,
 		Completion: &ReadCompletion{FullSpanSeconds: 1000, FixedSeconds: 20},
-		DataEnd:    &entity.TapeBytePosition{Partition: 1, LogicalObject: 200},
-		Timing:     &entity.TapeReadTiming{BytesPerSecond: proto.Float64(4), PostLocateReadOverheadSeconds: proto.Float64(2)}})
+		DataEnd:    &entity.TapeBytePosition{Partition: 1, LogicalObject: 200}})
 	require.NotNil(t, provider, reason)
 	return provider.(*ltfsReadOrderProvider)
 }
@@ -58,10 +64,99 @@ func TestLTFSReadOrderRangesFollowFileOffsetsAndActualBlockSize(t *testing.T) {
 	require.True(t, known)
 	require.Equal(t, uint64(41), state.Position.LogicalObject)
 	require.Equal(t, uint64(40), state.Cache.LogicalObject)
-	current, available, err := provider.Current(context.Background())
+}
+
+func TestLTFSReadOrderCurrentAssumesDataPartitionStart(t *testing.T) {
+	// Mount leaves the drive near BOT: the Data partition's first object, without a cached block.
+	current, available, err := ltfsOrderFixture(t).Current(context.Background())
+	require.NoError(t, err)
+	require.True(t, available)
+	require.True(t, proto.Equal(&entity.TapeBytePosition{Partition: 1}, current.Position))
+	require.Nil(t, current.Cache)
+	require.Equal(t, "ltfs", current.Stream)
+
+	// A map that cannot resolve that object keeps the origin unknown.
+	current, available, err = ltfsOrderFixtureFrom(t, 10).Current(context.Background())
 	require.NoError(t, err)
 	require.False(t, available)
 	require.Nil(t, current.Position)
+}
+
+func TestLTFSReadOrderOriginIsNeverBuffered(t *testing.T) {
+	// With a 50-block buffer, block 10 streams after a completed read but needs a locate after mount.
+	provider := ltfsOrderFixture(t)
+	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-test", SnapshotValid: func() bool { return true },
+		BOT: map[uint32]uint64{1: 0}, ReadObjectSeconds: 1, BufferObjects: 50,
+		Coefficients: ReadModelCoefficients{Base: 5, Seek: 1000},
+		Wraps: []ReadModelWrap{
+			{Partition: 1, Wrap: 4, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
+			{Partition: 1, Wrap: 5, Full: true, Endpoint: proto.Uint64(200), Direction: ReadWrapReverse},
+		}})
+	require.NoError(t, err)
+	provider.options.Model = model
+	interval := readplan.Range{Start: &entity.TapeBytePosition{Partition: 1, LogicalObject: 10},
+		End: &entity.TapeBytePosition{Partition: 1, LogicalObject: 11}, Stream: "ltfs"}
+
+	// From the origin: a read-speed locate of ten blocks and the one-block read.
+	origin, available, err := provider.Current(context.Background())
+	require.NoError(t, err)
+	require.True(t, available)
+	transition, known := provider.Evaluate(origin, interval)
+	require.True(t, known)
+	require.Equal(t, readplan.MethodSeek, transition.Method)
+	require.Equal(t, 16*time.Second, transition.Cost)
+
+	// After a read ending at block 0, the same move streams without the locate intercept.
+	read := readplan.State{Position: &entity.TapeBytePosition{Partition: 1}, Cache: &entity.TapeBytePosition{Partition: 1},
+		Stream: "ltfs"}
+	transition, known = provider.Evaluate(read, interval)
+	require.True(t, known)
+	require.Equal(t, 11*time.Second, transition.Cost)
+}
+
+func TestLTFSReadOrderReadsPayWrapTurns(t *testing.T) {
+	// Wrap 4 ends at block 100; a read through the turn into wrap 5 pays one 3-second approach reversal.
+	provider := ltfsOrderFixture(t)
+	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-test", SnapshotValid: func() bool { return true },
+		BOT: map[uint32]uint64{1: 0}, ReadObjectSeconds: 1,
+		Coefficients: ReadModelCoefficients{Seek: 1000, ApproachReversal: 3},
+		Wraps: []ReadModelWrap{
+			{Partition: 1, Wrap: 4, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
+			{Partition: 1, Wrap: 5, Full: true, Endpoint: proto.Uint64(200), Direction: ReadWrapReverse},
+		}})
+	require.NoError(t, err)
+	provider.options.Model = model
+	for _, test := range []struct {
+		name            string
+		position, start uint64
+		cache           *entity.TapeBytePosition
+		method          readplan.Method
+		seconds         float64
+	}{
+		{"within one wrap", 101, 101, nil, readplan.MethodContinue, 4},
+		{"across the turn", 95, 95, nil, readplan.MethodContinue, 13},
+		// The cached block 99 is the only one before the turn, so the drive reads only wrap 5.
+		{"cached block before the turn", 100, 99, &entity.TapeBytePosition{Partition: 1, LogicalObject: 99}, readplan.MethodCache, 5},
+	} {
+		interval := readplan.Range{Start: &entity.TapeBytePosition{Partition: 1, LogicalObject: test.start},
+			End: &entity.TapeBytePosition{Partition: 1, LogicalObject: 105}, Stream: "ltfs"}
+		transition, known := provider.Evaluate(readplan.State{Position: &entity.TapeBytePosition{Partition: 1,
+			LogicalObject: test.position}, Cache: test.cache, Stream: "ltfs"}, interval)
+		require.True(t, known, test.name)
+		require.Equal(t, test.method, transition.Method, test.name)
+		require.Equal(t, time.Duration(test.seconds*float64(time.Second)), transition.Cost, test.name)
+	}
+
+	// A file ending with wrap 4's last block pays the turn once; its adjacent successor does not repeat it.
+	first, known := provider.Evaluate(readplan.State{Position: &entity.TapeBytePosition{Partition: 1, LogicalObject: 95}, Stream: "ltfs"},
+		readplan.Range{Start: &entity.TapeBytePosition{Partition: 1, LogicalObject: 95},
+			End: &entity.TapeBytePosition{Partition: 1, LogicalObject: 99, OffsetBytes: 1}, Stream: "ltfs"})
+	require.True(t, known)
+	second, known := provider.Evaluate(first.Next, readplan.Range{Start: &entity.TapeBytePosition{Partition: 1, LogicalObject: 100},
+		End: &entity.TapeBytePosition{Partition: 1, LogicalObject: 105}, Stream: "ltfs"})
+	require.True(t, known)
+	require.Equal(t, readplan.MethodContinue, second.Method)
+	require.Equal(t, 13*time.Second, first.Cost+second.Cost)
 }
 
 func TestLTFSReadOrderPricesOnlyExistingReaderActions(t *testing.T) {
@@ -76,9 +171,9 @@ func TestLTFSReadOrderPricesOnlyExistingReaderActions(t *testing.T) {
 		{"last block", 11, &entity.TapeBytePosition{Partition: 1, LogicalObject: 10}, 10, 11, readplan.MethodCache, 0},
 		{"cached start and following block", 11, &entity.TapeBytePosition{Partition: 1, LogicalObject: 10}, 10, 12, readplan.MethodCache, 1},
 		{"immediately next block", 10, nil, 10, 11, readplan.MethodContinue, 1},
-		{"forward gap seeks", 8, nil, 10, 11, readplan.MethodSeek, 23},
-		{"backward seeks", 15, nil, 10, 11, readplan.MethodSeek, 53},
-		{"cache without matching host cursor cannot skip", 15, &entity.TapeBytePosition{Partition: 1, LogicalObject: 10}, 10, 11, readplan.MethodSeek, 53},
+		{"forward gap seeks at reading speed", 8, nil, 10, 11, readplan.MethodSeek, 3},
+		{"backward seeks", 15, nil, 10, 11, readplan.MethodSeek, 51},
+		{"cache without matching host cursor cannot skip", 15, &entity.TapeBytePosition{Partition: 1, LogicalObject: 10}, 10, 11, readplan.MethodSeek, 51},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// LTFS's observed cache predicate requires both the last block and its host-next coordinate.
@@ -133,10 +228,36 @@ func TestLTFSReadOrderRequiresKnownUncompressedLabel(t *testing.T) {
 	}
 }
 
+func TestLTFSReadOrderPricesFirstFileFromPostMountPosition(t *testing.T) {
+	// The logical first file lies on the reverse wrap, so starting from the Data partition start reorders it.
+	provider := ltfsOrderFixture(t)
+	requests := []ReadRequest{
+		ltfsRequest(&entity.LtfsExtent{Partition: "z", StartBlock: 120, ByteCount: 4}),
+		ltfsRequest(&entity.LtfsExtent{Partition: "z", StartBlock: 20, ByteCount: 4}),
+		ltfsRequest(&entity.LtfsExtent{Partition: "z", StartBlock: 80, ByteCount: 4}),
+	}
+	spans := make([]readplan.Span, len(requests))
+	for i, request := range requests {
+		ranges, known := provider.Ranges(request)
+		require.True(t, known)
+		spans[i] = readplan.Span{ID: int64(i + 1), Ranges: ranges}
+	}
+	sequence, err := readplan.Plan(t.Context(), t.TempDir(), provider, sequenceTestInput(spans))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, sequence.Close()) })
+
+	ids := sequenceTestIDs(t, sequence, 1)
+	require.ElementsMatch(t, []int64{1, 2, 3}, ids)
+	require.NotEqual(t, int64(1), ids[0], sequence.Reason())
+	baseline := ltfsCompleteRouteCost(t, provider, spans, []int64{1, 2, 3})
+	candidate := ltfsCompleteRouteCost(t, provider, spans, ids)
+	require.Less(t, candidate, baseline)
+}
+
 func TestLTFSReadOrderOptimizesCompleteSelectionWithFixedFirstFile(t *testing.T) {
 	// A fragmented first file ends near later members, so start-block sorting makes an avoidable round trip.
-	provider := ltfsOrderFixture(t)
-	provider.options.Timing.BytesPerSecond = proto.Float64(1e9)
+	// Without a resolvable post-mount position, the first file stays fixed.
+	provider := ltfsOrderFixtureFrom(t, 10)
 	requests := []ReadRequest{
 		ltfsRequest(&entity.LtfsExtent{Partition: "z", StartBlock: 10, ByteCount: 4},
 			&entity.LtfsExtent{Partition: "z", StartBlock: 79, ByteCount: 4, FileOffsetBytes: 4}),

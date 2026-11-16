@@ -86,6 +86,8 @@ var rpcCommandBindings = map[string]string{
 	entity.ScanJobService_GetCreation_FullMethodName:        "scan creation",
 	entity.ScanJobService_GetProgress_FullMethodName:        "scan progress",
 	entity.ScanJobService_ListEntries_FullMethodName:        "scan results",
+	entity.CalibrationJobService_Create_FullMethodName:      "calibration create",
+	entity.CalibrationJobService_GetProgress_FullMethodName: "job progress",
 }
 
 type httpRouteClass string
@@ -127,6 +129,7 @@ func TestEveryPublicRPCBindsToCLILeaf(t *testing.T) {
 		&entity.ArchiveJobService_ServiceDesc,
 		&entity.RestoreJobService_ServiceDesc,
 		&entity.ScanJobService_ServiceDesc,
+		&entity.CalibrationJobService_ServiceDesc,
 
 		&entity.FilesService_ServiceDesc,
 		&entity.LocationService_ServiceDesc,
@@ -175,6 +178,7 @@ func TestDocumentedCommandTreeUsesRealLeaves(t *testing.T) {
 		"restore create", "restore media", "restore files", "restore run volume", "restore run tape",
 		"preview create",
 		"scan create", "scan media", "scan progress", "scan results",
+		"calibration create",
 		"location create", "location list", "location get", "location update", "location delete",
 
 		"analyze create", "analyze progress", "analyze entries",

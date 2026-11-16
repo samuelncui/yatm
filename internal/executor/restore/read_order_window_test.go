@@ -15,6 +15,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/readplan"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -197,12 +198,27 @@ func runOrderedRestore(t *testing.T, ctx context.Context, runner *jobRestoreRunn
 func TestRestoreReadSequenceCrossesPagesWithoutFlushingResults(t *testing.T) {
 	// Freeze a complete selection whose best order crosses the submission page boundaries.
 	runner, copies, session := restoreOrderFixture(t, "a", "b", "c", "d", "e")
+	logger, hook := logtest.NewNullLogger()
+	runner.logger = logger
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// The result batch remains delayed until the ordinary ACP drain.
 	require.NoError(t, runOrderedRestore(t, ctx, runner, copies, session, 2))
 	require.Equal(t, []string{"e", "d", "c", "b", "a"}, session.opened)
+
+	// The completed planned read logs its realized time beside both estimates.
+	var completed bool
+	for _, entry := range hook.AllEntries() {
+		if entry.Message != "Restore read order completed" {
+			continue
+		}
+		completed = true
+		for _, field := range []string{"estimated_logical_ms", "estimated_planned_ms", "realized_ms"} {
+			require.Contains(t, entry.Data, field)
+		}
+	}
+	require.True(t, completed)
 	require.Equal(t, 1, session.observations, "the complete order observes the cursor before any source opens")
 	require.Equal(t, 5, session.closes)
 

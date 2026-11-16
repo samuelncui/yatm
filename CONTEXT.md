@@ -52,28 +52,32 @@ An already-mounted archive filesystem registered with an immutable YATM marker. 
 _Avoid_: any visible directory, original Location
 
 **Device settings**:
-User-owned settings for one configured Tape device: write defaults, read order, capacity polling, manual read parameters, passive read learning and read planning budget. They never grant device access, and each Media operation freezes them when admitted.
+User-owned settings for one configured Tape device: write defaults, read order, capacity polling, read parameters (at most one set per recorded density code) and read planning budget. They never grant device access, and each Media operation freezes them when admitted.
 _Avoid_: device preferences, drive profile, cartridge settings, device registry
 
 **Position map**:
-Spatial facts about a Tape's recorded layout, with their source, binding and uncertainty. It belongs to the Media, is derived from observations and is retained only while its binding still matches.
+Spatial facts about a Tape's recorded layout, with their source. It is derived from the current observations of one read Session and is never stored.
 _Avoid_: cartridge position table, index, physical guarantee
 
 **Read order**:
-The Device setting that orders a Tape read. Logical keeps recorded order; Auto adopts a planned order only when its inputs apply and its predicted cost is lowest, otherwise it keeps Logical.
+The Device setting that orders a Tape read. Logical keeps recorded order; Auto adopts a planned order only when its inputs apply and it is predicted to save at least one positioning base time over Logical, otherwise it keeps Logical.
 _Avoid_: route (outside planner internals), read plan, speedup guarantee
 
-**Passive read learning**:
-The Device setting that records observations of ordinary completed tar I/O in each Job without issuing additional commands, then refits learned read parameters after the Job.
-_Avoid_: calibration, benchmark, active measurement
+**Read-ahead buffer**:
+How far logically ahead a Tape drive reaches by continuing to read instead of positioning. A target within it costs the skipped data at reading speed plus one approach reversal for each wrap turn crossed; its size is a read parameter.
+_Avoid_: drive cache, prefetch window
 
-**Learned read parameters**:
-Tape read parameters refitted after each Job from the observations of ordinary completed I/O on one device that existing Jobs retain, with each Job weighted equally. They are server-owned, apply only to their exact observed conditions and yield to manual read parameters.
-_Avoid_: learned model, calibration, manual read parameters, drive speed guarantee
+**Read-speed locate**:
+A move beyond the read-ahead buffer to a target ahead in the same wrap and half that the drive covers at reading speed: the shared positioning base time plus the skipped records at the read rate.
+_Avoid_: short seek, reading through a gap
 
 **Prepared read**:
 The record of a Job's most recently prepared Tape read on a device: requested and prepared order, parameter and position sources, applicability and coverage. It describes preparation, not the loaded cartridge or the order finally executed.
 _Avoid_: read optimization, execution plan, ETA, current cartridge report
+
+**Calibration**:
+A Job that measures a Tape drive's positioning times on one cartridge and stores them as the device's read parameters for that recorded density.
+_Avoid_: drive benchmark, read learning, automatic tuning
 
 **Analyze**:
 A Scan configured to observe Location ranges and optionally publish original associations. Basic collection uses known-only content facts. Ordinary browsing does not require analysis.
@@ -112,11 +116,11 @@ Content-addressed derivative assets. Current-original and saved-version views ar
 _Avoid_: backup copy
 
 **Job**:
-A durable Archive, Restore or Scan operation with one lifecycle state. Preview and integrity checking are Scan configurations. Ordinary Library and Location file actions do not create Jobs.
+A durable Archive, Restore, Scan or Calibration operation with one lifecycle state. Preview and integrity checking are Scan configurations. Ordinary Library and Location file actions do not create Jobs.
 _Avoid_: backup, background task
 
 **Job state**:
-The one durable lifecycle word a Job reports. `PREPARING` means its manifest is still being built, `READY` means the manifest is complete and the remaining work waits for the operator to choose Media, `COMPLETED` means every workflow item settled, and `FAILED` means preparation or Scan execution ended with an error or an operator cancellation. These failures are terminal; create a new Job. Archive and Restore Media failures return to the state before that Media operation, retaining its reason and published results so the operator can select Media again. Execution is not a state: an active operation reports a live phase, including `QUEUED` while waiting for its Media resource. An idle Job reports no phase even when its runner is cached.
+The one durable lifecycle word a Job reports. `PREPARING` means its manifest is still being built, `READY` means the manifest is complete and the remaining work waits for the operator to choose Media, `COMPLETED` means every workflow item settled, and `FAILED` means preparation, Scan or Calibration execution ended with an error or an operator cancellation. These failures are terminal; create a new Job. Archive and Restore Media failures return to the state before that Media operation, retaining its reason and published results so the operator can select Media again. Execution is not a state: an active operation reports a live phase, including `QUEUED` while waiting for its Media resource. An idle Job reports no phase even when its runner is cached.
 _Avoid_: running state, outcome, status plus result, retry
 
 **Executor**:

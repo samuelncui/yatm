@@ -17,6 +17,7 @@ methods, and [Interface contracts](contracts.md) owns the rules shared across su
 | [RestoreJobService](../../entity/job_restore.proto) | Estimate, Create, GetCreation, RestoreMedia, progress, Media/candidate pages |
 | [FilesService](../../entity/files.proto) | Projected List, explicit Measure, basic Get, annotations, Mkdir/Move/Remove, versions, copies, single-signature duplicates, retained identical Find results with bounded rows, [Library-defined sorting](library.md#identical-file-tools) and group/member pages, Keep/Merge, inventory admission and original relocation |
 | [ScanJobService](../../entity/job_scan.proto) | Configurable source/content/result policies, GetCreation, ReadMedia, progress and paged entries |
+| [CalibrationJobService](../../entity/job_calibration.proto) | Create and run a Calibration on a tar Media loaded in the device or on test data written over the loaded cartridge, progress with measured moves and fitted parameters |
 | [LocationService](../../entity/location.proto) | Register/list/get/update/delete, access summary and administrator discovery of unregistered paths |
 | [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation, Job pipeline limits and Device settings |
 
@@ -33,7 +34,8 @@ JobService exposes no Job retry/restart operation. Job listings filter by kind, 
 `JobFilter` has no status filter. Typed Media operations require an idle `READY` Job; the
 [shared lifecycle](jobs.md#shared-lifecycle) owns their admission and settlement.
 
-Each kind's `GetCreation` reads the existing Job configuration and priority under the Job deletion
+Calibration has no `GetCreation`: its specification is only a device and a Media, so a new
+Calibration is simply created again. Each other kind's `GetCreation` reads the existing Job configuration and priority under the Job deletion
 guard, through a read-only bundle connection. It returns that kind's typed Create request and an
 `unavailable_reason` when original inputs cannot be recovered completely. Imported Jobs and indexed
 companion Scans can lack original selection roots; their processed manifests are not substituted
@@ -96,8 +98,8 @@ existing queued behavior.
 MediaService.InspectDevice accepts one configured device and returns transient passive observations.
 Busy devices return a typed reason without hardware queries.
 The optional `prepared_read` is separately timestamped last-prepared-read information from this
-process, including Job/Media, requested/prepared order, parameter and position sources, applicability,
-coverage and the selected learned read parameters' mean and maximum error. It can accompany a busy response; it never identifies the
+process, including Job/Media, requested/prepared order, parameter and position sources, applicability
+and coverage. It can accompany a busy response; it never identifies the
 currently loaded cartridge or claims the final execution route. It adds no hardware query. Optional identity/mode/limit facts
 remain absent when unknown; feature support and current availability are separate.
 Capacity limits report optional native bytes before EW, partition and observation timestamps, with
@@ -136,24 +138,23 @@ Library JSONL backups carry the locators. There is no separate recovery export.
 Device Settings also carries the optional tar capacity-polling interval. The admitted Device
 snapshot owns its effective value for both FORMAT and APPEND; the [tar capacity admission contract](tape.md#tar-capacity-admission)
 owns its defaults, query-failure handling and confirmed-WRITE accounting.
-The optional `TapeDeviceSettings.read_parameters` uses this same replacement and snapshot path.
-It contains measured applicability conditions, nominal geometry, seven positioning terms,
+The repeated `TapeDeviceSettings.read_parameters` uses this same replacement and snapshot path.
+It holds at most one set per recorded density code; each set names its `applies_to.density_code`
+and optionally a `drive_serial`, and contains nominal geometry, nonnegative positioning terms,
 READ-rate/overhead estimates, separate normal-unload `completion` timings and descriptive provenance.
-Completion has optional `full_span_seconds` and `fixed_seconds`; supplied
-full-span time must be positive and fixed time nonnegative. Supplied values are type/range checked;
-partial measurements retain absent fields, separately from explicit zero, false and plaintext.
-The longitudinal coefficient uses either seconds per absolute LPOS unit or seconds per complete
-longitudinal span (`longitudinal_seconds_per_wrap`), mutually exclusive by field presence.
+Validation requires the density code and rejects a repeated one within a device.
+Completion has optional `full_span_seconds`, `fixed_seconds` and `ltfs_unmount_seconds`; supplied
+full-span time must be positive and fixed and LTFS unmount time nonnegative. Supplied values are type/range checked;
+partial measurements retain absent fields, separately from explicit zero.
+The seek-speed coefficient is seconds per complete longitudinal span (`seek_seconds_per_wrap`).
+Reading-speed positioning has no field; it derives from record bytes and `bytes_per_second`.
 Explicit zero positioning terms are valid; omitted measurements stay unknown. Saving input does not establish its
-applicability or accuracy; the prepared tar factory checks actual conditions and map coverage.
+accuracy; read preparation selects the set by the loaded cartridge's density and checks map coverage.
+`TapePreparedRead.parameters_source` is `configured` for a Device settings set, `builtin` for the
+built-in values and `unavailable` without a Tape report.
 There is no measurement RPC, registry, cartridge-position table or new tar metadata.
-The same Device group carries optional `passive_read_learning` (omitted means enabled) and
-`read_planning_seconds` (omitted means 300; explicit values must be positive). Read-only
-`learned_read_parameters` are server-owned: Settings Update replaces user-owned Device settings while retaining
-the latest learned read parameters, including when a client submits an older snapshot. The observations behind
-them have no API. Media responses and backups
-include the optional derived `tape_position_map`; the [persistence owner](persistence.md#derived-tape-data)
-defines its initialization binding and separate update boundary.
+The same Device group carries optional `read_planning_seconds` (omitted means 300; explicit values must be
+positive). Settings Update replaces the stored Device settings.
 
 ## Browser Endpoint Addresses
 

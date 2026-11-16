@@ -1,7 +1,7 @@
 # Tape Read Planning
 
 How Tape reads choose an order: Logical and Auto read order, the cost model and its parameter
-sources, passive read learning and position maps. The
+sources and position maps. The
 [Tape contract](tape.md) owns cartridge identity, formats and Sessions.
 
 ## Software Read Ordering
@@ -33,8 +33,15 @@ The [planner](../../internal/media/readplan/plan.go) orders one complete selecti
 SQLite index under `Work/temporary`; Job and Library locators are never rewritten and ACP receives the
 original sources. Providers must quote every member transition, a certified incoming-independent exit
 state, spatial neighbourhood coordinates and the terminal action. The search starts from the complete
-LOGICAL route and adopts only a lower complete-route estimate that covers every member exactly once;
-it is a deterministic heuristic, not a proof of optimality. A candidate move whose cost is unknown is
+LOGICAL route and keeps only a lower complete-route estimate that covers every member exactly once;
+it is a heuristic, not a proof of optimality, and its steps are deterministic, but where it stops
+depends on elapsed time (the payback stop and the budget below), so the same selection can end on a
+different route on a faster or slower host. The best route is adopted only when its
+predicted saving over LOGICAL is at least one `base_seconds` of the applied parameters, the fixed
+cost every LOCATE pays, and never less than the built-in `base_seconds`, so a configured
+value of zero cannot remove the floor: a smaller saving removes less than one LOCATE and lies within
+the route estimate's accumulated per-move error, so LOGICAL is kept and the reason states both values. A
+candidate move whose cost is unknown is
 skipped; LOGICAL is kept with a recorded reason when a member's range, exit state or spatial
 coordinate is unknown, when the current route cannot be priced, or when no lower route is found.
 
@@ -43,130 +50,145 @@ later transition and the provider's terminal action from the forecast exit. Tar 
 the identity label and establishes a qualified host-next address; its terminal action is
 synchronous unload, priced as fixed work plus the physical longitudinal fraction times full-span
 rewind time. Missing completion parameters keep LOGICAL. LTFS delegates completion to the configured
-unmount adapter and prices rewind/unload from the final forecast position, assuming completion does
-not rewrite the Index; an adapter-caused Index rewrite lies outside this estimate. Scores are
+unmount adapter and prices the same rewind/unload from the final forecast position plus
+`ltfs_unmount_seconds` (absent is zero) for the adapter and Session finalization, assuming
+completion does not rewrite the Index; an adapter-caused Index rewrite lies outside this estimate. Scores are
 route-comparison estimates, not elapsed-time guarantees. A provider with an unknown initial position
 fixes the first LOGICAL file and compares only the remainder; otherwise an unknown origin keeps LOGICAL.
 
 One planning budget covers indexing and search: absent `read_planning_seconds` allows 300 seconds;
-explicit values are positive. Expiry keeps the last completely verified route or the LOGICAL
+explicit values are positive. Within it, planning also has to pay for itself: planning precedes
+every read, and search returns diminish, so after each search round the planner stops once the time
+spent since planning began exceeds the predicted saving achieved so far and keeps that route. Expiry keeps the last completely verified route or the LOGICAL
 manifest, never a partial selection. Cancellation, index corruption and temporary-disk failure remain
-errors. Closing the index removes it; abandoned directories follow the shared seven-day cleanup
+errors. A candidate route whose changed-edge estimate disagrees with its complete score, a
+current route that loses a priced edge and a route that no longer covers every member exactly once
+each break a planner invariant; because ordering is optional, the attempt then keeps LOGICAL and
+logs that reason as a warning instead of failing. Closing the index removes it; abandoned directories follow the shared seven-day cleanup
 policy. After planning or its fallback, the Session records the effective order (AUTO only when a
 lower route was adopted) and its reason in the Device read-optimization status, and the attempt's
-read-order log records `planning_ns`.
+read-order log records `planning_ns` and, when the LOGICAL route could be priced, the estimated
+LOGICAL and selected route costs (`estimated_logical_ms`, `estimated_planned_ms`). When every read
+of such an attempt settles without error, a second log line repeats both estimates with
+`realized_ms`, the time from the end of planning until the last read settled, so a run can be
+compared with its prediction; the estimates also include the terminal action, which follows later.
 
-The [cost model](../../internal/media/read_cost.go) retains all seven CERN factors: intercept,
-wrap, band, landing zone, direction, same-wrap step-back and longitudinal distance. Signed terms
-are regression coefficients; a negative term is not an independent mechanical benefit. Nonfinite,
-negative or overflowing total predictions cannot quote elapsed time. Absolute LPOS interpolation
-uses the actual interval midpoint `min + (max-min)/2`. Alternatively,
-`longitudinal_seconds_per_wrap` prices one whole longitudinal tape span using normalized coordinates
-0–1 and midpoint 0.5; it is mutually exclusive with seconds per LPOS. Reverse wraps reflect that
-coordinate. Its estimates are not guaranteed latency bounds.
+The cost model applies only to content written with hardware compression Off and has no
+compression term; its read rate is the density's native rate (or the configured one), because gap reads are discarded on the host and member reads cost the same in every order.
 
-Parameter priority is manual read parameters, learned read parameters matching
-all observed conditions, then [built-in initial values](../../internal/executor/media_tar_defaults.go):
-timing measured on HP LTO-5 and per-density wraps, native rate and rewind, which passive learning
-corrects on each drive. Missing serial, firmware, density, record or written control
-facts remain unknown. Partial manual input is never silently filled from learning. Hardware-compressed
+The [cost model](../../internal/media/read_cost.go) prices a LOCATE from a to b in one partition with
+nonnegative terms, choosing the first of three ways the drive can arrive:
+
+- Streaming: b is logically ahead of a (its logical object at or after a's) by at most
+  `buffer_bytes` divided by the applicable record bytes, in any wrap, because the drive keeps
+  reading instead of positioning. It costs the skipped objects at reading speed (their record bytes
+  divided by `bytes_per_second`) plus one `approach_reversal_seconds` for each wrap turn crossed,
+  and no other positioning term. Absent or zero `buffer_bytes`, or an unknown record size, never
+  streams.
+- A read-speed locate: b is in the same wrap interval and half as a and does not lie behind it (b
+  at or after a in the wrap's read direction). It costs `base_seconds` plus the objects between
+  them at reading speed, so reading speed has no separate parameter.
+- A seek, for every other move (a same-wrap move behind the head, a forward move across the
+  midpoint and every wrap change): `base_seconds` plus the physical longitudinal distance at seek
+  speed (`seek_seconds_per_wrap`), plus one whole `approach_reversal_seconds` when the signed
+  longitudinal distance of the move along b's wrap read direction is negative, that is, when the
+  tape arrives moving against that direction. Changing wrap or band adds no term of its own.
+
+Halves split the wrap at its physical
+midpoint, which belongs to the second half. This follows the CERN observation that drives position
+at reading speed unless they cross a high-speed positioning zone, rather than a constant midpoint
+crossing term; the [research](../research/tape-read-ordering.md) records the evidence.
+`seek_seconds_per_wrap` prices one whole longitudinal tape span using normalized coordinates 0–1
+and midpoint 0.5. Reverse wraps reflect that coordinate. Nonfinite or overflowing predictions cannot quote elapsed time, and the estimates are
+not guaranteed latency bounds.
+
+Reading follows the same rule: continuous reading from one logical object to a later one in the same
+partition costs its objects at reading speed plus one `approach_reversal_seconds` for each wrap turn
+crossed between them, because logical order runs through a partition's wraps in increasing number
+and the drive reverses at each wrap end. A read is priced up to its host-next position, so one that
+ends with a wrap's last object pays that turn and the following move, which starts at host-next in
+the next wrap, does not pay it again. LTFS extent reads and tar transfers with a position map are
+priced this way, and an endpoint the map does not resolve leaves the quote unknown. A tar transfer
+without a position map prices its records at the read rate alone.
+
+Each configured Tape device holds at most one set of read parameters per recorded density code in
+its Device settings, entered by the operator or stored by a [Calibration](#calibrated-parameters). A read uses the set whose density code equals the loaded cartridge's recorded
+density; a set that names a `drive_serial` other than the one the drive reports does not apply, and
+the Prepared read's applicability reason says so. Otherwise the read uses the
+[built-in initial values](../../internal/executor/media_tar_defaults.go): positioning and reading
+terms from a fixed calibration sequence on one HP LTO-5 drive, completion timing measured on HP
+LTO-5 and per-density wraps, native rate and rewind. The Prepared read reports the source as
+`configured` or `builtin`. Missing values in a configured set stay unknown and are never filled from
+the built-in values, so the affected estimates are unknown and the read keeps LOGICAL. Record size,
+compression and encryption take no part in selection: the time to pass one object at reading speed
+and the read-ahead buffer use the Session's actual record size (the tar Media profile's record
+bytes, or the LTFS volume block size). Hardware-compressed or unknown-record
 written content retains ordinary reading and exact seek but is excluded from linear smart ordering.
 Changing current drive compression does not change the cartridge's written policy.
-The optional `completion` parameters keep full-span rewind and fixed unload work separate.
+The optional `completion` parameters keep full-span rewind, fixed unload work and the additional
+LTFS unmount time separate.
 
-Passive read learning defaults on and adds no measurement command. The native transport emits completed
-scalar observations into a bounded 256-entry queue; overflow drops observations and increments a
-counter without waiting. The consumer only buffers records in memory; nothing is persisted or fitted
-while the record lane is active. Sequence gaps and failed commands withdraw the inferred logical
-cursor, idle time and preceding action, so only actions whose endpoints were known are recorded.
-LOCATE(10)/LOCATE(16), REWIND and synchronous UNLOAD each form one record. A first READ after LOCATE
-and a READ that crosses a filemark together with its following data READ are single records. Other
-data READs form a READ segment: the contiguous READs between any other commands, split only where
-the discard label changes, never by time. Successful nonmoving restoration preserves the cursor but
-ends READ continuity. SPACE is not decoded, so like a failed command it withdraws the cursor and
-records nothing; command observations do not expose RECOVERED ERROR sense, so records carry no
-recovered-error count.
+## Calibrated Parameters
 
-Each record keeps raw facts only: the logical address of both endpoints (partition, logical object
-and file number when known), their wrap and longitudinal offset within the wrap's interpolation span
-as resolved by the Session's position map, that map's source, observation time and LPOS bounds, the
-SCSI opcode, action, preceding action, absolute start, host idle time before the action, and for
-READ records the command count, bytes, device seconds, host wait, largest host gap and discard label.
-Each record also names its device and applicability. The current fit reads only the device,
-applicability, Job, action, endpoint partitions, wraps and offsets, map LPOS bounds, bytes and
-device seconds. The barcode, map source and time, opcode, preceding action, start time, idle time,
-logical object and file numbers, command count, host timing and discard label are recorded but
-unused: they keep each record a portable, self-describing measurement that a later model or
-another drive's analysis can use without the Catalog. Band, direction and access features are derived
-at fit time from the wrap and the generation layout through the same feature function the cost model
-uses. After native I/O settles and the drive is released, the attempt's records are appended to its
-Job bundle's [observation file](persistence.md#job-bundle). A background refit, serialized per device
-and bounded by the process lifetime, then streams the observation files of every Job in the catalog,
-keeps those of the same device and applicability, and refits every action:
+A [Calibration Job](jobs.md#calibration) measures the set for one drive and recorded density. It
+times at least 21 fitted LOCATEs in wraps 0 and 1 of a tar Media or written test data: same-half forward moves,
+backward moves, forward probes that bisect the streaming distance and wrap changes, the fixed
+sequence the [research](../research/tape-read-ordering.md#locate-time-shape-and-a-fixed-calibration-sequence)
+measured. A least-squares fit yields the base, seek and approach-reversal terms, the reading time
+of one span and the streaming distance. The fit fails, and Device settings stay unchanged, when no
+move streamed, when fewer than two same-half LOCATEs were observed, when their slope differs from
+the streaming reading speed by more than 10%, when a term is negative or unidentified, or when any
+move misses the fit by more than 3 seconds.
 
-- LOCATE uses the seven-term model in the base parameters' longitudinal unit.
-- READ uses seconds = bytes / rate, plus the first-READ or filemark overhead for those records.
-- UNLOAD uses fixed work plus the physical fraction of one full-span rewind; it never relabels LOCATE
-  coefficients as rewind time.
-
-The fit minimizes weighted absolute deviations. Each record weighs one over its Job's record count for
-that action, so every Job carries equal weight and one abnormal Job among N moves the result by about
-1/N. The solve uses iteratively reweighted least squares with a fixed iteration bound and a
-deterministic stopping rule; the same observations always give the same parameters. A coefficient is updated
-only when its weighted feature column is independent under the scaled/reorthogonalized rank check,
-and only when the result is a valid parameter (positive rate and full span, nonnegative overheads,
-fixed work and longitudinal slope); otherwise it keeps the base value. The published model records
-the observation count and the unweighted mean and maximum absolute residual over those observations.
-Isolated Device Settings writes publish it for subsequent tasks, replacing the stored model read at
-the start of that refit. Deleting a Job removes its observations from later refits; there is no other
-retention. A write or refit failure only logs a warning; manual preferences remain unchanged. Turning
-learning off records and publishes nothing; existing observations remain with their Jobs.
+The stored set applies to the drive's reported serial and the cartridge's recorded density. Its
+positioning terms come from the fit; `buffer_bytes` is the streaming distance times the bytes in
+wrap 0 (its logical objects times the Media's record bytes) and `bytes_per_second` is those bytes
+over the reading time of one span. `completion.full_span_seconds` is the fitted seek time of one
+span, and `completion.fixed_seconds` is the timed unload minus that seek time times the final span
+fraction, not below zero. Geometry and `ltfs_unmount_seconds` are copied from the built-in values
+for the density, so the set is complete on its own. Seconds are rounded to 0.01 and bytes to whole
+numbers; `source_reference` names the Job.
 
 ## LTFS Reads
 
 LTFS uses the same planner with its existing file extents and native ACP paths. Optional device
 facts are acquired under the existing owner before mount; that raw descriptor closes before LTFS
-owns physical I/O. AUTO preparation can read each physical partition's VOL1/filemark/XML Label/
-filemark prefix using qualified CP LOCATE and variable READ, without changing controls or the
-adapter-installed key. Two complete, agreeing Labels establish the symbol-to-physical mapping;
-the bounded reader does not scan file contents. Its two partition-start seeks have separate
-preparation cost, recorded in the Job log. The XML cap is 512 KiB per Label, not a format limit.
-Commands use a twenty-minute native timeout and retain ownership until settlement. Unavailable
-host buffers, unsupported forms or unusable complete Labels withdraw this optional source;
-cancellation, native I/O faults and uncertain completion remain errors. Cleanup must finish before mount.
+owns physical I/O. That pre-mount step reads only the geometry facts; it does not read the
+LTFS Labels. A LOGICAL Device does not take it.
 
-Mounted LTFS supplies the written block size, compression policy, volume UUID and partition roles,
-which must agree with the pre-mount Labels. Its current index generation binds retained geometry;
-Labels contain no index generation. Mount can reposition, so its initial cursor remains unknown.
+Mounted LTFS supplies the written block size, compression policy, volume UUID and partition map.
+The map must be exactly `I:a,D:b`: every known formatter (IBM/OpenLTFS and HPE `mkltfs`) places the
+Index partition `a` on physical partition 0 and the data partition `b` on physical partition 1, so
+that convention fixes the mapping `{a: 0, b: 1}`. Any other map keeps LOGICAL with its reason. A wrong
+convention can only leave extents outside the map, which are unknown and keep LOGICAL, never change data.
+Mount reads the current Index from the Index partition near BOT, so the post-mount position is
+assumed, not observed, to be the Data partition's first object.
 The read-only `indexLocation` must place the current Index on the Index partition for this normal
 completion comparison. A missing/invalid pointer, unknown matching data-partition EOD or incomplete
 completion parameters withdraw optimization. The old Index start is never substituted for EOD.
 `ltfs.sync` is not a probe: reading it can write an Index and is not used.
-When the raw source is unavailable, unambiguous mounted MAM
-selectors remain usable. Contradictory sources never substitute for one another. Partition letters
-and capacity ratios alone do not establish addresses. Missing or conflicting facts retain LOGICAL
+Missing or conflicting facts retain LOGICAL
 without changing native reads. No raw command is issued after LTFS mounts.
 
 The LTFS evaluator visits a file's extents in file-offset order, retaining sparse gaps and partial
 block uncertainty. It prices the demonstrated last-block cache, adjacent reads and ordinary seeks;
-it grants no unimplemented gap-discard benefit. The mounted initial cursor is unknown, so every
-route keeps the same complete first file. This terminal model only prices data-partition content;
-other or cross-partition selections retain LOGICAL. Matching native learned read parameters can supply mechanical priors, but do not validate LTFS
-whole-file latency. LTFS has no whole-file passive read learning and no ACP source-timing
-extension. Finalization
-invalidates the Session's model before another attempt can use it.
+it grants no unimplemented gap-discard benefit. The first file is priced as an ordinary move from
+the assumed post-mount position, without a cached block or streaming (mount leaves the
+head on the Index partition, so the drive is not reading ahead in the data partition), so any member can be read first; when the
+position map cannot resolve that object (its first wrap has no endpoint), every route keeps the same complete, unquoted first file. This terminal model only prices data-partition content;
+other or cross-partition selections retain LOGICAL. It selects parameters as tar does; native Tape timing estimates do not validate LTFS whole-file latency. Finalization invalidates the Session's model before another attempt can use it.
 
 ## Position Maps
 
-Position maps belong to Media and contain spatial facts, source, binding and uncertainty. A live
-complete REOWP report takes priority. Read preparation reads cartridge memory once on the owned
+Position maps contain spatial facts and their source. They exist only for the current read
+Session and are never written to the Catalog. A live complete REOWP report takes priority. Read preparation reads cartridge memory once on the owned
 descriptor of any drive if REOWP has no complete directory; ordinary device Inspect does not read CM.
 READ BUFFER tries buffer `10h`, which HP documents for Ultrium 2 to 6, and then `05h`, which IBM
 and HPE Ultrium 7 and later document; HP's `20h` main-buffer segments are never read. The
 descriptor bounds the image to 32 KiB and each transfer to 4 KiB. An empty, unsupported or
-undecodable buffer moves to the next one. Unsupported, malformed or inconsistent CM leaves matching
-retained geometry available; cancellation, uncertain completion and medium changes remain
-preparation errors. No failure triggers LOAD or another motion.
+undecodable buffer moves to the next one. Unsupported, malformed or inconsistent CM leaves the
+Session without a position map, so reading keeps LOGICAL order; cancellation, uncertain completion
+and medium changes remain preparation errors. No failure triggers LOAD or another motion.
 LTFS obtains the same facts before mounting and closes the raw owner before native reads.
 
 The [CM decoder](../../internal/media/tape/cm_directory.go) selects the tape directory layout of
@@ -192,17 +214,21 @@ that wrap, or actual EOD for the final partial wrap. This is the HPE-documented 
 cumulative counts already equal it. A drive whose completed-wrap value names the last object on the
 wrap shifts that boundary by one object, which is accepted as estimation error. The
 [endpoint research](../research/tape-read-ordering.md#reowp-endpoint-definition) records the vendor
-definitions. Source selection never changes a saved file's logical locator. Accepted derived geometry uses the existing Media map and session lifetime;
-no raw CM image or per-file wrap is persisted. A new read after APPEND observes the current directory.
+definitions. Source selection never changes a saved file's logical locator. Accepted derived geometry
+has the Session's lifetime; no position map, raw CM image or per-file wrap is persisted. Every read,
+including one after APPEND, observes the current directory.
 
-When timing parameters omit nominal layout,
-a self-described tar map remains usable only if current full boundaries agree and current EOD covers
-its saved prefix; confirmation never extends retained coverage. Tar maps bind to initialization ID; LTFS maps
-bind to volume UUID and index generation. Missing or ambiguous coverage refuses cost estimates without changing exact logical seek addresses. Session
+Without a current report or with timing parameters that omit the nominal layout, the Session has no
+position map and keeps LOGICAL order. Missing or ambiguous coverage refuses cost estimates without changing exact logical seek addresses. Session
 invalidation withdraws live estimates. The four-band, alternating-wrap interpolation assumption uses
 a sourced nominal wrap count; complete intervals use their own boundaries. A partial final interval
 uses the greater of its observed length and typical complete interval length for scale, while actual
 EOD still bounds readable data. Locations whose wrap classification is ambiguous remain unknown.
+Interpolation places objects by count, and LTFS ends every file with a short block, so a wrap of many
+small files holds more objects and misplaces them. An LTFS Session therefore has no position map when
+a full wrap's object count differs from its partition's median by more than 0.5%: that keeps the
+misplacement below 0.5% of a span, 0.48 seconds at the built-in full-span seek and about the held-out
+LTFS positioning error, while recorded HP LTO-5 maps deviate by at most 0.06%. The read keeps LOGICAL.
 
 Tar planning and execution share one full-range evaluator for retained-record reuse, continued READ
 with gap discard/filemarks, and LOCATE plus target reads. Headers, padding, cross-record ends and
@@ -210,7 +236,7 @@ actual host-next/cache state are included. Missing seek costs never justify read
 gap; immediately adjacent or retained records can still be reused. Actual reads validate header,
 path, content length and padding. A safe state mismatch withdraws further estimates; physical I/O
 failure retains the existing Tape error/cleanup boundary. A planned sequence remains a fixed estimate,
-not a physical cursor observation. The optimizer is a deterministic heuristic, not a global optimum.
+not a physical cursor observation. The optimizer is a heuristic, not a global optimum.
 
 Passive REOWP inspection scopes the A3/1F/45 maintenance CDB family to IBM and HP/HPE Ultrium
 devices, using independently documented IBM and HPE response framing. Standard RSOC reports retain

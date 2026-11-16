@@ -137,8 +137,6 @@ type Executor struct {
 	access   []compiledAccessRange
 	scripts  Scripts
 	previews Previewer
-	// readRefits serializes passive read learning refits per device; values are *sync.Mutex.
-	readRefits sync.Map
 	// Protected by deviceLock; one last prepared observation per configured device, never live I/O state.
 	preparedRead map[string]*entity.TapePreparedRead
 }
@@ -252,8 +250,13 @@ func (e *Executor) CreateJob(
 
 // CreateTargetJob captures the immutable navigation target of a resource-scoped Job.
 func (e *Executor) CreateTargetJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error) (*Job, error) {
-	// Scan may select a Location, a Media, or multiple resources through its frozen selections.
-	if kind != entity.JobKind_JOB_KIND_SCAN || target.LocationID < 0 || target.MediaID < 0 || target.LocationID > 0 && target.MediaID > 0 {
+	// Scan may select a Location, a Media, or multiple resources through its frozen selections; a
+	// Calibration names its device and optionally the Media expected in it.
+	valid := target.LocationID >= 0 && target.MediaID >= 0 && (target.LocationID == 0 || target.MediaID == 0)
+	switch {
+	case valid && kind == entity.JobKind_JOB_KIND_SCAN:
+	case valid && kind == entity.JobKind_JOB_KIND_CALIBRATION && target.LocationID == 0 && target.TargetName != "":
+	default:
 		return nil, fmt.Errorf("Job target does not match its kind")
 	}
 	return e.createJob(ctx, kind, priority, target, initialize)

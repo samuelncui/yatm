@@ -131,13 +131,15 @@ func (e *Executor) validateBundle(jobID int64) (complete bool, returnErr error) 
 		manifestTable = "copies"
 	case entity.JobKind_JOB_KIND_SCAN:
 		manifestTable = "entries"
+	case entity.JobKind_JOB_KIND_CALIBRATION:
+		manifestTable = "moves"
 	default:
 		return false, fmt.Errorf("invalid Job kind in bundle, id=%d kind=%d", jobID, record.Kind)
 	}
 	if !db.Migrator().HasTable(manifestTable) {
 		return false, fmt.Errorf("committed Job bundle is missing manifest table, id=%d table=%q", jobID, manifestTable)
 	}
-	if record.Kind == entity.JobKind_JOB_KIND_SCAN ||
+	if record.Kind == entity.JobKind_JOB_KIND_SCAN || record.Kind == entity.JobKind_JOB_KIND_CALIBRATION ||
 		record.Checkpoint == entity.JobStatus_JOB_STATUS_PREPARING {
 		if !db.Migrator().HasTable("config") {
 			return false, fmt.Errorf("committed Job bundle is missing config table, id=%d", jobID)

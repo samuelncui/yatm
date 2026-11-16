@@ -28,6 +28,7 @@ type tarDeviceFixture struct {
 	records                                                []tarFixtureRecord
 	cursor, opens, closes                                  int
 	writes, filemarks, failMark, unloads                   int
+	synchronizations                                       int
 	warningMark                                            int
 	barcode                                                string
 	barcodeWrites                                          int
@@ -408,6 +409,10 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 		f.cursor++
 	case 0x10:
 		count := int(command.CDB[2])<<16 | int(command.CDB[3])<<8 | int(command.CDB[4])
+		if count == 0 {
+			f.synchronizations++
+			break
+		}
 		if count != 1 {
 			return tape.Response{}, errors.New("fixture expects one completing filemark")
 		}

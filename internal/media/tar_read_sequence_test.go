@@ -40,7 +40,7 @@ func TestTarReadSequenceSparseInitialCursorAdoptsAutoAndReadsExactMembers(t *tes
 	d, options, members := tarPositionFixture(t, false, []int{4096}, members)
 	options.ReadOrder = entity.TapeReadOrder_TAPE_READ_ORDER_AUTO
 	options.ReadTiming, options.ReadModel = tarReadTimingFixture(), tarReadModelFixture(t, nil)
-	options.ReadModel.coefficients.Longitudinal = 1
+	options.ReadModel.coefficients.Seek, options.ReadModel.readObjectSeconds = 10000, 1
 	session, err := NewTarReadSession(d, options)
 	if err != nil {
 		t.Fatal(err)

@@ -51,6 +51,9 @@ describe("Jobs filters", () => {
     await userEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByLabelText("Query")).toBeEmptyDOMElement();
     expect(screen.getByRole("combobox", { name: "Job type" })).toHaveTextContent("All types");
+    await userEvent.click(screen.getByRole("combobox", { name: "Job type" }));
+    await userEvent.click(screen.getByRole("option", { name: "Calibration" }));
+    expect(screen.getByLabelText("Query")).toHaveTextContent(`?kind=${JobKind.CALIBRATION}`);
   });
 
   it("reuses configured Locations, including later edits, without rereading them with Media", async () => {

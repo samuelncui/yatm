@@ -19,11 +19,11 @@ The [public Job contract](../../entity/job.proto) exposes kind, priority, durabl
 | PREPARING | The manifest is still being built | Background manifest construction or analysis; progress, logs, cancel |
 | READY | The manifest is complete and the remaining work waits for the operator to choose Media and start it | Choose Media, run the Media step, inspect results, cancel an active attempt |
 | COMPLETED | Every workflow item settled | Read results/logs or delete retained Job metadata |
-| FAILED | An admitted Scan or manifest-preparation attempt ended with an error or operator cancellation; the reason is the Job's error field, and an operator cancellation reads as `Cancelled by the operator` rather than as the internal context error | Read the reason and logs or delete retained Job metadata; create a new Job to perform the work again |
+| FAILED | An admitted Scan, Calibration or manifest-preparation attempt ended with an error or operator cancellation; the reason is the Job's error field, and an operator cancellation reads as `Cancelled by the operator` rather than as the internal context error | Read the reason and logs or delete retained Job metadata; create a new Job to perform the work again |
 
 **A phase is a live observation, not a second state.** Only an active attempt reports one; an idle Job reports `JOB_PHASE_UNSPECIFIED` even when its runner remains cached, and a restart never resumes a former phase. A running Job therefore reports its durable state plus a working phase, which is how a surface distinguishes "READY and executing its Media step" from "READY and waiting for the operator".
 
-**There is no Job-level retry or restart for any kind.** Failed or cancelled Scan execution and manifest preparation are terminal. A new Scan repeats the selected work; retained manifests, counters and published results do not authorize another run of the failed or cancelled Job. The state and its reason are written in one update.
+**There is no Job-level retry or restart for any kind.** Failed or cancelled Scan or Calibration execution and manifest preparation are terminal. A new Scan repeats the selected work; retained manifests, counters and published results do not authorize another run of the failed or cancelled Job. The state and its reason are written in one update.
 
 **Recreating work must return to the normal creation flow.** Restore the original selections and
 options in the creation form for the operator to review and edit. Opening or prefilling the form
@@ -34,7 +34,7 @@ and log. Keep the old Job and its results intact; never reset its state machine 
 completed-item checkpoints into the new Job. Archive and Restore Media failure handling remains
 local to the Media operation; it does not recreate or restart the Job.
 
-Failures before attempt admission leave the existing Job state unchanged. Admitted Scan or Index errors and operator cancellation settle as `FAILED`. Only an admitted Archive or Restore Media operation ending in an error or operator cancellation, including while `QUEUED`, returns the Job to its pre-Media `READY` state. It retains the prepared manifest, failure reason and latest attempt timing. Successful per-file and Media checkpoints remain processed; the operator may load Media again for the remaining work. A retained manifest alone never enables a `FAILED` Job's Media action.
+Failures before attempt admission leave the existing Job state unchanged. Admitted Scan, Calibration or Index errors and operator cancellation settle as `FAILED`. Only an admitted Archive or Restore Media operation ending in an error or operator cancellation, including while `QUEUED`, returns the Job to its pre-Media `READY` state. It retains the prepared manifest, failure reason and latest attempt timing. Successful per-file and Media checkpoints remain processed; the operator may load Media again for the remaining work. A retained manifest alone never enables a `FAILED` Job's Media action.
 
 Process restart never retries or restarts a Job, revives terminal `FAILED` work, resumes a former live phase, or recreates a queued attempt. An Archive/Restore Job returned to `READY` after a Media error or cancellation still requires an explicit Media operation.
 
@@ -55,7 +55,7 @@ has its own FIFO queue in resource-arrival order, without preemption or Job-prio
 Different resources run independently. A queued attempt remains cancellable and excludes another
 start or Job deletion; the CLI continues waiting. Cancelling removes its queued request and does
 not publish inventory. An Archive/Restore cancellation returns to pre-Media `READY` with its
-reason and prepared manifest; a Scan cancellation is terminal `FAILED`. An idle Job awaiting
+reason and prepared manifest; a Scan or Calibration cancellation is terminal `FAILED`. An idle Job awaiting
 an operator's Media choice reports no live phase, and process restart does not recreate
 queued attempts. Attempt settlement publishes the disappearance of its live phase to list readers.
 
@@ -282,6 +282,48 @@ VERIFY_COPIES result policy; [copy health](library.md#copy-health) remains indep
 and accessibility. Neither is a separate runner or Job kind.
 
 Preview is optional and off by default. Its policy selects missing-only generation or forced regeneration of all identified content. KNOWN_ONLY without a usable identity skips generation and counts it. Generator failures are per-item findings, not a rollback of otherwise valid scanning. Asset addressing and validity belong to [Preview storage](preview.md).
+
+## Calibration
+
+[CalibrationJobService](../../entity/job_calibration.proto) owns the CALIBRATION kind and its
+[runner](../../internal/executor/calibration/runner.go). The specification names the device and
+exactly one of a tar Tape Media expected in it or `write_test_data`. Create validates it, builds the
+bundle (the frozen specification, the measured `moves` and the fitted parameters) and runs the
+Job's only attempt at once, like a Volume Scan: `PREPARING` to `COMPLETED`, or `FAILED` with its
+reason. There is no `READY` state, Media step, GetCreation or retry. The Job's target name is the
+device; its Media property indexes the Media when one is given.
+
+1. `PREPARING_MEDIA`: take the drive's attempt lease through the Executor (`QUEUED` while waiting)
+   and open the native SG path tar uses; LTFS is never mounted and no Tape script runs.
+   - With a Media, require a ready cartridge whose cartridge memory barcode matches it. The label is
+     not read, because the Encrypt script that would supply its key is not run. The Media must be
+     written with hardware compression Off.
+   - With `write_test_data`, refuse a cartridge whose cartridge memory barcode is registered Media,
+     FORMAT's check, and examine nothing else. FORMAT's preparation and initialization establish a
+     single partition at the beginning of tape, then zero records with hardware compression Off and
+     the default tar record policy overwrite it. After each 4 GiB the stream is synchronized, the
+     descriptor is reopened and the drive's wrap report is read; writing continues at the reported
+     end of data until it shows wraps 0 and 1 complete. No Media is created, no barcode is
+     written, and nothing erases or reformats the cartridge afterwards.
+
+   The position source is the wrap endpoint map read planning uses; the recorded density must be
+   reported and have built-in geometry, and partition zero must hold wraps 0 and 1 complete, or the
+   Job fails stating the bytes two wraps need on this cartridge.
+2. `CALIBRATING`: run the fixed [sequence](../../internal/executor/calibration/sequence.go). Each
+   target wrap and span fraction becomes a logical object by linear interpolation inside that
+   wrap's endpoint interval (wrap 0 forward, wrap 1 reverse); one LOCATE is timed on a monotonic
+   clock and READ POSITION must then equal the target. A move under 0.3 seconds did not move the
+   tape, which the sequence never expects, and fails the Job. Each move except the first, which
+   leaves the load point, is persisted as it completes; cancellation is honoured between moves.
+3. Fit the terms; moves that do not fit the model fail the Job.
+4. Unload through the tar finish path and time the unload. Every failure instead releases the
+   drive without unloading, as failed tar work does.
+5. Replace the Device settings set with the same density code for this device, or add one, through
+   the settings group's validated save, then complete the Job. The Job log records each move, the
+   fitted terms and the largest residual.
+
+[Read planning](read-planning.md#calibrated-parameters) owns how the stored fields are derived.
+Deleting the Job removes only its bundle; stored parameters stay.
 
 ## Original Matching
 

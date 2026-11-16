@@ -21,7 +21,7 @@ func TestDeviceSettingsRetainOptionalFalseAndInactiveEntries(t *testing.T) {
 	// Missing Settings remain an LTFS chooser preference without creating a registry.
 	module := testModule(t)
 	ctx := context.Background()
-	absent, err := module.Device.group.Read(ctx)
+	absent, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, absent.Present)
 	require.Equal(t, "ltfs_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
@@ -31,7 +31,7 @@ func TestDeviceSettingsRetainOptionalFalseAndInactiveEntries(t *testing.T) {
 	saved.Devices[0].GetTape().TarWriteOptions.HardwareCompression = nil
 
 	// Saving inactive entries needs no hardware and preserves explicit false through protobuf JSON.
-	stored, err := module.Device.group.Read(ctx)
+	stored, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.True(t, stored.Present)
 	require.True(t, proto.Equal(value, stored.Value))
@@ -74,7 +74,7 @@ func TestDeviceReadOrderDefaultsAndOfflinePersistence(t *testing.T) {
 		value.Devices[0].GetTape().ReadOrder = order
 		_, err := module.Device.Save(ctx, value)
 		require.NoError(t, err)
-		stored, err := module.Device.group.Read(ctx)
+		stored, err := module.Device.Read(ctx)
 		require.NoError(t, err)
 		require.Equal(t, order, stored.Value.Devices[0].GetTape().ReadOrder)
 		defaults := TapeDefaults(stored.Value, "/dev/inactive")
@@ -117,7 +117,7 @@ func TestDeviceCapacityPollIntervalOfflinePersistenceAndIsolation(t *testing.T) 
 	// Existing chooser defaults stay intact while absent capacity policy resolves without persistence.
 	module := testModule(t)
 	ctx := context.Background()
-	absent, err := module.Device.group.Read(ctx)
+	absent, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, absent.Present)
 	require.Equal(t, "ltfs_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
@@ -129,7 +129,7 @@ func TestDeviceCapacityPollIntervalOfflinePersistenceAndIsolation(t *testing.T) 
 	saved, err := module.Device.Save(ctx, value)
 	require.NoError(t, err)
 	*saved.Devices[0].GetTape().CapacityPollIntervalSeconds = 17
-	stored, err := module.Device.group.Read(ctx)
+	stored, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.True(t, proto.Equal(value, stored.Value))
 	var document row

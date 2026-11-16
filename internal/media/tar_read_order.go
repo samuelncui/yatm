@@ -77,6 +77,10 @@ func (p *tarReadOrderProvider) ReadPlanningBudget() time.Duration {
 	return p.session.options.ReadPlanningBudget
 }
 
+func (p *tarReadOrderProvider) MinimumGain() time.Duration {
+	return p.session.options.ReadModel.MinimumGain()
+}
+
 // CanonicalReadState certifies the reachable post-member state without changing cache semantics.
 func (p *tarReadOrderProvider) CanonicalReadState(span readplan.Span) (readplan.State, bool) {
 	// Existing cached input must satisfy the same record-reader invariant as every reachable successor.

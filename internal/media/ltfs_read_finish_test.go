@@ -26,18 +26,24 @@ func BenchmarkLTFSReadFinish(b *testing.B) {
 
 func ltfsCompleteRouteCost(t *testing.T, provider *ltfsReadOrderProvider, spans []readplan.Span, ids []int64) time.Duration {
 	t.Helper()
-	// Follow complete native extent transitions after the common first file, then direct rewind/unload.
+	// Follow complete native extent transitions from the assumed post-mount position, or after the
+	// common first file when that position is unresolved, then direct rewind/unload.
 	require.Len(t, ids, len(spans))
-	require.Equal(t, spans[0].ID, ids[0])
 	byID := make(map[int64]readplan.Span, len(spans))
 	for _, span := range spans {
 		byID[span.ID] = span
 	}
-	state, known := provider.FixedFirstReadState(byID[ids[0]])
-	require.True(t, known)
-	delete(byID, ids[0])
+	state, known := readplan.State{Position: provider.origin, Stream: "ltfs"}, true
+	rest := ids
+	if provider.origin == nil {
+		require.Equal(t, spans[0].ID, ids[0])
+		state, known = provider.FixedFirstReadState(byID[ids[0]])
+		require.True(t, known)
+		delete(byID, ids[0])
+		rest = ids[1:]
+	}
 	total := time.Duration(0)
-	for _, id := range ids[1:] {
+	for _, id := range rest {
 		span, exists := byID[id]
 		require.True(t, exists)
 		delete(byID, id)
@@ -53,7 +59,7 @@ func ltfsCompleteRouteCost(t *testing.T, provider *ltfsReadOrderProvider, spans 
 	// Price the selected terminal policy independently of the provider's Finish implementation.
 	finish, known := provider.options.Model.UnloadCost(state.Position, provider.options.Completion)
 	require.True(t, known)
-	total += finish
+	total += finish + time.Duration(provider.options.Completion.LTFSUnmountSeconds*float64(time.Second))
 	return total
 }
 
@@ -79,6 +85,19 @@ func TestLTFSReadFinishUsesNoIndexRewriteAndReflectedEndpoints(t *testing.T) {
 	require.Equal(t, forward, reverse)
 }
 
+func TestLTFSReadFinishAddsUnmountTime(t *testing.T) {
+	// LTFS completion adds the unmount adapter's time; the shared unload price stays tar's.
+	provider := ltfsOrderFixture(t)
+	provider.options.Completion = &ReadCompletion{FullSpanSeconds: 100, FixedSeconds: 3, LTFSUnmountSeconds: 12}
+	position := &entity.TapeBytePosition{Partition: 1, LogicalObject: 10}
+	cost, known := provider.Finish(readplan.State{Position: position})
+	require.True(t, known)
+	require.Equal(t, 25*time.Second, cost)
+	unload, known := provider.options.Model.UnloadCost(position, provider.options.Completion)
+	require.True(t, known)
+	require.Equal(t, 13*time.Second, unload)
+}
+
 func TestLTFSReadFinishAtEODRetainsUnloadOverhead(t *testing.T) {
 	// EOD at physical BOT needs no longitudinal travel, but still pays fixed unload work.
 	provider := ltfsOrderFixture(t)
@@ -101,7 +120,7 @@ func TestLTFSReadFinishPartialEODDoesNotStretchCoverage(t *testing.T) {
 	provider := ltfsOrderFixture(t)
 	options := provider.options
 	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-partial-test", SnapshotValid: func() bool { return true },
-		BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+		BOT: map[uint32]uint64{1: 0}, Coefficients: ReadModelCoefficients{Seek: 1000},
 		Wraps: []ReadModelWrap{
 			{Partition: 1, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
 			{Partition: 1, Wrap: 1, Endpoint: proto.Uint64(125), EstimatedSpanObjects: proto.Uint64(100), Direction: ReadWrapReverse},
@@ -135,6 +154,8 @@ func TestLTFSReadFinishRequiresAndCopiesCompletionFacts(t *testing.T) {
 		{"nonfinite full span", func(o *LTFSReadOptions) { o.Completion.FullSpanSeconds = math.NaN() }},
 		{"unrepresentable full span", func(o *LTFSReadOptions) { o.Completion.FullSpanSeconds = math.MaxFloat64 }},
 		{"negative fixed time", func(o *LTFSReadOptions) { o.Completion.FixedSeconds = -1 }},
+		{"negative unmount time", func(o *LTFSReadOptions) { o.Completion.LTFSUnmountSeconds = -1 }},
+		{"nonfinite unmount time", func(o *LTFSReadOptions) { o.Completion.LTFSUnmountSeconds = math.NaN() }},
 		{"missing EOD", func(o *LTFSReadOptions) { o.DataEnd = nil }},
 		{"offset EOD", func(o *LTFSReadOptions) { o.DataEnd.OffsetBytes = 1 }},
 		{"unknown partition", func(o *LTFSReadOptions) { o.DataEnd.Partition = 2 }},

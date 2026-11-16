@@ -19,22 +19,23 @@ export const TarWriteOptionsFields = ({
       slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
       fullWidth
       label="Record mode"
-      value={value.recordMode ?? ""}
+      // Without an inherited default, unset means Variable, so it shows as Variable rather than as a separate entry.
+      value={value.recordMode ?? (effective ? "" : TapeRecordMode.VARIABLE)}
       helperText={
-        value.recordMode === undefined
-          ? effective?.recordMode === TapeRecordMode.FIXED
-            ? "Inherited: Fixed."
-            : effective?.recordMode === TapeRecordMode.VARIABLE
-              ? "Inherited: Variable."
-              : "Defaults to Variable unless set for the device or FORMAT."
-          : effective
-            ? "Choose Fixed or Variable, or inherit the device default."
-            : "Leave unset to use Variable."
+        !effective
+          ? "New tar FORMAT uses this unless the FORMAT overrides it."
+          : value.recordMode === undefined
+            ? effective.recordMode === TapeRecordMode.FIXED
+              ? "Inherited: Fixed."
+              : effective.recordMode === TapeRecordMode.VARIABLE
+                ? "Inherited: Variable."
+                : "Defaults to Variable unless set for the device or FORMAT."
+            : "Choose Fixed or Variable, or inherit the device default."
       }
       disabled={disabled}
       onChange={(event) => onChange({ ...value, recordMode: event.target.value === "" ? undefined : Number(event.target.value) })}
     >
-      <MenuItem value="">{effective ? "Use device default" : "Default (Variable)"}</MenuItem>
+      {effective && <MenuItem value="">Use device default</MenuItem>}
       <MenuItem value={TapeRecordMode.FIXED}>Fixed</MenuItem>
       <MenuItem value={TapeRecordMode.VARIABLE}>Variable</MenuItem>
     </TextField>

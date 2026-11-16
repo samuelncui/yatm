@@ -38,24 +38,14 @@ only after unmount; expiry never recursively follows them or external Restore ou
 
 ## Derived Tape Data
 
-The nullable `media.tape_position_map` stores geometry separately from the immutable Tape profile.
-It records initialization binding, declared partition coverage, wrap endpoints, direction, source and
-spatial uncertainty. Actual EOD limits a partial final wrap independently of its interpolation scale.
-The Library validates and replaces this field after rechecking the Media identity and initialization binding;
-ordinary Media publication cannot overwrite it. Library JSON and JSONL backups retain the field.
-Reads validate the physical tar label before using retained geometry and bind its lifetime to the
-current prepared Session. A failed map save logs a warning without failing content access.
+Tape [position maps](read-planning.md#position-maps) are not stored; each read Session derives its
+own from current drive observations. An existing Catalog may still contain the nullable
+`media.tape_position_map` column; it is neither mapped, read nor written, and new Catalogs do not
+create it.
 
-Device settings retain learned read parameters independently of user-owned values. Client
-Save ignores supplied learning fields and preserves the latest server-owned learned read parameters. Their publication
-compares the prior value for one exact device/configuration and leaves user-owned values and other learned read parameters
-unchanged. Manual read parameters take precedence; admitted settings and parameters remain frozen
-through the current operation. Learned read parameters are bounded to 8 MiB of protobuf-encoded values per
-device. Publishing retires that device's oldest automatic results when necessary, retaining the
-newly fitted result and every manual preference; other devices are unaffected.
-
-The observations behind learned read parameters are not a Settings table; each Job keeps its own in its
-[bundle](#job-bundle), so deleting the Job removes them from later refits.
+Device settings are user-owned; each save replaces the whole group. A device's read parameters for
+the loaded cartridge's density take precedence over built-in ones; admitted settings and parameters
+remain frozen through the current operation.
 
 ## Timestamps
 
@@ -116,7 +106,7 @@ they are independent of the `v0.1.x` and v1 software release names.
 
 ## Job Bundle
 
-Each Job owns `work/jobs/<job_id>/`: `job.json` describes the bundle, `state.db` stores execution state, and `job.log` records events. Tape-specific reports and LTFS logs/indexes live below `tapes/<barcode>/`; the existing Media/Job profiles retain their keys. Native tar reads with [passive read learning](read-planning.md#software-read-ordering) append `tapes/<barcode>/read-observations.jsonl`, one JSON object per completed Tape action with raw facts only: `device`, `scope` (protobuf JSON of the learned model's applicability), `job_id`, `barcode`, optional `map_source`, `map_observed_at_ns`, `min_lpos` and `max_lpos`, `opcode`, `action` (`LOCATE`, `REWIND`, `READ` segment, `FIRST_READ`, `FILEMARK_READ` or `UNLOAD`), optional `previous_action`, `started_at_ns`, optional `idle_seconds`, `from`/`to` endpoints with optional `partition`, `object`, `file`, `wrap`, `offset` and `span`, and `commands`, `bytes`, `device_seconds`, `host_seconds`, `max_host_gap_seconds` and `discard`. Instants are decimal strings. Each attempt appends after native I/O settles; a refit skips a truncated tail. Temporary script key files do not become additional durable recovery records. The complete append-only log remains with its Job until deletion; it is not rotated or truncated. A bundle is the retention and cleanup unit; detailed Job state is never a Library blob.
+Each Job owns `work/jobs/<job_id>/`: `job.json` describes the bundle, `state.db` stores execution state, and `job.log` records events. Tape-specific reports and LTFS logs/indexes live below `tapes/<barcode>/`; the existing Media/Job profiles retain their keys. Temporary script key files do not become additional durable recovery records. The complete append-only log remains with its Job until deletion; it is not rotated or truncated. A bundle is the retention and cleanup unit; detailed Job state is never a Library blob.
 
 [Bundle creation](../../internal/executor/db.go) finishes before Create returns. [Job records](../../internal/executor/job.go) keep authoritative kind, durable status and priority in the Job database's single `job` row. The private `jobs` catalog row contains only identity, navigation, revision and query projections; runtime `Job` snapshots combine that row with the authoritative Job record and the attached runner's live phase. The Executor's `catalog_kind` is an indexed query projection, published with a new revision when the durable state changes. A Job's state and live phase are read from its own record on every hydration, so no catalog column carries either. Append-only `job_properties(job_id, key, value)` stores `location_id` and `media_id` values for catalog filters, without source/destination roles. Values come from frozen selections or actual operations.
 

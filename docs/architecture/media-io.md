@@ -35,9 +35,8 @@ and resolves the Media record once per attempt:
   for FORMAT. It checks the physical cartridge barcode or Volume marker against that descriptor
   before encryption, mount or path exposure; tar validates its physical label after establishing
   the required record mode and before content access. FORMAT generates the new key and profile and
-  returns them in the Session's descriptor, which Archive publishes. A read Session returns the Tape
-  position map it observed in its descriptor; the Job saves that map, and a failed save is logged
-  without vetoing the read.
+  returns them in the Session's descriptor, which Archive publishes. A read Session keeps its Tape
+  position map to itself; nothing writes it back to the Media.
 
 Read Finalize also receives the caller's read/stop error. A successful raw tar read uses normal
 physical release; failed or canceled work only restores owned controls and closes the descriptor.

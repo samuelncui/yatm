@@ -66,7 +66,7 @@ func TestScanCurrentIndexCompletesPreboundNativeRanges(t *testing.T) {
 				// Use the production LTFS state model and parser, including the common first file and unload cost.
 				model, err := media.NewReadCostModel(media.ReadModelProfile{ID: "Scan current Index fixture",
 					SnapshotValid: func() bool { return true },
-					BOT:           map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+					BOT:           map[uint32]uint64{1: 0}, Coefficients: media.ReadModelCoefficients{Seek: 1000},
 					Wraps: []media.ReadModelWrap{
 						{Partition: 1, Wrap: 0, Full: true, Endpoint: proto.Uint64(100), Direction: media.ReadWrapForward},
 						{Partition: 1, Wrap: 1, Full: true, Endpoint: proto.Uint64(200), Direction: media.ReadWrapReverse},
@@ -78,8 +78,6 @@ func TestScanCurrentIndexCompletesPreboundNativeRanges(t *testing.T) {
 					BlockBytes: 512 << 10, Compression: proto.Bool(false), Partitions: map[string]uint32{"q": 1},
 					Model: model, Completion: &media.ReadCompletion{FullSpanSeconds: 1000},
 					DataEnd: &entity.TapeBytePosition{Partition: 1, LogicalObject: 200},
-					Timing: &entity.TapeReadTiming{BytesPerSecond: proto.Float64(1e9),
-						PostLocateReadOverheadSeconds: proto.Float64(0)},
 					ReadIndex: func(ctx context.Context, yield func(*media.LTFSIndexEntry) error) error {
 						indexReads++
 						return media.ParseLTFSReadIndex(ctx, strings.NewReader(index), "volume", 7, yield)

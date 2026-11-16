@@ -295,8 +295,8 @@ export interface ListJobLogLinesResponse {
 /**
  * JobStatus is a Job's one durable state. PREPARING means its manifest is still being built, READY
  * means the manifest is complete and the remaining work waits for the operator to choose Media,
- * and COMPLETED means every workflow item settled. FAILED is terminal preparation or Scan failure,
- * including operator cancellation; the reason is in the Job's error field. Archive/Restore Media
+ * and COMPLETED means every workflow item settled. FAILED is terminal preparation, Scan or
+ * Calibration failure, including operator cancellation; the reason is in the Job's error field. Archive/Restore Media
  * failures return to their pre-Media state with that reason and published results retained.
  * Current execution is a live observation reported through JobPhase, not durable state.
  *
@@ -343,7 +343,11 @@ export enum JobKind {
     /**
      * @generated from protobuf enum value: JOB_KIND_SCAN = 4;
      */
-    SCAN = 4
+    SCAN = 4,
+    /**
+     * @generated from protobuf enum value: JOB_KIND_CALIBRATION = 5;
+     */
+    CALIBRATION = 5
 }
 /**
  * JobPhase is the live stage of an active Job attempt. QUEUED waits for its Media resource;
@@ -404,7 +408,11 @@ export enum JobPhase {
     /**
      * @generated from protobuf enum value: JOB_PHASE_COMPARING_CONTENT = 16;
      */
-    COMPARING_CONTENT = 16
+    COMPARING_CONTENT = 16,
+    /**
+     * @generated from protobuf enum value: JOB_PHASE_CALIBRATING = 17;
+     */
+    CALIBRATING = 17
 }
 /**
  * JobResultOrder selects the direction of one Job manifest result page.

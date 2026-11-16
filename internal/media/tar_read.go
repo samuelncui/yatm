@@ -462,7 +462,6 @@ func (s *tarReadSession) prepareRead(ctx context.Context, locator *entity.TarMet
 
 func (s *tarReadSession) continueRead(ctx context.Context, file uint64) error {
 	// Cross APPEND files only after parsing real members, zero trailer padding and a real FILEMARK.
-	ctx = tape.WithReadDiscard(ctx)
 	s.records.ctx = ctx
 	for s.file < file {
 		for {
@@ -547,7 +546,6 @@ func (source *tarContentSource) Open(ctx context.Context) (file fs.File, openErr
 	}
 
 	// Skipped members must settle their real padding before the selected source can open.
-	discardCtx := tape.WithReadDiscard(ctx)
 	for {
 		s.records.ctx = ctx
 		member, err := nextTarMember(s.records, locator.TapeFile)
@@ -571,7 +569,6 @@ func (source *tarContentSource) Open(ctx context.Context) (file fs.File, openErr
 		if member.start > locator.HeaderOffsetBytes {
 			return nil, errors.New("tar locator is not a header-chain boundary")
 		}
-		s.records.ctx = discardCtx
 		if _, err := io.Copy(io.Discard, member.reader); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,55 @@
+syntax = "proto3";
+package yatm.v1;
+option go_package = "github.com/samuelncui/yatm/entity;entity";
+
+import "job.proto";
+import "settings.proto";
+
+service CalibrationJobService {
+    rpc Create(CreateCalibrationJobRequest) returns (CreateCalibrationJobResponse) {}
+    rpc GetProgress(GetCalibrationJobProgressRequest) returns (GetCalibrationJobProgressResponse) {}
+}
+
+// CalibrationJobSpec names the configured Tape device and what to calibrate on. Exactly one of
+// media_id and write_test_data is given.
+message CalibrationJobSpec {
+    string device = 1;
+    // The tar Tape Media expected in the drive.
+    optional int64 media_id = 2;
+    // Overwrites the loaded cartridge from the beginning of tape with test data and calibrates on it.
+    bool write_test_data = 3;
+}
+
+// CalibrationMove is one measured LOCATE. A position is a wrap and the longitudinal fraction of
+// one span measured from the beginning-of-tape end.
+message CalibrationMove {
+    uint32 from_wrap = 1;
+    double from_span = 2;
+    uint32 to_wrap = 3;
+    double to_span = 4;
+    double seconds = 5;
+}
+
+message CreateCalibrationJobRequest {
+    CalibrationJobSpec spec = 1;
+}
+
+message CreateCalibrationJobResponse {
+    Job job = 1;
+}
+
+message GetCalibrationJobProgressRequest {
+    int64 id = 1;
+}
+
+message GetCalibrationJobProgressResponse {
+    Job job = 1;
+    CalibrationJobSpec spec = 2;
+    // Moves measured so far, in order.
+    repeated CalibrationMove moves = 3;
+    uint32 total_moves = 4;
+    // The fitted read parameters, present once the moves were fitted.
+    optional TapeReadParameters parameters = 5;
+    // Latest execution attempt, excluding time waiting between attempts. Absent when unknown.
+    optional int64 elapsed_ms = 6;
+}

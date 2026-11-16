@@ -52,7 +52,7 @@ type Module struct {
 	Library Group[*entity.LibrarySettings]
 	Preview Group[*entity.PreviewSettings]
 	Job     Group[*entity.JobSettings]
-	Device  DeviceGroup
+	Device  Group[*entity.DeviceSettings]
 }
 
 type row struct {
@@ -90,11 +90,11 @@ func New(db *gorm.DB, preview PreviewDefinition) *Module {
 		},
 		validate: ValidateJob,
 	})
-	module.Device = DeviceGroup{group: newGroup(db, definition[*entity.DeviceSettings]{
+	module.Device = newGroup(db, definition[*entity.DeviceSettings]{
 		key:      "devices",
 		defaults: func() (*entity.DeviceSettings, error) { return &entity.DeviceSettings{}, nil },
 		validate: ValidateDevice,
-	})}
+	})
 	return module
 }
 
@@ -110,7 +110,7 @@ func (m *Module) WithDB(db *gorm.DB) *Module {
 // NewWithCatalog keeps committed Settings reads off the Catalog writer connection.
 func NewWithCatalog(write, read *gorm.DB, preview PreviewDefinition) *Module {
 	module := New(write, preview)
-	module.Library.reader, module.Preview.reader, module.Job.reader, module.Device.group.reader = read, read, read, read
+	module.Library.reader, module.Preview.reader, module.Job.reader, module.Device.reader = read, read, read, read
 	return module
 }
 

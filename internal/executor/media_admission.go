@@ -13,7 +13,7 @@ import (
 )
 
 // OpenReadSession resolves the frozen expectation's Media record once for a Job attempt, opens the
-// Backend Session with it and persists the Tape position map that Session observed.
+// Backend Session with it.
 func (e *Executor) OpenReadSession(
 	ctx context.Context, jobID int64, logger *logrus.Logger, mediaWait func(bool), target *entity.ReadMediaTarget,
 ) (mediapkg.ReadSession, error) {
@@ -28,19 +28,7 @@ func (e *Executor) OpenReadSession(
 		return nil, err
 	}
 	backend := e.newMediaBackend(jobID, logger, mediaWait).(*mediaBackend)
-	session, err := backend.NewReadSession(ctx, target, describeMedia(stored))
-	if err != nil {
-		return nil, err
-	}
-
-	// Geometry is derived; a save failure cannot veto the available read.
-	if selected := session.Media(); selected != nil && selected.TapePositionMap != nil &&
-		!proto.Equal(selected.TapePositionMap, stored.TapePositionMap) {
-		if _, err := e.Lib().UpdateMediaTapePositionMap(ctx, stored, selected.TapePositionMap); err != nil {
-			backend.logger.WithContext(ctx).WithError(err).Warn("save observed Tape position map failed")
-		}
-	}
-	return session, nil
+	return backend.NewReadSession(ctx, target, describeMedia(stored))
 }
 
 // checkReadMedia admits the resolved record only as the identity and profile frozen for this attempt.

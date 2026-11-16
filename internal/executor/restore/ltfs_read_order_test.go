@@ -70,7 +70,7 @@ func TestRestoreConsumesLTFSProviderSequenceAsNativePaths(t *testing.T) {
 				index += `</contents></directory></ltfsindex>`
 				model, err := media.NewReadCostModel(media.ReadModelProfile{ID: "LTFS Restore fixture",
 					SnapshotValid: func() bool { return true },
-					BOT:           map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+					BOT:           map[uint32]uint64{1: 0}, Coefficients: media.ReadModelCoefficients{Seek: 1000},
 					Wraps: []media.ReadModelWrap{
 						{Partition: 1, Wrap: 0, Full: true, Endpoint: proto.Uint64(100), Direction: media.ReadWrapForward},
 						{Partition: 1, Wrap: 1, Full: true, Endpoint: proto.Uint64(200), Direction: media.ReadWrapReverse},
@@ -85,9 +85,7 @@ func TestRestoreConsumesLTFSProviderSequenceAsNativePaths(t *testing.T) {
 					ReadIndex: func(ctx context.Context, yield func(*media.LTFSIndexEntry) error) error {
 						indexReads++
 						return media.ParseLTFSReadIndex(ctx, strings.NewReader(index), "204d1c2f-c755-44cf-ac70-8541ded5f005", 7, yield)
-					},
-					Timing: &entity.TapeReadTiming{BytesPerSecond: proto.Float64(1e9),
-						PostLocateReadOverheadSeconds: proto.Float64(0)}})
+					}})
 				require.NotNil(t, session.provider, reason)
 
 				// The production Restore feeder submits the same complete plan across different ACP batch sizes.

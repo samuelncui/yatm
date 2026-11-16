@@ -40,8 +40,7 @@ func tarCostRange(file, start, end uint64, offset uint32) readplan.Range {
 func TestTarReadModelPricesOnlyCoveredMemberRecords(t *testing.T) {
 	// A final partial wrap keeps its actual EOD while its coordinate uses a full-wrap denominator.
 	profile, _ := readModelFixture()
-	profile.FullWrapSeconds = proto.Float64(10)
-	profile.Coefficients.Longitudinal = 0
+	profile.Coefficients.Seek = 10
 	profile.Wraps = profile.Wraps[:2]
 	profile.Wraps[0].Endpoint = proto.Uint64(100)
 	profile.Wraps[1].Endpoint = proto.Uint64(150)
@@ -138,9 +137,8 @@ func TestTarReadActionsCacheOnlyNeedsNoTiming(t *testing.T) {
 }
 
 func TestTarReadActionsMissingInputsAffectOnlyTheirMethod(t *testing.T) {
-	// Continue works with no positioning model or post-LOCATE measurement; cache needs neither READ input.
+	// Continue works with no positioning model; cache needs no READ input.
 	s := &tarReadSession{options: TarSessionOptions{Mode: tape.RecordMode{MaximumBytes: 4096}, ReadTiming: tarReadTimingFixture()}}
-	s.options.ReadTiming.PostLocateReadOverheadSeconds = nil
 	state := readplan.State{Position: readOrderPosition(101), Stream: tarPrefix(1)}
 	if transition, known := s.evaluateRead(state, tarCostRange(1, 102, 103, 0)); !known || transition.Method != readplan.MethodContinue {
 		t.Fatalf("continue=%v known=%t", transition, known)
@@ -189,19 +187,55 @@ func TestTarReadActionsRejectUnknownAndOverflow(t *testing.T) {
 	}
 }
 
-func TestTarReadActionsChargePostLocateOnce(t *testing.T) {
-	// A complete distant seek includes positioning plus first READ overhead and containing-record bytes.
+func TestTarReadActionsChargePositioningOnce(t *testing.T) {
+	// A complete seek into the other half includes positioning and containing-record bytes.
 	s := &tarReadSession{options: TarSessionOptions{Mode: tape.RecordMode{MaximumBytes: 4096}, ReadTiming: tarReadTimingFixture(), ReadModel: tarReadModelFixture(t, nil)}, navigator: &tarPositionDevice{bits: 64}}
 	from := readplan.State{Position: readOrderPosition(101), Stream: tarPrefix(1)}
-	transition, known := s.evaluateRead(from, tarCostRange(1, 120, 121, 0))
-	if !known || transition.Method != readplan.MethodSeek || transition.Cost != 11500*time.Millisecond {
+	transition, known := s.evaluateRead(from, tarCostRange(1, 6000, 6001, 0))
+	if !known || transition.Method != readplan.MethodSeek || transition.Cost != 11*time.Second {
 		t.Fatalf("seek=%v known=%t", transition, known)
 	}
 
-	// A subsequent file does not itself imply a new seek or another post-LOCATE overhead.
-	next, known := s.evaluateRead(transition.Next, tarCostRange(2, 122, 123, 0))
+	// A subsequent file does not itself imply a new seek.
+	next, known := s.evaluateRead(transition.Next, tarCostRange(2, 6002, 6003, 0))
 	if !known || next.Method != readplan.MethodContinue || next.Cost != 1250*time.Millisecond {
 		t.Fatalf("next=%v known=%t", next, known)
+	}
+}
+
+func TestTarReadTransfersPayWrapTurns(t *testing.T) {
+	// Wrap 0 ends at record 200; continuing through the turn into wrap 1 pays one 3-second reversal.
+	model, err := NewReadCostModel(ReadModelProfile{ID: "software-only tar turn fixture", SnapshotValid: func() bool { return true },
+		BOT: map[uint32]uint64{0: 0}, ReadObjectSeconds: 1,
+		Coefficients: ReadModelCoefficients{Base: 100, ApproachReversal: 3},
+		Wraps: []ReadModelWrap{{Partition: 0, Wrap: 0, Direction: ReadWrapForward, Full: true, Endpoint: proto.Uint64(200)},
+			{Partition: 0, Wrap: 1, Direction: ReadWrapReverse, Full: true, Endpoint: proto.Uint64(400)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &tarReadSession{options: TarSessionOptions{Mode: tape.RecordMode{MaximumBytes: 4096}, ReadTiming: tarReadTimingFixture(),
+		ReadModel: model}, navigator: &tarPositionDevice{bits: 64}}
+	for _, test := range []struct {
+		name       string
+		start, end uint64
+		cost       time.Duration
+	}{{"within one wrap", 190, 196, 6 * time.Second}, {"across the turn", 195, 203, 11 * time.Second}} {
+		state := readplan.State{Position: readOrderPosition(test.start), Stream: tarPrefix(1)}
+		transition, known := s.evaluateRead(state, tarCostRange(1, test.start, test.end, 0))
+		if !known || transition.Method != readplan.MethodContinue || transition.Cost != test.cost {
+			t.Fatalf("%s: transition=%v known=%t", test.name, transition, known)
+		}
+	}
+
+	// A member ending with wrap 0's last record and its successor from host-next 200 pay the turn
+	// exactly once, like the single continuous read across it.
+	first, known := s.evaluateRead(readplan.State{Position: readOrderPosition(195), Stream: tarPrefix(1)}, tarCostRange(1, 195, 200, 0))
+	if !known {
+		t.Fatal("first member is unpriced")
+	}
+	second, known := s.evaluateRead(first.Next, tarCostRange(1, 200, 203, 0))
+	if !known || second.Method != readplan.MethodContinue || first.Cost+second.Cost != 11*time.Second {
+		t.Fatalf("first=%v second=%v known=%t", first, second, known)
 	}
 }
 
@@ -212,7 +246,6 @@ func TestTarLogicalReadContinuesAndCachesWithoutModel(t *testing.T) {
 	d.cursor = 1
 	options.TapeFile, options.ReadInitialFileKnown, options.ReadInitialPosition = 1, true, readOrderPosition(101)
 	options.ReadTiming = tarReadTimingFixture()
-	options.ReadTiming.PostLocateReadOverheadSeconds = nil
 	session, _ := NewTarReadSession(d, options)
 	readPositionMember(t, session, tarPositionRequest(t, d, members[1]), members[1].data)
 	readPositionMember(t, session, tarPositionRequest(t, d, members[0]), members[0].data)
@@ -229,8 +262,15 @@ func TestTarReadRuntimeChoosesContinueAndThenRealSeek(t *testing.T) {
 	d, options, members := tarPositionFixture(t, false, []int{4096}, members)
 	d.cursor = 1
 	options.TapeFile, options.ReadInitialFileKnown, options.ReadInitialPosition = 1, true, readOrderPosition(101)
-	options.ReadTiming, options.ReadModel = tarReadTimingFixture(), tarReadModelFixture(t, nil)
-	options.ReadModel.coefficients.Base = 0.01
+	// The wrap midpoint at object 104 puts the fourth member in the other half from the first.
+	model, err := NewReadCostModel(ReadModelProfile{ID: "software-only tar midpoint fixture", SnapshotValid: func() bool { return true },
+		BOT: map[uint32]uint64{0: 0}, ReadObjectSeconds: 1,
+		Wraps:        []ReadModelWrap{{Partition: 0, Wrap: 7, Band: 2, Direction: ReadWrapForward, Full: true, Endpoint: proto.Uint64(208)}},
+		Coefficients: ReadModelCoefficients{Base: 0.01}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.ReadTiming, options.ReadModel = tarReadTimingFixture(), model
 	session, _ := NewTarReadSession(d, options)
 	readPositionMember(t, session, tarPositionRequest(t, d, members[0]), members[0].data)
 	if d.reads != 1 || len(d.locates) != 0 {

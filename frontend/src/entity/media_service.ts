@@ -495,16 +495,6 @@ export interface TapePreparedRead {
      * @generated from protobuf field: string coverage_detail = 11
      */
     coverageDetail: string;
-    /**
-     * Residuals of the selected learned read parameters over their retained observations.
-     *
-     * @generated from protobuf field: optional double learned_mae_seconds = 12
-     */
-    learnedMaeSeconds?: number;
-    /**
-     * @generated from protobuf field: optional double learned_max_error_seconds = 13
-     */
-    learnedMaxErrorSeconds?: number;
 }
 /**
  * @generated from protobuf message yatm.v1.DeviceFeatureScope
@@ -2473,9 +2463,7 @@ class TapePreparedRead$Type extends MessageType<TapePreparedRead> {
             { no: 8, name: "parameters_reference", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 9, name: "applicability_reason", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 10, name: "position_source", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 11, name: "coverage_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 12, name: "learned_mae_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 13, name: "learned_max_error_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ }
+            { no: 11, name: "coverage_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<TapePreparedRead>): TapePreparedRead {
@@ -2533,12 +2521,6 @@ class TapePreparedRead$Type extends MessageType<TapePreparedRead> {
                 case /* string coverage_detail */ 11:
                     message.coverageDetail = reader.string();
                     break;
-                case /* optional double learned_mae_seconds */ 12:
-                    message.learnedMaeSeconds = reader.double();
-                    break;
-                case /* optional double learned_max_error_seconds */ 13:
-                    message.learnedMaxErrorSeconds = reader.double();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2584,12 +2566,6 @@ class TapePreparedRead$Type extends MessageType<TapePreparedRead> {
         /* string coverage_detail = 11; */
         if (message.coverageDetail !== "")
             writer.tag(11, WireType.LengthDelimited).string(message.coverageDetail);
-        /* optional double learned_mae_seconds = 12; */
-        if (message.learnedMaeSeconds !== undefined)
-            writer.tag(12, WireType.Bit64).double(message.learnedMaeSeconds);
-        /* optional double learned_max_error_seconds = 13; */
-        if (message.learnedMaxErrorSeconds !== undefined)
-            writer.tag(13, WireType.Bit64).double(message.learnedMaxErrorSeconds);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

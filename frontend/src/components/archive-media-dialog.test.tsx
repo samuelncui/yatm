@@ -393,7 +393,12 @@ it.each(
           value: {
             oneofKind: "device",
             device: DeviceSettings.create({
-              devices: [{ device: "/dev/nst0", options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1", tarWriteOptions: options } } }],
+              devices: [
+                {
+                  device: "/dev/nst0",
+                  options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1", tarWriteOptions: options, readParameters: [] } },
+                },
+              ],
             }),
           },
         }),
@@ -459,6 +464,7 @@ it("refreshes untouched device defaults while retaining edited record values", a
                   oneofKind: "tape",
                   tape: {
                     readOrder: 0,
+                    readParameters: [],
                     defaultFormat: "tar_pax_v1",
                     tarWriteOptions: { recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144, hardwareCompression: false },
                   },
@@ -470,6 +476,7 @@ it("refreshes untouched device defaults while retaining edited record values", a
                   oneofKind: "tape",
                   tape: {
                     readOrder: 0,
+                    readParameters: [],
                     defaultFormat: "tar_pax_v1",
                     tarWriteOptions: { recordMode: TapeRecordMode.FIXED, recordBytes: 131072, hardwareCompression: false },
                   },
@@ -510,7 +517,7 @@ it("keeps failed device defaults unknown until an explicit refresh succeeds", as
         value: {
           oneofKind: "device",
           device: DeviceSettings.create({
-            devices: [{ device: "/dev/nst0", options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1" } } }],
+            devices: [{ device: "/dev/nst0", options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1", readParameters: [] } } }],
           }),
         },
       }),

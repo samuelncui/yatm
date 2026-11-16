@@ -60,6 +60,7 @@ type contentStream struct {
 	orderChecked bool
 	provider     mediapkg.ReadOrderProvider
 	sequence     *readplan.Sequence
+	readStarted  time.Time
 	trackReads   bool
 	reads        *mediapkg.ReadBatch
 	hardStopped  <-chan struct{}
@@ -256,9 +257,13 @@ func contentHashPolicy(config *Config, session mediapkg.ReadSession) acp.HashPol
 }
 
 func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) (rerr error) {
-	// Release the disposable route only after ACP has drained every accepted source.
+	// Release the disposable route only after ACP has drained every accepted source; a complete
+	// planned read logs its realized time beside the estimates.
 	defer func() {
 		if s.sequence != nil {
+			if rerr == nil {
+				executor.LogReadOrderRealized(ctx, s.runner.logger, "Scan", s.sequence, time.Since(s.readStarted))
+			}
 			rerr = errors.Join(rerr, s.sequence.Close())
 		}
 	}()
@@ -459,7 +464,7 @@ func (s *contentStream) prepareSequence(ctx context.Context) error {
 	if sequence == nil {
 		s.provider = nil
 	}
-	s.sequence = sequence
+	s.sequence, s.readStarted = sequence, time.Now()
 	return nil
 }
 

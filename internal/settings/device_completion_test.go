@@ -19,13 +19,15 @@ func TestDeviceReadCompletionPreservesPartialSettingsAndJSON(t *testing.T) {
 		"full span only":  {FullSpanSeconds: proto.Float64(107)},
 		"fixed zero only": {FixedSeconds: proto.Float64(0)},
 		"complete":        {FullSpanSeconds: proto.Float64(107), FixedSeconds: proto.Float64(3.5)},
+		"LTFS unmount":    {FullSpanSeconds: proto.Float64(107), FixedSeconds: proto.Float64(3.5), LtfsUnmountSeconds: proto.Float64(12)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			// Partial inputs survive the real Settings replacement and protobuf JSON storage boundary.
 			module := testModule(t)
 			ctx := context.Background()
 			value := deviceTestValue()
-			value.Devices[0].GetTape().ReadParameters = &entity.TapeReadParameters{Completion: completion}
+			value.Devices[0].GetTape().ReadParameters = []*entity.TapeReadParameters{{
+				AppliesTo: &entity.TapeReadApplicability{DensityCode: proto.Uint32(0x58)}, Completion: completion}}
 			want := proto.Clone(value).(*entity.DeviceSettings)
 			saved, err := module.Device.Save(ctx, value)
 			require.NoError(t, err)
@@ -44,7 +46,7 @@ func TestDeviceReadCompletionPreservesPartialSettingsAndJSON(t *testing.T) {
 						require.Contains(t, string(document.Value), `"`+field+`"`)
 					}
 				}
-				saved.Devices[0].GetTape().ReadParameters.Completion.FixedSeconds = proto.Float64(99)
+				saved.Devices[0].GetTape().ReadParameters[0].Completion.FixedSeconds = proto.Float64(99)
 			}
 
 			// Returned and attempt-default messages must not mutate committed completion measurements.
@@ -52,12 +54,12 @@ func TestDeviceReadCompletionPreservesPartialSettingsAndJSON(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, proto.Equal(want, stored))
 			defaults := TapeDefaults(stored, "/dev/inactive")
-			if defaults.ReadParameters.Completion != nil {
-				defaults.ReadParameters.Completion.FixedSeconds = proto.Float64(99)
+			if defaults.ReadParameters[0].Completion != nil {
+				defaults.ReadParameters[0].Completion.FixedSeconds = proto.Float64(99)
 			}
 			require.True(t, proto.Equal(want, stored))
-			require.Nil(t, stored.Devices[0].GetTape().ReadParameters.Positioning)
-			require.Nil(t, stored.Devices[0].GetTape().ReadParameters.Reading)
+			require.Nil(t, stored.Devices[0].GetTape().ReadParameters[0].Positioning)
+			require.Nil(t, stored.Devices[0].GetTape().ReadParameters[0].Reading)
 		})
 	}
 }
@@ -67,9 +69,10 @@ func TestDeviceReadCompletionRejectsInvalidReplacement(t *testing.T) {
 	module := testModule(t)
 	ctx := context.Background()
 	baseline := deviceTestValue()
-	baseline.Devices[0].GetTape().ReadParameters = &entity.TapeReadParameters{
+	baseline.Devices[0].GetTape().ReadParameters = []*entity.TapeReadParameters{{
+		AppliesTo:  &entity.TapeReadApplicability{DensityCode: proto.Uint32(0x58)},
 		Completion: &entity.TapeReadCompletion{FullSpanSeconds: proto.Float64(107)},
-	}
+	}}
 	_, err := module.Device.Save(ctx, baseline)
 	require.NoError(t, err)
 	for field, set := range map[string]func(*entity.TapeReadCompletion, float64){
@@ -77,6 +80,9 @@ func TestDeviceReadCompletionRejectsInvalidReplacement(t *testing.T) {
 			value.FullSpanSeconds = proto.Float64(seconds)
 		},
 		"fixed": func(value *entity.TapeReadCompletion, seconds float64) { value.FixedSeconds = proto.Float64(seconds) },
+		"LTFS unmount": func(value *entity.TapeReadCompletion, seconds float64) {
+			value.LtfsUnmountSeconds = proto.Float64(seconds)
+		},
 	} {
 		invalid := []float64{math.NaN(), math.Inf(1), math.Inf(-1), -1, 1e20}
 		if field == "full span" {
@@ -86,8 +92,8 @@ func TestDeviceReadCompletionRejectsInvalidReplacement(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%v", field, seconds), func(t *testing.T) {
 				// Validation rejects nonfinite, negative, overflowing and zero full-span inputs before storage.
 				value := proto.Clone(baseline).(*entity.DeviceSettings)
-				set(value.Devices[0].GetTape().ReadParameters.Completion, seconds)
-				require.Error(t, ValidateTapeReadParameters(value.Devices[0].GetTape().ReadParameters))
+				set(value.Devices[0].GetTape().ReadParameters[0].Completion, seconds)
+				require.Error(t, ValidateTapeReadParameters(value.Devices[0].GetTape().ReadParameters[0]))
 				_, err := module.Device.Save(ctx, value)
 				require.ErrorIs(t, err, ErrInvalid)
 				stored, err := module.Device.Current(ctx)

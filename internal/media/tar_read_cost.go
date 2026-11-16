@@ -3,7 +3,6 @@ package media
 import (
 	"math"
 	"math/bits"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +78,7 @@ func (s *tarReadSession) evaluateRead(state readplan.State, interval readplan.Ra
 	var selectedRecords uint64
 	known := false
 	offer := func(method readplan.Method, records, marks uint64, setup time.Duration) bool {
-		cost, ok := s.readTransferCost(records, marks)
+		cost, ok := s.readTransferCost(end, records, marks)
 		if !ok {
 			return false
 		}
@@ -99,15 +98,12 @@ func (s *tarReadSession) evaluateRead(state readplan.State, interval readplan.Ra
 		}
 	}
 
-	// Only a real LOCATE pays the effective post-LOCATE READ overhead.
+	// Only a real LOCATE pays positioning time.
 	seekKnown := false
-	if s.navigator != nil && s.options.ReadModel.Valid() && state.Position != nil &&
-		s.options.ReadTiming != nil && s.options.ReadTiming.PostLocateReadOverheadSeconds != nil {
+	if s.navigator != nil && s.options.ReadModel.Valid() && state.Position != nil {
 		target := &entity.TapeBytePosition{LogicalObject: start}
-		setup, ok := s.options.ReadModel.AccessCost(state.Position, target)
-		extra, extraOK := readSeconds(*s.options.ReadTiming.PostLocateReadOverheadSeconds)
-		if ok && extraOK {
-			seekKnown = offer(readplan.MethodSeek, end-start, 0, setup+extra)
+		if setup, ok := s.options.ReadModel.AccessCost(state.Position, target); ok {
+			seekKnown = offer(readplan.MethodSeek, end-start, 0, setup)
 		}
 	}
 
@@ -144,26 +140,12 @@ func (s *tarReadSession) modelCoversReadRange(interval readplan.Range) bool {
 		return false
 	}
 	end, _ := tarReadRecordEnd(interval.End, 64)
-	start := interval.Start.LogicalObject
-	wraps := model.intervals[interval.Start.Partition]
-	at := sort.Search(len(wraps), func(i int) bool { return wraps[i].high > start })
-	if at == len(wraps) || start < wraps[at].low {
-		return false
-	}
-
-	// Both endpoints alone cannot establish coverage across a missing interior interval.
-	covered := wraps[at].high
-	for covered < end && at+1 < len(wraps) {
-		at++
-		if wraps[at].low != covered {
-			return false
-		}
-		covered = wraps[at].high
-	}
-	return end <= covered
+	return model.covers(interval.Start.Partition, interval.Start.LogicalObject, end)
 }
 
-func (s *tarReadSession) readTransferCost(records, marks uint64) (time.Duration, bool) {
+// readTransferCost prices a transfer of records data records and marks filemarks that ends with the
+// record before end.
+func (s *tarReadSession) readTransferCost(end, records, marks uint64) (time.Duration, bool) {
 	// Pure host-buffer work has no native latency or empirical timing prerequisite.
 	if records == 0 && marks == 0 {
 		return 0, true
@@ -177,11 +159,26 @@ func (s *tarReadSession) readTransferCost(records, marks uint64) (time.Duration,
 	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
 		return 0, false
 	}
-	high, bytes := bits.Mul64(records, uint64(s.options.Mode.MaximumBytes))
-	if high != 0 {
-		return 0, false
+
+	// A position map prices the records with each wrap turn up to host-next end; without one the
+	// records alone take their bytes at the read rate.
+	estimate := 0.0
+	if model := s.options.ReadModel; model.Valid() {
+		seconds, known := model.ReadingSeconds(&entity.TapeBytePosition{LogicalObject: end - records - marks},
+			&entity.TapeBytePosition{LogicalObject: end}, records)
+		if !known {
+			return 0, false
+		}
+		estimate = seconds
+	} else {
+		high, bytes := bits.Mul64(records, uint64(s.options.Mode.MaximumBytes))
+		if high != 0 {
+			return 0, false
+		}
+		estimate = float64(bytes) / rate
 	}
-	estimate := float64(bytes) / rate
+
+	// Each crossed filemark adds its fixed overhead.
 	if marks != 0 {
 		if timing.FilemarkOverheadSeconds == nil || *timing.FilemarkOverheadSeconds < 0 ||
 			math.IsNaN(*timing.FilemarkOverheadSeconds) || math.IsInf(*timing.FilemarkOverheadSeconds, 0) {

@@ -16,6 +16,10 @@ var (
 	_ = driver.Valuer(&RestoreJobSpec{})
 	_ = sql.Scanner(&ScanJobSpec{})
 	_ = driver.Valuer(&ScanJobSpec{})
+	_ = sql.Scanner(&CalibrationJobSpec{})
+	_ = driver.Valuer(&CalibrationJobSpec{})
+	_ = sql.Scanner(&TapeReadParameters{})
+	_ = driver.Valuer(&TapeReadParameters{})
 	_ = sql.Scanner(&ArchiveManifestFile{})
 	_ = driver.Valuer(&ArchiveManifestFile{})
 	_ = sql.Scanner(&ArchiveCopyResult{})
@@ -43,6 +47,22 @@ func (x *ScanJobSpec) Scan(src any) error {
 }
 
 func (x *ScanJobSpec) Value() (driver.Value, error) {
+	return Value(x)
+}
+
+func (x *CalibrationJobSpec) Scan(src any) error {
+	return Scan(x, src)
+}
+
+func (x *CalibrationJobSpec) Value() (driver.Value, error) {
+	return Value(x)
+}
+
+func (x *TapeReadParameters) Scan(src any) error {
+	return Scan(x, src)
+}
+
+func (x *TapeReadParameters) Value() (driver.Value, error) {
 	return Value(x)
 }
 

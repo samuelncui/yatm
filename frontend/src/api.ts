@@ -2,6 +2,7 @@ import type { FileData } from "@samuelncui/chonky";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import {
   ArchiveJobServiceClient,
+  CalibrationJobServiceClient,
   JobServiceClient,
   MediaAccess,
   MediaKind,
@@ -46,6 +47,7 @@ export const jobCli = new JobServiceClient(transport);
 export const archiveJobCli = new ArchiveJobServiceClient(transport);
 export const restoreJobCli = new RestoreJobServiceClient(transport);
 export const scanJobCli = new ScanJobServiceClient(transport);
+export const calibrationJobCli = new CalibrationJobServiceClient(transport);
 export const filesCli = new FilesServiceClient(transport);
 export const locationCli = new LocationServiceClient(transport);
 export const settingsCli = new SettingsServiceClient(transport);
@@ -55,6 +57,7 @@ export const settingsCli = new SettingsServiceClient(transport);
   archiveJobs: archiveJobCli,
   restoreJobs: restoreJobCli,
   scanJobs: scanJobCli,
+  calibrationJobs: calibrationJobCli,
   locations: locationCli,
   files: filesCli,
 };

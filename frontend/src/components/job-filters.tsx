@@ -8,7 +8,7 @@ import { jobLabel } from "@/components/job-progress";
 import { errorMessage } from "@/tools";
 import { useLocationChoices } from "./use-location-choices";
 
-export const jobKinds = [JobKind.ARCHIVE, JobKind.RESTORE, JobKind.SCAN];
+export const jobKinds = [JobKind.ARCHIVE, JobKind.RESTORE, JobKind.SCAN, JobKind.CALIBRATION];
 export function jobFilterFromParams(params: URLSearchParams): JobFilter {
   const kind = Number(params.get("kind"));
   const location = params.get("location");

@@ -12,6 +12,7 @@ import (
 )
 
 func (s *orderedRestoreSession) ReadPlanningBudget() time.Duration { return s.planningBudget }
+func (s *orderedRestoreSession) MinimumGain() time.Duration        { return 0 }
 
 func TestRestoreReadPlanningBudgetKeepsManifestAndVerifiedReuse(t *testing.T) {
 	for _, reuse := range []bool{false, true} {

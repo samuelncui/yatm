@@ -1,6 +1,24 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { isWritableTapeFormat } from "@/components/tape-format";
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  LinearProgress,
+  MenuItem,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+} from "@mui/material";
 import { mediaCli } from "@/api";
 import {
   DeviceConfig,
@@ -21,12 +39,27 @@ import { Feedback } from "@/components/feedback";
 import { ActionDialog } from "@/components/action-dialog";
 import { ActionRow } from "@/components/action-row";
 import { errorMessage } from "@/tools";
-import { captureTapeReadConditions, importTapeReadParameters, validateTapeReadParameters } from "./settings-device-read-parameters";
+import { CalibrationButton } from "./settings-device-calibration";
+import {
+  applyReadParametersForm,
+  captureTapeReadConditions,
+  densityLabel,
+  formatRate,
+  formatSeconds,
+  readParameterGroups,
+  readParametersForm,
+  readParametersFormErrors,
+  tapeDensityNames,
+  validateTapeReadParameterSets,
+  type ReadParametersForm,
+} from "./settings-device-read-parameters";
 
 export const DeviceSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.DEVICE, DeviceSettings, "Device");
   const { devices, loading: listing, error: listError, load: loadDevices } = useTapeDevices("Could not list devices");
-  const [selected, setSelected] = useState("");
+  const [params] = useSearchParams();
+  // A link from a Job may name the device to show.
+  const [selected, setSelected] = useState(() => params.get("device") ?? "");
   const [deviceError, setDeviceError] = useState("");
   const [report, setReport] = useState<InspectDeviceResponse | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -92,7 +125,7 @@ export const DeviceSettingsBrowser = () => {
           validateTarWriteOptions(entry.options.tape.tarWriteOptions ?? TarWriteOptions.create()) ||
           capacityPollError(entry.options.tape.capacityPollIntervalSeconds) ||
           readPlanningError(entry.options.tape.readPlanningSeconds) ||
-          validateTapeReadParameters(entry.options.tape.readParameters);
+          validateTapeReadParameterSets(entry.options.tape.readParameters);
       }
       if (!error) continue;
       if (entry.device !== device) selectDevice(entry.device);
@@ -158,12 +191,11 @@ export const DeviceSettingsBrowser = () => {
                     select
                     fullWidth
                     label="Default Tape format"
-                    slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                    value={tape.defaultFormat ?? ""}
+                    // An unset format means LTFS, so it shows as LTFS rather than as a separate entry.
+                    value={tape.defaultFormat ?? "ltfs_v1"}
                     disabled={disabled}
-                    onChange={(event) => change({ ...tape, defaultFormat: event.target.value || undefined })}
+                    onChange={(event) => change({ ...tape, defaultFormat: event.target.value })}
                   >
-                    <MenuItem value="">LTFS by default</MenuItem>
                     <MenuItem value="ltfs_v1">LTFS</MenuItem>
                     <MenuItem value="tar_pax_v1">Tar</MenuItem>
                     {tape.defaultFormat && !isWritableTapeFormat(tape.defaultFormat) && (
@@ -233,25 +265,11 @@ export const DeviceSettingsBrowser = () => {
                   helperText={readPlanningError(tape.readPlanningSeconds) || "Limit for planning one Tape's read order."}
                   onChange={(event) => change({ ...tape, readPlanningSeconds: event.target.value === "" ? undefined : Number(event.target.value) })}
                 />
-                <TextField
-                  select
-                  fullWidth
-                  label="Tar passive read learning"
-                  value={tape.passiveReadLearning === undefined ? "" : tape.passiveReadLearning ? "on" : "off"}
-                  disabled={disabled}
-                  slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                  helperText="Learns from ordinary tar reads for later Jobs. Manual read parameters take priority."
-                  onChange={(event) => change({ ...tape, passiveReadLearning: event.target.value === "" ? undefined : event.target.value === "on" })}
-                >
-                  <MenuItem value="">On by default</MenuItem>
-                  <MenuItem value="on">On</MenuItem>
-                  <MenuItem value="off">Off</MenuItem>
-                </TextField>
               </SettingsSection>
             )}
             {device && (
               <>
-                <SettingsSection title="Manual read parameters" collapsible hasError={!!validateTapeReadParameters(tape.readParameters)}>
+                <SettingsSection title="Read parameters" collapsible hasError={!!validateTapeReadParameterSets(tape.readParameters)}>
                   <ReadParametersEditor
                     key={device}
                     value={tape.readParameters}
@@ -259,7 +277,9 @@ export const DeviceSettingsBrowser = () => {
                     disabled={disabled}
                     onDirtyChange={setParametersDirty}
                     onChange={(readParameters) => change({ ...tape, readParameters })}
-                  />
+                  >
+                    <CalibrationButton device={device} disabled={disabled || !summary} />
+                  </ReadParametersEditor>
                 </SettingsSection>
                 <SettingsSection
                   title="Device details"
@@ -289,113 +309,265 @@ export const DeviceSettingsBrowser = () => {
   );
 };
 
+// ReadParametersEditor edits one device's read parameters, at most one set per density code.
 const ReadParametersEditor = ({
   value,
   report,
   disabled,
   onChange,
   onDirtyChange,
+  children,
 }: {
-  value?: TapeReadParameters;
+  value: TapeReadParameters[];
   report: InspectDeviceResponse | null;
   disabled: boolean;
-  onChange: (value: TapeReadParameters | undefined) => void;
+  onChange: (value: TapeReadParameters[]) => void;
   onDirtyChange: (dirty: boolean) => void;
+  /** Further actions for the device's read parameters, after Add. */
+  children?: ReactNode;
 }) => {
-  const serialized = value ? TapeReadParameters.toJsonString(value, { prettySpaces: 2 }) : "";
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
+  // The dialog edits the set at index, or adds one when index is -1.
+  const [index, setIndex] = useState<number | null>(null);
+  const [initial, setInitial] = useState<ReadParametersForm>(() => readParametersForm(TapeReadParameters.create()));
+  const [form, setForm] = useState<ReadParametersForm>(initial);
+  const [otherDensity, setOtherDensity] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState("");
   const [discard, setDiscard] = useState(false);
   const titleID = useId();
-  const dirty = open && text !== serialized;
+  const dirty = index !== null && JSON.stringify(form) !== JSON.stringify(initial);
   useEffect(() => {
     onDirtyChange(dirty);
     return () => onDirtyChange(false);
   }, [dirty, onDirtyChange]);
-  const close = () => {
-    if (text !== serialized) setDiscard(true);
-    else setOpen(false);
+  const editing = index !== null && index >= 0;
+  const used = value.flatMap((entry, at) => (at === index || entry.appliesTo?.densityCode === undefined ? [] : [entry.appliesTo.densityCode]));
+  const errors = index === null ? {} : readParametersFormErrors(form, used);
+  const shownErrors = attempted ? errors : Object.fromEntries(Object.entries(errors).filter(([key]) => key !== "density" || form.density.trim()));
+  const open = (next: number) => {
+    const start = readParametersForm(next >= 0 ? value[next] : TapeReadParameters.create());
+    setInitial(start);
+    setForm(start);
+    setOtherDensity(start.density !== "" && !tapeDensityNames.has(Number(start.density)));
+    setAttempted(false);
+    setError("");
+    setIndex(next);
   };
+  const close = () => {
+    if (dirty) setDiscard(true);
+    else setIndex(null);
+  };
+  const edit = (change: Partial<ReadParametersForm>) => {
+    setForm((current) => ({ ...current, ...change }));
+    setError("");
+  };
+  const setValue = (key: string, text: string) => setForm((current) => ({ ...current, values: { ...current.values, [key]: text } }));
+  const reportDensity = report?.report.oneofKind === "tape" ? report.report.tape.densityCode : undefined;
+  // Editing keeps the set's density code, so details of another density cannot fill it.
+  const reportMismatch = editing && reportDensity !== undefined && reportDensity !== value[index].appliesTo?.densityCode;
+  const fromDeviceDetails = () => {
+    if (!report) return;
+    const captured = readParametersForm(captureTapeReadConditions(report));
+    // Old measurements are cleared rather than assigned to the reported drive.
+    const density = editing ? form.density : captured.density;
+    setForm({ ...captured, density });
+    if (!editing) setOtherDensity(density !== "" && !tapeDensityNames.has(Number(density)));
+    setError("");
+  };
+  const apply = () => {
+    if (index === null) return;
+    setAttempted(true);
+    if (Object.keys(errors).length > 0) return;
+    const parameters = applyReadParametersForm(editing ? value[index] : TapeReadParameters.create(), initial, form);
+    const next = editing ? value.map((entry, at) => (at === index ? parameters : entry)) : [...value, parameters];
+    const invalid = validateTapeReadParameterSets(next);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    onChange(next);
+    setIndex(null);
+  };
+  const setsError = validateTapeReadParameterSets(value);
   return (
     <Stack spacing={1}>
       <Feedback severity="info">
-        {value ? "Manual read parameters are configured in this draft. " : "Automatic parameters are selected in this draft. "}
-        Manual values take priority; missing values stay unknown.
+        A read uses the set for the loaded cartridge&apos;s density code, otherwise built-in values. Missing values stay unknown.
       </Feedback>
-      {validateTapeReadParameters(value) && <Feedback severity="error">{validateTapeReadParameters(value)}</Feedback>}
+      {setsError && <Feedback severity="error">{setsError}</Feedback>}
+      {value.length > 0 && (
+        <TableContainer>
+          <Table aria-label="Read parameter sets" size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Density</TableCell>
+                <TableCell>Drive serial</TableCell>
+                <TableCell>Source reference</TableCell>
+                <TableCell align="right">Fixed positioning time</TableCell>
+                <TableCell align="right">Seek time for one span</TableCell>
+                <TableCell align="right">Read rate</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {value.map((parameters, at) => {
+                const label = densityLabel(parameters.appliesTo?.densityCode);
+                return (
+                  <TableRow key={at}>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>{label}</TableCell>
+                    <TableCell>{parameters.appliesTo?.driveSerial ?? "Any drive"}</TableCell>
+                    <TableCell>{parameters.sourceReference || "None"}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatSeconds(parameters.positioning?.baseSeconds)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatSeconds(parameters.positioning?.seekSecondsPerWrap)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatRate(parameters.reading?.bytesPerSecond)}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <Button type="button" size="small" disabled={disabled} aria-label={`Edit read parameters for ${label}`} onClick={() => open(at)}>
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="small"
+                        disabled={disabled}
+                        aria-label={`Reset ${label} to built-in`}
+                        onClick={() => onChange(value.filter((_, other) => other !== at))}
+                      >
+                        Reset to built-in
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
       <ActionRow>
-        <Button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            setText(serialized);
-            setError("");
-            setOpen(true);
-          }}
-        >
-          Edit read parameters
+        <Button type="button" disabled={disabled} onClick={() => open(-1)}>
+          Add read parameters
         </Button>
-        <Button type="button" disabled={disabled || !value} onClick={() => onChange(undefined)}>
-          Use automatic parameters
-        </Button>
+        {children}
       </ActionRow>
-      {open && (
+      {index !== null && (
         <Dialog open onClose={close} aria-labelledby={titleID} maxWidth="md" fullWidth>
-          <DialogTitle id={titleID}>Edit manual read parameters</DialogTitle>
+          <DialogTitle id={titleID}>{editing ? "Edit read parameters" : "Add read parameters"}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Alert severity="warning">
-                Manual read parameters override learned and built-in values. Incomplete parameters may keep Logical order. Apply changes only the page draft;
-                use Save on the Settings page to keep them.
+                Read parameters override built-in values for their density code. Incomplete parameters may keep Logical order. Apply changes only the page
+                draft; use Save on the Settings page to keep them.
               </Alert>
+              <p>Empty fields stay unknown; do not enter 0 for a value you have not measured.</p>
+              {editing ? (
+                <TextField
+                  fullWidth
+                  label="Density code"
+                  value={densityLabel(value[index].appliesTo?.densityCode)}
+                  disabled
+                  helperText="Fixed for an existing set."
+                />
+              ) : (
+                <>
+                  <TextField
+                    select
+                    fullWidth
+                    required
+                    label="Density code"
+                    slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
+                    value={otherDensity ? "other" : form.density}
+                    disabled={disabled}
+                    error={!otherDensity && !!shownErrors.density}
+                    helperText={(!otherDensity && shownErrors.density) || "The recorded density of the cartridges this set applies to."}
+                    onChange={(event) => {
+                      const other = event.target.value === "other";
+                      setOtherDensity(other);
+                      edit({ density: other ? "" : event.target.value });
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      Choose a density code
+                    </MenuItem>
+                    {[...tapeDensityNames.keys()].map((code) => (
+                      <MenuItem key={code} value={String(code)} disabled={used.includes(code)}>
+                        {densityLabel(code)}
+                        {used.includes(code) ? " · already set" : ""}
+                      </MenuItem>
+                    ))}
+                    <MenuItem value="other">Other density code</MenuItem>
+                  </TextField>
+                  {otherDensity && (
+                    <TextField
+                      fullWidth
+                      required
+                      label="Other density code"
+                      value={form.density}
+                      disabled={disabled}
+                      error={!!shownErrors.density}
+                      helperText={shownErrors.density || "Decimal, or hexadecimal with 0x, from 0 to 255."}
+                      onChange={(event) => edit({ density: event.target.value })}
+                    />
+                  )}
+                </>
+              )}
               <TextField
-                autoFocus
-                multiline
-                minRows={5}
-                maxRows={16}
                 fullWidth
-                label="Read parameters JSON"
-                value={text}
+                label="Drive serial number"
+                value={form.driveSerial}
                 disabled={disabled}
-                error={!!error}
-                helperText={error || "Omitted values remain unknown. LPOS values use decimal strings; time values use seconds."}
-                onChange={(event) => {
-                  setText(event.target.value);
-                  setError("");
-                }}
+                helperText="When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive."
+                onChange={(event) => edit({ driveSerial: event.target.value })}
+              />
+              {readParameterGroups.map((group) => (
+                <Stack key={group.title} spacing={2}>
+                  <strong>{group.title}</strong>
+                  {group.fields.map((field) => (
+                    <TextField
+                      key={field.key}
+                      fullWidth
+                      label={field.label}
+                      value={form.values[field.key]}
+                      disabled={disabled}
+                      placeholder="Unknown"
+                      slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+                      error={!!shownErrors[field.key]}
+                      helperText={shownErrors[field.key] || field.helper}
+                      onChange={(event) => {
+                        setValue(field.key, event.target.value);
+                        setError("");
+                      }}
+                    />
+                  ))}
+                </Stack>
+              ))}
+              <TextField
+                fullWidth
+                label="Source reference"
+                value={form.sourceReference}
+                disabled={disabled}
+                helperText="Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID."
+                onChange={(event) => edit({ sourceReference: event.target.value })}
               />
               <p>
-                {report
-                  ? "From device details replaces the JSON with the conditions in the report shown on this page and clears timings. It does not query the device."
-                  : "From device details needs a report: use Refresh device details on this page first."}
+                {!report
+                  ? "From device details needs a report: use Refresh device details on this page first."
+                  : reportMismatch
+                    ? `The displayed device details report ${densityLabel(reportDensity)}, not this set's density code.`
+                    : `From device details fills the drive serial${editing ? "" : " and density code"} from the report shown on this page and clears the other values. It does not query the device.`}
               </p>
+              {error && <Feedback severity="error">{error}</Feedback>}
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button
-              variant="contained"
-              disabled={disabled || !text.trim()}
-              onClick={() => {
-                try {
-                  onChange(importTapeReadParameters(text));
-                  setOpen(false);
-                } catch (reason) {
-                  setError(errorMessage(reason, "Could not apply read parameters"));
-                }
-              }}
-            >
+            <Button variant="contained" disabled={disabled} onClick={apply}>
               Apply
             </Button>
             <Button onClick={close}>Cancel</Button>
-            <Button
-              disabled={disabled || !report}
-              onClick={() => {
-                if (!report) return;
-                setText(TapeReadParameters.toJsonString(captureTapeReadConditions(report), { prettySpaces: 2 }));
-                setError("");
-              }}
-            >
+            <Button disabled={disabled || !report || reportMismatch} onClick={fromDeviceDetails}>
               From device details
             </Button>
           </DialogActions>
@@ -407,7 +579,7 @@ const ReadParametersEditor = ({
           confirmLabel="Discard"
           cancelLabel="Keep editing"
           danger
-          onConfirm={() => setOpen(false)}
+          onConfirm={() => setIndex(null)}
           onClose={() => setDiscard(false)}
         >
           These read parameters have not been applied to the Settings draft.

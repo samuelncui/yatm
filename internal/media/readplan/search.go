@@ -3,6 +3,7 @@ package readplan
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -87,7 +88,7 @@ func (s *Sequence) edge(ctx context.Context, from, to int64, initial State, c *c
 // score proves exact rank coverage and sums every directed edge, including origin and finish.
 func (s *Sequence) score(ctx context.Context, r route, initial State, c *cache) (time.Duration, bool, error) {
 	if s.fixedFirst != nil && r[0].next != 1 {
-		return 0, false, errors.New("read route changed its unpriced first member")
+		return 0, false, fmt.Errorf("%w: the route changed its unpriced first member", errInconsistent)
 	}
 	seen := make([]bool, len(r))
 	total, from, count := time.Duration(0), int64(0), 0
@@ -96,7 +97,7 @@ func (s *Sequence) score(ctx context.Context, r route, initial State, c *cache) 
 			return 0, false, err
 		}
 		if rank < 1 || rank >= int64(len(r)) || seen[rank] {
-			return 0, false, errors.New("read route has an invalid or duplicate rank")
+			return 0, false, fmt.Errorf("%w: the route has an invalid or duplicate rank", errInconsistent)
 		}
 		seen[rank] = true
 		count++
@@ -108,7 +109,7 @@ func (s *Sequence) score(ctx context.Context, r route, initial State, c *cache) 
 		from = rank
 	}
 	if count != len(r)-1 {
-		return 0, false, errors.New("read route does not cover the complete selection")
+		return 0, false, fmt.Errorf("%w: the route does not cover the complete selection", errInconsistent)
 	}
 	cost, known, err := s.edge(ctx, from, 0, initial, c)
 	return total + cost, known, err
@@ -136,6 +137,7 @@ func (s *Sequence) optimize(ctx context.Context, initial State, count int64) (re
 		return nil
 	}
 	s.reason = reasonNoGain
+	s.priced, s.logicalCost, s.plannedCost = true, total, total
 
 	// Directed descent, then reconnection at a local minimum; bounded kicks explore other minima
 	// from the best route without publishing a provisional cost increase.
@@ -144,7 +146,12 @@ func (s *Sequence) optimize(ctx context.Context, initial State, count int64) (re
 	trials, stagnant := 0, 0
 	d := &descent{sequence: s, initial: initial, cache: c, marks: make([]uint32, len(r))}
 	descending := false
-	for {
+	for round := 0; ; round++ {
+		// Planning precedes every read. Search returns diminish, so once planning has taken longer
+		// than the predicted saving achieved so far, further search cannot be expected to pay back.
+		if round > 0 && s.now().Sub(s.started) > s.logicalCost-retained {
+			return nil
+		}
 		predicted, improved, err := d.sweep(ctx, r, total, descending)
 		if err != nil {
 			return s.stop(err)
@@ -180,12 +187,9 @@ func (s *Sequence) optimize(ctx context.Context, initial State, count int64) (re
 		}
 
 		// Changed-edge deltas must equal the complete traversal that authorizes a checkpoint.
-		complete, known, err := s.score(ctx, r, initial, c)
+		complete, err := s.confirm(ctx, r, initial, c, predicted, total)
 		if err != nil {
 			return s.stop(err)
-		}
-		if !known || complete != predicted || complete >= total {
-			return errors.New("read route delta disagrees with its complete score")
 		}
 		total = complete
 		descending = !descending
@@ -196,6 +200,7 @@ func (s *Sequence) optimize(ctx context.Context, initial State, count int64) (re
 			return s.stop(err)
 		}
 		retained, stagnant = complete, 0
+		s.plannedCost = complete
 		best = append(best[:0], r...)
 		s.planned, s.reason = true, reasonPlanned
 		if s.fixedFirst != nil {
@@ -204,12 +209,29 @@ func (s *Sequence) optimize(ctx context.Context, initial State, count int64) (re
 	}
 }
 
-// stop retains the last committed checkpoint or LOGICAL after budget expiry; other errors remain fatal.
-func (s *Sequence) stop(err error) error {
-	if !errors.Is(err, ErrBudget) {
-		return err
+// confirm scores a delta-predicted route completely; a disagreement breaks a route invariant.
+func (s *Sequence) confirm(ctx context.Context, r route, initial State, c *cache, predicted, total time.Duration,
+) (time.Duration, error) {
+	complete, known, err := s.score(ctx, r, initial, c)
+	if err != nil {
+		return 0, err
 	}
-	if !s.planned {
+	if !known || complete != predicted || complete >= total {
+		return 0, fmt.Errorf("%w: a changed-edge estimate disagrees with its complete score", errInconsistent)
+	}
+	return complete, nil
+}
+
+// stop retains the last committed checkpoint or LOGICAL after budget expiry and withdraws every
+// route after a broken invariant, keeping LOGICAL with that reason; other errors remain fatal.
+func (s *Sequence) stop(err error) error {
+	switch {
+	case errors.Is(err, errInconsistent):
+		s.planned, s.plannedCost = false, s.logicalCost
+		s.reason = "LOGICAL: " + err.Error()
+	case !errors.Is(err, ErrBudget):
+		return err
+	case !s.planned:
 		s.reason = reasonBudget
 	}
 	return nil
@@ -233,7 +255,7 @@ func (d *descent) sweep(ctx context.Context, r route, total time.Duration, desce
 	current := func(from, to int64) (time.Duration, error) {
 		cost, known, err := edge(from, to)
 		if err == nil && !known {
-			err = errors.New("read route lost a priced edge")
+			err = fmt.Errorf("%w: the route lost a priced edge", errInconsistent)
 		}
 		return cost, err
 	}

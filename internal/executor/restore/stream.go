@@ -108,6 +108,7 @@ type copyItems struct {
 	prepared    bool
 	exhausted   bool
 	sequence    *readplan.Sequence
+	readStarted time.Time
 }
 
 // nextPage returns the next bounded page of transferable candidates, or io.EOF once the
@@ -159,9 +160,13 @@ func (s *copyItems) nextPage(ctx context.Context) ([]acp.Item, error) {
 }
 
 func (s *copyItems) consume(ctx context.Context, engine *acp.StreamCopyer) (rerr error) {
-	// Always release a partially consumed order after ACP has drained accepted work.
+	// Always release a partially consumed order after ACP has drained accepted work; a complete
+	// planned read logs its realized time beside the estimates.
 	defer func() {
 		if s.sequence != nil {
+			if rerr == nil {
+				executor.LogReadOrderRealized(ctx, s.runner.logger, "Restore", s.sequence, time.Since(s.readStarted))
+			}
 			rerr = errors.Join(rerr, s.sequence.Close())
 		}
 	}()
@@ -192,7 +197,7 @@ func (s *copyItems) prepareSequence(ctx context.Context) error {
 	sequence, err := executor.PlanReadOrder(
 		ctx, s.runner.logger, "Restore", s.runner.exe.Paths().Work, ordered, provider, s.readSpans(ctx, provider),
 	)
-	s.sequence = sequence
+	s.sequence, s.readStarted = sequence, time.Now()
 	return err
 }
 
@@ -360,7 +365,8 @@ func (s *copyItems) resolve(ctx context.Context, copy *copyCandidate) (acp.Item,
 	}
 
 	// Bind the frozen on-Media path without using an endpoint identifier as a filesystem path.
-	source, err := s.session.Source(media.ReadRequest{Path: copy.MediaPath, Storage: &entity.StoragePosition{Order: copy.StorageOrder, Metadata: copy.StorageMetadata}})
+	request := media.ReadRequest{Path: copy.MediaPath, Storage: &entity.StoragePosition{Order: copy.StorageOrder, Metadata: copy.StorageMetadata}}
+	source, err := s.session.Source(request)
 	if err == nil {
 		err = source.Validate()
 	}
