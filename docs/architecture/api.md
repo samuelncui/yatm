@@ -99,10 +99,10 @@ The optional `prepared_read` is separately timestamped last-prepared-read inform
 process, including Job/Media, requested/prepared order, parameter and position sources, applicability,
 coverage and the selected learned read parameters' mean and maximum error. It can accompany a busy response; it never identifies the
 currently loaded cartridge or claims the final execution route. It adds no hardware query. Optional identity/mode/limit facts
-remain absent when unknown; feature support, current availability and validation are separate.
+remain absent when unknown; feature support and current availability are separate.
 Capacity limits report optional native bytes before EW, partition and observation timestamps, with
 estimate quality. Existing feature fields distinguish
-support, availability and measured validation.
+support and availability.
 They are transient diagnostics, not a per-file fit guarantee or persisted FORMAT preference.
 Compression/decompression limits expose an optional current numeric algorithm and enable-bit
 changeability. Current-enabled observations remain in TapeDeviceReport. Missing changeability
@@ -118,13 +118,11 @@ retains separate qualification and availability.
 Permission, missing tools, no medium, clean unsupported forms, malformed responses and unknown
 ownership have distinct reasons. No capability report is saved in the Catalog. The
 [Tape device contract](tape.md#device-observation-and-raw-transport) defines physical access and cleanup.
-InspectDevice can include supported baseline tar write recommendations; absent recommendations
-remain unknown and never certify physical writes. The existing MediaService.Inspect retains its
+InspectDevice supplies no write recommendations. The existing MediaService.Inspect retains its
 cartridge-oriented LTFS/Volume behavior. Tar label validation occurs under the operation lease.
 An optional `write_target` asks about one tar Archive write on the inspected device. The reply
 then answers with `resolved_tar_options`, the options the attempt would use after the
-[Tape option resolution](contracts.md#tape-options-and-selection) and this report's
-recommendations, and with `writable` and, when false, `write_detail`. The answer comes from the
+[Tape option resolution](contracts.md#tape-options-and-selection), and with `writable` and, when false, `write_detail`. The answer comes from the
 attempt's own resolution and Media checks (FORMAT needs an unregistered barcode, APPEND an
 available registered tar profile that explicit options match) plus known physical blockers: busy,
 missing medium, write protection, or a device reason other than an optional diagnostic

@@ -140,10 +140,6 @@ export interface ExpectedFile {
      */
     sizeBytes: bigint;
     /**
-     * @generated from protobuf field: int64 file_version_id = 5
-     */
-    fileVersionId: bigint;
-    /**
      * @generated from protobuf field: uint32 mode = 6
      */
     mode: number;
@@ -551,7 +547,6 @@ class ExpectedFile$Type extends MessageType<ExpectedFile> {
             { no: 2, name: "signature", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
             { no: 3, name: "sha256", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
             { no: 4, name: "size_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 5, name: "file_version_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 6, name: "mode", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
             { no: 7, name: "mtime_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 8, name: "original_location_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
@@ -563,7 +558,6 @@ class ExpectedFile$Type extends MessageType<ExpectedFile> {
         message.signature = new Uint8Array(0);
         message.sha256 = new Uint8Array(0);
         message.sizeBytes = 0n;
-        message.fileVersionId = 0n;
         message.mode = 0;
         message.mtimeNs = 0n;
         message.originalLocationId = 0n;
@@ -587,9 +581,6 @@ class ExpectedFile$Type extends MessageType<ExpectedFile> {
                     break;
                 case /* int64 size_bytes */ 4:
                     message.sizeBytes = reader.int64().toBigInt();
-                    break;
-                case /* int64 file_version_id */ 5:
-                    message.fileVersionId = reader.int64().toBigInt();
                     break;
                 case /* uint32 mode */ 6:
                     message.mode = reader.uint32();
@@ -624,9 +615,6 @@ class ExpectedFile$Type extends MessageType<ExpectedFile> {
         /* int64 size_bytes = 4; */
         if (message.sizeBytes !== 0n)
             writer.tag(4, WireType.Varint).int64(message.sizeBytes);
-        /* int64 file_version_id = 5; */
-        if (message.fileVersionId !== 0n)
-            writer.tag(5, WireType.Varint).int64(message.fileVersionId);
         /* uint32 mode = 6; */
         if (message.mode !== 0)
             writer.tag(6, WireType.Varint).uint32(message.mode);

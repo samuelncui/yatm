@@ -29,14 +29,13 @@ type legacyLibraryFile struct {
 }
 
 type legacyLibraryTape struct {
-	ID            int64      `json:"id,omitempty"`
-	Barcode       string     `json:"barcode,omitempty"`
-	Name          string     `json:"name,omitempty"`
-	Encryption    string     `json:"encryption,omitempty"`
-	CreateTime    time.Time  `json:"create_time,omitempty"`
-	DestroyTime   *time.Time `json:"destroy_time,omitempty"`
-	CapacityBytes int64      `json:"capacity_bytes,omitempty"`
-	WritenBytes   int64      `json:"writen_bytes,omitempty"`
+	ID            int64     `json:"id,omitempty"`
+	Barcode       string    `json:"barcode,omitempty"`
+	Name          string    `json:"name,omitempty"`
+	Encryption    string    `json:"encryption,omitempty"`
+	CreateTime    time.Time `json:"create_time,omitempty"`
+	CapacityBytes int64     `json:"capacity_bytes,omitempty"`
+	WritenBytes   int64     `json:"writen_bytes,omitempty"`
 }
 
 type legacyLibraryPosition struct {
@@ -236,21 +235,13 @@ func legacyTapeToMedia(value *legacyLibraryTape) (*Media, error) {
 	if err != nil {
 		return nil, fmt.Errorf("convert legacy Tape creation time, tape_id=%d: %w", value.ID, err)
 	}
-	var destroyed *int64
-	if value.DestroyTime != nil {
-		stamp, err := dataformat.Nanoseconds(*value.DestroyTime)
-		if err != nil {
-			return nil, fmt.Errorf("convert legacy Tape destruction time, tape_id=%d: %w", value.ID, err)
-		}
-		destroyed = &stamp
-	}
 	return &Media{
 		ID: value.ID, Kind: entity.MediaKind_MEDIA_KIND_TAPE,
 		Identity: NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, value.Barcode), Name: value.Name,
 		Profile: (&entity.TapeMediaProfile{
 			Encryption: value.Encryption, Format: TapeFormatLTFSV0,
 		}).Pack(),
-		CreatedAtNS: created, DestroyedAtNS: destroyed,
+		CreatedAtNS:   created,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WritenBytes,
 	}, nil
 }

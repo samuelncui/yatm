@@ -118,9 +118,6 @@ func TestInspectionUsesOnlyPassiveBoundedQueriesAndUnvalidatedFacts(t *testing.T
 		t.Fatalf("mode facts=%v", tape)
 	}
 	for _, f := range tape.Features {
-		if f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
-			t.Fatalf("passive query certified hardware: %v", f)
-		}
 		if f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE && (f.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED || f.GetNavigation().GetAddressBits() != 64) {
 			t.Fatal("reported navigation pair is missing")
 		}

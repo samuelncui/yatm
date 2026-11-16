@@ -16,7 +16,6 @@ import { RestoreVersionPolicy } from "./job_storage";
 import { RestoreDestination } from "./job_storage";
 import { FileSelection } from "./file";
 import { LocationEntryRef } from "./file";
-import { File } from "./file";
 import { SourceFile } from "./source";
 /**
  * @generated from protobuf message yatm.v1.AccessRange
@@ -129,10 +128,6 @@ export interface ObservedEntry {
      */
     path: string;
     /**
-     * @generated from protobuf field: bool directory = 5
-     */
-    directory: boolean;
-    /**
      * @generated from protobuf field: int64 file_id = 6
      */
     fileId: bigint;
@@ -209,47 +204,6 @@ export interface Location {
      * @generated from protobuf field: yatm.v1.LocationConfig config = 16
      */
     config?: LocationConfig;
-}
-/**
- * @generated from protobuf message yatm.v1.FileLocation
- */
-export interface FileLocation {
-    /**
-     * @generated from protobuf field: int64 file_id = 1
-     */
-    fileId: bigint;
-    /**
-     * @generated from protobuf field: int64 location_id = 2
-     */
-    locationId: bigint;
-    /**
-     * @generated from protobuf field: string path = 3
-     */
-    path: string;
-    /**
-     * @generated from protobuf field: string parent_path = 4
-     */
-    parentPath: string;
-    /**
-     * @generated from protobuf field: int64 size_bytes = 5
-     */
-    sizeBytes: bigint;
-    /**
-     * @generated from protobuf field: uint32 mode = 6
-     */
-    mode: number;
-    /**
-     * @generated from protobuf field: int64 mtime_ns = 7
-     */
-    mtimeNs: bigint;
-    /**
-     * @generated from protobuf field: bytes signature = 8
-     */
-    signature: Uint8Array;
-    /**
-     * @generated from protobuf field: bytes sha256 = 9
-     */
-    sha256: Uint8Array;
 }
 /**
  * @generated from protobuf message yatm.v1.CreateLocationRequest
@@ -399,14 +353,6 @@ export interface LocationEntriesQuery {
      * @generated from protobuf field: int32 limit = 4
      */
     limit: number;
-    /**
-     * @generated from protobuf field: string cursor = 6
-     */
-    cursor: string;
-    /**
-     * @generated from protobuf field: string name_filter = 7
-     */
-    nameFilter: string;
 }
 /**
  * @generated from protobuf message yatm.v1.LocationEntry
@@ -420,14 +366,6 @@ export interface LocationEntry {
      * @generated from protobuf field: bool directory = 2
      */
     directory: boolean;
-    /**
-     * @generated from protobuf field: yatm.v1.FileLocation original = 3
-     */
-    original?: FileLocation;
-    /**
-     * @generated from protobuf field: yatm.v1.File file = 4
-     */
-    file?: File;
     /**
      * @generated from protobuf field: yatm.v1.LocationEntryRef reference = 5
      */
@@ -996,7 +934,6 @@ class ObservedEntry$Type extends MessageType<ObservedEntry> {
     constructor() {
         super("yatm.v1.ObservedEntry", [
             { no: 3, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "directory", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 6, name: "file_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 7, name: "size_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 8, name: "mode", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
@@ -1008,7 +945,6 @@ class ObservedEntry$Type extends MessageType<ObservedEntry> {
     create(value?: PartialMessage<ObservedEntry>): ObservedEntry {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.path = "";
-        message.directory = false;
         message.fileId = 0n;
         message.sizeBytes = 0n;
         message.mode = 0;
@@ -1026,9 +962,6 @@ class ObservedEntry$Type extends MessageType<ObservedEntry> {
             switch (fieldNo) {
                 case /* string path */ 3:
                     message.path = reader.string();
-                    break;
-                case /* bool directory */ 5:
-                    message.directory = reader.bool();
                     break;
                 case /* int64 file_id */ 6:
                     message.fileId = reader.int64().toBigInt();
@@ -1063,9 +996,6 @@ class ObservedEntry$Type extends MessageType<ObservedEntry> {
         /* string path = 3; */
         if (message.path !== "")
             writer.tag(3, WireType.LengthDelimited).string(message.path);
-        /* bool directory = 5; */
-        if (message.directory !== false)
-            writer.tag(5, WireType.Varint).bool(message.directory);
         /* int64 file_id = 6; */
         if (message.fileId !== 0n)
             writer.tag(6, WireType.Varint).int64(message.fileId);
@@ -1228,117 +1158,6 @@ class Location$Type extends MessageType<Location> {
  * @generated MessageType for protobuf message yatm.v1.Location
  */
 export const Location = new Location$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class FileLocation$Type extends MessageType<FileLocation> {
-    constructor() {
-        super("yatm.v1.FileLocation", [
-            { no: 1, name: "file_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "location_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "parent_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "size_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 6, name: "mode", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 7, name: "mtime_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 8, name: "signature", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
-            { no: 9, name: "sha256", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
-        ]);
-    }
-    create(value?: PartialMessage<FileLocation>): FileLocation {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.fileId = 0n;
-        message.locationId = 0n;
-        message.path = "";
-        message.parentPath = "";
-        message.sizeBytes = 0n;
-        message.mode = 0;
-        message.mtimeNs = 0n;
-        message.signature = new Uint8Array(0);
-        message.sha256 = new Uint8Array(0);
-        if (value !== undefined)
-            reflectionMergePartial<FileLocation>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: FileLocation): FileLocation {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* int64 file_id */ 1:
-                    message.fileId = reader.int64().toBigInt();
-                    break;
-                case /* int64 location_id */ 2:
-                    message.locationId = reader.int64().toBigInt();
-                    break;
-                case /* string path */ 3:
-                    message.path = reader.string();
-                    break;
-                case /* string parent_path */ 4:
-                    message.parentPath = reader.string();
-                    break;
-                case /* int64 size_bytes */ 5:
-                    message.sizeBytes = reader.int64().toBigInt();
-                    break;
-                case /* uint32 mode */ 6:
-                    message.mode = reader.uint32();
-                    break;
-                case /* int64 mtime_ns */ 7:
-                    message.mtimeNs = reader.int64().toBigInt();
-                    break;
-                case /* bytes signature */ 8:
-                    message.signature = reader.bytes();
-                    break;
-                case /* bytes sha256 */ 9:
-                    message.sha256 = reader.bytes();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: FileLocation, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* int64 file_id = 1; */
-        if (message.fileId !== 0n)
-            writer.tag(1, WireType.Varint).int64(message.fileId);
-        /* int64 location_id = 2; */
-        if (message.locationId !== 0n)
-            writer.tag(2, WireType.Varint).int64(message.locationId);
-        /* string path = 3; */
-        if (message.path !== "")
-            writer.tag(3, WireType.LengthDelimited).string(message.path);
-        /* string parent_path = 4; */
-        if (message.parentPath !== "")
-            writer.tag(4, WireType.LengthDelimited).string(message.parentPath);
-        /* int64 size_bytes = 5; */
-        if (message.sizeBytes !== 0n)
-            writer.tag(5, WireType.Varint).int64(message.sizeBytes);
-        /* uint32 mode = 6; */
-        if (message.mode !== 0)
-            writer.tag(6, WireType.Varint).uint32(message.mode);
-        /* int64 mtime_ns = 7; */
-        if (message.mtimeNs !== 0n)
-            writer.tag(7, WireType.Varint).int64(message.mtimeNs);
-        /* bytes signature = 8; */
-        if (message.signature.length)
-            writer.tag(8, WireType.LengthDelimited).bytes(message.signature);
-        /* bytes sha256 = 9; */
-        if (message.sha256.length)
-            writer.tag(9, WireType.LengthDelimited).bytes(message.sha256);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.FileLocation
- */
-export const FileLocation = new FileLocation$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class CreateLocationRequest$Type extends MessageType<CreateLocationRequest> {
     constructor() {
@@ -1878,9 +1697,7 @@ class LocationEntriesQuery$Type extends MessageType<LocationEntriesQuery> {
         super("yatm.v1.LocationEntriesQuery", [
             { no: 1, name: "location_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 2, name: "parent_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "limit", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
-            { no: 6, name: "cursor", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 7, name: "name_filter", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 4, name: "limit", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
         ]);
     }
     create(value?: PartialMessage<LocationEntriesQuery>): LocationEntriesQuery {
@@ -1888,8 +1705,6 @@ class LocationEntriesQuery$Type extends MessageType<LocationEntriesQuery> {
         message.locationId = 0n;
         message.parentPath = "";
         message.limit = 0;
-        message.cursor = "";
-        message.nameFilter = "";
         if (value !== undefined)
             reflectionMergePartial<LocationEntriesQuery>(this, message, value);
         return message;
@@ -1907,12 +1722,6 @@ class LocationEntriesQuery$Type extends MessageType<LocationEntriesQuery> {
                     break;
                 case /* int32 limit */ 4:
                     message.limit = reader.int32();
-                    break;
-                case /* string cursor */ 6:
-                    message.cursor = reader.string();
-                    break;
-                case /* string name_filter */ 7:
-                    message.nameFilter = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1935,12 +1744,6 @@ class LocationEntriesQuery$Type extends MessageType<LocationEntriesQuery> {
         /* int32 limit = 4; */
         if (message.limit !== 0)
             writer.tag(4, WireType.Varint).int32(message.limit);
-        /* string cursor = 6; */
-        if (message.cursor !== "")
-            writer.tag(6, WireType.LengthDelimited).string(message.cursor);
-        /* string name_filter = 7; */
-        if (message.nameFilter !== "")
-            writer.tag(7, WireType.LengthDelimited).string(message.nameFilter);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1957,8 +1760,6 @@ class LocationEntry$Type extends MessageType<LocationEntry> {
         super("yatm.v1.LocationEntry", [
             { no: 1, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "directory", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 3, name: "original", kind: "message", T: () => FileLocation },
-            { no: 4, name: "file", kind: "message", T: () => File },
             { no: 5, name: "reference", kind: "message", T: () => LocationEntryRef }
         ]);
     }
@@ -1981,12 +1782,6 @@ class LocationEntry$Type extends MessageType<LocationEntry> {
                 case /* bool directory */ 2:
                     message.directory = reader.bool();
                     break;
-                case /* yatm.v1.FileLocation original */ 3:
-                    message.original = FileLocation.internalBinaryRead(reader, reader.uint32(), options, message.original);
-                    break;
-                case /* yatm.v1.File file */ 4:
-                    message.file = File.internalBinaryRead(reader, reader.uint32(), options, message.file);
-                    break;
                 case /* yatm.v1.LocationEntryRef reference */ 5:
                     message.reference = LocationEntryRef.internalBinaryRead(reader, reader.uint32(), options, message.reference);
                     break;
@@ -2008,12 +1803,6 @@ class LocationEntry$Type extends MessageType<LocationEntry> {
         /* bool directory = 2; */
         if (message.directory !== false)
             writer.tag(2, WireType.Varint).bool(message.directory);
-        /* yatm.v1.FileLocation original = 3; */
-        if (message.original)
-            FileLocation.internalBinaryWrite(message.original, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
-        /* yatm.v1.File file = 4; */
-        if (message.file)
-            File.internalBinaryWrite(message.file, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
         /* yatm.v1.LocationEntryRef reference = 5; */
         if (message.reference)
             LocationEntryRef.internalBinaryWrite(message.reference, writer.tag(5, WireType.LengthDelimited).fork(), options).join();

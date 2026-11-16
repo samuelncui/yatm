@@ -27,7 +27,7 @@ func timestampSnapshot(t *testing.T, stamp int64) (*Library, []byte) {
 		CreatedAtNS: stamp, UpdatedAtNS: stamp, LastSyncAtNS: stamp}
 	require.NoError(t, insert.Create(location).Error)
 	media := testTapeMedia("NS0001", TapeFormatLTFSV0)
-	media.ID, media.CreatedAtNS, media.DestroyedAtNS = 3, stamp, &stamp
+	media.ID, media.CreatedAtNS = 3, stamp
 	require.NoError(t, insert.Create(media).Error)
 	require.NoError(t, insert.Create(&Position{ID: 11, MediaID: media.ID, Path: file.Name,
 		MtimeNS: stamp, WrittenAtNS: stamp, CheckedAtNS: stamp}).Error)
@@ -61,7 +61,7 @@ func assertTimestampRows(t *testing.T, lib *Library, stamp int64) {
 	for table, columns := range map[string][]string{
 		"files":              {"created_at_ns", "updated_at_ns"},
 		"locations":          {"created_at_ns", "updated_at_ns", "last_sync_at_ns"},
-		"media":              {"created_at_ns", "destroyed_at_ns"},
+		"media":              {"created_at_ns"},
 		"positions":          {"mtime_ns", "written_at_ns", "checked_at_ns"},
 		"file_locations":     {"mtime_ns"},
 		"file_tracking_keys": {"observed_at_ns"},
@@ -319,7 +319,7 @@ func TestLibraryNanosecondMediaOrderAndOptionalJSON(t *testing.T) {
 		value any
 		key   string
 	}{
-		{rows[0], "destroyed_at_ns"}, {&MediaStats{}, "last_written_at_ns"},
+		{&MediaStats{}, "last_written_at_ns"},
 	} {
 		encoded, err := json.Marshal(test.value)
 		require.NoError(t, err)

@@ -24,11 +24,10 @@ and available READ POSITION/LOCATE form observations. It sends no positioning, w
 or measurement command.
 Cartridge Inspect remains the distinct LTFS adapter action and can load the cartridge.
 
-Feature reports separate support, current availability and validation, with typed reasons, limits
+Feature reports separate support and current availability, with typed reasons, limits
 and evidence. Missing or unreadable facts remain absent or explicitly unknown. A clean unsupported
 optional query does not invalidate other observations. Passive queries do not qualify write, seek,
-recovery or cleanup behavior; features whose applicable operation is not established remain
-unvalidated. Reports are transient observations, not Library facts or saved configuration.
+recovery or cleanup behavior, and carry no physical validation claim. Reports are transient observations, not Library facts or saved configuration.
 Archive displays optional-query diagnostics without treating unsupported, malformed or unimplemented
 optional observations as a blanket write veto. Known busy, missing-medium, write-protection and
 readiness/ownership failures still block its form; leased Executor preparation owns final admission.
@@ -107,9 +106,8 @@ LTFS. Tar defaults to variable records with a 512 KiB (524288-byte) maximum, ove
 Device settings and then explicit FORMAT values; device/transport limits remain mandatory.
 APPEND and reads retain the recorded policy. Tar options cannot be supplied to LTFS, and conflicting
 APPEND options fail before access.
-Compression omission survives admission so leased preparation can apply a qualified recommendation
-under the [shared precedence](contracts.md#tape-options-and-selection); without one its final
-profile defaults off. [Encryption](#encryption) has no per-device or per-write switch.
+Compression omission survives admission under the
+[shared precedence](contracts.md#tape-options-and-selection); its final profile defaults off. [Encryption](#encryption) has no per-device or per-write switch.
 
 The Device capacity-polling interval is an execution preference for tar FORMAT and APPEND,
 independent of the cartridge profile. Its admitted snapshot resolves omission to five seconds,
@@ -199,7 +197,7 @@ Optional cached capacity admission
 does not replace EW/error handling; unknown capacity does not prevent writing. Record choices must fit observed block limits
 and the selected transport allocation. Generic applicable SSC forms can establish eligibility without
 an exact-model allowlist, but unknown required semantics or failed safety evidence refuses access.
-Passive observations remain UNVALIDATED and supply no physically validated write recommendations.
+Passive observations establish no physical validation.
 
 FORMAT remains explicit and destructive and rejects a registered barcode. Its record profile and
 key use the existing Media/Job publication path; failure does not create a separate recovery copy. As in LTFS, the
@@ -243,7 +241,7 @@ record's tar offset cannot underflow. The Tape provider owns eligibility for the
 standard READ POSITION/LOCATE pairing, partition-zero scope and address width. Its logical-object
 contract counts records and filemarks independently of compression or record byte lengths. Missing
 pairing or applicable failed evidence withdraws optional navigation. Physical validation remains
-UNVALIDATED until its own acceptance; it is not another protocol-eligibility switch.
+outside passive reports until its own acceptance; it is not another protocol-eligibility switch.
 
 With an eligible navigator, the writer captures one fresh start position before content emission,
 counts accepted complete records and checks the expected next object after its synchronized

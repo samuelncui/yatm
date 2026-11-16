@@ -165,7 +165,7 @@ func TestScanMaintainedResultsMatchManifestAggregation(t *testing.T) {
 // counter an idle Job reports is counted when that phase starts.
 var discoveryPhases = []entity.JobPhase{
 	entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT,
-	entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE, entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
+	entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
 	entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE, entity.JobPhase_JOB_PHASE_COMPLETED,
 }
 

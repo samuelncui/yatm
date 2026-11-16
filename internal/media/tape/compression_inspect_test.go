@@ -35,9 +35,6 @@ func TestCompressionReportKeepsCurrentAlgorithmsAndChangeabilityDistinct(t *test
 	if read.GetCompression().CurrentAlgorithm == nil || read.GetCompression().GetCurrentAlgorithm() != 0 || read.GetCompression().EnableChangeable == nil || read.GetCompression().GetEnableChangeable() || read.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY {
 		t.Fatalf("read=%v", read)
 	}
-	if write.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || read.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
-		t.Fatal("software observation fabricated physical qualification")
-	}
 }
 
 func TestCompressionOptionalMaskFailuresDoNotBlockCapacityOrBaseline(t *testing.T) {
@@ -134,7 +131,7 @@ func TestCompressionCurrentModeRefreshDoesNotUseChangeableValues(t *testing.T) {
 	}
 	write := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION)
 	read := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION)
-	if write.GetCompression().GetCurrentAlgorithm() != 0xff || read.GetCompression().CurrentAlgorithm == nil || read.GetCompression().GetCurrentAlgorithm() != 0 || write.GetCompression().EnableChangeable == nil || read.GetCompression().EnableChangeable == nil || write.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED || read.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
+	if write.GetCompression().GetCurrentAlgorithm() != 0xff || read.GetCompression().CurrentAlgorithm == nil || read.GetCompression().GetCurrentAlgorithm() != 0 || write.GetCompression().EnableChangeable == nil || read.GetCompression().EnableChangeable == nil || write.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED {
 		t.Fatalf("current IDs or prior qualification changed: write=%v read=%v", write, read)
 	}
 	if err := d.Cleanup(context.Background()); err != nil {

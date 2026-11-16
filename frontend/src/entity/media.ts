@@ -139,10 +139,6 @@ export interface TapePositionPartition {
      */
     partition: number;
     /**
-     * @generated from protobuf field: uint64 bot = 2
-     */
-    bot: bigint;
-    /**
      * @generated from protobuf field: optional uint64 eod = 3
      */
     eod?: bigint;
@@ -266,10 +262,6 @@ export interface Media {
      * @generated from protobuf field: int64 created_at_ns = 17
      */
     createdAtNs: bigint;
-    /**
-     * @generated from protobuf field: optional int64 destroyed_at_ns = 18
-     */
-    destroyedAtNs?: bigint;
     /**
      * @generated from protobuf field: int64 capacity_bytes = 19
      */
@@ -937,14 +929,12 @@ class TapePositionPartition$Type extends MessageType<TapePositionPartition> {
     constructor() {
         super("yatm.v1.TapePositionPartition", [
             { no: 1, name: "partition", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 2, name: "bot", kind: "scalar", T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 3, name: "eod", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<TapePositionPartition>): TapePositionPartition {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.partition = 0;
-        message.bot = 0n;
         if (value !== undefined)
             reflectionMergePartial<TapePositionPartition>(this, message, value);
         return message;
@@ -956,9 +946,6 @@ class TapePositionPartition$Type extends MessageType<TapePositionPartition> {
             switch (fieldNo) {
                 case /* uint32 partition */ 1:
                     message.partition = reader.uint32();
-                    break;
-                case /* uint64 bot */ 2:
-                    message.bot = reader.uint64().toBigInt();
                     break;
                 case /* optional uint64 eod */ 3:
                     message.eod = reader.uint64().toBigInt();
@@ -978,9 +965,6 @@ class TapePositionPartition$Type extends MessageType<TapePositionPartition> {
         /* uint32 partition = 1; */
         if (message.partition !== 0)
             writer.tag(1, WireType.Varint).uint32(message.partition);
-        /* uint64 bot = 2; */
-        if (message.bot !== 0n)
-            writer.tag(2, WireType.Varint).uint64(message.bot);
         /* optional uint64 eod = 3; */
         if (message.eod !== undefined)
             writer.tag(3, WireType.Varint).uint64(message.eod);
@@ -1213,7 +1197,6 @@ class Media$Type extends MessageType<Media> {
             { no: 6, name: "capabilities", kind: "message", T: () => Capabilities },
             { no: 9, name: "profile", kind: "message", T: () => MediaProfile },
             { no: 17, name: "created_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 18, name: "destroyed_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 19, name: "capacity_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 20, name: "written_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 21, name: "mounted", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
@@ -1261,9 +1244,6 @@ class Media$Type extends MessageType<Media> {
                     break;
                 case /* int64 created_at_ns */ 17:
                     message.createdAtNs = reader.int64().toBigInt();
-                    break;
-                case /* optional int64 destroyed_at_ns */ 18:
-                    message.destroyedAtNs = reader.int64().toBigInt();
                     break;
                 case /* int64 capacity_bytes */ 19:
                     message.capacityBytes = reader.int64().toBigInt();
@@ -1316,9 +1296,6 @@ class Media$Type extends MessageType<Media> {
         /* int64 created_at_ns = 17; */
         if (message.createdAtNs !== 0n)
             writer.tag(17, WireType.Varint).int64(message.createdAtNs);
-        /* optional int64 destroyed_at_ns = 18; */
-        if (message.destroyedAtNs !== undefined)
-            writer.tag(18, WireType.Varint).int64(message.destroyedAtNs);
         /* int64 capacity_bytes = 19; */
         if (message.capacityBytes !== 0n)
             writer.tag(19, WireType.Varint).int64(message.capacityBytes);

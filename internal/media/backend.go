@@ -65,7 +65,6 @@ type Descriptor struct {
 	Profile         *entity.MediaProfile
 	TapePositionMap *entity.TapePositionMap
 	CreateTime      time.Time
-	DestroyTime     *time.Time
 	CapacityBytes   int64
 	WrittenBytes    int64
 }

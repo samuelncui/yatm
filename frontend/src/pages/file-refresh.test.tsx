@@ -47,7 +47,7 @@ vi.mock("react-virtuoso", () => ({
   ),
 }));
 
-import { File, FileScope, FileOperationKind, LocationEntriesPage, LocationEntry, LocationEntryRef, GetLocationResponse } from "@/entity";
+import { FileScope, FileOperationKind, LocationEntriesPage, LocationEntry, LocationEntryRef, GetLocationResponse } from "@/entity";
 import { useFileBrowser } from "@/components/use-file-browser";
 import type { FileOperations } from "@/components/file-operations";
 import { filesEntryData } from "@/components/files-browser";
@@ -58,9 +58,9 @@ const initialRef = LocationEntryRef.create({
   path: "photo.jpg",
   facts: { mode: 420, sizeBytes: 40n, mtimeNs: 1n },
 });
-const entries = (reference = initialRef, admitted = false) =>
+const entries = (reference = initialRef) =>
   LocationEntriesPage.create({
-    entries: [{ path: reference.path, reference, file: admitted ? File.create({ id: 19n, name: "photo.jpg" }) : undefined }],
+    entries: [{ path: reference.path, reference }],
   });
 
 beforeEach(() => {
@@ -231,7 +231,7 @@ it("preserves a selected row and open context menu during refresh, then uses its
   expect(handle.current?.getFileSelection()).toEqual(new Set(["location-file:4:photo.jpg"]));
 
   const latestRef = LocationEntryRef.create({ ...initialRef, facts: { ...initialRef.facts!, sizeBytes: 80n, mtimeNs: 2n } });
-  listEntries.mockReturnValueOnce({ response: Promise.resolve(entries(latestRef, true)) });
+  listEntries.mockReturnValueOnce({ response: Promise.resolve(entries(latestRef)) });
   await act(async () => {
     await refresh();
   });

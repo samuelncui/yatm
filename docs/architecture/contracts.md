@@ -72,11 +72,9 @@ No surface offers Job-level retry or restart; the [Job lifecycle](jobs.md#shared
 ## Tape options and selection
 
 FORMAT resolves explicit fields before saved Device defaults. Unset tar record policy defaults to
-variable records with a 512 KiB (524288-byte) maximum; validated recommendations can supply other
-still-unset write fields. Native record and transport limits remain mandatory: an incompatible
+variable records with a 512 KiB (524288-byte) maximum. Native record and transport limits remain mandatory: an incompatible
 choice fails preparation rather than silently changing the mode or size.
-With no explicit or saved format, FORMAT defaults to LTFS; a recommendation never chooses the format
-or overrides the record policy. Optional false remains distinct from omission. Unsupported record
+With no explicit or saved format, FORMAT defaults to LTFS. Optional false remains distinct from omission. Unsupported record
 choices and controls are field errors. Tar FORMAT can select hardware compression
 On or Off; APPEND enforces the immutable cartridge choice after validating its label and physical
 tail. Read preparation preserves write compression controls and independently requires hardware

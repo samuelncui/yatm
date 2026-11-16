@@ -84,7 +84,8 @@ enum TapePositionDirection {
 // Logical coverage is partition-scoped; absent EOD remains unknown.
 message TapePositionPartition {
     uint32 partition = 1;
-    uint64 bot = 2;
+    reserved 2;
+    reserved "bot";
     optional uint64 eod = 3;
 }
 
@@ -126,7 +127,8 @@ message Media {
     MediaProfile profile = 9;
 
     int64 created_at_ns = 17;
-    optional int64 destroyed_at_ns = 18;
+    reserved 18;
+    reserved "destroyed_at_ns";
     int64 capacity_bytes = 19;
     int64 written_bytes = 20;
     optional bool mounted = 21;

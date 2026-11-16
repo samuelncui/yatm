@@ -23,9 +23,9 @@ orchestration, item transitions and Library publication.
 and resolves the Media record once per attempt:
 
 - Restore and Scan read the Media of their frozen ReadMediaTarget by ID and require its identity
-  and profile to equal the frozen expectation. A tar Media must also be undestroyed, with a valid
-  tar profile and a decodable stored key. The read never queries Restore `copies` or requires fake
-  Restore tables for Scan.
+  and profile to equal the frozen expectation. A tar Media must also have a valid tar profile and
+  a decodable stored key. The read never queries Restore `copies` or requires fake Restore tables
+  for Scan.
 - Archive first holds the Tape drive or Volume, then resolves the requested barcode or UUID, the
   write format and tar options, and decides eligibility: FORMAT requires an unregistered barcode,
   APPEND an available registered Tape whose immutable format, options and stored key are valid, and

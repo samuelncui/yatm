@@ -165,7 +165,7 @@ class MetadataAuditTest(unittest.TestCase):
                 CREATE TABLE file_versions (file_id, signature, hash, size, mode, mtime_ns,
                     first_archived_at_ns, last_archived_at_ns);
                 CREATE TABLE media (id INTEGER PRIMARY KEY, identity, name, created_at_ns,
-                    destroyed_at_ns, capacity_bytes, written_bytes, profile);
+                    capacity_bytes, written_bytes, profile);
                 CREATE TABLE jobs (id INTEGER PRIMARY KEY, created_at_ns, updated_at_ns, revision);
                 INSERT INTO files VALUES (1, 0, 'folder', 2, -1, -1), (2, 1, 'sample', 1, -1, -1);
                 INSERT INTO jobs VALUES (1, 3000000004, 3000000004, 1);
@@ -178,7 +178,7 @@ class MetadataAuditTest(unittest.TestCase):
             db.execute("INSERT INTO file_versions VALUES (?,?,?,?,?,?,?,?)", (
                 2, signature, file_hash, 3, 420, -1, None, None,
             ))
-            db.execute("INSERT INTO media VALUES (1,'SYNTHETIC','Synthetic tape',0,NULL,100,3,?)", (
+            db.execute("INSERT INTO media VALUES (1,'SYNTHETIC','Synthetic tape',0,100,3,?)", (
                 b"\x0a\x09\x1a\x07ltfs_v1",
             ))
         with contextlib.closing(sqlite3.connect(self.state_db)) as db, db:
@@ -292,7 +292,7 @@ class MetadataAuditTest(unittest.TestCase):
             SELECT 4,file_id,2,path,mode,size,hash,mod_time,write_time FROM positions WHERE id=1""")
         (self.index.parent / "SECOND.schema").write_bytes(self.index.read_bytes())
         self.sql(self.catalog, """INSERT INTO media
-            SELECT 2,'SECOND',name,created_at_ns,destroyed_at_ns,capacity_bytes,written_bytes,profile FROM media WHERE id=1""")
+            SELECT 2,'SECOND',name,created_at_ns,capacity_bytes,written_bytes,profile FROM media WHERE id=1""")
         for source, target in ((1, 4), (9, 10)):
             self.sql(self.catalog, """INSERT INTO positions
                 SELECT ?,2,path,parent_path,is_dir,mode,size,hash,signature,mtime_ns,written_at_ns,

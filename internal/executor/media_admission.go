@@ -52,9 +52,6 @@ func checkReadMedia(stored *library.Media, target *entity.ReadMediaTarget) error
 	if stored.Profile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 {
 		return nil
 	}
-	if stored.DestroyedAtNS != nil {
-		return fmt.Errorf("tar read Media is unavailable")
-	}
 	if err := entity.ValidateTarMediaProfile(stored.Profile.GetTape()); err != nil {
 		return err
 	}
@@ -109,7 +106,7 @@ func (e *Executor) OpenWriteSession(
 }
 
 // checkTapeWriteMedia admits FORMAT only for an unregistered identity and APPEND only for usable registered Media.
-// resolveTapeWrite has already bound an APPEND target to its registered, undestroyed format.
+// resolveTapeWrite has already bound an APPEND target to its registered format.
 func checkTapeWriteMedia(stored *library.Media, target *entity.ArchiveTapeTarget) error {
 	if target.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT {
 		if stored != nil {

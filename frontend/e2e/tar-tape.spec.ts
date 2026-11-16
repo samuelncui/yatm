@@ -7,7 +7,6 @@ import {
   DeviceFeatureKind,
   DeviceFeatureSupport,
   DeviceFeatureAvailability,
-  DeviceFeatureValidation,
   DeviceFeatureEvidence,
   TapeGeometryLimits,
   TapeReadOrder,
@@ -166,8 +165,6 @@ const fixture = async (page: Page) => {
                 oneofKind: "tape",
                 tape: {
                   encryptionEnabled: false,
-                  recommendationDetail: "Baseline write options",
-                  recommendedWriteOptions: baseline,
                   features: [
                     DeviceFeature.create({
                       feature: DeviceFeatureKind.END_OF_WRAP_POSITION,
@@ -180,7 +177,6 @@ const fixture = async (page: Page) => {
                     }),
                     DeviceFeature.create({
                       feature: DeviceFeatureKind.SOFTWARE_READ_ORDER,
-                      validation: DeviceFeatureValidation.UNVALIDATED,
                       availability: DeviceFeatureAvailability.UNAVAILABLE,
                       detail: "No qualified geometry/timing model; Auto falls back to Logical",
                     }),

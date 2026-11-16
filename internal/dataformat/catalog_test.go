@@ -52,7 +52,7 @@ func TestCatalogAcceptsNanosecondColumns(t *testing.T) {
 	for _, statement := range []string{
 		"CREATE TABLE files (created_at_ns INTEGER, updated_at_ns INTEGER)",
 		"CREATE TABLE locations (created_at_ns INTEGER, updated_at_ns INTEGER, last_sync_at_ns INTEGER)",
-		"CREATE TABLE media (created_at_ns INTEGER, destroyed_at_ns INTEGER)",
+		"CREATE TABLE media (created_at_ns INTEGER)",
 		"CREATE TABLE positions (mtime_ns INTEGER, written_at_ns INTEGER, checked_at_ns INTEGER)",
 		"CREATE TABLE file_versions (first_archived_at_ns INTEGER, last_archived_at_ns INTEGER)",
 		"CREATE TABLE file_version_archives (archived_at_ns INTEGER)",

@@ -89,9 +89,6 @@ func TestCheckTarWriteReportsAttemptResolution(t *testing.T) {
 		return &entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: barcode, Name: "Checked", Mode: mode,
 			Format: proto.String(library.TapeFormatTarPAXV1), TarOptions: options}
 	}
-	recommended := func(options *entity.TarWriteOptions) *entity.InspectDeviceResponse {
-		return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{RecommendedWriteOptions: options}}}
-	}
 	variable, fixed := entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(), entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED.Enum()
 	format, appendMode := entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND
 	for _, tc := range []struct {
@@ -105,12 +102,9 @@ func TestCheckTarWriteReportsAttemptResolution(t *testing.T) {
 		{name: "default options", report: &entity.InspectDeviceResponse{}, target: target("ABC002", format, nil),
 			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288)}},
 		{name: "device defaults", saved: &entity.TarWriteOptions{RecordMode: fixed, RecordBytes: proto.Uint32(262144), HardwareCompression: proto.Bool(false)},
-			report: recommended(&entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}), target: target("ABC002", format, nil),
+			report: &entity.InspectDeviceResponse{}, target: target("ABC002", format, nil),
 			options: &entity.TarWriteOptions{RecordMode: fixed, RecordBytes: proto.Uint32(262144), HardwareCompression: proto.Bool(false)}},
-		{name: "recommendation fills only omitted compression", report: recommended(&entity.TarWriteOptions{RecordBytes: proto.Uint32(8192), HardwareCompression: proto.Bool(true)}),
-			target:  target("ABC002", format, nil),
-			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288), HardwareCompression: proto.Bool(true)}},
-		{name: "explicit choice wins", report: recommended(&entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}),
+		{name: "explicit choice wins", report: &entity.InspectDeviceResponse{},
 			target:  target("ABC002", format, &entity.TarWriteOptions{RecordBytes: proto.Uint32(1048576), HardwareCompression: proto.Bool(false)}),
 			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(1048576), HardwareCompression: proto.Bool(false)}},
 		{name: "FORMAT on existing Media", report: &entity.InspectDeviceResponse{}, target: target("ABC001", format, nil),

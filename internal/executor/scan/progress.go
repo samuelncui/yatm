@@ -70,8 +70,8 @@ type manifestCounts struct {
 func countedPhase(phase entity.JobPhase) bool {
 	switch phase {
 	case entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_UNSPECIFIED, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT,
-		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS, entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE,
-		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA, entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
+		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS, entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
+		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
 		entity.JobPhase_JOB_PHASE_COMPLETED, entity.JobPhase_JOB_PHASE_QUEUED:
 		return true
 	}

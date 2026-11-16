@@ -47,7 +47,6 @@ function filesStatusIndicator(status: FilesEntry["status"]) {
 
   const originalLabels = {
     [OriginalAvailability.UNSPECIFIED]: "Local file not checked",
-    [OriginalAvailability.UNCHECKED]: "Local file not checked",
     [OriginalAvailability.PRESENT]: "Local file present",
     [OriginalAvailability.MISSING]: "Local file missing",
     [OriginalAvailability.UNLINKED]: "No local file linked",

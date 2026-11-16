@@ -6,10 +6,8 @@ import {
   DeviceFeatureEvidence,
   DeviceFeatureKind,
   DeviceFeatureSupport,
-  DeviceFeatureValidation,
   DeviceReason,
   TapeCapacityQuality,
-  TapeRecordMode,
   type TapeCapacityLimits,
   type TapeEncryptionLimits,
   type TapeGeometryLimits,
@@ -189,26 +187,11 @@ export const DeviceInspectionResult = ({ reply }: { reply: InspectDeviceResponse
             {fieldLabel(name)}: {reply.report.oneofKind === "tape" && reply.report.tape[name] !== undefined ? String(reply.report.tape[name]) : "Unknown"}
           </span>
         ))}
-        {reply.report.tape.recommendationDetail && <Alert severity="info">{reply.report.tape.recommendationDetail}</Alert>}
-        {reply.report.tape.recommendedWriteOptions && (
-          <>
-            <strong>Tar FORMAT recommendations</strong>
-            {Object.entries(reply.report.tape.recommendedWriteOptions).map(
-              ([name, value]) =>
-                value !== undefined && (
-                  <span key={name}>
-                    {fieldLabel(name)}: {name === "recordMode" ? enumLabel(TapeRecordMode, Number(value)) : String(value)}
-                  </span>
-                ),
-            )}
-          </>
-        )}
         {reply.report.tape.features.map((feature, index) => (
           <Stack key={`${feature.feature}-${index}`} spacing={0.5} sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
             <strong>{enumLabel(DeviceFeatureKind, feature.feature)}</strong>
             <span>
-              Support: {enumLabel(DeviceFeatureSupport, feature.support)} · Availability: {enumLabel(DeviceFeatureAvailability, feature.availability)} ·
-              Validation: {enumLabel(DeviceFeatureValidation, feature.validation)}
+              Support: {enumLabel(DeviceFeatureSupport, feature.support)} · Availability: {enumLabel(DeviceFeatureAvailability, feature.availability)}
             </span>
             <span>Evidence: {enumLabel(DeviceFeatureEvidence, feature.evidence)}</span>
             {feature.reason !== DeviceReason.UNSPECIFIED && <span>Reason: {enumLabel(DeviceReason, feature.reason)}</span>}

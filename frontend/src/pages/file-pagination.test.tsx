@@ -32,7 +32,7 @@ vi.mock("@/api", async (original) => {
                 libraryPage(reply, directory.target.fileId),
               )
             : locationEntries(locationPageRequest(directory, cursor, query)).response.then((reply: any) =>
-                livePage(reply, directory.target.location.locationId, directory.target.location.path),
+                livePage(reply, directory.target.location.locationId, directory.target.location.path, { "physical.jpg": 19n }),
               ),
         ),
       search: ({ directory, cursor, query, scope }: any) =>
@@ -40,7 +40,7 @@ vi.mock("@/api", async (original) => {
           directory.target.oneofKind === "fileId"
             ? fileGet({ id: directory.target.fileId, cursor, scope, limit: 100 }).response.then((reply: any) => libraryPage(reply, directory.target.fileId))
             : locationEntries(locationPageRequest(directory, cursor, query)).response.then((reply: any) =>
-                livePage(reply, directory.target.location.locationId, directory.target.location.path),
+                livePage(reply, directory.target.location.locationId, directory.target.location.path, { "physical.jpg": 19n }),
               ),
         ),
       get: ({ reference }: any) => ({
@@ -114,7 +114,6 @@ beforeEach(() => {
         entries: [
           {
             path: "physical.jpg",
-            file: { id: 19n, name: "logical.jpg" },
             reference: { locationId: 4n, path: "physical.jpg", facts: { mode: 420, sizeBytes: 40n } },
           },
         ],

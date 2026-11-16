@@ -462,10 +462,6 @@ func TestCapacityPreparationKeepsEstimateQualificationUnknown(t *testing.T) {
 		sample.IssuedAt.IsZero() || sample.CompletedAt.Before(sample.IssuedAt) {
 		t.Fatalf("estimate=%+v", sample)
 	}
-	f := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING)
-	if f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
-		t.Fatalf("sample self-qualified: %v", f)
-	}
 	if err := d.Cleanup(context.Background()); err != nil {
 		t.Fatal(err)
 	}

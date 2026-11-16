@@ -485,34 +485,8 @@ func TestTarOptionResolutionRecordSizeDefaultAndOverrides(t *testing.T) {
 			require.Equal(t, tc.expected, resolved.TarOptions.GetRecordBytes())
 			require.Equal(t, tc.explicit, target.TarOptions.RecordBytes)
 			require.Zero(t, fixture.opens)
-
-			// Later device recommendations cannot replace the admitted size policy.
-			options := mergeTarOptions(&entity.TarWriteOptions{RecordBytes: proto.Uint32(8192)}, resolved.TarOptions)
-			require.Equal(t, tc.expected, options.GetRecordBytes())
 		})
 	}
-}
-
-func TestTarOptionResolutionDefersCompressionDefault(t *testing.T) {
-	// Admission retains an omitted field so a later qualified device recommendation can fill it.
-	_, backend, _, _ := tarFactoryFixture(t)
-	target := tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE).GetTape()
-	resolved, _, err := backend.executor.resolveTapeWrite(context.Background(), target)
-	require.NoError(t, err)
-	require.Nil(t, resolved.TarOptions.HardwareCompression)
-	recommended := &entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}
-	options := mergeTarOptions(recommended, resolved.TarOptions)
-	require.True(t, options.GetHardwareCompression())
-	require.Nil(t, target.TarOptions.HardwareCompression)
-
-	// Explicit off still wins over a recommendation, including after the admission merge.
-	target.TarOptions.HardwareCompression = proto.Bool(false)
-	resolved, _, err = backend.executor.resolveTapeWrite(context.Background(), target)
-	require.NoError(t, err)
-	options = mergeTarOptions(recommended, resolved.TarOptions)
-	require.NotNil(t, options.HardwareCompression)
-	require.False(t, options.GetHardwareCompression())
-	require.True(t, recommended.GetHardwareCompression())
 }
 
 func TestTarFormatAssignsAbsentMAMBarcode(t *testing.T) {

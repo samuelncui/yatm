@@ -65,7 +65,7 @@ func TestNavigationSelectsReportedPairBeforeMotion(t *testing.T) {
 		}
 		for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE} {
 			f := feature(device.Report(), kind)
-			if f.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED || f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED ||
+			if f.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED ||
 				f.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY || f.GetNavigation().GetAddressBits() != bits {
 				t.Fatalf("physical qualification invented or pair missing: %v", f)
 			}
@@ -123,7 +123,7 @@ func TestNavigationReportingKeepsUnsupportedUnknownAndMalformedDistinct(t *testi
 				t.Fatal(err)
 			}
 			f := feature(device.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE)
-			if f.Support != tc.support || f.Reason != tc.reason || f.GetNavigation() != nil || f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
+			if f.Support != tc.support || f.Reason != tc.reason || f.GetNavigation() != nil {
 				t.Fatalf("report=%v", f)
 			}
 			navigator, err := device.Navigation(context.Background())

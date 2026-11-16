@@ -9,7 +9,6 @@ import {
   DeviceFeatureKind,
   DeviceFeatureSupport,
   DeviceFeatureAvailability,
-  DeviceFeatureValidation,
   DeviceFeatureEvidence,
   DeviceReason,
   TapeCapacityLimits,
@@ -119,26 +118,22 @@ describe("Tape device choices", () => {
             oneofKind: "tape",
             tape: {
               writeProtected: false,
-              recommendationDetail: "",
               features: [
                 DeviceFeature.create({
                   feature: DeviceFeatureKind.LOCATE,
                   support: DeviceFeatureSupport.SUPPORTED,
                   availability: DeviceFeatureAvailability.UNKNOWN,
-                  validation: DeviceFeatureValidation.UNVALIDATED,
                   evidence: DeviceFeatureEvidence.REPORTED,
                 }),
                 DeviceFeature.create({
                   feature: DeviceFeatureKind.END_OF_WRAP_POSITION,
                   support: DeviceFeatureSupport.UNSUPPORTED,
                   availability: DeviceFeatureAvailability.UNAVAILABLE,
-                  validation: DeviceFeatureValidation.UNVALIDATED,
                 }),
                 DeviceFeature.create({
                   feature: DeviceFeatureKind.HARDWARE_ENCRYPTION,
                   support: DeviceFeatureSupport.UNKNOWN,
                   availability: DeviceFeatureAvailability.UNAVAILABLE,
-                  validation: DeviceFeatureValidation.UNVALIDATED,
                   reason: DeviceReason.NOT_IMPLEMENTED,
                 }),
               ],
@@ -147,23 +142,19 @@ describe("Tape device choices", () => {
         })}
       />,
     );
-    expect(screen.getByText(/Support: supported · Availability: unknown · Validation: unvalidated/)).toBeInTheDocument();
+    expect(screen.getByText(/Support: supported · Availability: unknown/)).toBeInTheDocument();
     expect(screen.getByText("Medium present: Unknown")).toBeInTheDocument();
     expect(screen.getByText("Write protected: false")).toBeInTheDocument();
     expect(screen.getByText("Evidence: reported")).toBeInTheDocument();
-    expect(screen.getByText(/Support: unsupported · Availability: unavailable · Validation: unvalidated/)).toBeInTheDocument();
+    expect(screen.getByText(/Support: unsupported · Availability: unavailable/)).toBeInTheDocument();
     expect(screen.getByText("hardware encryption")).toBeInTheDocument();
-    expect(screen.getByText(/Support: unknown · Availability: unavailable · Validation: unvalidated/)).toBeInTheDocument();
+    expect(screen.getByText(/Support: unknown · Availability: unavailable/)).toBeInTheDocument();
     expect(screen.getByText("Reason: not implemented")).toBeInTheDocument();
   });
 });
 
 it.each([undefined, false, true])("keeps passive encryption state %s distinct from unknown", (encryptionEnabled) => {
-  render(
-    <DeviceInspectionResult
-      reply={InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { encryptionEnabled, recommendationDetail: "", features: [] } } })}
-    />,
-  );
+  render(<DeviceInspectionResult reply={InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { encryptionEnabled, features: [] } } })} />);
   expect(screen.getByText(`Encryption enabled: ${encryptionEnabled === undefined ? "Unknown" : String(encryptionEnabled)}`)).toBeVisible();
 });
 
@@ -177,13 +168,11 @@ it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.UNSPECIFIED])("keeps 
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
                 support: DeviceFeatureSupport.SUPPORTED,
                 availability: DeviceFeatureAvailability.READY,
-                validation: DeviceFeatureValidation.UNVALIDATED,
                 evidence: DeviceFeatureEvidence.REPORTED,
                 limits: {
                   oneofKind: "capacity",
@@ -208,7 +197,6 @@ it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.UNSPECIFIED])("keeps 
   expect(screen.getByText("Observation started: 2026-10-15T02:00:00.000Z")).toBeVisible();
   expect(screen.getByText("Observation completed: 2026-10-15T02:01:00.000Z")).toBeVisible();
   expect(screen.getByText(/does not guarantee that a file will fit/)).toBeVisible();
-  expect(screen.getByText(/Validation: unvalidated/)).toBeVisible();
 });
 
 it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct", (remainingBytes) => {
@@ -218,7 +206,6 @@ it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct",
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
@@ -247,7 +234,6 @@ it.each([
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             compressionEnabled: true,
             decompressionEnabled: false,
             features: [
@@ -255,7 +241,6 @@ it.each([
                 feature: DeviceFeatureKind.HARDWARE_COMPRESSION,
                 support: DeviceFeatureSupport.SUPPORTED,
                 availability: DeviceFeatureAvailability.READY,
-                validation: DeviceFeatureValidation.UNVALIDATED,
                 evidence: DeviceFeatureEvidence.REPORTED,
                 limits: { oneofKind: "compression", compression: TapeCompressionLimits.create({ currentAlgorithm, enableChangeable }) },
               }),
@@ -275,8 +260,7 @@ it.each([
   expect(screen.getByText(`Enable changeable: ${enableChangeable === undefined ? "Unknown" : String(enableChangeable)}`)).toBeVisible();
   expect(screen.getByText("Compression enabled: true")).toBeVisible();
   expect(screen.getByText("Decompression enabled: false")).toBeVisible();
-  expect(screen.getByText(/Support: supported · Availability: ready · Validation: unvalidated/)).toBeVisible();
-  expect(screen.queryByText("Tar FORMAT recommendations")).not.toBeInTheDocument();
+  expect(screen.getByText(/Support: supported · Availability: ready/)).toBeVisible();
 });
 
 it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero without key-presence claims", (keyInstanceCounter) => {
@@ -286,14 +270,12 @@ it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero witho
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             encryptionEnabled: false,
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.HARDWARE_ENCRYPTION,
                 support: DeviceFeatureSupport.SUPPORTED,
                 availability: DeviceFeatureAvailability.READY,
-                validation: DeviceFeatureValidation.UNVALIDATED,
                 limits: {
                   oneofKind: "encryption",
                   encryption: TapeEncryptionLimits.create({
@@ -323,8 +305,6 @@ it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero witho
   expect(screen.getByText("Parameters control: 0")).toBeVisible();
   expect(screen.getByText(`Key instance counter: ${keyInstanceCounter === undefined ? "Unknown" : "0"}`)).toBeVisible();
   expect(screen.getByText(/does not establish key presence/)).toBeVisible();
-  expect(screen.getByText(/Validation: unvalidated/)).toBeVisible();
-  expect(screen.queryByText("Tar FORMAT recommendations")).not.toBeInTheDocument();
 });
 
 it("shows the reported all-wrap command form without qualifying Auto", () => {
@@ -334,11 +314,9 @@ it("shows the reported all-wrap command form without qualifying Auto", () => {
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.SOFTWARE_READ_ORDER,
-                validation: DeviceFeatureValidation.UNVALIDATED,
                 detail: "No qualified geometry and timing model; effective order is Logical",
                 limits: {
                   oneofKind: "geometry",
@@ -356,7 +334,6 @@ it("shows the reported all-wrap command form without qualifying Auto", () => {
   expect(screen.getByText("Source: synthetic REOWP response")).toBeVisible();
   expect(screen.getByText(/reported command form, not qualified full coverage/)).toBeVisible();
   expect(screen.getByText("No qualified geometry and timing model; effective order is Logical")).toBeVisible();
-  expect(screen.queryByText("Tar FORMAT recommendations")).not.toBeInTheDocument();
 });
 
 it("keeps reported wraps unknown when only the command form is reported", () => {
@@ -366,7 +343,6 @@ it("keeps reported wraps unknown when only the command form is reported", () => 
         report: {
           oneofKind: "tape",
           tape: {
-            recommendationDetail: "",
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.END_OF_WRAP_POSITION,

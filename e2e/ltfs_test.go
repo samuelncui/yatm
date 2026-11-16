@@ -40,16 +40,15 @@ type legacyLibraryBackup struct {
 }
 
 type legacyTape struct {
-	ID            int64      `json:"id,omitempty"`
-	Barcode       string     `json:"barcode,omitempty"`
-	Name          string     `json:"name,omitempty"`
-	SerialNumber  string     `json:"serial_number,omitempty"`
-	Encryption    string     `json:"encryption,omitempty"`
-	Format        string     `json:"format,omitempty"`
-	CreateTime    time.Time  `json:"create_time,omitempty"`
-	DestroyTime   *time.Time `json:"destroy_time,omitempty"`
-	CapacityBytes int64      `json:"capacity_bytes,omitempty"`
-	WritenBytes   int64      `json:"writen_bytes,omitempty"`
+	ID            int64     `json:"id,omitempty"`
+	Barcode       string    `json:"barcode,omitempty"`
+	Name          string    `json:"name,omitempty"`
+	SerialNumber  string    `json:"serial_number,omitempty"`
+	Encryption    string    `json:"encryption,omitempty"`
+	Format        string    `json:"format,omitempty"`
+	CreateTime    time.Time `json:"create_time,omitempty"`
+	CapacityBytes int64     `json:"capacity_bytes,omitempty"`
+	WritenBytes   int64     `json:"writen_bytes,omitempty"`
 }
 
 type legacyFile struct {
@@ -450,15 +449,10 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoError(t, err)
 	profile := currentMedia.Profile.GetTape()
 	require.NotNil(t, profile)
-	var destroyedAt *time.Time
-	if currentMedia.DestroyedAtNS != nil {
-		stamp := legacyFixtureTime(*currentMedia.DestroyedAtNS)
-		destroyedAt = &stamp
-	}
 	tapes := []*legacyTape{{
 		ID: currentMedia.ID, Barcode: currentMedia.Identity, Name: currentMedia.Name,
 		SerialNumber: profile.SerialNumber, Encryption: profile.Encryption, Format: profile.Format,
-		CreateTime: legacyFixtureTime(currentMedia.CreatedAtNS), DestroyTime: destroyedAt,
+		CreateTime:    legacyFixtureTime(currentMedia.CreatedAtNS),
 		CapacityBytes: currentMedia.CapacityBytes, WritenBytes: currentMedia.WrittenBytes,
 	}}
 

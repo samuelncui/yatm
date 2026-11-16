@@ -62,7 +62,7 @@ func PositionRestoreEligible(health entity.PositionHealth) bool {
 	return slices.Contains(RestoreCandidateHealth(false), health)
 }
 
-// ContentMedia lists, for each signature, the distinct undestroyed Media holding a regular Position of that
+// ContentMedia lists, for each signature, the distinct Media holding a regular Position of that
 // content that Restore may read; the list length is the content's Media count. Several copies on one
 // Media count once, and damaged, unreadable or missing copies do not count. Callers pass a bounded
 // batch of known signatures.
@@ -75,10 +75,9 @@ func (l *Library) ContentMedia(ctx context.Context, signatures [][]byte) (map[st
 		Signature []byte
 		MediaID   int64
 	}
-	if err := l.readDB().WithContext(ctx).Model(ModelPosition).Distinct("positions.signature", "positions.media_id").
-		Joins("JOIN media ON media.id = positions.media_id AND media.destroyed_at_ns IS NULL").
-		Where("positions.signature IN ? AND positions.is_dir = ? AND positions.health IN ?", signatures, false, RestoreCandidateHealth(false)).
-		Order("positions.media_id").Scan(&rows).Error; err != nil {
+	if err := l.readDB().WithContext(ctx).Model(ModelPosition).Distinct("signature", "media_id").
+		Where("signature IN ? AND is_dir = ? AND health IN ?", signatures, false, RestoreCandidateHealth(false)).
+		Order("media_id").Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("count content Media failed, %w", err)
 	}
 	for _, row := range rows {

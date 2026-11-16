@@ -10,60 +10,53 @@ import (
 
 func TestNavigationRequiresPreparedEnvelopeAndApplicableEvidence(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		kind       entity.DeviceFeatureKind
-		validation entity.DeviceFeatureValidation
-		support    entity.DeviceFeatureSupport
-		reason     entity.DeviceReason
-		eligible   bool
+		name     string
+		kind     entity.DeviceFeatureKind
+		support  entity.DeviceFeatureSupport
+		reason   entity.DeviceReason
+		eligible bool
 	}{
 		{
-			name:       "unvalidated",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
-			reason:     0,
-			eligible:   true,
+			name:     "unvalidated",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
+			reason:   0,
+			eligible: true,
 		},
 		{
-			name:       "unknown current position",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
-			reason:     entity.DeviceReason_DEVICE_REASON_NOT_READY,
-			eligible:   true,
+			name:     "unknown current position",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
+			reason:   entity.DeviceReason_DEVICE_REASON_NOT_READY,
+			eligible: true,
 		},
 		{
-			name:       "unknown support",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN,
-			reason:     0,
-			eligible:   false,
+			name:     "unknown support",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN,
+			reason:   0,
+			eligible: false,
 		},
 		{
-			name:       "unsupported",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED,
-			reason:     entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
-			eligible:   false,
+			name:     "unsupported",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED,
+			reason:   entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
+			eligible: false,
 		},
 		{
-			name:       "rejected position",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
-			reason:     entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
-			eligible:   false,
+			name:     "rejected position",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
+			reason:   entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
+			eligible: false,
 		},
 		{
-			name:       "malformed position",
-			kind:       entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
-			validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-			support:    entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
-			reason:     entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE,
-			eligible:   false,
+			name:     "malformed position",
+			kind:     entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION,
+			support:  entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
+			reason:   entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE,
+			eligible: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -82,7 +75,7 @@ func TestNavigationRequiresPreparedEnvelopeAndApplicableEvidence(t *testing.T) {
 
 			// Current position readiness is refreshed by the consumer; failed or contradictory support is not.
 			f := feature(device.report, tc.kind)
-			f.Validation, f.Support, f.Reason = tc.validation, tc.support, tc.reason
+			f.Support, f.Reason = tc.support, tc.reason
 			f.Availability = entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN
 			navigator, err := device.Navigation(context.Background())
 			if err != nil || (navigator != nil) != tc.eligible || fixture.motions != 0 {

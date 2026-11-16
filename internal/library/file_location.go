@@ -34,11 +34,6 @@ func (p *FileLocation) BeforeSave(*gorm.DB) error {
 	return nil
 }
 
-func (p *FileLocation) ToEntity() *entity.FileLocation {
-	return &entity.FileLocation{FileId: p.FileID, LocationId: p.LocationID, Path: p.Path, ParentPath: p.ParentPath,
-		SizeBytes: p.Size, Mode: p.Mode, MtimeNs: p.MtimeNS, Signature: p.Signature, Sha256: p.Hash}
-}
-
 func originalParent(value string) string {
 	parent := path.Dir(value)
 	if parent == "." {

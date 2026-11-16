@@ -82,7 +82,7 @@ func (e *Executor) resolveTapeWrite(ctx context.Context, target *entity.ArchiveT
 			resolved.TarOptions = mergeTarOptions(defaults.TarWriteOptions, resolved.TarOptions)
 		}
 	case entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND:
-		if stored == nil || stored.DestroyedAtNS != nil || stored.Profile.GetTape() == nil {
+		if stored == nil || stored.Profile.GetTape() == nil {
 			return nil, nil, fmt.Errorf("APPEND requires available registered Tape Media")
 		}
 		format := stored.Profile.GetTape().Format
@@ -121,7 +121,7 @@ func (e *Executor) resolveTapeWrite(ctx context.Context, target *entity.ArchiveT
 }
 
 func mergeTarOptions(levels ...*entity.TarWriteOptions) *entity.TarWriteOptions {
-	// Default to variable 512 KiB records; retain omitted compression for qualified recommendations.
+	// Default to variable 512 KiB records; an omitted compression stays absent.
 	resolved := &entity.TarWriteOptions{
 		RecordMode:  entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(),
 		RecordBytes: proto.Uint32(512 << 10),
@@ -152,9 +152,9 @@ func tarProfileOptions(profile *entity.TarMediaProfile) *entity.TarWriteOptions 
 	}
 }
 
-// formatTarOptions applies qualified recommendations to still-omitted FORMAT controls.
-func formatTarOptions(report *entity.InspectDeviceResponse, options *entity.TarWriteOptions) (*entity.TarWriteOptions, error) {
-	resolved := mergeTarOptions(report.GetTape().GetRecommendedWriteOptions(), options)
+// formatTarOptions completes FORMAT options with the default record policy and validates them.
+func formatTarOptions(options *entity.TarWriteOptions) (*entity.TarWriteOptions, error) {
+	resolved := mergeTarOptions(options)
 	return resolved, settingspkg.ValidateTarWriteOptions(resolved)
 }
 
@@ -187,10 +187,9 @@ func (e *Executor) CheckTarWrite(ctx context.Context, report *entity.InspectDevi
 		return nil
 	}
 
-	// FORMAT options are those the leased attempt derives from this report's recommendations.
 	report.ResolvedTarOptions = resolved.TarOptions
 	if resolved.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT {
-		report.ResolvedTarOptions, err = formatTarOptions(report, resolved.TarOptions)
+		report.ResolvedTarOptions, err = formatTarOptions(resolved.TarOptions)
 		if err != nil {
 			report.WriteDetail = err.Error()
 			return nil

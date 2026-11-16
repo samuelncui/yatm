@@ -48,11 +48,11 @@ export function libraryPage(reply: FilePageFixture, id = 0n) {
     totalEntryCount: BigInt(reply.children?.length ?? 0),
   });
 }
-export function liveEntry(entry: LocationEntry, locationId: bigint): FilesEntry {
+export function liveEntry(entry: LocationEntry, locationId: bigint, associatedFileId?: bigint): FilesEntry {
   const reference = entry.reference ?? { locationId, path: entry.path };
   return FilesEntry.create({
     reference: { target: { oneofKind: "location", location: reference } },
-    associatedFileId: entry.file?.id,
+    associatedFileId,
     path: entry.path,
     name: entry.path.replace(/\/$/, "").split("/").at(-1) ?? "",
     kind: entry.directory ? EntryKind.DIRECTORY : EntryKind.FILE,
@@ -75,7 +75,7 @@ export function liveDetail(entry: LocationEntry, locationId: bigint) {
     detail: FilesDetail.create({ entry: row, original: { reference: row.reference, sourceName: "Location", path: entry.path } }),
   });
 }
-export function livePage(reply: LocationEntriesPage, locationId: bigint, path = "") {
+export function livePage(reply: LocationEntriesPage, locationId: bigint, path = "", associatedFileIds: Record<string, bigint> = {}) {
   const parts = path.split("/").filter(Boolean);
   const breadcrumbs = ["", ...parts.map((_, index) => parts.slice(0, index + 1).join("/"))].map((path, index) =>
     FilesEntry.create({
@@ -87,7 +87,7 @@ export function livePage(reply: LocationEntriesPage, locationId: bigint, path = 
     }),
   );
   return ListFilesResponse.create({
-    entries: reply.entries.map((entry) => liveEntry(entry, locationId)),
+    entries: reply.entries.map((entry) => liveEntry(entry, locationId, associatedFileIds[entry.path])),
     directory: breadcrumbs.at(-1),
     breadcrumbs,
     scope: FileScope.ALL,

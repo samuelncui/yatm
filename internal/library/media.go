@@ -36,7 +36,6 @@ type Media struct {
 	Name            string                  `gorm:"type:varchar(256)" json:"name,omitempty"`
 	Profile         *entity.MediaProfile    `gorm:"type:blob;not null" json:"profile,omitempty"`
 	CreatedAtNS     int64                   `json:"created_at_ns,string"`
-	DestroyedAtNS   *int64                  `json:"destroyed_at_ns,omitempty,string"`
 	CapacityBytes   int64                   `json:"capacity_bytes,omitempty"`
 	WrittenBytes    int64                   `json:"written_bytes,omitempty"`
 	TapePositionMap *entity.TapePositionMap `gorm:"type:blob" json:"tape_position_map,omitempty"`
@@ -49,7 +48,6 @@ type mediaJSON struct {
 	Name            string           `json:"name,omitempty"`
 	Profile         json.RawMessage  `json:"profile"`
 	CreatedAtNS     int64            `json:"created_at_ns,string"`
-	DestroyedAtNS   *int64           `json:"destroyed_at_ns,omitempty,string"`
 	CapacityBytes   int64            `json:"capacity_bytes,omitempty"`
 	WrittenBytes    int64            `json:"written_bytes,omitempty"`
 	TapePositionMap json.RawMessage  `json:"tape_position_map,omitempty"`
@@ -77,7 +75,7 @@ func (value Media) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(&mediaJSON{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: profile,
-		CreatedAtNS: value.CreatedAtNS, DestroyedAtNS: value.DestroyedAtNS,
+		CreatedAtNS:   value.CreatedAtNS,
 		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 		TapePositionMap: positionMap,
 	})
@@ -109,7 +107,7 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 	}
 	*value = Media{
 		ID: decoded.ID, Kind: decoded.Kind, Identity: decoded.Identity, Name: decoded.Name, Profile: profile,
-		CreatedAtNS: decoded.CreatedAtNS, DestroyedAtNS: decoded.DestroyedAtNS,
+		CreatedAtNS:   decoded.CreatedAtNS,
 		CapacityBytes: decoded.CapacityBytes, WrittenBytes: decoded.WrittenBytes,
 		TapePositionMap: positionMap,
 	}

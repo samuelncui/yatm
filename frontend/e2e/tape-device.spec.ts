@@ -5,7 +5,6 @@ import {
   DeviceFeatureEvidence,
   DeviceFeatureKind,
   DeviceFeatureSupport,
-  DeviceFeatureValidation,
   DeviceKind,
   DeviceReason,
   DeviceSummary,
@@ -64,20 +63,17 @@ test("Media device details preserve passive diagnostics and usable desktop/narro
                 tape: {
                   writeProtected: false,
                   encryptionEnabled: false,
-                  recommendationDetail: "",
                   features: [
                     DeviceFeature.create({
                       feature: DeviceFeatureKind.LOCATE,
                       support: DeviceFeatureSupport.SUPPORTED,
                       availability: DeviceFeatureAvailability.UNKNOWN,
-                      validation: DeviceFeatureValidation.UNVALIDATED,
                       evidence: DeviceFeatureEvidence.REPORTED,
                     }),
                     DeviceFeature.create({
                       feature: DeviceFeatureKind.HARDWARE_ENCRYPTION,
                       support: DeviceFeatureSupport.UNKNOWN,
                       availability: DeviceFeatureAvailability.UNAVAILABLE,
-                      validation: DeviceFeatureValidation.UNVALIDATED,
                       reason: DeviceReason.NOT_IMPLEMENTED,
                     }),
                   ],
@@ -144,7 +140,7 @@ test("Media device details preserve passive diagnostics and usable desktop/narro
     await expect(details.getByText("Medium present: Unknown", { exact: true })).toBeVisible();
     await expect(details.getByText("Write protected: false", { exact: true })).toBeVisible();
     await expect(details.getByText("Encryption enabled: false", { exact: true })).toBeVisible();
-    await expect(details.getByText(/Support: supported · Availability: unknown · Validation: unvalidated/)).toBeVisible();
+    await expect(details.getByText(/Support: supported · Availability: unknown/)).toBeVisible();
     await expect(details.getByText("Evidence: reported", { exact: true })).toBeVisible();
     await expect(details.getByText("Reason: not implemented", { exact: true })).toBeVisible();
     await expectFits(details);

@@ -40,11 +40,7 @@ func convertMedia(value *library.Media) (*entity.Media, error) {
 		return nil, fmt.Errorf("convert Media capabilities failed, media_id=%d, %w", value.ID, err)
 	}
 
-	// Preserve optional timestamps and give the response its own mutable geometry.
-	var destroyedAt *int64
-	if value.DestroyedAtNS != nil {
-		destroyedAt = proto.Int64(*value.DestroyedAtNS)
-	}
+	// Give the response its own mutable geometry.
 	var positionMap *entity.TapePositionMap
 	if value.TapePositionMap != nil {
 		positionMap = proto.Clone(value.TapePositionMap).(*entity.TapePositionMap)
@@ -63,8 +59,8 @@ func convertMedia(value *library.Media) (*entity.Media, error) {
 		},
 		Profile: profile, CreatedAtNs: value.CreatedAtNS,
 		TapePositionMap: positionMap, EncryptionKeySaved: keySaved,
-		DestroyedAtNs: destroyedAt, CapacityBytes: value.CapacityBytes,
-		WrittenBytes: value.WrittenBytes,
+		CapacityBytes: value.CapacityBytes,
+		WrittenBytes:  value.WrittenBytes,
 	}, nil
 }
 

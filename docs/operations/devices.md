@@ -68,10 +68,10 @@ yatm-cli settings devices --device-json device-settings.json
 For example, a saved tar preference for one configured entry is:
 
 ```json
-{"devices":[{"device":"/dev/nst0","tape":{"defaultFormat":"tar_pax_v1","tarWriteOptions":{"recordMode":"TAPE_RECORD_MODE_VARIABLE","recordBytes":262144,"hardwareCompression":false},"readOrder":"TAPE_READ_ORDER_LOGICAL"}}]}
+{"devices":[{"device":"/dev/nst0","tape":{"defaultFormat":"tar_pax_v1","tarWriteOptions":{"recordMode":"TAPE_RECORD_MODE_VARIABLE","recordBytes":524288,"hardwareCompression":false},"readOrder":"TAPE_READ_ORDER_LOGICAL"}}]}
 ```
 
-The example size is an explicit preference, not a hardware recommendation. Omitted options remain
+The example size is an explicit preference. Omitted options remain
 absent; explicit `false` remains an explicit choice. `readOrder` accepts `TAPE_READ_ORDER_LOGICAL`
 or `TAPE_READ_ORDER_AUTO`; omission/unspecified uses Logical when the attempt is admitted.
 The optional `capacityPollIntervalSeconds` uses Auto when omitted, preserves explicit `0` as Off,
@@ -93,8 +93,7 @@ support, required control changes and readback; a saved preference alone cannot 
 APPEND uses the cartridge's saved choice after verifying its label and recorded tail. Reads require
 compatible hardware decoding for compressed content and preserve the drive's write-compression
 controls. Diagnostics show observed algorithm identifiers and known or unknown control changeability,
-separately from physical validation. No physically qualified compression recommendation is supplied
-by passive inspection, and expected compression savings are not a space guarantee.
+separately from physical validation. Expected compression savings are not a space guarantee.
 
 ## Encryption
 
@@ -150,7 +149,7 @@ LTFS retains its cartridge checks, initialization, mount and normal unmount flow
 ```shell
 yatm-cli archive write tape format JOB_ID --device /dev/nst0 \
   --barcode ABC123 --name 'Archive Tape' --confirm-format ABC123 \
-  --format tar_pax_v1 --record-mode variable --record-bytes 262144
+  --format tar_pax_v1 --record-mode variable --record-bytes 524288
 ```
 
 Omit `--format` to use the selected device's saved format, or supply `--format ltfs_v1` for an

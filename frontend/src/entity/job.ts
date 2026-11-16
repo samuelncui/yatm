@@ -390,10 +390,6 @@ export enum JobPhase {
      */
     GENERATING_PREVIEWS = 9,
     /**
-     * @generated from protobuf enum value: JOB_PHASE_VALIDATING_SOURCE = 12;
-     */
-    VALIDATING_SOURCE = 12,
-    /**
      * @generated from protobuf enum value: JOB_PHASE_PUBLISHING_SOURCE = 13;
      */
     PUBLISHING_SOURCE = 13,

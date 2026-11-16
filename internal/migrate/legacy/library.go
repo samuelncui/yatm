@@ -35,7 +35,6 @@ type legacyLibraryTape struct {
 	Name          string
 	Encryption    string
 	CreateTime    time.Time
-	DestroyTime   *time.Time
 	CapacityBytes int64
 	WritenBytes   int64
 }
@@ -89,7 +88,6 @@ type stagedLibraryMedia struct {
 	Name          string               `gorm:"type:varchar(256)"`
 	Profile       *entity.MediaProfile `gorm:"type:blob;not null"`
 	CreatedAtNS   int64
-	DestroyedAtNS *int64
 	CapacityBytes int64
 	WrittenBytes  int64
 }
@@ -523,14 +521,6 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 			if err != nil {
 				return 0, fmt.Errorf("convert legacy Tape %d creation time failed, %w", tape.ID, err)
 			}
-			var destroyedAtNS *int64
-			if tape.DestroyTime != nil {
-				stamp, err := dataformat.Nanoseconds(*tape.DestroyTime)
-				if err != nil {
-					return 0, fmt.Errorf("convert legacy Tape %d destruction time failed, %w", tape.ID, err)
-				}
-				destroyedAtNS = &stamp
-			}
 			// Barcodes that differ only by case or spacing would collide as one Tape identity.
 			identity := library.NormalizeMediaIdentity(entity.MediaKind_MEDIA_KIND_TAPE, tape.Barcode)
 			if previous, ok := barcodes[identity]; ok {
@@ -543,7 +533,7 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 				Name:     tape.Name, Profile: (&entity.TapeMediaProfile{
 					Encryption: tape.Encryption, Format: library.TapeFormatLTFSV0,
 				}).Pack(),
-				CreatedAtNS: createdAtNS, DestroyedAtNS: destroyedAtNS,
+				CreatedAtNS:   createdAtNS,
 				CapacityBytes: tape.CapacityBytes, WrittenBytes: tape.WritenBytes,
 			})
 		}

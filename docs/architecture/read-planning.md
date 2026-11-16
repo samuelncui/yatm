@@ -217,7 +217,7 @@ devices, using independently documented IBM and HPE response framing. Standard R
 exact service-action and field-mask checks. A complete vendor-specific support-5 report for HP/HPE
 Ultrium permits one bounded report-all query on loaded, ready media; rejection never triggers a
 second form. Other vendor/product families remain unknown without a vendor query. A successful
-query supplies OBSERVED evidence, with physical validation UNVALIDATED. Typed observations expose the reported
+query supplies OBSERVED evidence. Typed observations expose the reported
 long command form and source, with count only after an interpretable response; these do not prove
 full-wrap coverage. Successful querying
 alone leaves freshness unknown. The live reported observation preserves gaps, pair identities and

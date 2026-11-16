@@ -305,11 +305,6 @@ func (s *checkSession) Media() *mediapkg.Descriptor {
 	if s.media == nil {
 		return nil
 	}
-	var destroyed *time.Time
-	if s.media.DestroyedAtNS != nil {
-		stamp := time.Unix(0, *s.media.DestroyedAtNS)
-		destroyed = &stamp
-	}
 	return &mediapkg.Descriptor{
 		ID:            s.media.ID,
 		Kind:          s.media.Kind,
@@ -317,7 +312,6 @@ func (s *checkSession) Media() *mediapkg.Descriptor {
 		Name:          s.media.Name,
 		Profile:       s.media.Profile,
 		CreateTime:    time.Unix(0, s.media.CreatedAtNS),
-		DestroyTime:   destroyed,
 		CapacityBytes: s.media.CapacityBytes,
 		WrittenBytes:  s.media.WrittenBytes,
 	}

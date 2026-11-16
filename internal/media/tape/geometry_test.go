@@ -146,11 +146,11 @@ func TestGeometryPreservesReportedPairsGapsObjectsAndUnknownFreshness(t *testing
 	}
 	report := d.Report()
 	observedFeature := feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
-	if observedFeature.GetGeometry().GetReportedWraps() != 3 || !observedFeature.GetGeometry().GetAllWraps() || observedFeature.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || report.GetTape().RecommendedWriteOptions != nil {
+	if observedFeature.GetGeometry().GetReportedWraps() != 3 || !observedFeature.GetGeometry().GetAllWraps() {
 		t.Fatalf("feature=%v", observedFeature)
 	}
 	order := feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER)
-	if order.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN || order.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || order.Reason != entity.DeviceReason_DEVICE_REASON_NOT_READY {
+	if order.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN || order.Reason != entity.DeviceReason_DEVICE_REASON_NOT_READY {
 		t.Fatalf("order=%v", order)
 	}
 	if err := d.Cleanup(context.Background()); err != nil || geometry.Valid() || again.Valid() {
@@ -248,7 +248,7 @@ func TestHPEReportedFormsObserveEndpointShapeWithoutQualification(t *testing.T) 
 				limits := reported.GetGeometry()
 				if err != nil || !observed.Valid() || f.formQueries != 1 || f.wrapQueries != 1 || observed.AllWraps == tc.short ||
 					reported.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY || reported.Evidence != entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_OBSERVED ||
-					reported.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || limits.GetReportedWraps() != 1 {
+					limits.GetReportedWraps() != 1 {
 					t.Fatalf("map=%v error=%v queries=%d feature=%v", observed, err, f.wrapQueries, reported)
 				}
 				want := []WrapEndpoint{{Partition: 65535, Wrap: 65534, Object: 1<<48 - 1}}
@@ -261,7 +261,7 @@ func TestHPEReportedFormsObserveEndpointShapeWithoutQualification(t *testing.T) 
 					t.Fatalf("map=%+v feature=%v", observed, reported)
 				}
 				order := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER)
-				if order.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN || d.Report().GetTape().RecommendedWriteOptions != nil {
+				if order.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN {
 					t.Fatalf("unqualified ordering=%v", order)
 				}
 
@@ -359,8 +359,7 @@ func TestHPEVendorObservationFailureNeverIssuesAnotherForm(t *testing.T) {
 			reported := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
 			if err != nil || observed != nil || reported.GetGeometry() != nil ||
 				reported.Support == entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED ||
-				reported.Support == entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED ||
-				reported.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
+				reported.Support == entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED {
 				t.Fatalf("map=%v error=%v feature=%v", observed, err, reported)
 			}
 			profile := encryptionTestProfile()

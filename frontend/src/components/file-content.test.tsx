@@ -201,7 +201,7 @@ it("omits Archive for a saved-only regular File while keeping its saved version 
 });
 it("does not offer Archive for a Library File without an original when its status is stale", () => {
   const value = detail();
-  value.entry!.status!.original = OriginalAvailability.UNCHECKED;
+  value.entry!.status!.original = OriginalAvailability.UNSPECIFIED;
   value.original = undefined;
   value.contentReference = undefined;
   render(<FileContent detail={value} onRefresh={refresh} />, { wrapper: MemoryRouter });

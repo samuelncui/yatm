@@ -295,7 +295,6 @@ func TestScanIndeterminateFinalStagesRetainDiscoveredWork(t *testing.T) {
 		{Path: "two", Change: entity.ScanChange_SCAN_CHANGE_UNCHANGED, Size: 20},
 	}).Error)
 	for _, phase := range []entity.JobPhase{
-		entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE,
 		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
 		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
 	} {

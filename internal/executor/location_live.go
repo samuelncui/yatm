@@ -104,7 +104,6 @@ func (e *Executor) ObserveLocationEntry(ctx context.Context, locationID int64, r
 type locationCursor struct {
 	LocationID int64
 	Path       string
-	Filter     string
 	After      string
 }
 
@@ -164,15 +163,14 @@ func (e *Executor) ReadLocationEntriesMatching(ctx context.Context, req *entity.
 	if err != nil {
 		return nil, err
 	}
-	filter := strings.ToLower(req.GetNameFilter())
-	cursor := locationCursor{LocationID: location.ID, Path: parent, Filter: filter}
+	cursor := locationCursor{LocationID: location.ID, Path: parent}
 	if requestCursor != "" {
 		var stored locationCursor
 		data, err := base64.RawURLEncoding.DecodeString(requestCursor)
 		if len(requestCursor) > 16384 || err != nil || json.Unmarshal(data, &stored) != nil {
 			return nil, fmt.Errorf("invalid directory cursor")
 		}
-		if stored.LocationID != cursor.LocationID || stored.Path != parent || stored.Filter != filter {
+		if stored.LocationID != cursor.LocationID || stored.Path != parent {
 			return nil, library.ErrLocationConflict
 		}
 		cursor.After = stored.After
@@ -184,7 +182,7 @@ func (e *Executor) ReadLocationEntriesMatching(ctx context.Context, req *entity.
 		eligible := children[:0]
 		for _, child := range children {
 			name := child.Name()
-			if name <= cursor.After || !strings.Contains(strings.ToLower(name), filter) || reader.Excluded(child) {
+			if name <= cursor.After || reader.Excluded(child) {
 				continue
 			}
 			eligible = append(eligible, child)

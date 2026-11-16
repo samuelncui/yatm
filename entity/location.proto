@@ -51,7 +51,8 @@ message LocationAccessibility {
 // it matched none.
 message ObservedEntry {
   string path = 3;
-  bool directory = 5;
+  reserved 5;
+  reserved "directory";
   int64 file_id = 6;
   int64 size_bytes = 7;
   uint32 mode = 8;
@@ -73,18 +74,6 @@ message Location {
   int64 last_job_id = 13;
   bool restore_target = 15;
   LocationConfig config = 16;
-}
-
-message FileLocation {
-  int64 file_id = 1;
-  int64 location_id = 2;
-  string path = 3;
-  string parent_path = 4;
-  int64 size_bytes = 5;
-  uint32 mode = 6;
-  int64 mtime_ns = 7;
-  bytes signature = 8;
-  bytes sha256 = 9;
 }
 
 message CreateLocationRequest { Location location = 1; }
@@ -124,14 +113,14 @@ message LocationEntriesQuery {
   int64 location_id = 1;
   string parent_path = 2;
   int32 limit = 4;
-  string cursor = 6;
-  string name_filter = 7;
+  reserved 6, 7;
+  reserved "cursor", "name_filter";
 }
 message LocationEntry {
   string path = 1;
   bool directory = 2;
-  FileLocation original = 3;
-  File file = 4;
+  reserved 3, 4;
+  reserved "original", "file";
   LocationEntryRef reference = 5;
 }
 message LocationEntriesPage {

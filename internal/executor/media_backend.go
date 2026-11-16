@@ -130,11 +130,6 @@ func describeMedia(value *library.Media) *mediapkg.Descriptor {
 	if value.CreatedAtNS != 0 {
 		created = time.Unix(0, value.CreatedAtNS)
 	}
-	var destroyed *time.Time
-	if value.DestroyedAtNS != nil {
-		stamp := time.Unix(0, *value.DestroyedAtNS)
-		destroyed = &stamp
-	}
 
 	// Mutable geometry belongs to this request even when the Library row was cached.
 	var positionMap *entity.TapePositionMap
@@ -144,7 +139,7 @@ func describeMedia(value *library.Media) *mediapkg.Descriptor {
 	return &mediapkg.Descriptor{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
 		TapePositionMap: positionMap,
-		CreateTime:      created, DestroyTime: destroyed,
-		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
+		CreateTime:      created,
+		CapacityBytes:   value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}
 }

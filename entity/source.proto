@@ -9,6 +9,6 @@ message SourceFile {
     string name = 3;
 
     int64 mode = 17;
-    int64 mtime_ns = 18;
-    int64 size_bytes = 19;
+    reserved 18, 19;
+    reserved "mtime_ns", "size_bytes";
 }

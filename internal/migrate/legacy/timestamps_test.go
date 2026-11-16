@@ -42,8 +42,6 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 	media, err := library.New(db).GetMedia(ctx, 1)
 	require.NoError(t, err)
 	require.Equal(t, legacyTimestampNS, media.CreatedAtNS)
-	require.NotNil(t, media.DestroyedAtNS)
-	require.Equal(t, legacyTimestampNS+1, *media.DestroyedAtNS)
 	var position library.Position
 	require.NoError(t, db.First(&position, 1).Error)
 	require.Equal(t, int64(-17), position.MtimeNS)
@@ -66,7 +64,7 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 		columns []string
 	}{
 		{"files", []string{"created_at_ns", "updated_at_ns"}},
-		{"media", []string{"created_at_ns", "destroyed_at_ns"}},
+		{"media", []string{"created_at_ns"}},
 		{"positions", []string{"mtime_ns", "written_at_ns", "checked_at_ns"}},
 		{"file_versions", []string{"mtime_ns"}},
 		{"jobs", []string{"created_at_ns", "updated_at_ns", "deleted_at_ns"}},
@@ -97,7 +95,7 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 	require.True(t, time.Unix(0, job.UpdatedAtNS).Equal(source.UpdateTime))
 }
 
-func TestPreparePreservesZeroTimeAndNullableDestruction(t *testing.T) {
+func TestPreparePreservesZeroTime(t *testing.T) {
 	// Legacy zero times map to zero without triggering GORM's automatic timestamp population.
 	db := newLegacyTestDB(t)
 	t.Cleanup(func() { _ = resource.CloseDB(db) })
@@ -105,16 +103,15 @@ func TestPreparePreservesZeroTimeAndNullableDestruction(t *testing.T) {
 	require.NoError(t, db.Delete(&legacyJob{}, 1).Error)
 	require.NoError(t, db.Model(&legacyLibraryFile{}).Where("id = ?", 1).Update("mod_time", time.Time{}).Error)
 	require.NoError(t, db.Model(&legacyLibraryTape{}).Where("id = ?", 1).
-		Updates(map[string]any{"create_time": time.Time{}, "destroy_time": nil}).Error)
+		Update("create_time", time.Time{}).Error)
 	zero := time.Time{}
-	require.NoError(t, db.Create(&legacyLibraryTape{ID: 2, Barcode: "ZERO02", DestroyTime: &zero}).Error)
 	require.NoError(t, db.Model(&legacyLibraryPosition{}).Where("id = ?", 1).
 		Updates(map[string]any{"mod_time": zero, "write_time": zero}).Error)
 	report, err := prepareLegacy(context.Background(), db, t.TempDir())
 	require.NoError(t, err)
 	require.True(t, report.Success)
 
-	// Null destruction and an explicitly supplied zero time remain different current facts.
+	// Zero source times stay zero.
 	var file stagedLibraryFile
 	require.NoError(t, db.First(&file, 1).Error)
 	require.Zero(t, file.CreatedAtNS)
@@ -122,12 +119,8 @@ func TestPreparePreservesZeroTimeAndNullableDestruction(t *testing.T) {
 	require.Zero(t, file.MtimeNS)
 	var media []stagedLibraryMedia
 	require.NoError(t, db.Order("id").Find(&media).Error)
-	require.Len(t, media, 2)
+	require.Len(t, media, 1)
 	require.Zero(t, media[0].CreatedAtNS)
-	require.Nil(t, media[0].DestroyedAtNS)
-	require.Zero(t, media[1].CreatedAtNS)
-	require.NotNil(t, media[1].DestroyedAtNS)
-	require.Zero(t, *media[1].DestroyedAtNS)
 	var position stagedLibraryPosition
 	require.NoError(t, db.First(&position, 1).Error)
 	require.Zero(t, position.MtimeNS)
@@ -140,7 +133,6 @@ func TestPrepareRejectsOutOfRangeLegacyInstants(t *testing.T) {
 	for _, field := range []struct{ table, column, message string }{
 		{"files", "mod_time", "File 1 mtime"},
 		{"tapes", "create_time", "Tape 1 creation time"},
-		{"tapes", "destroy_time", "Tape 1 destruction time"},
 		{"positions", "mod_time", "Position 1 mtime"},
 		{"positions", "write_time", "Position 1 write time"},
 		{"jobs", "create_time", "Job 1 creation time"},
@@ -181,9 +173,8 @@ func seedLegacyTimestampRows(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.Create(&legacyLibraryFile{
 		ID: 1, Name: "timestamp.txt", Mode: 0o644, ModTime: time.Unix(0, -17), Size: 24, Hash: hash[:],
 	}).Error)
-	destroyed := time.Unix(0, legacyTimestampNS+1)
 	require.NoError(t, db.Create(&legacyLibraryTape{
-		ID: 1, Barcode: "STAMP1", CreateTime: time.Unix(0, legacyTimestampNS), DestroyTime: &destroyed,
+		ID: 1, Barcode: "STAMP1", CreateTime: time.Unix(0, legacyTimestampNS),
 	}).Error)
 	require.NoError(t, db.Create(&legacyLibraryPosition{
 		ID: 1, FileID: 1, TapeID: 1, Path: "timestamp.txt", Mode: 0o644, ModTime: time.Unix(0, -17),

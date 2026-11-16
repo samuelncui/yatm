@@ -30,14 +30,6 @@ export interface SourceFile {
      * @generated from protobuf field: int64 mode = 17
      */
     mode: bigint;
-    /**
-     * @generated from protobuf field: int64 mtime_ns = 18
-     */
-    mtimeNs: bigint;
-    /**
-     * @generated from protobuf field: int64 size_bytes = 19
-     */
-    sizeBytes: bigint;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class SourceFile$Type extends MessageType<SourceFile> {
@@ -46,9 +38,7 @@ class SourceFile$Type extends MessageType<SourceFile> {
             { no: 1, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "parent_path", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 17, name: "mode", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 18, name: "mtime_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 19, name: "size_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 17, name: "mode", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<SourceFile>): SourceFile {
@@ -57,8 +47,6 @@ class SourceFile$Type extends MessageType<SourceFile> {
         message.parentPath = "";
         message.name = "";
         message.mode = 0n;
-        message.mtimeNs = 0n;
-        message.sizeBytes = 0n;
         if (value !== undefined)
             reflectionMergePartial<SourceFile>(this, message, value);
         return message;
@@ -79,12 +67,6 @@ class SourceFile$Type extends MessageType<SourceFile> {
                     break;
                 case /* int64 mode */ 17:
                     message.mode = reader.int64().toBigInt();
-                    break;
-                case /* int64 mtime_ns */ 18:
-                    message.mtimeNs = reader.int64().toBigInt();
-                    break;
-                case /* int64 size_bytes */ 19:
-                    message.sizeBytes = reader.int64().toBigInt();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -110,12 +92,6 @@ class SourceFile$Type extends MessageType<SourceFile> {
         /* int64 mode = 17; */
         if (message.mode !== 0n)
             writer.tag(17, WireType.Varint).int64(message.mode);
-        /* int64 mtime_ns = 18; */
-        if (message.mtimeNs !== 0n)
-            writer.tag(18, WireType.Varint).int64(message.mtimeNs);
-        /* int64 size_bytes = 19; */
-        if (message.sizeBytes !== 0n)
-            writer.tag(19, WireType.Varint).int64(message.sizeBytes);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

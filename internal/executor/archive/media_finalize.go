@@ -224,18 +224,10 @@ func libraryMedia(value *mediapkg.Descriptor) (*library.Media, error) {
 	if err != nil {
 		return nil, err
 	}
-	var destroyed *int64
-	if value.DestroyTime != nil {
-		stamp, err := dataformat.Nanoseconds(*value.DestroyTime)
-		if err != nil {
-			return nil, err
-		}
-		destroyed = &stamp
-	}
 	return &library.Media{
 		ID: value.ID, Kind: value.Kind, Identity: value.Identity, Name: value.Name, Profile: value.Profile,
 		TapePositionMap: value.TapePositionMap,
-		CreatedAtNS:     created, DestroyedAtNS: destroyed,
-		CapacityBytes: value.CapacityBytes, WrittenBytes: value.WrittenBytes,
+		CreatedAtNS:     created,
+		CapacityBytes:   value.CapacityBytes, WrittenBytes: value.WrittenBytes,
 	}, nil
 }

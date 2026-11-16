@@ -320,10 +320,10 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		return nil, err
 	}
 
-	// Apply qualified recommendations to still-omitted controls before any mutation.
+	// Resolve FORMAT options before any mutation.
 	operation := tape.Read
 	if format {
-		options, err := formatTarOptions(prepared.Report(), target.TarOptions)
+		options, err := formatTarOptions(target.TarOptions)
 		if err != nil {
 			return nil, err
 		}

@@ -225,7 +225,6 @@ func (d *Device) Capacity(ctx context.Context) (*Capacity, error) {
 func (d *Device) reportCapacity(sample *CapacitySample, issued bool, err error) {
 	// Optional estimates never self-certify physical bounds or streaming qualification.
 	f := feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING)
-	f.Validation = entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED
 	f.Evidence = entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_UNSPECIFIED
 	f.Limits = nil
 	f.Support, f.Availability, f.Reason = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN, entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN, entity.DeviceReason_DEVICE_REASON_NOT_READY

@@ -849,9 +849,7 @@ describe("File detail loading", () => {
     const reference = LocationEntryRef.create({ locationId: 4n, path: "physical.txt", facts: { sizeBytes: 4n, mode: 420 } });
     if (scope === "location") {
       localStorage.setItem("details-pane:source", JSON.stringify({ kind: "location", id: "4", name: "Photos" }));
-      locationEntries.mockReturnValue(
-        call(LocationEntriesPage.create({ entries: [{ path: reference.path, reference, file: { id: 8n, name: "logical.txt" } }] })),
-      );
+      locationEntries.mockReturnValue(call(LocationEntriesPage.create({ entries: [{ path: reference.path, reference }] })));
     } else {
       fileGet.mockReturnValue(call({ children: [{ id: 8n, name: "logical.txt" }] }));
     }
@@ -1102,9 +1100,7 @@ describe("Library file browser search", () => {
   it("filters live Location entries without querying the Library index", async () => {
     localStorage.setItem("pane:source", JSON.stringify({ kind: "location", id: "4", name: "Photos" }));
     const reference = LocationEntryRef.create({ locationId: 4n, path: "camera/original.jpg", facts: { sizeBytes: 20n, mtimeNs: 1n } });
-    locationEntries.mockReturnValue(
-      call(LocationEntriesPage.create({ entries: [{ file: { id: 7n, name: "logical.jpg" }, path: reference.path, reference }], revision: 9n })),
-    );
+    locationEntries.mockReturnValue(call(LocationEntriesPage.create({ entries: [{ path: reference.path, reference }], revision: 9n })));
     const { result } = renderHook(() =>
       useFileBrowser(
         createRef<FileBrowserHandle>(),
@@ -1117,7 +1113,7 @@ describe("Library file browser search", () => {
     await waitFor(() => expect(locationEntries).toHaveBeenCalled());
     await act(async () => result.current.search("original"));
     const file = result.current.files[0];
-    expect(file).toMatchObject({ id: "location-file:4:camera/original.jpg", libraryFileID: 7n, name: "original.jpg", physicalPath: "camera/original.jpg" });
+    expect(file).toMatchObject({ id: "location-file:4:camera/original.jpg", name: "original.jpg", physicalPath: "camera/original.jpg" });
     expect(selectionForFile(file!, FileScope.SAVED)).toEqual({
       target: { oneofKind: "location", location: { locationId: 4n, path: "camera/original.jpg" } },
       scope: FileScope.ALL,

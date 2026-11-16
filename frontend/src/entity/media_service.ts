@@ -544,10 +544,6 @@ export interface DeviceFeature {
      */
     availability: DeviceFeatureAvailability;
     /**
-     * @generated from protobuf field: yatm.v1.DeviceFeatureValidation validation = 4
-     */
-    validation: DeviceFeatureValidation;
-    /**
      * @generated from protobuf field: yatm.v1.DeviceReason reason = 5
      */
     reason: DeviceReason;
@@ -818,16 +814,6 @@ export interface TapeDeviceReport {
      * @generated from protobuf field: repeated yatm.v1.DeviceFeature features = 17
      */
     features: DeviceFeature[];
-    /**
-     * Suggested FORMAT values only when applicable qualification establishes them.
-     *
-     * @generated from protobuf field: optional yatm.v1.TarWriteOptions recommended_write_options = 18
-     */
-    recommendedWriteOptions?: TarWriteOptions;
-    /**
-     * @generated from protobuf field: string recommendation_detail = 19
-     */
-    recommendationDetail: string;
 }
 /**
  * Volume candidate states select the applicable mounted-Volume operation.
@@ -983,21 +969,6 @@ export enum DeviceFeatureAvailability {
      * @generated from protobuf enum value: DEVICE_FEATURE_AVAILABILITY_READY = 3;
      */
     READY = 3
-}
-/**
- * Passive inspection never establishes write/seek/recovery qualification.
- *
- * @generated from protobuf enum yatm.v1.DeviceFeatureValidation
- */
-export enum DeviceFeatureValidation {
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_UNSPECIFIED = 0;
-     */
-    UNSPECIFIED = 0,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_UNVALIDATED = 1;
-     */
-    UNVALIDATED = 1
 }
 /**
  * @generated from protobuf enum yatm.v1.DeviceReason
@@ -2703,7 +2674,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
             { no: 1, name: "feature", kind: "enum", T: () => ["yatm.v1.DeviceFeatureKind", DeviceFeatureKind, "DEVICE_FEATURE_KIND_"] },
             { no: 2, name: "support", kind: "enum", T: () => ["yatm.v1.DeviceFeatureSupport", DeviceFeatureSupport, "DEVICE_FEATURE_SUPPORT_"] },
             { no: 3, name: "availability", kind: "enum", T: () => ["yatm.v1.DeviceFeatureAvailability", DeviceFeatureAvailability, "DEVICE_FEATURE_AVAILABILITY_"] },
-            { no: 4, name: "validation", kind: "enum", T: () => ["yatm.v1.DeviceFeatureValidation", DeviceFeatureValidation, "DEVICE_FEATURE_VALIDATION_"] },
             { no: 5, name: "reason", kind: "enum", T: () => ["yatm.v1.DeviceReason", DeviceReason, "DEVICE_REASON_"] },
             { no: 6, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 7, name: "evidence", kind: "enum", T: () => ["yatm.v1.DeviceFeatureEvidence", DeviceFeatureEvidence, "DEVICE_FEATURE_EVIDENCE_"] },
@@ -2721,7 +2691,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
         message.feature = 0;
         message.support = 0;
         message.availability = 0;
-        message.validation = 0;
         message.reason = 0;
         message.detail = "";
         message.evidence = 0;
@@ -2743,9 +2712,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
                     break;
                 case /* yatm.v1.DeviceFeatureAvailability availability */ 3:
                     message.availability = reader.int32();
-                    break;
-                case /* yatm.v1.DeviceFeatureValidation validation */ 4:
-                    message.validation = reader.int32();
                     break;
                 case /* yatm.v1.DeviceReason reason */ 5:
                     message.reason = reader.int32();
@@ -2816,9 +2782,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
         /* yatm.v1.DeviceFeatureAvailability availability = 3; */
         if (message.availability !== 0)
             writer.tag(3, WireType.Varint).int32(message.availability);
-        /* yatm.v1.DeviceFeatureValidation validation = 4; */
-        if (message.validation !== 0)
-            writer.tag(4, WireType.Varint).int32(message.validation);
         /* yatm.v1.DeviceReason reason = 5; */
         if (message.reason !== 0)
             writer.tag(5, WireType.Varint).int32(message.reason);
@@ -3354,15 +3317,12 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
             { no: 8, name: "compression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 9, name: "decompression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 10, name: "encryption_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 17, name: "features", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceFeature },
-            { no: 18, name: "recommended_write_options", kind: "message", T: () => TarWriteOptions },
-            { no: 19, name: "recommendation_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 17, name: "features", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceFeature }
         ]);
     }
     create(value?: PartialMessage<TapeDeviceReport>): TapeDeviceReport {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.features = [];
-        message.recommendationDetail = "";
         if (value !== undefined)
             reflectionMergePartial<TapeDeviceReport>(this, message, value);
         return message;
@@ -3404,12 +3364,6 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
                     break;
                 case /* repeated yatm.v1.DeviceFeature features */ 17:
                     message.features.push(DeviceFeature.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* optional yatm.v1.TarWriteOptions recommended_write_options */ 18:
-                    message.recommendedWriteOptions = TarWriteOptions.internalBinaryRead(reader, reader.uint32(), options, message.recommendedWriteOptions);
-                    break;
-                case /* string recommendation_detail */ 19:
-                    message.recommendationDetail = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -3456,12 +3410,6 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
         /* repeated yatm.v1.DeviceFeature features = 17; */
         for (let i = 0; i < message.features.length; i++)
             DeviceFeature.internalBinaryWrite(message.features[i], writer.tag(17, WireType.LengthDelimited).fork(), options).join();
-        /* optional yatm.v1.TarWriteOptions recommended_write_options = 18; */
-        if (message.recommendedWriteOptions)
-            TarWriteOptions.internalBinaryWrite(message.recommendedWriteOptions, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
-        /* string recommendation_detail = 19; */
-        if (message.recommendationDetail !== "")
-            writer.tag(19, WireType.LengthDelimited).string(message.recommendationDetail);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

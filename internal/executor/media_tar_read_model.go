@@ -119,7 +119,7 @@ func compileTapePositionMap(parameters *entity.TapeReadParameters, value *entity
 		if partition == nil {
 			return nil, "Tape position map has a missing partition"
 		}
-		bot[partition.Partition] = partition.Bot
+		bot[partition.Partition] = 0
 	}
 	model, err := mediapkg.NewReadCostModel(mediapkg.ReadModelProfile{
 		ID: "tape:" + value.Source, SnapshotValid: valid,

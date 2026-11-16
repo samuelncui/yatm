@@ -20,7 +20,6 @@ func TestLibraryNanosecondJSONLRejectsIncompatibleShapes(t *testing.T) {
 		{recordTypeFile, "created_at_ns", "created_at_ms"},
 		{recordTypeFile, "updated_at_ns", "updated_at_ms"},
 		{recordTypeMedia, "created_at_ns", "create_time"},
-		{recordTypeMedia, "destroyed_at_ns", "destroy_time"},
 		{recordTypePosition, "mtime_ns", "mod_time"},
 		{recordTypePosition, "written_at_ns", "write_time"},
 		{recordTypePosition, "checked_at_ns", "checked_at"},
@@ -35,7 +34,7 @@ func TestLibraryNanosecondJSONLRejectsIncompatibleShapes(t *testing.T) {
 		{recordTypeTracking, "observed_at_ns", "observed_at_ms"},
 	} {
 		for _, mutation := range []string{"old_key", "number", "overflow", "missing"} {
-			optional := field.current == "destroyed_at_ns" || field.current == "first_archived_at_ns" || field.current == "last_archived_at_ns"
+			optional := field.current == "first_archived_at_ns" || field.current == "last_archived_at_ns"
 			if (mutation == "missing" && optional) || (mutation == "old_key" && field.old == field.current) {
 				continue
 			}
@@ -89,7 +88,7 @@ func TestLibraryNanosecondJSONLRejectsIncompatibleShapes(t *testing.T) {
 func legacyTimestampSnapshot(t *testing.T, stamp time.Time, change func(*legacyLibraryFile, *legacyLibraryTape, *legacyLibraryPosition)) []byte {
 	t.Helper()
 	file := &legacyLibraryFile{ID: 7, Name: "content", Mode: 0644, ModTime: stamp, Signature: []byte("saved")}
-	tape := &legacyLibraryTape{ID: 3, Barcode: "NS0001", CreateTime: stamp, DestroyTime: &stamp}
+	tape := &legacyLibraryTape{ID: 3, Barcode: "NS0001", CreateTime: stamp}
 	position := &legacyLibraryPosition{ID: 11, FileID: file.ID, TapeID: tape.ID, Path: file.Name, Mode: 0644,
 		ModTime: stamp, WriteTime: stamp}
 	if change != nil {
@@ -119,7 +118,6 @@ func TestLibraryNanosecondLegacyImport(t *testing.T) {
 			media, err := lib.GetMedia(context.Background(), 3)
 			require.NoError(t, err)
 			require.Equal(t, want, media.CreatedAtNS)
-			require.Equal(t, &want, media.DestroyedAtNS)
 			position, err := readTestPosition(lib, 11)
 			require.NoError(t, err)
 			require.Equal(t, want, position.MtimeNS)
@@ -139,7 +137,6 @@ func TestLibraryNanosecondLegacyRejectsOutOfRange(t *testing.T) {
 		for name, change := range map[string]func(*legacyLibraryFile, *legacyLibraryTape, *legacyLibraryPosition){
 			"file":      func(file *legacyLibraryFile, _ *legacyLibraryTape, _ *legacyLibraryPosition) { file.ModTime = bad },
 			"created":   func(_ *legacyLibraryFile, tape *legacyLibraryTape, _ *legacyLibraryPosition) { tape.CreateTime = bad },
-			"destroyed": func(_ *legacyLibraryFile, tape *legacyLibraryTape, _ *legacyLibraryPosition) { tape.DestroyTime = &bad },
 			"mtime": func(_ *legacyLibraryFile, _ *legacyLibraryTape, position *legacyLibraryPosition) {
 				position.ModTime = bad
 			},

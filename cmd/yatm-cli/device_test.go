@@ -77,7 +77,6 @@ func TestTapeDeviceInspectKeepsReportedSupportUnvalidated(t *testing.T) {
 						Feature:      entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE,
 						Support:      entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED,
 						Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN,
-						Validation:   entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
 						Evidence:     entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_REPORTED,
 					}},
 				}},
@@ -92,7 +91,7 @@ func TestTapeDeviceInspectKeepsReportedSupportUnvalidated(t *testing.T) {
 		"device":{"device":"/dev/nst0","kind":"DEVICE_KIND_TAPE"},
 		"tape":{"medium_present":false,"features":[{
 			"feature":"DEVICE_FEATURE_KIND_LOCATE","support":"DEVICE_FEATURE_SUPPORT_SUPPORTED",
-			"availability":"DEVICE_FEATURE_AVAILABILITY_UNKNOWN","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED",
+			"availability":"DEVICE_FEATURE_AVAILABILITY_UNKNOWN",
 			"evidence":"DEVICE_FEATURE_EVIDENCE_REPORTED"
 		}]}
 	}`, stdout)
@@ -116,8 +115,8 @@ func TestTapeDeviceInspectPreservesTransientCapacity(t *testing.T) {
 			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
 				registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
 					return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{Features: []*entity.DeviceFeature{{
-						Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING, Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-						Limits: &entity.DeviceFeature_Capacity{Capacity: tc.capacity},
+						Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING,
+						Limits:  &entity.DeviceFeature_Capacity{Capacity: tc.capacity},
 					}}}}}, nil
 				}})
 			}, nil, nil)
@@ -125,7 +124,7 @@ func TestTapeDeviceInspectPreservesTransientCapacity(t *testing.T) {
 			// The existing diagnostics command forwards the transient report with no alternate RPC or setting write.
 			exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
 			require.Equal(t, exitSuccess, exit, stderr)
-			require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","capacity":`+tc.json+`}]}}`, stdout)
+			require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING","capacity":`+tc.json+`}]}}`, stdout)
 			require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 			require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
 		})
@@ -149,8 +148,7 @@ func TestTapeDeviceInspectPreservesCompressionFacts(t *testing.T) {
 					return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{
 						CompressionEnabled: proto.Bool(true), DecompressionEnabled: proto.Bool(false),
 						Features: []*entity.DeviceFeature{{Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION,
-							Support: entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED, Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY,
-							Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED, Limits: &entity.DeviceFeature_Compression{Compression: tc.limits}}},
+							Support: entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED, Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY, Limits: &entity.DeviceFeature_Compression{Compression: tc.limits}}},
 					}}}, nil
 				}})
 			}, nil, nil)
@@ -158,7 +156,7 @@ func TestTapeDeviceInspectPreservesCompressionFacts(t *testing.T) {
 			// ProtoJSON retains known false/zero and absent facts independently of support and current state.
 			exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
 			require.Equal(t, exitSuccess, exit, stderr)
-			require.JSONEq(t, `{"tape":{"compression_enabled":true,"decompression_enabled":false,"features":[{"feature":"DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION","support":"DEVICE_FEATURE_SUPPORT_SUPPORTED","availability":"DEVICE_FEATURE_AVAILABILITY_READY","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","compression":`+tc.json+`}]}}`, stdout)
+			require.JSONEq(t, `{"tape":{"compression_enabled":true,"decompression_enabled":false,"features":[{"feature":"DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION","support":"DEVICE_FEATURE_SUPPORT_SUPPORTED","availability":"DEVICE_FEATURE_AVAILABILITY_READY","compression":`+tc.json+`}]}}`, stdout)
 			require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 			require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
 		})
@@ -172,7 +170,7 @@ func TestTapeDeviceInspectPreservesEncryptionFactsWithoutKeyPresence(t *testing.
 			registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
 				return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{
 					EncryptionEnabled: proto.Bool(false), Features: []*entity.DeviceFeature{{
-						Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION, Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
+						Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION,
 						Limits: &entity.DeviceFeature_Encryption{Encryption: &entity.TapeEncryptionLimits{
 							Algorithms:            []*entity.TapeEncryptionAlgorithm{{Name: "AES-256-GCM-128", Index: 17, KeyBytes: 32}},
 							CurrentAlgorithmIndex: proto.Uint32(0), EncryptionMode: proto.Uint32(0), DecryptionMode: proto.Uint32(2), ITNexusScope: proto.Uint32(0), KeyScope: proto.Uint32(2), ParametersControl: proto.Uint32(0), KeyInstanceCounter: counter,
@@ -189,7 +187,7 @@ func TestTapeDeviceInspectPreservesEncryptionFactsWithoutKeyPresence(t *testing.
 		if counter != nil {
 			counterJSON = `,"key_instance_counter":0`
 		}
-		require.JSONEq(t, `{"tape":{"encryption_enabled":false,"features":[{"feature":"DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","encryption":{"algorithms":[{"name":"AES-256-GCM-128","index":17,"key_bytes":32}],"current_algorithm_index":0,"encryption_mode":0,"decryption_mode":2,"i_t_nexus_scope":0,"key_scope":2,"parameters_control":0`+counterJSON+`}}]}}`, stdout)
+		require.JSONEq(t, `{"tape":{"encryption_enabled":false,"features":[{"feature":"DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION","encryption":{"algorithms":[{"name":"AES-256-GCM-128","index":17,"key_bytes":32}],"current_algorithm_index":0,"encryption_mode":0,"decryption_mode":2,"i_t_nexus_scope":0,"key_scope":2,"parameters_control":0`+counterJSON+`}}]}}`, stdout)
 		require.NotContains(t, stdout, "v1:")
 		require.NotContains(t, stdout, "key_present")
 		require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
@@ -201,14 +199,14 @@ func TestTapeDeviceInspectPreservesGeometryUnknownAndFallback(t *testing.T) {
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
 		registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
 			return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{Features: []*entity.DeviceFeature{{
-				Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER, Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-				Detail: "No qualified geometry/timing model; effective read order is LOGICAL",
-				Limits: &entity.DeviceFeature_Geometry{Geometry: &entity.TapeGeometryLimits{AllWraps: proto.Bool(true), ReportedWraps: proto.Uint32(0), Source: proto.String("REOWP long response")}},
+				Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER,
+				Detail:  "No qualified geometry/timing model; effective read order is LOGICAL",
+				Limits:  &entity.DeviceFeature_Geometry{Geometry: &entity.TapeGeometryLimits{AllWraps: proto.Bool(true), ReportedWraps: proto.Uint32(0), Source: proto.String("REOWP long response")}},
 			}}}}}, nil
 		}})
 	}, nil, nil)
 	exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","detail":"No qualified geometry/timing model; effective read order is LOGICAL","geometry":{"all_wraps":true,"reported_wraps":0,"source":"REOWP long response"}}]}}`, stdout)
+	require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER","detail":"No qualified geometry/timing model; effective read order is LOGICAL","geometry":{"all_wraps":true,"reported_wraps":0,"source":"REOWP long response"}}]}}`, stdout)
 	require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 }

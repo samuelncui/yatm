@@ -58,7 +58,8 @@ message ExpectedFile {
   bytes signature = 2;
   bytes sha256 = 3;
   int64 size_bytes = 4;
-  int64 file_version_id = 5;
+  reserved 5;
+  reserved "file_version_id";
   uint32 mode = 6;
   int64 mtime_ns = 7;
   // Navigation provenance captured with the original observation, not content identity.

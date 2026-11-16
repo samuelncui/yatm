@@ -51,7 +51,7 @@ func (d *Device) reportCompression(pages, changes map[byte][]byte, changeErr err
 	for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION} {
 		f := feature(d.report, kind)
 		f.Support, f.Availability = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN, entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN
-		f.Evidence, f.Validation = entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_UNSPECIFIED, entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED
+		f.Evidence = entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_UNSPECIFIED
 		f.Reason, f.Detail, f.Limits = entity.DeviceReason_DEVICE_REASON_NOT_READY, "Compression mode prerequisites are not established", nil
 		if len(page) < 16 {
 			continue

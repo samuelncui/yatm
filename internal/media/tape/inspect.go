@@ -41,7 +41,6 @@ func newReport(identity Identity) *entity.InspectDeviceResponse {
 		tape.Features = append(tape.Features, &entity.DeviceFeature{
 			Feature: kind, Support: entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN,
 			Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN,
-			Validation:   entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
 			Reason:       entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED,
 			Detail:       "No applicable operation or cleanup qualification is established",
 		})

@@ -167,7 +167,6 @@ func inspectNavigation(ctx context.Context, transport Transport, report *entity.
 		for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE} {
 			f := feature(report, kind)
 			f.Support, f.Evidence = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED, entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_REPORTED
-			f.Validation = entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED
 			f.Limits = &entity.DeviceFeature_Navigation{Navigation: proto.Clone(limits).(*entity.TapeNavigationLimits)}
 			f.Availability, f.Reason = entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN, entity.DeviceReason_DEVICE_REASON_NOT_READY
 			f.Detail = "Standard SSC logical-object pair reported; current logical position is unknown; physical reload qualification remains unvalidated"

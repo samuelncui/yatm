@@ -65,7 +65,7 @@ afterEach(() => vi.useRealTimers());
 describe("Automatic Media Scan", () => {
   it("animates a bar only while the Job works and stops it when the Job waits", async () => {
     getProgress.mockReturnValue(call({ progress: Progress.create({ totalKnown: false, copiedFileCount: 2n }) }));
-    const active = Job.create({ id: 30n, mediaId: 9n, kind: JobKind.SCAN, status: JobStatus.READY, phase: JobPhase.VALIDATING_SOURCE });
+    const active = Job.create({ id: 30n, mediaId: 9n, kind: JobKind.SCAN, status: JobStatus.READY, phase: JobPhase.INDEXING });
     const page = render(<ScanCard job={active} />);
 
     expect(screen.getByRole("progressbar").className).toContain("indeterminate");

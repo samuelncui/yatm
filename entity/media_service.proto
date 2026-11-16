@@ -222,12 +222,6 @@ enum DeviceFeatureAvailability {
   DEVICE_FEATURE_AVAILABILITY_READY = 3;
 }
 
-// Passive inspection never establishes write/seek/recovery qualification.
-enum DeviceFeatureValidation {
-  DEVICE_FEATURE_VALIDATION_UNSPECIFIED = 0;
-  DEVICE_FEATURE_VALIDATION_UNVALIDATED = 1;
-}
-
 enum DeviceReason {
   DEVICE_REASON_UNSPECIFIED = 0;
   DEVICE_REASON_BUSY = 1;
@@ -260,7 +254,8 @@ message DeviceFeature {
   DeviceFeatureKind feature = 1;
   DeviceFeatureSupport support = 2;
   DeviceFeatureAvailability availability = 3;
-  DeviceFeatureValidation validation = 4;
+  reserved 4;
+  reserved "validation";
   DeviceReason reason = 5;
   string detail = 6;
   DeviceFeatureEvidence evidence = 7;
@@ -349,7 +344,6 @@ message TapeDeviceReport {
   // Current write encryption state; absent means it was not established.
   optional bool encryption_enabled = 10;
   repeated DeviceFeature features = 17;
-  // Suggested FORMAT values only when applicable qualification establishes them.
-  optional TarWriteOptions recommended_write_options = 18;
-  string recommendation_detail = 19;
+  reserved 18, 19;
+  reserved "recommended_write_options", "recommendation_detail";
 }

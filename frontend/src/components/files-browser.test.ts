@@ -165,7 +165,6 @@ describe("Shared Files browser boundary", () => {
     [OriginalAvailability.PRESENT, FilesArchive.AVAILABLE, FilesCoverage.UNSPECIFIED, "success", "unknown"],
     [OriginalAvailability.MISSING, FilesArchive.AVAILABLE, FilesCoverage.NOT_APPLICABLE, "archive", undefined],
     [OriginalAvailability.UNLINKED, FilesArchive.AVAILABLE, FilesCoverage.NOT_APPLICABLE, "archive", undefined],
-    [OriginalAvailability.UNCHECKED, FilesArchive.AVAILABLE, FilesCoverage.UNSPECIFIED, "info", undefined],
     [OriginalAvailability.UNAVAILABLE, FilesArchive.AVAILABLE, FilesCoverage.UNSPECIFIED, "info", undefined],
     [OriginalAvailability.PRESENT, FilesArchive.NONE, FilesCoverage.UNCOVERED, "warning", undefined],
     [OriginalAvailability.PRESENT, FilesArchive.NONE, FilesCoverage.UNSPECIFIED, "info", "unknown"],

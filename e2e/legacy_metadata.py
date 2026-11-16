@@ -228,7 +228,6 @@ def check(original_directory, migrated_directory, *, staged=False, revisions=Non
             source = source_media[row["id"]]
             assert row["identity"] == source["barcode"] and row["name"] == source["name"], "Media identity differs"
             assert row["created_at_ns"] == _stamp(source["create_time"]), "Media creation time differs"
-            assert row["destroyed_at_ns"] == _stamp(source["destroy_time"]), "Media destruction time differs"
             assert row["capacity_bytes"] == source["capacity_bytes"], "Media capacity differs"
             profile = _fields(_fields(row["profile"])[1][0])
             assert profile.get(2, [b""])[0] == source["encryption"].encode(), "Media encryption differs"

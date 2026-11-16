@@ -99,17 +99,14 @@ func ValidateTapePositionMap(media *Media, value *entity.TapePositionMap) error 
 		return fmt.Errorf("Tape position map has no partition traversal")
 	}
 
-	// Partition anchors and actual EOD bound every declared endpoint without inventing coverage.
+	// Actual EOD bounds every declared endpoint without inventing coverage.
 	partitions := make(map[uint32]*entity.TapePositionPartition, len(value.Partitions))
 	for _, partition := range value.Partitions {
 		if partition == nil || partitions[partition.Partition] != nil {
 			return fmt.Errorf("Tape position map has a missing or duplicate partition")
 		}
-		if partition.Eod != nil && *partition.Eod < partition.Bot {
-			return fmt.Errorf("Tape position map EOD precedes BOT")
-		}
-		if tape.Format == TapeFormatTarPAXV1 && (partition.Partition != 0 || partition.Bot != 0) {
-			return fmt.Errorf("tar Tape position map requires partition-zero BOT")
+		if tape.Format == TapeFormatTarPAXV1 && partition.Partition != 0 {
+			return fmt.Errorf("tar Tape position map requires partition zero")
 		}
 		partitions[partition.Partition] = partition
 	}
@@ -145,7 +142,7 @@ func validateTapePositionWraps(
 			return fmt.Errorf("Tape position map has an invalid partition, duplicate wrap or direction")
 		}
 		seen[key] = true
-		low, known := partition.Bot, true
+		low, known := uint64(0), true
 		if before := previous[wrap.Partition]; before != nil {
 			low, known = 0, false
 			if before.Full && before.Endpoint != nil {
@@ -160,7 +157,7 @@ func validateTapePositionWraps(
 			continue
 		}
 		high := *wrap.Endpoint
-		if high < partition.Bot || known && high <= low || partition.Eod != nil && high > *partition.Eod {
+		if known && high <= low || partition.Eod != nil && high > *partition.Eod {
 			return fmt.Errorf("Tape position map endpoint is outside logical coverage")
 		}
 		if before, exists := endpoints[wrap.Partition]; exists && high < before {

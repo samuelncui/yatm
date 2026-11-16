@@ -119,7 +119,7 @@ func TestStageRuleNeverShowsAPercentageWithoutADenominator(t *testing.T) {
 	for _, phase := range []entity.JobPhase{
 		entity.JobPhase_JOB_PHASE_INDEXING,
 		entity.JobPhase_JOB_PHASE_QUEUED, entity.JobPhase_JOB_PHASE_PREPARING_MEDIA,
-		entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE, entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
+		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
 		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE, entity.JobPhase_JOB_PHASE_UNSPECIFIED,
 	} {
 		rule := RuleFor(phase, &Counts{Files: 0, Bytes: 0})

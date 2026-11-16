@@ -240,10 +240,6 @@ export enum OriginalAvailability {
      */
     UNSPECIFIED = 0,
     /**
-     * @generated from protobuf enum value: ORIGINAL_AVAILABILITY_UNCHECKED = 1;
-     */
-    UNCHECKED = 1,
-    /**
      * @generated from protobuf enum value: ORIGINAL_AVAILABILITY_PRESENT = 2;
      */
     PRESENT = 2,
