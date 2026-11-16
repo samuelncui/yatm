@@ -181,8 +181,7 @@ func Validate(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) 
 			report.DeletedJobs = append(report.DeletedJobs, job.ID)
 			continue
 		}
-		counts, _, err := prepareJob(ctx, workRoot, expected, "positions_staging", restorePositionsRequired,
-			jobsRoot, filepath.Join(backup.WorkRoot, "jobs"), backup.WorkRoot, &job, backup.RestoreRoot)
+		counts, _, err := prepareJob(ctx, expected, restorePositionsRequired, jobsRoot, backup.WorkRoot, &job, backup.RestoreRoot)
 		if err != nil {
 			return report, fmt.Errorf("rebuild expected Job %d failed, %w", job.ID, err)
 		}

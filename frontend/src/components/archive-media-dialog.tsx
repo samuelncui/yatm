@@ -14,7 +14,7 @@ import { Job, Media, MediaKind } from "@/entity";
 import { ArchiveTapeFields } from "@/components/archive-tape-fields";
 import { Feedback } from "@/components/feedback";
 import { useArchiveTape } from "@/components/use-archive-tape";
-import { RefreshContext } from "@/pages/jobs";
+import { RefreshContext } from "./job-list-state";
 import { errorMessage, runUIAction } from "@/tools";
 
 /** Chooses the Media a READY Archive writes to and starts that write. */

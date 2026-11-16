@@ -124,17 +124,5 @@ func (e *Executor) restoreLocationRoot(location *library.Location, legacy bool) 
 	if !e.originalAccess(root)("", true) {
 		return "", fmt.Errorf("legacy Restore root is outside administrator access")
 	}
-	for current := root; ; current = filepath.Dir(current) {
-		info, err := os.Lstat(current)
-		if err != nil && !os.IsNotExist(err) {
-			return "", err
-		}
-		if err == nil && !info.IsDir() {
-			return "", fmt.Errorf("legacy Restore root traverses a non-directory or symlink: %q", current)
-		}
-		if current == filepath.Dir(current) {
-			break
-		}
-	}
 	return root, nil
 }

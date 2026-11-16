@@ -56,9 +56,6 @@ func (s *filesService) ListIdenticalGroups(ctx context.Context, req *entity.List
 	if err != nil {
 		return nil, err
 	}
-	if req.GetMemberLimit() < 0 || req.GetMemberLimit() > 1000 || int64(limit)*int64(req.GetMemberLimit()) > 1000 {
-		return nil, status.Error(codes.InvalidArgument, "initial member projection must contain at most 1000 rows")
-	}
 	if req.GetCursor() != "" && req.GetResultId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "identical result ID is required for a group continuation")
 	}
@@ -81,30 +78,6 @@ func (s *filesService) ListIdenticalGroups(ctx context.Context, req *entity.List
 	reply := &entity.ListIdenticalGroupsResponse{NextCursor: page.NextCursor, ResultId: result.id}
 	for _, group := range page.Groups {
 		reply.Groups = append(reply.Groups, identicalGroup(&group))
-	}
-	if req.GetMemberLimit() > 0 {
-		var members []library.IdenticalMember
-		pages := make([]library.IdenticalMemberPage, 0, len(page.Groups))
-		for _, group := range page.Groups {
-			membersPage, err := snapshot.Members(group.ID, "", int64(req.MemberLimit))
-			if err != nil {
-				return nil, err
-			}
-			pages = append(pages, membersPage)
-			members = append(members, membersPage.Members...)
-		}
-		entries, observations, err := s.memberEntries(ctx, members)
-		if err != nil {
-			return nil, err
-		}
-		offset := 0
-		for index, membersPage := range pages {
-			size := len(membersPage.Members)
-			memberReply := identicalMembers(scope, &page.Groups[index], membersPage, entries[offset:offset+size], observations)
-			memberReply.ResultId = result.id
-			reply.MemberPages = append(reply.MemberPages, memberReply)
-			offset += size
-		}
 	}
 	completed = true
 	return reply, nil

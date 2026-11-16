@@ -123,8 +123,6 @@ func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile,
 		if err := reserve.EnsureTransfer(ctx, mode.MaximumBytes); err != nil {
 			return Records{}, err
 		}
-	} else if bounded, ok := d.transport.(interface{ TransferLimit() int }); ok && bounded.TransferLimit() < mode.MaximumBytes {
-		return Records{}, fmt.Errorf("selected record exceeds the transport buffer")
 	}
 
 	// Read current non-secret controls and required medium facts before any MODE SELECT or write.

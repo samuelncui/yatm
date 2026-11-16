@@ -39,9 +39,9 @@ describe("initialScan", () => {
   });
 
   it("treats existing collection shortcuts as a policy prefill, not a separate mode", () => {
-    const initial = initialScan(new URLSearchParams("collect=1"), { selections: [selection] });
+    const initial = initialScan(new URLSearchParams("collect=1"), null);
 
-    expect(initial.target).toEqual(expect.objectContaining({ kind: "files" }));
+    expect(initial.target).toEqual({ kind: "files", entries: [] });
     expect(initial.options).toEqual({
       signaturePolicy: Signature.KNOWN_ONLY,
       resultPolicy: Result.PUBLISH_ORIGINALS,

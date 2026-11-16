@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
@@ -215,7 +216,7 @@ func TestPrepareScaledIdenticalFixture(t *testing.T) {
 	// Far offsets remain addressable with either hidden projection across the large group and pairs.
 	for _, hidden := range []bool{false, true} {
 		for _, offset := range []int64{0, 500, 1200} {
-			rows, count, err := snapshot.Rows(offset, 100, hidden)
+			rows, count, err := snapshot.SortedRows(offset, 100, hidden, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 			require.NoError(t, err)
 			require.Len(t, rows, int(min(100, count-offset)))
 			require.Equal(t, offset, rows[0].Position)

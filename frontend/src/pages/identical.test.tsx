@@ -54,7 +54,7 @@ vi.mock("@/api", () => ({
   },
 }));
 vi.mock("@/components/file-metadata-dialog", () => ({ FileMetadataDialog: () => null }));
-vi.mock("./file-detail", () => ({ FileInspector: ({ name }: { name?: string }) => <aside aria-label="Inspector">{name ?? "No selection"}</aside> }));
+vi.mock("@/components/file-detail", () => ({ FileInspector: ({ name }: { name?: string }) => <aside aria-label="Inspector">{name ?? "No selection"}</aside> }));
 vi.mock("react-toastify", () => ({ toast: { error: state.error, success: state.success } }));
 vi.mock("@samuelncui/chonky", async (original) => ({
   ...(await original<typeof import("@samuelncui/chonky")>()),

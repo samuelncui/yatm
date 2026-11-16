@@ -210,23 +210,7 @@ func jobAttemptReason(job *entity.Job) string {
 // jobRunning reports an admitted attempt, including a queue for shared Media resources. An idle
 // Job has no live phase and needs an operator action rather than continued polling.
 func jobRunning(job *entity.Job) bool {
-	switch job.Phase {
-	case entity.JobPhase_JOB_PHASE_QUEUED,
-		entity.JobPhase_JOB_PHASE_INDEXING,
-		entity.JobPhase_JOB_PHASE_PREPARING_MEDIA,
-		entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA,
-		entity.JobPhase_JOB_PHASE_COPYING_FROM_MEDIA,
-		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
-		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
-		entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE,
-		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
-		entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA,
-		entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT,
-		entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
-		return true
-	default:
-		return false
-	}
+	return job.Phase != entity.JobPhase_JOB_PHASE_UNSPECIFIED && job.Phase != entity.JobPhase_JOB_PHASE_COMPLETED
 }
 
 func (c *jobWaitCommand) Execute(_ []string) error {
@@ -270,8 +254,7 @@ func (c *jobWaitCommand) Execute(_ []string) error {
 		last = reply
 
 		// Emit the last observation before returning a terminal or actionable result.
-		if reply.Job.Status == entity.JobStatus_JOB_STATUS_COMPLETED &&
-			(reply.Job.Phase == entity.JobPhase_JOB_PHASE_COMPLETED || reply.Job.Phase == entity.JobPhase_JOB_PHASE_UNSPECIFIED) {
+		if reply.Job.Status == entity.JobStatus_JOB_STATUS_COMPLETED && !jobRunning(reply.Job) {
 			return writeProto(c.runtime.stdout, reply)
 		}
 

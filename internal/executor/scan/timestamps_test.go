@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -61,11 +62,11 @@ func TestScanRejectsUnrepresentableObservedAndReadMtime(t *testing.T) {
 			// Physical roots and logical leaves share this preparation boundary before any manifest write.
 			stamp := time.Date(year, 1, 1, 0, 0, 0, 123, time.UTC)
 			local := &locationStage{source: &library.Location{ID: 1}}
-			row, err := local.observation("file", "", scanTimestampInfo{stamp: stamp}, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY)
+			row, err := local.observation("file", scanTimestampInfo{stamp: stamp}, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY)
 			require.ErrorContains(t, err, "outside the signed Unix nanosecond range")
 			require.Nil(t, row)
 			// ACP completion must not wrap an actual mtime or overwrite the frozen Verify baseline.
-			stream := &contentStream{config: &Config{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}}}
+			stream := &contentStream{ctx: context.Background(), config: &Config{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}}}
 			baseline := &Entry{MtimeNS: 123, Expected: &entity.ExpectedFile{MtimeNs: 123}}
 			write, keep := stream.accept(baseline, acp.Result{Size: 7, Mode: 0644, ModTime: stamp, SHA256: make([]byte, 32)})
 			require.True(t, keep)

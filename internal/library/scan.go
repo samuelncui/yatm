@@ -27,13 +27,10 @@ func (l *Library) ApplyScan(
 	// Keep inventory and saved-content associations atomic without modifying physical files.
 	var applied *Media
 	if err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Lock the operation to one existing Media identity and discard its derived directory index.
+		// Resolve the one existing Media identity and discard its derived directory index.
 		stored := new(Media)
 		if err := tx.First(stored, mediaID).Error; err != nil {
 			return fmt.Errorf("read scanned Media failed, media_id=%d, %w", mediaID, err)
-		}
-		if stored.Kind != entity.MediaKind_MEDIA_KIND_VOLUME && stored.Kind != entity.MediaKind_MEDIA_KIND_TAPE {
-			return fmt.Errorf("scanned Media kind is unsupported, media_id=%d", mediaID)
 		}
 		if err := tx.Where("media_id = ? AND is_dir = ?", mediaID, true).Delete(ModelPosition).Error; err != nil {
 			return fmt.Errorf("clear scanned Media directories failed, media_id=%d, %w", mediaID, err)
@@ -118,6 +115,7 @@ func applyScanEntry(tx *gorm.DB, mediaID int64, entry *entity.ScanEntry) error {
 	}
 
 	// Publication replaces observed facts and preserves health only for unchanged content.
+	// validateScanEntry admits only these three changes.
 	switch entry.Change {
 	case entity.ScanChange_SCAN_CHANGE_ADDED:
 		if found {
@@ -147,8 +145,6 @@ func applyScanEntry(tx *gorm.DB, mediaID int64, entry *entity.ScanEntry) error {
 		if err := tx.Delete(stored).Error; err != nil {
 			return fmt.Errorf("delete scanned Media Position failed, path=%q, %w", entry.Path, err)
 		}
-	default:
-		return fmt.Errorf("unsupported Scan change, path=%q change=%s", entry.Path, entry.Change)
 	}
 	return nil
 }

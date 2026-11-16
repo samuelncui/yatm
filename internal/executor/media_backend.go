@@ -54,8 +54,7 @@ func (b *mediaBackend) NewReadSession(
 			switch target.ExpectedProfile.GetTape().GetFormat() {
 			case library.TapeFormatTarPAXV1:
 				session, err = b.newTarReadSession(ctx, access, target)
-			case "", library.TapeFormatLTFSV0, library.TapeFormatLTFSV1:
-				// Existing legacy requests retain the native identity/preparation path.
+			case library.TapeFormatLTFSV0, library.TapeFormatLTFSV1:
 				session, err = b.newTapeReadSession(ctx, access, target)
 			default:
 				err = fmt.Errorf("Tape read format is unsupported")

@@ -27,7 +27,7 @@ func TestCachedObservedContentUsesObservedMetadata(t *testing.T) {
 
 	// Prime a real disposable cache through ACP before testing already-observed metadata.
 	filename, observed := writeObservedFile(t, "cached", []byte("observed content"))
-	facts, err := VerifyObservedContent(context.Background(), filename, observed)
+	facts, err := VerifyObservedContent(context.Background(), filename)
 	require.NoError(t, err)
 	_, valid, err := acp.ReadCachedSignature(filename)
 	require.NoError(t, err)
@@ -171,9 +171,11 @@ func TestSelectionStageAndCaptureReuseBatchFacts(t *testing.T) {
 		require.EqualValues(t, 8, original.Size)
 	}
 
-	// Single-file missing identity remains typed, and cancellation cannot emit partial captures.
-	_, _, err = exe.CaptureOriginal(ctx, 0)
-	require.ErrorIs(t, err, library.ErrFileNotFound)
+	// A missing File is omitted, and cancellation cannot emit partial captures.
+	require.NoError(t, exe.CaptureOriginals(ctx, []int64{0}, func(int64, string, *entity.ExpectedFile) error {
+		t.Fatal("missing File emitted a row")
+		return nil
+	}))
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	err = exe.CaptureOriginals(cancelled, ids, func(int64, string, *entity.ExpectedFile) error {

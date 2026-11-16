@@ -207,7 +207,7 @@ func TestFileMetadataFollowsIdentityLifecycle(t *testing.T) {
 	require.Empty(t, tags[other.ID])
 
 	// Moving into Trash preserves annotations because it is still the same File.
-	require.NoError(t, lib.Delete(ctx, []int64{file.ID}))
+	require.NoError(t, trashFiles(ctx, lib, file.ID))
 	stored, err = lib.GetFile(ctx, file.ID)
 	require.NoError(t, err)
 	require.NotZero(t, stored.ParentID)
@@ -227,7 +227,7 @@ func TestTrashRootMetadataSurvivesLaterDeletes(t *testing.T) {
 	require.NoError(t, lib.EditFileMetadata(ctx, []int64{TrashFileID}, FileMetadataEdit{AddTags: []string{"trash"}, Note: &note}))
 
 	// Allocating a Trash checkpoint must not recreate the stable root identity with empty metadata.
-	require.NoError(t, lib.Delete(ctx, []int64{file.ID}))
+	require.NoError(t, trashFiles(ctx, lib, file.ID))
 	stored, err := lib.GetFile(ctx, TrashFileID)
 	require.NoError(t, err)
 	require.Equal(t, "trash note", stored.Note)

@@ -30,19 +30,15 @@ vi.mock("react-virtuoso", () => ({
     </div>
   ),
 }));
-import { JobResultsDialog, type JobItemViews } from "./job-results-dialog";
+import { JobResultsDialog, type JobItemView } from "./job-results-dialog";
 
 let total = 500;
-const views: JobItemViews = [
-  {
-    id: "files",
-    label: "Files",
-    emptyLabel: "No results yet.",
-    listing: "scan-entries",
-    cursorOf: (entry: ScanEntry) => String(entry.id),
-    render: (entry: ScanEntry) => <span>{entry.path}</span>,
-  },
-];
+const view: JobItemView = {
+  emptyLabel: "No results yet.",
+  listing: "scan-entries",
+  cursorOf: (entry: ScanEntry) => String(entry.id),
+  render: (entry: ScanEntry) => <span>{entry.path}</span>,
+};
 
 /** Serves a frozen manifest of `total` rows for whichever anchor it receives. */
 const serveManifest = (request: { limit: number; cursor: string; order: JobResultOrder; offset?: bigint; includeTotal: boolean }) => {
@@ -72,7 +68,7 @@ beforeEach(() => {
 
 describe("Job results list", () => {
   it("spans the whole result set and continues from the last loaded row", async () => {
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
 
     // The first load carries the size of the list; later windows must not repeat that query.
@@ -98,7 +94,7 @@ describe("Job results list", () => {
   });
 
   it("anchors a distant position with an offset and then fills upward", async () => {
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     await screen.findByText("file-1.txt");
 
@@ -127,7 +123,7 @@ describe("Job results list", () => {
   });
 
   it("keeps loaded rows when a later window fails and retries without discarding them", async () => {
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     await screen.findByText("file-1.txt");
 
@@ -145,7 +141,7 @@ describe("Job results list", () => {
   });
 
   it("does not request or flash loading while scrolling cached rows", async () => {
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     await screen.findByText("file-1.txt");
     await userEvent.click(screen.getByRole("button", { name: "range 0" }));
@@ -156,7 +152,7 @@ describe("Job results list", () => {
   it("aborts a closed view and ignores its response after reopening", async () => {
     let finish!: (value: Awaited<ReturnType<typeof serveManifest>["response"]>) => void;
     listEntries.mockImplementationOnce(() => ({ response: new Promise((resolve) => (finish = resolve)) }));
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     const signal = listEntries.mock.calls[0][1].abort as AbortSignal;
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -170,7 +166,7 @@ describe("Job results list", () => {
   it.each([false, true])("does not continue or report an obsolete window after returning to cached rows (failure: %s)", async (fail) => {
     total = 6000;
     let finish!: () => void;
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     await screen.findByText("file-1.txt");
     listEntries.mockImplementationOnce((request) => ({
@@ -190,7 +186,7 @@ describe("Job results list", () => {
 
   it("reuses an in-flight page when the user moves within that page", async () => {
     let finish!: () => void;
-    render(<JobResultsDialog jobId={7n} title="Scan results" views={views} />);
+    render(<JobResultsDialog jobId={7n} title="Scan results" view={view} />);
     await userEvent.click(screen.getByRole("button", { name: "Results" }));
     await screen.findByText("file-1.txt");
     listEntries.mockImplementationOnce((request) => ({

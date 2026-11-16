@@ -110,8 +110,3 @@ func JobResultCursorPair(cursor string) (int64, int64, bool, error) {
 	}
 	return firstValue, secondValue, true, nil
 }
-
-// JobResultPairValue renders a composite order key for a cursor.
-func JobResultPairValue(first, second int64) string {
-	return fmt.Sprintf("%d:%d", first, second)
-}

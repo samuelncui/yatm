@@ -11,7 +11,7 @@ import (
 func (r *runner) previewWorkload(ctx context.Context, config *Config, scope *Scope) (int64, error) {
 	// Stream content groups, including prior results, without retaining a file-sized set or issuing row lookups.
 	query := r.db.WithContext(ctx).Model(&Entry{}).
-		Select("id", "location_id", "scope_path", "source_path", "sha256", "size", "change", "finding").
+		Select("id", "location_id", "source_path", "sha256", "size", "change", "finding").
 		Where(r.scopeQuery(ctx, scope)).
 		Order("sha256, size, id")
 	rows, err := query.Rows()
@@ -67,16 +67,7 @@ func (r *runner) previewWorkload(ctx context.Context, config *Config, scope *Sco
 			hash, size = append(hash[:0], row.SHA256...), row.Size
 			candidate = false
 		}
-		if row.LocationID != scope.LocationID || (scope.LocationID > 0 && scope.ID > 0 && row.ScopePath != scope.Path) {
-			continue
-		}
-		if row.Change == entity.ScanChange_SCAN_CHANGE_REMOVED {
-			continue
-		}
-		if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES && row.Finding != entity.ScanFinding_SCAN_FINDING_MATCH {
-			continue
-		}
-		if !candidate && r.exe.Previews().Supports(row.SourcePath, config.PreviewJobSettings) {
+		if !candidate && row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED && r.previewEligible(config, &row) {
 			candidate = true
 		}
 	}
@@ -87,4 +78,14 @@ func (r *runner) previewWorkload(ctx context.Context, config *Config, scope *Sco
 		return 0, err
 	}
 	return total, nil
+}
+
+// previewEligible reports whether one observed entry has usable, supported content for a Preview.
+// Verification previews only matching copies, and an entry without a content identity has nothing
+// to ask the store about.
+func (r *runner) previewEligible(config *Config, row *Entry) bool {
+	if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES && row.Finding != entity.ScanFinding_SCAN_FINDING_MATCH {
+		return false
+	}
+	return len(row.SHA256) == 32 && r.exe.Previews().Supports(row.SourcePath, config.PreviewJobSettings)
 }

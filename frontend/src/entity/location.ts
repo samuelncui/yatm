@@ -252,28 +252,6 @@ export interface FileLocation {
     sha256: Uint8Array;
 }
 /**
- * @generated from protobuf message yatm.v1.LocationRef
- */
-export interface LocationRef {
-    /**
-     * @generated from protobuf field: int64 id = 1
-     */
-    id: bigint;
-}
-/**
- * @generated from protobuf message yatm.v1.LocationEntryQuery
- */
-export interface LocationEntryQuery {
-    /**
-     * @generated from protobuf field: int64 location_id = 1
-     */
-    locationId: bigint;
-    /**
-     * @generated from protobuf field: string path = 2
-     */
-    path: string;
-}
-/**
  * @generated from protobuf message yatm.v1.CreateLocationRequest
  */
 export interface CreateLocationRequest {
@@ -1349,108 +1327,6 @@ class FileLocation$Type extends MessageType<FileLocation> {
  * @generated MessageType for protobuf message yatm.v1.FileLocation
  */
 export const FileLocation = new FileLocation$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class LocationRef$Type extends MessageType<LocationRef> {
-    constructor() {
-        super("yatm.v1.LocationRef", [
-            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
-        ]);
-    }
-    create(value?: PartialMessage<LocationRef>): LocationRef {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.id = 0n;
-        if (value !== undefined)
-            reflectionMergePartial<LocationRef>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LocationRef): LocationRef {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* int64 id */ 1:
-                    message.id = reader.int64().toBigInt();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: LocationRef, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* int64 id = 1; */
-        if (message.id !== 0n)
-            writer.tag(1, WireType.Varint).int64(message.id);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.LocationRef
- */
-export const LocationRef = new LocationRef$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class LocationEntryQuery$Type extends MessageType<LocationEntryQuery> {
-    constructor() {
-        super("yatm.v1.LocationEntryQuery", [
-            { no: 1, name: "location_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 2, name: "path", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
-        ]);
-    }
-    create(value?: PartialMessage<LocationEntryQuery>): LocationEntryQuery {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.locationId = 0n;
-        message.path = "";
-        if (value !== undefined)
-            reflectionMergePartial<LocationEntryQuery>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LocationEntryQuery): LocationEntryQuery {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* int64 location_id */ 1:
-                    message.locationId = reader.int64().toBigInt();
-                    break;
-                case /* string path */ 2:
-                    message.path = reader.string();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: LocationEntryQuery, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* int64 location_id = 1; */
-        if (message.locationId !== 0n)
-            writer.tag(1, WireType.Varint).int64(message.locationId);
-        /* string path = 2; */
-        if (message.path !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.path);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.LocationEntryQuery
- */
-export const LocationEntryQuery = new LocationEntryQuery$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class CreateLocationRequest$Type extends MessageType<CreateLocationRequest> {
     constructor() {

@@ -7,12 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/treeops"
 	"gorm.io/gorm"
 )
 
@@ -225,32 +223,6 @@ func validateFileParent(tx *gorm.DB, parentID, movingID int64) error {
 		parentID = parent.ParentID
 	}
 	return nil
-}
-
-func (l *Library) Delete(ctx context.Context, ids []int64) error {
-	// Retain missing identities and the reserved Trash root; common planning owns subtree retention.
-	if len(ids) > 1000 {
-		return fmt.Errorf("select at most 1000 operation roots")
-	}
-	refs := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		_, err := l.GetFile(ctx, id)
-		if errors.Is(err, ErrFileNotFound) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		refs = append(refs, strconv.FormatInt(id, 10))
-	}
-	if len(refs) == 0 {
-		return nil
-	}
-	_, err := l.organizeTree(ctx, treeops.Request{Kind: treeops.Delete, Sources: refs})
-	return err
 }
 
 const (

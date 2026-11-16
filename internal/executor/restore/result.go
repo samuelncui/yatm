@@ -18,15 +18,6 @@ func (a *jobRestoreRunner) completeOutput(ctx context.Context, copy *copyCandida
 	if err != nil {
 		return err
 	}
-	if a.destination.GetLocationId() != 0 {
-		owner, err := a.exe.Lib().GetFileLocationAtPath(ctx, a.destination.LocationId, path.Join(a.destination.Path, copy.TargetPath))
-		if err != nil {
-			return err
-		}
-		if owner != nil {
-			return fmt.Errorf("Restore output is already linked to File %d", owner.FileID)
-		}
-	}
 	if !damaged && copy.FileVersionID != 0 {
 		if err := a.restoreMetadata(copy.TargetPath, copy.Mode, copy.MtimeNS); err != nil {
 			return err

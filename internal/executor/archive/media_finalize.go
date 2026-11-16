@@ -42,8 +42,7 @@ func (a *jobArchiveRunner) reconcileWriteResult(ctx context.Context, result *med
 			return errors.Join(errInvalidFinalInventory, err)
 		}
 		if result.VerifiedPrefix {
-			_, err := keepVerifiedPrefix(tx)
-			return err
+			return keepVerifiedPrefix(tx)
 		}
 		unverified, err := resetUnverifiedItems(tx)
 		missing += unverified
@@ -82,9 +81,6 @@ func finalizeStagedPaths(tx *gorm.DB, result *mediapkg.WriteResult) (int64, erro
 		for _, item := range items {
 			// Native nil positioning awaits Inventory; tar's private validator rejects missing evidence.
 			cursor = item.ID
-			if item.MediaPath != item.TargetPath || item.Result == nil {
-				return 0, fmt.Errorf("staged Archive path or result is unexpected, id=%d path=%q", item.ID, item.MediaPath)
-			}
 			storage, err := result.FinalizeStorage(item.Result.Storage)
 			if err != nil {
 				return 0, errors.Join(errInvalidFinalInventory, err)
@@ -109,30 +105,23 @@ func finalizeStagedPaths(tx *gorm.DB, result *mediapkg.WriteResult) (int64, erro
 			if len(updates) == 0 {
 				continue
 			}
-			updated := tx.Model(&Item{}).Where(
-				"id = ? AND status = ? AND media_path = ?", item.ID, entity.CopyStatus_COPY_STATUS_STAGED, item.MediaPath,
-			).Updates(updates)
-			if updated.Error != nil || updated.RowsAffected != 1 {
-				return 0, fmt.Errorf("finalize staged Archive path failed, id=%d affected=%d, %w", item.ID, updated.RowsAffected, updated.Error)
+			if err := tx.Model(&Item{}).Where("id = ?", item.ID).Updates(updates).Error; err != nil {
+				return 0, fmt.Errorf("finalize staged Archive path failed, id=%d, %w", item.ID, err)
 			}
 		}
 	}
 }
 
 func attachCompletedStorage(tx *gorm.DB, entry *mediapkg.CompletedFile) error {
-	// Only a unique staged path can receive physical completion evidence.
+	// Unique logical targets make each staged Media path unique.
 	var items []*Item
-	result := tx.Select("id", "result").Where(
+	if err := tx.Select("id", "result").Where(
 		"status = ? AND media_path = ?", entity.CopyStatus_COPY_STATUS_STAGED, entry.Path,
-	).Limit(2).Find(&items)
-	if result.Error != nil {
-		return fmt.Errorf("query staged Archive item failed, path=%q, %w", entry.Path, result.Error)
+	).Limit(1).Find(&items).Error; err != nil {
+		return fmt.Errorf("query staged Archive item failed, path=%q, %w", entry.Path, err)
 	}
 	if len(items) == 0 {
 		return nil
-	}
-	if len(items) != 1 || items[0].Result == nil {
-		return errors.Join(errInvalidFinalInventory, fmt.Errorf("invalid staged Archive item, path=%q", entry.Path))
 	}
 	item := items[0]
 	if item.Result.Storage != nil {
@@ -179,31 +168,29 @@ func resetUnverifiedItems(tx *gorm.DB) (int64, error) {
 	}
 }
 
-func keepVerifiedPrefix(tx *gorm.DB) (int64, error) {
+func keepVerifiedPrefix(tx *gorm.DB) error {
 	var cursor string
-	var kept int64
 	closed := false
 	for {
 		var items []*Item
 		if err := tx.Where("status IN ? AND target_path > ?", []entity.CopyStatus{
 			entity.CopyStatus_COPY_STATUS_PENDING, entity.CopyStatus_COPY_STATUS_STAGED,
 		}, cursor).Order("target_path").Limit(batchSize).Find(&items).Error; err != nil {
-			return 0, fmt.Errorf("query Archive verified prefix failed, cursor=%q, %w", cursor, err)
+			return fmt.Errorf("query Archive verified prefix failed, cursor=%q, %w", cursor, err)
 		}
 		if len(items) == 0 {
-			return kept, nil
+			return nil
 		}
 		for _, item := range items {
 			cursor = item.TargetPath
 			verified := item.Status == entity.CopyStatus_COPY_STATUS_STAGED && item.Result != nil && item.Result.Storage != nil
 			if !closed && verified {
-				kept++
 				continue
 			}
 			closed = true
 			if item.Status == entity.CopyStatus_COPY_STATUS_STAGED {
 				if err := resetOneItem(tx, item.ID); err != nil {
-					return 0, err
+					return err
 				}
 			}
 		}
@@ -232,10 +219,6 @@ func targetNoSpaceError(err error) error {
 }
 
 func libraryMedia(value *mediapkg.Descriptor) (*library.Media, error) {
-	if value == nil {
-		return nil, nil
-	}
-
 	// Check runtime instants before admitting the session's metadata into the Library.
 	created, err := dataformat.Nanoseconds(value.CreateTime)
 	if err != nil {

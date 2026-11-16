@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/samuelncui/yatm/internal/media/tape"
 )
@@ -34,19 +35,11 @@ func (f *fakeTransport) Close() error {
 // fakeNativeTransport exposes the same complete optional method set as Linux SG over any Transport.
 type fakeNativeTransport struct {
 	tape.Transport
-	limit, reservations int
-	busy                bool
+	busy bool
 }
 
-func (f *fakeNativeTransport) TransferLimit() int { return f.limit }
-
-func (f *fakeNativeTransport) EnsureTransfer(ctx context.Context, size int) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	f.reservations++
-	f.limit = size
-	return nil
+func (f *fakeNativeTransport) EnsureTransfer(ctx context.Context, _ int) error {
+	return ctx.Err()
 }
 
 func (f *fakeNativeTransport) ExecuteObserved(ctx context.Context, command tape.Command, onIssue func() error) (tape.Response, error) {
@@ -77,10 +70,15 @@ func (f *fakeNativeTransport) TryExecute(ctx context.Context, command tape.Comma
 	return response, true, err
 }
 
-// fakeBoundedTransport adds only a transfer limit, without the native optional methods.
+// fakeBoundedTransport reserves transfers up to a fixed adapter limit, like Linux SG readback.
 type fakeBoundedTransport struct {
 	tape.Transport
 	limit int
 }
 
-func (f *fakeBoundedTransport) TransferLimit() int { return f.limit }
+func (f *fakeBoundedTransport) EnsureTransfer(_ context.Context, size int) error {
+	if size > f.limit {
+		return fmt.Errorf("SG reserved buffer %d is smaller than selected record %d", f.limit, size)
+	}
+	return nil
+}

@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router";
 import { ChonkyActions, FileToolbar, type FileBrowserHandle } from "@samuelncui/chonky";
 import { beforeEach, expect, it, vi } from "vitest";
 import { FilesEntry, FileOperationRef, ListFilesResponse, SearchFilesResponse, MeasureFilesResponse, EntryKind, FileScope } from "@/entity";
-import { useFileBrowser } from "@/pages/file";
+import { useFileBrowser } from "@/components/use-file-browser";
 import { ToobarInfo } from "@/components/toolbarInfo";
 import { FileBrowser } from "@/components/file-browser";
 
@@ -33,7 +33,7 @@ function Harness() {
         </FileToolbar>
       </FileBrowser>
       <button onClick={() => void browser.refresh()}>Reload directory</button>
-      <button onClick={() => void browser.search("name:Photos", false)}>Search photos</button>
+      <button onClick={() => void browser.search("name:Photos")}>Search photos</button>
       <output aria-label="folder bytes">{browser.files[0]?.size ?? "unknown"}</output>
       <output aria-label="visible rows">{browser.files.length}</output>
     </>

@@ -67,9 +67,6 @@ func (a *jobArchiveRunner) Index(ctx context.Context) (returnErr error) {
 	if err := a.db.WithContext(ctx).First(config, 1).Error; err != nil {
 		return fmt.Errorf("read archive job config failed, %w", err)
 	}
-	if config.Spec == nil {
-		return fmt.Errorf("archive job spec is missing")
-	}
 	if err := a.applySpec(ctx, config.Spec); err != nil {
 		return err
 	}
@@ -81,18 +78,8 @@ func (a *jobArchiveRunner) Index(ctx context.Context) (returnErr error) {
 	return a.transition(archiveStateWaitingForMedia)
 }
 
-func validateWriteMedia(param *entity.WriteArchiveMediaRequest) error {
-	if param == nil || param.Target == nil {
-		return fmt.Errorf("archive Media target is missing")
-	}
-	return nil
-}
-
 func (a *jobArchiveRunner) writeMedia(ctx context.Context, param *entity.WriteArchiveMediaRequest) error {
-	// Validate and enter the Archive Media flow.
-	if err := validateWriteMedia(param); err != nil {
-		return err
-	}
+	// Enter the Archive Media flow.
 	if err := a.transition(archiveStatePreparingMedia); err != nil {
 		return err
 	}

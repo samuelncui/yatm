@@ -10,7 +10,7 @@ import { PageTabs } from "@/components/page-navigation";
 import { GetLocationResponse, type Job, type Location } from "@/entity";
 import { contentTime } from "@/components/content-status";
 import { LocationJobs } from "@/components/location-jobs";
-import { jobStatusLabel } from "@/components/job-card";
+import { jobStatusLabel } from "@/components/job-progress";
 import { LocationForm } from "@/components/location-form";
 import { errorMessage } from "@/tools";
 import { LocationEntryBrowser } from "@/components/location-entry-browser";
@@ -243,7 +243,8 @@ const LocationDetail = () => {
               onCancel={() => navigate("/settings/locations")}
               onSaved={(location) => {
                 saveLocation(store, location);
-                setReply(GetLocationResponse.create({ location }));
+                // Keep the last availability until the re-read below replaces it.
+                setReply((current) => GetLocationResponse.create({ ...current, location }));
                 void load();
               }}
               additionalActions={(busy) => ({

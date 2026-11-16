@@ -107,6 +107,8 @@ message FilesDetail {
   // The recorded content identity of the current original, published only while its observation
   // is applicable. Preview and every content-addressed read take exactly this identity.
   bytes content_signature = 5;
+  // The File's most recently archived saved version, absent when it has none.
+  FileVersion latest_version = 6;
 }
 // ListFilesRequest names one directory. A directory read carries no query and no cursor.
 message ListFilesRequest {
@@ -136,14 +138,13 @@ message SearchFilesRequest {
   bool recursive = 6;
   repeated FilesInclude include = 7;
 }
-// SearchFilesResponse is one page of a query. total is absent when the query cannot state it.
+// SearchFilesResponse is one page of a query.
 message SearchFilesResponse {
   repeated FilesEntry entries = 1;
   string next_cursor = 2;
   FileScope scope = 3;
   FilesEntry directory = 4;
   repeated FilesEntry breadcrumbs = 5;
-  optional int64 total_entry_count = 6;
 }
 message GetFileRequest { FileOperationRef reference = 1; }
 message GetFileResponse { FilesDetail detail = 1; }
@@ -263,13 +264,10 @@ message CloseIdenticalResultRequest { string result_id = 1; }
 message CloseIdenticalResultResponse {}
 message ListIdenticalGroupsRequest {
   IdenticalScope scope = 1; string cursor = 2; int32 limit = 3;
-  // Optional initial member projection; zero skips member hydration and physical observations.
-  int32 member_limit = 4;
   string result_id = 5;
 }
 message ListIdenticalGroupsResponse {
   repeated IdenticalGroup groups = 1; string next_cursor = 2;
-  repeated ListIdenticalMembersResponse member_pages = 3;
   string result_id = 4;
 }
 message ListIdenticalMembersRequest { IdenticalScope scope = 1; string group_id = 2; string cursor = 3; int32 limit = 4; string result_id = 5; }

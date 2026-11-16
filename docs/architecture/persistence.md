@@ -41,7 +41,7 @@ only after unmount; expiry never recursively follows them or external Restore ou
 The nullable `media.tape_position_map` stores geometry separately from the immutable Tape profile.
 It records initialization binding, declared partition coverage, wrap endpoints, direction, source and
 spatial uncertainty. Actual EOD limits a partial final wrap independently of its interpolation scale.
-The Library validates and replaces this field using the observed initialization and previous map;
+The Library validates and replaces this field after rechecking the Media identity and initialization binding;
 ordinary Media publication cannot overwrite it. Library JSON and JSONL backups retain the field.
 Reads validate the physical tar label before using retained geometry and bind its lifetime to the
 current prepared Session. A failed map save logs a warning without failing content access.
@@ -97,12 +97,10 @@ of a `jobs` table alone does not make a database empty. The supported offline le
 migration establishes the same Catalog and bundle identities and revision 1 as fresh creation.
 Job bundles share one format definition across runners and the migrator.
 
-An older Alpha Catalog with the same revision but obsolete Settings, file-operation tables
-or pre-nanosecond timestamp columns is rejected before writes. Bundle,
-backup and Volume marker readers likewise require their current timestamp shape. Restore bundles
-without the current nullable `copies.storage_metadata` column are rejected on opening, without
-adding it or changing the bundle. Migrated v0.1.x candidates have that column with absent locators.
-Existing pre-stable v1 layouts require an explicit conversion or reinstall.
+Only the v0.1.x migration path is supported; an Alpha Catalog or bundle with the current marker and
+revision is used as it stands, without layout checks or conversion. Bundle, backup and Volume
+marker readers require their current timestamp shape. Migrated v0.1.x Restore candidates carry
+`copies.storage_metadata` with absent locators.
 
 Unmarked nonempty catalogs, prototype JSONL headers, unmarked pre-stable bundles and
 unknown format revisions are rejected with their data retained. Prototype

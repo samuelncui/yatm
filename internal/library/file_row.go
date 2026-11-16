@@ -29,39 +29,11 @@ func (row *fileRow) BeforeCreate(*gorm.DB) error {
 }
 
 func (row *fileRow) BeforeUpdate(tx *gorm.DB) error {
-	// Validate only fields this update will persist; partial metadata edits have no new name.
-	selected, restricted := tx.Statement.SelectAndOmitColumns(false, true)
-	if included, found := selected["name"]; !included && (found || restricted) {
+	// Only full-row saves persist a name; column updates of other fields carry none.
+	if _, full := tx.Statement.Dest.(*fileRow); !full {
 		return nil
 	}
-	name := row.Name
-	includeEmpty := selected["name"]
-	switch fields := tx.Statement.Dest.(type) {
-	case map[string]any:
-		value, found := fields["name"]
-		if !found {
-			value, found = fields["Name"]
-		}
-		if !found {
-			return nil
-		}
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("File name must be literal UTF-8 text")
-		}
-		name = text
-		includeEmpty = true
-	case *fileRow:
-		name = fields.Name
-	case fileRow:
-		name = fields.Name
-	}
-	if name == "" && !includeEmpty {
-		return nil
-	}
-
-	// Full-row saves and explicit name updates share the component syntax owner.
-	if err := entity.ValidatePathComponent(name); err != nil {
+	if err := entity.ValidatePathComponent(row.Name); err != nil {
 		return fmt.Errorf("invalid File name, %w", err)
 	}
 	return nil

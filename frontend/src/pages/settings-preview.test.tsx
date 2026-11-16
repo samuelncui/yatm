@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { render } from "@/state/test-render";
+import { renderPage } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PreviewSettings, SettingsValue } from "@/entity";
@@ -81,7 +81,7 @@ beforeEach(() => {
     .mockImplementation(({ value: settings }: { value: SettingsValue }) => ({ response: Promise.resolve({ value: SettingsValue.clone(settings) }) }));
 });
 const open = async () => {
-  render(<PreviewSettingsBrowser />);
+  renderPage(<PreviewSettingsBrowser />);
   await screen.findByRole("group", { name: "Image · jpg, png" });
   await userEvent.click(screen.getByRole("button", { name: /Advanced output/ }));
   await userEvent.click(screen.getByRole("button", { name: /Supported formats/ }));
@@ -334,7 +334,7 @@ describe("Preview settings", () => {
 
   it("retries an initial settings load failure", async () => {
     get.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Service unavailable")) }));
-    render(<PreviewSettingsBrowser />);
+    renderPage(<PreviewSettingsBrowser />);
     expect(await screen.findByText("Service unavailable")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     await screen.findByRole("group", { name: "Image · jpg, png" });
@@ -392,7 +392,7 @@ describe("Preview settings", () => {
 });
 
 it("keeps optional output, runtime and capability details folded while primary output stays visible", async () => {
-  render(<PreviewSettingsBrowser />);
+  renderPage(<PreviewSettingsBrowser />);
   await screen.findByRole("group", { name: "Image · jpg, png" });
   expect(screen.getByRole("spinbutton", { name: "Maximum width (px)" })).toBeVisible();
   expect(screen.queryByRole("combobox", { name: "File extensions" })).not.toBeInTheDocument();

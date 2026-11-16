@@ -36,8 +36,7 @@ func (d *Device) Navigation(ctx context.Context) (*Navigation, error) {
 	// Configure owns the SSC record envelope; a reported contradiction or failed qualification removes seek.
 	for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_READ_POSITION, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_LOCATE} {
 		f := feature(d.report, kind)
-		if f.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED ||
-			f.Validation == entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_FAILED {
+		if f.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED {
 			return nil, nil
 		}
 		if f.Reason != 0 && f.Reason != entity.DeviceReason_DEVICE_REASON_NOT_READY {

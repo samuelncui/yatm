@@ -310,8 +310,8 @@ exact current-value page 0C query is allowed there, with kernel queue-tail place
 never opens it. The writer does not wait for this query's I/O or an I/O-spanning software lock.
 The kernel, HBA and drive remain shared, so this does not promise physical zero delay.
 Its issue callback captures the cumulative cost of WRITEs already known to have returned full
-acceptance. Atomic publication deducts all reservations beyond that prefix, completion reserve and
-known error/unreflected allowances from an absolute sample, saturating at zero. An overlapping
+acceptance. Atomic publication deducts all reservations beyond that prefix and the completion
+reserve from an absolute sample, saturating at zero. An overlapping
 WRITE remains charged even if its before-submission callback has run; a conservative double debit
 is possible. No admission lock spans I/O; finalization joins the observer before physical
 completion, control/key cleanup or descriptor release.
@@ -339,16 +339,14 @@ Unknown native outcome, reset, deferred write errors, medium loss/not-ready and 
 query/attachment failures still invalidate the attempt. A query-local error cannot hide a joined
 failure. Finalization joins the issued request before completion and cleanup.
 
-Only fresh lower-bound observations with known allowances and bounded native costs establish bounded
-admission. Estimates cannot promise that a member fits or increase an applicable bounded budget.
-The current provider supplies estimates with unknown error, buffer lag and physical overhead.
+The provider supplies estimates with unknown error, buffer lag and physical overhead, so admission
+cannot promise that a member fits.
 Production retains the preparation observation and cached debits. Unless the optional query is
 confirmed unsupported, the admitted polling interval enables background capacity polling even when
 preparation could not obtain a value. Explicit Off retains only the preparation/debit path.
 Unsupported queries retain EW/error handling without a polling loop.
-This protocol-based policy does not certify device performance or physical costs. Unknown freshness
-cannot establish a lower bound; the [capacity study](../research/tape-capacity.md) explains the
-separate measurement limits.
+This protocol-based policy does not certify device performance or physical costs; the
+[capacity study](../research/tape-capacity.md) explains the separate measurement limits.
 The worker and data path remain independent; per-file admission consumes cached facts only.
 Polling remains advisory and does not establish a bound on native counter lag or physical costs.
 

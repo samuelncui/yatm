@@ -1,3 +1,5 @@
+//go:build darwin || freebsd
+
 package fileops
 
 import "golang.org/x/sys/unix"

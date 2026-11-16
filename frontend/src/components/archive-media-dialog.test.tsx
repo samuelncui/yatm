@@ -46,7 +46,7 @@ vi.mock("react-router", () => ({
 }));
 
 import { WriteMediaDialog } from "@/components/archive-media-dialog";
-import { RefreshContext } from "@/pages/jobs";
+import { RefreshContext } from "./job-list-state";
 
 const call = <T,>(response: T) => ({ response: Promise.resolve(response) });
 const registeredDetail = 'Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode="ABC123"';

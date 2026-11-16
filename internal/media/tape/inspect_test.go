@@ -76,18 +76,11 @@ func inspectionFixture(command Command) (Response, error) {
 	return Response{Completed: true, Residual: int32(len(command.Data) - len(data))}, nil
 }
 
-type fixedTransferTransport struct {
-	*serializedTransport
-	limit int
-}
-
-func (t *fixedTransferTransport) TransferLimit() int { return t.limit }
-
 func TestInspectionDoesNotAdvertiseGrowableReservationAsMaximum(t *testing.T) {
 	for _, growable := range []bool{false, true} {
-		// Both descriptors currently reserve 32 KiB; only an immutable bound establishes a maximum.
+		// A current 32 KiB reservation, growable or not, is never advertised as the maximum.
 		serialized := newSerializedTransport(inspectionFixture, func() error { return nil })
-		var transport Transport = &fixedTransferTransport{serializedTransport: serialized, limit: 32 << 10}
+		var transport Transport = serialized
 		if growable {
 			transport = &sgTransport{serializedTransport: serialized, limit: 32 << 10}
 		}

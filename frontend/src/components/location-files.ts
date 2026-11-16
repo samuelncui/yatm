@@ -1,7 +1,5 @@
 import type { FileData } from "@samuelncui/chonky";
-import { convertFiles, MODE_SYMLINK, MODE_TYPE } from "@/api";
-import { dateFromNs } from "@/tools/time";
-import { FileSelection, FileScope, LocationEntryRef, type Location, type LocationEntry } from "@/entity";
+import { FileSelection, FileScope, LocationEntryRef, type Location } from "@/entity";
 import { filesPage, locationDirectoryReference } from "@/components/files-browser";
 
 export const locationDirectoryID = (path: string) => `location:${path}`;
@@ -25,31 +23,6 @@ export function locatedFile(file: FileData, locationId: bigint, path: string, re
       scope: FileScope.ALL,
     }),
   };
-}
-
-export function locationEntryFile(entry: LocationEntry, location: Location): FileData {
-  const name = entry.path.replace(/\/$/, "").split("/").at(-1) ?? entry.path;
-  const known = entry.file ? convertFiles([entry.file])[0] : undefined;
-  const facts = entry.reference?.facts;
-  return locatedFile(
-    {
-      ...known,
-      id: entry.directory ? locationDirectoryID(entry.path) : `location-file:${location.id}:${entry.path}`,
-      name,
-      isDir: entry.directory,
-      isSymlink: !!facts && (facts.mode & MODE_SYMLINK) !== 0,
-      isRegularFile: !!facts && (facts.mode & MODE_TYPE) === 0,
-      size: entry.directory ? undefined : facts ? Number(facts.sizeBytes) : undefined,
-      modDate: dateFromNs(facts?.mtimeNs),
-      modDateNs: facts?.mtimeNs,
-      detailsAvailable: true,
-      libraryFileID: entry.file?.id,
-      status: known?.status,
-    },
-    location.id,
-    entry.path,
-    entry.reference,
-  );
 }
 
 export function associatedLibraryFileID(file: FileData): string | undefined {

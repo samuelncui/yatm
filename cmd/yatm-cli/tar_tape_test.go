@@ -138,7 +138,7 @@ func TestTarAppendUsesExactRegisteredProfile(t *testing.T) {
 }
 
 func TestDeviceSettingsReplacementNeverInspectsHardware(t *testing.T) {
-	// Read and replace the typed preference group through the existing Settings endpoints.
+	// Replace the typed preference group through the existing Settings endpoint.
 	settings := &stubDeviceSettingsService{value: &entity.DeviceSettings{}}
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) { entity.RegisterSettingsServiceServer(server, settings) }, nil, nil)
 	filename := filepath.Join(t.TempDir(), "device.json")
@@ -150,9 +150,9 @@ func TestDeviceSettingsReplacementNeverInspectsHardware(t *testing.T) {
 	require.Contains(t, stdout, `"hardware_compression":false`)
 	require.NotNil(t, settings.updated.GetDevice().Devices[0].GetTape().TarWriteOptions.HardwareCompression)
 	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, settings.updated.GetDevice().Devices[0].GetTape().ReadOrder)
-	require.Equal(t, 1, recorder.count(entity.SettingsService_Get_FullMethodName))
+	require.Zero(t, recorder.count(entity.SettingsService_Get_FullMethodName))
 	require.Equal(t, 1, recorder.count(entity.SettingsService_Update_FullMethodName))
-	require.Len(t, recorder.calls, 2)
+	require.Len(t, recorder.calls, 1)
 }
 
 type stubHintRestoreService struct {

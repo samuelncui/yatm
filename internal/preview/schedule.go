@@ -22,7 +22,7 @@ func (m *Manager) currentSettings(ctx context.Context) (*entity.PreviewSettings,
 	if m.settings != nil {
 		return m.settings(ctx)
 	}
-	return &entity.PreviewSettings{Enabled: true, Concurrency: 2, TimeoutSeconds: 600, MaxInputPixels: 64_000_000}, nil
+	return &entity.PreviewSettings{Enabled: true, Concurrency: 2, TimeoutSeconds: 600, MaxInputPixels: maxInputPixels}, nil
 }
 
 func (m *Manager) beginGeneration(ctx context.Context, key, sourcePath, identity string) (*generation, bool, error) {
@@ -64,9 +64,6 @@ func (m *Manager) beginGeneration(ctx context.Context, key, sourcePath, identity
 		settings, err := m.currentSettings(ctx)
 		if err == nil && (!settings.GetEnabled() || (m.settings != nil && !supportsRoute(sourcePath, settings.GetGenerators()))) {
 			err = ErrDisabled
-		}
-		if err == nil && (settings.GetConcurrency() < 1 || settings.GetConcurrency() > 16) {
-			err = fmt.Errorf("invalid Preview concurrency")
 		}
 		if err == nil {
 			err = ctx.Err()

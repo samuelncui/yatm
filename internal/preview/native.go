@@ -213,8 +213,8 @@ func validateNativeImage(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if asset.MediaType != "image/"+request.Format || asset.Width == 0 || asset.Height == 0 ||
-		uint64(asset.Width)*uint64(asset.Height) > maxPreviewTimelinePixels {
+	// buildManifest owns the aggregate pixel and asset size limits.
+	if asset.MediaType != "image/"+request.Format || asset.Width == 0 || asset.Height == 0 {
 		return fmt.Errorf("Preview helper returned invalid image metadata")
 	}
 	width, height := int(asset.Width), int(asset.Height)
@@ -241,7 +241,7 @@ func validateNativeImage(
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxPreviewAssetSize {
+	if !info.Mode().IsRegular() {
 		return fmt.Errorf("Preview helper returned an invalid image file")
 	}
 	file, err := os.Open(filename)
@@ -287,7 +287,7 @@ func (m *Manager) Capabilities(ctx context.Context) (*entity.GetPreviewCapabilit
 		inputs[kind] = &entity.PreviewInputFormats{Extensions: extensions}
 	}
 	return &entity.GetPreviewCapabilitiesResponse{Available: true, Version: c.Version, FfmpegVersion: c.FFmpegVersion,
-		Kinds: c.Kinds, InputExtensions: c.InputExtensions, OutputFormats: c.OutputFormats,
+		OutputFormats:         c.OutputFormats,
 		InputExtensionsByKind: inputs, LibrawVersion: c.LibRawVersion}, nil
 }
 

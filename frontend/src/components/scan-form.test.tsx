@@ -4,8 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Location, PreviewPolicy, PreviewSettings, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
-import type { InitialScan } from "@/pages/scan-input";
-import { scanPreferencesKey } from "@/pages/scan-preferences";
+import type { InitialScan } from "./scan-input";
+import { scanPreferencesKey } from "./scan-preferences";
 import { ScanForm } from "./scan-form";
 
 const { get, fileGet, create, capabilities, settings } = vi.hoisted(() => ({
@@ -101,19 +101,18 @@ it("keeps the form's draft and does not write preferences after failed creation"
   expect(start).toBeEnabled();
 });
 
-it("does not resolve old shortcut paths or overwrite a manually chosen Location after cancellation", async () => {
+it("does not overwrite a manually chosen Location after cancellation", async () => {
   let complete!: (reply: unknown) => void;
   get.mockReturnValueOnce({
     response: new Promise((resolve) => {
       complete = resolve;
     }),
   });
-  show({ ...initial(), target: { kind: "location", id: "1", paths: ["old-range"] } });
+  show({ ...initial(), target: { kind: "location", id: "1" } });
   const signal = get.mock.calls[0][1].abort as AbortSignal;
   await userEvent.click(screen.getByRole("button", { name: "Select new Location" }));
   expect(signal.aborted).toBe(true);
   await act(async () => complete({ location: source }));
-  expect(fileGet).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   await screen.findByText("Created Job 43");
   expect(create.mock.calls[0][0].spec.selections[0].target).toEqual({ oneofKind: "location", location: { locationId: 2n, path: "" } });

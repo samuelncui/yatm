@@ -14,12 +14,8 @@ vi.mock("react-virtuoso", () => ({
     </div>
   ),
 }));
-vi.mock("@/pages/jobs", async () => {
-  const { createContext } = await import("react");
-  return { RefreshContext: createContext(async () => {}) };
-});
-vi.mock("@/components/job-card", async (original) => {
-  const actual = await original<typeof import("@/components/job-card")>();
+vi.mock("@/components/job-progress", async (original) => {
+  const actual = await original<typeof import("@/components/job-progress")>();
   const { useEffect, useRef } = await import("react");
   return {
     ...actual,

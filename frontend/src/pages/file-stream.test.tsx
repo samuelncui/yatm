@@ -6,7 +6,7 @@ import { ChonkyActions, FileBrowser, FileList, type FileArray, type FileBrowserH
 import { AppStateProvider } from "@/state/react";
 import { render } from "@/state/test-render";
 import { EntryKind, FileScope, FilesEntry, ListFilesResponse } from "@/entity";
-import { useFileBrowser } from "./file";
+import { useFileBrowser } from "@/components/use-file-browser";
 
 const { list, search, toastError } = vi.hoisted(() => ({ list: vi.fn(), search: vi.fn(), toastError: vi.fn() }));
 vi.mock("@/api", async (original) => ({

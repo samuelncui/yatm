@@ -21,7 +21,6 @@ type TarRecordDevice interface {
 	Rewind(context.Context) error
 	Space(context.Context, byte, int32) error
 	Filemarks(context.Context, uint32) error
-	Sync(context.Context) error
 }
 
 // TarNavigator supplies reload-stable host-next logical addresses, with one object

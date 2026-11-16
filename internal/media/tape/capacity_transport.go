@@ -102,13 +102,9 @@ func (t *capacityTransport) finishQuery(command Command, response Response, err 
 
 	// Native uncertainty closes shared admission; malformed counter data is only an unavailable observation.
 	if err == nil {
-		if response.Residual < 0 || int(response.Residual) > len(command.Data) {
-			err = &UncertainError{Cause: ErrMalformed}
-		} else {
-			_, _, err = decodeCapacity(command.Data[:len(command.Data)-int(response.Residual)])
-			if err == ErrMalformed {
-				return err
-			}
+		_, _, err = decodeCapacity(command.Data[:len(command.Data)-int(response.Residual)])
+		if err == ErrMalformed {
+			return err
 		}
 	}
 	if CleanUnsupported(err) {

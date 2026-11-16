@@ -160,7 +160,6 @@ vi.mock("@/api", () => ({
   fileBase: "/files",
   MODE_DIR: 2147483648n,
   Root: { id: "0", name: "Root", isDir: true },
-  convertFiles: (files: any[]) => files.map(convert),
   convertSearchResults: (results: any[]) =>
     results.map((result) => ({
       ...convert(result.file),
@@ -207,7 +206,8 @@ vi.mock("@samuelncui/chonky", async (importOriginal) => {
   };
 });
 
-import { FileBrowser, useFileBrowser } from "@/pages/file";
+import { FileBrowser } from "@/pages/file";
+import { useFileBrowser } from "@/components/use-file-browser";
 import type { LibraryFileData } from "@/api";
 import { libraryLayouts } from "@/pages/routes";
 import {
@@ -548,7 +548,7 @@ it.each(["library", "location"])("only treats a completed %s page as a backgroun
   expect(result.current.listProps.loading).toBeUndefined();
   let pending!: Promise<void>;
   act(() => {
-    pending = result.current.refresh(true);
+    pending = result.current.refresh();
   });
   expect(result.current.listProps.loading).toBe("refreshing");
   await act(async () => {
@@ -757,7 +757,7 @@ it("does not offer destructive Location actions in a read-only selection browser
   expect(actions).not.toContain(CreateFolder.id);
 });
 
-it.each(["library", "location"])("does not offer Download in %s browsing, search or duplicate results", async (scope) => {
+it.each(["library", "location"])("does not offer Download in %s browsing or search results", async (scope) => {
   if (scope === "location") {
     localStorage.setItem("content-actions:source", JSON.stringify({ kind: "location", id: "4", name: "Photos" }));
   }
@@ -766,8 +766,6 @@ it.each(["library", "location"])("does not offer Download in %s browsing, search
   await waitFor(() => expect(scope === "library" ? fileGet : locationEntries).toHaveBeenCalled());
   expect(result.current.browserProps.fileActions.map((action) => action.id)).not.toContain(ChonkyActions.DownloadFiles.id);
   await act(async () => result.current.search("tag:review"));
-  expect(result.current.browserProps.fileActions.map((action) => action.id)).not.toContain(ChonkyActions.DownloadFiles.id);
-  await act(async () => result.current.search("", true));
   expect(result.current.browserProps.fileActions.map((action) => action.id)).not.toContain(ChonkyActions.DownloadFiles.id);
 });
 
@@ -837,8 +835,7 @@ describe("directory admission", () => {
     expect(selections[0].target).toEqual({ oneofKind: "location", location: { locationId: 4n, path: "photos" } });
     expect(collect).not.toHaveBeenCalled();
   });
-  it("enables directory admission without enabling unsigned archive files", () => {
-    expect(AddLocationFileAction.fileFilter!({ id: "folder", name: "Folder", isDir: true })).toBe(true);
+  it("admits archive directories and signed archive files only", () => {
     expect(ImportPositionsAction.fileFilter!({ id: "folder", name: "Folder", isDir: true, position: { id: 5n } })).toBe(true);
     expect(ImportPositionsAction.fileFilter!({ id: "file", name: "File", position: { id: 6n } })).toBe(false);
     expect(ImportPositionsAction.fileFilter!({ id: "file", name: "File", position: { id: 6n, signature: new Uint8Array([1]) } })).toBe(true);
@@ -1150,12 +1147,12 @@ describe("Library file browser search", () => {
     // A listing is complete on arrival: no scroll position contributes a read.
     await waitFor(() => expect(result.current.files.map((file) => file?.id)).toEqual(["7", "8"]));
     fileGet.mockClear();
-    await act(async () => result.current.refresh(true));
+    await act(async () => result.current.refresh());
     expect(result.current.files.map((file) => file?.id)).toEqual(["7", "8"]);
     expect(fileGet).toHaveBeenCalledTimes(1);
     fileGet.mockImplementation(() => ({ response: Promise.reject(new Error("Directory unavailable")) }));
     await act(async () => {
-      await expect(result.current.refresh(true)).rejects.toThrow("Directory unavailable");
+      await expect(result.current.refresh()).rejects.toThrow("Directory unavailable");
     });
     // A failed refresh keeps the listing it already had.
     expect(result.current.files.map((file) => file?.id)).toEqual(["7", "8"]);
@@ -1169,12 +1166,12 @@ describe("Library file browser search", () => {
     fileGet.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
     let pending!: Promise<void>;
     act(() => {
-      pending = result.current.refresh(true);
+      pending = result.current.refresh();
     });
     expect(result.current.listProps.reading).toBe(true);
     fileGet.mockImplementation(() => call({ children: [] }));
 
-    await act(async () => result.current.refresh(true));
+    await act(async () => result.current.refresh());
     expect(fileGet).toHaveBeenCalledTimes(3);
     expect(result.current.files).toEqual([]);
     await act(async () => {
@@ -1240,7 +1237,7 @@ describe("Library file browser search", () => {
     act(() => result.current.listProps.onScroll({ currentTarget: { scrollHeight: 100, scrollTop: 90, clientHeight: 10 } } as never));
     await waitFor(() => expect(result.current.files).toHaveLength(2));
     fileSearch.mockClear();
-    await act(async () => result.current.refresh(true));
+    await act(async () => result.current.refresh());
     expect(result.current.files.map((file) => file?.name)).toEqual(["/a.txt", "/b.txt"]);
     expect(fileSearch.mock.calls.map(([input]) => input.cursor)).toEqual([undefined, "more"]);
   });
@@ -1268,7 +1265,7 @@ describe("Library file browser search", () => {
     );
     await waitFor(() => expect(result.current.files.map((file) => file?.name)).toEqual(["a", "b"]));
     locationEntries.mockClear();
-    await act(async () => result.current.refresh(true));
+    await act(async () => result.current.refresh());
     expect(result.current.files.map((file) => file?.name)).toEqual(["a", "b"]);
     // No cursor exists for a complete read, so a refresh reads the directory once.
     expect(locationEntries).toHaveBeenCalledTimes(1);
@@ -1300,7 +1297,7 @@ describe("Library file browser search", () => {
     });
     let pending!: Promise<void>;
     await act(async () => {
-      pending = result.current.refresh(true);
+      pending = result.current.refresh();
     });
     await act(async () => result.current.search("replacement"));
     list.mockClear();
@@ -1524,26 +1521,6 @@ describe("Library file browser search", () => {
     );
     await waitFor(() => expect(result.current.files).toHaveLength(2));
     expect(fileGet).toHaveBeenLastCalledWith({ id: 0n, needSize: false, scope: FileScope.SAVED, limit: 100 });
-  });
-  it("routes explicit identical-file searches to the standalone tool without replacing ordinary results", async () => {
-    const { result } = renderHook(() => ({
-      browser: useFileBrowser(
-        createRef<FileBrowserHandle>(),
-        "group-review",
-        async () => {},
-        () => {},
-        locateOther,
-      ),
-      route: useLocation(),
-    }));
-    await waitFor(() => expect(fileGet).toHaveBeenCalled());
-    fileSearch.mockReturnValue(call({ results: [], nextCursor: "" }));
-    await act(async () => result.current.browser.search("tag:review"));
-    fileSearch.mockClear();
-    await act(async () => result.current.browser.search("has:duplicates", true));
-    expect(result.current.route.pathname).toBe("/tools/identical");
-    expect(result.current.browser.searchState).toMatchObject({ query: "tag:review" });
-    expect(fileSearch).not.toHaveBeenCalled();
   });
 
   it("pages results and opens a selected result in the other pane", async () => {

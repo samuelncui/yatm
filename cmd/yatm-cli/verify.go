@@ -72,15 +72,7 @@ func (c *verifyEntriesCommand) Execute(_ []string) error {
 	// Fetch one typed page; generic job progress/wait handles the shared lifecycle.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](ctx, c.runtime,
-		entity.ScanJobService_ListEntries_FullMethodName,
-		&entity.ListScanJobEntriesRequest{
-			Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset, IncludeTotal: c.IncludeTotal,
-		})
-	if err != nil {
-		return err
-	}
-	return writeProto(c.runtime.stdout, reply)
+	return c.writeScanEntries(ctx, c.runtime, c.Args.ID)
 }
 
 func (c *verifyRunCommand) Execute(_ []string) error {

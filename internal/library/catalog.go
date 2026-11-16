@@ -60,16 +60,11 @@ func (l *Library) ListContentDuplicates(ctx context.Context, signature []byte, a
 // ImportArchivePositions explicitly creates independent catalog objects from physical inventory.
 // Historical archive time is unknown; observing a copy is not a new backup operation.
 func (l *Library) ImportArchivePositions(ctx context.Context, ids []int64) ([]int64, error) {
-	result, err := l.ImportArchivePositionRoots(ctx, ids)
+	result, err := l.ImportArchivePositionSelection(ctx, ids, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	return result.FileIDs, nil
-}
-
-// ImportArchivePositionRoots admits the selected roots without a Media scope or a dry run.
-func (l *Library) ImportArchivePositionRoots(ctx context.Context, ids []int64) (*ArchiveImportResult, error) {
-	return l.ImportArchivePositionSelection(ctx, ids, nil, false)
 }
 
 // ImportArchivePositionSelection imports explicit files and the signed regular descendants of selected directories.
@@ -271,7 +266,7 @@ func importArchivePosition(tx *gorm.DB, media *Media, copy *Position) (int64, er
 	if err != nil {
 		return 0, err
 	}
-	if _, err := recordVersion(tx, &FileVersion{FileID: file.ID, Signature: copy.Signature, Hash: copy.Hash, Size: copy.Size,
+	if _, err := recordRegularVersion(tx, &FileVersion{FileID: file.ID, Signature: copy.Signature, Hash: copy.Hash, Size: copy.Size,
 		Mode: copy.Mode, MtimeNS: copy.MtimeNS}); err != nil {
 		return 0, err
 	}

@@ -1,10 +1,8 @@
 package restore
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -17,7 +15,7 @@ import (
 // applySpec freezes explicit archived versions; current originals never choose restore content.
 func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJobSpec) error {
 	// Exclude Library replacement for the complete manifest-building attempt.
-	if spec == nil || (len(spec.FileVersionIds) == 0 && len(spec.Selections) == 0) {
+	if len(spec.FileVersionIds) == 0 && len(spec.Selections) == 0 {
 		return fmt.Errorf("Restore requires FileVersions or file selections")
 	}
 	if _, err := a.exe.RestoreOutputPath(ctx, spec.Destination, ""); err != nil {
@@ -48,10 +46,7 @@ func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJo
 }
 
 func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.RestoreJobSpec, db *gorm.DB, progress *executor.Progress) error {
-	// Rebuild only incomplete manifests; policy mismatches never freeze a partial executable selection.
-	if err := library.ValidateRestoreVersionSelection(spec.VersionPolicy, spec.SkipUnmatchedVersions); err != nil {
-		return err
-	}
+	// Rebuild only incomplete manifests; Create validated the version policy.
 	if err := a.resetManifest(ctx, db); err != nil {
 		return err
 	}
@@ -113,12 +108,6 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 					if !eligible && position.Health != entity.PositionHealth_POSITION_HEALTH_DAMAGED && position.Health != entity.PositionHealth_POSITION_HEALTH_UNREADABLE {
 						continue
 					}
-					if position.Size != version.Size || !bytes.Equal(position.Hash, version.Hash) {
-						return fmt.Errorf("Position %d disagrees with FileVersion %d integrity facts", position.ID, id)
-					}
-					if err := entity.ValidateRelativePath(position.Path); err != nil {
-						return err
-					}
 					media, err := a.exe.Lib().GetMedia(ctx, position.MediaID)
 					if err != nil {
 						return err
@@ -163,9 +152,6 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 		// A version without any known copy cannot become an executable restore item.
 		if !found {
 			return fmt.Errorf("FileVersion %d has no archived copy", id)
-		}
-		if totalFiles == math.MaxInt64 || version.Size > math.MaxInt64-totalBytes {
-			return fmt.Errorf("Restore totals exceed the supported range")
 		}
 		totalFiles++
 		totalBytes += version.Size

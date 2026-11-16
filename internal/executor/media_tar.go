@@ -85,9 +85,6 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		return nil, fmt.Errorf("tar read requires frozen Media expectations")
 	}
 	device := strings.TrimSpace(access.Device)
-	if access.MediaId != nil && access.GetMediaId() != expected.ExpectedMediaId {
-		return nil, fmt.Errorf("tar Media hint differs from the frozen expectation")
-	}
 	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, expected.ExpectedIdentity)
 	if err != nil {
 		return nil, err
@@ -227,14 +224,7 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		if err != nil {
 			return nil, err
 		}
-		for _, feature := range prepared.Report().GetTape().GetFeatures() {
-			if feature.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER {
-				b.logger.WithContext(ctx).WithFields(map[string]any{
-					"device": device, "elapsed_ms": time.Since(started).Milliseconds(), "detail": feature.Detail,
-				}).Info("Tape read directory preparation")
-				break
-			}
-		}
+		b.logReadDirectoryPreparation(ctx, device, started, prepared.Report(), "Tape read directory preparation")
 
 		var observed *entity.TapePositionMap
 		readModel, observed, readReason = compileTarMediaReadModel(parameters, stored, geometry, valid.Load)
@@ -586,7 +576,7 @@ func (b *mediaBackend) tarCapacity(ctx context.Context, prepared *tape.Device, i
 		remaining = fmt.Sprintf("%d", *sample.RemainingBytes)
 	}
 	b.logger.WithContext(ctx).Infof(
-		"tar capacity estimate, remaining_native_bytes=%s partition=%d observation_error=unknown unreflected_writes=unknown native_cost_bound=false poll_interval=%s",
+		"tar capacity estimate, remaining_native_bytes=%s partition=%d poll_interval=%s",
 		remaining, partition, options.Interval,
 	)
 	return options, nil

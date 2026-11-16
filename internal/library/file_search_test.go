@@ -57,13 +57,15 @@ func TestSearchFilesSupportsFieldsBooleanTagsAndPaths(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			page, err := lib.SearchFilesIn(ctx, test.query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
+			page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, test.query, "", 100)
 			require.NoError(t, err)
-			ids := make([]int64, 0, len(page.Results))
-			paths := make([]string, 0, len(page.Results))
-			for _, result := range page.Results {
-				ids = append(ids, result.File.ID)
-				paths = append(paths, result.Path)
+			resolved, err := lib.ReadFilePaths(ctx, page.Files)
+			require.NoError(t, err)
+			ids := make([]int64, 0, len(page.Files))
+			paths := make([]string, 0, len(page.Files))
+			for _, result := range page.Files {
+				ids = append(ids, result.ID)
+				paths = append(paths, resolved[result.ID])
 			}
 			require.ElementsMatch(t, test.ids, ids)
 			require.ElementsMatch(t, test.paths, paths)
@@ -73,15 +75,15 @@ func TestSearchFilesSupportsFieldsBooleanTagsAndPaths(t *testing.T) {
 
 func TestSearchFilesRejectsUnsupportedQueries(t *testing.T) {
 	_, lib := newTestLibrary(t)
-	for _, query := range []string{"", "path:docs", "type:image", "size:-1", "name:/report.*/"} {
+	for _, query := range []string{"path:docs", "type:image", "size:-1", "name:/report.*/"} {
 		t.Run(query, func(t *testing.T) {
-			_, err := lib.SearchFilesIn(context.Background(), query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
+			_, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, query, "", 100)
 			require.Error(t, err)
 		})
 	}
-	_, err := lib.SearchFilesIn(context.Background(), strings.Repeat("a", maxFileSearchRunes+1), "", 100, entity.FileScope_FILE_SCOPE_ALL)
-	require.ErrorContains(t, err, "exceeds")
-	_, err = lib.SearchFilesIn(context.Background(), "name:report", "", maxFileSearchLimit+1, entity.FileScope_FILE_SCOPE_ALL)
+	_, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, strings.Repeat("a", maxFileSearchRunes+1), "", 100)
+	require.ErrorContains(t, err, "at most")
+	_, err = lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:report", "", maxFileSearchLimit+1)
 	require.ErrorContains(t, err, "page limit")
 	_, err = lib.ListTags(context.Background(), "", "", -1)
 	require.ErrorContains(t, err, "page limit")
@@ -103,15 +105,15 @@ func TestSearchFilesAndTagListUseQueryBoundOpaqueCursors(t *testing.T) {
 	}))
 
 	// Page through same-name Files and reject cursor reuse with another query.
-	first, err := lib.SearchFilesIn(ctx, "name:same", "", 1, entity.FileScope_FILE_SCOPE_ALL)
+	first, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:same", "", 1)
 	require.NoError(t, err)
-	require.Len(t, first.Results, 1)
+	require.Len(t, first.Files, 1)
 	require.NotEmpty(t, first.NextCursor)
-	second, err := lib.SearchFilesIn(ctx, "name:same", first.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
+	second, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:same", first.NextCursor, 1)
 	require.NoError(t, err)
-	require.Len(t, second.Results, 1)
-	require.NotEqual(t, first.Results[0].File.ID, second.Results[0].File.ID)
-	_, err = lib.SearchFilesIn(ctx, "name:other", first.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
+	require.Len(t, second.Files, 1)
+	require.NotEqual(t, first.Files[0].ID, second.Files[0].ID)
+	_, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:other", first.NextCursor, 1)
 	require.ErrorContains(t, err, "another query")
 
 	// Page the canonical Tag projection and bind its cursor to the normalized prefix.
@@ -125,9 +127,9 @@ func TestSearchFilesAndTagListUseQueryBoundOpaqueCursors(t *testing.T) {
 	require.NotEqual(t, tags.Tags[0].Name, next.Tags[0].Name)
 	_, err = lib.ListTags(ctx, "other", tags.NextCursor, 1)
 	require.ErrorContains(t, err, "another query")
-	_, err = lib.SearchFilesIn(ctx, "name:same", tags.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
+	_, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:same", tags.NextCursor, 1)
 	require.ErrorContains(t, err, "another operation")
-	_, err = lib.SearchFilesIn(ctx, "name:same", "not-a-cursor", 1, entity.FileScope_FILE_SCOPE_ALL)
+	_, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:same", "not-a-cursor", 1)
 	require.ErrorContains(t, err, "page cursor")
 }
 

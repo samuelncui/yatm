@@ -31,14 +31,6 @@ type identicalResultManager struct {
 	sessions map[string]*identicalResult
 	live     int
 	building int
-	now      func() time.Time
-}
-
-func (m *identicalResultManager) clock() time.Time {
-	if m.now != nil {
-		return m.now()
-	}
-	return time.Now()
 }
 
 func (m *identicalResultManager) retireLocked(result *identicalResult) *library.IdenticalSnapshot {
@@ -53,17 +45,6 @@ func (m *identicalResultManager) retireLocked(result *identicalResult) *library.
 		return result.snapshot
 	}
 	return nil
-}
-
-func (m *identicalResultManager) sweepLocked() []*library.IdenticalSnapshot {
-	var closed []*library.IdenticalSnapshot
-	now := m.clock()
-	for _, result := range m.sessions {
-		if result.readers == 0 && !now.Before(result.lastUsed.Add(identicalResultIdle)) {
-			closed = append(closed, m.retireLocked(result))
-		}
-	}
-	return closed
 }
 
 func closeIdenticalSnapshots(snapshots []*library.IdenticalSnapshot) {
@@ -84,8 +65,9 @@ func closeIdenticalSnapshot(snapshot *library.IdenticalSnapshot) {
 
 // reserve owns one of the two result slots before the expensive catalog collection begins.
 func (m *identicalResultManager) reserve() error {
+	// Idle results retire through their release timer; a full table evicts the oldest idle one.
 	m.mu.Lock()
-	closed := m.sweepLocked()
+	var closed []*library.IdenticalSnapshot
 	if m.live+m.building >= 2 {
 		var oldest *identicalResult
 		for _, result := range m.sessions {
@@ -120,7 +102,7 @@ func (m *identicalResultManager) addReserved(snapshot *library.IdenticalSnapshot
 	if m.sessions == nil {
 		m.sessions = make(map[string]*identicalResult)
 	}
-	result := &identicalResult{id: uuid.NewString(), snapshot: snapshot, scope: scope, readers: 1, lastUsed: m.clock()}
+	result := &identicalResult{id: uuid.NewString(), snapshot: snapshot, scope: scope, readers: 1, lastUsed: time.Now()}
 	m.sessions[result.id] = result
 	m.building--
 	m.live++
@@ -130,7 +112,6 @@ func (m *identicalResultManager) addReserved(snapshot *library.IdenticalSnapshot
 
 func (m *identicalResultManager) acquire(id string) (*identicalResult, error) {
 	m.mu.Lock()
-	closed := m.sweepLocked()
 	result := m.sessions[id]
 	if result != nil {
 		result.readers++
@@ -140,7 +121,6 @@ func (m *identicalResultManager) acquire(id string) (*identicalResult, error) {
 		}
 	}
 	m.mu.Unlock()
-	closeIdenticalSnapshots(closed)
 	if result == nil {
 		return nil, status.Error(codes.OutOfRange, "identical result expired or unknown")
 	}
@@ -159,7 +139,7 @@ func (m *identicalResultManager) release(result *identicalResult) {
 			return
 		}
 	} else if result.readers == 0 {
-		result.lastUsed = m.clock()
+		result.lastUsed = time.Now()
 		result.timer = time.AfterFunc(identicalResultIdle, func() { m.expire(result.id) })
 	}
 	m.mu.Unlock()
@@ -169,7 +149,7 @@ func (m *identicalResultManager) expire(id string) {
 	m.mu.Lock()
 	result := m.sessions[id]
 	var snapshot *library.IdenticalSnapshot
-	if result != nil && result.readers == 0 && !m.clock().Before(result.lastUsed.Add(identicalResultIdle)) {
+	if result != nil && result.readers == 0 && !time.Now().Before(result.lastUsed.Add(identicalResultIdle)) {
 		snapshot = m.retireLocked(result)
 	}
 	m.mu.Unlock()
@@ -178,13 +158,13 @@ func (m *identicalResultManager) expire(id string) {
 
 func (m *identicalResultManager) close(id string) error {
 	m.mu.Lock()
-	closed := m.sweepLocked()
 	result := m.sessions[id]
+	var snapshot *library.IdenticalSnapshot
 	if result != nil {
-		closed = append(closed, m.retireLocked(result))
+		snapshot = m.retireLocked(result)
 	}
 	m.mu.Unlock()
-	closeIdenticalSnapshots(closed)
+	closeIdenticalSnapshot(snapshot)
 	if result == nil {
 		return status.Error(codes.OutOfRange, "identical result expired or unknown")
 	}

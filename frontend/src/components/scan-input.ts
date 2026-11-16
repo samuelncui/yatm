@@ -9,7 +9,7 @@ export type ScanOptions = {
   previewPolicy: PreviewPolicy;
 };
 export type ScanPrefill = {
-  target?: { kind: "location"; id: string; paths?: string[] } | { kind: "media"; id: string } | { kind: "files"; entries: ScanSelectionEntry[] };
+  target?: { kind: "location" | "media"; id: string } | { kind: "files"; entries: ScanSelectionEntry[] };
   options?: Partial<ScanOptions>;
 };
 export const collectionOptions: ScanOptions = {
@@ -28,12 +28,6 @@ function checkedPrefill(value: unknown): ScanPrefill {
       case "location":
       case "media":
         if (typeof target.id !== "string" || !/^[1-9]\d*$/.test(target.id)) throw new Error("The selected source is invalid. Choose a source.");
-        if (
-          target.kind === "location" &&
-          target.paths !== undefined &&
-          (!Array.isArray(target.paths) || target.paths.length > 1000 || target.paths.some((path) => typeof path !== "string"))
-        )
-          throw new Error("Invalid selected paths. Choose the range again.");
         break;
       case "files":
         if (
@@ -77,28 +71,12 @@ export function initialScan(params: URLSearchParams, state: unknown) {
   let prefill: ScanPrefill = {};
   let error = "";
   try {
-    const route = state as { scan?: unknown; selections?: unknown; paths?: unknown } | null;
+    const route = state as { scan?: unknown } | null;
     const location = params.get("location");
     const media = params.get("media");
     if (location && media) throw new Error("Choose one Scan source.");
     if (media) prefill.target = { kind: "media", id: media };
-    else if (location) prefill.target = { kind: "location", id: location, paths: route?.paths as string[] | undefined };
-    if (route?.selections !== undefined) {
-      if (prefill.target || !Array.isArray(route.selections) || route.selections.some((selection) => !FileSelection.is(selection)))
-        throw new Error("The selected files are invalid. Return to Files and select them again.");
-      prefill.target = {
-        kind: "files",
-        entries: route.selections.map((selection: FileSelection) => ({
-          selection,
-          name:
-            selection.target.oneofKind === "location"
-              ? selection.target.location.path || "/"
-              : `Library item ${selection.target.oneofKind === "library" ? selection.target.library.fileId : ""}`,
-          path: selection.target.oneofKind === "location" ? `Location ${selection.target.location.locationId}/${selection.target.location.path}` : "Library",
-          isDir: false,
-        })),
-      };
-    }
+    else if (location) prefill.target = { kind: "location", id: location };
     const options: Partial<ScanOptions> = {};
     if (params.get("result") === "verify") options.resultPolicy = ScanResultPolicy.VERIFY_COPIES;
     if (params.get("previews") === "1") options.previewPolicy = PreviewPolicy.MISSING_ONLY;
@@ -123,12 +101,11 @@ export function initialScan(params: URLSearchParams, state: unknown) {
     (saved?.kind === "media" ? { kind: "media" as const, id: saved.media?.id ?? "" } : { kind: "location" as const, id: saved?.location?.id ?? "" });
   const options: ScanOptions = {
     signaturePolicy: saved?.signaturePolicy ?? ScanSignaturePolicy.FILL_MISSING,
-    resultPolicy: resultForSource(target.kind, saved?.resultPolicy),
     compare: saved?.compare ?? true,
     previewPolicy: saved?.previewPolicy ?? PreviewPolicy.NONE,
     ...prefill.options,
+    resultPolicy: resultForSource(target.kind, prefill.options?.resultPolicy ?? saved?.resultPolicy),
   };
-  options.resultPolicy = resultForSource(target.kind, options.resultPolicy);
   return { target, options, error, explicit, saved };
 }
 

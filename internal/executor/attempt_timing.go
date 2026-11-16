@@ -17,27 +17,15 @@ func (e *Executor) startAttemptTiming(ctx context.Context, jobID int64) error {
 		return err
 	}
 	defer closeDB()
-	// Timing starts only for newly created preparation or an admitted READY Media operation.
-	var record JobRecord
-	if err := db.WithContext(ctx).First(&record, singletonJobID).Error; err != nil {
-		return fmt.Errorf("record Job attempt start failed, id=%d, %w", jobID, err)
-	}
-	if record.Status != entity.JobStatus_JOB_STATUS_PREPARING && record.Status != entity.JobStatus_JOB_STATUS_READY {
-		return fmt.Errorf("Job cannot start from status %s, id=%d", record.Status, jobID)
-	}
-
+	// Callers admit only newly created preparation or a READY Media operation.
 	// A new Media operation replaces the previous operation's timing and error without changing state.
 	startedAt := time.Now()
-	result := db.WithContext(ctx).Model(&JobRecord{}).Where("id = ?", singletonJobID).Updates(map[string]any{
+	if err := db.WithContext(ctx).Model(&JobRecord{}).Where("id = ?", singletonJobID).Updates(map[string]any{
 		"latest_attempt_started_at_ns":  startedAt.UnixNano(),
 		"latest_attempt_finished_at_ns": nil,
 		"error":                         "",
-	})
-	if result.Error != nil {
-		return fmt.Errorf("record Job attempt start failed, id=%d, %w", jobID, result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return fmt.Errorf("record Job attempt start failed, id=%d, common record missing", jobID)
+	}).Error; err != nil {
+		return fmt.Errorf("record Job attempt start failed, id=%d, %w", jobID, err)
 	}
 
 	// Keep the monotonic clock component for live and final elapsed calculations.
@@ -61,14 +49,9 @@ func (e *Executor) finishAttemptTiming(jobID int64, runner Runner) {
 		return
 	}
 	defer closeDB()
-	result := db.Model(&JobRecord{}).Where("id = ?", singletonJobID).
-		Update("latest_attempt_finished_at_ns", finishedAt)
-	if result.Error != nil {
-		runner.Logger().WithError(result.Error).Errorf("finish Job attempt timing failed, id=%d", jobID)
-		return
-	}
-	if result.RowsAffected != 1 {
-		runner.Logger().Errorf("finish Job attempt timing failed, id=%d, common record missing", jobID)
+	if err := db.Model(&JobRecord{}).Where("id = ?", singletonJobID).
+		Update("latest_attempt_finished_at_ns", finishedAt).Error; err != nil {
+		runner.Logger().WithError(err).Errorf("finish Job attempt timing failed, id=%d", jobID)
 	}
 }
 
@@ -109,7 +92,7 @@ func (e *Executor) ApplyAttemptProgress(ctx context.Context, jobID int64, progre
 			EstimateState: entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE}
 	}
 	if record.Kind == entity.JobKind_JOB_KIND_ARCHIVE || record.Kind == entity.JobKind_JOB_KIND_RESTORE {
-		checkpoint := manifestPosition(record.Checkpoint)
+		checkpoint := record.Checkpoint
 		progress.TotalKnown = checkpoint == entity.JobStatus_JOB_STATUS_READY || checkpoint == entity.JobStatus_JOB_STATUS_COMPLETED
 	}
 	if record.LatestAttemptStartedAtNS != nil && record.LatestAttemptFinishedAtNS != nil {

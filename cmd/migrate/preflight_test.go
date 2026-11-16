@@ -15,42 +15,27 @@ func TestQuiesceService(t *testing.T) {
 	requests := 0
 	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
-		if requests == 1 {
-			require.Equal(t, http.MethodGet, request.Method)
-			require.Equal(t, "/files/_upgrade/status", request.URL.Path)
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     make(http.Header),
-				Body:       io.NopCloser(strings.NewReader(`{"process_id":42,"running_job_ids":[]}`)),
-				Request:    request,
-			}, nil
-		}
 		require.Equal(t, http.MethodPost, request.Method)
 		require.Equal(t, "/files/_upgrade/quiesce", request.URL.Path)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(`{"running_job_ids":[7,9]}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"process_id":42,"running_job_ids":[7,9]}`)),
 			Request:    request,
 		}, nil
 	})
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })
 
-	ids, err := quiesceService(context.Background(), "http://localhost:8080", 42)
+	ids, err := quiesceService(context.Background(), "localhost:8080", 42)
 	require.NoError(t, err)
 	require.Equal(t, []int64{7, 9}, ids)
-	require.Equal(t, 2, requests)
+	require.Equal(t, 1, requests)
 }
 
 func TestQuiesceServiceRejectsChangedProcess(t *testing.T) {
 	originalTransport := http.DefaultTransport
-	requests := 0
 	http.DefaultTransport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		requests++
-		body := `{"process_id":42,"running_job_ids":[]}`
-		if requests == 2 {
-			body = `{"process_id":99,"running_job_ids":[]}`
-		}
+		body := `{"process_id":99,"running_job_ids":[]}`
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
 	})
 	t.Cleanup(func() { http.DefaultTransport = originalTransport })

@@ -2,6 +2,7 @@ package apis
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
@@ -9,6 +10,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 )
 
 type filesService struct {
@@ -36,9 +38,6 @@ func (s *filesService) List(req *entity.ListFilesRequest, stream entity.FilesSer
 	if req.GetDirectory().GetTarget() == nil {
 		return status.Error(codes.InvalidArgument, "directory reference is required")
 	}
-	if _, err := parseFilesProjection(req.Include); err != nil {
-		return err
-	}
 	source, request, err := s.resolveListSource(req)
 	if err != nil {
 		return err
@@ -60,9 +59,6 @@ func (s *filesService) Search(ctx context.Context, req *entity.SearchFilesReques
 	if req.GetDirectory().GetTarget() == nil {
 		return nil, status.Error(codes.InvalidArgument, "directory reference is required")
 	}
-	if _, err := parseFilesProjection(req.Include); err != nil {
-		return nil, err
-	}
 	limit, err := pageLimit(req.Limit)
 	if err != nil {
 		return nil, err
@@ -81,12 +77,11 @@ func (s *filesService) Search(ctx context.Context, req *entity.SearchFilesReques
 		return nil, err
 	}
 	return &entity.SearchFilesResponse{
-		Entries:         reply.Entries,
-		NextCursor:      reply.NextCursor,
-		Scope:           reply.Scope,
-		Directory:       reply.Directory,
-		Breadcrumbs:     reply.Breadcrumbs,
-		TotalEntryCount: reply.Total,
+		Entries:     reply.Entries,
+		NextCursor:  reply.NextCursor,
+		Scope:       reply.Scope,
+		Directory:   reply.Directory,
+		Breadcrumbs: reply.Breadcrumbs,
 	}, nil
 }
 
@@ -167,6 +162,13 @@ func (s *filesService) Get(ctx context.Context, req *entity.GetFileRequest) (*en
 			return nil, err
 		}
 		reply.Organization = &entity.FilesOrganization{Parent: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: file.ParentID}}, Path: strings.TrimPrefix(paths[detail.FileID], "/"), Note: file.Note, Tags: tags[detail.FileID]}
+		latest, err := s.api.lib.LatestFileVersion(ctx, detail.FileID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		if latest != nil {
+			reply.LatestVersion = latest.ToEntity()
+		}
 	}
 	return &entity.GetFileResponse{Detail: reply}, nil
 }
@@ -178,12 +180,12 @@ func (s *filesService) resolveDetailSource(reference *entity.FileOperationRef) (
 		if target.FileId < library.TrashFileID {
 			return nil, files.Entry{}, status.Error(codes.InvalidArgument, "invalid Library reference")
 		}
-		return &librarySource{service: s}, files.Entry{Kind: files.KindLibrary, ID: target.FileId}, nil
+		return &librarySource{service: s}, files.Entry{ID: target.FileId}, nil
 	case *entity.FileOperationRef_Location:
 		if target.Location == nil {
 			return nil, files.Entry{}, status.Error(codes.InvalidArgument, "Location reference is required")
 		}
-		return &locationSource{service: s}, files.Entry{Kind: files.KindLocation, ID: target.Location.LocationId, Path: target.Location.Path}, nil
+		return &locationSource{service: s}, files.Entry{ID: target.Location.LocationId, Path: target.Location.Path}, nil
 	default:
 		return nil, files.Entry{}, status.Error(codes.InvalidArgument, "unsupported Files source")
 	}

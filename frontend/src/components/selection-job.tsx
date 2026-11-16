@@ -28,7 +28,7 @@ import {
   type SelectionInspectionResult,
 } from "@/entity";
 import { RefreshListAction } from "@/actions";
-import { useFileBrowser } from "@/pages/file";
+import { useFileBrowser } from "@/components/use-file-browser";
 import { RestoreDestinationPicker, type RestoreTarget } from "@/components/restore-destination";
 import { PreviewPolicySelect, usePreviewGeneration } from "@/components/preview-policy-select";
 import { ChooseVersionDialog } from "@/components/version-picker";
@@ -183,8 +183,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   };
   const skipUnmatchedVersions = skipConsent === consentKey;
   const create = async () => {
-    if (submitting.current || !canCreate || estimating || !summary || (kind === "archive" && previewPolicy !== PreviewPolicy.NONE && !generation.available))
-      return;
+    if (submitting.current || !canCreate) return;
     submitting.current = true;
     setBusy(true);
     setError("");
@@ -258,8 +257,9 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   }, [inspection, inspectionKey, estimateAttempt, entries.length, validPolicy, kind, unavailable]);
   const canCreate =
     validPolicy &&
-    (kind !== "archive" || validPreview) &&
+    (kind !== "archive" || (validPreview && (previewPolicy === PreviewPolicy.NONE || generation.available))) &&
     !unavailable &&
+    !estimating &&
     !!summary &&
     summary.fileCount > 0n &&
     !busy &&
@@ -446,11 +446,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            variant="contained"
-            disabled={!canCreate || estimating || (kind === "archive" && previewPolicy !== PreviewPolicy.NONE && !generation.available)}
-            onClick={() => void create()}
-          >
+          <Button variant="contained" disabled={!canCreate} onClick={() => void create()}>
             {busy ? "Preparing…" : `Prepare ${labels[kind].toLowerCase()}`}
           </Button>
           <Button disabled={busy} onClick={() => setConfiguring(false)}>

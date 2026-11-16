@@ -45,8 +45,6 @@ type ltfsLabelsHandle struct {
 	partition, step int
 }
 
-func (*ltfsLabelsHandle) TransferLimit() int { return 512 << 10 }
-
 func (h *ltfsLabelsHandle) EnsureTransfer(ctx context.Context, _ int) error {
 	return errors.Join(h.provider.reserveErr, ctx.Err())
 }
@@ -110,7 +108,7 @@ func TestLTFSLabelObservationClosesBeforeNativeOwnership(t *testing.T) {
 			exe := setupTestExecutor(t)
 			fixture := &ltfsLabelsProvider{tarReadMapProvider: &tarReadMapProvider{
 				tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()},
-				endpoints:        []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180}},
+				endpoints:           []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180}},
 			}, readErr: test.readErr, reserveErr: test.reserveErr}
 			fixture.cleanupError = test.closeErr
 			exe.tapeProvider = fixture

@@ -109,10 +109,7 @@ func registerLibraryCommands(root *flags.Command, commandRuntime *runtime) error
 }
 
 func (c *previewCreateCommand) Execute(_ []string) error {
-	preview, err := parsePreviewPolicy(c.PreviewPolicy)
-	if err != nil {
-		return err
-	}
+	preview := previewPolicy(c.PreviewPolicy)
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	selections, err := c.selections()
@@ -180,10 +177,7 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 	if c.LocationID > 0 {
 		selections = locationSelections(c.LocationID, c.Paths)
 	}
-	preview, err := parsePreviewPolicy(c.PreviewPolicy)
-	if err != nil {
-		return err
-	}
+	preview := previewPolicy(c.PreviewPolicy)
 
 	// Validate the policy matrix before creating the durable Scan.
 	signatures := map[string]entity.ScanSignaturePolicy{"known-only": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY, "fill-missing": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING, "force-read": entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ}
@@ -218,16 +212,15 @@ func (c *scanProgressCommand) Execute(args []string) error {
 	return (&jobProgressCommand{runtime: c.runtime, Args: c.Args}).Execute(args)
 }
 
-func parsePreviewPolicy(value string) (entity.PreviewPolicy, error) {
+// previewPolicy maps --preview-policy, which the flag parser restricts to its three choices.
+func previewPolicy(value string) entity.PreviewPolicy {
 	switch value {
-	case "none":
-		return entity.PreviewPolicy_PREVIEW_POLICY_NONE, nil
 	case "missing-only":
-		return entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, nil
+		return entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY
 	case "regenerate-all":
-		return entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL, nil
+		return entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL
 	default:
-		return entity.PreviewPolicy_PREVIEW_POLICY_NONE, usageError(fmt.Errorf("invalid Preview policy %q", value))
+		return entity.PreviewPolicy_PREVIEW_POLICY_NONE
 	}
 }
 
@@ -252,18 +245,7 @@ func (c *scanResultsCommand) Execute(_ []string) error {
 	if job.Job.Kind != entity.JobKind_JOB_KIND_SCAN {
 		return usageError(fmt.Errorf("Job is not a Location or Media scan"))
 	}
-	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](
-		ctx,
-		c.runtime,
-		entity.ScanJobService_ListEntries_FullMethodName,
-		&entity.ListScanJobEntriesRequest{
-			Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset, IncludeTotal: c.IncludeTotal,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	return writeProto(c.runtime.stdout, reply)
+	return c.writeScanEntries(ctx, c.runtime, c.Args.ID)
 }
 
 func (c *libraryExportCommand) Execute(_ []string) error {

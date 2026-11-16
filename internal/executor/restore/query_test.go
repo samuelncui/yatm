@@ -2,11 +2,11 @@ package restore
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,7 +49,7 @@ func TestRestoreResultsPageAcrossMedia(t *testing.T) {
 	require.Equal(t, second.ID, filesPage.Items[1].Candidate.MediaId)
 
 	// A descending page crosses the Media boundary in reverse.
-	boundary := executor.JobResultPairValue(filesPage.Items[1].Candidate.MediaId, filesPage.Items[1].Id)
+	boundary := fmt.Sprintf("%d:%d", filesPage.Items[1].Candidate.MediaId, filesPage.Items[1].Id)
 	backward, err := runner.queryFiles(ctx, &entity.ListRestoreJobFilesRequest{
 		Limit: 1, Cursor: boundary, Order: entity.JobResultOrder_JOB_RESULT_ORDER_DESCENDING,
 	})

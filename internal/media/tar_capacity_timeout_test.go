@@ -35,12 +35,12 @@ func TestTarCapacityLocalMissesKeepWriteAndRecover(t *testing.T) {
 					calls++
 					switch {
 					case calls <= 5:
-						return tarCapacityTestSample(0, tape.CapacityLowerBound), true, failure
+						return tarCapacityTestSample(0, tape.CapacityEstimate), true, failure
 					case calls == 6:
 						close(entered)
 						select {
 						case <-release:
-							return tarCapacityTestSample(10000, tape.CapacityLowerBound), true, nil
+							return tarCapacityTestSample(10000, tape.CapacityEstimate), true, nil
 						case <-ctx.Done():
 							return nil, true, ctx.Err()
 						}
@@ -115,7 +115,7 @@ func TestTarCapacityBusyAndUnknownSamplesKeepObserver(t *testing.T) {
 		options.Observe = func(ctx context.Context, issue func() error) (*tape.CapacitySample, bool, error) {
 			calls++
 			if calls <= 5 {
-				return tarCapacityTestSample(0, tape.CapacityLowerBound), false, nil
+				return tarCapacityTestSample(0, tape.CapacityEstimate), false, nil
 			}
 			if err := issue(); err != nil {
 				return nil, false, err
@@ -129,7 +129,7 @@ func TestTarCapacityBusyAndUnknownSamplesKeepObserver(t *testing.T) {
 				close(entered)
 				select {
 				case <-release:
-					return tarCapacityTestSample(10000, tape.CapacityLowerBound), true, nil
+					return tarCapacityTestSample(10000, tape.CapacityEstimate), true, nil
 				case <-ctx.Done():
 					return nil, true, ctx.Err()
 				}
@@ -177,7 +177,7 @@ func TestTarCapacityShutdownJoinsNativeObservation(t *testing.T) {
 			<-ctx.Done()
 			close(canceled)
 			<-release
-			return tarCapacityTestSample(0, tape.CapacityLowerBound), true, nil
+			return tarCapacityTestSample(0, tape.CapacityEstimate), true, nil
 		}
 		session, err := newTarTestWriteSession(&tarCapacityTestDevice{tarTestDevice: &tarTestDevice{}}, options)
 		require.NoError(t, err)

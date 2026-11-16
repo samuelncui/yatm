@@ -122,7 +122,7 @@ func TestTarFactoryFormatRecordDefaultsRejectUnsupportedBeforeMutation(t *testin
 		{name: "fixed-only device rejects omitted variable mode", limits: [6]byte{0, 0, 0x10, 0, 0x10, 0}, maximum: 2 << 20,
 			options: &entity.TarWriteOptions{RecordBytes: proto.Uint32(4096)}, error: "variable tar records are outside observed block limits"},
 		{name: "default exceeds transport buffer", limits: [6]byte{0, 0x20, 0, 0, 0, 0}, maximum: 256 << 10,
-			error: "selected record exceeds the transport buffer"},
+			error: "is smaller than selected record"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Device reports remain authoritative even when the suite fills omitted record choices.

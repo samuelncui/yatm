@@ -327,7 +327,7 @@ it("inherits the source browser's pending-read sort restriction and restores Sor
   expect(list).toHaveBeenCalledTimes(1);
 });
 
-it("bounds selected-root rendering and rejects additions beyond 1,000 roots", async () => {
+it("bounds selected-root rendering and leaves the root limit to the server", async () => {
   const entries = Array.from({ length: 1000 }, (_, index) => saved(BigInt(index + 100)));
   const { onChoose } = renderDialog({ entries });
   expect(within(screen.getByRole("list", { name: "Selected roots" })).getAllByRole("listitem")).toHaveLength(50);
@@ -335,8 +335,7 @@ it("bounds selected-root rendering and rejects additions beyond 1,000 roots", as
   expect(within(screen.getByRole("list", { name: "Selected roots" })).getAllByRole("listitem")).toHaveLength(100);
   await selectFile("Albums");
   await addSelected();
-  await screen.findByText("Choose up to 1,000 roots. Select a parent folder to include its contents.");
-  expect(screen.getByText("1000 selected roots")).toBeInTheDocument();
+  expect(await screen.findByText("1001 selected roots")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Choose" }));
-  expect(onChoose).toHaveBeenCalledWith(entries);
+  expect(onChoose.mock.lastCall?.[0]).toHaveLength(1001);
 });

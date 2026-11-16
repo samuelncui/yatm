@@ -34,12 +34,6 @@ const (
 )
 
 func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.ArchiveMediaTarget) error {
-	// Library-selected transfers retain their File identities and logical targets through publication.
-	var config Config
-	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
-		return err
-	}
-
 	// Discard candidates left by an interrupted earlier attempt before preparing the physical Media.
 	if err := a.resetStagedItems(ctx); err != nil {
 		return err
@@ -158,9 +152,6 @@ func (a *jobArchiveRunner) commitStagedMedia(
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	if media == nil {
-		return nil, 0, 0, fmt.Errorf("Archive Session returned no Media")
-	}
 	var files, bytes int64
 	query := a.db.WithContext(ctx).Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED)
 	if err := query.Count(&files).Error; err != nil {
@@ -184,25 +175,14 @@ func (a *jobArchiveRunner) commitStagedMedia(
 
 	// Advance submitted state only after successful Library publication.
 	err = a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		record := new(executor.JobRecord)
-		if err := tx.First(record, 1).Error; err != nil {
-			return fmt.Errorf("read Archive Job state failed, %w", err)
-		}
-		if record.Status != entity.JobStatus_JOB_STATUS_READY {
-			return fmt.Errorf("Archive commit requires READY Job, status=%s", record.Status)
-		}
 		if err := recordArchivedContent(tx); err != nil {
 			return err
 		}
-		updated := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED).
+		if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED).
 			Updates(map[string]any{
 				"status": entity.CopyStatus_COPY_STATUS_SUBMITTED, "media_id": stored.ID, "result": nil,
-			})
-		if updated.Error != nil {
-			return fmt.Errorf("submit Archive items failed, %w", updated.Error)
-		}
-		if updated.RowsAffected != files {
-			return fmt.Errorf("submit Archive items failed, affected=%d expected=%d", updated.RowsAffected, files)
+			}).Error; err != nil {
+			return fmt.Errorf("submit Archive items failed, %w", err)
 		}
 		var pending int64
 		if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).Count(&pending).Error; err != nil {
@@ -346,19 +326,13 @@ func (a *jobArchiveRunner) stagedMediaFiles(ctx context.Context, yield func(*lib
 }
 
 func (a *jobArchiveRunner) resetStagedItems(ctx context.Context) error {
-	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED).
-			Updates(map[string]any{
-				"status": entity.CopyStatus_COPY_STATUS_PENDING, "media_path": "", "media_id": nil, "result": nil,
-			}).Error; err != nil {
-			return fmt.Errorf("reset staged Archive items failed, %w", err)
-		}
-		if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).
-			Updates(map[string]any{"media_path": "", "media_id": nil, "result": nil}).Error; err != nil {
-			return fmt.Errorf("clear pending Archive results failed, %w", err)
-		}
-		return nil
-	})
+	if err := a.db.WithContext(ctx).Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED).
+		Updates(map[string]any{
+			"status": entity.CopyStatus_COPY_STATUS_PENDING, "media_path": "", "media_id": nil, "result": nil,
+		}).Error; err != nil {
+		return fmt.Errorf("reset staged Archive items failed, %w", err)
+	}
+	return nil
 }
 
 func (a *jobArchiveRunner) archiveEventHandler(ctx context.Context) acp.EventHandler {

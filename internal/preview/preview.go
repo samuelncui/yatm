@@ -30,6 +30,7 @@ const (
 	maxPreviewDimension      = 8192
 	maxPreviewTimelineFrames = 1000
 	maxPreviewTimelinePixels = 100_000_000
+	maxInputPixels           = 64_000_000
 )
 
 var ErrUnsupported = errors.New("Preview source type is unsupported")
@@ -64,7 +65,7 @@ func New(config Config, work string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	root := resolveRoot(config.Root, work)
+	root := ResolveRoot(config.Root, work)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, fmt.Errorf("create Preview root failed, path=%q, %w", root, err)
 	}
@@ -142,7 +143,7 @@ func (m *Manager) Generate(
 	}
 	generators := m.generators
 	if settings != nil {
-		configs, err := generatorConfigsFor(settings.GetGenerators(), "", 64_000_000)
+		configs, err := generatorConfigsFor(settings.GetGenerators(), "", maxInputPixels)
 		if err != nil {
 			return nil, err
 		}
@@ -185,10 +186,7 @@ func (m *Manager) Generate(
 		return nil, err
 	}
 	if !owner {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		return signature, ctx.Err()
+		return signature, nil
 	}
 	defer func() { m.finishGeneration(bundlePath, pending, true, resultErr) }()
 	// A missing-only request that waited behind another generation reuses what it published.
@@ -396,8 +394,6 @@ func buildManifest(
 
 	return &entity.PreviewManifest{
 		FileSignature: append([]byte(nil), signature...),
-		Generator:     configured.kind,
-		SettingsJson:  append([]byte(nil), configured.settingsJSON...),
 		Assets:        manifestAssets,
 	}, nil
 }

@@ -156,7 +156,7 @@ func TestTapeFinalizeStopsAfterUnmountFailureAndKeepsDeviceUnavailable(t *testin
 	require.Nil(t, result)
 	require.ErrorIs(t, err, mediapkg.ErrFinalizeUnusable)
 	require.ErrorContains(t, err, "unmount Tape failed")
-	require.NotErrorIs(t, err, errInvalidTapeIndex)
+	require.NotContains(t, err.Error(), "LTFS index")
 
 	// Ending the attempt keeps the uncertain physical device unavailable for later work.
 	exe.endAttempt(1)

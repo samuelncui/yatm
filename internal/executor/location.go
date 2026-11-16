@@ -168,7 +168,6 @@ func (e *Executor) CheckLocation(source *library.Location) (string, error) {
 		return "", fmt.Errorf("online root is not the canonical path; update the Location")
 	}
 
-	source.AccessAllowed = e.originalAccess(root)
 	return root, nil
 }
 
@@ -195,6 +194,12 @@ func (e *Executor) locationAccessRanges(root string) []locationAccessRange {
 		ranges = append(ranges, locationAccessRange{filepath.ToSlash(relative), access.matcher})
 	}
 	return ranges
+}
+
+// LocationExcluded applies the administrator boundary of the Location's root and its user Ignore
+// rules to one relative path, as browsing and collection do.
+func (e *Executor) LocationExcluded(location *library.Location, relative string, directory bool) bool {
+	return !e.originalAccess(location.RootPath)(relative, directory) || location.Ignored(relative, directory)
 }
 
 func (e *Executor) originalAccess(root string) func(string, bool) bool {
@@ -292,7 +297,7 @@ func (r *OriginalResolver) check(ctx context.Context, original *library.FileLoca
 	if err != nil {
 		return "", nil, err
 	}
-	if location.AccessExcluded(original.Path, info.IsDir()) {
+	if !r.exe.originalAccess(root)(original.Path, info.IsDir()) {
 		return "", nil, ErrAccessExcluded
 	}
 	return full, info, nil

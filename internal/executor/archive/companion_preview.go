@@ -2,7 +2,6 @@ package archive
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
 	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
@@ -31,9 +30,6 @@ func (a *jobArchiveRunner) createCompanionPreview(ctx context.Context) {
 					return nil
 				}
 				for _, item := range items {
-					if item.Data == nil || item.Data.Expected == nil {
-						return fmt.Errorf("Archive item %d lacks archived content", item.ID)
-					}
 					if err := yield(item.Data.SourcePath, item.Data.Expected); err != nil {
 						return err
 					}

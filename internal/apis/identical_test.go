@@ -46,11 +46,12 @@ func TestIdenticalKeepAggregatesCrossLocationPartialFailure(t *testing.T) {
 	cacheContentSignature(t, ctx, filename)
 	admittedPage(t, locations, created.Location.Id)
 	scope.Roots = append(scope.Roots, &entity.IdenticalRoot{LocationId: created.Location.Id})
-	groups, err := s.ListIdenticalGroups(ctx, &entity.ListIdenticalGroupsRequest{Scope: scope, Limit: 1, MemberLimit: 1})
+	groups, err := s.ListIdenticalGroups(ctx, &entity.ListIdenticalGroupsRequest{Scope: scope, Limit: 1})
 	require.NoError(t, err)
-	require.Len(t, groups.MemberPages, 1)
-	keep := groups.MemberPages[0].Members[0].Entry.Reference
 	group := groups.Groups[0]
+	members, err := s.ListIdenticalMembers(ctx, &entity.ListIdenticalMembersRequest{Scope: scope, GroupId: group.Id, Limit: 1, ResultId: groups.ResultId})
+	require.NoError(t, err)
+	keep := members.Members[0].Entry.Reference
 	stream := &identicalTestStream{}
 	stream.onSend = func(update *entity.FileOperationResult) {
 		if len(stream.updates) == 0 {

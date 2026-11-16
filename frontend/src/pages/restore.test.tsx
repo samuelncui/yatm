@@ -59,7 +59,7 @@ vi.mock("@/api", async (original) => ({
   },
   locationCli: { list, get },
 }));
-vi.mock("@/pages/file", () => ({
+vi.mock("@/components/use-file-browser", () => ({
   useFileBrowser: () => ({
     refresh: async () => {},
     scope: FileScope.SAVED,

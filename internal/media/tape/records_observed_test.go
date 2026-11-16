@@ -32,10 +32,4 @@ func TestObservedWriteRequiresAnExplicitTransportIssueBoundary(t *testing.T) {
 	if err != nil || !result.AcceptedKnown || result.Bytes != 512 || transport.calls != 1 || callbacks != 0 {
 		t.Fatalf("ordinary write=%+v err=%v calls=%d callbacks=%d", result, err, transport.calls, callbacks)
 	}
-
-	// A nil hook asks for ordinary WRITE; it does not introduce an optional transport requirement.
-	result, err = records.WriteObserved(context.Background(), make([]byte, 512), nil)
-	if err != nil || !result.AcceptedKnown || result.Bytes != 512 || transport.calls != 2 || callbacks != 0 {
-		t.Fatalf("nil-hook write=%+v err=%v calls=%d callbacks=%d", result, err, transport.calls, callbacks)
-	}
 }

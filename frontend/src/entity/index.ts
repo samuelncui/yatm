@@ -1,6 +1,5 @@
 
 export * from "./copy_status";
-export * from "./file.oneof_gen";
 export * from "./file";
 export * from "./file_operation";
 export * from "./files.client";
@@ -19,19 +18,15 @@ export * from "./library_service.client";
 export * from "./library_service";
 export * from "./location.client";
 export * from "./location";
-export * from "./media.oneof_gen";
 export * from "./media";
 export * from "./media_service.client";
-export * from "./media_service.oneof_gen";
 export * from "./media_service";
 export * from "./position";
 export * from "./preview.client";
 export * from "./preview";
 export * from "./progress";
 export * from "./settings.client";
-export * from "./settings.oneof_gen";
 export * from "./settings";
 export * from "./source";
-export * from "./storage.oneof_gen";
 export * from "./storage";
 export * from "./tag";

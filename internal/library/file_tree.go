@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -113,24 +112,17 @@ func (s *fileTree) Stat(ctx context.Context, ref string) (treeops.Node, error) {
 	}
 
 	// Derive display paths using bounded ancestry; the stable reference remains the File ID.
-	// The depth bound also ends a corrupted cyclic ancestry.
-	names := []string{row.Name}
+	parents, err := listFileRowParents(s.db.WithContext(ctx), row.ParentID)
+	if err != nil {
+		return treeops.Node{}, err
+	}
+	names := make([]string, 0, len(parents)+1)
 	inTrash := false
-	for parentID := row.ParentID; parentID != 0; {
-		if len(names) >= maxFilePathDepth {
-			return treeops.Node{}, fmt.Errorf("Library ancestry exceeds %d levels", maxFilePathDepth)
-		}
-		inTrash = inTrash || parentID == TrashFileID
-		var parent fileRow
-		if err := s.db.WithContext(ctx).First(&parent, parentID).Error; err != nil {
-			return treeops.Node{}, err
-		}
+	for _, parent := range parents {
 		names = append(names, parent.Name)
-		parentID = parent.ParentID
+		inTrash = inTrash || parent.ID == TrashFileID
 	}
-	for left, right := 0, len(names)-1; left < right; left, right = left+1, right-1 {
-		names[left], names[right] = names[right], names[left]
-	}
+	names = append(names, row.Name)
 	node := logicalNode(row.file(), strings.Join(names, "/"))
 	if inTrash {
 		node.Deletion = treeops.Retain
@@ -142,13 +134,8 @@ func (s *fileTree) Stat(ctx context.Context, ref string) (treeops.Node, error) {
 }
 
 func logicalNode(file *File, display string) treeops.Node {
-	guard, _ := json.Marshal(struct {
-		ID, ParentID int64
-		Name         string
-		Kind         entity.FileKind
-	}{file.ID, file.ParentID, file.Name, file.Kind})
 	return treeops.Node{Ref: strconv.FormatInt(file.ID, 10), Parent: strconv.FormatInt(file.ParentID, 10), Name: file.Name,
-		Path: display, Exists: true, Directory: file.Kind == entity.FileKind_FILE_KIND_DIRECTORY, Guard: guard, FileID: file.ID,
+		Path: display, Exists: true, Directory: file.Kind == entity.FileKind_FILE_KIND_DIRECTORY, FileID: file.ID,
 		Protected: file.ID <= 0, Deletion: treeops.Detach}
 }
 
@@ -198,7 +185,7 @@ func (s *fileTree) ResolveChild(ctx context.Context, parent treeops.Node, name s
 
 	// Missing ancestors defer lookup until the shared plan creates them.
 	childPath := displayChild(parent.Path, name)
-	absent := treeops.Node{Ref: "path:" + childPath, Parent: parent.Ref, ParentGuard: parent.Guard, Name: name, Path: childPath}
+	absent := treeops.Node{Ref: "path:" + childPath, Parent: parent.Ref, Name: name, Path: childPath}
 	if !parent.Exists {
 		return absent, nil
 	}
@@ -216,9 +203,7 @@ func (s *fileTree) ResolveChild(ctx context.Context, parent treeops.Node, name s
 	if err != nil {
 		return treeops.Node{}, err
 	}
-	result := logicalNode(row.file(), childPath)
-	result.ParentGuard = parent.Guard
-	return result, nil
+	return logicalNode(row.file(), childPath), nil
 }
 
 func (s *fileTree) ApplyPrimitive(ctx context.Context, p treeops.Primitive) (treeops.Receipt, error) {
@@ -302,7 +287,7 @@ func (s *fileTree) removeEmpty(ctx context.Context, source, target treeops.Node)
 		return treeops.Receipt{}, err
 	}
 	from, to := fromRow.file(), toRow.file()
-	if _, err := s.lib.mergeFileMetadata(ctx, s.db, from, to); err != nil {
+	if err := s.lib.mergeFileMetadata(ctx, s.db, from, to); err != nil {
 		return treeops.Receipt{}, err
 	}
 	if err := saveFileRow(s.db.WithContext(ctx), to); err != nil {

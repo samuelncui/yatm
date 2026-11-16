@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,11 +48,6 @@ func (r *runner) runScope(ctx context.Context, config *Config, scope *Scope, tar
 }
 
 func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, local *locationStage, session mediapkg.ReadSession) (returnErr error) {
-	// Bind every stage snapshot to this source, independently of cumulative business counters.
-	r.lock.Lock()
-	r.activeScope = scope
-	r.lock.Unlock()
-	defer func() { r.lock.Lock(); r.activeScope = nil; r.lock.Unlock() }()
 	// A prepared source supplies enumeration and physical cleanup, not a separate processing flow.
 	defer func() {
 		if session != nil {
@@ -115,9 +109,6 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 		err := session.Finalize(context.WithoutCancel(ctx), readErr)
 		session = nil
 		if err != nil {
-			return errors.Join(readErr, err)
-		}
-		if _, err := r.validateMedia(context.WithoutCancel(ctx), config); err != nil {
 			return errors.Join(readErr, err)
 		}
 	}
@@ -252,11 +243,7 @@ func (r *runner) resolveMediaSources(ctx context.Context, session mediapkg.ReadS
 			r.logResult("Scan content file failed", time.Time{}, err, logrus.Fields{
 				"path": row.Path, "location_id": row.LocationID,
 			})
-			row.Finding = entity.ScanFinding_SCAN_FINDING_UNREADABLE
-			if errors.Is(err, os.ErrNotExist) {
-				row.Finding = entity.ScanFinding_SCAN_FINDING_MISSING
-			}
-			row.Detail, row.CheckedAtNS, row.NeedsHash = err.Error(), time.Now().UnixNano(), false
+			recordReadFinding(row, err)
 		}
 		if err := r.saveEntries(ctx, rows); err != nil {
 			return err
@@ -284,11 +271,7 @@ func setHash(entry *Entry, hash []byte) {
 }
 
 func (r *runner) scopeQuery(ctx context.Context, scope *Scope) *gorm.DB {
-	query := r.db.WithContext(ctx).Where("location_id = ?", scope.LocationID)
-	if scope.LocationID > 0 && scope.ID > 0 {
-		query = query.Where("scope_path = ?", scope.Path)
-	}
-	return query
+	return r.db.WithContext(ctx).Where("location_id = ?", scope.LocationID)
 }
 
 func (r *runner) eachEntry(ctx context.Context, scope *Scope, use func(*Entry) error) error {
@@ -493,14 +476,8 @@ func (r *runner) classifyPreviews(ctx context.Context, config *Config, scope *Sc
 }
 
 func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Scope, settled *settledRows) (returnErr error) {
-	// Sample this scope's Preview workload from the already complete input manifest.
-	var total int64
-	if err := r.scopeQuery(ctx, scope).Model(&Entry{}).
-		Where("change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED).Count(&total).Error; err != nil {
-		return err
-	}
+	// Every exit clears the scope's timing, so a classification made meanwhile is never discarded.
 	r.lock.Lock()
-	r.previewTiming = previewTiming{total: total, started: time.Now()}
 	r.contentScope = scope
 	r.lock.Unlock()
 	started := time.Now()
@@ -545,17 +522,7 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 			r.lock.Unlock()
 		}()
 		// Nothing to do is not an outcome: a skipped entry stays empty and is reported as skipped.
-		if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES && row.Finding != entity.ScanFinding_SCAN_FINDING_MATCH {
-			skipped.Add(1)
-			return nil
-		}
-		if len(row.SHA256) != 32 {
-			// KNOWN_ONLY without a usable content identity skips the entry: there is no content to
-			// ask the store about, so it is counted as skipped rather than as a failure.
-			skipped.Add(1)
-			return nil
-		}
-		if !r.exe.Previews().Supports(row.SourcePath, config.PreviewJobSettings) {
+		if !r.previewEligible(config, row) {
 			skipped.Add(1)
 			return nil
 		}
@@ -600,19 +567,12 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 			started := time.Now()
 			fields := logrus.Fields{"path": row.Path, "location_id": row.LocationID}
 			r.logInfo("Scan Preview started", fields)
-			lastPhase := ""
-			lastReport := time.Time{}
+			// Progress events stay counters rather than log lines; only the decoder start is a work sample.
 			var actualGeneration atomic.Bool
 			progressCtx := previewpkg.WithProgress(ctx, func(event previewprotocol.Event) {
 				if event.Phase == "generate" {
 					actualGeneration.Store(true)
 				}
-				if event.Phase == lastPhase && time.Since(lastReport) < 5*time.Second {
-					return
-				}
-				lastPhase, lastReport = event.Phase, time.Now()
-				r.logInfo("Scan Preview progress", logrus.Fields{"path": row.Path, "phase": event.Phase,
-					"completed": event.Completed, "total": event.Total, "elapsed_ms": event.ElapsedMS})
 			})
 			_, err := r.exe.Previews().Generate(
 				progressCtx, row.SourcePath, row.SHA256, row.Size, row.MtimeNS, force, config.PreviewJobSettings,

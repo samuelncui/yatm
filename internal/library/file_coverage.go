@@ -37,7 +37,7 @@ func reconcileCoveredVersions(tx, originals *gorm.DB) error {
 			if err != nil {
 				return err
 			}
-			if _, err := recordVersion(tx, version); err != nil {
+			if _, err := recordRegularVersion(tx, version); err != nil {
 				return fmt.Errorf("retain covered original failed, file_id=%d, %w", original.FileID, err)
 			}
 			after = original.FileID

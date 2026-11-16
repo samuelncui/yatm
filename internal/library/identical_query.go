@@ -244,7 +244,7 @@ func (s *IdenticalSnapshot) Groups(cursor string, limit int64) (IdenticalGroupPa
 	if err != nil {
 		return page, err
 	}
-	_, after, _, err := decodePageCursor(cursor, byte(6), s.scope+"\x00"+s.Revision)
+	_, after, _, err := decodePageCursor(cursor, identicalGroupCursorKind, s.scope+"\x00"+s.Revision)
 	if err != nil {
 		return page, err
 	}
@@ -275,7 +275,7 @@ func (s *IdenticalSnapshot) Groups(cursor string, limit int64) (IdenticalGroupPa
 		page.Groups = append(page.Groups, IdenticalGroup{ID: id, Name: row.Name, Count: row.Count, Fingerprint: row.Fingerprint})
 	}
 	if more {
-		page.NextCursor = encodePageCursor(byte(6), s.scope+"\x00"+s.Revision, "", rows[len(rows)-1].Component)
+		page.NextCursor = encodePageCursor(identicalGroupCursorKind, s.scope+"\x00"+s.Revision, "", rows[len(rows)-1].Component)
 	}
 	return page, nil
 }
@@ -348,7 +348,7 @@ func (s *IdenticalSnapshot) Members(groupID, cursor string, limit int64) (Identi
 	if err != nil {
 		return page, err
 	}
-	_, after, _, err := decodePageCursor(cursor, byte(7), s.scope+"\x00"+s.Revision+"\x00"+groupID)
+	_, after, _, err := decodePageCursor(cursor, identicalMemberCursorKind, s.scope+"\x00"+s.Revision+"\x00"+groupID)
 	if err != nil {
 		return page, err
 	}
@@ -367,7 +367,7 @@ func (s *IdenticalSnapshot) Members(groupID, cursor string, limit int64) (Identi
 		return page, err
 	}
 	if more {
-		page.NextCursor = encodePageCursor(byte(7), s.scope+"\x00"+s.Revision+"\x00"+groupID, "", nodes[len(nodes)-1].FileID)
+		page.NextCursor = encodePageCursor(identicalMemberCursorKind, s.scope+"\x00"+s.Revision+"\x00"+groupID, "", nodes[len(nodes)-1].FileID)
 	}
 	return page, nil
 }

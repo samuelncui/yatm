@@ -2,7 +2,7 @@ import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolki
 import { FileSelection, FileVersion } from "@/entity";
 import type { RestorePolicy } from "@/components/restore-version-policy";
 import { parseUnixNs } from "@/tools/time";
-import { readStored, writeStored, type StorageCodec } from "./storage";
+import { readStored, type StorageCodec } from "./storage";
 import type { AppStore } from "./store";
 
 export type SelectionKind = "archive" | "restore";
@@ -64,8 +64,6 @@ export const selectionCodec: StorageCodec<SelectionEntry[]> = {
 };
 
 export const loadSelectionEntries = (kind: SelectionKind) => readStored("session", selectionStorageKey(kind), selectionCodec) ?? [];
-export const saveSelectionEntries = (kind: SelectionKind, entries: SelectionEntry[]) =>
-  writeStored("session", selectionStorageKey(kind), entries, selectionCodec);
 export const restorePolicyKey = `${selectionStorageKey("restore")}:version-policy`;
 export const restorePolicyCodec: StorageCodec<RestorePolicy> = {
   encode: JSON.stringify,

@@ -4,7 +4,6 @@ import { Link } from "react-router";
 import { styled } from "@mui/material/styles";
 import ListItem, { type ListItemProps } from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
-import ListItemButton from "@mui/material/ListItemButton";
 import Skeleton from "@mui/material/Skeleton";
 import Typography from "@mui/material/Typography";
 
@@ -30,7 +29,6 @@ export const JobResultText = ({ primary, secondary }: { primary: string; seconda
     }}
   />
 );
-const FileListItemButton = styled(ListItemButton)({ padding: 0 });
 
 export interface FileState {
   path: string;
@@ -41,30 +39,19 @@ export interface FileState {
   resultFileID?: bigint;
 }
 
-export const FileListItem = memo(({ src, onClick, className }: { src?: FileState; onClick?: () => void; className?: string }) => {
-  if (!src) {
-    return null;
-  }
-
-  const text = (
+export const FileRow = ({ src }: { src: FileState }) => (
+  <JobResultRow component="div" disablePadding>
     <JobResultText
       primary={src.path}
       secondary={`${formatFilesize(src.size)} · ${src.resultLabel || CopyStatus[src.status]}${src.resultMessage ? ` · ${src.resultMessage}` : ""}`}
     />
-  );
-  return (
-    <JobResultRow component="div" className={className} disablePadding>
-      {onClick ? <FileListItemButton onClick={onClick}>{text}</FileListItemButton> : text}
-      {src.resultFileID ? (
-        <Typography component={Link} to={`/file?file=${src.resultFileID}`} variant="body2" noWrap sx={{ ml: 2, flexShrink: 0 }}>
-          View file
-        </Typography>
-      ) : null}
-    </JobResultRow>
-  );
-});
-
-export const FileRow = FileListItem;
+    {src.resultFileID ? (
+      <Typography component={Link} to={`/file?file=${src.resultFileID}`} variant="body2" noWrap sx={{ ml: 2, flexShrink: 0 }}>
+        View file
+      </Typography>
+    ) : null}
+  </JobResultRow>
+);
 
 export const FileRowPlaceholder = memo(() => (
   <JobResultRow component="div" disablePadding aria-hidden>

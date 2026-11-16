@@ -18,11 +18,7 @@ export const errorMessage = (error: unknown, fallback: string): string => {
 };
 
 export const runUIAction = (action: () => Promise<unknown>, fallback: string): void => {
-  try {
-    void action().catch((error: unknown) => toast.error(errorMessage(error, fallback)));
-  } catch (error) {
-    toast.error(errorMessage(error, fallback));
-  }
+  void action().catch((error: unknown) => toast.error(errorMessage(error, fallback)));
 };
 
 export const formatFilesize = (size: number | bigint): string =>

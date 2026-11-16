@@ -174,7 +174,7 @@ func (s *IdenticalSnapshot) stageComponentFile(tx *gorm.DB, scope IdenticalScope
 			return nil
 		}
 		for parent, depth := row.ParentID, 0; parent != 0; depth++ {
-			if depth > 1000 {
+			if depth > maxFilePathDepth {
 				return fmt.Errorf("identical File ancestry is too deep")
 			}
 			if parent == TrashFileID {
@@ -200,7 +200,7 @@ func (s *IdenticalSnapshot) stageComponentFile(tx *gorm.DB, scope IdenticalScope
 			Limit(1).Find(&original).Error; err != nil {
 			return fmt.Errorf("read identical Location original failed, %w", err)
 		}
-		if original.FileID == 0 || !identicalInRoots(original, scope.Roots) {
+		if original.FileID == 0 || IsLocationTrashPath(original.Path) {
 			return nil
 		}
 		node = identicalNode{FileID: id, Component: id, Name: filepath.Base(original.Path),

@@ -3,9 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ChonkyActions, FileBrowser, FileList, type FileBrowserHandle } from "@samuelncui/chonky";
-import { convertFiles } from "@/api";
 import { archiveColors } from "@/components/content-status";
-import { File } from "@/entity";
 import { chonkyI18n } from "@/tools";
 
 // Keep the actual shared row/selection implementation; jsdom has no virtual viewport.
@@ -51,7 +49,7 @@ describe("Shared file row status", () => {
   });
   it("renders a trailing, focusable tooltip without replacing filename, properties or selection", async () => {
     const ref = createRef<FileBrowserHandle>();
-    const [file] = convertFiles([File.create({ id: 4n, name: "notes.txt", sizeBytes: 12n })]);
+    const file = { id: "4", name: "notes.txt", isDir: false, size: 12 };
     const files = [{ ...file, status: { color: archiveColors.success, label: "Local file present · Current content archived" } }];
     render(
       <FileBrowser ref={ref} files={files} i18n={chonkyI18n} disableDragAndDrop defaultFileViewActionId={ChonkyActions.EnableListView.id}>

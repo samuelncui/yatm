@@ -56,7 +56,7 @@ func TestIdenticalIndexedRowsAndPositions(t *testing.T) {
 	}{{true, 10, []int64{0, files[0].ID, files[1].ID, files[2].ID, 0, files[3].ID, files[4].ID, 0, files[5].ID, files[6].ID}},
 		{false, 5, []int64{0, files[0].ID, files[2].ID, 0, files[5].ID}}} {
 		for offset := int64(0); offset < projection.total+2; offset++ {
-			rows, total, err := snapshot.Rows(offset, 1, projection.hidden)
+			rows, total, err := snapshot.SortedRows(offset, 1, projection.hidden, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 			require.NoError(t, err)
 			require.Equal(t, projection.total, total)
 			if offset >= projection.total {
@@ -69,7 +69,7 @@ func TestIdenticalIndexedRowsAndPositions(t *testing.T) {
 			require.NotEmpty(t, rows[0].Group.Fingerprint)
 		}
 	}
-	positions, err := snapshot.LookupPositions([]int64{files[2].ID, files[1].ID, files[3].ID, files[5].ID, 999999})
+	positions, err := snapshot.LookupSortedPositions([]int64{files[2].ID, files[1].ID, files[3].ID, files[5].ID, 999999}, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Len(t, positions, 4)
 	require.Equal(t, int64(3), positions[0].AllPosition)
@@ -82,7 +82,7 @@ func TestIdenticalIndexedRowsAndPositions(t *testing.T) {
 		ids[i] = int64(100000 + i)
 	}
 	ids[999] = files[5].ID
-	positions, err = snapshot.LookupPositions(ids)
+	positions, err = snapshot.LookupSortedPositions(ids, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Len(t, positions, 1)
 	require.Equal(t, files[5].ID, positions[0].FileID)
@@ -109,7 +109,7 @@ func TestIdenticalRowsOrderByGroupTitleThenComponent(t *testing.T) {
 	require.NoError(t, err)
 	defer snapshot.Close()
 	require.Equal(t, int64(9), snapshot.AllRows)
-	rows, _, err := snapshot.Rows(0, 9, true)
+	rows, _, err := snapshot.SortedRows(0, 9, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Equal(t, []string{strconv.FormatInt(files[2].ID, 10), strconv.FormatInt(files[4].ID, 10), strconv.FormatInt(files[0].ID, 10)},
 		[]string{rows[0].Group.ID, rows[3].Group.ID, rows[6].Group.ID})
@@ -126,7 +126,7 @@ func TestIdenticalRowsOrderByGroupTitleThenComponent(t *testing.T) {
 	members, err := snapshot.MembersByIDs([]int64{nested[0].ID})
 	require.NoError(t, err)
 	require.Equal(t, "bucket/Alpha", members[0].Path)
-	positions, err := snapshot.LookupPositions([]int64{files[0].ID, nested[0].ID})
+	positions, err := snapshot.LookupSortedPositions([]int64{files[0].ID, nested[0].ID}, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Equal(t, int64(7), positions[0].AllPosition)
 	require.Equal(t, int64(6), positions[0].AllHeaderPosition)
@@ -313,9 +313,9 @@ func TestIdenticalVisibleRowsUseVisibleGroupTitleAndOrder(t *testing.T) {
 	snapshot, err := lib.OpenIdenticalSnapshot(context.Background(), IdenticalScope{Source: IdenticalLibrary})
 	require.NoError(t, err)
 	defer snapshot.Close()
-	all, _, err := snapshot.Rows(0, 6, true)
+	all, _, err := snapshot.SortedRows(0, 6, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
-	visible, _, err := snapshot.Rows(0, 5, false)
+	visible, _, err := snapshot.SortedRows(0, 5, false, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Equal(t, []string{".a-hidden", "Beta"}, []string{all[0].Group.Name, all[3].Group.Name})
 	require.Equal(t, []string{"Beta", "Zulu"}, []string{visible[0].Group.Name, visible[3].Group.Name})
@@ -345,7 +345,7 @@ func TestIdenticalRowsTitleOrderingCrossesMetadataBatch(t *testing.T) {
 	defer snapshot.Close()
 	require.Equal(t, int64(70), snapshot.GroupCount)
 	for _, group := range []int64{0, 1, 63, 64, 69} {
-		rows, _, err := snapshot.Rows(group*3, 1, true)
+		rows, _, err := snapshot.SortedRows(group*3, 1, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		require.Equal(t, fmt.Sprintf("title-%03d-a", group), rows[0].Group.Name)
@@ -373,7 +373,7 @@ func TestIdenticalRetainedPagesDoNotCollectAgain(t *testing.T) {
 	afterFind := collects
 	require.Positive(t, afterFind)
 	for offset := int64(0); offset < snapshot.AllRows; offset++ {
-		_, _, err := snapshot.Rows(offset, 1, true)
+		_, _, err := snapshot.SortedRows(offset, 1, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 		require.NoError(t, err)
 	}
 	groups, err := snapshot.Groups("", 10)

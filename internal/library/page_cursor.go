@@ -11,11 +11,10 @@ import (
 
 const (
 	pageCursorVersion         = byte(1)
-	searchCursorKind          = byte(1)
 	tagCursorKind             = byte(2)
-	duplicateGroupCursorKind  = byte(3)
-	duplicateMemberCursorKind = byte(4)
 	fileListCursorKind        = byte(5)
+	identicalGroupCursorKind  = byte(6)
+	identicalMemberCursorKind = byte(7)
 	pageCursorPrefix          = 2 + 16 + 8
 	maxPageCursorSize         = 4096
 )

@@ -57,7 +57,7 @@ func TestJobResultCursorParsing(t *testing.T) {
 		require.ErrorContains(t, err, "is not a valid row key", cursor)
 	}
 
-	first, second, present, err := JobResultCursorPair(JobResultPairValue(3, 9))
+	first, second, present, err := JobResultCursorPair("3:9")
 	require.NoError(t, err)
 	require.True(t, present)
 	require.EqualValues(t, 3, first)

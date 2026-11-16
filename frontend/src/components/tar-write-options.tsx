@@ -20,10 +20,8 @@ export const TarWriteOptionsFields = ({
       fullWidth
       label="Record mode"
       value={value.recordMode ?? ""}
-      error={!!recordModeError(value.recordMode)}
       helperText={
-        recordModeError(value.recordMode) ||
-        (value.recordMode === undefined
+        value.recordMode === undefined
           ? effective?.recordMode === TapeRecordMode.FIXED
             ? "Inherited: Fixed."
             : effective?.recordMode === TapeRecordMode.VARIABLE
@@ -31,7 +29,7 @@ export const TarWriteOptionsFields = ({
               : "Defaults to Variable unless set for the device or FORMAT."
           : effective
             ? "Choose Fixed or Variable, or inherit the device default."
-            : "Leave unset to use Variable.")
+            : "Leave unset to use Variable."
       }
       disabled={disabled}
       onChange={(event) => onChange({ ...value, recordMode: event.target.value === "" ? undefined : Number(event.target.value) })}
@@ -83,12 +81,9 @@ export const TarWriteOptionsFields = ({
   </>
 );
 
-const recordModeError = (mode?: TapeRecordMode): string =>
-  mode !== undefined && mode !== TapeRecordMode.FIXED && mode !== TapeRecordMode.VARIABLE ? "Choose Fixed or Variable record mode." : "";
-
 const recordSizeError = (size?: number): string =>
   size !== undefined && (!Number.isInteger(size) || size < 512 || size > 0xffffffff || size % 512 !== 0)
     ? "Record size must be a multiple of 512 bytes between 512 and 4294966784."
     : "";
 
-export const validateTarWriteOptions = (value: TarWriteOptions): string => recordModeError(value.recordMode) || recordSizeError(value.recordBytes);
+export const validateTarWriteOptions = (value: TarWriteOptions): string => recordSizeError(value.recordBytes);

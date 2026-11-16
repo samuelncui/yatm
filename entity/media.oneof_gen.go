@@ -19,25 +19,6 @@ func (x *ArchiveMediaTarget) Unpack() OneofArchiveMediaTarget {
 	}
 }
 
-func PackArchiveMediaTarget(param OneofArchiveMediaTarget) *ArchiveMediaTarget {
-	switch param := param.(type) {
-	case *ArchiveTapeTarget:
-		return &ArchiveMediaTarget{
-			Backend: &ArchiveMediaTarget_Tape{
-				Tape: param,
-			},
-		}
-	case *ArchiveVolumeTarget:
-		return &ArchiveMediaTarget{
-			Backend: &ArchiveMediaTarget_Volume{
-				Volume: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *ArchiveTapeTarget) Pack() *ArchiveMediaTarget {
 	return &ArchiveMediaTarget{
 		Backend: &ArchiveMediaTarget_Tape{
@@ -81,25 +62,6 @@ func (x *MediaProfile) Unpack() OneofMediaProfile {
 	}
 }
 
-func PackMediaProfile(param OneofMediaProfile) *MediaProfile {
-	switch param := param.(type) {
-	case *TapeMediaProfile:
-		return &MediaProfile{
-			Kind: &MediaProfile_Tape{
-				Tape: param,
-			},
-		}
-	case *VolumeMediaProfile:
-		return &MediaProfile{
-			Kind: &MediaProfile_Volume{
-				Volume: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *TapeMediaProfile) Pack() *MediaProfile {
 	return &MediaProfile{
 		Kind: &MediaProfile_Tape{
@@ -138,25 +100,6 @@ func (x *ReadMediaTarget) Unpack() OneofReadMediaTarget {
 		return param.Tape
 	case *ReadMediaTarget_Volume:
 		return param.Volume
-	default:
-		return nil
-	}
-}
-
-func PackReadMediaTarget(param OneofReadMediaTarget) *ReadMediaTarget {
-	switch param := param.(type) {
-	case *ReadTapeTarget:
-		return &ReadMediaTarget{
-			Backend: &ReadMediaTarget_Tape{
-				Tape: param,
-			},
-		}
-	case *ReadVolumeTarget:
-		return &ReadMediaTarget{
-			Backend: &ReadMediaTarget_Volume{
-				Volume: param,
-			},
-		}
 	default:
 		return nil
 	}

@@ -33,9 +33,6 @@ func (l *Library) WalkRestoreSelections(ctx context.Context, selections []*entit
 	if len(selections)+len(ids) == 0 || len(selections)+len(ids) > 1000 {
 		return fmt.Errorf("Restore requires between 1 and 1000 selection roots or versions")
 	}
-	if err := ValidateRestoreVersionSelection(policy, false); err != nil {
-		return err
-	}
 	overridden := make(map[int64]struct{}, len(ids))
 	handled := make(map[int64]struct{}, len(ids))
 	for _, id := range ids {

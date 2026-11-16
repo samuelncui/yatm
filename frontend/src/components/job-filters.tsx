@@ -4,7 +4,7 @@ import { Button, MenuItem, TextField } from "@mui/material";
 import { useSearchParams } from "react-router";
 import { mediaCli } from "@/api";
 import { JobKind, type JobFilter, type Media } from "@/entity";
-import { jobLabel } from "@/components/job-card";
+import { jobLabel } from "@/components/job-progress";
 import { errorMessage } from "@/tools";
 import { useLocationChoices } from "./use-location-choices";
 

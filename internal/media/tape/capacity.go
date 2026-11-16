@@ -18,17 +18,15 @@ type CapacityQuality uint8
 const (
 	CapacityUnknown CapacityQuality = iota
 	CapacityEstimate
-	CapacityLowerBound
 )
 
 // CapacitySample describes recorded-EOD-to-EW native bytes, never head position or nominal capacity.
-// Missing remaining bytes or allowances are unknown; they cannot establish a bounded fit guarantee.
+// Missing remaining bytes are unknown.
 type CapacitySample struct {
-	Partition                    uint32
-	IssuedAt, CompletedAt        time.Time
-	RemainingBytes               *uint64
-	Quality                      CapacityQuality
-	ErrorBytes, UnreflectedBytes *uint64
+	Partition             uint32
+	IssuedAt, CompletedAt time.Time
+	RemainingBytes        *uint64
+	Quality               CapacityQuality
 }
 
 // Capacity owns an attempt's optional query. Initial is immutable; the writer owns its cache.
@@ -82,25 +80,10 @@ func checkCommandResponse(command Command, response Response) error {
 
 func onlyCapacityQueryError(err error) bool {
 	// Every joined cause must be query-local; a miss cannot hide a reset or loss.
-	if _, ok := err.(*capacityQueryError); ok {
-		return true
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return onlyCapacityQueryError(wrapped.Unwrap())
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
-		}
-		for _, cause := range causes {
-			if !onlyCapacityQueryError(cause) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+	return everyCause(err, func(err error) (bool, bool) {
+		_, ok := err.(*capacityQueryError)
+		return ok, ok
+	})
 }
 
 func capacitySubmissionRejected(err error) bool {
@@ -152,11 +135,12 @@ func preparationCapacity(ctx context.Context, transport Transport, partition uin
 }
 
 func capacityResponse(command Command, response Response, partition uint32, started, completed time.Time) (*CapacitySample, bool, error) {
-	// Host/sense/residual evidence remains authoritative before interpreting an optional value.
+	// Host/sense evidence remains authoritative before interpreting an optional value.
+	// The serialized transport already rejected a residual outside the transfer.
 	if err := checkCommandResponse(command, response); err != nil {
 		return nil, true, err
 	}
-	if response.Residual < 0 || int(response.Residual) > len(command.Data) || started.IsZero() {
+	if started.IsZero() {
 		return nil, true, &UncertainError{Cause: ErrMalformed}
 	}
 	remaining, complete, err := decodeCapacity(command.Data[:len(command.Data)-int(response.Residual)])

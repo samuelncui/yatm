@@ -109,7 +109,8 @@ func loadGenerators(configs []GeneratorConfig) (map[string]configuredGenerator, 
 	return routes, nil
 }
 
-func resolveRoot(root, work string) string {
+// ResolveRoot places an empty or relative Preview root under the Work directory.
+func ResolveRoot(root, work string) string {
 	if strings.TrimSpace(root) == "" {
 		return filepath.Join(work, "previews")
 	}

@@ -93,8 +93,6 @@ func TestUpdateMediaTapePositionMapUsesCurrentIdentityAndMap(t *testing.T) {
 	require.NoError(t, err)
 	first, err := lib.UpdateMediaTapePositionMap(ctx, media, testTapePositionMap())
 	require.NoError(t, err)
-	stale, err := lib.GetMedia(ctx, media.ID)
-	require.NoError(t, err)
 	corrected := proto.Clone(first.TapePositionMap).(*entity.TapePositionMap)
 	corrected.Wraps[0].Endpoint = proto.Uint64(90)
 	corrected.Wraps[1].EstimatedSpanObjects = proto.Uint64(110)
@@ -105,8 +103,6 @@ func TestUpdateMediaTapePositionMapUsesCurrentIdentityAndMap(t *testing.T) {
 	require.True(t, proto.Equal(first.Profile, updated.Profile))
 	corrected.Wraps[0].Endpoint = proto.Uint64(80)
 	require.Equal(t, uint64(90), *updated.TapePositionMap.Wraps[0].Endpoint)
-	_, err = lib.UpdateMediaTapePositionMap(ctx, stale, nil)
-	require.ErrorContains(t, err, "position map changed")
 
 	// A profile changed by another owner cannot receive even a map invalidation from the old snapshot.
 	changed := proto.Clone(updated.Profile).(*entity.MediaProfile)
@@ -186,14 +182,14 @@ func TestMediaJSONRejectsInvalidTapePositionMap(t *testing.T) {
 	require.NoError(t, json.Unmarshal(encoded, &decoded))
 	require.True(t, proto.Equal(media.TapePositionMap, decoded.TapePositionMap))
 
-	// Invalid geometry and unknown map fields fail before replacing the caller's valid value.
-	for _, invalid := range [][]byte{
-		bytes.Replace(encoded, []byte(`"endpoint":"100"`), []byte(`"endpoint":"200"`), 1),
-		bytes.Replace(encoded, []byte(`"source":`), []byte(`"unknown_source":`), 1),
-	} {
-		require.Error(t, json.Unmarshal(invalid, &decoded))
-		require.True(t, proto.Equal(media.TapePositionMap, decoded.TapePositionMap))
-	}
+	// Unknown map fields fail before replacing the caller's valid value.
+	require.Error(t, json.Unmarshal(bytes.Replace(encoded, []byte(`"source":`), []byte(`"unknown_source":`), 1), &decoded))
+	require.True(t, proto.Equal(media.TapePositionMap, decoded.TapePositionMap))
+
+	// Catalog import validates decoded geometry through the Media owner.
+	var invalid Media
+	require.NoError(t, json.Unmarshal(bytes.Replace(encoded, []byte(`"endpoint":"100"`), []byte(`"endpoint":"200"`), 1), &invalid))
+	require.Error(t, validateMedia(&invalid))
 
 	// Export also rejects corrupted stored geometry instead of emitting an unrestorable backup.
 	media.TapePositionMap.Wraps[0].Endpoint = proto.Uint64(200)

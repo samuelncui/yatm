@@ -42,13 +42,13 @@ import { allowsFileOperation, filesEntryData } from "@/components/files-browser"
 import { useCommittedSettings } from "@/components/settings-editor";
 import { fileOperationReference } from "@/components/file-operations";
 import { revealLocationFileURL } from "@/components/original-location-link";
-import { useIdenticalSparse, type IdenticalResult, type ProjectionIntervals } from "@/components/identical-sparse";
+import { rowFileID, useIdenticalSparse, type IdenticalResult, type ProjectionIntervals } from "@/components/identical-sparse";
 import { IdenticalScopePicker } from "@/components/identical-scope";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { scanSelectionEntry } from "@/components/scan-selection";
 import { FileMetadataDialog } from "@/components/file-metadata-dialog";
 import { useActionDialog } from "@/components/action-dialog";
-import { FileInspector } from "./file-detail";
+import { FileInspector } from "@/components/file-detail";
 import { ArchiveLibraryAction, EditFileMetadataAction, ScanFilesAction, ViewFileDetailsAction, LocateInOtherPaneAction } from "@/actions";
 import { associatedLibraryFileID, selectionForFile } from "@/components/location-files";
 import { contentHex } from "@/components/content-status";
@@ -58,7 +58,11 @@ const keepID = "identical-keep";
 const mergeID = "identical-merge";
 const sortSizeID = ChonkyActions.SortFilesBySize.id;
 const removeID = ChonkyActions.DeleteFiles.id;
-type IdenticalSort = { key: IdenticalSortKey; descending: boolean };
+// The tool sorts groups by size only; the preference keeps its direction.
+const sizeOrder = (descending: boolean) => ({
+  sortKey: IdenticalSortKey.SIZE,
+  sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+});
 const initialPreferences: FileListPreferences = { sort: "size", descending: true, foldersFirst: false };
 const staleGroup = (error: unknown) => error instanceof RpcError && error.code === "ABORTED";
 
@@ -91,7 +95,7 @@ export const IdenticalFiles = () => {
   const [result, setResult] = useState<IdenticalResult>();
   const [includeHidden, setIncludeHidden] = useState(false);
   const [preferences, setPreferences] = useFileListPreferences("identical", initialPreferences);
-  const sort = useMemo<IdenticalSort>(() => ({ key: IdenticalSortKey.SIZE, descending: preferences.descending }), [preferences.descending]);
+  const descending = preferences.descending;
   const [removed, setRemoved] = useState<Map<string, IdenticalPosition>>(new Map());
   const [removedGroups, setRemovedGroups] = useState<Set<string>>(new Set());
   const [removedGroupIntervals, setRemovedGroupIntervals] = useState<Map<string, ProjectionIntervals>>(new Map());
@@ -117,7 +121,7 @@ export const IdenticalFiles = () => {
   const changedGroupRef = useRef(new Set<string>());
   const unavailableRef = useRef(false);
   const hiddenRequest = useRef(0);
-  const sortRef = useRef(sort);
+  const descendingRef = useRef(descending);
   const sorting = useRef(false);
   const resultSource = useRef<IdenticalSource | undefined>(undefined);
   const mergeActive = useRef(0);
@@ -164,8 +168,8 @@ export const IdenticalFiles = () => {
   const sparse = useIdenticalSparse(
     result,
     includeHidden,
-    sort.key,
-    sort.descending,
+    IdenticalSortKey.SIZE,
+    descending,
     removed,
     removedGroups,
     removedGroupIntervals,
@@ -184,13 +188,13 @@ export const IdenticalFiles = () => {
     if (settingsError) toast.error(settingsError);
   }, [settingsError]);
   // A superseded result closes at once; an operation still running on it updates only its own rows.
-  const closeResult = useCallback((old?: IdenticalResult) => {
-    if (old) void filesCli.closeIdenticalResult({ resultId: old.id }).response.catch(() => undefined);
+  const closeResult = useCallback((resultId?: string) => {
+    if (resultId) void filesCli.closeIdenticalResult({ resultId }).response.catch(() => undefined);
   }, []);
   const clear = useCallback(() => {
     generation.current++;
     hiddenRequest.current++;
-    closeResult(resultRef.current);
+    closeResult(resultRef.current?.id);
     resultRef.current = undefined;
     resultSource.current = undefined;
     setResult(undefined);
@@ -259,8 +263,7 @@ export const IdenticalFiles = () => {
         const reply = await lookupPositions({
           resultId: current.id,
           fileIds: batch,
-          sortKey: sortRef.current.key,
-          sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+          ...sizeOrder(descendingRef.current),
         });
         const found = new Set(reply.positions.map((position) => String(position.fileId)));
         if (batch.some((id) => !found.has(String(id)))) throw new Error("Could not locate updated files in this result. Find again.");
@@ -278,7 +281,7 @@ export const IdenticalFiles = () => {
     try {
       const reply = await filesCli.findIdentical({ scope }).response;
       if (request !== generation.current) {
-        closeResult({ id: reply.resultId, allCount: 0, visibleCount: 0 });
+        closeResult(reply.resultId);
         return;
       }
       const found = { id: reply.resultId, allCount: Number(reply.allRowCount), visibleCount: Number(reply.visibleRowCount) };
@@ -299,7 +302,7 @@ export const IdenticalFiles = () => {
       const snapshotId = resultRef.current?.id;
       setSwitchingHidden(true);
       try {
-        const projection = await sparse.prepareProjection(next, sort.key, sort.descending);
+        const projection = await sparse.prepareProjection(next, IdenticalSortKey.SIZE, descending);
         const { pins } = projection;
         if (request !== hiddenRequest.current || resultRef.current?.id !== snapshotId) return;
         if (snapshotId) sparse.useProjection(projection);
@@ -312,7 +315,7 @@ export const IdenticalFiles = () => {
         if (request === hiddenRequest.current) setSwitchingHidden(false);
       }
     },
-    [sort, sparse, switchingHidden],
+    [descending, sparse, switchingHidden],
   );
 
   const switchSort = useCallback(async () => {
@@ -322,7 +325,7 @@ export const IdenticalFiles = () => {
       toast.error("Wait for the current operation to finish before sorting.");
       return;
     }
-    const next: IdenticalSort = { key: IdenticalSortKey.SIZE, descending: !sort.descending };
+    const next = !descending;
     const request = ++hiddenRequest.current;
     sorting.current = true;
     setSwitchingSort(true);
@@ -334,21 +337,20 @@ export const IdenticalFiles = () => {
         const reply = await lookupPositions({
           resultId: snapshot.id,
           fileIds: batch,
-          sortKey: next.key,
-          sortOrder: next.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+          ...sizeOrder(next),
         });
         for (const position of reply.positions) positions.set(String(position.fileId), position);
       }
       if (positions.size !== ids.length) throw new Error("Could not locate updated files in this result. Find again.");
-      const projection = await sparse.prepareProjection(includeHidden, next.key, next.descending, positions);
+      const projection = await sparse.prepareProjection(includeHidden, IdenticalSortKey.SIZE, next, positions);
       const { pins } = projection;
       if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
       sparse.useProjection(projection);
       setSelected((current) => (current && !pins.has(current.id) ? [...pins.values()].at(-1)?.file : current));
       setRemoved(positions);
       if (projection.removedGroups) setRemovedGroupIntervals(projection.removedGroups);
-      sortRef.current = next;
-      setPreferences({ ...initialPreferences, descending: next.descending });
+      descendingRef.current = next;
+      setPreferences({ ...initialPreferences, descending: next });
     } catch (failure) {
       if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
       toast.error(errorMessage(failure, "Could not sort identical files"));
@@ -358,7 +360,7 @@ export const IdenticalFiles = () => {
         setSwitchingSort(false);
       }
     }
-  }, [includeHidden, lookupPositions, removed, sort, sparse, switchingHidden, setPreferences]);
+  }, [includeHidden, lookupPositions, removed, descending, sparse, switchingHidden, setPreferences]);
 
   const stream = useCallback(
     async (
@@ -405,8 +407,7 @@ export const IdenticalFiles = () => {
         inFlightFiles.current.add(file.id);
         const row = fileRows.get(file.id);
         const groupId = row?.group?.id ?? "";
-        const entry = row?.member?.entry;
-        const selectedId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
+        const selectedId = rowFileID(row);
         groupBusy(snapshot, groupId, 1);
         if (resultRef.current?.id === snapshot.id) {
           if (selectedId !== undefined)
@@ -461,12 +462,6 @@ export const IdenticalFiles = () => {
             }
             if (positionError && moved && resultRef.current?.id === snapshot.id) invalidate();
             if (resultRef.current?.id === snapshot.id) {
-              if (selectedId !== undefined)
-                setKeepStatus((current) => {
-                  const next = new Map(current);
-                  next.delete(String(selectedId));
-                  return next;
-                });
               const revision = ++statusRevision.current;
               setItemStatus((current) =>
                 new Map(current).set(file.id, {
@@ -586,7 +581,7 @@ export const IdenticalFiles = () => {
               ...ChonkyActions.SortFilesBySize,
               // Sparse rows are ordered by the server, including unloaded members.
               sortKeySelector: undefined,
-              button: { ...ChonkyActions.SortFilesBySize.button, icon: sort.descending ? ChonkyIconName.sortDesc : ChonkyIconName.sortAsc },
+              button: { ...ChonkyActions.SortFilesBySize.button, icon: descending ? ChonkyIconName.sortDesc : ChonkyIconName.sortAsc },
               customVisibility: () => (sortAvailable ? CustomVisibilityState.Active : CustomVisibilityState.Disabled),
             }),
           ]
@@ -618,7 +613,7 @@ export const IdenticalFiles = () => {
       { ...ArchiveLibraryAction, fileFilter: (file: FileData | null) => allowsFileOperation(file, FileOperationKind.ARCHIVE) },
       { ...ScanFilesAction, fileFilter: (file: FileData | null) => allowsFileOperation(file, FileOperationKind.SCAN) },
     ];
-  }, [busyGroupIds, changedGroups, itemStatus, mergeBusy, result, sort, source, sparse.unavailable, switchingHidden, switchingSort]);
+  }, [busyGroupIds, changedGroups, itemStatus, mergeBusy, result, descending, source, sparse.unavailable, switchingHidden, switchingSort]);
 
   const onFileAction: GenericFileActionHandler<FileAction> = (data) => {
     const selectedFiles: FileData[] = data.state.selectedFilesForAction;
@@ -679,13 +674,8 @@ export const IdenticalFiles = () => {
     const row = groupId ? sparse.groupRows.get(groupId) : undefined;
     const group = row?.group;
     if (!group || !selectedFiles.length) return;
-    if (
-      data.id === mergeID &&
-      source === IdenticalSource.LIBRARY &&
-      !changedGroups.has(group.id) &&
-      !busyGroupRef.current.has(scopeKey + ":" + group.id) &&
-      selectedFiles.length === 1
-    ) {
+    // Action visibility and the operations themselves check group state; these guards only pick the target.
+    if (data.id === mergeID && source === IdenticalSource.LIBRARY && selectedFiles.length === 1) {
       const target = selectedFiles[0];
       const reference = fileOperationReference(target).target;
       if (reference.oneofKind !== "fileId" || data.state.selectedFiles.length !== 1) return;
@@ -711,8 +701,7 @@ export const IdenticalFiles = () => {
             const positions = await lookupPositions({
               resultId: snapshot.id,
               fileIds: [reference.fileId],
-              sortKey: sortRef.current.key,
-              sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+              ...sizeOrder(descendingRef.current),
             });
             const targetPosition = positions.positions[0];
             if (!targetPosition) throw new Error("Could not locate this group. Find again.");
@@ -724,8 +713,7 @@ export const IdenticalFiles = () => {
                 offset: otherHeader,
                 limit: 1,
                 includeHidden: !includeHidden,
-                sortKey: sortRef.current.key,
-                sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
+                ...sizeOrder(descendingRef.current),
               });
               const count = other.rows[0]?.displayMemberCount;
               if (count === undefined) throw new Error("Could not read the other hidden-file view. Find again.");
@@ -761,14 +749,7 @@ export const IdenticalFiles = () => {
       return;
     }
     if (source !== IdenticalSource.LOCATIONS || ![keepID, removeID].includes(data.id)) return;
-    if (
-      data.id === keepID &&
-      (changedGroups.has(group.id) ||
-        busyGroupRef.current.has(scopeKey + ":" + group.id) ||
-        selectedFiles.length !== 1 ||
-        data.state.selectedFiles.length !== 1)
-    )
-      return;
+    if (data.id === keepID && (selectedFiles.length !== 1 || data.state.selectedFiles.length !== 1)) return;
     const run = () => (data.id === keepID ? keep(group, selectedFiles[0]) : removeFiles(selectedFiles));
     if (!confirmRemove) {
       runUIAction(run, data.id === keepID ? "Keep failed" : "Delete failed");

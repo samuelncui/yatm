@@ -262,12 +262,12 @@ func (e *Executor) CreatePreparedJob(
 }
 
 // CreateTargetJob captures the immutable navigation target of a resource-scoped Job.
-func (e *Executor) CreateTargetJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error, prepare func(Runner) error) (*Job, error) {
+func (e *Executor) CreateTargetJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error) (*Job, error) {
 	// Scan may select a Location, a Media, or multiple resources through its frozen selections.
 	if kind != entity.JobKind_JOB_KIND_SCAN || target.LocationID < 0 || target.MediaID < 0 || target.LocationID > 0 && target.MediaID > 0 {
 		return nil, fmt.Errorf("Job target does not match its kind")
 	}
-	return e.createPreparedJob(ctx, kind, priority, target, initialize, prepare)
+	return e.createPreparedJob(ctx, kind, priority, target, initialize, nil)
 }
 
 func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error, prepare func(Runner) error) (_ *Job, rerr error) {
@@ -275,9 +275,6 @@ func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, p
 		return nil, fmt.Errorf("%w: Job priority must not be negative, value=%d", ErrInvalidRequest, priority)
 	}
 	// Validate the type before creating any durable data.
-	if initialize == nil {
-		return nil, fmt.Errorf("create job failed, initializer is nil")
-	}
 	if _, err := getRunnerFactory(kind); err != nil {
 		return nil, err
 	}
@@ -460,10 +457,7 @@ func (e *Executor) StartJob(
 	unlockJob := e.lockJob(jobID)
 	defer unlockJob()
 
-	// Reject invalid or terminal work before allocating an attempt.
-	if run == nil {
-		return fmt.Errorf("start job failed, runner function is nil")
-	}
+	// Reject terminal work before allocating an attempt.
 	job, err := e.GetJob(ctx, jobID)
 	if err != nil {
 		return err
@@ -504,7 +498,7 @@ func (e *Executor) StartJob(
 	// Only Archive and Restore return to Media selection when an admitted Media operation fails.
 	failureState := entity.JobStatus_JOB_STATUS_FAILED
 	if kind == entity.JobKind_JOB_KIND_ARCHIVE || kind == entity.JobKind_JOB_KIND_RESTORE {
-		failureState = job.Status
+		failureState = entity.JobStatus_JOB_STATUS_READY
 	}
 
 	// Run asynchronously while keeping shutdown and cancellation observable.
@@ -548,9 +542,6 @@ func (e *Executor) UseJobRunner(
 	defer unlockJob()
 
 	// Resolve only the expected typed runner while deletion remains excluded.
-	if use == nil {
-		return fmt.Errorf("use job runner failed, function is nil")
-	}
 	job, err := e.GetJob(ctx, jobID)
 	if err != nil {
 		return err

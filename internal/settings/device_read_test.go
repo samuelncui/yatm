@@ -14,7 +14,7 @@ func TestDeviceReadParametersPreserveUnknownsAndIsolateDefaults(t *testing.T) {
 	// Missing measurements never acquire a nominal rate, zero overhead or CERN preset.
 	module := testModule(t)
 	ctx := context.Background()
-	absent, err := module.Device.Read(ctx)
+	absent, err := module.Device.group.Read(ctx)
 	require.NoError(t, err)
 	require.Nil(t, TapeDefaults(absent.Value, "/dev/inactive").ReadParameters)
 	value := deviceTestValue()

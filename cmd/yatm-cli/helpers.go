@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -79,6 +80,19 @@ func (o jobResultPageOptions) order() entity.JobResultOrder {
 	return entity.JobResultOrder_JOB_RESULT_ORDER_ASCENDING
 }
 
+// writeScanEntries prints one page of a Scan Job's entries.
+func (o jobResultPageOptions) writeScanEntries(ctx context.Context, rt *runtime, id int64) error {
+	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](ctx, rt,
+		entity.ScanJobService_ListEntries_FullMethodName,
+		&entity.ListScanJobEntriesRequest{
+			Id: id, Limit: o.pageLimit(), Cursor: o.Cursor, Order: o.order(), Offset: o.Offset, IncludeTotal: o.IncludeTotal,
+		})
+	if err != nil {
+		return err
+	}
+	return writeProto(rt.stdout, reply)
+}
+
 // pageLimit leaves zero to the server default.
 func (o jobResultPageOptions) pageLimit() int32 {
 	if o.Limit == nil {
@@ -87,31 +101,25 @@ func (o jobResultPageOptions) pageLimit() int32 {
 	return *o.Limit
 }
 
-func parseMediaKinds(values []string) ([]entity.MediaKind, error) {
+// mediaKinds maps --kind values, which the flag parser restricts to tape and volume.
+func mediaKinds(values []string) []entity.MediaKind {
 	result := make([]entity.MediaKind, 0, len(values))
 	for _, value := range values {
-		switch strings.ToLower(strings.TrimSpace(value)) {
-		case "tape":
-			result = append(result, entity.MediaKind_MEDIA_KIND_TAPE)
-		case "volume":
-			result = append(result, entity.MediaKind_MEDIA_KIND_VOLUME)
-		default:
-			return nil, usageError(fmt.Errorf("unsupported Media kind, kind=%q", value))
+		kind := entity.MediaKind_MEDIA_KIND_TAPE
+		if value == "volume" {
+			kind = entity.MediaKind_MEDIA_KIND_VOLUME
 		}
+		result = append(result, kind)
 	}
-	return result, nil
+	return result
 }
 
-func parseVolumeType(value string) (entity.VolumeType, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "hdd":
-		return entity.VolumeType_VOLUME_TYPE_HDD, nil
-	case "hm-smr":
-		return entity.VolumeType_VOLUME_TYPE_HM_SMR, nil
-	default:
-		return entity.VolumeType_VOLUME_TYPE_UNSPECIFIED,
-			usageError(fmt.Errorf("unsupported Volume type, type=%q", value))
+// volumeType maps --type, which the flag parser restricts to hdd and hm-smr.
+func volumeType(value string) entity.VolumeType {
+	if value == "hm-smr" {
+		return entity.VolumeType_VOLUME_TYPE_HM_SMR
 	}
+	return entity.VolumeType_VOLUME_TYPE_HDD
 }
 
 func parseCopyStatuses(values []string) ([]entity.CopyStatus, error) {

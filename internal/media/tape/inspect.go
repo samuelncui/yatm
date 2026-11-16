@@ -97,7 +97,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 			}
 		}
 	}()
-	observe := func(kind entity.DeviceFeatureKind, err error) bool {
+	observe := func(err error) bool {
 		if err == nil {
 			return true
 		}
@@ -105,14 +105,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		if errors.Is(err, ErrUncertain) || ctx.Err() != nil || reason == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || reason == entity.DeviceReason_DEVICE_REASON_NOT_READY {
 			d.invalidateGeometry()
 			if limits := feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION).GetGeometry(); limits != nil {
-				limits.ReportedWraps, limits.Fresh = nil, nil
-			}
-		}
-		if kind != 0 {
-			f := feature(report, kind)
-			f.Reason, f.Detail = reason, err.Error()
-			if reason == entity.DeviceReason_DEVICE_REASON_UNSUPPORTED {
-				f.Support = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED
+				limits.ReportedWraps = nil
 			}
 		}
 		if reason == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM {
@@ -130,7 +123,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	if err == nil {
 		err = decodeInquiry(data, report)
 	}
-	if !observe(0, err) || err != nil {
+	if !observe(err) || err != nil {
 		return report, err
 	}
 	data, err = query(ctx, transport, []byte{0x12, 1, 0x80, 0, 255, 0}, 255)
@@ -146,7 +139,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 			}
 		}
 	}
-	if !observe(0, err) {
+	if !observe(err) {
 		return report, err
 	}
 
@@ -155,11 +148,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	if err == nil {
 		report.GetTape().MediumPresent = proto.Bool(true)
 	}
-	if Reason(err) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM {
-		report.GetTape().MediumPresent = proto.Bool(false)
-		report.Reason, report.Detail = Reason(err), err.Error()
-	}
-	if !observe(0, err) {
+	if !observe(err) {
 		return report, err
 	}
 
@@ -168,7 +157,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	if err == nil {
 		err = decodeBlockLimits(data, report, transport)
 	}
-	if !observe(0, err) {
+	if !observe(err) {
 		return report, err
 	}
 	data, err = query(ctx, transport, []byte{0x5a, 0, 0x3f, 0, 0, 0, 0, 0x10, 0, 0}, MaxQueryBytes)
@@ -177,7 +166,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	if err == nil {
 		modePartition, currentPages, err = decodeMode(data, report.GetTape())
 	}
-	if !observe(0, err) {
+	if !observe(err) {
 		return report, err
 	}
 
@@ -187,7 +176,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		changeErr = errors.Join(changeErr, ctx.Err())
 		d.reportCompression(currentPages, changes, changeErr)
 		if errors.Is(changeErr, ErrUncertain) || ctx.Err() != nil || Reason(changeErr) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(changeErr) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(0, changeErr) {
+			if !observe(changeErr) {
 				return report, changeErr
 			}
 		}
@@ -197,13 +186,13 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 
 	// A non-secret encryption status query reports current hardware mode without changing keys.
 	data, err = encryptionStatus(ctx, transport, report.GetTape())
-	if !observe(0, err) {
+	if !observe(err) {
 		return report, err
 	}
 	if err == nil {
 		encryptionErr := d.inspectEncryption(ctx, data)
 		if errors.Is(encryptionErr, ErrUncertain) || ctx.Err() != nil || Reason(encryptionErr) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(encryptionErr) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(0, encryptionErr) {
+			if !observe(encryptionErr) {
 				return report, encryptionErr
 			}
 		}
@@ -244,7 +233,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 			f.Support = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNSUPPORTED
 		}
 		if errors.Is(err, ErrUncertain) || ctx.Err() != nil || f.Reason == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || f.Reason == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(0, err) {
+			if !observe(err) {
 				return report, err
 			}
 		}
@@ -254,14 +243,14 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	d.navigation, latestPosition, navigationErr = inspectNavigation(ctx, transport, report, position, long, err)
 	navigationErr = errors.Join(navigationErr, ctx.Err())
 	if errors.Is(navigationErr, ErrUncertain) || ctx.Err() != nil || Reason(navigationErr) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(navigationErr) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-		if !observe(0, navigationErr) {
+		if !observe(navigationErr) {
 			return report, navigationErr
 		}
 	}
 
 	// Geometry reporting is independent of logical seek and never proves freshness or a cost model.
 	if err := d.inspectGeometry(ctx); err != nil {
-		if !observe(0, err) {
+		if !observe(err) {
 			return report, err
 		}
 	}
@@ -293,7 +282,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		capacityErr = errors.Join(capacityErr, ctx.Err())
 		d.reportCapacity(sample, issued, capacityErr)
 		if errors.Is(capacityErr, ErrUncertain) || ctx.Err() != nil || Reason(capacityErr) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(capacityErr) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(0, capacityErr) {
+			if !observe(capacityErr) {
 				return report, capacityErr
 			}
 		}

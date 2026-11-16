@@ -16,17 +16,15 @@ import (
 func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *library.Media,
 	geometry *tape.WrapMap, valid func() bool,
 ) (*mediapkg.ReadCostModel, *entity.TapePositionMap, string) {
-	// The caller proves the label and frozen profile before accepting geometry into this session.
-	if stored == nil || stored.Profile.GetTape().GetTar() == nil || valid == nil || !valid() {
-		return nil, nil, "A current identified tar Media session is unavailable"
-	}
-	if err := entity.ValidateTarMediaProfile(stored.Profile.GetTape()); err != nil {
-		return nil, nil, err.Error()
-	}
+	// The caller proves the label and validated frozen profile before accepting geometry into this session.
 	profile := stored.Profile.GetTape().Tar
 	current := geometry.Complete()
-	layout := parameters.GetGeometry()
-	if current && layout != nil && layout.NominalWraps != nil {
+	if current {
+		if reason := tarReportedWrapsReason(geometry); reason != "" {
+			return nil, nil, reason
+		}
+	}
+	if layout := parameters.GetGeometry(); current && layout != nil && layout.NominalWraps != nil {
 		observed, reason := deriveTarPositionMap(parameters, profile, geometry)
 		if observed == nil {
 			return nil, nil, reason
@@ -65,16 +63,8 @@ func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.Wr
 		value.Partitions[0].Eod != nil && *value.Partitions[0].Eod > geometry.Endpoints[len(geometry.Endpoints)-1].Object {
 		return "Current reported EOD does not cover the retained Tape position map"
 	}
-	low := uint64(0)
 	for index, endpoint := range geometry.Endpoints {
-		if endpoint.Partition != 0 || endpoint.Wrap != uint32(index) {
-			return "Linear interpolation requires contiguous partition-zero wraps beginning at zero"
-		}
 		last, high := index == len(geometry.Endpoints)-1, endpoint.Object
-		if high <= low {
-			return "Reported wrap boundaries are empty or reversed"
-		}
-		low = high
 		if index >= len(value.Wraps) {
 			continue
 		}
@@ -94,17 +84,31 @@ func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.Wr
 	return ""
 }
 
+// tarReportedWrapsReason qualifies the current report's contiguous, increasing partition-zero traversal.
+func tarReportedWrapsReason(geometry *tape.WrapMap) string {
+	low := uint64(0)
+	for index, endpoint := range geometry.Endpoints {
+		if endpoint.Partition != 0 || endpoint.Wrap != uint32(index) {
+			return "Linear interpolation requires contiguous partition-zero wraps beginning at zero"
+		}
+		if endpoint.Object <= low {
+			return "Reported wrap boundaries are empty or reversed"
+		}
+		low = endpoint.Object
+	}
+	return ""
+}
+
 func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
 	geometry *tape.WrapMap,
 ) (*entity.TapePositionMap, string) {
 	// Assigning bands requires the explicit four-band layout rather than the number of populated wraps.
+	// The caller qualifies the complete reported traversal before deriving its map.
 	layout := parameters.GetGeometry()
-	if profile == nil || layout == nil || layout.NominalWraps == nil || layout.GetNominalWraps() < 4 ||
-		layout.GetNominalWraps()%4 != 0 {
+	if layout.GetNominalWraps() < 4 || layout.GetNominalWraps()%4 != 0 {
 		return nil, "The four-band interpolation layout requires an explicit nominal wrap count"
 	}
-	if !geometry.Complete() || len(geometry.Endpoints) < 2 ||
-		uint64(len(geometry.Endpoints)) > uint64(layout.GetNominalWraps()) {
+	if len(geometry.Endpoints) < 2 || uint64(len(geometry.Endpoints)) > uint64(layout.GetNominalWraps()) {
 		return nil, "A current complete reported-wrap map with a full interval is unavailable"
 	}
 
@@ -113,13 +117,7 @@ func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity
 	lengths := make([]uint64, 0, len(wraps)-1)
 	low := uint64(0)
 	for index, endpoint := range geometry.Endpoints {
-		if endpoint.Partition != 0 || endpoint.Wrap != uint32(index) {
-			return nil, "Linear interpolation requires contiguous partition-zero wraps beginning at zero"
-		}
 		last, high := index == len(wraps)-1, endpoint.Object
-		if high <= low {
-			return nil, "Reported wrap boundaries are empty or reversed"
-		}
 		band, direction := tapeWrapLayout(endpoint.Wrap, layout.GetNominalWraps())
 		wraps[index] = &entity.TapePositionWrap{Partition: endpoint.Partition, Wrap: endpoint.Wrap,
 			Band: band, Direction: direction,

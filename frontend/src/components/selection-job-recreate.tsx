@@ -46,7 +46,7 @@ const loadRestore = async (id: bigint, signal: AbortSignal): Promise<SelectionCr
     if (!location || location.id !== destination.locationId) throw new Error("This Location is unavailable.");
     const { detail } = await filesCli.get({ reference: locationDirectoryReference(String(location.id), destination.path) }, { abort: signal }).response;
     signal.throwIfAborted();
-    if (!canChooseLocationDirectory(detail?.entry, location.id, destination.path)) throw new Error("This destination is unavailable.");
+    if (!canChooseLocationDirectory(detail?.entry)) throw new Error("This destination is unavailable.");
     result.destination = { location, path: destination.path };
   } catch (failure) {
     signal.throwIfAborted();

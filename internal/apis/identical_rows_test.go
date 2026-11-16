@@ -233,16 +233,13 @@ func TestIdenticalSortedRowsAndLookupShareRequestedOrder(t *testing.T) {
 func TestIdenticalResultExpiryAndActiveReader(t *testing.T) {
 	// Expiration and explicit Close invalidate IDs while an acquired reader finishes safely.
 	s, scope, _ := identicalFixture(t)
-	base := time.Now()
-	now := base
-	s.api.identicalResults.now = func() time.Time { return now }
 	result, err := s.FindIdentical(context.Background(), &entity.FindIdenticalRequest{Scope: scope})
 	require.NoError(t, err)
 	reader, err := s.api.identicalResults.acquire(result.ResultId)
 	require.NoError(t, err)
 	_, err = s.CloseIdenticalResult(context.Background(), &entity.CloseIdenticalResultRequest{ResultId: result.ResultId})
 	require.NoError(t, err)
-	rows, _, err := reader.snapshot.Rows(0, 1, true)
+	rows, _, err := reader.snapshot.SortedRows(0, 1, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	s.api.identicalResults.release(reader)
@@ -251,7 +248,12 @@ func TestIdenticalResultExpiryAndActiveReader(t *testing.T) {
 
 	result, err = s.FindIdentical(context.Background(), &entity.FindIdenticalRequest{Scope: scope})
 	require.NoError(t, err)
-	now = base.Add(identicalResultIdle + time.Second)
+	// An idle result retires when its release timer finds it unused for the idle period.
+	manager := &s.api.identicalResults
+	manager.mu.Lock()
+	manager.sessions[result.ResultId].lastUsed = time.Now().Add(-identicalResultIdle - time.Second)
+	manager.mu.Unlock()
+	manager.expire(result.ResultId)
 	_, err = s.ListIdenticalRows(context.Background(), &entity.ListIdenticalRowsRequest{ResultId: result.ResultId})
 	require.Equal(t, codes.OutOfRange, status.Code(err))
 }

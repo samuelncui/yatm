@@ -8,8 +8,8 @@ import {
   encodeSelection,
   makeSelectEntries,
   selectionActions,
+  selectionCodec,
   selectionStorageKey,
-  saveSelectionEntries,
   type SelectionEntry,
 } from "./selections";
 import { encodeJobList, jobListActions, makeSelectJobList } from "./jobs";
@@ -62,7 +62,12 @@ it("updates mounted views immediately while keeping separate application stores 
 
 it("hydrates once and round-trips protobuf IDs, bytes and oneofs without nonserializable actions", () => {
   const selection = FileSelection.create({ scope: FileScope.ALL, target: { oneofKind: "location", location: { locationId: 9007199254740993n, path: "a" } } });
-  saveSelectionEntries("restore", [entry(), { key: FileSelection.toJsonString(selection), name: "a", path: "a", selection }]);
+  writeStored(
+    "session",
+    selectionStorageKey("restore"),
+    [entry(), { key: FileSelection.toJsonString(selection), name: "a", path: "a", selection }],
+    selectionCodec,
+  );
   const errors = vi.spyOn(console, "error");
   const store = createAppStore();
   const select = makeSelectEntries("restore");

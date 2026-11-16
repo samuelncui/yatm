@@ -6,8 +6,9 @@ import (
 )
 
 func (e *Engine) Roots(ctx context.Context) ([]Root, error) {
+	// The operation service admits at most 1000 sources, and each source plans at most one root.
 	var roots []Root
-	err := e.db.WithContext(ctx).Order("id").Limit(1000).Find(&roots).Error
+	err := e.db.WithContext(ctx).Order("id").Find(&roots).Error
 	return roots, err
 }
 

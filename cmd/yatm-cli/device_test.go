@@ -106,8 +106,8 @@ func TestTapeDeviceInspectPreservesTransientCapacity(t *testing.T) {
 	}{
 		{"estimate", &entity.TapeCapacityLimits{
 			Partition: proto.Uint32(0), RemainingBytes: proto.Uint64(math.MaxUint64), Quality: entity.TapeCapacityQuality_TAPE_CAPACITY_QUALITY_ESTIMATE,
-			IssuedAtNs: proto.Int64(1792029600000000000), CompletedAtNs: proto.Int64(1792029660000000000), ObservationErrorBytes: proto.Uint64(0),
-		}, `{"partition":0,"remaining_bytes":"18446744073709551615","quality":"TAPE_CAPACITY_QUALITY_ESTIMATE","issued_at_ns":"1792029600000000000","completed_at_ns":"1792029660000000000","observation_error_bytes":"0"}`},
+			IssuedAtNs: proto.Int64(1792029600000000000), CompletedAtNs: proto.Int64(1792029660000000000),
+		}, `{"partition":0,"remaining_bytes":"18446744073709551615","quality":"TAPE_CAPACITY_QUALITY_ESTIMATE","issued_at_ns":"1792029600000000000","completed_at_ns":"1792029660000000000"}`},
 		{"unknown", &entity.TapeCapacityLimits{}, `{}`},
 		{"observed zero", &entity.TapeCapacityLimits{RemainingBytes: proto.Uint64(0)}, `{"remaining_bytes":"0"}`},
 	} {
@@ -197,24 +197,18 @@ func TestTapeDeviceInspectPreservesEncryptionFactsWithoutKeyPresence(t *testing.
 }
 
 func TestTapeDeviceInspectPreservesGeometryUnknownAndFallback(t *testing.T) {
-	for _, fresh := range []*bool{nil, proto.Bool(false)} {
-		// An observed long response/all-wrap form does not establish H6 coverage, freshness or a qualified ordering model.
-		server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-			registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
-				return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{Features: []*entity.DeviceFeature{{
-					Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER, Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
-					Detail: "No qualified geometry/timing model; effective read order is LOGICAL",
-					Limits: &entity.DeviceFeature_Geometry{Geometry: &entity.TapeGeometryLimits{AllWraps: proto.Bool(true), ReportedWraps: proto.Uint32(0), Fresh: fresh, Source: proto.String("REOWP long response")}},
-				}}}}}, nil
-			}})
-		}, nil, nil)
-		exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
-		require.Equal(t, exitSuccess, exit, stderr)
-		freshJSON := ""
-		if fresh != nil {
-			freshJSON = `,"fresh":false`
-		}
-		require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","detail":"No qualified geometry/timing model; effective read order is LOGICAL","geometry":{"all_wraps":true,"reported_wraps":0`+freshJSON+`,"source":"REOWP long response"}}]}}`, stdout)
-		require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
-	}
+	// An observed long response/all-wrap form does not establish H6 coverage or a qualified ordering model.
+	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
+			return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{Features: []*entity.DeviceFeature{{
+				Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER, Validation: entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED,
+				Detail: "No qualified geometry/timing model; effective read order is LOGICAL",
+				Limits: &entity.DeviceFeature_Geometry{Geometry: &entity.TapeGeometryLimits{AllWraps: proto.Bool(true), ReportedWraps: proto.Uint32(0), Source: proto.String("REOWP long response")}},
+			}}}}}, nil
+		}})
+	}, nil, nil)
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER","validation":"DEVICE_FEATURE_VALIDATION_UNVALIDATED","detail":"No qualified geometry/timing model; effective read order is LOGICAL","geometry":{"all_wraps":true,"reported_wraps":0,"source":"REOWP long response"}}]}}`, stdout)
+	require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 }

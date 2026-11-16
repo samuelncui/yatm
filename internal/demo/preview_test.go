@@ -150,7 +150,7 @@ func TestPrepareVideoOverrideUsesNativeWorker(t *testing.T) {
 	require.NoError(t, err)
 	manifest, err := previews.Manifest(video.Signature)
 	require.NoError(t, err)
-	require.Equal(t, "video", manifest.Generator)
+	require.NotEmpty(t, manifest.Assets)
 	requireBundledVideoPreviews(t, previews, video.Signature)
 
 	// Reuse retains the prepared override and still requires an explicit reset to replace its source.

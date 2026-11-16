@@ -25,7 +25,7 @@ func TestLogicalRemoveAndMergeShareTrashPlacement(t *testing.T) {
 	require.NoError(t, db.Create(&FileTrackingKey{FileID: first.ID, Kind: TrackingNative, LocationID: 1, KeyValue: []byte("first")}).Error)
 	version := &FileVersion{FileID: first.ID, Signature: []byte("saved")}
 	require.NoError(t, db.Create(version).Error)
-	require.NoError(t, lib.Delete(ctx, []int64{first.ID, second.ID}))
+	require.NoError(t, trashFiles(ctx, lib, first.ID, second.ID))
 	storedFirst, err := lib.GetFile(ctx, first.ID)
 	require.NoError(t, err)
 	storedSecond, err := lib.GetFile(ctx, second.ID)
@@ -39,7 +39,7 @@ func TestLogicalRemoveAndMergeShareTrashPlacement(t *testing.T) {
 	// Move out and merge uses the same container layout, while Merge alone retires originals and reassigns history.
 	storedFirst.ParentID = parentA.ID
 	require.NoError(t, lib.MoveFile(ctx, storedFirst))
-	require.NoError(t, lib.MergeFiles(ctx, target.ID, []int64{first.ID}))
+	require.NoError(t, mergeFiles(ctx, lib, target.ID, first.ID))
 	retired, err := lib.GetFile(ctx, first.ID)
 	require.NoError(t, err)
 	parents, err := lib.ReadFileAncestors(ctx, first.ID)

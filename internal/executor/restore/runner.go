@@ -44,12 +44,6 @@ func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (
 	}
 	db := files.DB
 
-	// Existing Alpha bundles must carry the current candidate schema; opening never migrates them.
-	if !db.Migrator().HasColumn(&Copy{}, "storage_metadata") {
-		_ = executor.CloseRunnerFiles(db, files.Log)
-		return nil, fmt.Errorf("unsupported Restore Job schema: copies.storage_metadata is missing")
-	}
-
 	// Recover the frozen creation options only after admitting the current candidate schema.
 	var config Config
 	if err := db.WithContext(ctx).First(&config, 1).Error; err != nil {
@@ -87,9 +81,6 @@ func (a *jobRestoreRunner) Index(ctx context.Context) (returnErr error) {
 	if err := a.db.WithContext(ctx).First(config, 1).Error; err != nil {
 		return fmt.Errorf("read restore job config failed, %w", err)
 	}
-	if config.Spec == nil {
-		return fmt.Errorf("restore job spec is missing")
-	}
 	if err := a.applySpec(ctx, config.Spec); err != nil {
 		return err
 	}
@@ -111,54 +102,31 @@ func (a *jobRestoreRunner) Index(ctx context.Context) (returnErr error) {
 	return a.transition(restoreStateWaitingForMedia)
 }
 
-func validateRestoreMedia(param *entity.RestoreMediaRequest) error {
-	if param == nil || param.Target == nil {
-		return fmt.Errorf("restore Media target is missing")
-	}
-	return nil
-}
-
-func (a *jobRestoreRunner) restore(ctx context.Context, param *entity.RestoreMediaRequest) (returnErr error) {
-	// Validate and enter the Restore Media flow.
-	if err := validateRestoreMedia(param); err != nil {
-		return err
-	}
+func (a *jobRestoreRunner) restore(ctx context.Context, param *entity.RestoreMediaRequest) error {
+	// Enter the Restore Media flow.
 	if err := a.transition(restoreStatePreparingMedia); err != nil {
 		return err
 	}
-	defer func() {
-		if returnErr == nil {
-			return
-		}
-		next := restoreStateWaitingForMedia
-		record := new(executor.JobRecord)
-		if err := a.db.WithContext(context.WithoutCancel(ctx)).First(record, 1).Error; err == nil && record.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
-			next = restoreStateCompleted
-		}
-		if err := a.transition(next); err != nil {
-			returnErr = errors.Join(returnErr, err)
-		}
-	}()
 
 	// The summary is counted before this attempt's first checkpoint; its checkpoints advance it.
-	if err := a.recountSummary(ctx); err != nil {
-		return err
-	}
 	// The runner owns the copy flow while the Backend owns physical Media preparation and finalization.
-	if err := a.restoreMedia(ctx, param.Target); err != nil {
-		return err
+	err := a.recountSummary(ctx)
+	if err == nil {
+		err = a.restoreMedia(ctx, param.Target)
 	}
-	a.dropProgress()
+	if err == nil {
+		a.dropProgress()
+	}
 
 	// Return to the stable phase represented by the committed Job record.
+	next := restoreStateWaitingForMedia
 	record := new(executor.JobRecord)
-	if err := a.db.WithContext(context.WithoutCancel(ctx)).First(record, 1).Error; err != nil {
-		return fmt.Errorf("read restore job state failed, %w", err)
+	if readErr := a.db.WithContext(context.WithoutCancel(ctx)).First(record, 1).Error; readErr != nil {
+		err = errors.Join(err, fmt.Errorf("read restore job state failed, %w", readErr))
+	} else if record.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
+		next = restoreStateCompleted
 	}
-	if record.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
-		return a.transition(restoreStateCompleted)
-	}
-	return a.transition(restoreStateWaitingForMedia)
+	return errors.Join(err, a.transition(next))
 }
 
 func (a *jobRestoreRunner) Close() error {

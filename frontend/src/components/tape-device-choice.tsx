@@ -68,7 +68,6 @@ const fieldLabels: Record<string, string> = {
   keyInstanceCounter: "Key instance counter",
   allWraps: "All wraps",
   reportedWraps: "Reported wraps",
-  fresh: "Fresh",
   source: "Source",
 };
 
@@ -87,16 +86,11 @@ const featureLimits = ({ limits }: DeviceFeature) => {
 
 const CapacityDetails = ({ capacity }: { capacity: TapeCapacityLimits }) => (
   <>
-    <span>
-      Capacity quality:{" "}
-      {capacity.quality === TapeCapacityQuality.ESTIMATE ? "Estimate" : capacity.quality === TapeCapacityQuality.LOWER_BOUND ? "Lower bound" : "Unknown"}
-    </span>
+    <span>Capacity quality: {capacity.quality === TapeCapacityQuality.ESTIMATE ? "Estimate" : "Unknown"}</span>
     <span>Partition: {capacity.partition ?? "Unknown"}</span>
     <span>Native space before early warning: {capacity.remainingBytes === undefined ? "Unknown" : `${capacity.remainingBytes} bytes`}</span>
     <span>Observation started: {dateFromNs(capacity.issuedAtNs)?.toISOString() ?? "Unknown"}</span>
     <span>Observation completed: {dateFromNs(capacity.completedAtNs)?.toISOString() ?? "Unknown"}</span>
-    <span>Observation error allowance: {capacity.observationErrorBytes === undefined ? "Unknown" : `${capacity.observationErrorBytes} bytes`}</span>
-    <span>Unreflected write allowance: {capacity.unreflectedBytes === undefined ? "Unknown" : `${capacity.unreflectedBytes} bytes`}</span>
     <Alert severity="info">
       {capacity.quality === TapeCapacityQuality.ESTIMATE
         ? "This capacity estimate does not guarantee that a file will fit."
@@ -127,7 +121,7 @@ const EncryptionDetails = ({ encryption }: { encryption: TapeEncryptionLimits })
 
 const GeometryDetails = ({ geometry }: { geometry: TapeGeometryLimits }) => (
   <>
-    {(["allWraps", "reportedWraps", "fresh", "source"] as const).map((name) => (
+    {(["allWraps", "reportedWraps", "source"] as const).map((name) => (
       <span key={name}>
         {fieldLabel(name)}: {geometry[name] === undefined ? "Unknown" : String(geometry[name])}
       </span>

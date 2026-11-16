@@ -44,7 +44,7 @@ func (p *tarBaselineProvider) Open(identity tape.Identity) (tape.Transport, erro
 			copy(command.Data[8:16], "IBM     ")
 		}
 		return response, err
-	}}, limit: 4096}, nil
+	}}}, nil
 }
 
 func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t *testing.T) {

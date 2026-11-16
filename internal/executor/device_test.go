@@ -24,3 +24,14 @@ func TestAttemptTapeLeaseReuseRetainsSingleOwnership(t *testing.T) {
 	exe.endAttempt(1)
 	require.Equal(t, []string{"/dev/nst0"}, exe.ListAvailableDevices())
 }
+
+// ListAvailableDevices lists the configured drives that are not busy.
+func (e *Executor) ListAvailableDevices() []string {
+	devices := make([]string, 0, len(e.devices))
+	for _, device := range e.ListDevices() {
+		if !device.Busy {
+			devices = append(devices, device.Device)
+		}
+	}
+	return devices
+}

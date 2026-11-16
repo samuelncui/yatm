@@ -24,11 +24,11 @@ func TestScanStageSnapshotUsesOnlyActiveScope(t *testing.T) {
 	r := newProgressRunner(t)
 	r.phase = entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT
 	require.NoError(t, r.db.Create(&[]*Entry{
-		{LocationID: 1, ScopePath: "active", Path: "pending", Size: 100, NeedsHash: true},
-		{LocationID: 1, ScopePath: "active", Path: "ready", Size: 900},
-		{LocationID: 1, ScopePath: "other", Path: "other", Size: 900, NeedsHash: true},
+		{LocationID: 1, Path: "pending", Size: 100, NeedsHash: true},
+		{LocationID: 1, Path: "ready", Size: 900},
+		{LocationID: 2, Path: "other", Size: 900, NeedsHash: true},
 	}).Error)
-	startContentAttempt(t, r, &Scope{ID: 1, LocationID: 1, Path: "active"})
+	startContentAttempt(t, r, &Scope{LocationID: 1})
 	r.inflightBytes.Store(20)
 
 	// Global business totals remain available, but progress and its denominator share the active scope.
@@ -102,7 +102,7 @@ func TestScanPhaseTransitionClearsReadSpeedsAndPreviewEstimates(t *testing.T) {
 	r := newProgressRunner(t)
 	r.progress.UpdateSessionCurrent(1<<20, 1)
 	r.progress.CommitSession()
-	r.previewTiming = previewTiming{total: 9, completed: 3, samples: 3, started: time.Now().Add(-time.Minute)}
+	r.previewTiming = previewTiming{completed: 3, samples: 3}
 	r.contentScope = &Scope{LocationID: 1}
 	var logs bytes.Buffer
 	r.logger = logrus.New()
@@ -190,9 +190,7 @@ func TestScanPreviewSamplingExcludesReusedAndSkippedEntries(t *testing.T) {
 				require.EqualValues(t, 5, r.previewOutcomes.ready, "four contents and their duplicate")
 				require.EqualValues(t, 2, r.previewOutcomes.skipped, "unsupported and unsigned entries")
 				for _, observed := range observations {
-					require.EqualValues(t, 7, observed.total)
 					require.True(t, observed.workKnown, "the scope classified its unique generation workload")
-					require.False(t, observed.started.IsZero(), "scope wall time includes classified work")
 					require.Zero(t, observed.samples, "a fake Generate call without the decoder-start event is not a real work sample")
 					require.EqualValues(t, 4, observed.workTotal)
 				}

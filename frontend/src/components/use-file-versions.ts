@@ -76,31 +76,3 @@ export function useFileVersionPages(fileID: bigint | undefined, refresh?: unknow
   }, [fileID, load, refresh, retainPages]);
   return { versions, more, loading, failure, load, remove: (id: bigint) => setVersions((current) => current.filter((version) => version.id !== id)) };
 }
-
-/** Overview needs the newest archive date, which may occur beyond the first ID-ordered page. */
-export function useLatestSavedVersion(fileID: bigint | undefined, refresh: unknown) {
-  const [version, setVersion] = useState<FileVersion | null>();
-  useEffect(() => {
-    setVersion(undefined);
-    if (fileID === undefined) {
-      setVersion(null);
-      return;
-    }
-    const controller = new AbortController();
-    const load = async () => {
-      let newest: FileVersion | undefined;
-      for await (const page of versionPages(fileID, 0n, 100, controller.signal)) {
-        for (const candidate of page.versions) {
-          if (!newest || compareVersionDates(candidate, newest) < 0) newest = candidate;
-        }
-      }
-      if (!controller.signal.aborted) setVersion(newest ?? null);
-    };
-    // History errors belong to Saved versions; Overview has no Preview without a known version.
-    void load().catch(() => {
-      if (!controller.signal.aborted) setVersion(null);
-    });
-    return () => controller.abort();
-  }, [fileID, refresh]);
-  return version;
-}

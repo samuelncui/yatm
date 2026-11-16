@@ -46,14 +46,14 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 	require.Error(t, err)
 
 	// Search applies the same database predicate before selecting each page.
-	search, err := lib.SearchFilesIn(ctx, "type:file", "", 1, entity.FileScope_FILE_SCOPE_DEFAULT)
+	search, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_DEFAULT, true, "type:file", "", 1)
 	require.NoError(t, err)
-	require.Len(t, search.Results, 1)
-	require.Equal(t, first.ID, search.Results[0].File.ID)
-	search, err = lib.SearchFilesIn(ctx, "type:file", search.NextCursor, 1, entity.FileScope_FILE_SCOPE_SAVED)
+	require.Len(t, search.Files, 1)
+	require.Equal(t, first.ID, search.Files[0].ID)
+	search, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_SAVED, true, "type:file", search.NextCursor, 1)
 	require.NoError(t, err)
-	require.Len(t, search.Results, 1)
-	require.Equal(t, second.ID, search.Results[0].File.ID)
+	require.Len(t, search.Files, 1)
+	require.Equal(t, second.ID, search.Files[0].ID)
 	require.Empty(t, search.NextCursor)
 
 	// A frozen selection retains its scope when the persistent display preference changes.

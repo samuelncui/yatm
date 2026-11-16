@@ -99,8 +99,8 @@ func Create(ctx context.Context, exe *executor.Executor, priority int64, spec *e
 }
 
 func (s *service) RestoreMedia(ctx context.Context, req *entity.RestoreMediaRequest) (*entity.RestoreMediaResponse, error) {
-	if err := validateRestoreMedia(req); err != nil {
-		return nil, err
+	if req == nil || req.Target == nil {
+		return nil, fmt.Errorf("restore Media target is missing")
 	}
 
 	// Start one asynchronous Restore Media attempt through the common executor lifecycle.

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
@@ -6,9 +6,9 @@ import Stack from "@mui/material/Stack";
 import { mediaCli, restoreJobCli } from "@/api";
 import { CopyStatus, GetRestoreJobProgressResponse, Job, JobResultOrder, JobStatus, Media, RestoreMedia, type RestoreItem } from "@/entity";
 import { ReadMediaDialog } from "@/components/read-media-dialog";
-import { CancelJobButton, JobProgressCard, isJobRunning } from "@/components/job-card";
+import { CancelJobButton, JobProgressCard, isJobRunning } from "@/components/job-progress";
 import { FileRow } from "@/components/job-file-list-item";
-import { JobResultsDialog, type JobItemViews } from "@/components/job-results-dialog";
+import { JobResultsDialog, type JobItemView } from "@/components/job-results-dialog";
 import { useJobProgress } from "@/components/use-job-progress";
 
 const mediaPageSize = 100;
@@ -59,7 +59,7 @@ export const RestoreCard = ({ job }: { job: Job }) => {
   const storage = data?.storage;
 
   // The Media identity labels reuse the storage read; paging stays with the shared list.
-  const resultViews = useMemo(() => restoreResultViews(storage), [storage]);
+  const resultView = useMemo(() => restoreResultView(storage), [storage]);
   const running = isJobRunning(job);
   return (
     <JobProgressCard
@@ -86,20 +86,12 @@ export const RestoreCard = ({ job }: { job: Job }) => {
             />
           )}
           {running && <CancelJobButton jobID={job.id} />}
-          <JobResultsDialog jobId={job.id} title="Restore results" views={resultViews} />
+          <JobResultsDialog jobId={job.id} title="Restore results" view={resultView} />
         </Fragment>
       }
     />
   );
 };
-
-/** The Restore outcome summary and the per-Media copy status of the loaded candidates. */
-export const restoreExtras = (reply: GetRestoreJobProgressResponse, media: RestoreMedia[], storage?: Map<bigint, Media>): ReactNode => (
-  <>
-    {reply.summary && restoreSummary(reply.summary)}
-    {media.length > 0 && restoreMediaChips(media, storage)}
-  </>
-);
 
 const restoreSummary = (summary: GetRestoreJobProgressResponse["summary"]) => (
   <Stack className="product-actions" direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }} aria-label="Restore results">
@@ -142,15 +134,11 @@ const restoreResultRow = (identity: string | undefined, item: RestoreItem) => (
   />
 );
 
-const restoreResultViews = (storage: Map<bigint, Media> | undefined): JobItemViews => [
-  {
-    id: "files",
-    label: "Files",
-    emptyLabel: "No restore results yet.",
-    listing: "restore-files",
-    // One composite key spans every Media in a single sequence.
-    cursorOf: (item: RestoreItem) => `${item.candidate?.mediaId ?? 0n}:${item.id}`,
-    render: (item: RestoreItem) => restoreResultRow(item.candidate ? storage?.get(item.candidate.mediaId)?.identity : undefined, item),
-  },
-];
+const restoreResultView = (storage: Map<bigint, Media> | undefined): JobItemView => ({
+  emptyLabel: "No restore results yet.",
+  listing: "restore-files",
+  // One composite key spans every Media in a single sequence.
+  cursorOf: (item: RestoreItem) => `${item.candidate?.mediaId ?? 0n}:${item.id}`,
+  render: (item: RestoreItem) => restoreResultRow(item.candidate ? storage?.get(item.candidate.mediaId)?.identity : undefined, item),
+});
 import { Feedback } from "@/components/feedback";

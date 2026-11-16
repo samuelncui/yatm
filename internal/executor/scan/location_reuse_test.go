@@ -36,7 +36,7 @@ func TestScanReusesRecordedHashOfRenamedOriginal(t *testing.T) {
 	stage := &locationStage{runner: r, source: source}
 	info, err := executor.Lstat(renamed)
 	require.NoError(t, err)
-	row, err := stage.observation("selected/renamed", "", info, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING)
+	row, err := stage.observation("selected/renamed", info, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING)
 	require.NoError(t, err)
 	require.True(t, row.NeedsHash)
 	require.NoError(t, stage.reuseRelocatedContent(ctx, []*Entry{row}))
@@ -45,7 +45,7 @@ func TestScanReusesRecordedHashOfRenamedOriginal(t *testing.T) {
 	require.Equal(t, []byte("opaque"), row.Signature)
 
 	// Changed metadata keeps the read: the same object may hold other content now.
-	row, err = stage.observation("selected/renamed", "", info, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING)
+	row, err = stage.observation("selected/renamed", info, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING)
 	require.NoError(t, err)
 	row.MtimeNS++
 	require.NoError(t, stage.reuseRelocatedContent(ctx, []*Entry{row}))

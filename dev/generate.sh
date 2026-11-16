@@ -20,9 +20,7 @@ for artifact in "$CURDIR"/*.pb.go; do
             rm -f -- "$output"
         fi
     done
-    for output in "$CURDIR/${base}.oneof_gen.go" "$CURDIR/../frontend/src/entity/${base}.oneof_gen.ts"; do
-        [[ -f "$output" ]] && rm -f -- "$output"
-    done
+    rm -f -- "$CURDIR/${base}.oneof_gen.go"
 done
 
 protoc --go_out="$GO_DST_DIR" --go_opt=paths=source_relative \

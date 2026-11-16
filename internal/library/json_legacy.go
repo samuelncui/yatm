@@ -51,12 +51,6 @@ type legacyLibraryPosition struct {
 	Hash      []byte    `json:"hash,omitempty"`
 }
 
-type legacyLibraryDecoders struct {
-	files     func(*json.Decoder) error
-	tapes     func(*json.Decoder) error
-	positions func(*json.Decoder) error
-}
-
 func (l *Library) importLegacyJSON(ctx context.Context, r io.Reader, dryRun bool) (rerr error) {
 	// Resolve arbitrary legacy array order in a disposable indexed staging database, before replacement.
 	temporary, err := resource.OpenTemporaryDB(l.work, "yatm-legacy-import-")
@@ -71,8 +65,8 @@ func (l *Library) importLegacyJSON(ctx context.Context, r io.Reader, dryRun bool
 
 	// Decode into staging before replacing any live catalog records.
 	included := map[string]struct{}{}
-	decoders := legacyLibraryDecoders{
-		files: func(decoder *json.Decoder) error {
+	decoders := map[string]func(*json.Decoder) error{
+		"files": func(decoder *json.Decoder) error {
 			included[recordTypeFile] = struct{}{}
 			return importLegacyArray(decoder, stage, "file", func(v *legacyLibraryFile) *legacyLibraryFile {
 				// Root is virtual; discard it before the staging table can allocate a real ID.
@@ -82,16 +76,16 @@ func (l *Library) importLegacyJSON(ctx context.Context, r io.Reader, dryRun bool
 				return v
 			})
 		},
-		tapes: func(decoder *json.Decoder) error {
+		"tapes": func(decoder *json.Decoder) error {
 			included[recordTypeMedia] = struct{}{}
 			return importLegacyArray(decoder, stage, "tape", func(v *legacyLibraryTape) *legacyLibraryTape { return v })
 		},
-		positions: func(decoder *json.Decoder) error {
+		"positions": func(decoder *json.Decoder) error {
 			included[recordTypePosition] = struct{}{}
 			return importLegacyArray(decoder, stage, "position", func(v *legacyLibraryPosition) *legacyLibraryPosition { return v })
 		},
 	}
-	if _, err := decodeLegacyLibrary(json.NewDecoder(r), decoders); err != nil {
+	if err := decodeLegacyLibrary(json.NewDecoder(r), decoders); err != nil {
 		return fmt.Errorf("validate legacy backup: %w", err)
 	}
 
@@ -261,58 +255,46 @@ func legacyTapeToMedia(value *legacyLibraryTape) (*Media, error) {
 	}, nil
 }
 
-func decodeLegacyLibrary(decoder *json.Decoder, decoders legacyLibraryDecoders) (bool, error) {
+func decodeLegacyLibrary(decoder *json.Decoder, decoders map[string]func(*json.Decoder) error) error {
 	// Decode each declared top-level entity exactly once.
 	if err := expectJSONDelimiter(decoder, '{'); err != nil {
-		return false, err
+		return err
 	}
-	seen := make(map[string]struct{}, 3)
-	positions := false
+	seen := make(map[string]struct{}, len(decoders))
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
-			return false, err
+			return err
 		}
 		name, ok := token.(string)
 		if !ok {
-			return false, fmt.Errorf("legacy Library field name is invalid")
+			return fmt.Errorf("legacy Library field name is invalid")
 		}
 		if _, exists := seen[name]; exists {
-			return false, fmt.Errorf("duplicate legacy Library field %q", name)
+			return fmt.Errorf("duplicate legacy Library field %q", name)
 		}
 		seen[name] = struct{}{}
 
-		var decode func(*json.Decoder) error
-		switch name {
-		case "files":
-			decode = decoders.files
-		case "tapes":
-			decode = decoders.tapes
-		case "positions":
-			decode = decoders.positions
-			positions = true
-		default:
-			return false, fmt.Errorf("unknown legacy Library field %q", name)
-		}
-		if decode == nil {
-			return false, fmt.Errorf("legacy Library field %q has no decoder", name)
+		decode, ok := decoders[name]
+		if !ok {
+			return fmt.Errorf("unknown legacy Library field %q", name)
 		}
 		if err := decode(decoder); err != nil {
-			return false, err
+			return err
 		}
 	}
 	if err := expectJSONDelimiter(decoder, '}'); err != nil {
-		return false, err
+		return err
 	}
 
 	// Require one complete top-level object and only trailing whitespace.
 	if _, err := decoder.Token(); err != io.EOF {
 		if err == nil {
-			return false, fmt.Errorf("unexpected trailing data")
+			return fmt.Errorf("unexpected trailing data")
 		}
-		return false, err
+		return err
 	}
-	return positions, nil
+	return nil
 }
 
 func importLegacyArray[Legacy any, Current any](

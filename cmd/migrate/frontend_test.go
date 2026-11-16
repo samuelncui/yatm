@@ -29,7 +29,7 @@ func TestFrontendReadinessChecksRenderedHTMLAndAssets(t *testing.T) {
 		_, _ = io.WriteString(w, strings.ReplaceAll(template, "%%API_BASE%%", conf.Domain+"/services"))
 	}))
 	defer server.Close()
-	conf.Listen = server.URL
+	conf.Listen = server.Listener.Addr().String()
 	require.NoError(t, checkFrontend(context.Background(), conf, directory))
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "assets", "main.js"), []byte("another release"), 0600))
 	require.ErrorContains(t, checkFrontend(context.Background(), conf, directory), "script does not match")

@@ -210,12 +210,12 @@ func (l *Library) ReadFileFacts(ctx context.Context, ids []int64, attributes, st
 			facts.HasVersions, facts.HasCopies, facts.HasArchive, facts.HasBadCopies = row.HasVersions, row.HasCopies, row.HasArchive, row.HasBadCopies
 			facts.CurrentCopies, facts.CurrentArchive, facts.CurrentBadCopies, facts.LatestUnavailable = row.CurrentCopies, row.CurrentArchive, row.CurrentBadCopies, row.LatestUnavailable
 		}
-		var keys []*FileTrackingKey
-		if err := l.readDB().WithContext(ctx).Where("file_id IN ?", batch).Find(&keys).Error; err != nil {
+		tracking, err := l.ReadFileTrackingKeys(ctx, batch)
+		if err != nil {
 			return nil, err
 		}
-		for _, key := range keys {
-			result[key.FileID].Tracking = append(result[key.FileID].Tracking, key)
+		for id, keys := range tracking {
+			result[id].Tracking = keys
 		}
 	}
 	return result, nil

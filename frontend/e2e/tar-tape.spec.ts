@@ -521,7 +521,6 @@ for (const viewport of [
       await dialog.getByRole("button", { name: "Device details", exact: true, expanded: false }).click();
       const details = dialog;
       await expect(details.getByText("No qualified geometry/timing model; Auto falls back to Logical")).toBeVisible();
-      await expect(details.getByText("Fresh: Unknown", { exact: true })).toBeVisible();
       await details.getByText("software read order", { exact: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`tar-read-order-${id}-${viewport.name}.png`) });
       await details.getByRole("button", { name: "Device details", exact: true, expanded: true }).click();

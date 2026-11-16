@@ -20,7 +20,6 @@ func newCopyCandidate(copy *Copy, file *File) *copyCandidate {
 		MediaPath:       copy.MediaPath,
 		StorageOrder:    append([]byte{}, copy.StorageOrder...),
 		StorageMetadata: metadata,
-		PositionID:      copy.PositionID,
 		FileID:          file.FileID,
 		FileVersionID:   file.FileVersionID,
 		Signature:       file.Signature,

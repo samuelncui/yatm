@@ -174,12 +174,7 @@ func (s *tapeReadSession) readInventory(
 			returnErr = errors.Join(returnErr, fmt.Errorf("close read LTFS index failed, %w", err))
 		}
 	}()
-	return mediapkg.ParseLTFSIndex(ctx, file, func(entry *mediapkg.LTFSIndexEntry) error {
-		if yield != nil {
-			return yield(entry)
-		}
-		return nil
-	})
+	return mediapkg.ParseLTFSIndex(ctx, file, yield)
 }
 
 type tapeWriteSession struct {
@@ -361,44 +356,10 @@ func (s *tapeWriteSession) Finalize(ctx context.Context, cause error) (*mediapkg
 	}, nil
 }
 
-var (
-	errInvalidTapeIndex   = errors.New("invalid final Tape index")
-	errUnusableTapeResult = errors.New("unusable Tape finalize result")
-)
-
-func (s *tapeWriteSession) finalInventory(ctx context.Context) (result mediapkg.FinalInventory, returnErr error) {
-	// Validate the capture without retaining an open file in the returned inventory callback.
+func (s *tapeWriteSession) finalInventory(ctx context.Context) (mediapkg.FinalInventory, error) {
+	// The returned callback opens the captured Index for each consumption.
 	if err := waitForTapeIndex(ctx, s.indexPath); err != nil {
-		return nil, errors.Join(
-			errInvalidTapeIndex, errUnusableTapeResult,
-			fmt.Errorf("wait for final LTFS index failed, barcode=%q, %w", s.barcode, err),
-		)
-	}
-	file, err := os.Open(s.indexPath)
-	if err != nil {
-		return nil, errors.Join(
-			errInvalidTapeIndex, errUnusableTapeResult,
-			fmt.Errorf("open LTFS index failed, barcode=%q, %w", s.barcode, err),
-		)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			result = nil
-			returnErr = errors.Join(returnErr, fmt.Errorf("close LTFS index failed, barcode=%q, %w", s.barcode, err))
-		}
-	}()
-	info, err := file.Stat()
-	if err != nil {
-		return nil, errors.Join(
-			errInvalidTapeIndex, errUnusableTapeResult,
-			fmt.Errorf("stat LTFS index failed, barcode=%q, %w", s.barcode, err),
-		)
-	}
-	if info.Size() == 0 {
-		return nil, errors.Join(
-			errInvalidTapeIndex, errUnusableTapeResult,
-			fmt.Errorf("LTFS index is empty, barcode=%q", s.barcode),
-		)
+		return nil, fmt.Errorf("wait for final LTFS index failed, barcode=%q, %w", s.barcode, err)
 	}
 
 	// Each consumption owns its own handle, including parser and callback failures.

@@ -171,7 +171,7 @@ func TestScanProgressRequestIssuesNoAggregateQuery(t *testing.T) {
 	// Opening the attempt reads the durable denominator and completed base once, and never again.
 	stream := startContentAttempt(t, r, &Scope{})
 	baseline, baselineAggregates := counting.counts()
-	require.Equal(t, 4, baseline, "the attempt reads the durable totals once")
+	require.Equal(t, 3, baseline, "the attempt reads the durable totals once")
 	require.Equal(t, baseline, baselineAggregates, "the attempt's statements are the durable totals")
 
 	// ACP reports one sample every second; the events alone must carry the estimate forward.

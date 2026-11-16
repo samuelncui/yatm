@@ -41,27 +41,19 @@ func (d *Device) ReadLTFSLabels(ctx context.Context) ([2][]byte, error) {
 		return labels, fmt.Errorf("LTFS Label record bounds are unavailable: %w", ErrUnsupported)
 	}
 	maximum := min(ltfsLabelMaximumBytes, int(limits.GetMaximumBytes()))
-	if reserve, ok := d.transport.(interface {
+	reserve, ok := d.transport.(interface {
 		EnsureTransfer(context.Context, int) error
-	}); ok {
-		// EnsureTransfer owns reservation/readback; verify its exposed current bound when available.
-		if err := reserve.EnsureTransfer(ctx, maximum); err != nil {
-			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
-				errors.Is(err, ErrUncertain) {
-				return labels, fmt.Errorf("reserve LTFS Label buffer failed, %w", errors.Join(err, ctx.Err()))
-			}
-			return labels, fmt.Errorf("LTFS Label host buffer is unavailable (%v): %w", err, ErrUnsupported)
-		}
-		if bounded, ok := d.transport.(interface{ TransferLimit() int }); ok && bounded.TransferLimit() < maximum {
-			return labels, fmt.Errorf("LTFS Label buffer reservation readback is insufficient: %w", ErrUnsupported)
-		}
-	} else if bounded, ok := d.transport.(interface{ TransferLimit() int }); ok {
-		maximum = min(maximum, bounded.TransferLimit())
-	} else {
+	})
+	if !ok {
 		return labels, fmt.Errorf("LTFS Label transport bound is unavailable: %w", ErrUnsupported)
 	}
-	if maximum < 80 {
-		return labels, fmt.Errorf("LTFS Label transport buffer is insufficient: %w", ErrUnsupported)
+	// EnsureTransfer owns reservation and refuses an insufficient readback.
+	if err := reserve.EnsureTransfer(ctx, maximum); err != nil {
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, ErrUncertain) {
+			return labels, fmt.Errorf("reserve LTFS Label buffer failed, %w", errors.Join(err, ctx.Err()))
+		}
+		return labels, fmt.Errorf("LTFS Label host buffer is unavailable (%v): %w", err, ErrUnsupported)
 	}
 	buffer := make([]byte, maximum)
 	records := Records{Transport: d.transport, Mode: RecordMode{MaximumBytes: maximum}, Timeout: 20 * time.Minute,
@@ -115,28 +107,15 @@ func (d *Device) ReadLTFSLabels(ctx context.Context) ([2][]byte, error) {
 }
 
 func onlyLTFSLabelOversize(err error) bool {
-	if err == io.ErrShortBuffer {
-		return true
-	}
-	if failure, ok := err.(*CommandError); ok {
-		sense := failure.Sense
-		return currentCommand(failure) && sense.Key == 0 && sense.ASC == 0 && sense.ASCQ == 0 &&
-			sense.ILI && !sense.Filemark && !sense.EOM && sense.InformationValid && sense.Information < 0
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return onlyLTFSLabelOversize(wrapped.Unwrap())
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
+	return everyCause(err, func(err error) (bool, bool) {
+		if err == io.ErrShortBuffer {
+			return true, true
 		}
-		for _, cause := range causes {
-			if !onlyLTFSLabelOversize(cause) {
-				return false
-			}
+		if failure, ok := err.(*CommandError); ok {
+			sense := failure.Sense
+			return currentCommand(failure) && sense.Key == 0 && sense.ASC == 0 && sense.ASCQ == 0 &&
+				sense.ILI && !sense.Filemark && !sense.EOM && sense.InformationValid && sense.Information < 0, true
 		}
-		return true
-	}
-	return false
+		return false, false
+	})
 }

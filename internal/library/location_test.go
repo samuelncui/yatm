@@ -431,12 +431,12 @@ func TestLocationFileSearchUsesPublishedLocations(t *testing.T) {
 	source, err := lib.PublishAnalyzed(ctx, source.ID, 1, observedTestManifest(observedTestEntry("one", "first"), observedTestEntry("two", "second")), nil)
 	require.NoError(t, err)
 	for _, query := range []string{fmt.Sprintf("location:%d", source.ID), "has:original", "has:original AND NOT has:archive"} {
-		page, err := lib.SearchFilesIn(ctx, query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
+		page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, query, "", 100)
 		require.NoError(t, err)
-		require.Len(t, page.Results, 2, query)
+		require.Len(t, page.Files, 2, query)
 	}
 	for _, query := range []string{"location:0", "location:unknown", "has:backup"} {
-		_, err := lib.SearchFilesIn(ctx, query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
+		_, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, query, "", 100)
 		require.Error(t, err)
 	}
 }
@@ -449,10 +449,10 @@ func TestLocationLongNamesOnlySuffixNewNodes(t *testing.T) {
 	name := strings.Repeat("日", 80) + ".txt"
 	source = publishComplete(t, lib, source.ID, 1, observedTestEntry(name, "old"))
 	publishComplete(t, lib, source.ID, 2, observedTestEntry(name, "new"))
-	page, err := lib.SearchFilesIn(ctx, "type:file", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "type:file", "", 100)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 2)
-	for _, row := range page.Results {
-		require.LessOrEqual(t, len(row.File.Name), 256)
+	require.Len(t, page.Files, 2)
+	for _, row := range page.Files {
+		require.LessOrEqual(t, len(row.Name), 256)
 	}
 }

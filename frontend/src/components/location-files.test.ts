@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { streamListingLater } from "@/test/files-fixture";
-import { File, FileScope, Location, LocationEntry, LocationEntryRef, GetLocationResponse, ListFilesResponse } from "@/entity";
+import { FileScope, GetLocationResponse, ListFilesResponse } from "@/entity";
 import { filesCli, locationCli } from "@/api";
-import { associatedLibraryFileID, locatedFile, selectionForFile, locationEntryFile, locationFilePage } from "./location-files";
+import { locatedFile, selectionForFile, locationFilePage } from "./location-files";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -90,28 +90,5 @@ describe("Indexed selection adaptation", () => {
   it("does not silently reinterpret malformed physical rows as Library selections", () => {
     expect(() => selectionForFile({ id: "7", name: "file", physicalLocationID: "4" }, FileScope.ALL)).toThrow("no live selection");
     expect(() => selectionForFile({ id: "7", name: "file", originSelection: { locationId: "4" } }, FileScope.ALL)).toThrow("invalid selection");
-  });
-  it("represents a live file without inventing a Library ID or content state", () => {
-    const reference = LocationEntryRef.create({
-      locationId: 4n,
-      path: "docs/未收录.txt",
-      facts: { sizeBytes: 64n, mtimeNs: 1000000n, mode: 420 },
-    });
-    const file = locationEntryFile(LocationEntry.create({ path: reference.path, reference }), Location.create({ id: 4n, name: "Documents" }));
-    expect(file.id).toBe("location-file:4:docs/未收录.txt");
-    expect(file.size).toBe(64);
-    expect(file.status).toBeUndefined();
-    expect(selectionForFile(file, FileScope.SAVED).target).toMatchObject({ oneofKind: "location", location: { locationId: 4n, path: reference.path } });
-  });
-  it("keeps physical row identity stable when admission or observed content changes", () => {
-    const location = Location.create({ id: 4n });
-    const entry = LocationEntry.create({ path: "image.jpg", reference: { locationId: 4n, path: "image.jpg" } });
-    const initial = locationEntryFile(entry, location);
-    const admitted = locationEntryFile({ ...entry, file: File.create({ id: 19n }) }, location);
-    expect(admitted.id).toBe(initial.id);
-    expect(associatedLibraryFileID(initial)).toBeUndefined();
-    expect(associatedLibraryFileID(admitted)).toBe("19");
-    // Identity is the Location and relative path, so an admitted row keeps its target.
-    expect(admitted.locationReference).toEqual(expect.objectContaining({ locationId: 4n, path: "image.jpg" }));
   });
 });

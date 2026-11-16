@@ -89,7 +89,6 @@ func NewLTFSReadOrderProvider(options LTFSReadOptions) (ReadOrderProvider, strin
 		return nil, "LTFS Data partition EOD has no label mapping"
 	}
 	options.Partitions = partitions
-	options.Compression = proto.Bool(false)
 	options.Timing = proto.Clone(options.Timing).(*entity.TapeReadTiming)
 	completion := *options.Completion
 	options.Completion = &completion

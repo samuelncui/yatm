@@ -3,7 +3,6 @@ package apis
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,7 +66,7 @@ func (s *filesService) Measure(req *entity.MeasureFilesRequest, stream entity.Fi
 			return library.ErrLocationConflict
 		}
 		// Location Ignore excludes this Location's content, so it also excludes a measured root.
-		if location.Excluded(source.Location.Path, true) {
+		if s.api.exe.LocationExcluded(location, source.Location.Path, true) {
 			return status.Error(codes.FailedPrecondition, "Location Ignore excludes the measured path")
 		}
 		boundaries, loadErr := s.api.lib.ReadLocationBoundaries(ctx, location)
@@ -88,10 +87,6 @@ func (s *filesService) Measure(req *entity.MeasureFilesRequest, stream entity.Fi
 }
 
 func mergeMeasurement(total, item *entity.FilesMeasurement) {
-	if item.KnownBytes < 0 || total.KnownBytes > math.MaxInt64-item.KnownBytes {
-		total.Complete, total.Error = false, "size exceeds supported range"
-		return
-	}
 	total.KnownBytes += item.KnownBytes
 	if !item.Complete {
 		total.Complete = false

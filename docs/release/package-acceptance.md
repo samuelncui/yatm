@@ -143,7 +143,7 @@ python3 e2e/package_acceptance.py \
 ```
 
 The metadata tar contains root-level `tapes.db`, its retained WAL if present, and installation-relative
-`captured_indices`, `job-logs`, `write-reports` or transitional `jobs` evidence as applicable.
+`captured_indices`, `job-logs` or `write-reports` evidence as applicable.
 The controller copies only those data members. It rejects links and escaping paths, excludes saved
 configuration and scripts, and supplies an isolated configuration with no Tape devices or live
 Locations. The old server never starts. The exact candidate installer exercises declined Prepare,
@@ -153,7 +153,7 @@ The stopped installation then exercises repeated cleanup and historical Job repa
 [Independent metadata checks](../../e2e/legacy_metadata.py) compare copied legacy facts with the
 migrated SQLite rows and Job files, including nanosecond instants and archived logs. This checker
 supports completed Archive history with submitted inline sources and uniquely matched logged Media.
-It rejects other retained Job kinds/states and transitional Job databases; the report records missing
+It rejects other retained Job kinds/states; the report records missing
 Restore and other-state coverage. Compressed metadata needs `zstd` on the local `PATH`.
 Run Python without optimization because these checks use assertions. A missing fixture category is
 not acceptance. Real metadata, extracted copies and detailed transcripts remain in the private

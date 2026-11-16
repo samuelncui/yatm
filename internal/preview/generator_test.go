@@ -117,7 +117,7 @@ func TestGenerationUsesLiveRuntimeAndFrozenOutputSettings(t *testing.T) {
 			require.NoError(t, err)
 			manifest, err := manager.Manifest(signature)
 			require.NoError(t, err)
-			require.JSONEq(t, string(manager.generators[extension].settingsJSON), string(manifest.SettingsJson))
+			require.NotEmpty(t, manifest.Assets)
 			actual := decodePreviewAsset(t, manager, signature, role)
 			require.Equal(t, 80, actual.Width)
 			require.Equal(t, 45, actual.Height)

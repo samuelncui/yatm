@@ -100,8 +100,8 @@ process, including Job/Media, requested/prepared order, parameter and position s
 coverage and the selected learned read parameters' mean and maximum error. It can accompany a busy response; it never identifies the
 currently loaded cartridge or claims the final execution route. It adds no hardware query. Optional identity/mode/limit facts
 remain absent when unknown; feature support, current availability and validation are separate.
-Capacity limits report optional native bytes before EW, partition, observation timestamps and error/
-unreflected-write allowances, with estimate/lower-bound quality. Existing feature fields distinguish
+Capacity limits report optional native bytes before EW, partition and observation timestamps, with
+estimate quality. Existing feature fields distinguish
 support, availability and measured validation.
 They are transient diagnostics, not a per-file fit guarantee or persisted FORMAT preference.
 Compression/decompression limits expose an optional current numeric algorithm and enable-bit
@@ -113,9 +113,8 @@ reader and are not FORMAT preferences. Encryption setup belongs to the configure
 these observations do not add native key management. A key counter is not evidence that a key is present or correct;
 neither keys nor key-associated data enter inspection responses.
 Geometry limits expose the reported all-wrap command form and source, with count only after an
-interpretable response and optional freshness. Command-form support is not proof of full coverage;
-passive queries leave freshness unknown. Software ordering retains separate qualification and
-availability.
+interpretable response. Command-form support is not proof of full coverage. Software ordering
+retains separate qualification and availability.
 Permission, missing tools, no medium, clean unsupported forms, malformed responses and unknown
 ownership have distinct reasons. No capability report is saved in the Catalog. The
 [Tape device contract](tape.md#device-observation-and-raw-transport) defines physical access and cleanup.

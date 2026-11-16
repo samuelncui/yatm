@@ -1,13 +1,11 @@
 import { Feedback } from "@/components/feedback";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useBeforeUnload, useBlocker } from "react-router";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Checkbox, Grid, Stack, TextField } from "@mui/material";
 import { locationCli } from "@/api";
 import { Location } from "@/entity";
 import { SettingsField } from "@/components/settings-field";
-import { SettingsSection } from "@/components/settings-page";
+import { SettingsSection, UnsavedChangesPrompt } from "@/components/settings-page";
 import { LocationPathPicker } from "@/components/location-path-picker";
-import { ActionDialog } from "@/components/action-dialog";
 import { ActionRow } from "@/components/action-row";
 import { errorMessage } from "@/tools";
 
@@ -36,25 +34,12 @@ export const LocationForm = ({
   const [error, setError] = useState("");
   const [browsing, setBrowsing] = useState(false);
   const leave = useRef(false);
-  const discardConfirmed = useRef(false);
   const dirty = JSON.stringify(value) !== JSON.stringify(initial);
   const scopeChanged = value.rootPath !== initial.rootPath || value.ignore !== initial.ignore;
   useEffect(() => {
     onDirtyChange?.(dirty);
     return () => onDirtyChange?.(false);
   }, [dirty, onDirtyChange]);
-  const blocker = useBlocker(() => dirty && !leave.current);
-  useBeforeUnload(
-    useCallback(
-      (event: BeforeUnloadEvent) => {
-        if (dirty && !leave.current) {
-          event.preventDefault();
-          event.returnValue = "";
-        }
-      },
-      [dirty],
-    ),
-  );
   const save = async () => {
     if (busy) return;
     setBusy(true);
@@ -183,24 +168,7 @@ export const LocationForm = ({
           }}
         />
       )}
-      {blocker.state === "blocked" && (
-        <ActionDialog
-          title="Discard unsaved changes?"
-          confirmLabel="Discard"
-          cancelLabel="Keep editing"
-          danger
-          onConfirm={() => {
-            blocker.proceed?.();
-            discardConfirmed.current = true;
-          }}
-          onClose={() => {
-            if (!discardConfirmed.current) blocker.reset?.();
-            discardConfirmed.current = false;
-          }}
-        >
-          Your Location configuration has not been saved.
-        </ActionDialog>
-      )}
+      <UnsavedChangesPrompt when={() => dirty && !leave.current}>Your Location configuration has not been saved.</UnsavedChangesPrompt>
     </>
   );
 };

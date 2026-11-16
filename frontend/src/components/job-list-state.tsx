@@ -1,8 +1,11 @@
-import { useCallback, useMemo, type SetStateAction } from "react";
+import { createContext, useCallback, useMemo, type SetStateAction } from "react";
 import { useAppSelector, useAppStore } from "@/state/react";
 import { encodeJobList, jobListActions, makeSelectJobList, type JobListSnapshot } from "@/state/jobs";
 
 export type { JobListSnapshot } from "@/state/jobs";
+
+/** Job cards and Media dialogs refresh the Jobs view that renders them. */
+export const RefreshContext = createContext<() => Promise<void>>(async () => {});
 
 export const useJobListState = (key: string) => {
   const store = useAppStore();

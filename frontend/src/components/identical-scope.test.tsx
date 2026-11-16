@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { Location, type IdenticalRoot } from "@/entity";
 import { IdenticalScopePicker } from "./identical-scope";
+import { createAppStore } from "@/state/store";
+import { loadLocations } from "@/state/locations";
 
 const { list, get, report } = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), report: vi.fn() }));
 vi.mock("@/api", () => ({ locationCli: { list, get } }));
@@ -27,60 +29,17 @@ beforeEach(() => {
   get.mockReturnValue({ response: Promise.resolve({}) });
 });
 
-it("hydrates a preselected Location label without opening or enumerating choices", async () => {
-  get.mockReturnValue({ response: Promise.resolve({ location: Location.create({ id: 99n, name: "Deep-linked Location" }) }) });
+it("labels a preselected Location from the shared catalog and keeps an unknown ID explicit", async () => {
+  list.mockReturnValue(call([Location.create({ id: 99n, name: "Deep-linked Location" })]));
+  const store = createAppStore();
+  await loadLocations(store);
   const onChange = vi.fn();
-  render(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} />);
-  expect(await screen.findByText("Deep-linked Location")).toBeInTheDocument();
-  expect(screen.queryByText("Location 99")).not.toBeInTheDocument();
+  const view = render(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} />, { store });
+  expect(screen.getByText("Deep-linked Location")).toBeInTheDocument();
   expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-  expect(get).toHaveBeenCalledExactlyOnceWith({ id: 99n }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
-  expect(list).not.toHaveBeenCalled();
-  expect(onChange).not.toHaveBeenCalled();
-});
-
-it.each(["changed", "removed", "unmounted"] as const)("cancels preselected-label lookup (%s) and ignores its late reply", async (action) => {
-  let complete!: (reply: unknown) => void;
-  get.mockReturnValueOnce({
-    response: new Promise((resolve) => {
-      complete = resolve;
-    }),
-  });
-  const onChange = vi.fn();
-  const view = render(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} />);
-  const signal = get.mock.calls[0][1].abort as AbortSignal;
-  expect(screen.getByText("Location 99")).toBeInTheDocument();
-  if (action === "unmounted") view.unmount();
-  else {
-    if (action === "changed") get.mockReturnValueOnce({ response: Promise.resolve({ location: Location.create({ id: 100n, name: "Current Location" }) }) });
-    view.rerender(<IdenticalScopePicker value={action === "changed" ? [{ locationId: 100n }] : []} onChange={onChange} />);
-    if (action === "changed") await screen.findByText("Current Location");
-  }
-  expect(signal.aborted).toBe(true);
-  await act(async () => complete({ location: Location.create({ id: 99n, name: "Obsolete label" }) }));
-  expect(screen.queryByText("Obsolete label")).not.toBeInTheDocument();
-  expect(screen.queryByText("Location 99")).not.toBeInTheDocument();
-  if (action === "changed") expect(screen.getByText("Current Location")).toBeInTheDocument();
-  if (action === "removed") {
-    get.mockReturnValueOnce({ response: Promise.resolve({ location: Location.create({ id: 99n, name: "Fresh label" }) }) });
-    view.rerender(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} />);
-    expect(await screen.findByText("Fresh label")).toBeInTheDocument();
-    expect(get).toHaveBeenCalledTimes(2);
-  }
-  expect(list).not.toHaveBeenCalled();
-  expect(onChange).not.toHaveBeenCalled();
-  expect(report).not.toHaveBeenCalled();
-});
-
-it("retains the explicit selected ID on lookup failure without toasts or automatic enumeration", async () => {
-  get.mockImplementation(() => ({ response: Promise.reject(new Error("Location unavailable")) }));
-  const onChange = vi.fn();
-  const view = render(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} />);
-  await act(async () => {});
-  view.rerender(<IdenticalScopePicker value={[{ locationId: 99n }]} onChange={onChange} disabled />);
-  expect(screen.getByText("Location 99")).toBeInTheDocument();
-  expect(get).toHaveBeenCalledOnce();
-  expect(list).not.toHaveBeenCalled();
+  view.rerender(<IdenticalScopePicker value={[{ locationId: 100n }]} onChange={onChange} />);
+  expect(screen.getByText("Location 100")).toBeInTheDocument();
+  expect(list).toHaveBeenCalledOnce();
   expect(onChange).not.toHaveBeenCalled();
   expect(report).not.toHaveBeenCalled();
 });

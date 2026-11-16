@@ -20,7 +20,6 @@ var statusCodes = []struct {
 	code codes.Code
 }{
 	{executor.ErrAccessExcluded, codes.PermissionDenied},
-	{library.ErrLocationBusy, codes.FailedPrecondition},
 	{library.ErrLocationConflict, codes.Aborted},
 	{library.ErrLocationUnverified, codes.FailedPrecondition},
 	{settingspkg.ErrInvalid, codes.InvalidArgument},

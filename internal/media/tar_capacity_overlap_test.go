@@ -33,7 +33,7 @@ func TestTarCapacityWriteCallbackCannotAdvanceFullReturnPrefix(t *testing.T) {
 		if err := issue(); err != nil {
 			return nil, false, err
 		}
-		return tarCapacityTestSample(10000, tape.CapacityLowerBound), true, nil
+		return tarCapacityTestSample(10000, tape.CapacityEstimate), true, nil
 	}
 	session, err := newTarTestWriteSession(device, options)
 	require.NoError(t, err)
@@ -160,15 +160,14 @@ func TestTarCapacityOffDoesNotAccountEachReturnedWrite(t *testing.T) {
 
 func TestTarCapacityOverlapSaturatesWithoutReclaimingInFlightWrites(t *testing.T) {
 	for _, tc := range []struct {
-		name                           string
-		remaining, captured, allowance uint64
-		want                           uint64
+		name                string
+		remaining, captured uint64
+		want                uint64
 	}{
-		{"known return before query", 20000, 4160, 0, 20000 - 4160 - 1344},
-		{"return during query", 20000, 0, 0, 20000 - 8320 - 1344},
-		{"small sample", 100, 0, 0, 0},
-		{"maximum allowance", math.MaxUint64, 0, math.MaxUint64, 0},
-		{"maximum sample", math.MaxUint64, 0, 0, math.MaxUint64 - 8320 - 1344},
+		{"known return before query", 20000, 4160, 20000 - 4160 - 1344},
+		{"return during query", 20000, 0, 20000 - 8320 - 1344},
+		{"small sample", 100, 0, 0},
+		{"maximum sample", math.MaxUint64, 0, math.MaxUint64 - 8320 - 1344},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// The returned prefix may grow after capture; publication still subtracts the captured K.
@@ -178,8 +177,7 @@ func TestTarCapacityOverlapSaturatesWithoutReclaimingInFlightWrites(t *testing.T
 			require.NoError(t, err)
 			require.NoError(t, budget.reserve(8192))
 			require.NoError(t, budget.returned(4096))
-			sample := tarCapacityTestSample(tc.remaining, tape.CapacityLowerBound)
-			sample.ErrorBytes, sample.UnreflectedBytes = &tc.allowance, &tc.allowance
+			sample := tarCapacityTestSample(tc.remaining, tape.CapacityEstimate)
 			budget.publish(sample, tarCapacityIssue{returned: tc.captured})
 			require.Equal(t, tc.want, budget.available)
 		})

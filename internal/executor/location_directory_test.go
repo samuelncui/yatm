@@ -95,7 +95,7 @@ func TestLocationChildAccessUsesRegisteredRootRanges(t *testing.T) {
 		reader, err := exe.PrepareLocationDirectory(location, parent)
 		require.NoError(t, err)
 		for _, name := range []string{"file", "file.secret", "anchored"} {
-			require.Equal(t, !location.AccessExcluded(filepath.ToSlash(filepath.Join(parent, name)), false), reader.Allowed(name, false))
+			require.Equal(t, exe.originalAccess(root)(filepath.ToSlash(filepath.Join(parent, name)), false), reader.Allowed(name, false))
 		}
 		require.False(t, reader.Allowed("file.secret", false))
 	}

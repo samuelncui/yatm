@@ -86,7 +86,7 @@ func (s *locationStage) enumerate(ctx context.Context, policy entity.ScanSignatu
 			continue
 		}
 		if err := walkSelection(ctx, s.exe, s.source, scope.Path, func(name string, info os.FileInfo) error {
-			row, err := s.observation(name, scope.Path, info, policy)
+			row, err := s.observation(name, info, policy)
 			if err != nil {
 				return err
 			}
@@ -102,13 +102,13 @@ func (s *locationStage) enumerate(ctx context.Context, policy entity.ScanSignatu
 	return flush()
 }
 
-func (s *locationStage) observation(name, scope string, info os.FileInfo, policy entity.ScanSignaturePolicy) (*Entry, error) {
+func (s *locationStage) observation(name string, info os.FileInfo, policy entity.ScanSignaturePolicy) (*Entry, error) {
 	facts, err := executor.InspectLocationFacts(info)
 	if err != nil {
 		return nil, fmt.Errorf("inspect Location entry %q failed, %w", name, err)
 	}
 	full := filepath.Join(s.source.RootPath, filepath.FromSlash(name))
-	return &Entry{LocationID: s.source.ID, Path: name, ScopePath: scope, SourcePath: full,
+	return &Entry{LocationID: s.source.ID, Path: name, SourcePath: full,
 		Change: entity.ScanChange_SCAN_CHANGE_ADDED, NeedsHash: policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
 		Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Evidence: observation.FromKeys(s.tracker.Observe(full, info))}, nil
 }
@@ -270,7 +270,7 @@ func (s *locationStage) recordAbsent(ctx context.Context, scope *Scope, rows []*
 	paths := make([]string, 0, len(rows))
 	absent := make(map[string]*library.FileLocation, len(rows))
 	for _, row := range rows {
-		if library.IsLocationTrashPath(row.Path) || s.source.Excluded(row.Path, false) {
+		if library.IsLocationTrashPath(row.Path) || s.exe.LocationExcluded(s.source, row.Path, false) {
 			continue
 		}
 		paths = append(paths, row.Path)
@@ -295,7 +295,7 @@ func (s *locationStage) recordAbsent(ctx context.Context, scope *Scope, rows []*
 		if row == nil {
 			continue
 		}
-		entries = append(entries, &Entry{LocationID: s.source.ID, Path: row.Path, ScopePath: scope.Path,
+		entries = append(entries, &Entry{LocationID: s.source.ID, Path: row.Path,
 			Change: entity.ScanChange_SCAN_CHANGE_REMOVED, Before: row.Observation()})
 	}
 	if err := s.saveEntries(ctx, entries); err != nil {
@@ -338,7 +338,7 @@ func walkSelection(ctx context.Context, exe *executor.Executor, source *library.
 	}
 
 	// The Executor enforces administrator boundaries; Location Ignore excludes the named file.
-	if source.Excluded(selected, false) {
+	if exe.LocationExcluded(source, selected, false) {
 		return nil
 	}
 	return yield(selected, info)

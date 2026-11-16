@@ -86,18 +86,7 @@ type Job struct {
 
 // CheckpointState reports the last published manifest position for retained result inspection.
 func (job *Job) CheckpointState() entity.JobStatus {
-	return manifestPosition(job.Checkpoint)
-}
-
-// manifestPosition reports the manifest position one durable state records. Only a state a runner
-// publishes while its manifest exists is a position; a failure or a cancellation is not.
-func manifestPosition(state entity.JobStatus) entity.JobStatus {
-	switch state {
-	case entity.JobStatus_JOB_STATUS_PREPARING, entity.JobStatus_JOB_STATUS_READY, entity.JobStatus_JOB_STATUS_COMPLETED:
-		return state
-	default:
-		return entity.JobStatus_JOB_STATUS_UNSPECIFIED
-	}
+	return job.Checkpoint
 }
 
 // JobTarget is immutable catalog navigation metadata, not execution state.

@@ -154,8 +154,9 @@ convert to `Date` only for display and date controls, with range validation and 
 before the Unix epoch. An unchanged Restore cutoff keeps its original nanoseconds rather than
 round-tripping through the control's lower precision.
 File rows keep their original nanoseconds as the shared browser date-sort key; saved-version
-ordering and Preview selection follow the Library's [latest saved version order](../docs/architecture/library.md#organization-and-content)
-with exact nanosecond comparisons. A first-date display fallback does not replace an unknown last archive date in that order.
+ordering follows the Library's [latest saved version order](../docs/architecture/library.md#organization-and-content)
+with exact nanosecond comparisons, and the saved-version Preview uses the latest version that
+`FilesDetail` reports. A first-date display fallback does not replace an unknown last archive date in that order.
 
 Shared read hooks keep requests local to each consumer. Preview and saved-version reads share their
 feature hooks; the [Location-choice hook](src/components/use-location-choices.ts) owns

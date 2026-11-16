@@ -1,5 +1,5 @@
 import { Feedback } from "@/components/feedback";
-import { createContext, memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -11,17 +11,14 @@ import { jobCli } from "@/api";
 import { Job, JobKind, type JobFilter } from "@/entity";
 import { JobFilters, jobFilterFromParams } from "@/components/job-filters";
 
-import { JobCard, jobLabel } from "@/components/job-card";
+import { JobCard, isJobRunning, jobLabel } from "@/components/job-progress";
 import { contentTime } from "@/components/content-status";
-import { isJobRunning } from "@/components/job-progress";
 import { PageHeading } from "@/components/page-heading";
 import { errorMessage } from "@/tools";
 import { ArchiveCard } from "@/components/job-archive";
 import { RestoreCard } from "@/components/job-restore";
 import { ScanCard } from "@/components/job-scan";
-import { useJobListState } from "@/components/job-list-state";
-
-export const RefreshContext = createContext<() => Promise<void>>(async () => {});
+import { RefreshContext, useJobListState } from "@/components/job-list-state";
 
 const catalogPageSize = 20n;
 const changePageSize = 100n;
@@ -33,11 +30,8 @@ const mergeJobs = (current: Job[], changed: Job[]) => {
     // Retain tombstones so an older in-flight snapshot cannot resurrect a Job.
     byID.set(job.id, job);
   }
-  return Array.from(byID.values()).sort((a, b) => {
-    if (a.createdAtNs !== b.createdAtNs) return a.createdAtNs > b.createdAtNs ? -1 : 1;
-    if (a.id === b.id) return 0;
-    return a.id > b.id ? -1 : 1;
-  });
+  // The server pages Jobs by descending ID; merged pages keep that order.
+  return Array.from(byID.values()).sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1));
 };
 
 export const JobsBrowser = () => {

@@ -37,7 +37,7 @@ type settingsAccessCommand struct{ runtime *runtime }
 
 type settingsBrowseCommand struct {
 	runtime *runtime
-	Path    string `long:"path" description:"Authorized absolute path, or a relative directory with location-id"`
+	Path    string `long:"path" description:"Authorized absolute path; empty lists the access ranges"`
 	Cursor  string `long:"cursor" description:"Directory page cursor"`
 	Limit   int32  `long:"limit" default:"100" description:"Maximum directories in this page"`
 }
@@ -90,24 +90,22 @@ func (c *settingsLibraryCommand) Execute(_ []string) error {
 }
 
 func (c *settingsPreviewCommand) Execute(_ []string) error {
-	// Read the effective group for display; replacement files carry the whole typed value.
-	changing := c.PreviewJSON != ""
+	// Display the effective group; a replacement file carries the whole typed value.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_PREVIEW)
-	if err != nil {
-		return err
-	}
-	settings := value.GetPreview()
-	if settings == nil {
-		return runtimeError("protocol", fmt.Errorf("Preview settings reply is missing"))
-	}
-	if !changing {
-		return writeProto(c.runtime.stdout, settings)
+	if c.PreviewJSON == "" {
+		value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_PREVIEW)
+		if err != nil {
+			return err
+		}
+		if value.GetPreview() == nil {
+			return runtimeError("protocol", fmt.Errorf("Preview settings reply is missing"))
+		}
+		return writeProto(c.runtime.stdout, value.GetPreview())
 	}
 
 	// Replace the complete Preview group from the bounded input file.
-	settings = &entity.PreviewSettings{}
+	settings := &entity.PreviewSettings{}
 	if err := readSettingsJSON(c.PreviewJSON, "Preview", settings); err != nil {
 		return err
 	}
@@ -152,20 +150,19 @@ func (c *settingsDeviceCommand) Execute(_ []string) error {
 	// Read the complete typed group without querying physical devices.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_DEVICE)
-	if err != nil {
-		return err
-	}
-	settings := value.GetDevice()
-	if settings == nil {
-		return runtimeError("protocol", fmt.Errorf("Device settings reply is missing"))
-	}
 	if c.DeviceJSON == "" {
-		return writeProto(c.runtime.stdout, settings)
+		value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_DEVICE)
+		if err != nil {
+			return err
+		}
+		if value.GetDevice() == nil {
+			return runtimeError("protocol", fmt.Errorf("Device settings reply is missing"))
+		}
+		return writeProto(c.runtime.stdout, value.GetDevice())
 	}
 
 	// Replace only the Device settings; admission validates hardware later.
-	settings = &entity.DeviceSettings{}
+	settings := &entity.DeviceSettings{}
 	if err := readSettingsJSON(c.DeviceJSON, "Device", settings); err != nil {
 		return err
 	}

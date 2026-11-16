@@ -152,8 +152,8 @@ func TestSGReservationReadsActualBoundWithoutClampingRequest(t *testing.T) {
 			return nil
 		}
 		err := transport.EnsureTransfer(context.Background(), 512<<10)
-		if (err == nil) != (actual == 512<<10) || calls != 2 || transport.TransferLimit() != actual || reserved != actual {
-			t.Fatalf("reservation=%v actual=%d native=%d", err, transport.TransferLimit(), reserved)
+		if (err == nil) != (actual == 512<<10) || calls != 2 || transport.limit != actual || reserved != actual {
+			t.Fatalf("reservation=%v actual=%d native=%d", err, transport.limit, reserved)
 		}
 		if err := transport.Close(); err != nil {
 			t.Fatal(err)

@@ -189,10 +189,10 @@ func TestLibraryNanosecondAutoTimestamps(t *testing.T) {
 	require.Equal(t, now.UnixNano(), FileRowTime(projected))
 
 	// Directory search compares the stored instant directly without a millisecond multiplier.
-	page, err := lib.SearchFilesIn(ctx, `mtime:"`+now.Format(time.RFC3339Nano)+`"`, "", 10, entity.FileScope_FILE_SCOPE_ALL)
+	page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, `mtime:"`+now.Format(time.RFC3339Nano)+`"`, "", 10)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 1)
-	require.Equal(t, file.ID, page.Results[0].File.ID)
+	require.Len(t, page.Files, 1)
+	require.Equal(t, file.ID, page.Files[0].ID)
 }
 
 func TestLibraryNanosecondArchiveCutoffAndMerge(t *testing.T) {

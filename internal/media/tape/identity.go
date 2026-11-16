@@ -14,9 +14,7 @@ import (
 // Configured retains the exact script-facing name; Key is only an Executor resource identity.
 type Identity struct {
 	Configured string
-	Canonical  string
 	Key        string
-	Sysfs      string
 	SG         string
 	Aliases    []string
 }
@@ -52,7 +50,6 @@ func (r Resolver) Resolve(path string) (Identity, error) {
 	if info.Mode()&os.ModeCharDevice == 0 {
 		return identity, fmt.Errorf("Tape alias is not a character device: %w", ErrUnsupported)
 	}
-	identity.Canonical = canonical
 	name := filepath.Base(canonical)
 	var device string
 	if match := tapeName.FindStringSubmatch(name); match != nil {
@@ -75,7 +72,7 @@ func (r Resolver) Resolve(path string) (Identity, error) {
 	if strings.TrimSpace(string(kind)) != "1" {
 		return identity, fmt.Errorf("SCSI device is not sequential access")
 	}
-	identity.Sysfs, identity.Key = device, device
+	identity.Key = device
 	generic, err := os.ReadDir(filepath.Join(device, "scsi_generic"))
 	if err != nil {
 		return identity, fmt.Errorf("read Tape SG aliases failed, %w", err)

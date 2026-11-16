@@ -8,7 +8,6 @@ package files
 
 import (
 	"context"
-	"errors"
 
 	"github.com/samuelncui/yatm/entity"
 )
@@ -34,24 +33,18 @@ type Directory struct {
 	Path string
 }
 
-// Entry identifies one row for detail and operation calls.
+// Entry identifies one row for detail and operation calls; its Source fixes the kind.
 type Entry struct {
-	Kind Kind
 	ID   int64
 	Path string
 }
 
-// ErrStopListing lets a consumer end a listing early, which is how a caller that only
-// needs to know the directory resolves stops after the first batch.
-var ErrStopListing = errors.New("listing stopped by its consumer")
-
 // ListRequest asks for one complete directory listing. It carries a directory and the fact
 // groups the caller needs, never a cursor or a page size: a listing has no remainder.
-// Query and Recursive are empty for a directory read, where they are always meaningless.
+// Recursive is false for a directory read; a Library query page sets it.
 type ListRequest struct {
 	Directory Directory
 	Scope     entity.FileScope
-	Query     string
 	Recursive bool
 	Include   []entity.FilesInclude
 	BatchSize int
@@ -78,19 +71,18 @@ type SearchRequest struct {
 	Include   []entity.FilesInclude
 }
 
-// SearchReply is one page. Total is nil when the query cannot state how many matches exist.
+// SearchReply is one page.
 type SearchReply struct {
 	Entries     []*entity.FilesEntry
 	NextCursor  string
 	Scope       entity.FileScope
 	Directory   *entity.FilesEntry
 	Breadcrumbs []*entity.FilesEntry
-	Total       *int64
 }
 
 // ListRequest is the listing shape of the same directory, scope, query and fact groups.
 func (r SearchRequest) ListRequest() ListRequest {
-	return ListRequest{Directory: r.Directory, Scope: r.Scope, Query: r.Query, Recursive: r.Recursive,
+	return ListRequest{Directory: r.Directory, Scope: r.Scope, Recursive: r.Recursive,
 		Include: r.Include, BatchSize: r.Limit}
 }
 

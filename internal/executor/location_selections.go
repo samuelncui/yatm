@@ -17,17 +17,12 @@ import (
 
 // WalkLiveSelections expands only selected physical scopes and admits their ordinary files.
 // Job manifests retain responsibility for deduplicating File IDs across mixed logical/physical roots.
+// FreezeSelections already bounded and validated the selection roots; no in-memory visited set
+// grows with the number of descendants.
 func (e *Executor) WalkLiveSelections(ctx context.Context, db *gorm.DB, selections []*entity.FileSelection, yield func(*library.File, string) error) (rerr error) {
-	// User roots are bounded; no in-memory visited set grows with the number of descendants.
-	if len(selections) == 0 || len(selections) > 1000 {
-		return fmt.Errorf("select between 1 and 1000 roots")
-	}
 	var logical []*entity.FileSelection
 	physical := map[int64][]*entity.LocationSelection{}
 	for _, selection := range selections {
-		if selection == nil {
-			return fmt.Errorf("missing selection")
-		}
 		if selection.GetLibrary() != nil {
 			logical = append(logical, selection)
 		}
@@ -102,7 +97,7 @@ func (e *Executor) walkLocationSelection(ctx context.Context, location *library.
 		}
 		return fmt.Errorf("Trash content cannot be selected for a Job")
 	}
-	if !recursive && location.Excluded(ref.Path, info.IsDir()) {
+	if !recursive && e.LocationExcluded(location, ref.Path, info.IsDir()) {
 		return nil
 	}
 	// Earlier selected roots own their complete subtrees, including empty directories.

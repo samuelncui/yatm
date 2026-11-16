@@ -3,7 +3,6 @@ package tools
 import (
 	"net/http"
 	"net/http/pprof"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,10 +18,6 @@ func NewDebugServer(addr string) {
 	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	if err := http.ListenAndServe(addr, debugMux); err != nil {
-		if strings.Contains(err.Error(), "interrupt") {
-			return
-		}
-
 		logrus.WithError(err).Errorf("debug server listen and serve fail: addr= %s", addr)
 	}
 }

@@ -3,10 +3,8 @@ package library
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"time"
 
-	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
 )
 
@@ -93,11 +91,9 @@ func (l *Library) publishObservations(ctx context.Context, locationID int64, ana
 			}
 			ids := make([]int64, 0, len(rows))
 			for _, p := range rows {
-				if p == nil || p.IsDir || !fs.FileMode(p.Mode).IsRegular() || p.Size < 0 {
+				// Admission owns the regular-file and path validation.
+				if p.IsDir {
 					return fmt.Errorf("invalid analysis file facts")
-				}
-				if err := entity.ValidateRelativePath(p.Path); err != nil {
-					return err
 				}
 				if p.Path <= previous {
 					return fmt.Errorf("analysis manifest is not ordered at %q", p.Path)

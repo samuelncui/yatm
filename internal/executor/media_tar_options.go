@@ -43,14 +43,6 @@ func (b *mediaBackend) tapeDefaults(ctx context.Context, device string) (*entity
 	return settingspkg.TapeDefaults(value, device), nil
 }
 
-func (b *mediaBackend) resolveTapeReadOrder(ctx context.Context, device string) (entity.TapeReadOrder, error) {
-	defaults, err := b.tapeDefaults(ctx, device)
-	if err != nil {
-		return 0, err
-	}
-	return settingspkg.TapeDefaultReadOrder(defaults), nil
-}
-
 func (b *mediaBackend) resolveTapeWrite(ctx context.Context, target *entity.ArchiveTapeTarget) (*entity.ArchiveTapeTarget, error) {
 	// Freeze the configured selector and explicit choices before waiting for the drive.
 	if target == nil {

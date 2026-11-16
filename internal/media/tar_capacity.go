@@ -14,15 +14,12 @@ import (
 
 // TarCapacityOptions contains attempt-local qualified cost and observation facts.
 // Cost is a monotone cumulative native-byte cost, including record and filemark overhead.
-// When CostBounded is true, its increments must bound each extension under the qualified packing policy.
 type TarCapacityOptions struct {
 	Initial *tape.CapacitySample
 	// Observe calls its callback synchronously when granting a query lifetime, before native submission.
-	Observe     func(context.Context, func() error) (*tape.CapacitySample, bool, error)
-	Interval    time.Duration
-	MaxAge      time.Duration
-	Cost        func(encodedBytes, records uint64, filemarks uint32) (uint64, error)
-	CostBounded bool
+	Observe  func(context.Context, func() error) (*tape.CapacitySample, bool, error)
+	Interval time.Duration
+	Cost     func(encodedBytes, records uint64, filemarks uint32) (uint64, error)
 }
 
 type tarCapacityWriter interface {
@@ -35,15 +32,10 @@ type tarCapacityIssue struct {
 
 type tarCapacityRefusal struct {
 	wanted, available uint64
-	quality           tape.CapacityQuality
 }
 
 func (e *tarCapacityRefusal) Error() string {
-	quality := "estimate"
-	if e.quality == tape.CapacityLowerBound {
-		quality = "lower bound"
-	}
-	return fmt.Sprintf("tar capacity admission stopped, want=%d have=%d native_bytes quality=%s", e.wanted, e.available, quality)
+	return fmt.Sprintf("tar capacity admission stopped, want=%d have=%d native_bytes quality=estimate", e.wanted, e.available)
 }
 
 func (*tarCapacityRefusal) Unwrap() error { return ErrTargetNoSpace }
@@ -57,8 +49,7 @@ type tarCapacityBudget struct {
 	reservedBytes, returnedBytes uint64
 	reservedCost, returnedCost   uint64
 	available                    uint64
-	quality                      tape.CapacityQuality
-	validUntil, lastIssue        time.Time
+	lastIssue                    time.Time
 	known, closed                bool
 	failure                      error
 	cancel                       context.CancelFunc
@@ -69,8 +60,8 @@ func newTarCapacityBudget(options *TarCapacityOptions, mode tape.RecordMode) (*t
 	if options == nil {
 		return nil, nil
 	}
-	if options.Cost == nil || options.MaxAge < 0 || options.Interval < 0 || options.Observe != nil && options.Interval == 0 {
-		return nil, errors.New("tar capacity requires a cost policy and valid observation age/cadence")
+	if options.Cost == nil || options.Interval < 0 || options.Observe != nil && options.Interval == 0 {
+		return nil, errors.New("tar capacity requires a cost policy and a valid observation cadence")
 	}
 	// Reserve both end blocks, fixed-mode final padding and the terminating filemark.
 	// Charging up to two additional records is conservative even when the trailer shares a member record.
@@ -206,11 +197,8 @@ func (b *tarCapacityBudget) reserve(bytes uint64) error {
 		return errors.Join(err, errors.New("tar capacity cost policy is not monotone"))
 	}
 	debit := cost - b.reservedCost
-	if b.known && !b.validUntil.IsZero() && !time.Now().Before(b.validUntil) {
-		b.known = false
-	}
 	if b.known && debit > b.available {
-		return &tarCapacityRefusal{wanted: debit, available: b.available, quality: b.quality}
+		return &tarCapacityRefusal{wanted: debit, available: b.available}
 	}
 	if b.known {
 		b.available -= debit
@@ -248,15 +236,11 @@ func (b *tarCapacityBudget) publish(sample *tape.CapacitySample, issue tarCapaci
 		return false
 	}
 	if sample.IssuedAt.IsZero() || sample.CompletedAt.Before(sample.IssuedAt) || sample.CompletedAt.After(now) ||
-		!sample.IssuedAt.After(b.lastIssue) || b.options.MaxAge > 0 && !now.Before(sample.IssuedAt.Add(b.options.MaxAge)) || sample.IssuedAt.After(now) {
+		!sample.IssuedAt.After(b.lastIssue) || sample.IssuedAt.After(now) {
 		return false
 	}
-	if sample.RemainingBytes == nil || sample.Quality != tape.CapacityEstimate && sample.Quality != tape.CapacityLowerBound {
+	if sample.RemainingBytes == nil || sample.Quality != tape.CapacityEstimate {
 		return false
-	}
-	quality := tape.CapacityEstimate
-	if sample.Quality == tape.CapacityLowerBound && b.options.MaxAge > 0 && b.options.CostBounded && sample.ErrorBytes != nil && sample.UnreflectedBytes != nil {
-		quality = tape.CapacityLowerBound
 	}
 	if issue.returned > b.returnedCost || issue.returned > b.reservedCost {
 		return false
@@ -264,12 +248,6 @@ func (b *tarCapacityBudget) publish(sample *tape.CapacitySample, issue tarCapaci
 
 	// Subtract separately to avoid overflow; WRITEs returned during the query are debited again.
 	deductions := []uint64{b.reservedCost - issue.returned, b.closure}
-	if sample.ErrorBytes != nil {
-		deductions = append(deductions, *sample.ErrorBytes)
-	}
-	if sample.UnreflectedBytes != nil {
-		deductions = append(deductions, *sample.UnreflectedBytes)
-	}
 	available := *sample.RemainingBytes
 	for _, debit := range deductions {
 		if debit >= available {
@@ -278,17 +256,8 @@ func (b *tarCapacityBudget) publish(sample *tape.CapacitySample, issue tarCapaci
 		}
 		available -= debit
 	}
-	if b.known && b.quality == tape.CapacityLowerBound && now.Before(b.validUntil) && quality != tape.CapacityLowerBound {
-		// An estimate can tighten an applicable bound, but cannot increase it or renew its age.
-		b.available = min(b.available, available)
-		b.lastIssue = sample.IssuedAt
-		return true
-	}
-	b.available, b.quality, b.known = available, quality, true
-	b.validUntil, b.lastIssue = time.Time{}, sample.IssuedAt
-	if b.options.MaxAge > 0 {
-		b.validUntil = sample.IssuedAt.Add(b.options.MaxAge)
-	}
+	b.available, b.known = available, true
+	b.lastIssue = sample.IssuedAt
 	return true
 }
 

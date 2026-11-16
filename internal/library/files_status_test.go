@@ -57,10 +57,10 @@ func TestFileStatusFactsAndOriginalDuplicates(t *testing.T) {
 	var found []int64
 	cursor := ""
 	for {
-		page, err := lib.SearchFilesIn(ctx, "has:duplicates", cursor, 1, entity.FileScope_FILE_SCOPE_ALL)
+		page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "has:duplicates", cursor, 1)
 		require.NoError(t, err)
-		for _, result := range page.Results {
-			found = append(found, result.File.ID)
+		for _, result := range page.Files {
+			found = append(found, result.ID)
 		}
 		cursor = page.NextCursor
 		if cursor == "" {
@@ -68,23 +68,23 @@ func TestFileStatusFactsAndOriginalDuplicates(t *testing.T) {
 		}
 	}
 	require.Equal(t, []int64{files[0].ID, files[1].ID, files[2].ID}, found)
-	page, err := lib.SearchFilesIn(ctx, fmt.Sprintf("location:%d AND has:duplicates", two.ID), "", 10, entity.FileScope_FILE_SCOPE_ALL)
+	page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, fmt.Sprintf("location:%d AND has:duplicates", two.ID), "", 10)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 1, "Location filters narrow results, not the global comparison")
-	require.Equal(t, files[1].ID, page.Results[0].File.ID)
-	page, err = lib.SearchFilesIn(ctx, "name:a AND has:duplicates", "", 10, entity.FileScope_FILE_SCOPE_ALL)
+	require.Len(t, page.Files, 1, "Location filters narrow results, not the global comparison")
+	require.Equal(t, files[1].ID, page.Files[0].ID)
+	page, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:a AND has:duplicates", "", 10)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 1)
+	require.Len(t, page.Files, 1)
 
 	// Removing one index does not merge Files; the two remaining originals still match within one Location.
 	require.NoError(t, db.Delete(&FileLocation{}, "file_id = ?", files[1].ID).Error)
-	page, err = lib.SearchFilesIn(ctx, "has:duplicates", "", 10, entity.FileScope_FILE_SCOPE_ALL)
+	page, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "has:duplicates", "", 10)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 2)
+	require.Len(t, page.Files, 2)
 	require.NoError(t, db.Delete(&FileLocation{}, "file_id = ?", files[2].ID).Error)
-	page, err = lib.SearchFilesIn(ctx, "has:duplicates", "", 10, entity.FileScope_FILE_SCOPE_ALL)
+	page, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "has:duplicates", "", 10)
 	require.NoError(t, err)
-	require.Empty(t, page.Results, "equal historical signatures alone do not make online duplicates")
+	require.Empty(t, page.Files, "equal historical signatures alone do not make online duplicates")
 }
 
 func TestRestorableStatusMatchesPreparation(t *testing.T) {

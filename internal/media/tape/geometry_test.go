@@ -136,7 +136,7 @@ func TestGeometryPreservesReportedPairsGapsObjectsAndUnknownFreshness(t *testing
 	d := geometryDevice(t, f)
 	geometry, err := d.Geometry(context.Background())
 	want := []WrapEndpoint{{Wrap: 3, Object: 1 << 40}, {Wrap: 8, Object: 1 << 40}, {Partition: 1, Wrap: 3, Object: 77}}
-	if err != nil || !geometry.Valid() || !geometry.AllWraps || geometry.Fresh != nil || geometry.Source != "A3/1F/45" || geometry.ObservedAt.IsZero() || !reflect.DeepEqual(geometry.Endpoints, want) {
+	if err != nil || !geometry.Valid() || !geometry.AllWraps || geometry.Source != "A3/1F/45" || geometry.ObservedAt.IsZero() || !reflect.DeepEqual(geometry.Endpoints, want) {
 		t.Fatalf("geometry=%+v error=%v", geometry, err)
 	}
 	geometry.Endpoints[0].Object = 9
@@ -146,7 +146,7 @@ func TestGeometryPreservesReportedPairsGapsObjectsAndUnknownFreshness(t *testing
 	}
 	report := d.Report()
 	observedFeature := feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
-	if observedFeature.GetGeometry().Fresh != nil || observedFeature.GetGeometry().GetReportedWraps() != 3 || !observedFeature.GetGeometry().GetAllWraps() || observedFeature.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || report.GetTape().RecommendedWriteOptions != nil {
+	if observedFeature.GetGeometry().GetReportedWraps() != 3 || !observedFeature.GetGeometry().GetAllWraps() || observedFeature.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || report.GetTape().RecommendedWriteOptions != nil {
 		t.Fatalf("feature=%v", observedFeature)
 	}
 	order := feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER)
@@ -200,7 +200,7 @@ func TestGeometryFirstOnlyHasNoInventedEndpointAssociation(t *testing.T) {
 	d := geometryDevice(t, f)
 	geometry, err := d.Geometry(context.Background())
 	feature := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
-	if err != nil || geometry == nil || geometry.AllWraps || len(geometry.Endpoints) != 0 || geometry.Fresh != nil || feature.GetGeometry().GetAllWraps() || feature.GetGeometry().GetReportedWraps() != 1 || feature.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_PARTIAL {
+	if err != nil || geometry == nil || geometry.AllWraps || len(geometry.Endpoints) != 0 || feature.GetGeometry().GetAllWraps() || feature.GetGeometry().GetReportedWraps() != 1 || feature.Support != entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_PARTIAL {
 		t.Fatalf("map=%+v error=%v feature=%v", geometry, err, feature)
 	}
 	if err := d.Cleanup(context.Background()); err != nil {
@@ -246,9 +246,9 @@ func TestHPEReportedFormsObserveEndpointShapeWithoutQualification(t *testing.T) 
 				observed, err := d.Geometry(context.Background())
 				reported := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
 				limits := reported.GetGeometry()
-				if err != nil || !observed.Valid() || f.formQueries != 1 || f.wrapQueries != 1 || observed.AllWraps == tc.short || observed.Fresh != nil ||
+				if err != nil || !observed.Valid() || f.formQueries != 1 || f.wrapQueries != 1 || observed.AllWraps == tc.short ||
 					reported.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY || reported.Evidence != entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_OBSERVED ||
-					reported.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || limits.GetReportedWraps() != 1 || limits.Fresh != nil {
+					reported.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED || limits.GetReportedWraps() != 1 {
 					t.Fatalf("map=%v error=%v queries=%d feature=%v", observed, err, f.wrapQueries, reported)
 				}
 				want := []WrapEndpoint{{Partition: 65535, Wrap: 65534, Object: 1<<48 - 1}}

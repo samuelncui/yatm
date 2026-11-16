@@ -11,10 +11,8 @@ import (
 const previewMinimumSamples = 3
 
 type previewTiming struct {
-	total     int64
 	completed int64
 	samples   int64
-	started   time.Time
 
 	// workTotal is the classified unique generation workload; workKnown says whether the scope
 	// classified one at all, so a disabled generator reports counters without a fabricated rate.

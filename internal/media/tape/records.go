@@ -87,10 +87,6 @@ func (r Records) Write(ctx context.Context, data []byte) (RecordResult, error) {
 // WriteObserved records actual WRITE issue under the primary WRITE lane for its accounting callback.
 // A callback rejection proves zero acceptance; no admission lock spans the native command.
 func (r Records) WriteObserved(ctx context.Context, data []byte, onIssue func() error) (RecordResult, error) {
-	if onIssue == nil {
-		return r.Write(ctx, data)
-	}
-
 	// Qualify actual issue accounting before allowing any WRITE onto an opaque transport.
 	transport, ok := r.Transport.(interface {
 		ExecuteObserved(context.Context, Command, func() error) (Response, error)
@@ -214,29 +210,16 @@ func decodeRecord(response Response, size int, mode RecordMode, writing bool) (R
 // The caller separately requires known accepted bytes and an early-warning result. Settled caller
 // cancellation is compatible; an independent transport failure never is.
 func WriteWarning(err error, remaining int64, mode RecordMode) bool {
-	if err == ErrEarlyWarning || err == context.Canceled || err == context.DeadlineExceeded {
-		return true
-	}
-	if failure, ok := err.(*CommandError); ok {
-		observed, cause := writeWarningRemaining(failure, mode)
-		return cause == nil && observed == remaining
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return WriteWarning(wrapped.Unwrap(), remaining, mode)
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
+	return everyCause(err, func(err error) (bool, bool) {
+		if err == ErrEarlyWarning || err == context.Canceled || err == context.DeadlineExceeded {
+			return true, true
 		}
-		for _, cause := range causes {
-			if !WriteWarning(cause, remaining, mode) {
-				return false
-			}
+		if failure, ok := err.(*CommandError); ok {
+			observed, cause := writeWarningRemaining(failure, mode)
+			return cause == nil && observed == remaining, true
 		}
-		return true
-	}
-	return false
+		return false, false
+	})
 }
 
 func writeWarningRemaining(failure *CommandError, mode RecordMode) (int64, error) {
@@ -330,8 +313,6 @@ func filemarkResponse(response Response, count uint32, warningCounts bool) error
 	return &UncertainError{Cause: err}
 }
 
-func (r Records) Sync(ctx context.Context) error { return r.Filemarks(ctx, 0) }
-
 // Unload uses the synchronous SSC LOAD UNLOAD form. The drive performs its own rewind;
 // no separate REWIND or medium-dependent verification follows successful release.
 func (r Records) Unload(ctx context.Context) (err error) {
@@ -417,23 +398,8 @@ func (r Records) geometryError(err error) {
 
 func onlyCancellation(err error) bool {
 	// Only cancellation leaves a known geometry observation intact; mixed physical failures invalidate it.
-	if err == context.Canceled || err == context.DeadlineExceeded {
-		return true
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
-		}
-		for _, cause := range causes {
-			if !onlyCancellation(cause) {
-				return false
-			}
-		}
-		return true
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return onlyCancellation(wrapped.Unwrap())
-	}
-	return false
+	return everyCause(err, func(err error) (bool, bool) {
+		cancelled := err == context.Canceled || err == context.DeadlineExceeded
+		return cancelled, cancelled
+	})
 }

@@ -29,7 +29,7 @@ func TestContentVerificationReportsTheObservedFileAndRefreshesItsCache(t *testin
 	filename, observed := writeObservedFile(t, "file.txt", content)
 
 	// The file is read and hashed, and the result becomes reusable cache state.
-	facts, err := VerifyObservedContent(ctx, filename, observed)
+	facts, err := VerifyObservedContent(ctx, filename)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(content)), facts.SizeBytes)
 	require.Equal(t, contentHash[:], facts.Sha256)
@@ -47,7 +47,7 @@ func TestContentVerificationReportsTheObservedFileAndRefreshesItsCache(t *testin
 func TestContentVerificationReadsContentInsteadOfTrustingTheCache(t *testing.T) {
 	ctx := context.Background()
 	filename, observed := writeObservedFile(t, "file.txt", []byte("saved"))
-	_, err := VerifyObservedContent(ctx, filename, observed)
+	_, err := VerifyObservedContent(ctx, filename)
 	require.NoError(t, err)
 
 	// Equal metadata with different bytes must still be observed as the bytes on disk.
@@ -59,17 +59,17 @@ func TestContentVerificationReadsContentInsteadOfTrustingTheCache(t *testing.T) 
 	require.Equal(t, observed.Size(), current.Size())
 
 	otherHash := sha256.Sum256([]byte("other"))
-	verified, err := VerifyObservedContent(ctx, filename, current)
+	verified, err := VerifyObservedContent(ctx, filename)
 	require.NoError(t, err)
 	require.Equal(t, otherHash[:], verified.Sha256)
 }
 
 func TestContentObservationKeepsRetryableSourceErrors(t *testing.T) {
 	ctx := context.Background()
-	filename, observed := writeObservedFile(t, "file.txt", []byte("saved"))
+	filename, _ := writeObservedFile(t, "file.txt", []byte("saved"))
 
 	// A source ACP cannot describe stays an error with its original identity, never a silent gap.
 	require.NoError(t, os.Remove(filename))
-	_, err := VerifyObservedContent(ctx, filename, observed)
+	_, err := VerifyObservedContent(ctx, filename)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 }

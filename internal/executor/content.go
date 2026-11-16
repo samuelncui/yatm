@@ -16,11 +16,8 @@ import (
 )
 
 // VerifyObservedContent reads actual bytes when satisfying a Restore from an existing output.
-func VerifyObservedContent(ctx context.Context, filename string, observed os.FileInfo) (*entity.ExpectedFile, error) {
-	if !observed.Mode().IsRegular() {
-		return nil, fmt.Errorf("content input is not an ordinary file")
-	}
-
+// The caller has already observed filename as an ordinary file.
+func VerifyObservedContent(ctx context.Context, filename string) (*entity.ExpectedFile, error) {
 	// One caller-owned item carries the content facts back through the results callback.
 	source := &observedHash{filename: filename}
 	engine, err := acp.NewStream(ctx, source.accept, acp.WithHashPolicy(acp.HashReadRefresh))
@@ -65,11 +62,7 @@ func (s *observedHash) Targets() []string { return nil }
 // never returns a cancellation error.
 func (s *observedHash) accept(results []acp.Result) error {
 	for _, result := range results {
-		item, ok := result.Job.(*observedHash)
-		if !ok {
-			continue
-		}
-		item.complete(result)
+		s.complete(result)
 	}
 	return nil
 }
@@ -78,10 +71,6 @@ func (s *observedHash) accept(results []acp.Result) error {
 func (s *observedHash) complete(result acp.Result) {
 	if result.Err != nil {
 		s.fail(result.Err)
-		return
-	}
-	if len(result.SHA256) != 32 {
-		s.fail(fmt.Errorf("ACP content hash is missing, source=%q", s.filename))
 		return
 	}
 	signature, err := library.NewFileSignature(result.SHA256, result.Size)
@@ -119,23 +108,6 @@ func (s *observedHash) expected() *entity.ExpectedFile {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.result
-}
-
-// CaptureOriginal observes the one original selected by File identity.
-func (e *Executor) CaptureOriginal(ctx context.Context, fileID int64) (string, *entity.ExpectedFile, error) {
-	var filename string
-	var expected *entity.ExpectedFile
-	err := e.CaptureOriginals(ctx, []int64{fileID}, func(_ int64, name string, content *entity.ExpectedFile) error {
-		filename, expected = name, content
-		return nil
-	})
-	if err != nil {
-		return "", nil, err
-	}
-	if expected == nil {
-		return "", nil, library.ErrFileNotFound
-	}
-	return filename, expected, nil
 }
 
 // CaptureOriginals prepares bounded batches in input order, omitting Files without originals.

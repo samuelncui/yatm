@@ -167,12 +167,6 @@ func (s *IdenticalSnapshot) indexProjectionRows(includeHidden bool) error {
 	return nil
 }
 
-// Rows reads one bounded random-access page without traversing earlier rows.
-func (s *IdenticalSnapshot) Rows(offset int64, limit int, includeHidden bool) ([]IdenticalIndexedRow, int64, error) {
-	return s.SortedRows(offset, limit, includeHidden, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID,
-		entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
-}
-
 // SortedRows reads a bounded page in the requested retained order.
 func (s *IdenticalSnapshot) SortedRows(offset int64, limit int, includeHidden bool, key entity.IdenticalSortKey, order entity.IdenticalSortOrder) ([]IdenticalIndexedRow, int64, error) {
 	// Validate the range and select the indexed position column before any read.
@@ -284,12 +278,6 @@ func identicalRowHeaderPosition(row identicalRowIndex, column string) int64 {
 		return identicalRowPosition(row, column) - row.PathRank
 	}
 	return row.HeaderPosition
-}
-
-// LookupPositions finds selected members without scanning either projection.
-func (s *IdenticalSnapshot) LookupPositions(ids []int64) ([]IdenticalPosition, error) {
-	return s.LookupSortedPositions(ids, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID,
-		entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 }
 
 // LookupSortedPositions locates members in both projections for one requested order.

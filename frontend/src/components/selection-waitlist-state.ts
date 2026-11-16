@@ -4,7 +4,7 @@ import { FileOperationKind, FileScope, FileSelection, FileVersion, type FilesDet
 import { allowsFileOperation, filesEntryData, filesEntryLibraryID, libraryDirectoryReference } from "@/components/files-browser";
 import { associatedLibraryFileID, selectionForFile } from "@/components/location-files";
 
-export { loadSelectionEntries, saveSelectionEntries, selectionStorageKey, mergeSelectionEntries } from "@/state/selections";
+export { loadSelectionEntries, selectionStorageKey, mergeSelectionEntries } from "@/state/selections";
 export type { SelectionEntry, SelectionKind, SelectionMergeResult } from "@/state/selections";
 import type { SelectionEntry, SelectionKind, SelectionMergeResult } from "@/state/selections";
 

@@ -106,12 +106,7 @@ func configurationSnapshot(ctx context.Context, db *gorm.DB, source, target stri
 }
 
 func configurationSettings(db *gorm.DB) *settingspkg.Module {
-	return settingspkg.New(db, settingspkg.PreviewDefinition{
-		Default: func() (*entity.PreviewSettings, error) {
-			return preview.SettingsFromConfig(preview.Config{})
-		},
-		Validate: preview.ValidateSettings,
-	})
+	return settingspkg.New(db, preview.SettingsDefinition())
 }
 
 func readConfigurationSetting[T proto.Message](ctx context.Context, group settingspkg.Group[T]) (configurationSetting[T], error) {
@@ -188,8 +183,8 @@ func planConfiguration(ctx context.Context, db *gorm.DB, filename string) (*conf
 	}
 	plan.ImportLocations = (plan.Source != "" || plan.Target != "")
 	if plan.ImportLocations {
-		for _, root := range []string{plan.Source, plan.Target} {
-			if root == "" || root == plan.Target && root == plan.Source && len(plan.Settings) > 0 {
+		for index, root := range []string{plan.Source, plan.Target} {
+			if root == "" || index == 1 && root == plan.Source {
 				continue
 			}
 			message := fmt.Sprintf("Register Location %q (preferred restore target: %t).", root, root == plan.Target)
@@ -201,8 +196,6 @@ func planConfiguration(ctx context.Context, db *gorm.DB, filename string) (*conf
 			plan.Settings = append(plan.Settings, message)
 		}
 		plan.Changed = true
-	} else if plan.Source != "" || plan.Target != "" {
-		plan.Settings = append(plan.Settings, "Preserve previously migrated Locations, including user edits and removals.")
 	}
 	// A group nobody wrote yet is the one the deployment configuration may seed.
 	if !state.Preview.Present {
@@ -266,17 +259,6 @@ func applyConfigurationPlan(ctx context.Context, db *gorm.DB, filename string, p
 
 	// Publish all imported preferences together, without file I/O inside the transaction.
 	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		state, err := configurationSnapshot(ctx, tx, plan.Source, plan.Target)
-		if err != nil {
-			return err
-		}
-		hash, err := configurationStateHash(state)
-		if err != nil {
-			return err
-		}
-		if hash != plan.StateHash {
-			return fmt.Errorf("Settings changed since review")
-		}
 		transactionSettings := module.WithDB(tx)
 		lib := library.NewWithSettings(tx, transactionSettings)
 		if plan.ImportLocations {
@@ -297,9 +279,6 @@ func applyConfigurationPlan(ctx context.Context, db *gorm.DB, filename string, p
 	original, err := readConfigurationFile(filename)
 	if err != nil {
 		return err
-	}
-	if fmt.Sprintf("%x", sha256.Sum256(original)) != plan.OriginalHash {
-		return fmt.Errorf("configuration changed before write; Settings were applied, keep service stopped and recover the backup")
 	}
 	if string(original) == plan.YAML {
 		return nil

@@ -60,7 +60,8 @@ func readObservationBatch(tx *gorm.DB, locationID int64, rows []*ObservedEntry) 
 
 func (b *observationBatch) admit(tx *gorm.DB, location *Location, p *ObservedEntry) (*FileLocation, error) {
 	// Preserve path continuity and every existing identity/occupancy validation.
-	if p == nil || !fs.FileMode(p.Mode).IsRegular() || p.Size < 0 {
+	// readObservationBatch already rejected nil rows of this batch.
+	if !fs.FileMode(p.Mode).IsRegular() || p.Size < 0 {
 		return nil, fmt.Errorf("invalid file observation")
 	}
 	if err := entity.ValidateRelativePath(p.Path); err != nil {

@@ -61,7 +61,6 @@ func (*archiveStorageDevice) Rewind(context.Context) error {
 func (*archiveStorageDevice) Space(context.Context, byte, int32) error {
 	return errors.New("unexpected fixture SPACE")
 }
-func (*archiveStorageDevice) Sync(context.Context) error { return nil }
 
 func archiveStorageDescriptor() *mediapkg.Descriptor {
 	return &mediapkg.Descriptor{Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "STG001", CreateTime: time.Unix(1, 0),

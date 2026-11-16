@@ -25,14 +25,11 @@ func tarCapacityTestCost(encoded, records uint64, marks uint32) (uint64, error) 
 
 func tarCapacityTestSample(remaining uint64, quality tape.CapacityQuality) *tape.CapacitySample {
 	now := time.Now().Add(-time.Millisecond)
-	zero := uint64(0)
-	return &tape.CapacitySample{IssuedAt: now, CompletedAt: now, RemainingBytes: &remaining,
-		Quality: quality, ErrorBytes: &zero, UnreflectedBytes: &zero}
+	return &tape.CapacitySample{IssuedAt: now, CompletedAt: now, RemainingBytes: &remaining, Quality: quality}
 }
 
 func tarCapacityTestOptions(remaining uint64) *TarCapacityOptions {
-	return &TarCapacityOptions{Initial: tarCapacityTestSample(remaining, tape.CapacityLowerBound),
-		MaxAge: time.Hour, Cost: tarCapacityTestCost, CostBounded: true}
+	return &TarCapacityOptions{Initial: tarCapacityTestSample(remaining, tape.CapacityEstimate), Cost: tarCapacityTestCost}
 }
 
 type tarCapacityTestDevice struct {
@@ -81,7 +78,7 @@ func TestTarCapacityUsesObservedMetadataAndCapturedPAX(t *testing.T) {
 			_, cause := ref.Content.Open(context.Background(), metadata)
 			require.ErrorIs(t, cause, ErrTargetNoSpace)
 			require.ErrorContains(t, cause, "want=")
-			require.ErrorContains(t, cause, "quality=lower bound")
+			require.ErrorContains(t, cause, "quality=estimate")
 			require.Zero(t, device.writes)
 
 			// Cached refusal seals the buffered member with a real normal trailer and one mark.
@@ -131,18 +128,17 @@ func TestTarCapacityAbsoluteSamplesUseFullReturnsAndNewReservations(t *testing.T
 	require.NoError(t, budget.reserve(8192))
 	require.NoError(t, budget.returned(4096))
 	issue := tarCapacityIssue{returned: 4160}
-	remaining, allowance := uint64(20000), uint64(300)
-	sample := tarCapacityTestSample(remaining, tape.CapacityLowerBound)
-	sample.UnreflectedBytes = &allowance
+	remaining := uint64(20000)
+	sample := tarCapacityTestSample(remaining, tape.CapacityEstimate)
 	// The response already arrived; a later admission still belongs to A until atomic publication.
 	require.NoError(t, budget.reserve(1024))
 	budget.publish(sample, issue)
-	require.Equal(t, uint64(20000-4160-1088-1344-300), budget.available)
+	require.Equal(t, uint64(20000-4160-1088-1344), budget.available)
 
 	// Repeated absolute observations do not debit prior, fully returned lifetime bytes again.
 	require.NoError(t, budget.returned(4096))
 	issue = tarCapacityIssue{returned: 8320}
-	sample = tarCapacityTestSample(remaining, tape.CapacityLowerBound)
+	sample = tarCapacityTestSample(remaining, tape.CapacityEstimate)
 	sample.IssuedAt = sample.IssuedAt.Add(time.Microsecond)
 	sample.CompletedAt = sample.IssuedAt
 	budget.publish(sample, issue)
@@ -152,37 +148,8 @@ func TestTarCapacityAbsoluteSamplesUseFullReturnsAndNewReservations(t *testing.T
 	require.Equal(t, previous, budget.available)
 }
 
-func TestTarCapacityEstimateCannotReplenishBoundAndUnknownFreshnessIsEstimated(t *testing.T) {
-	// Approximate refresh cannot increase a still-applicable lower bound or extend its expiry.
-	options := tarCapacityTestOptions(10000)
-	budget, err := newTarCapacityBudget(options, tape.RecordMode{MaximumBytes: 4096})
-	require.NoError(t, err)
-	require.NoError(t, budget.reserve(1024))
-	before, expiry := budget.available, budget.validUntil
-	estimate := tarCapacityTestSample(100000, tape.CapacityEstimate)
-	estimate.IssuedAt = estimate.IssuedAt.Add(time.Microsecond)
-	estimate.CompletedAt = estimate.IssuedAt
-	budget.publish(estimate, tarCapacityIssue{})
-	require.Equal(t, before, budget.available)
-	require.Equal(t, tape.CapacityLowerBound, budget.quality)
-	require.Equal(t, expiry, budget.validUntil)
-
-	// Missing freshness/cost/error terms never manufacture a bound; the estimate remains best effort.
-	options.MaxAge = 0
-	options.Initial.IssuedAt = time.Now().Add(-24 * time.Hour)
-	options.Initial.CompletedAt = options.Initial.IssuedAt
-	options.Initial.ErrorBytes, options.Initial.UnreflectedBytes = nil, nil
-	budget, err = newTarCapacityBudget(options, tape.RecordMode{MaximumBytes: 4096})
-	require.NoError(t, err)
-	require.True(t, budget.known)
-	require.Equal(t, tape.CapacityEstimate, budget.quality)
-	require.True(t, budget.validUntil.IsZero())
-	require.ErrorContains(t, budget.reserve(100000), "quality=estimate")
-}
-
 func TestTarCapacityStaleUnknownAndInvalidSamplesCannotCreateHeadroom(t *testing.T) {
 	for name, change := range map[string]func(*tape.CapacitySample){
-		"stale":       func(s *tape.CapacitySample) { s.IssuedAt = time.Now().Add(-2 * time.Hour); s.CompletedAt = s.IssuedAt },
 		"unknown":     func(s *tape.CapacitySample) { s.RemainingBytes = nil },
 		"bad quality": func(s *tape.CapacitySample) { s.Quality = 255 },
 		"future":      func(s *tape.CapacitySample) { s.CompletedAt = time.Now().Add(time.Hour) },
@@ -193,7 +160,7 @@ func TestTarCapacityStaleUnknownAndInvalidSamplesCannotCreateHeadroom(t *testing
 			options.Initial = nil
 			budget, err := newTarCapacityBudget(options, tape.RecordMode{MaximumBytes: 4096})
 			require.NoError(t, err)
-			sample := tarCapacityTestSample(100000, tape.CapacityLowerBound)
+			sample := tarCapacityTestSample(100000, tape.CapacityEstimate)
 			change(sample)
 			budget.publish(sample, tarCapacityIssue{})
 			require.False(t, budget.known)
@@ -246,7 +213,7 @@ func TestTarCapacityObserverPublicationIncludesOverlappingAdmissions(t *testing.
 		case <-ctx.Done():
 			return nil, true, ctx.Err()
 		}
-		return tarCapacityTestSample(10000, tape.CapacityLowerBound), true, nil
+		return tarCapacityTestSample(10000, tape.CapacityEstimate), true, nil
 	}
 	device := &tarCapacityTestDevice{tarTestDevice: &tarTestDevice{}}
 	session, err := newTarTestWriteSession(device, options)
@@ -338,7 +305,7 @@ func TestTarCapacityIssuedObserverDoesNotBlockWrite(t *testing.T) {
 		case <-ctx.Done():
 			return nil, true, ctx.Err()
 		}
-		return tarCapacityTestSample(10000, tape.CapacityLowerBound), true, nil
+		return tarCapacityTestSample(10000, tape.CapacityEstimate), true, nil
 	}
 	session, err := newTarTestWriteSession(device, options)
 	require.NoError(t, err)
@@ -402,7 +369,6 @@ func TestTarCapacityRefreshFailureRetainsDebitedBudget(t *testing.T) {
 				require.ErrorIs(t, budget.stop(), failure)
 			}
 			require.Equal(t, before, budget.available)
-			require.Equal(t, tape.CapacityLowerBound, budget.quality)
 		})
 	}
 }
@@ -426,8 +392,8 @@ func TestTarCapacityNoMediumObservationFailsAttempt(t *testing.T) {
 	require.ErrorIs(t, budget.stop(), failure)
 }
 
-func TestTarCapacityExpiryAndFailedReservations(t *testing.T) {
-	// Expired bounded evidence becomes unknown; previously admitted/failed work is never reclaimed.
+func TestTarCapacityFailedReservationsAreNotCharged(t *testing.T) {
+	// A refused reservation leaves the admitted work unchanged.
 	options := tarCapacityTestOptions(10000)
 	budget, err := newTarCapacityBudget(options, tape.RecordMode{MaximumBytes: 4096})
 	require.NoError(t, err)
@@ -435,10 +401,6 @@ func TestTarCapacityExpiryAndFailedReservations(t *testing.T) {
 	before := budget.reservedCost
 	require.ErrorIs(t, budget.reserve(10000), ErrTargetNoSpace)
 	require.Equal(t, before, budget.reservedCost)
-	budget.validUntil = time.Now().Add(-time.Second)
-	require.NoError(t, budget.reserve(10000))
-	require.False(t, budget.known)
-	require.Greater(t, budget.reservedCost, before)
 }
 
 func TestTarCapacityLiveRequiresActualSubmissionHook(t *testing.T) {
@@ -489,7 +451,7 @@ func TestTarCapacityBusyObserverDoesNotPublishOrScaleWithMembers(t *testing.T) {
 	options.Capacity.Interval = time.Hour
 	options.Capacity.Observe = func(context.Context, func() error) (*tape.CapacitySample, bool, error) {
 		close(returned)
-		return tarCapacityTestSample(0, tape.CapacityLowerBound), false, nil
+		return tarCapacityTestSample(0, tape.CapacityEstimate), false, nil
 	}
 	device := &tarCapacityTestDevice{tarTestDevice: &tarTestDevice{}}
 	session, err := newTarTestWriteSession(device, options)

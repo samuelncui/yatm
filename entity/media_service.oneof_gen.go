@@ -35,49 +35,6 @@ func (x *DeviceFeature) Unpack() OneofDeviceFeature {
 	}
 }
 
-func PackDeviceFeature(param OneofDeviceFeature) *DeviceFeature {
-	switch param := param.(type) {
-	case *TapeCapacityLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Capacity{
-				Capacity: param,
-			},
-		}
-	case *TapeCompressionLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Compression{
-				Compression: param,
-			},
-		}
-	case *TapeEncryptionLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Encryption{
-				Encryption: param,
-			},
-		}
-	case *TapeGeometryLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Geometry{
-				Geometry: param,
-			},
-		}
-	case *TapeNavigationLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Navigation{
-				Navigation: param,
-			},
-		}
-	case *TapeRecordLimits:
-		return &DeviceFeature{
-			Limits: &DeviceFeature_Records{
-				Records: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *TapeCapacityLimits) Pack() *DeviceFeature {
 	return &DeviceFeature{
 		Limits: &DeviceFeature_Capacity{
@@ -165,19 +122,6 @@ func (x *InspectDeviceResponse) Unpack() OneofInspectDeviceResponse {
 	}
 }
 
-func PackInspectDeviceResponse(param OneofInspectDeviceResponse) *InspectDeviceResponse {
-	switch param := param.(type) {
-	case *TapeDeviceReport:
-		return &InspectDeviceResponse{
-			Report: &InspectDeviceResponse_Tape{
-				Tape: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *TapeDeviceReport) Pack() *InspectDeviceResponse {
 	return &InspectDeviceResponse{
 		Report: &InspectDeviceResponse_Tape{
@@ -204,25 +148,6 @@ func (x *InspectMediaRequest) Unpack() OneofInspectMediaRequest {
 		return param.Tape
 	case *InspectMediaRequest_Volume:
 		return param.Volume
-	default:
-		return nil
-	}
-}
-
-func PackInspectMediaRequest(param OneofInspectMediaRequest) *InspectMediaRequest {
-	switch param := param.(type) {
-	case *InspectMediaTapeTarget:
-		return &InspectMediaRequest{
-			Target: &InspectMediaRequest_Tape{
-				Tape: param,
-			},
-		}
-	case *InspectMediaVolumeTarget:
-		return &InspectMediaRequest{
-			Target: &InspectMediaRequest_Volume{
-				Volume: param,
-			},
-		}
 	default:
 		return nil
 	}
@@ -266,25 +191,6 @@ func (x *ListMediaRequest) Unpack() OneofListMediaRequest {
 		return param.Ids
 	case *ListMediaRequest_List:
 		return param.List
-	default:
-		return nil
-	}
-}
-
-func PackListMediaRequest(param OneofListMediaRequest) *ListMediaRequest {
-	switch param := param.(type) {
-	case *MediaIds:
-		return &ListMediaRequest{
-			Param: &ListMediaRequest_Ids{
-				Ids: param,
-			},
-		}
-	case *MediaFilter:
-		return &ListMediaRequest{
-			Param: &ListMediaRequest_List{
-				List: param,
-			},
-		}
 	default:
 		return nil
 	}

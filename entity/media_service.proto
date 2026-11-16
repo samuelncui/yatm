@@ -226,8 +226,6 @@ enum DeviceFeatureAvailability {
 enum DeviceFeatureValidation {
   DEVICE_FEATURE_VALIDATION_UNSPECIFIED = 0;
   DEVICE_FEATURE_VALIDATION_UNVALIDATED = 1;
-  DEVICE_FEATURE_VALIDATION_VALIDATED = 2;
-  DEVICE_FEATURE_VALIDATION_FAILED = 3;
 }
 
 enum DeviceReason {
@@ -317,18 +315,16 @@ message TapeEncryptionLimits {
   optional uint32 key_instance_counter = 8;
 }
 
-// Observed reporting form/count; neither establishes full-wrap coverage or freshness.
+// Observed reporting form/count; neither establishes full-wrap coverage.
 message TapeGeometryLimits {
   optional bool all_wraps = 1;
   optional uint32 reported_wraps = 2;
-  optional bool fresh = 3;
   optional string source = 4;
 }
 
 enum TapeCapacityQuality {
   TAPE_CAPACITY_QUALITY_UNSPECIFIED = 0;
   TAPE_CAPACITY_QUALITY_ESTIMATE = 1;
-  TAPE_CAPACITY_QUALITY_LOWER_BOUND = 2;
 }
 
 // Transient native-space observation before EW, independent of logical seek.
@@ -338,9 +334,6 @@ message TapeCapacityLimits {
   TapeCapacityQuality quality = 3;
   optional int64 issued_at_ns = 4;
   optional int64 completed_at_ns = 5;
-  // Absent allowances are unknown, not zero and not a complete-file-fit guarantee.
-  optional uint64 observation_error_bytes = 6;
-  optional uint64 unreflected_bytes = 7;
 }
 
 message TapeDeviceReport {

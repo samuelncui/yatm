@@ -31,7 +31,7 @@ func init() {
 func newVideoGenerator(values map[string]any) (Generator, error) {
 	// Decode the configured commands and derivative settings over safe defaults.
 	options := videoOptions{
-		MaxInputPixels: 64_000_000, PosterWidth: 512, PosterHeight: 512,
+		MaxInputPixels: maxInputPixels, PosterWidth: 512, PosterHeight: 512,
 		TimelineWidth: 320, TimelineHeight: 180, TimelineIntervalSecond: 10,
 		TimelineMaxFrames: 30, Format: "webp", Quality: 75,
 	}

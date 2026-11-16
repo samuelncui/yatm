@@ -8,14 +8,12 @@ import {
   FileOperationRef,
   FileOperationSpec,
   FileOperationSummary,
-  Location,
-  LocationEntry,
   LocationEntryRef,
 } from "@/entity";
 import { canPasteFiles, fileOperationReference, useFileOperations } from "./file-operations";
 import { filesEntryData } from "./files-browser";
 import { EntryKind, FilesEntry } from "@/entity";
-import { locationEntryFile } from "./location-files";
+import { locatedFile } from "./location-files";
 import { operationResponse } from "@/test/files-fixture";
 
 const { execute, notify, dismiss, report } = vi.hoisted(() => ({ execute: vi.fn(), notify: vi.fn(), dismiss: vi.fn(), report: vi.fn() }));
@@ -259,7 +257,7 @@ it.each(["library", "location"])("shares cut/paste for %s and clears its clipboa
   const source =
     scope === "library"
       ? { id: "8", name: "a.txt" }
-      : locationEntryFile(LocationEntry.create({ path: location.path, reference: location }), Location.create({ id: 3n }));
+      : locatedFile({ id: `location-file:3:${location.path}`, name: location.path }, 3n, location.path, location);
   const target = fileOperationReference(source);
   act(() => result.current.setClipboard({ kind: FileOperationKind.MOVE, files: [source] }));
   execute.mockReturnValueOnce(stream([operationResponse({ summary: { ...summary, failedCount: 1n } })]));

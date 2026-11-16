@@ -54,9 +54,6 @@ func validateTrash(root string) error {
 
 func (s *locationTree) trashTarget(ctx context.Context, item *Item) (string, error) {
 	// Validate boundaries before creating any managed directories.
-	if library.IsLocationTrashPath(item.SourcePath) {
-		return "", fmt.Errorf("Trash entries cannot be removed")
-	}
 	if err := s.op.protectedRange(ctx, s.location, library.LocationTrashDirectory, true); err != nil {
 		return "", err
 	}
@@ -76,11 +73,7 @@ func (s *locationTree) trashTarget(ctx context.Context, item *Item) (string, err
 	}
 
 	// Operation and item identities reserve an exclusive, collision-free output container.
-	operationID, err := uuid.Parse(s.config.OperationID)
-	if err != nil {
-		return "", fmt.Errorf("invalid operation identity, %w", err)
-	}
-	batch := uuid.NewSHA1(operationID, []byte(strconv.FormatInt(item.ID, 10))).String()
+	batch := uuid.NewSHA1(s.operationID, []byte(strconv.FormatInt(item.ID, 10))).String()
 	container := path.Join(library.LocationTrashDirectory, batch)
 	if err := os.Mkdir(filepath.Join(s.location.RootPath, filepath.FromSlash(container)), 0700); err != nil {
 		return "", fmt.Errorf("reserve Trash container failed, %w", err)

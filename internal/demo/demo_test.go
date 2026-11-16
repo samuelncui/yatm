@@ -20,6 +20,7 @@ import (
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	previewpkg "github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/treeops"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -131,13 +132,13 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	var invoices int64
 	require.NoError(t, db.Model(library.ModelFileTag).Where("tag = ?", "invoice").Count(&invoices).Error)
 	require.Equal(t, int64(101), invoices)
-	firstPage, err := lib.SearchFilesIn(context.Background(), "tag:invoice", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	firstPage, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, "tag:invoice", "", 100)
 	require.NoError(t, err)
-	require.Len(t, firstPage.Results, 100)
+	require.Len(t, firstPage.Files, 100)
 	require.NotEmpty(t, firstPage.NextCursor)
-	secondPage, err := lib.SearchFilesIn(context.Background(), "tag:invoice", firstPage.NextCursor, 100, entity.FileScope_FILE_SCOPE_ALL)
+	secondPage, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, "tag:invoice", firstPage.NextCursor, 100)
 	require.NoError(t, err)
-	require.Len(t, secondPage.Results, 1)
+	require.Len(t, secondPage.Files, 1)
 	require.Empty(t, secondPage.NextCursor)
 
 	// Verify every pending workflow contains actionable manifest rows.
@@ -305,50 +306,46 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	require.Nil(t, extra)
 
 	// Unknown content remains unsigned, while known coverage supplies a version without another copy.
-	unknown, err := lib.SearchFilesIn(context.Background(), "has:unknown", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	unknown, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, "has:unknown", "", 100)
 	require.NoError(t, err)
-	require.Len(t, unknown.Results, 1)
-	require.Equal(t, "notes.txt", unknown.Results[0].File.Name)
-	page, err := lib.SearchFilesIn(context.Background(), "name:handbook.md AND has:original AND has:archive", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	require.Len(t, unknown.Files, 1)
+	require.Equal(t, "notes.txt", unknown.Files[0].Name)
+	page, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, "name:handbook.md AND has:original AND has:archive", "", 100)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 1)
-	require.Equal(t, "handbook.md", page.Results[0].File.Name)
-	versions, _, err := lib.ListFileVersions(context.Background(), page.Results[0].File.ID, 0, 10)
+	require.Len(t, page.Files, 1)
+	require.Equal(t, "handbook.md", page.Files[0].Name)
+	versions, _, err := lib.ListFileVersions(context.Background(), page.Files[0].ID, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, versions, 1, "known archived content is a saved version without another physical copy")
-	require.Equal(t, page.Results[0].File.ID, versions[0].FileID)
+	require.Equal(t, page.Files[0].ID, versions[0].FileID)
 	require.NotNil(t, versions[0].FirstArchivedAtNS)
 	covered, _, err := lib.ListContentCopies(context.Background(), versions[0].Signature, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, covered, 1)
 
 	// The product review tag works through the same quoted simple query used by the frontend.
-	review, err := lib.SearchFilesIn(
-		context.Background(), `(name:"archive-review" OR tag:"archive-review" OR note:"archive-review")`, "", 100, entity.FileScope_FILE_SCOPE_ALL,
-	)
+	review, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, `(name:"archive-review" OR tag:"archive-review" OR note:"archive-review")`, "", 100)
 	require.NoError(t, err)
-	require.Len(t, review.Results, 5)
-	needsArchive, err := lib.SearchFilesIn(
-		context.Background(), `(tag:"archive-review") AND (has:original AND NOT has:unknown AND NOT has:archive)`, "", 100, entity.FileScope_FILE_SCOPE_ALL,
-	)
+	require.Len(t, review.Files, 5)
+	needsArchive, err := lib.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, true, `(tag:"archive-review") AND (has:original AND NOT has:unknown AND NOT has:archive)`, "", 100)
 	require.NoError(t, err)
-	require.Len(t, needsArchive.Results, 3,
+	require.Len(t, needsArchive.Files, 3,
 		"unavailable originals remain indexed and unknown content is not classified as needing Archive")
 
 	// Duplicate search compares published originals across Locations even when one root is unavailable.
 	requireReviewDuplicates(t, lib, documents.ID, unavailable.ID)
 	requireReviewIdenticalHistory(t, lib)
 	requireReviewIdenticalPaging(t, lib)
-	facts, err = lib.ReadFileFacts(context.Background(), []int64{current.ID, page.Results[0].File.ID, unknown.Results[0].File.ID}, false, true)
+	facts, err = lib.ReadFileFacts(context.Background(), []int64{current.ID, page.Files[0].ID, unknown.Files[0].ID}, false, true)
 	require.NoError(t, err)
 	require.True(t, facts[current.ID].HasVersions)
 	require.False(t, facts[current.ID].CurrentCopies)
-	require.True(t, facts[page.Results[0].File.ID].CurrentCopies)
-	require.Nil(t, facts[unknown.Results[0].File.ID].Original.Signature)
+	require.True(t, facts[page.Files[0].ID].CurrentCopies)
+	require.Nil(t, facts[unknown.Files[0].ID].Original.Signature)
 	requireReviewVersionHistory(t, lib, root, current.ID, budget.ID)
 
 	// Exercise the normal Trash allocation without colliding with the visible dot-directory fixture.
-	require.NoError(t, lib.Delete(context.Background(), []int64{budget.ID}))
+	trashFile(t, lib, budget.ID)
 	parents, err := lib.ReadFileAncestors(context.Background(), budget.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, parents)
@@ -459,7 +456,7 @@ func requireReviewIdenticalPaging(t *testing.T, lib *library.Library) {
 	// Jump across unloaded pages and switch hidden projections without losing complete group counts.
 	for _, includeHidden := range []bool{false, true} {
 		for _, offset := range []int64{0, 200, 100} {
-			rows, total, err := snapshot.Rows(offset, 100, includeHidden)
+			rows, total, err := snapshot.SortedRows(offset, 100, includeHidden, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 			require.NoError(t, err)
 			require.NotEmpty(t, rows)
 			require.Equal(t, offset, rows[0].Position)
@@ -486,13 +483,15 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	ids := make(map[int64]struct{})
 	cursor := ""
 	for {
-		page, err := lib.SearchFilesIn(ctx, "tag:duplicate-review AND has:duplicates", cursor, 2, entity.FileScope_FILE_SCOPE_ALL)
+		page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "tag:duplicate-review AND has:duplicates", cursor, 2)
 		require.NoError(t, err)
-		for _, result := range page.Results {
-			require.NotContains(t, ids, result.File.ID)
-			ids[result.File.ID] = struct{}{}
-			require.NotEmpty(t, result.File.Signature)
-			groups[string(result.File.Signature)]++
+		for _, result := range page.Files {
+			require.NotContains(t, ids, result.ID)
+			ids[result.ID] = struct{}{}
+			file, err := lib.GetFile(ctx, result.ID)
+			require.NoError(t, err)
+			require.NotEmpty(t, file.Signature)
+			groups[string(file.Signature)]++
 		}
 		require.LessOrEqual(t, len(ids), 9)
 		cursor = page.NextCursor
@@ -507,14 +506,14 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	require.ElementsMatch(t, []int{2, 3, 4}, sizes)
 
 	// All members are discoverable by tag; a Location filter does not erase matches elsewhere.
-	page, err := lib.SearchFilesIn(ctx, "tag:duplicate-review AND has:duplicates", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	page, err := lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "tag:duplicate-review AND has:duplicates", "", 100)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 9)
-	page, err = lib.SearchFilesIn(ctx, "location:"+strconv.FormatInt(documentsID, 10)+" AND has:duplicates", "", 100, entity.FileScope_FILE_SCOPE_ALL)
+	require.Len(t, page.Files, 9)
+	page, err = lib.ListFileRows(ctx, 0, entity.FileScope_FILE_SCOPE_ALL, true, "location:"+strconv.FormatInt(documentsID, 10)+" AND has:duplicates", "", 100)
 	require.NoError(t, err)
-	require.Len(t, page.Results, 1)
-	require.Equal(t, "original-only.txt", page.Results[0].File.Name)
-	unversionedID := page.Results[0].File.ID
+	require.Len(t, page.Files, 1)
+	require.Equal(t, "original-only.txt", page.Files[0].Name)
+	unversionedID := page.Files[0].ID
 
 	// Global duplicates and an explicit Inspector selection remain actionable in saved-only Library views.
 	settings, err := lib.Settings().Library.Current(ctx)
@@ -772,4 +771,20 @@ func requireTableCount(t *testing.T, db *gorm.DB, model any, want int64) {
 	var count int64
 	require.NoError(t, db.Model(model).Count(&count).Error)
 	require.Equal(t, want, count)
+}
+
+// trashFile runs the shared logical Remove operation the Files service uses.
+func trashFile(t *testing.T, lib *library.Library, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	temporary, err := resource.OpenTemporaryDB(t.TempDir(), "yatm-demo-remove-")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, temporary.Close()) }()
+	engine, err := treeops.New(ctx, temporary.DB, lib.FileTree(), treeops.Options{NativeMove: true}, lib.FileTreeTransaction)
+	require.NoError(t, err)
+	require.NoError(t, engine.Prepare(ctx, treeops.Request{Kind: treeops.Delete, Sources: []string{strconv.FormatInt(id, 10)}}))
+	require.NoError(t, engine.Run(ctx, func(result treeops.Result) error {
+		require.Equal(t, treeops.Succeeded, result.Outcome, result.Error)
+		return nil
+	}))
 }

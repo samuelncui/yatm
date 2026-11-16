@@ -6,7 +6,6 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
-	settingspkg "github.com/samuelncui/yatm/internal/settings"
 )
 
 func tapeReadCompletion(parameters *entity.TapeReadParameters) *mediapkg.ReadCompletion {
@@ -85,9 +84,6 @@ func compileTarPositionMap(parameters *entity.TapeReadParameters, profile *entit
 func compileTapePositionMap(parameters *entity.TapeReadParameters, value *entity.TapePositionMap,
 	valid func() bool,
 ) (*mediapkg.ReadCostModel, string) {
-	if err := settingspkg.ValidateTapeReadParameters(parameters); err != nil {
-		return nil, err.Error()
-	}
 	positioning := parameters.GetPositioning()
 	if positioning == nil || positioning.BaseSeconds == nil || positioning.WrapChangeSeconds == nil ||
 		positioning.BandChangeSeconds == nil || positioning.LandingZoneChangeSeconds == nil ||

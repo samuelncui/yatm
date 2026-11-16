@@ -85,7 +85,7 @@ export async function readCreationEntries(selections: FileSelection[], versionID
           if (versionID !== undefined) {
             const { version } = await filesCli.getVersion({ id: versionID }, { abort: signal }).response;
             signal.throwIfAborted();
-            if (!version || version.id !== versionID || version.fileId <= 0n) throw new Error("This saved version is unavailable.");
+            if (!version) throw new Error("This saved version is unavailable.");
             entry.version = version;
             entry.versionID = undefined;
             entry.fileID = String(version.fileId);
@@ -102,16 +102,7 @@ export async function readCreationEntries(selections: FileSelection[], versionID
           signal.throwIfAborted();
           const file = detail?.entry;
           if (file?.error) throw new Error(file.error);
-          const actual = file?.reference?.target;
-          const expected = reference.target;
-          const matches =
-            expected.oneofKind === "fileId"
-              ? actual?.oneofKind === "fileId" && actual.fileId === expected.fileId
-              : expected.oneofKind === "location" &&
-                actual?.oneofKind === "location" &&
-                actual.location.locationId === expected.location.locationId &&
-                actual.location.path === expected.location.path;
-          if (!file || !matches) throw new Error("This selected entry is unavailable.");
+          if (!file) throw new Error("This selected entry is unavailable.");
           entry.name = file.name || label;
           entry.path =
             target?.oneofKind === "location"

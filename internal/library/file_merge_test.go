@@ -26,7 +26,7 @@ func TestMergeFilesZipsSavedHistoryAndRetainsSourceIdentity(t *testing.T) {
 	require.NoError(t, recordVersionArchives(db, other.ID, &middle))
 
 	// Merge uses existing metadata semantics without inventing an archive at the current time.
-	require.NoError(t, lib.MergeFiles(ctx, target.ID, []int64{source.ID}))
+	require.NoError(t, mergeFiles(ctx, lib, target.ID, source.ID))
 	stored, err := lib.GetFileVersion(ctx, preferred.ID)
 	require.NoError(t, err)
 	require.Equal(t, uint32(0600), stored.Mode)
@@ -61,7 +61,7 @@ func TestMergeKeepsVersionOwnership(t *testing.T) {
 	require.Error(t, err)
 	_, err = lib.RemoveFileVersion(ctx, a.ID, av.ID, false)
 	require.NoError(t, err)
-	require.NoError(t, lib.MergeFiles(ctx, a.ID, []int64{b.ID}))
+	require.NoError(t, mergeFiles(ctx, lib, a.ID, b.ID))
 	_, err = lib.GetFile(ctx, a.ID)
 	require.NoError(t, err)
 }

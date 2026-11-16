@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestImportArchivePositionRootsExpandsDirectoriesInPages(t *testing.T) {
+func TestImportArchivePositionSelectionExpandsDirectoriesInPages(t *testing.T) {
 	// Register the Media before recording the selected inventory range.
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -51,7 +51,7 @@ func TestImportArchivePositionRootsExpandsDirectoriesInPages(t *testing.T) {
 	require.Empty(t, entries)
 
 	// The selected child is covered by the directory root and must not be imported twice.
-	result, err := lib.ImportArchivePositionRoots(ctx, []int64{selectedChild.ID, directory.ID})
+	result, err := lib.ImportArchivePositionSelection(ctx, []int64{selectedChild.ID, directory.ID}, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, int64(batchSize+2), result.Files)
 	require.Equal(t, int64(1), result.SkippedFiles)
@@ -62,7 +62,7 @@ func TestImportArchivePositionRootsExpandsDirectoriesInPages(t *testing.T) {
 	require.Equal(t, int64(batchSize+2), versions)
 }
 
-func TestImportArchivePositionRootsTreatsDirectoryPathsAsSegments(t *testing.T) {
+func TestImportArchivePositionSelectionTreatsDirectoryPathsAsSegments(t *testing.T) {
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
 	media, err := lib.CreateMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
@@ -75,7 +75,7 @@ func TestImportArchivePositionRootsTreatsDirectoryPathsAsSegments(t *testing.T) 
 	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "foobar/outside.txt", Signature: []byte("outside"), Mode: 0o644}).Error)
 	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "FOO/other-case.txt", Signature: []byte("other-case"), Mode: 0o644}).Error)
 
-	result, err := lib.ImportArchivePositionRoots(ctx, []int64{directory.ID})
+	result, err := lib.ImportArchivePositionSelection(ctx, []int64{directory.ID}, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), result.Files)
 	var files []*fileRow
@@ -84,7 +84,7 @@ func TestImportArchivePositionRootsTreatsDirectoryPathsAsSegments(t *testing.T) 
 	require.Equal(t, "inside.txt", files[0].Name)
 }
 
-func TestImportArchivePositionRootsRejectsUnsignedExplicitFileAtomically(t *testing.T) {
+func TestImportArchivePositionSelectionRejectsUnsignedExplicitFileAtomically(t *testing.T) {
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
 	media, err := lib.CreateMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
@@ -97,7 +97,7 @@ func TestImportArchivePositionRootsRejectsUnsignedExplicitFileAtomically(t *test
 	require.NoError(t, db.Create(unknown).Error)
 
 	// A bad explicit root rejects the complete request instead of publishing a partial logical import.
-	_, err = lib.ImportArchivePositionRoots(ctx, []int64{valid.ID, unknown.ID})
+	_, err = lib.ImportArchivePositionSelection(ctx, []int64{valid.ID, unknown.ID}, nil, false)
 	require.ErrorContains(t, err, "has no archived content identity")
 	var versions int64
 	require.NoError(t, db.Model(new(FileVersion)).Count(&versions).Error)
@@ -340,7 +340,7 @@ func TestImportArchivePositionSelectionRollsBackLaterPageFailure(t *testing.T) {
 	require.EqualValues(t, batchSize+2, positions)
 }
 
-func TestImportArchivePositionRootsPrunesDescendantsAfterInterleavedSiblings(t *testing.T) {
+func TestImportArchivePositionSelectionPrunesDescendantsAfterInterleavedSiblings(t *testing.T) {
 	// "a-b" sorts between "a" and "a/c"; the selected directory still covers its descendant.
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -355,7 +355,7 @@ func TestImportArchivePositionRootsPrunesDescendantsAfterInterleavedSiblings(t *
 		require.NoError(t, db.Create(row).Error)
 	}
 
-	result, err := lib.ImportArchivePositionRoots(ctx, []int64{directory.ID, sibling.ID, nested.ID})
+	result, err := lib.ImportArchivePositionSelection(ctx, []int64{directory.ID, sibling.ID, nested.ID}, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, int64(2), result.Files)
 	require.Zero(t, result.ExistingFiles)

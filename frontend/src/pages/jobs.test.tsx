@@ -16,7 +16,8 @@ const ListReturn = () => <Link to={jobListPath(useLocation().state?.returnTo)}>A
 const { listJobs, getJob, listLocations, listMedia } = vi.hoisted(() => ({ listJobs: vi.fn(), getJob: vi.fn(), listLocations: vi.fn(), listMedia: vi.fn() }));
 
 vi.mock("@/api", () => ({ jobCli: { list: listJobs, get: getJob }, locationCli: { list: listLocations }, mediaCli: { list: listMedia } }));
-vi.mock("@/components/job-card", () => ({
+vi.mock("@/components/job-progress", async (original) => ({
+  ...(await original<typeof import("@/components/job-progress")>()),
   jobLabel: () => "Archive",
   JobCard: ({ job }: { job: Job }) => <div data-testid="job-card">{`job-${job.id}-${job.revision}-${job.status}`}</div>,
 }));
@@ -99,7 +100,7 @@ afterEach(() => {
 });
 
 describe("JobsBrowser", () => {
-  it("merges Jobs newest first using ns inside one millisecond, independently of ID order", async () => {
+  it("merges Jobs in the server's descending ID order, independently of creation time", async () => {
     vi.useFakeTimers();
     listJobs
       .mockReturnValueOnce(call({ jobs: [job(9n, 1n, 1n)], revision: 1n, hasMore: false }))
@@ -112,9 +113,9 @@ describe("JobsBrowser", () => {
     await act(async () => Promise.resolve());
     await act(async () => vi.advanceTimersByTimeAsync(2000));
     expect(screen.getAllByTestId("job-card").map((card) => card.textContent)).toEqual([
-      `job-1-3-${JobStatus.READY}`,
-      `job-2-2-${JobStatus.READY}`,
       `job-9-1-${JobStatus.READY}`,
+      `job-2-2-${JobStatus.READY}`,
+      `job-1-3-${JobStatus.READY}`,
     ]);
   });
 

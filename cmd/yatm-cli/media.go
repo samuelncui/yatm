@@ -167,10 +167,7 @@ func (c *mediaListCommand) Execute(_ []string) error {
 	if c.Offset != nil && c.AfterID != nil {
 		return usageError(fmt.Errorf("Media after ID and offset are mutually exclusive"))
 	}
-	kinds, err := parseMediaKinds(c.Kinds)
-	if err != nil {
-		return err
-	}
+	kinds := mediaKinds(c.Kinds)
 
 	// Keep search and cursor constraints on the server-side catalog page.
 	ctx, cancel := c.runtime.context()
@@ -330,10 +327,6 @@ func (c *mediaDeleteCommand) Execute(_ []string) error {
 }
 
 func (c *volumeInitializeCommand) Execute(_ []string) error {
-	volumeType, err := parseVolumeType(c.Type)
-	if err != nil {
-		return err
-	}
 	if strings.TrimSpace(c.Args.MountPoint) == "" {
 		return usageError(fmt.Errorf("Volume mount point is empty"))
 	}
@@ -351,7 +344,7 @@ func (c *volumeInitializeCommand) Execute(_ []string) error {
 			Name:       c.Name,
 			Profile: &entity.VolumeMediaProfile{
 				SerialNumber: c.SerialNumber,
-				Type:         volumeType,
+				Type:         volumeType(c.Type),
 			},
 		},
 	)

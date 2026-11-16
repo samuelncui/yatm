@@ -15,15 +15,12 @@ import {
   SettingsServiceClient,
   VolumeType,
 } from "@/entity";
-import type { File, Media, Position } from "@/entity";
+import type { Media, Position } from "@/entity";
 
 import { dateFromNs } from "@/tools/time";
 import { formatFilesize } from "@/tools/tools";
 
 export const MODE_DIR = 2147483648n; // d: is a directory
-export const MODE_SYMLINK = 0x08000000; // L: symbolic link
-// Go FileMode type bits: directory, link, device, pipe, socket, character device and irregular.
-export const MODE_TYPE = 0x8f280000;
 
 const apiBase: string = (() => {
   const base = (window as any).apiBase as string;
@@ -96,31 +93,6 @@ export const isMediaFile = (file: FileData | null | undefined): file is MediaFil
 export const isArchivePosition = (file: FileData | null | undefined): file is MediaPositionFileData =>
   !!file && typeof file.position?.id === "bigint" && !file.isDir;
 
-export function convertFiles(files: Array<File>, dirWithSize: boolean = false): LibraryFileData[] {
-  return files.map((file) => {
-    const isDir = (file.mode & MODE_DIR) > 0;
-
-    return {
-      id: `${file.id}`,
-      name: file.name,
-      ext: extname(file.name),
-      isDir,
-      isHidden: file.name.startsWith("."),
-      openable: true,
-      selectable: true,
-      draggable: true,
-      droppable: isDir,
-      size: !isDir || dirWithSize ? Number(file.sizeBytes) : undefined,
-      modDate: dateFromNs(file.mtimeNs),
-      modDateNs: file.mtimeNs,
-      parentId: `${file.parentId}`,
-      tags: file.tags,
-      note: file.note,
-      detailsAvailable: true,
-    };
-  });
-}
-
 export function convertMedia(media: Array<Media>): MediaFileData[] {
   return media.map((value) => {
     const label = mediaCapabilityLabel(value);
@@ -166,6 +138,9 @@ export function mediaAvailabilityLabel(media: Media): string {
   if (media.kind === MediaKind.VOLUME && media.mounted !== true) return "Mount required";
   return "Online";
 }
+
+/** Media whose copies can be read now, without loading or mounting it first. */
+export const isMediaOnline = (media: Media | undefined): boolean => !!media && mediaAvailabilityLabel(media) === "Online";
 
 export function accessLabel(access?: MediaAccess): string {
   switch (access) {

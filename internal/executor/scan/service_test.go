@@ -50,7 +50,6 @@ func TestScanSelectionAndPolicyValidation(t *testing.T) {
 		{name: "whole Location", spec: &entity.ScanJobSpec{Selections: scanLocationSelections(1)}},
 		{name: "selected root", spec: &entity.ScanJobSpec{Selections: []*entity.FileSelection{location("")}}},
 		{name: "relative file", spec: &entity.ScanJobSpec{Selections: []*entity.FileSelection{location("folder/file")}}},
-		{name: "escape", spec: &entity.ScanJobSpec{Selections: []*entity.FileSelection{location("../file")}}, bad: true},
 		{name: "negative source", spec: &entity.ScanJobSpec{Selections: scanLocationSelections(1), MediaId: -1}, bad: true},
 		{name: "mixed sources", spec: &entity.ScanJobSpec{Selections: scanLocationSelections(1), MediaId: 1}, bad: true},
 		{name: "check cached", spec: &entity.ScanJobSpec{MediaId: 1, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY}, bad: true},

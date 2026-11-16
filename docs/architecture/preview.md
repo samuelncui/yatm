@@ -57,5 +57,4 @@ Asset validity is derived independently from the [Job lifecycle](jobs.md). It do
 | Current content unknown | No current Preview; explicit saved versions remain selectable | Request a Scan that acquires missing facts |
 | Matching readable bundle | Serve the requested role | Job removal does not remove assets |
 | Bundle absent or damaged | Keep File/version metadata; report missing/error on asset access | An explicit Scan with Preview can regenerate |
-| Generator settings outdated | Keep the asset in missing-only mode | Regenerate-all replaces it |
 | Generation fails or is canceled | Keep completed assets and successful Scan observations | Create a new Scan for another generation attempt |

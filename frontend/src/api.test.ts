@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { convertFiles, convertMedia, convertPositions, MODE_DIR } from "@/api";
-import { File, Media, MediaAccess, MediaKind, Position, VolumeType } from "@/entity";
+import { convertMedia, convertPositions, MODE_DIR } from "@/api";
+import { Media, MediaAccess, MediaKind, Position, VolumeType } from "@/entity";
 
-it("keeps original ns for row sorting and converts File, Media and Position dates only for display", () => {
+it("keeps original ns for row sorting and converts Media and Position dates only for display", () => {
   const ns = 1_700_000_000_123_999_999n;
-  const rows = [
-    ...convertFiles([File.create({ mtimeNs: ns })]),
-    ...convertMedia([Media.create({ createdAtNs: ns })]),
-    ...convertPositions([Position.create({ writtenAtNs: ns })]),
-  ];
+  const rows = [...convertMedia([Media.create({ createdAtNs: ns })]), ...convertPositions([Position.create({ writtenAtNs: ns })])];
   for (const row of rows) {
     expect(row.modDateNs).toBe(ns);
     expect(row.modDate).toEqual(new Date("2023-11-14T22:13:20.123Z"));

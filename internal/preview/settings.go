@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,7 +18,7 @@ func SettingsFromConfig(config Config) (*entity.PreviewSettings, error) {
 	if len(configs) == 0 {
 		configs = defaultGeneratorConfigs()
 	}
-	settings := &entity.PreviewSettings{Concurrency: 2, TimeoutSeconds: 600, MaxInputPixels: 64_000_000}
+	settings := &entity.PreviewSettings{Concurrency: 2, TimeoutSeconds: 600, MaxInputPixels: maxInputPixels}
 	for _, config := range configs {
 		item := &entity.PreviewGeneratorSettings{Enabled: true}
 		for _, name := range config.Extensions {
@@ -51,6 +52,14 @@ func SettingsFromConfig(config Config) (*entity.PreviewSettings, error) {
 		settings.Generators = append(settings.Generators, item)
 	}
 	return settings, ValidateSettings(settings)
+}
+
+// SettingsDefinition supplies the Settings module with Preview defaults and validation.
+func SettingsDefinition() settingspkg.PreviewDefinition {
+	return settingspkg.PreviewDefinition{
+		Default:  func() (*entity.PreviewSettings, error) { return SettingsFromConfig(Config{}) },
+		Validate: ValidateSettings,
+	}
 }
 
 // generatorConfigs validates persisted preferences before any process is launched.
@@ -106,8 +115,8 @@ func ValidateSettings(settings *entity.PreviewSettings) error {
 	if settings.GetTimeoutSeconds() < 1 || settings.GetTimeoutSeconds() > 86400 {
 		return fmt.Errorf("Preview timeout must be between 1 and 86400 seconds")
 	}
-	if settings.GetMaxInputPixels() < 1 || settings.GetMaxInputPixels() > 64_000_000 {
-		return fmt.Errorf("Preview input pixel limit must be between 1 and 64000000")
+	if settings.GetMaxInputPixels() < 1 || settings.GetMaxInputPixels() > maxInputPixels {
+		return fmt.Errorf("Preview input pixel limit must be between 1 and %d", maxInputPixels)
 	}
 
 	// Validate all saved routes, including disabled options retained for later use.

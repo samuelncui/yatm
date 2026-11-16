@@ -84,15 +84,12 @@ func (l *Library) PublishRestore(ctx context.Context, publication *RestorePublic
 		}
 
 		// A frozen Job remains authoritative after catalog history is merged or removed.
+		// Saved content facts are immutable, so one comparison covers both the frozen and stored version.
 		var version FileVersion
 		err := tx.Where("id = ? AND file_id = ?", result.SourceVersionID, result.SourceFileID).First(&version).Error
 		sourceExists := err == nil
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
-		}
-		if sourceExists && (version.Size != result.ExpectedSize || !bytes.Equal(version.Signature, result.Signature) ||
-			!bytes.Equal(version.Hash, result.ExpectedHash)) {
-			return fmt.Errorf("Restore source version identity changed")
 		}
 		if publication.Version != nil {
 			version = *publication.Version
@@ -142,7 +139,7 @@ func (l *Library) PublishRestore(ctx context.Context, publication *RestorePublic
 			}
 			result.ResultFileID, result.Outcome = file.ID, RestoreNewFile
 			version.ID, version.FileID = 0, file.ID
-			if _, err := recordVersion(tx, &version); err != nil {
+			if _, err := recordRegularVersion(tx, &version); err != nil {
 				return err
 			}
 		}

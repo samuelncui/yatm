@@ -45,8 +45,8 @@ vi.mock("react-virtuoso", () => ({
   ),
 }));
 
-vi.mock("@/components/job-card", async (original) => {
-  const actual = await original<typeof import("@/components/job-card")>();
+vi.mock("@/components/job-progress", async (original) => {
+  const actual = await original<typeof import("@/components/job-progress")>();
   const { useEffect, useRef } = await import("react");
   return {
     ...actual,

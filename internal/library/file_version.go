@@ -43,9 +43,6 @@ func (v *FileVersion) HasRestoreIntegrity() bool {
 // recordVersion belongs to the transaction publishing archive inventory or a covered original.
 func recordVersion(tx *gorm.DB, value *FileVersion) (*FileVersion, error) {
 	// Content equality never supplies a different File's ownership or restore metadata.
-	if err := value.BeforeSave(tx); err != nil {
-		return nil, err
-	}
 	var owner fileRow
 	if err := tx.Select("id", "kind").First(&owner, value.FileID).Error; err != nil {
 		return nil, fmt.Errorf("resolve archived File failed, %w", err)

@@ -55,7 +55,7 @@ func (e *Executor) CheckPreparedLocationPath(location *library.Location, root, r
 	}
 
 	// Runtime/archive exclusions and administrator rules are mandatory even for explicit selections.
-	if location.AccessExcluded(relative, info.IsDir()) {
+	if !e.originalAccess(root)(relative, info.IsDir()) {
 		return "", nil, ErrAccessExcluded
 	}
 	return full, info, nil
@@ -95,11 +95,6 @@ type locationCursor struct {
 	Path       string
 	Filter     string
 	After      string
-}
-
-// ListLocationEntries keeps only a bounded lexical page, never a cached physical tree.
-func (e *Executor) ListLocationEntries(ctx context.Context, req *entity.LocationEntriesQuery) (*entity.LocationEntriesPage, error) {
-	return e.ListLocationEntriesMatching(ctx, req, nil)
 }
 
 // ListLocationEntriesMatching applies a read-only batch predicate during one
@@ -222,9 +217,6 @@ func (e *Executor) ReadLocationEntriesMatching(ctx context.Context, req *entity.
 			}
 		}
 		for _, index := range indexes {
-			if index < 0 || index >= len(eligible) {
-				return fmt.Errorf("invalid directory predicate result")
-			}
 			child := eligible[index]
 			candidate := locationCandidate{name: child.Name(), child: child}
 			if match != nil {

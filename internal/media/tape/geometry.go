@@ -21,12 +21,11 @@ type WrapEndpoint struct {
 }
 
 // WrapMap retains the documented response order and gaps. AllWraps describes the reporting form,
-// not H6 coverage; absent Fresh is unknown. Costs need separate evidence.
+// not H6 coverage. Costs need separate evidence.
 type WrapMap struct {
 	Endpoints  []WrapEndpoint
 	AllWraps   bool
 	ObservedAt time.Time
-	Fresh      *bool
 	Source     string
 	valid      *atomic.Bool
 }
@@ -56,9 +55,6 @@ func (d *Device) Geometry(ctx context.Context) (*WrapMap, error) {
 	}
 	copy := *d.geometry
 	copy.Endpoints = append([]WrapEndpoint(nil), d.geometry.Endpoints...)
-	if copy.Fresh != nil {
-		copy.Fresh = proto.Bool(*copy.Fresh)
-	}
 	return &copy, nil
 }
 

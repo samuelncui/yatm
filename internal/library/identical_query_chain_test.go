@@ -42,7 +42,7 @@ func TestIdenticalLongTransitiveChain(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, groups.Groups, 1)
 	require.Equal(t, int64(length), groups.Groups[0].Count)
-	rows, _, err := full.Rows(length, 1, true)
+	rows, _, err := full.SortedRows(length, 1, true, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_FILE_ID, entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_UNSPECIFIED)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, files[length-1].ID, rows[0].FileID)

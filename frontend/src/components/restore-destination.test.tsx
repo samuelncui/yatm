@@ -246,13 +246,6 @@ it.each([
   ["missing", undefined],
   ["not writable", FilesEntry.create({ ...directory(3n, "photos"), operations: [] })],
   ["a file", FilesEntry.create({ ...directory(3n, "photos"), kind: EntryKind.FILE })],
-  [
-    "served for another Location",
-    FilesEntry.create({
-      ...directory(3n, "photos"),
-      reference: { target: { oneofKind: "location", location: { locationId: 4n, path: "photos" } } },
-    }),
-  ],
 ])("does not reuse a saved directory that is %s", async (_, entry) => {
   localStorage.setItem("restore:last-target", stored());
   listFiles.mockReturnValue(streamListing(ListFilesResponse.create({ directory: entry })));

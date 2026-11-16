@@ -163,7 +163,7 @@ func TestRecordCDBUnitsNavigationAndPhysicalCompletion(t *testing.T) {
 	if _, err := records.Write(context.Background(), make([]byte, 512)); err != nil {
 		t.Fatal(err)
 	}
-	if err := records.Sync(context.Background()); err != nil {
+	if err := records.Filemarks(context.Background(), 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := records.Filemarks(context.Background(), 1); err != nil {

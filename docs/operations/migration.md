@@ -109,6 +109,7 @@ Prepare prints the report as JSON and keeps it as `migration.json` in the attemp
 | Field | Check |
 | --- | --- |
 | `library_files`, `library_tapes`, `library_positions` | Match what the old UI showed: roughly the number of Files, every Tape you own, and their recorded copies. |
+| `library_directories` | Directories derived from the recorded copies' paths for browsing each Tape. Informational. |
 | `library_storage_positions` | Copies placed from a captured LTFS Index. `0` while the old installation has captured `.schema` files means Prepare did not find them. |
 | `migrated_jobs`, `archive_items`, `restore_items` | Your Job history; `deleted_jobs` were already deleted and are not migrated. |
 | `warnings` | Read each one; see below. |

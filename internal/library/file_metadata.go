@@ -284,7 +284,7 @@ func (l *Library) mergeFileMetadata(
 	tx *gorm.DB,
 	source *File,
 	target *File,
-) (bool, error) {
+) error {
 	// Merge distinct notes without silently discarding either directory's metadata.
 	mergedNote := target.Note
 	if mergedNote == "" {
@@ -293,24 +293,23 @@ func (l *Library) mergeFileMetadata(
 		mergedNote += "\n\n" + source.Note
 	}
 	if utf8.RuneCountInString(mergedNote) > maxNoteRunes {
-		return false, fmt.Errorf("merged directory note exceeds %d characters", maxNoteRunes)
+		return fmt.Errorf("merged directory note exceeds %d characters", maxNoteRunes)
 	}
 
 	// Replace the target relations with the deterministic union of both Tag sets.
 	tagsByID, err := l.mGetFileTags(ctx, tx, source.ID, target.ID)
 	if err != nil {
-		return false, err
+		return err
 	}
 	mergedTags, err := normalizeTags(append(tagsByID[target.ID], tagsByID[source.ID]...))
 	if err != nil {
-		return false, err
+		return err
 	}
 	if err := replaceFileTags(ctx, tx, []int64{target.ID}, mergedTags); err != nil {
-		return false, err
+		return err
 	}
-	changed := target.Note != mergedNote
 	target.Note = mergedNote
-	return changed, nil
+	return nil
 }
 
 func deleteFileRows(ctx context.Context, tx *gorm.DB, ids []int64) error {

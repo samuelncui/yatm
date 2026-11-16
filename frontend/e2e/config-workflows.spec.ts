@@ -185,7 +185,6 @@ const fixture = async (page: Page) => {
             GetPreviewCapabilitiesResponse.create({
               available: true,
               version: state.preview.command,
-              kinds: ["image", "video"],
               inputExtensionsByKind: { image: { extensions: ["jpg"] }, video: { extensions: ["mp4"] } },
               outputFormats: ["webp", "jpg", "png"],
             }),

@@ -248,8 +248,6 @@ def check(original_directory, migrated_directory, *, staged=False, revisions=Non
         assert [row["id"] for row in current_jobs] == [row["id"] for row in jobs], "Job IDs differ"
         result["jobs"] = []
         for ordinal, (source, row) in enumerate(zip(jobs, current_jobs), 1):
-            if (original_directory / "jobs" / str(source["id"]) / "state.db").exists():
-                raise NotImplementedError("Transitional Job manifests are outside the inline Archive audit scope")
             # Frozen legacy JobStatus: COMPLETED=4, DELETED=255 (excluded above).
             if source["status"] != 4:
                 raise NotImplementedError(

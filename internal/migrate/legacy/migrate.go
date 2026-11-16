@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +21,6 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/executor/archive"
 	"github.com/samuelncui/yatm/internal/executor/restore"
-	"github.com/samuelncui/yatm/internal/library"
 	legacypb "github.com/samuelncui/yatm/internal/migrate/legacy/pb"
 	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
@@ -30,7 +28,6 @@ import (
 
 const (
 	reportFilename           = "migration-report.json"
-	legacyJobsDirectory      = "jobs-legacy"
 	legacyJobLogsDirectory   = "job-logs"
 	legacyLTFSIndexDirectory = "captured_indices"
 	executorID               = "local"
@@ -115,7 +112,6 @@ func PrepareWithLTFSIndex(
 
 	// Discard only migration-owned output from an interrupted prior prepare.
 	jobsRoot := filepath.Join(workRoot, "jobs")
-	legacyJobsRoot := filepath.Join(workRoot, legacyJobsDirectory)
 	if hasStaging(db) {
 		if err := Abort(db, workRoot); err != nil {
 			return report, fmt.Errorf("discard interrupted current preparation failed, %w", err)
@@ -127,22 +123,11 @@ func PrepareWithLTFSIndex(
 		}
 	}
 
-	// Preserve an existing legacy Job directory before creating current Bundles at the final path.
-	if exists(legacyJobsRoot) && exists(jobsRoot) {
-		return report, fmt.Errorf("both legacy and active Job directories exist; inspect them before preparing")
-	}
-	if !exists(legacyJobsRoot) && exists(jobsRoot) {
-		entries, err := os.ReadDir(jobsRoot)
-		if err != nil {
-			return report, fmt.Errorf("inspect legacy Job directory failed, %w", err)
-		}
-		if len(entries) == 0 {
-			if err := os.Remove(jobsRoot); err != nil {
-				return report, fmt.Errorf("remove empty legacy Job directory failed, %w", err)
-			}
-		} else if err := os.Rename(jobsRoot, legacyJobsRoot); err != nil {
-			return report, fmt.Errorf("preserve legacy Job directory failed, %w", err)
-		}
+	// v0.1.x keeps no Job directory, so an existing one belongs to another installation.
+	if entries, err := os.ReadDir(jobsRoot); err == nil && len(entries) != 0 {
+		return report, fmt.Errorf("a Job directory already exists; inspect it before preparing, path=%q", jobsRoot)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return report, fmt.Errorf("inspect Job directory failed, %w", err)
 	}
 
 	// Create the staging table first so Abort can identify ownership of the final directory.
@@ -194,18 +179,7 @@ func PrepareWithLTFSIndex(
 		if job.UpdateTime.Before(job.CreateTime) {
 			updatedAtNS = createdAtNS
 		}
-		counts, warnings, err := prepareJob(
-			ctx,
-			workRoot,
-			db,
-			"positions_staging",
-			restorePositionsRequired,
-			jobsRoot,
-			legacyJobsRoot,
-			workRoot,
-			job,
-			restoreRoot,
-		)
+		counts, warnings, err := prepareJob(ctx, db, restorePositionsRequired, jobsRoot, workRoot, job, restoreRoot)
 		if err != nil {
 			return report, fmt.Errorf("migrate legacy job failed, id=%d, %w", job.ID, err)
 		}
@@ -254,12 +228,9 @@ const (
 
 func prepareJob(
 	ctx context.Context,
-	workRoot string,
 	libraryDB *gorm.DB,
-	positionsTable string,
 	positionPolicy restorePositionPolicy,
 	jobsRoot string,
-	legacyJobsRoot string,
 	legacyWorkRoot string,
 	job *legacyJob,
 	restoreRoot string,
@@ -301,62 +272,20 @@ func prepareJob(
 
 	switch state := job.State.State.(type) {
 	case *legacypb.JobState_Archive:
-		var transitionalDB *gorm.DB
-		var table string
-		if state.Archive != nil && len(state.Archive.Sources) == 0 {
-			var cleanup func() error
-			transitionalDB, table, cleanup, err = openTransitionalJobDB(workRoot, legacyJobsRoot, job.ID, "files")
-			if err != nil {
-				return itemCounts{}, nil, err
-			}
-			if transitionalDB != nil {
-				defer func() { returnErr = errors.Join(returnErr, cleanup()) }()
-			}
-		}
-		count, err := migrateArchive(ctx, jobDB, transitionalDB, table, job, state.Archive)
+		count, err := migrateArchive(ctx, jobDB, job, state.Archive)
 		if err != nil {
 			return itemCounts{}, nil, err
 		}
-		reconcileWarnings, err := reconcileMigratedArchive(
-			ctx,
-			jobDB,
-			libraryDB,
-			positionsTable,
-			job.ID,
-			legacyMediaIDs,
-		)
+		warnings, err := reconcileMigratedArchive(ctx, jobDB, libraryDB, job.ID, legacyMediaIDs)
 		if err != nil {
 			return itemCounts{}, nil, err
 		}
-		warnings := reconcileWarnings
 		if count == 0 {
 			warnings = append(warnings, fmt.Sprintf("job %d has an empty archive manifest; migrated as completed", job.ID))
 		}
 		return itemCounts{archive: count}, warnings, nil
 	case *legacypb.JobState_Restore:
-		var transitionalDB *gorm.DB
-		var table string
-		if state.Restore != nil && len(state.Restore.Tapes) == 0 {
-			var cleanup func() error
-			transitionalDB, table, cleanup, err = openTransitionalJobDB(workRoot, legacyJobsRoot, job.ID, "files", "restore_files")
-			if err != nil {
-				return itemCounts{}, nil, err
-			}
-			if transitionalDB != nil {
-				defer func() { returnErr = errors.Join(returnErr, cleanup()) }()
-			}
-		}
-		count, err := migrateRestore(
-			ctx,
-			jobDB,
-			libraryDB,
-			positionsTable,
-			positionPolicy,
-			transitionalDB,
-			table,
-			job,
-			state.Restore,
-		)
+		count, err := migrateRestore(ctx, jobDB, libraryDB, positionPolicy, job, state.Restore)
 		var warnings []string
 		if err == nil && restoreRoot != "" {
 			var root string
@@ -375,23 +304,6 @@ func prepareJob(
 	default:
 		return itemCounts{}, nil, fmt.Errorf("unsupported JobState type %T", job.State.State)
 	}
-}
-
-func openTransitionalJobDB(work, root string, jobID int64, tables ...string) (*gorm.DB, string, func() error, error) {
-	filename := filepath.Join(root, fmt.Sprint(jobID), "state.db")
-	if !exists(filename) {
-		return nil, "", nil, nil
-	}
-	db, cleanup, err := openSnapshotCatalog(work, filename)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("open transitional Job DB failed, %w", err)
-	}
-	for _, table := range tables {
-		if db.Migrator().HasTable(table) {
-			return db, table, cleanup, nil
-		}
-	}
-	return nil, "", nil, cleanup()
 }
 
 func migrateLegacyJobLog(workRoot, jobDir string, jobID int64) ([]int64, error) {
@@ -444,26 +356,6 @@ func migrateLegacyJobLog(workRoot, jobDir string, jobID int64) ([]int64, error) 
 	return mediaIDs, nil
 }
 
-type transitionalArchiveItem struct {
-	ID     int64 `gorm:"primaryKey"`
-	Base   string
-	Path   sortPath
-	Size   int64
-	Status legacypb.CopyStatus
-}
-
-type transitionalRestoreCopy struct {
-	ID         int64 `gorm:"primaryKey"`
-	FileID     int64
-	TapeID     int64
-	Path       sortPath
-	PositionID int64
-	TargetPath string
-	Size       int64
-	Hash       []byte
-	Status     legacypb.CopyStatus
-}
-
 type migratedRestoreCopy struct {
 	Copy          restore.Copy
 	FileID        int64
@@ -476,12 +368,9 @@ type migratedRestoreCopy struct {
 	TargetPath    string
 }
 
-func migrateArchive(ctx context.Context, db, transitionalDB *gorm.DB, transitionalTable string, job *legacyJob, state *legacypb.JobArchiveState) (int, error) {
+func migrateArchive(ctx context.Context, db *gorm.DB, job *legacyJob, state *legacypb.JobArchiveState) (int, error) {
 	if state == nil {
 		return 0, fmt.Errorf("archive state is missing")
-	}
-	if transitionalDB != nil {
-		return migrateTransitionalArchive(ctx, db, transitionalDB, transitionalTable, job)
 	}
 
 	// Stream bounded item batches into one complete Archive Job database.
@@ -502,7 +391,7 @@ func migrateArchive(ctx context.Context, db, transitionalDB *gorm.DB, transition
 			return nil
 		}
 		for index, source := range state.Sources {
-			if source == nil || source.Source == nil {
+			if source.Source == nil {
 				return fmt.Errorf("archive source is missing, item_index=%d", index)
 			}
 			if source.Size < 0 {
@@ -556,93 +445,10 @@ func migrateArchive(ctx context.Context, db, transitionalDB *gorm.DB, transition
 	return len(state.Sources), nil
 }
 
-func migrateTransitionalArchive(ctx context.Context, db, transitionalDB *gorm.DB, table string, job *legacyJob) (int, error) {
-	// Stream the pre-current transitional manifest without retaining all items in memory.
-	rows, err := transitionalDB.WithContext(ctx).Table(table).Order("id").Rows()
-	if err != nil {
-		return 0, fmt.Errorf("read transitional Archive Job DB failed, %w", err)
-	}
-	defer rows.Close()
-
-	count := 0
-	allSubmitted := true
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.AutoMigrate(&executor.JobRecord{}, &archive.Config{}, &archive.Item{}); err != nil {
-			return err
-		}
-		items := make([]*archive.Item, 0, 256)
-		flush := func() error {
-			if len(items) == 0 {
-				return nil
-			}
-			if err := tx.CreateInBatches(items, 256).Error; err != nil {
-				return err
-			}
-			items = items[:0]
-			return nil
-		}
-		for rows.Next() {
-			var source transitionalArchiveItem
-			if err := transitionalDB.ScanRows(rows, &source); err != nil {
-				return err
-			}
-			if source.Size < 0 {
-				return fmt.Errorf("archive source has invalid size, item_id=%d size=%d", source.ID, source.Size)
-			}
-			tapePath := source.Path.String()
-			if err := entity.ValidateRelativePath(tapePath); err != nil {
-				return fmt.Errorf("invalid archive tape path, item_id=%d, %w", source.ID, err)
-			}
-			data := &entity.ArchiveManifestFile{SourcePath: filepath.Clean(filepath.Join(source.Base, filepath.FromSlash(tapePath)))}
-			if err := data.Validate(); err != nil {
-				return fmt.Errorf("invalid archive source, item_id=%d, %w", source.ID, err)
-			}
-
-			status := migratedCopyStatus(source.Status)
-			if status != entity.CopyStatus_COPY_STATUS_SUBMITTED {
-				allSubmitted = false
-			}
-			item := &archive.Item{
-				ID: source.ID, Status: status, Size: source.Size, TargetPath: tapePath, Data: data,
-			}
-			if status == entity.CopyStatus_COPY_STATUS_SUBMITTED {
-				item.MediaPath = tapePath
-			}
-			items = append(items, item)
-			count++
-			if len(items) == cap(items) {
-				if err := flush(); err != nil {
-					return err
-				}
-			}
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if err := flush(); err != nil {
-			return err
-		}
-
-		status := entity.JobStatus_JOB_STATUS_READY
-		if allSubmitted {
-			status = entity.JobStatus_JOB_STATUS_COMPLETED
-		}
-		if err := tx.Create(&archive.Config{ID: 1, Spec: &entity.ArchiveJobSpec{}}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&executor.JobRecord{ID: 1, Kind: entity.JobKind_JOB_KIND_ARCHIVE, Status: status, Checkpoint: status, Priority: job.Priority}).Error
-	})
-	if err != nil {
-		return 0, fmt.Errorf("write archive Job DB failed, %w", err)
-	}
-	return count, nil
-}
-
 func reconcileMigratedArchive(
 	ctx context.Context,
 	jobDB *gorm.DB,
 	libraryDB *gorm.DB,
-	positionsTable string,
 	jobID int64,
 	mediaIDs []int64,
 ) ([]string, error) {
@@ -711,7 +517,7 @@ func reconcileMigratedArchive(
 			paths = append(paths, item.MediaPath)
 		}
 		var positions []positionFact
-		if err := libraryDB.WithContext(ctx).Table(positionsTable).
+		if err := libraryDB.WithContext(ctx).Model(&stagedLibraryPosition{}).
 			Select("media_id", "path", "size").
 			Where("media_id IN ? AND is_dir = ? AND path IN ?", mediaIDs, false, paths).
 			Find(&positions).Error; err != nil {
@@ -800,39 +606,18 @@ func migrateRestore(
 	ctx context.Context,
 	jobDB *gorm.DB,
 	libraryDB *gorm.DB,
-	positionsTable string,
 	positionPolicy restorePositionPolicy,
-	transitionalDB *gorm.DB,
-	transitionalTable string,
 	job *legacyJob,
 	state *legacypb.JobRestoreState,
 ) (int, error) {
 	if state == nil {
 		return 0, fmt.Errorf("restore state is missing")
 	}
-	if transitionalDB != nil {
-		return migrateTransitionalRestore(
-			ctx,
-			jobDB,
-			libraryDB,
-			positionsTable,
-			positionPolicy,
-			transitionalDB,
-			transitionalTable,
-			job,
-		)
-	}
 
 	// Group duplicate physical candidates under their logical Library file.
 	byFile := make(map[int64][]*legacypb.RestoreFile)
-	for tapeIndex, tape := range state.Tapes {
-		if tape == nil {
-			return 0, fmt.Errorf("restore tape is missing, index=%d", tapeIndex)
-		}
-		for fileIndex, file := range tape.Files {
-			if file == nil {
-				return 0, fmt.Errorf("restore file is missing, tape_id=%d index=%d", tape.TapeId, fileIndex)
-			}
+	for _, tape := range state.Tapes {
+		for _, file := range tape.Files {
 			if file.TapeId == 0 {
 				file.TapeId = tape.TapeId
 			}
@@ -860,7 +645,7 @@ func migrateRestore(
 			if len(copies) == 0 {
 				return nil
 			}
-			if err := writeRestoreCopies(ctx, tx, libraryDB, positionsTable, positionPolicy, copies); err != nil {
+			if err := writeRestoreCopies(ctx, tx, libraryDB, positionPolicy, copies); err != nil {
 				return err
 			}
 			copies = copies[:0]
@@ -952,145 +737,10 @@ func migrateRestore(
 	return len(fileIDs), nil
 }
 
-func migrateTransitionalRestore(
-	ctx context.Context,
-	jobDB *gorm.DB,
-	libraryDB *gorm.DB,
-	positionsTable string,
-	positionPolicy restorePositionPolicy,
-	transitionalDB *gorm.DB,
-	table string,
-	job *legacyJob,
-) (int, error) {
-	// Keep only one logical file's physical candidates in memory at a time.
-	rows, err := transitionalDB.WithContext(ctx).Table(table).Order("file_id, tape_id, id").Rows()
-	if err != nil {
-		return 0, fmt.Errorf("read transitional Restore Job DB failed, %w", err)
-	}
-	defer rows.Close()
-
-	logicalFiles := 0
-	allCompleted := true
-	err = jobDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.AutoMigrate(&executor.JobRecord{}, &restore.Config{}, &restore.Copy{}, &restore.File{}); err != nil {
-			return err
-		}
-		copies := make([]*migratedRestoreCopy, 0, 256)
-		flush := func() error {
-			if len(copies) == 0 {
-				return nil
-			}
-			if err := writeRestoreCopies(ctx, tx, libraryDB, positionsTable, positionPolicy, copies); err != nil {
-				return err
-			}
-			copies = copies[:0]
-			return nil
-		}
-		var candidates []transitionalRestoreCopy
-		writeFile := func() error {
-			if len(candidates) == 0 {
-				return nil
-			}
-			first := candidates[0]
-			if first.FileID <= 0 || first.Size < 0 || len(first.Hash) != sha256.Size {
-				return fmt.Errorf("invalid restore source, file_id=%d", first.FileID)
-			}
-			if err := entity.ValidateRelativePath(first.TargetPath); err != nil {
-				return fmt.Errorf("invalid restore target path, file_id=%d, %w", first.FileID, err)
-			}
-			status := entity.CopyStatus_COPY_STATUS_PENDING
-			for _, candidate := range candidates {
-				if candidate.Status == legacypb.CopyStatus_SUBMITED {
-					status = entity.CopyStatus_COPY_STATUS_COMPLETED
-					break
-				}
-			}
-			if status != entity.CopyStatus_COPY_STATUS_COMPLETED {
-				allCompleted = false
-			}
-			seenTapes := make(map[int64]struct{}, len(candidates))
-			group := make([]*migratedRestoreCopy, 0, len(candidates))
-			for _, candidate := range candidates {
-				if candidate.TapeID <= 0 ||
-					candidate.TargetPath != first.TargetPath ||
-					candidate.Size != first.Size ||
-					!bytes.Equal(candidate.Hash, first.Hash) {
-					return fmt.Errorf("inconsistent restore candidates, file_id=%d", first.FileID)
-				}
-				tapePath := candidate.Path.String()
-				if err := entity.ValidateRelativePath(tapePath); err != nil {
-					return fmt.Errorf("invalid restore candidate, file_id=%d tape_id=%d, %w", first.FileID, candidate.TapeID, err)
-				}
-				if _, exists := seenTapes[candidate.TapeID]; exists {
-					continue
-				}
-				seenTapes[candidate.TapeID] = struct{}{}
-				group = append(group, &migratedRestoreCopy{
-					Copy:   restore.Copy{ID: candidate.ID, Status: status, MediaID: candidate.TapeID, MediaPath: tapePath},
-					FileID: first.FileID, Size: first.Size,
-					Hash: append([]byte(nil), first.Hash...), TargetPath: first.TargetPath,
-				})
-			}
-			if len(copies) > 0 && len(copies)+len(group) > cap(copies) {
-				if err := flush(); err != nil {
-					return err
-				}
-			}
-			copies = append(copies, group...)
-			if len(copies) >= cap(copies) {
-				if err := flush(); err != nil {
-					return err
-				}
-			}
-			logicalFiles++
-			candidates = candidates[:0]
-			return nil
-		}
-
-		for rows.Next() {
-			var candidate transitionalRestoreCopy
-			if err := transitionalDB.ScanRows(rows, &candidate); err != nil {
-				return err
-			}
-			if len(candidates) > 0 && candidate.FileID != candidates[0].FileID {
-				if err := writeFile(); err != nil {
-					return err
-				}
-			}
-			candidates = append(candidates, candidate)
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if err := writeFile(); err != nil {
-			return err
-		}
-		if err := flush(); err != nil {
-			return err
-		}
-
-		status := entity.JobStatus_JOB_STATUS_READY
-		if allCompleted {
-			status = entity.JobStatus_JOB_STATUS_COMPLETED
-		}
-		if err := tx.Create(&restore.Config{ID: 1, Spec: &entity.RestoreJobSpec{}}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&executor.JobRecord{
-			ID: 1, Kind: entity.JobKind_JOB_KIND_RESTORE, Status: status, Checkpoint: status, Priority: job.Priority,
-		}).Error
-	})
-	if err != nil {
-		return 0, fmt.Errorf("write restore Job DB failed, %w", err)
-	}
-	return logicalFiles, nil
-}
-
 func writeRestoreCopies(
 	ctx context.Context,
 	tx *gorm.DB,
 	libraryDB *gorm.DB,
-	positionsTable string,
 	positionPolicy restorePositionPolicy,
 	batch []*migratedRestoreCopy,
 ) error {
@@ -1127,7 +777,7 @@ func writeRestoreCopies(
 			end = len(values)
 		}
 		var page []positionOrder
-		if err := libraryDB.WithContext(ctx).Table(positionsTable).
+		if err := libraryDB.WithContext(ctx).Model(&stagedLibraryPosition{}).
 			Select("media_id", "path", "size", "storage_order").
 			Where("is_dir = ?", false).
 			Where("(media_id, path, size) IN ?", values[offset:end]).
@@ -1160,31 +810,19 @@ func writeRestoreCopies(
 			candidate.Copy.StorageOrder = append([]byte{}, order...)
 			candidate.Copy.ItemID = candidate.FileID
 			// Preserve the migrated Media identity before numeric catalog IDs can be reused.
-			mediaTable := "media_staging"
-			if positionsTable != "positions_staging" {
-				mediaTable = "media"
+			var media stagedLibraryMedia
+			if err := libraryDB.WithContext(ctx).Where("id = ?", candidate.Copy.MediaID).Limit(1).Find(&media).Error; err != nil {
+				return err
 			}
-			if libraryDB.Migrator().HasTable(mediaTable) {
-				var media library.Media
-				if err := libraryDB.WithContext(ctx).Table(mediaTable).Where("id = ?", candidate.Copy.MediaID).Limit(1).Find(&media).Error; err != nil {
-					return err
-				}
-				candidate.Copy.MediaIdentity, candidate.Copy.MediaProfile = media.Identity, media.Profile
-			}
+			candidate.Copy.MediaIdentity, candidate.Copy.MediaProfile = media.Identity, media.Profile
 			// legacy Jobs retain their frozen content even when no surviving Library version exists.
-			versionTable := "file_versions_staging"
-			if positionsTable != "positions_staging" {
-				versionTable = "file_versions"
+			var version stagedLibraryVersion
+			if err := libraryDB.WithContext(ctx).Where("file_id = ? AND hash = ? AND size = ?", candidate.FileID, candidate.Hash, candidate.Size).
+				Order("id").Limit(1).Find(&version).Error; err != nil {
+				return err
 			}
-			if libraryDB.Migrator().HasTable(versionTable) {
-				var version library.FileVersion
-				if err := libraryDB.WithContext(ctx).Table(versionTable).Where("file_id = ? AND hash = ? AND size = ?", candidate.FileID, candidate.Hash, candidate.Size).
-					Order("id").Limit(1).Find(&version).Error; err != nil {
-					return err
-				}
-				candidate.FileVersionID, candidate.Signature = version.ID, version.Signature
-				candidate.Mode, candidate.MtimeNS = version.Mode, version.MtimeNS
-			}
+			candidate.FileVersionID, candidate.Signature = version.ID, version.Signature
+			candidate.Mode, candidate.MtimeNS = version.Mode, version.MtimeNS
 			copies = append(copies, &candidate.Copy)
 			kept++
 		}
@@ -1269,13 +907,8 @@ func Commit(ctx context.Context, db *gorm.DB, workRoot string) error {
 		}).Error; err != nil {
 			return fmt.Errorf("validate prepared Job formats failed, %w", err)
 		}
-		if !db.Migrator().HasTable(&stagedLibraryVersion{}) || !db.Migrator().HasTable(&stagedJobProperty{}) {
-			return fmt.Errorf("prepared FileVersion or Job search property table is missing")
-		}
+		// A missing staged or active table fails its rename below.
 		for _, table := range stagingTableSwaps {
-			if !db.Migrator().HasTable(table.active) || !db.Migrator().HasTable(table.staged) {
-				return fmt.Errorf("migration table set is incomplete, active=%q staged=%q", table.active, table.staged)
-			}
 			if db.Migrator().HasTable(table.backup) {
 				return fmt.Errorf("legacy backup table already exists, table=%q", table.backup)
 			}
@@ -1324,15 +957,6 @@ func Commit(ctx context.Context, db *gorm.DB, workRoot string) error {
 		}
 	}
 
-	// Validate the final table names before reporting a successful commit.
-	if !db.Migrator().HasTable("file_versions") {
-		return fmt.Errorf("FileVersion table is missing after commit")
-	}
-	for _, table := range stagingTableSwaps {
-		if !db.Migrator().HasTable(table.final) || !db.Migrator().HasTable(table.backup) {
-			return fmt.Errorf("unexpected table state after commit, active=%q backup=%q", table.final, table.backup)
-		}
-	}
 	_, err = dataformat.CheckCatalog(db)
 	return err
 }
@@ -1371,7 +995,6 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 
 	// Rebuild the Bundle beside the active directory and retain the replaced Bundle for inspection.
 	jobsRoot := filepath.Join(workRoot, "jobs")
-	legacyJobsRoot := filepath.Join(backup.WorkRoot, "jobs")
 	repairRoot := filepath.Join(filepath.Dir(backup.Root), "repair-staging")
 	preparedDir := filepath.Join(repairRoot, fmt.Sprint(jobID))
 	activeDir := filepath.Join(jobsRoot, fmt.Sprint(jobID))
@@ -1408,23 +1031,12 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 	if err := os.RemoveAll(preparedDir); err != nil {
 		return fmt.Errorf("discard prior repair output failed, id=%d, %w", jobID, err)
 	}
-	counts, _, err := prepareJob(
-		ctx,
-		workRoot,
-		source,
-		"positions_staging",
-		restorePositionsOptional,
-		repairRoot,
-		legacyJobsRoot,
-		backup.WorkRoot,
-		&job,
-		restoreRoot,
-	)
+	counts, _, err := prepareJob(ctx, source, restorePositionsOptional, repairRoot, backup.WorkRoot, &job, restoreRoot)
 	if err != nil {
 		return fmt.Errorf("rebuild current Job Bundle failed, id=%d, %w", jobID, err)
 	}
 	if counts.archive+counts.restore == 0 {
-		return fmt.Errorf("transitional Job DB has no recoverable items, id=%d", jobID)
+		return fmt.Errorf("legacy Job has no recoverable items, id=%d", jobID)
 	}
 
 	// Switch only this Job after the replacement database is complete.
@@ -1442,7 +1054,7 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 		return fmt.Errorf("remove empty Job repair directory failed, %w", err)
 	}
 
-	// Publish the repaired runner state through the same revision allocator used by offline activation.
+	// Publish the repaired runner state under the next Job catalog revision.
 	stateDB, cleanupState, err := openSnapshotCatalog(workRoot, filepath.Join(activeDir, "state.db"))
 	if err != nil {
 		return err
@@ -1473,23 +1085,13 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 }
 
 func Cleanup(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) error {
-	// Never remove retained legacy data from an unsupported installation.
-	if _, err := dataformat.CheckCatalog(db); err != nil {
-		return err
-	}
-	if err := dataformat.CheckBundles(db, workRoot); err != nil {
-		return err
-	}
-
-	// Rebuild expected facts from the full backup before deleting any migration evidence.
+	// Validation checks the installation format and rebuilds expected facts from the full backup
+	// before any migration evidence is deleted.
 	if _, err := Validate(ctx, db, workRoot, backup); err != nil {
 		return fmt.Errorf("validate migration before cleanup failed, %w", err)
 	}
 
 	// SQLite cleanup commits its complete known table set together; retries tolerate absence.
-	if db.Dialector.Name() != "sqlite" {
-		return fmt.Errorf("automatic cleanup requires SQLite")
-	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for index := len(stagingTableSwaps) - 1; index >= 0; index-- {
 			for _, name := range []string{stagingTableSwaps[index].backup, stagingTableSwaps[index].staged} {
@@ -1513,14 +1115,8 @@ func Cleanup(ctx context.Context, db *gorm.DB, workRoot string, backup Backup) e
 	}
 
 	// Remove only directories accounted for by the immutable backup; preserve unknown files.
-	for _, name := range []string{legacyJobsDirectory, legacyJobLogsDirectory} {
-		sourceName := name
-		if name == legacyJobsDirectory {
-			sourceName = "jobs"
-		}
-		if err := removePreservedTree(filepath.Join(workRoot, name), filepath.Join(backup.WorkRoot, sourceName)); err != nil {
-			return err
-		}
+	if err := removePreservedTree(filepath.Join(workRoot, legacyJobLogsDirectory), filepath.Join(backup.WorkRoot, legacyJobLogsDirectory)); err != nil {
+		return err
 	}
 
 	// Remove the report after all migration-only database state is gone.
@@ -1540,9 +1136,8 @@ func Abort(db *gorm.DB, workRoot string) error {
 		}
 	}
 
-	// Remove current output and its ownership tables before restoring any preserved legacy directory.
+	// Remove current output and its ownership tables.
 	jobsRoot := filepath.Join(workRoot, "jobs")
-	legacyJobsRoot := filepath.Join(workRoot, legacyJobsDirectory)
 	if hasStaging(db) {
 		if err := os.RemoveAll(jobsRoot); err != nil {
 			return fmt.Errorf("remove current Job directory failed, %w", err)
@@ -1558,20 +1153,11 @@ func Abort(db *gorm.DB, workRoot string) error {
 		}
 	}
 
-	// Complete a pending directory restore after all current ownership evidence is gone.
 	for _, name := range []string{"file_versions_staging", "job_properties_staging"} {
 		if db.Migrator().HasTable(name) {
 			if err := db.Migrator().DropTable(name); err != nil {
 				return err
 			}
-		}
-	}
-	if exists(legacyJobsRoot) {
-		if exists(jobsRoot) {
-			return fmt.Errorf("cannot restore legacy Job directory because the active path exists")
-		}
-		if err := os.Rename(legacyJobsRoot, jobsRoot); err != nil {
-			return fmt.Errorf("restore legacy Job directory failed, %w", err)
 		}
 	}
 	return removeReport(workRoot)

@@ -119,28 +119,41 @@ func CheckResponse(response Response) error {
 // CleanUnsupported reports only known optional-command rejection, without another joined cause.
 // Cancellation, malformed/deferred responses and unknown completion must remain real failures.
 func CleanUnsupported(err error) bool {
-	if err == ErrUnsupported {
-		return true
-	}
-	if failure, ok := err.(*CommandError); ok {
-		return rejectedCommand(failure) && Reason(failure) == entity.DeviceReason_DEVICE_REASON_UNSUPPORTED
+	return everyCause(err, func(err error) (bool, bool) {
+		if err == ErrUnsupported {
+			return true, true
+		}
+		if failure, ok := err.(*CommandError); ok {
+			return rejectedCommand(failure) && Reason(failure) == entity.DeviceReason_DEVICE_REASON_UNSUPPORTED, true
+		}
+		return false, false
+	})
+}
+
+// everyCause reports whether every leaf cause satisfies leaf. leaf decides an error when its
+// second result is true; otherwise a wrapped error is unwrapped and a joined error needs every
+// cause. An empty join or an undecided leaf is false.
+func everyCause(err error, leaf func(error) (bool, bool)) bool {
+	if result, decided := leaf(err); decided {
+		return result
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return CleanUnsupported(wrapped.Unwrap())
+		return everyCause(wrapped.Unwrap(), leaf)
 	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
+	joined, ok := err.(interface{ Unwrap() []error })
+	if !ok {
+		return false
+	}
+	causes := joined.Unwrap()
+	if len(causes) == 0 {
+		return false
+	}
+	for _, cause := range causes {
+		if !everyCause(cause, leaf) {
 			return false
 		}
-		for _, cause := range causes {
-			if !CleanUnsupported(cause) {
-				return false
-			}
-		}
-		return true
 	}
-	return false
+	return true
 }
 
 func currentCommand(failure *CommandError) bool {

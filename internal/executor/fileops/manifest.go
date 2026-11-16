@@ -10,20 +10,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 )
 
-func (r *operation) currentLocation(ctx context.Context, config *config) (*library.Location, error) {
-	// Numeric IDs cannot retarget an operation after import or configuration changes.
-	location, err := r.exe.Lib().GetLocation(ctx, config.LocationID)
-	if err != nil {
-		return nil, err
-	}
-	if location.RootPath != config.RootPath {
-		return nil, library.ErrLocationConflict
-	}
-	if _, _, err := r.exe.CheckLocationPath(location, ""); err != nil {
-		return nil, err
-	}
-	return location, nil
-}
+const batchSize = 128
 
 func within(value, root string) bool { return value == root || strings.HasPrefix(value, root+"/") }
 

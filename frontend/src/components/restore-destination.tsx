@@ -64,7 +64,7 @@ export const RestoreDestinationPicker = ({
         }
         const page = await listLocationDirectories(location.id, stored.path, controller.signal);
         if (controller.signal.aborted) return;
-        if (!canChooseLocationDirectory(page.directory, location.id, stored.path)) {
+        if (!canChooseLocationDirectory(page.directory)) {
           setNotice("The last restore target is no longer available. Choose another target.");
           return;
         }
@@ -148,7 +148,7 @@ const RestoreDestinationDialog = ({
       onConfirm: async (name) => {
         if (!name || name === "." || name === ".." || /[/\0]/.test(name)) throw new Error("Enter one folder name.");
         const parent = (await filesCli.get({ reference: locationDirectoryReference(String(location.id), path) }).response).detail?.entry;
-        if (!canChooseLocationDirectory(parent, location.id, path)) throw new Error("The destination changed. Choose it again.");
+        if (!canChooseLocationDirectory(parent)) throw new Error("The destination changed. Choose it again.");
         await operations.start(
           FileOperationSpec.create({
             kind: FileOperationKind.MKDIR,

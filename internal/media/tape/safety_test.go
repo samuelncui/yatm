@@ -25,7 +25,7 @@ func TestVariableWriteCannotAcknowledgePartialRecord(t *testing.T) {
 	}
 
 	// Semantic uncertainty blocks the following command before it reaches the transport.
-	if err := records.Sync(context.Background()); !errors.Is(err, ErrUncertain) || calls != 1 {
+	if err := records.Filemarks(context.Background(), 0); !errors.Is(err, ErrUncertain) || calls != 1 {
 		t.Fatalf("partial record allowed sync: err=%v, calls=%d", err, calls)
 	}
 }
@@ -62,7 +62,7 @@ func TestUnknownCompletionAndCursorBlockLaterCommands(t *testing.T) {
 			var err error
 			switch operation {
 			case "sync":
-				err = records.Sync(context.Background())
+				err = records.Filemarks(context.Background(), 0)
 			case "filemark":
 				err = records.Filemarks(context.Background(), 1)
 			case "rewind":

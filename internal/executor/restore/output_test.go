@@ -160,7 +160,7 @@ func TestRestoreOutputCreationResolvesConflictsAtWriteTime(t *testing.T) {
 	require.NoError(t, os.WriteFile(target, []byte("saved"), 0644))
 	before, err := os.Stat(target)
 	require.NoError(t, err)
-	saved, err := executor.VerifyObservedContent(ctx, target, before)
+	saved, err := executor.VerifyObservedContent(ctx, target)
 	require.NoError(t, err)
 	require.Equal(t, before.Size(), saved.SizeBytes)
 	require.NoError(t, os.WriteFile(target, []byte("other"), 0644))

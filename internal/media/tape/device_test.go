@@ -268,8 +268,8 @@ func TestDeviceConfigurationDoesNotAdvertiseGrownReservationAsMaximum(t *testing
 			t.Fatal(err)
 		}
 		_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512 << 10}, Read)
-		if (err == nil) != (actual == 512<<10) || transport.TransferLimit() != actual {
-			t.Fatalf("actual=%d reservation=%d preparation=%v", actual, transport.TransferLimit(), err)
+		if (err == nil) != (actual == 512<<10) || transport.limit != actual {
+			t.Fatalf("actual=%d reservation=%d preparation=%v", actual, transport.limit, err)
 		}
 		if actual < 512<<10 && (f.selects != 0 || f.motions != 0 || f.writes != 0) {
 			t.Fatal("insufficient reservation admitted device mutation")

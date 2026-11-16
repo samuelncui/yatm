@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
@@ -214,7 +213,7 @@ func (r *runner) readContent(
 	if runErr == nil {
 		runErr = writeErr
 	} else if writeErr != nil && !errors.Is(runErr, writeErr) {
-		runErr = multierror.Append(runErr, writeErr).ErrorOrNil()
+		runErr = errors.Join(runErr, writeErr)
 	}
 	readBytes, processed := stream.counters()
 	progress.UpdateSessionCurrent(readBytes, processed)
@@ -228,17 +227,14 @@ func (r *runner) readContent(
 		if errors.Is(runErr, ctx.Err()) {
 			return runErr
 		}
-		return multierror.Append(ctx.Err(), runErr).ErrorOrNil()
+		return errors.Join(ctx.Err(), runErr)
 	}
 	return runErr
 }
 
 // contentHashPolicy maps Scan's signature and result policies onto ACP's single content
-// policy. KNOWN_ONLY never enters this phase; HashCachedOnly is the value that expresses it.
+// policy. KNOWN_ONLY never enters this phase.
 func contentHashPolicy(config *Config, session mediapkg.ReadSession) acp.HashPolicy {
-	if config.Spec.SignaturePolicy == entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY {
-		return acp.HashCachedOnly
-	}
 	if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
 		// Verification compares real content against frozen prior facts, never a stored hash.
 		return acp.HashRead
@@ -253,13 +249,6 @@ func contentHashPolicy(config *Config, session mediapkg.ReadSession) acp.HashPol
 	}
 	// Media use the cache like any other source, sequential Media included.
 	return acp.HashCachedOrReadRefresh
-}
-
-// reuseAllowed reports whether a completed item may be satisfied by a stored hash instead of
-// a real read. Only the fill-missing policy trusts the cache.
-func (s *contentStream) reuseAllowed() bool {
-	return s.config.Spec.SignaturePolicy == entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING &&
-		s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES
 }
 
 func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) (rerr error) {
@@ -638,13 +627,7 @@ func (s *contentStream) accept(row *Entry, result acp.Result) (contentWrite, boo
 	if result.Err != nil {
 		return s.failed(row, result.Err)
 	}
-	// All content consumers use ACP's actual successful read, never target rereads or hand-written hash loops.
-	if result.SignatureCacheHit && !s.reuseAllowed() {
-		return s.failed(row, fmt.Errorf("Scan ACP result does not identify an actual selected read"))
-	}
-	if len(result.Targets) > 0 {
-		return s.failed(row, fmt.Errorf("Scan ACP result reports unexpected copy targets"))
-	}
+	// The hash policy decides whether ACP may answer from the cache instead of an actual read.
 	if len(result.SHA256) != 32 {
 		return s.failed(row, fmt.Errorf("Scan ACP result has no SHA-256"))
 	}
@@ -680,10 +663,7 @@ func (s *contentStream) accept(row *Entry, result acp.Result) (contentWrite, boo
 // through the same callback; they are counted without inventing a per-file finding and without a
 // result to persist.
 func (s *contentStream) failed(row *Entry, cause error) (contentWrite, bool) {
-	if cause == nil {
-		cause = fmt.Errorf("Scan content item failed")
-	}
-	if errors.Is(cause, context.Canceled) || (s.ctx != nil && s.ctx.Err() != nil) {
+	if errors.Is(cause, context.Canceled) || s.ctx.Err() != nil {
 		s.lock.Lock()
 		s.processed++
 		s.lock.Unlock()
@@ -707,13 +687,7 @@ func (s *contentStream) recordReadError(ctx context.Context, row *Entry, cause e
 	if isDeviceReadError(cause) {
 		return cause
 	}
-	row.Finding = entity.ScanFinding_SCAN_FINDING_UNREADABLE
-	if errors.Is(cause, os.ErrNotExist) {
-		row.Finding = entity.ScanFinding_SCAN_FINDING_MISSING
-	}
-	row.Detail = cause.Error()
-	row.CheckedAtNS = time.Now().UnixNano()
-	row.NeedsHash = false
+	recordReadFinding(row, cause)
 	if err := s.runner.db.WithContext(ctx).Save(row).Error; err != nil {
 		return err
 	}
@@ -721,6 +695,15 @@ func (s *contentStream) recordReadError(ctx context.Context, row *Entry, cause e
 	s.processed++
 	s.lock.Unlock()
 	return nil
+}
+
+// recordReadFinding turns one file-local read failure into a verification finding.
+func recordReadFinding(row *Entry, cause error) {
+	row.Finding = entity.ScanFinding_SCAN_FINDING_UNREADABLE
+	if errors.Is(cause, os.ErrNotExist) {
+		row.Finding = entity.ScanFinding_SCAN_FINDING_MISSING
+	}
+	row.Detail, row.CheckedAtNS, row.NeedsHash = cause.Error(), time.Now().UnixNano(), false
 }
 
 // writeBatch persists accepted results using bounded SQL statements independently of ACP batches.

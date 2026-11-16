@@ -74,9 +74,6 @@ func (t *sgTransport) Close() error {
 	return errors.Join(queryErr, t.serializedTransport.Close())
 }
 
-// TransferLimit is this descriptor's current reserved buffer, not the hardware's maximum transfer.
-func (t *sgTransport) TransferLimit() int { return t.limit }
-
 // EnsureTransfer reserves the explicitly selected size and refuses an insufficient readback.
 // Linux caps this per-descriptor buffer by the adapter; Close releases it without device controls.
 func (t *sgTransport) EnsureTransfer(ctx context.Context, size int) error {

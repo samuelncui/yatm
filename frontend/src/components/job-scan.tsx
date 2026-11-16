@@ -3,8 +3,8 @@ import { dateFromNs } from "@/tools/time";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { scanJobCli } from "@/api";
 import { Job, JobStatus, GetScanJobProgressResponse, ScanFinding, ScanPreviewOutcome, ScanChange, ScanEntry, type GetScanJobCreationResponse } from "@/entity";
-import { CancelJobButton, JobProgressCard, isJobRunning } from "@/components/job-card";
-import { JobResultsDialog, type JobItemViews } from "@/components/job-results-dialog";
+import { CancelJobButton, JobProgressCard, isJobRunning } from "@/components/job-progress";
+import { JobResultsDialog, type JobItemView } from "@/components/job-results-dialog";
 import { ReadMediaDialog } from "@/components/read-media-dialog";
 import { useJobProgress } from "@/components/use-job-progress";
 import { JobResultRow, JobResultText } from "@/components/job-file-list-item";
@@ -59,7 +59,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
     };
   }, [visible, job.id, loadCreation, comparisonAttempt]);
   const compare = comparison?.jobId === job.id ? comparison.enabled : undefined;
-  const resultViews = useMemo(() => scanResultViews(job.status, compare), [job.status, compare]);
+  const resultView = useMemo(() => scanResultView(job.status, compare), [job.status, compare]);
   const running = isJobRunning(job);
   return (
     <JobProgressCard
@@ -90,7 +90,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
               }}
             />
           )}
-          <JobResultsDialog jobId={job.id} title="Scan results" views={resultViews} />
+          <JobResultsDialog jobId={job.id} title="Scan results" view={resultView} />
         </>
       }
     />
@@ -124,16 +124,12 @@ const resultRow = (path: string, description: string) => (
   </JobResultRow>
 );
 
-const scanResultViews = (status: JobStatus, compare: boolean | undefined): JobItemViews => [
-  {
-    id: "files",
-    label: "Files",
-    emptyLabel: "No file results yet.",
-    listing: "scan-entries",
-    cursorOf: (entry: ScanEntry) => String(entry.id),
-    render: (entry: ScanEntry) => resultRow(entry.path, scanEntryLabel(entry, status, compare)),
-  },
-];
+const scanResultView = (status: JobStatus, compare: boolean | undefined): JobItemView => ({
+  emptyLabel: "No file results yet.",
+  listing: "scan-entries",
+  cursorOf: (entry: ScanEntry) => String(entry.id),
+  render: (entry: ScanEntry) => resultRow(entry.path, scanEntryLabel(entry, status, compare)),
+});
 
 const findingLabels: Record<ScanFinding, string> = {
   [ScanFinding.UNSPECIFIED]: "Not checked",

@@ -16,8 +16,6 @@ message GetPreviewCapabilitiesResponse {
     string reason = 2;
     string version = 3;
     string ffmpeg_version = 4;
-    repeated string kinds = 5;
-    repeated string input_extensions = 6;
     repeated string output_formats = 7;
     map<string, PreviewInputFormats> input_extensions_by_kind = 8;
     string libraw_version = 9;
@@ -50,8 +48,6 @@ message GetPreviewResponse {
 
 message PreviewManifest {
     bytes file_signature = 1;
-    string generator = 2;
-    bytes settings_json = 3;
     repeated PreviewAsset assets = 4;
 }
 

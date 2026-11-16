@@ -146,7 +146,12 @@ func (c *fileVersionsCommand) Execute(_ []string) error {
 	return writeProto(c.runtime.stdout, reply)
 }
 func (c *contentPageOptions) signature() ([]byte, error) {
-	value, err := hex.DecodeString(c.Signature)
+	return hexSignature(c.Signature)
+}
+
+// hexSignature decodes a --signature value.
+func hexSignature(text string) ([]byte, error) {
+	value, err := hex.DecodeString(text)
 	if err != nil || len(value) == 0 {
 		return nil, usageError(fmt.Errorf("signature must be nonempty hexadecimal"))
 	}

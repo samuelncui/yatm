@@ -24,24 +24,22 @@ type ltfsLabelCommand struct {
 
 type ltfsLabelFixture struct {
 	*serializedTransport
-	base         *deviceFixture
-	commands     []ltfsLabelCommand
-	reserve      []int
-	reserveErr   error
-	onReserve    func()
-	shortReserve bool
-	limit        int
-	partition    int
-	step         int
-	xml          [2][]byte
-	edit         func(int, int, []byte) []byte
-	fail         func(Command) (Response, error, bool)
+	base       *deviceFixture
+	commands   []ltfsLabelCommand
+	reserve    []int
+	reserveErr error
+	onReserve  func()
+	partition  int
+	step       int
+	xml        [2][]byte
+	edit       func(int, int, []byte) []byte
+	fail       func(Command) (Response, error, bool)
 }
 
 func newLTFSLabelFixture(t *testing.T) (*Device, *ltfsLabelFixture) {
 	t.Helper()
 	// Reuse actual inspection and native response decoding; only the physical records are synthetic.
-	f := &ltfsLabelFixture{base: newDeviceFixture(), limit: 32 << 10,
+	f := &ltfsLabelFixture{base: newDeviceFixture(),
 		xml: [2][]byte{[]byte("<label>zero</label>"), []byte("<label>one</label>")}}
 	f.base.mode[51] = 1
 	f.serializedTransport = newSerializedTransport(f.execute, func() error { f.base.closed++; return nil })
@@ -59,16 +57,11 @@ func (f *ltfsLabelFixture) EnsureTransfer(ctx context.Context, size int) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if f.reserveErr == nil && !f.shortReserve {
-		f.limit = max(f.limit, size)
-	}
 	if f.onReserve != nil {
 		f.onReserve()
 	}
 	return f.reserveErr
 }
-
-func (f *ltfsLabelFixture) TransferLimit() int { return f.limit }
 
 func (f *ltfsLabelFixture) execute(command Command) (Response, error) {
 	// Capture command shapes without retaining the reusable read buffer or its contents.
@@ -185,13 +178,9 @@ func TestLTFSLabelsRejectBoundsAndUnsupportedCPBeforeMotion(t *testing.T) {
 			feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ).GetRecords().Variable = proto.Bool(false)
 		}},
 		{"unknown presence", func(d *Device, _ *ltfsLabelFixture) { d.report.GetTape().MediumPresent = nil }},
-		{"reservation insufficient", func(_ *Device, f *ltfsLabelFixture) { f.shortReserve = true }},
 		{"reservation rejected", func(_ *Device, f *ltfsLabelFixture) { f.reserveErr = ErrUnsupported }},
 		{"native reservation cap", func(_ *Device, f *ltfsLabelFixture) {
 			f.reserveErr = errors.New("SG reserved buffer 262144 is smaller than selected record 524288")
-		}},
-		{"fixed transport insufficient", func(d *Device, f *ltfsLabelFixture) {
-			d.transport = &fixedTransferTransport{serializedTransport: f.serializedTransport, limit: 79}
 		}},
 		{"unknown transport bound", func(d *Device, f *ltfsLabelFixture) { d.transport = f.serializedTransport }},
 		{"partition byte unsupported", func(_ *Device, f *ltfsLabelFixture) {
@@ -426,25 +415,19 @@ func TestLTFSLabelsCancellationWaitsForIssuedReadAndDoesNotClose(t *testing.T) {
 	}
 }
 
-func TestLTFSLabelsUseSmallerObservedAndTransportBounds(t *testing.T) {
-	for _, fixed := range []bool{false, true} {
-		// A declared smaller envelope bounds all requests; no optional partition-list attribute is needed.
-		d, f := newLTFSLabelFixture(t)
-		d.report.GetTape().PartitionCount = nil
-		maximum := 64 << 10
-		feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ).GetRecords().MaximumBytes = proto.Uint32(uint32(maximum))
-		if fixed {
-			maximum = 1024
-			d.transport = &fixedTransferTransport{serializedTransport: f.serializedTransport, limit: maximum}
-		}
-		labels, err := d.ReadLTFSLabels(t.Context())
-		if err != nil || !reflect.DeepEqual(labels, f.xml) {
-			t.Fatalf("fixed=%t labels=%q err=%v", fixed, labels, err)
-		}
-		for _, command := range f.commands {
-			if command.cdb[0] == 8 && command.bytes != maximum {
-				t.Fatalf("requested=%d bound=%d", command.bytes, maximum)
-			}
+func TestLTFSLabelsUseSmallerObservedBound(t *testing.T) {
+	// A declared smaller envelope bounds all requests; no optional partition-list attribute is needed.
+	d, f := newLTFSLabelFixture(t)
+	d.report.GetTape().PartitionCount = nil
+	maximum := 64 << 10
+	feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ).GetRecords().MaximumBytes = proto.Uint32(uint32(maximum))
+	labels, err := d.ReadLTFSLabels(t.Context())
+	if err != nil || !reflect.DeepEqual(labels, f.xml) {
+		t.Fatalf("labels=%q err=%v", labels, err)
+	}
+	for _, command := range f.commands {
+		if command.cdb[0] == 8 && command.bytes != maximum {
+			t.Fatalf("requested=%d bound=%d", command.bytes, maximum)
 		}
 	}
 }

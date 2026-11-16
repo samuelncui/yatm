@@ -17,17 +17,16 @@ import {
   Typography,
 } from "@mui/material";
 import Close from "@mui/icons-material/Close";
-import { mediaCli, filesCli, locationCli, scanJobCli } from "@/api";
+import { mediaCli, locationCli, scanJobCli } from "@/api";
 import { FileScope, FileSelection, Location, Media, MediaKind, MediaAccess, PreviewPolicy, ScanJobSpec, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
 import { errorMessage } from "@/tools";
-import { type InitialScan, type ScanOptions } from "@/pages/scan-input";
-import { resultForSource, saveScanPreferences } from "@/pages/scan-preferences";
+import { type InitialScan, type ScanOptions } from "./scan-input";
+import { resultForSource, saveScanPreferences } from "./scan-preferences";
 import { LocationSearchSelect, MediaSearchSelect } from "./catalog-search-select";
 import { ImportPositionsDialog, useLibraryAdmission } from "./import-positions-dialog";
 import { PreviewPolicySelect, usePreviewGeneration } from "./preview-policy-select";
 import { ScanSelectionDialog } from "./scan-selection-dialog";
-import { scanSelectionEntry, scanSelectionKey, type ScanSelectionEntry } from "./scan-selection";
-import { filesEntryData, locationDirectoryReference } from "./files-browser";
+import { scanSelectionKey, type ScanSelectionEntry } from "./scan-selection";
 import { ActionRow } from "./action-row";
 import { SettingsSection } from "./settings-page";
 
@@ -101,24 +100,7 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
         if (controller.signal.aborted) return;
         if (!location || String(location.id) !== source.id) throw new Error("The selected Location is unavailable. Choose a Location.");
         if (!initial.explicit && location.rootPath !== initial.saved?.location?.rootPath) throw new Error("The last Location has changed. Select it again.");
-        const entries: ScanSelectionEntry[] = [];
-        // Routed path shortcuts resolve only the requested roots, never descendants.
-        for (let start = 0; start < (source.paths?.length ?? 0); start += 20) {
-          const page = await Promise.all(
-            source.paths!.slice(start, start + 20).map(async (path) => {
-              const detail = await filesCli.get({ reference: locationDirectoryReference(source.id, path) }, { abort: controller.signal }).response;
-              const entry = detail.detail?.entry;
-              if (!entry) throw new Error("The selected entry is unavailable.");
-              const reference = entry.reference?.target;
-              if (reference?.oneofKind !== "location" || reference.location.locationId !== location.id)
-                throw new Error("The selected Location has changed. Choose the range again.");
-              return scanSelectionEntry(filesEntryData(entry), FileScope.ALL, location.name);
-            }),
-          );
-          if (controller.signal.aborted) return;
-          entries.push(...page);
-        }
-        setTarget({ kind: "location", location, partial: !!source.paths?.length, entries });
+        setTarget({ kind: "location", location, partial: false, entries: [] });
         return;
       }
       const reply = await mediaCli.list({ param: { oneofKind: "ids", ids: { ids: [BigInt(source.id)] } } }, { abort: controller.signal }).response;

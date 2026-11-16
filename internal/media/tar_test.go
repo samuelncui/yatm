@@ -77,7 +77,6 @@ func (d *tarTestDevice) Filemarks(_ context.Context, count uint32) error {
 	}
 	return d.completionErr
 }
-func (d *tarTestDevice) Sync(context.Context) error   { return nil }
 func (d *tarTestDevice) Rewind(context.Context) error { d.cursor = 0; return nil }
 func (d *tarTestDevice) Space(_ context.Context, code byte, count int32) error {
 	if code != 1 || count < 0 {

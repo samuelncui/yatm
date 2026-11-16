@@ -1,6 +1,5 @@
 import { FileBrowser } from "@/components/file-browser";
-import { Feedback } from "@/components/feedback";
-import { useCallback, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, List, ListItem, ListItemText, Typography } from "@mui/material";
 import Close from "@mui/icons-material/Close";
 import {
@@ -16,12 +15,10 @@ import {
 import { FileScope, FileOperationKind, type Location } from "@/entity";
 import { allowsFileOperation } from "./files-browser";
 import { RefreshListAction } from "@/actions";
-import { useFileBrowser } from "@/pages/file";
-import { errorMessage } from "@/tools";
+import { useFileBrowser } from "@/components/use-file-browser";
 import { librarySource, type PaneSource } from "./pane-source";
 import { scanSelectionEntry, scanSelectionKey, type ScanSelectionEntry } from "./scan-selection";
 
-const selectionLimit = 1000;
 const selectedPageSize = 50;
 const AddSelectionAction = defineFileAction({
   id: "add-file-selection",
@@ -31,18 +28,14 @@ const AddSelectionAction = defineFileAction({
 const noop = () => {};
 const refreshNothing = async () => {};
 
-export const FileSelectionDialog = ({
+const accepts = (file: FileData | null | undefined) => allowsFileOperation(file, FileOperationKind.SCAN);
+
+export const ScanSelectionDialog = ({
   entries,
   location,
   onChoose,
   onClose,
-  accepts,
-  storageKey = "file-selection",
-  title = "Choose files and folders",
 }: {
-  storageKey?: string;
-  accepts: (file: FileData | null | undefined) => boolean;
-  title?: string;
   entries: ScanSelectionEntry[];
   location?: Location;
   onChoose: (entries: ScanSelectionEntry[]) => void;
@@ -50,14 +43,10 @@ export const FileSelectionDialog = ({
 }) => {
   const [draft, setDraft] = useState(() => [...entries]);
   const [visibleRoots, setVisibleRoots] = useState(selectedPageSize);
-  const [error, setError] = useState("");
   const [source, setSource] = useState<PaneSource>(() => (location ? { kind: "location", id: String(location.id), name: location.name } : librarySource));
   const browserRef = useRef<FileBrowserHandle>(null);
-  const changeSource = useCallback((value: PaneSource) => {
-    setSource(value);
-    setError("");
-  }, []);
-  const browser = useFileBrowser(browserRef, storageKey, refreshNothing, undefined, noop, undefined, undefined, FileScope.DEFAULT, undefined, {
+  const changeSource = useCallback((value: PaneSource) => setSource(value), []);
+  const browser = useFileBrowser(browserRef, "scan-selection", refreshNothing, undefined, noop, undefined, undefined, FileScope.DEFAULT, undefined, {
     source,
     onChange: changeSource,
   });
@@ -76,18 +65,12 @@ export const FileSelectionDialog = ({
 
   const add = (files: FileData[], parent = directory) => {
     if (unavailable || files.some((file) => !accepts(file))) return;
-    try {
-      const combined = new Map(draft.map((entry) => [scanSelectionKey(entry), entry]));
-      for (const file of files) {
-        const entry = scanSelectionEntry(file, browser.scope, sourceLabel, parent);
-        combined.set(scanSelectionKey(entry), entry);
-      }
-      if (combined.size > selectionLimit) throw new Error("Choose up to 1,000 roots. Select a parent folder to include its contents.");
-      setDraft([...combined.values()]);
-      setError("");
-    } catch (error) {
-      setError(errorMessage(error, "Could not add this selection"));
+    const combined = new Map(draft.map((entry) => [scanSelectionKey(entry), entry]));
+    for (const file of files) {
+      const entry = scanSelectionEntry(file, browser.scope, sourceLabel, parent);
+      combined.set(scanSelectionKey(entry), entry);
     }
+    setDraft([...combined.values()]);
   };
   const addDirectory = () => {
     if (!current || !canAddDirectory || unavailable) return;
@@ -124,9 +107,8 @@ export const FileSelectionDialog = ({
   };
   return (
     <Dialog open fullWidth maxWidth="md" onClose={close} aria-labelledby="scan-selection-title">
-      <DialogTitle id="scan-selection-title">{title}</DialogTitle>
+      <DialogTitle id="scan-selection-title">Choose files and folders</DialogTitle>
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, minHeight: 0 }}>
-        {error && <Feedback severity="error">{error}</Feedback>}
         <Box sx={{ height: 340, minHeight: 220, flexShrink: 0 }}>
           <FileBrowser
             {...browser.browserProps}
@@ -155,7 +137,6 @@ export const FileSelectionDialog = ({
             disabled={!draft.length}
             onClick={() => {
               setDraft([]);
-              setError("");
               setVisibleRoots(selectedPageSize);
             }}
           >
@@ -190,7 +171,7 @@ export const FileSelectionDialog = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button variant="contained" disabled={draft.length > selectionLimit} onClick={() => onChoose(draft)}>
+        <Button variant="contained" onClick={() => onChoose(draft)}>
           Choose
         </Button>
         <Button onClick={close}>Cancel</Button>
@@ -198,7 +179,3 @@ export const FileSelectionDialog = ({
     </Dialog>
   );
 };
-
-export const ScanSelectionDialog = (props: Omit<ComponentProps<typeof FileSelectionDialog>, "accepts" | "storageKey">) => (
-  <FileSelectionDialog {...props} storageKey="scan-selection" accepts={(file) => allowsFileOperation(file, FileOperationKind.SCAN)} />
-);

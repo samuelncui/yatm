@@ -723,7 +723,7 @@ export interface TapeEncryptionLimits {
     keyInstanceCounter?: number;
 }
 /**
- * Observed reporting form/count; neither establishes full-wrap coverage or freshness.
+ * Observed reporting form/count; neither establishes full-wrap coverage.
  *
  * @generated from protobuf message yatm.v1.TapeGeometryLimits
  */
@@ -736,10 +736,6 @@ export interface TapeGeometryLimits {
      * @generated from protobuf field: optional uint32 reported_wraps = 2
      */
     reportedWraps?: number;
-    /**
-     * @generated from protobuf field: optional bool fresh = 3
-     */
-    fresh?: boolean;
     /**
      * @generated from protobuf field: optional string source = 4
      */
@@ -771,16 +767,6 @@ export interface TapeCapacityLimits {
      * @generated from protobuf field: optional int64 completed_at_ns = 5
      */
     completedAtNs?: bigint;
-    /**
-     * Absent allowances are unknown, not zero and not a complete-file-fit guarantee.
-     *
-     * @generated from protobuf field: optional uint64 observation_error_bytes = 6
-     */
-    observationErrorBytes?: bigint;
-    /**
-     * @generated from protobuf field: optional uint64 unreflected_bytes = 7
-     */
-    unreflectedBytes?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeDeviceReport
@@ -1011,15 +997,7 @@ export enum DeviceFeatureValidation {
     /**
      * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_UNVALIDATED = 1;
      */
-    UNVALIDATED = 1,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_VALIDATED = 2;
-     */
-    VALIDATED = 2,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_VALIDATION_FAILED = 3;
-     */
-    FAILED = 3
+    UNVALIDATED = 1
 }
 /**
  * @generated from protobuf enum yatm.v1.DeviceReason
@@ -1102,11 +1080,7 @@ export enum TapeCapacityQuality {
     /**
      * @generated from protobuf enum value: TAPE_CAPACITY_QUALITY_ESTIMATE = 1;
      */
-    ESTIMATE = 1,
-    /**
-     * @generated from protobuf enum value: TAPE_CAPACITY_QUALITY_LOWER_BOUND = 2;
-     */
-    LOWER_BOUND = 2
+    ESTIMATE = 1
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ListMediaRequest$Type extends MessageType<ListMediaRequest> {
@@ -3237,7 +3211,6 @@ class TapeGeometryLimits$Type extends MessageType<TapeGeometryLimits> {
         super("yatm.v1.TapeGeometryLimits", [
             { no: 1, name: "all_wraps", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 2, name: "reported_wraps", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 3, name: "fresh", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 4, name: "source", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
@@ -3257,9 +3230,6 @@ class TapeGeometryLimits$Type extends MessageType<TapeGeometryLimits> {
                     break;
                 case /* optional uint32 reported_wraps */ 2:
                     message.reportedWraps = reader.uint32();
-                    break;
-                case /* optional bool fresh */ 3:
-                    message.fresh = reader.bool();
                     break;
                 case /* optional string source */ 4:
                     message.source = reader.string();
@@ -3282,9 +3252,6 @@ class TapeGeometryLimits$Type extends MessageType<TapeGeometryLimits> {
         /* optional uint32 reported_wraps = 2; */
         if (message.reportedWraps !== undefined)
             writer.tag(2, WireType.Varint).uint32(message.reportedWraps);
-        /* optional bool fresh = 3; */
-        if (message.fresh !== undefined)
-            writer.tag(3, WireType.Varint).bool(message.fresh);
         /* optional string source = 4; */
         if (message.source !== undefined)
             writer.tag(4, WireType.LengthDelimited).string(message.source);
@@ -3306,9 +3273,7 @@ class TapeCapacityLimits$Type extends MessageType<TapeCapacityLimits> {
             { no: 2, name: "remaining_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 3, name: "quality", kind: "enum", T: () => ["yatm.v1.TapeCapacityQuality", TapeCapacityQuality, "TAPE_CAPACITY_QUALITY_"] },
             { no: 4, name: "issued_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 5, name: "completed_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 6, name: "observation_error_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 7, name: "unreflected_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 5, name: "completed_at_ns", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<TapeCapacityLimits>): TapeCapacityLimits {
@@ -3338,12 +3303,6 @@ class TapeCapacityLimits$Type extends MessageType<TapeCapacityLimits> {
                 case /* optional int64 completed_at_ns */ 5:
                     message.completedAtNs = reader.int64().toBigInt();
                     break;
-                case /* optional uint64 observation_error_bytes */ 6:
-                    message.observationErrorBytes = reader.uint64().toBigInt();
-                    break;
-                case /* optional uint64 unreflected_bytes */ 7:
-                    message.unreflectedBytes = reader.uint64().toBigInt();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -3371,12 +3330,6 @@ class TapeCapacityLimits$Type extends MessageType<TapeCapacityLimits> {
         /* optional int64 completed_at_ns = 5; */
         if (message.completedAtNs !== undefined)
             writer.tag(5, WireType.Varint).int64(message.completedAtNs);
-        /* optional uint64 observation_error_bytes = 6; */
-        if (message.observationErrorBytes !== undefined)
-            writer.tag(6, WireType.Varint).uint64(message.observationErrorBytes);
-        /* optional uint64 unreflected_bytes = 7; */
-        if (message.unreflectedBytes !== undefined)
-            writer.tag(7, WireType.Varint).uint64(message.unreflectedBytes);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

@@ -122,9 +122,6 @@ func sampledWork(rule StageRule, in StageInput) (int64, *int64) {
 		return 0, nil
 	}
 	unit := rule.Unit
-	if unit == entity.ProgressUnit_PROGRESS_UNIT_UNSPECIFIED {
-		unit = stageUnit(in.Total)
-	}
 	work := amount(unit, in.Work)
 	if !in.WorkKnown {
 		if !in.Total.Denominated() {
@@ -189,13 +186,7 @@ type stageMeter struct {
 
 // meter returns the attempt-local sampling window, creating it with the Progress clock.
 func (p *Progress) meter() *stageMeter {
-	p.stageOnce.Do(func() {
-		now := p.now
-		if now == nil {
-			now = time.Now
-		}
-		p.stage = &stageMeter{now: now}
-	})
+	p.stageOnce.Do(func() { p.stage = &stageMeter{now: p.now} })
 	return p.stage
 }
 
@@ -274,9 +265,6 @@ func (m *stageMeter) window(in StageInput, rule StageRule, work int64, workTotal
 		settled = Counts{Files: min(settled.Files, denominator.Files), Bytes: min(settled.Bytes, denominator.Bytes)}
 	}
 	unit := rule.Unit
-	if unit == entity.ProgressUnit_PROGRESS_UNIT_UNSPECIFIED {
-		unit = stageUnit(denominator)
-	}
 	result := &entity.StageProgress{Phase: in.Phase, Unit: unit, Completed: amount(unit, settled), EstimateState: entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE}
 	if denominator.Denominated() {
 		result.Total = proto.Int64(amount(unit, *denominator))

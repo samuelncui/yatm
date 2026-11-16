@@ -30,7 +30,8 @@ func TestFrozenRestoreSurvivesMergedAndRemovedVersion(t *testing.T) {
 
 	target := &library.File{Name: "merged.txt", Kind: entity.FileKind_FILE_KIND_REGULAR}
 	require.NoError(t, lib.SaveFile(ctx, target))
-	require.NoError(t, lib.MergeFiles(ctx, target.ID, []int64{source.ID}))
+	_, err = lib.MergeFileMembers(ctx, target.ID, func(yield func([]int64) error) error { return yield([]int64{source.ID}) }, false)
+	require.NoError(t, err)
 	moved, err := lib.GetFileVersion(ctx, version.ID)
 	require.NoError(t, err)
 	require.Equal(t, target.ID, moved.FileID)

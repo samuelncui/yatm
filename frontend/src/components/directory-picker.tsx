@@ -58,16 +58,9 @@ export const listLocationDirectories = async (locationID: bigint, path: string, 
   return { entries, breadcrumbs, directory };
 };
 
-export function canChooseLocationDirectory(entry: FilesEntry | undefined, locationID: bigint, path: string) {
-  const target = entry?.reference?.target;
-  return (
-    !entry?.error &&
-    entry?.kind === EntryKind.DIRECTORY &&
-    target?.oneofKind === "location" &&
-    target.location.locationId === locationID &&
-    target.location.path === path &&
-    entry.operations.includes(FileOperationKind.MKDIR)
-  );
+/** The server answers for the directory it was asked about; only its kind and operations decide. */
+export function canChooseLocationDirectory(entry: FilesEntry | undefined) {
+  return !entry?.error && entry?.kind === EntryKind.DIRECTORY && entry.operations.includes(FileOperationKind.MKDIR);
 }
 
 type DirectoryRow = { name: string; path: string; error?: string };
@@ -91,7 +84,7 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
       if (controller.signal.aborted) return;
       setRows(page.entries.filter((entry) => entry.kind === EntryKind.DIRECTORY || entry.error));
       setBreadcrumbs(page.breadcrumbs.filter((entry) => entry.path));
-      setWritable(canChooseLocationDirectory(page.directory, locationID, path));
+      setWritable(canChooseLocationDirectory(page.directory));
       setError("");
     } catch (error) {
       if (!controller.signal.aborted) {

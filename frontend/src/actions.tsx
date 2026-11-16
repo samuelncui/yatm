@@ -43,7 +43,6 @@ export const PasteFilesAction = defineFileAction({
 export const AddLocationFileAction = defineFileAction({
   id: "admit_location_files",
   requiresSelection: true,
-  fileFilter: (file) => !!file && (file.isDir || file.isRegularFile === true),
   button: { name: "Add to Library", toolbar: true, contextMenu: true, group: "Actions", icon: ChonkyIconName.file },
 });
 export const ScanFilesAction = defineFileAction({

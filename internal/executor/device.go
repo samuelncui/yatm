@@ -20,17 +20,6 @@ func (e *Executor) ListDevices() []*entity.DeviceSummary {
 	return devices
 }
 
-// ListAvailableDevices retains the native available-device view over the shared summaries.
-func (e *Executor) ListAvailableDevices() []string {
-	devices := make([]string, 0, len(e.devices))
-	for _, device := range e.ListDevices() {
-		if !device.Busy {
-			devices = append(devices, device.Device)
-		}
-	}
-	return devices
-}
-
 // TryAcquireTapeDevice reserves a configured drive without waiting and captures its release key.
 func (e *Executor) TryAcquireTapeDevice(device string) (func(), bool, error) {
 	// Reject names outside the configured Tape adapter boundary.

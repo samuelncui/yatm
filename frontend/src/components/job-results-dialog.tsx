@@ -8,10 +8,8 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import LinearProgress from "@mui/material/LinearProgress";
-import Tab from "@mui/material/Tab";
 
 import { archiveJobCli, restoreJobCli, scanJobCli } from "@/api";
-import { PageTabs } from "@/components/page-navigation";
 import { FileRowPlaceholder, jobResultRowHeight } from "@/components/job-file-list-item";
 import { firstUncovered, loadedAt, mergeWindow, planAnchor, resultPageSize as pageSize, type ResultWindow } from "./job-result-window";
 import { JobResultOrder } from "@/entity";
@@ -39,16 +37,12 @@ type JobItemPage = {
 };
 
 export type JobItemView<T = any> = {
-  id: string;
-  label: string;
   emptyLabel: string;
   listing: JobItemListing;
   /** The row's own order key, which becomes the cursor of the next page. */
   cursorOf: (row: T) => string;
   render: (row: T) => ReactNode;
 };
-
-export type JobItemViews = JobItemView[];
 
 const listingLoaders: Record<JobItemListing, (jobId: bigint, page: JobItemPageRequest, abort: AbortSignal) => Promise<JobItemPage>> = {
   "scan-entries": async (jobId, page, abort) => {
@@ -65,15 +59,14 @@ const listingLoaders: Record<JobItemListing, (jobId: bigint, page: JobItemPageRe
   },
 };
 
-export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title: string; views: JobItemViews }) => {
+export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title: string; view: JobItemView }) => {
   const [open, setOpen] = useState(false);
-  const [viewIndex, setViewIndex] = useState(0);
   const [total, setTotal] = useState(0);
   const [windows, setWindows] = useState<ResultWindow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const viewsRef = useRef(views);
+  const viewRef = useRef(view);
   const windowsRef = useRef<ResultWindow[]>([]);
   const totalRef = useRef(0);
   const pendingRange = useRef<{ start: number; end: number; includeTotal: boolean } | null>(null);
@@ -84,8 +77,8 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
   const controller = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    viewsRef.current = views;
-  }, [views]);
+    viewRef.current = view;
+  }, [view]);
 
   useEffect(
     () => () => {
@@ -100,9 +93,8 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
     setWindows(next);
   };
 
-  const fill = async (index: number, start: number, end: number, includeTotal: boolean) => {
-    const view = viewsRef.current[index];
-    if (!view) return;
+  const fill = async (start: number, end: number, includeTotal: boolean) => {
+    const view = viewRef.current;
     const run = generation.current;
     const viewport = visibleRange.current;
     // Each pass loads one window; a bounded number keeps one scroll burst responsive.
@@ -147,7 +139,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
     }
   };
 
-  const drain = async (index: number) => {
+  const drain = async () => {
     if (busy.current) return;
     busy.current = true;
     controller.current = new AbortController();
@@ -159,7 +151,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
       while (pendingRange.current && run === generation.current) {
         const wanted = pendingRange.current;
         pendingRange.current = null;
-        await fill(index, wanted.start, wanted.end, wanted.includeTotal);
+        await fill(wanted.start, wanted.end, wanted.includeTotal);
         // A stopped window never grows again, so a missing row ends the loop.
         if (wanted.includeTotal && windowsRef.current.length === 0) return;
       }
@@ -176,7 +168,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
     }
   };
 
-  const schedule = (index: number, range: ListRange, includeTotal = false) => {
+  const schedule = (range: ListRange, includeTotal = false) => {
     const wanted = { start: Math.max(0, range.startIndex), end: range.endIndex };
     if (wanted.start !== visibleRange.current.start || wanted.end !== visibleRange.current.end) visibleRange.current = wanted;
     if (failed.current) return;
@@ -188,43 +180,39 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
     }
     pendingRange.current = { ...wanted, includeTotal };
     setLoading(true);
-    void drain(index);
+    void drain();
   };
 
-  const reset = (index: number) => {
+  // Invalidates every read in flight; the next opening starts a new generation.
+  const stop = () => {
     generation.current++;
     controller.current?.abort();
     busy.current = false;
-    failed.current = false;
     pendingRange.current = null;
+  };
+
+  const show = () => {
+    stop();
+    failed.current = false;
     publish([]);
     totalRef.current = 0;
     setTotal(0);
     setError("");
-    setViewIndex(index);
-    schedule(index, { startIndex: 0, endIndex: pageSize - 1 }, true);
-  };
-
-  const show = () => {
     setOpen(true);
-    reset(0);
+    schedule({ startIndex: 0, endIndex: pageSize - 1 }, true);
   };
   const close = () => {
-    generation.current++;
-    controller.current?.abort();
-    busy.current = false;
-    pendingRange.current = null;
+    stop();
     setLoading(false);
     setOpen(false);
   };
 
-  const view = views[viewIndex] ?? views[0];
   return (
     <>
       <Button size="small" onClick={show}>
         Results
       </Button>
-      {open && view && (
+      {open && (
         <Dialog
           open
           onClose={close}
@@ -236,13 +224,6 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
         >
           <DialogTitle>{title}</DialogTitle>
           <DialogContent dividers className="job-results-content" sx={{ p: 0 }}>
-            {views.length > 1 && (
-              <PageTabs value={viewIndex} onChange={(_, value: number) => reset(value)} aria-label={`${title} views`}>
-                {views.map((candidate) => (
-                  <Tab key={candidate.id} label={candidate.label} />
-                ))}
-              </PageTabs>
-            )}
             <div className="job-results-page">
               {loading && <LinearProgress className="job-results-loading" aria-label="Loading Job results" />}
               {error && (
@@ -253,7 +234,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
                       onClick={() => {
                         failed.current = false;
                         setError("");
-                        schedule(viewIndex, { startIndex: visibleRange.current.start, endIndex: visibleRange.current.end }, totalRef.current === 0);
+                        schedule({ startIndex: visibleRange.current.start, endIndex: visibleRange.current.end }, totalRef.current === 0);
                       }}
                     >
                       Retry
@@ -269,7 +250,7 @@ export const JobResultsDialog = ({ jobId, title, views }: { jobId: bigint; title
                   totalCount={total}
                   fixedItemHeight={jobResultRowHeight}
                   increaseViewportBy={jobResultRowHeight * 10}
-                  rangeChanged={(range) => schedule(viewIndex, range)}
+                  rangeChanged={(range) => schedule(range)}
                   itemContent={(index) => {
                     const row = loadedAt(windows, index);
                     return row === undefined ? <FileRowPlaceholder /> : view.render(row);

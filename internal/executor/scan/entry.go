@@ -28,7 +28,6 @@ type Entry struct {
 	FileID       int64             `gorm:"index"`
 	LocationID   int64             `gorm:"not null;uniqueIndex:idx_entries_path,priority:1"`
 	Path         string            `gorm:"not null;uniqueIndex:idx_entries_path,priority:2"`
-	ScopePath    string            `gorm:"index"`
 	Change       entity.ScanChange `gorm:"index"`
 	Size         int64
 	Mode         uint32

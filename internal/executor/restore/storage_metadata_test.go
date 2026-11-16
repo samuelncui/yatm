@@ -55,23 +55,3 @@ func TestRestoreFreezesTarLocatorThroughReopenedBundle(t *testing.T) {
 	require.NoError(t, reopened.(*jobRestoreRunner).db.First(&persisted).Error)
 	require.True(t, proto.Equal(metadata, persisted.StorageMetadata))
 }
-
-func TestRestoreRejectsBundleMissingFrozenLocatorColumn(t *testing.T) {
-	// Remove only the newly required column from an otherwise valid current-family bundle.
-	runner, _, _ := setupVolumeRestore(t, "old-candidate-schema", map[string][]byte{"file.txt": []byte("saved")})
-	require.NoError(t, runner.db.Migrator().DropColumn(&Copy{}, "storage_metadata"))
-	require.NoError(t, runner.Close())
-	job, err := runner.exe.GetJob(context.Background(), runner.job.ID)
-	require.NoError(t, err)
-
-	// Opening the old Alpha layout rejects it without adding a column or inventing a nil locator.
-	reopened, err := newRunner(context.Background(), runner.exe, job)
-	require.ErrorContains(t, err, "copies.storage_metadata is missing")
-	require.Nil(t, reopened)
-	db, err := runner.exe.NewStateDB(context.Background(), job.ID)
-	require.NoError(t, err)
-	require.False(t, db.Migrator().HasColumn(&Copy{}, "storage_metadata"))
-	connection, err := db.DB()
-	require.NoError(t, err)
-	require.NoError(t, connection.Close())
-}

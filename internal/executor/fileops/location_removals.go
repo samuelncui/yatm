@@ -2,7 +2,6 @@ package fileops
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -17,11 +16,8 @@ type LocationRemovals struct {
 // WithLocationRemovals applies the declared Location scope to every bounded Remove batch.
 // The callback must not retain the session after returning.
 func WithLocationRemovals(exe *executor.Executor, locationIDs []int64, run func(*LocationRemovals) error) error {
-	// Deduplicate in stable order so the declared scope is deterministic.
-	ids := append([]int64(nil), locationIDs...)
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	declared := make(map[int64]bool, len(ids))
-	for _, id := range ids {
+	declared := make(map[int64]bool, len(locationIDs))
+	for _, id := range locationIDs {
 		if id <= 0 {
 			return fmt.Errorf("Location ID must be positive")
 		}

@@ -66,9 +66,6 @@ func (d *Device) selectMode(ctx context.Context, data []byte, verifyDecoder bool
 	if err := CheckResponse(response); err != nil {
 		return err
 	}
-	if response.Residual != 0 {
-		return &UncertainError{Cause: ErrMalformed}
-	}
 
 	// Pending partition controls are verified without treating the mode-page count as physical layout.
 	current, pages, err := d.readMode(ctx, false)

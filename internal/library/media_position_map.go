@@ -12,7 +12,7 @@ import (
 )
 
 // UpdateMediaTapePositionMap replaces only derived geometry after rechecking its current owner.
-// expected carries the previously read map for compare-and-swap; nil value invalidates that map.
+// expected carries the previously read immutable identity; nil value invalidates the map.
 // APPEND callers retain the complete prefix when constructing their replacement.
 func (l *Library) UpdateMediaTapePositionMap(
 	ctx context.Context,
@@ -28,7 +28,7 @@ func (l *Library) UpdateMediaTapePositionMap(
 		return nil, err
 	}
 
-	// Re-read on the writer so an import, invalidation or competing observation cannot be overwritten.
+	// Re-read on the writer so a replaced or re-initialized Media cannot receive another cartridge's map.
 	var updated *Media
 	if err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		stored := new(Media)
@@ -38,9 +38,6 @@ func (l *Library) UpdateMediaTapePositionMap(
 		if stored.Kind != expected.Kind || stored.Identity != expected.Identity ||
 			!proto.Equal(stored.Profile, expected.Profile) {
 			return fmt.Errorf("Media identity changed, media_id=%d", expected.ID)
-		}
-		if !proto.Equal(stored.TapePositionMap, expected.TapePositionMap) {
-			return fmt.Errorf("Media Tape position map changed, media_id=%d", expected.ID)
 		}
 		if proto.Equal(stored.TapePositionMap, value) {
 			updated = stored

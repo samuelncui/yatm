@@ -11,7 +11,7 @@ import (
 func TestFileListRejectsOtherOperationCursors(t *testing.T) {
 	// Equal bound text must not let another operation's cursor act as a directory continuation.
 	_, l := newTestLibrary(t)
-	for _, kind := range []byte{searchCursorKind, tagCursorKind, duplicateGroupCursorKind, duplicateMemberCursorKind} {
+	for _, kind := range []byte{tagCursorKind, identicalGroupCursorKind, identicalMemberCursorKind} {
 		cursor := encodePageCursor(kind, "0/1", "61", 0)
 		_, err := l.ListFileRows(context.Background(), 0, entity.FileScope_FILE_SCOPE_ALL, false, "", cursor, 1)
 		require.Error(t, err, "cursor kind %d", kind)

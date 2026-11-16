@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
@@ -60,11 +59,7 @@ func (c *previewGetCommand) contentSignature(ctx context.Context) ([]byte, error
 		return nil, usageError(fmt.Errorf("choose exactly one of signature, version-id or an entry"))
 	}
 	if c.Signature != "" {
-		value, err := hex.DecodeString(c.Signature)
-		if err != nil || len(value) == 0 {
-			return nil, usageError(fmt.Errorf("signature must be nonempty hexadecimal"))
-		}
-		return value, nil
+		return hexSignature(c.Signature)
 	}
 	if c.VersionID != nil {
 		if err := positiveID("FileVersion ID", *c.VersionID); err != nil {

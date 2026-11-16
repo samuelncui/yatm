@@ -24,8 +24,8 @@ vi.mock("react-virtuoso", () => ({
   ),
 }));
 
-vi.mock("@/components/job-card", async (original) => {
-  const actual = await original<typeof import("@/components/job-card")>();
+vi.mock("@/components/job-progress", async (original) => {
+  const actual = await original<typeof import("@/components/job-progress")>();
   const { useEffect, useRef } = await import("react");
   return {
     ...actual,
@@ -43,7 +43,7 @@ vi.mock("@/tools", async (original) => ({
   useSharedIntersectionObserver: () => false,
 }));
 vi.mock("react-router", () => ({
-  Link: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  Link: ({ children, to }: { children?: ReactNode; to: string }) => <a href={to}>{children}</a>,
   useLocation: () => ({ pathname: "/jobs", search: "" }),
 }));
 

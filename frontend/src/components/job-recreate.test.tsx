@@ -55,7 +55,7 @@ vi.mock("@/api", () => ({
   locationCli: { get: mocks.location },
   mediaCli: { list: mocks.media },
 }));
-vi.mock("@/pages/file", () => ({
+vi.mock("@/components/use-file-browser", () => ({
   useFileBrowser: () => ({ refresh: async () => {}, scope: FileScope.ALL, files: [], selector: null, browserProps: { onFileAction: vi.fn() } }),
 }));
 vi.mock("@samuelncui/chonky", async (original) => {

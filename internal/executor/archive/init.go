@@ -12,7 +12,7 @@ import (
 
 func (a *jobArchiveRunner) applySpec(ctx context.Context, spec *entity.ArchiveJobSpec) error {
 	// Current jobs build their one manifest from registered selections.
-	if spec != nil && len(spec.Selections) != 0 {
+	if len(spec.Selections) != 0 {
 		return a.applyLibrarySpec(ctx, spec)
 	}
 	// Migrated jobs already carry their complete item manifest.

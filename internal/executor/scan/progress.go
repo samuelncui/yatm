@@ -13,8 +13,7 @@ import (
 // later number and a progress request does not aggregate the manifest.
 type contentTotals struct {
 	// manifest counters stay cumulative over the Job's indexed manifest.
-	manifest     executor.Counts
-	manifestDone executor.Counts
+	manifest executor.Counts
 	// scope counters are the active range's totals and completed base, which the content stage
 	// uses as its own denominator.
 	scope     executor.Counts
@@ -344,9 +343,6 @@ func (r *runner) readContentTotals(ctx context.Context, scope *Scope) (contentTo
 	if totals.manifest, err = r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED); err != nil {
 		return contentTotals{}, err
 	}
-	if totals.manifestDone, err = r.entryProgress(ctx, "change != ? AND needs_hash = ?", entity.ScanChange_SCAN_CHANGE_REMOVED, false); err != nil {
-		return contentTotals{}, err
-	}
 	if totals.scope, err = r.scopeProgress(ctx, scope, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED); err != nil {
 		return contentTotals{}, err
 	}
@@ -399,7 +395,7 @@ func (r *runner) previewStageInput(phase entity.JobPhase, total executor.Counts)
 func (r *runner) stageKey(scope *Scope) string {
 	key := fmt.Sprintf("%d/%d", r.phaseStarted.UnixNano(), r.phase)
 	if scope != nil {
-		key += fmt.Sprintf("/%d/%d/%s", scope.LocationID, scope.ID, scope.Path)
+		key += fmt.Sprintf("/%d/%s", scope.LocationID, scope.Path)
 	}
 	return key
 }

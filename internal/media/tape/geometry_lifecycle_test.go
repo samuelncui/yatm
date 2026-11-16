@@ -54,7 +54,7 @@ func TestWrapObservationRemainsBoundedAndNeverDeclaresFreshness(t *testing.T) {
 		d := geometryDevice(t, f)
 		observed, err := d.Geometry(context.Background())
 		limits := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION).GetGeometry()
-		if err != nil || limits.Fresh != nil || count <= 341 && (observed == nil || len(observed.Endpoints) != count || limits.ReportedWraps == nil || limits.GetReportedWraps() != uint32(count)) || count == 342 && (observed != nil || limits.ReportedWraps != nil) {
+		if err != nil || count <= 341 && (observed == nil || len(observed.Endpoints) != count || limits.ReportedWraps == nil || limits.GetReportedWraps() != uint32(count)) || count == 342 && (observed != nil || limits.ReportedWraps != nil) {
 			t.Fatalf("count=%d map=%+v limits=%v error=%v", count, observed, limits, err)
 		}
 		if err := d.Cleanup(context.Background()); err != nil {
@@ -162,7 +162,7 @@ func TestGeometryReplacementWithdrawsPreviousRequestOwnedCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, err := d.Geometry(context.Background())
-	if err != nil || before.Valid() || !after.Valid() || after.Fresh != nil {
+	if err != nil || before.Valid() || !after.Valid() {
 		t.Fatalf("before=%t after=%t error=%v", before.Valid(), after.Valid(), err)
 	}
 	if err := d.Cleanup(context.Background()); err != nil || after.Valid() {
@@ -179,7 +179,7 @@ func TestGeometryReadinessLossDistinguishesFormFromEndpointObservation(t *testin
 		geometry, err := d.Geometry(context.Background())
 		feature := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION)
 		limits := feature.GetGeometry()
-		if err != nil || geometry != nil || limits == nil || limits.AllWraps == nil || !limits.GetAllWraps() || limits.ReportedWraps != nil || limits.Fresh != nil || feature.Reason != entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || feature.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNAVAILABLE {
+		if err != nil || geometry != nil || limits == nil || limits.AllWraps == nil || !limits.GetAllWraps() || limits.ReportedWraps != nil || feature.Reason != entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || feature.Availability != entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNAVAILABLE {
 			t.Fatalf("afterGeometry=%t map=%v error=%v feature=%v", afterGeometry, geometry, err, feature)
 		}
 		wantQueries, detail := 0, "no endpoint response observed"

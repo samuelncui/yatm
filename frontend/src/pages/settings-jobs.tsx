@@ -7,17 +7,12 @@ import { JobExecutionSettings, JobSettings, SettingsGroup } from "@/entity";
 /** The Executor's pipeline limits: what an attempt batches, buffers and flushes while it runs. */
 export const JobSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.JOB, JobSettings, "Job");
-  const { cancel, dirty, draft, error, invalid, loading, reload, reject, save: saveDraft, saved, saving, setDraft } = editor;
+  const { cancel, dirty, draft, error, invalid, loading, reload, save: saveDraft, saved, saving, setDraft } = editor;
   const execution = draft?.execution;
   const changeExecution = (changes: Partial<JobExecutionSettings>) =>
     setDraft((value) => (value?.execution ? { ...value, execution: { ...value.execution, ...changes } } : value));
   const save = async () => {
     if (!execution || saving || loading) return;
-    const validation = validateExecution(execution);
-    if (validation) {
-      reject(validation);
-      return;
-    }
     await saveDraft();
   };
 
@@ -48,7 +43,7 @@ export const JobSettingsBrowser = () => {
           <SettingsSection
             title="Advanced"
             collapsible
-            hasError={!!validateExecution(execution)}
+            hasError={!!invalid}
             description={`Manifest batch ${execution.readBatch} items · queued reads ${execution.readBufferMax} · queued results ${execution.writeBufferMax} · ${execution.writeBatchSize} results/update · flush ${execution.flushIntervalMs} ms`}
           >
             <Grid container spacing={2}>
@@ -87,7 +82,6 @@ export const JobSettingsBrowser = () => {
                   helperText="Maximum results in one update. Larger batches can delay progress reporting."
                   disabled={loading || saving}
                   value={execution.writeBatchSize}
-                  max={execution.writeBufferMax}
                   onChange={(writeBatchSize) => changeExecution({ writeBatchSize })}
                 />
               </Grid>
@@ -108,17 +102,4 @@ export const JobSettingsBrowser = () => {
       </Stack>
     </>
   );
-};
-
-// The service validates the same limits; this keeps a typo from becoming a round trip.
-const validateExecution = (settings: JobExecutionSettings): string => {
-  if (!Number.isInteger(settings.readBatch) || settings.readBatch < 1) return "Manifest batch (items) must be at least 1.";
-  if (!Number.isInteger(settings.readBufferMax) || settings.readBufferMax < 1 || settings.readBufferMax > 1000000)
-    return "Queued read items must be between 1 and 1000000.";
-  if (!Number.isInteger(settings.writeBufferMax) || settings.writeBufferMax < 1 || settings.writeBufferMax > 1000000)
-    return "Queued results must be between 1 and 1000000.";
-  if (!Number.isInteger(settings.writeBatchSize) || settings.writeBatchSize < 1) return "Results per update must be at least 1.";
-  if (settings.writeBatchSize > settings.writeBufferMax) return "Results per update must not exceed the queued results limit.";
-  if (!Number.isInteger(settings.flushIntervalMs) || settings.flushIntervalMs < 100) return "Result flush interval must be at least 100 milliseconds.";
-  return "";
 };

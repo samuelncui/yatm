@@ -21,7 +21,7 @@ func TestJobTargetFiltersBeforePagingAndRetainsFrozenLabels(t *testing.T) {
 		{LocationID: 7, TargetName: "Original name"}, {MediaID: 7, TargetName: "Archive"},
 		{LocationID: 8, TargetName: "Other"},
 	} {
-		job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, int64(index), target, func(*gorm.DB) error { return nil }, nil)
+		job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, int64(index), target, func(*gorm.DB) error { return nil })
 		require.NoError(t, err)
 		waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_READY)
 		if target.LocationID == 7 {
@@ -49,7 +49,7 @@ func TestJobTargetFiltersBeforePagingAndRetainsFrozenLabels(t *testing.T) {
 	require.Equal(t, entity.JobKind_JOB_KIND_SCAN, media.Jobs[0].Kind)
 
 	// A new Job is absent from the older snapshot, and filtered incremental polling preserves tombstones.
-	newJob, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7, TargetName: "New name"}, func(*gorm.DB) error { return nil }, nil)
+	newJob, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7, TargetName: "New name"}, func(*gorm.DB) error { return nil })
 	require.NoError(t, err)
 	waitJobStatus(t, exe, newJob.ID, entity.JobStatus_JOB_STATUS_READY)
 	snapshot, err := exe.ListJob(ctx, &entity.JobFilter{LocationId: proto.Int64(7), SnapshotRevision: proto.Int64(page.Revision)})
@@ -74,10 +74,10 @@ func TestJobTargetRejectsMismatchedKindsAndInvalidFilters(t *testing.T) {
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
 	for _, target := range []JobTarget{{LocationID: -1}, {MediaID: -1}, {LocationID: 1, MediaID: 1}} {
-		_, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, target, nil, nil)
+		_, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, target, nil)
 		require.Error(t, err)
 	}
-	_, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_ARCHIVE, 0, JobTarget{LocationID: 1}, nil, nil)
+	_, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_ARCHIVE, 0, JobTarget{LocationID: 1}, nil)
 	require.Error(t, err)
 	_, err = exe.ListJob(ctx, &entity.JobFilter{LocationId: proto.Int64(0)})
 	require.Error(t, err)
@@ -89,7 +89,7 @@ func TestJobPropertiesAndFiltersKeepChangeFeedRemovals(t *testing.T) {
 	// Primary targets and additional searchable values share one deduplicated index.
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
-	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7}, func(*gorm.DB) error { return nil }, nil)
+	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7}, func(*gorm.DB) error { return nil })
 	require.NoError(t, err)
 	waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_READY)
 	properties := []JobProperty{
@@ -147,7 +147,7 @@ func TestJobPropertyRetryCursorSurvivesRestart(t *testing.T) {
 	// Repeated indexing must leave a durable cursor that remains valid across restart.
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
-	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7}, func(*gorm.DB) error { return nil }, nil)
+	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7}, func(*gorm.DB) error { return nil })
 	require.NoError(t, err)
 	waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_READY)
 	property := JobProperty{Key: JobPropertyLocation, Value: 42}
@@ -172,7 +172,7 @@ func TestJobPropertiesRejectInvalidBatchWithoutPublishing(t *testing.T) {
 	// Invalid search keys and values must not partially publish an otherwise valid batch.
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
-	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{MediaID: 7}, func(*gorm.DB) error { return nil }, nil)
+	job, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{MediaID: 7}, func(*gorm.DB) error { return nil })
 	require.NoError(t, err)
 	waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_READY)
 	before := exe.currentJobRevision()
@@ -201,7 +201,7 @@ func TestFailedJobCreationRemovesProperties(t *testing.T) {
 	exe := setupTestExecutor(t)
 	_, err := exe.CreateTargetJob(ctx, entity.JobKind_JOB_KIND_SCAN, 0, JobTarget{LocationID: 7}, func(*gorm.DB) error {
 		return errors.New("initializer failed")
-	}, nil)
+	})
 	require.ErrorContains(t, err, "initializer failed")
 	var count int64
 	require.NoError(t, exe.db.Model(&JobProperty{}).Count(&count).Error)

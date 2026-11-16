@@ -21,15 +21,10 @@ func TestFileRowRejectsUnsupportedIdentity(t *testing.T) {
 			batch := []fileRow{{Name: "batch-valid", Kind: kept.Kind}, {Name: name, Kind: kept.Kind}}
 			require.Error(t, db.Create(&batch).Error)
 
-			// Full-row saves and partial name updates cannot bypass component validation.
+			// Full-row saves, the only Library rename path, cannot bypass component validation.
 			changed := *kept
 			changed.Name = name
 			require.Error(t, db.Save(&changed).Error)
-			for _, column := range []string{"name", "Name"} {
-				require.Error(t, db.Model(ModelFile).Where("id = ?", kept.ID).Update(column, name).Error)
-			}
-			require.Error(t, db.Model(kept).Select("name").Updates(fileRow{Name: name}).Error)
-			require.Error(t, db.Model(kept).Select("name").Updates(&fileRow{Name: name}).Error)
 			var rows []fileRow
 			require.NoError(t, db.Find(&rows).Error)
 			require.Len(t, rows, 1)
@@ -49,8 +44,6 @@ func TestFileRowPreservesLiteralUTF8AndPartialUpdates(t *testing.T) {
 		require.NoError(t, db.Save(row).Error)
 		require.NoError(t, db.Model(ModelFile).Where("id = ?", row.ID).Update("note", "edited").Error)
 		require.NoError(t, db.Model(ModelFile).Where("id = ?", row.ID).Update("parent_id", 0).Error)
-		require.NoError(t, db.Model(row).Updates(&fileRow{Note: "struct edit"}).Error)
-		require.NoError(t, db.Model(row).Select("note").Updates(map[string]any{"name": "ignored\xff", "note": "edited"}).Error)
 		stored, err := lib.GetFile(ctx, row.ID)
 		require.NoError(t, err)
 		require.Equal(t, name, stored.Name)

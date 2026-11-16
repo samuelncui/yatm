@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hashicorp/go-multierror"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -55,15 +54,12 @@ func TestScanReadFailureRetainsResultWriteFailure(t *testing.T) {
 			}
 			err = r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil)
 
-			// Distinct failures retain both identities and messages; a single cause needs no multierror wrapper.
+			// Distinct failures retain both identities and messages.
 			require.Equal(t, test.source, errors.Is(err, os.ErrPermission))
 			require.Equal(t, test.write, errors.Is(err, writeErr))
 			require.Equal(t, test.write, writeAttempted)
 			require.Equal(t, 1, source.opens)
-			var combined *multierror.Error
-			require.Equal(t, test.source && test.write, errors.As(err, &combined))
-			if combined != nil {
-				require.Len(t, combined.Errors, 2)
+			if test.source && test.write {
 				require.Contains(t, err.Error(), os.ErrPermission.Error())
 				require.Contains(t, err.Error(), writeErr.Error())
 			}

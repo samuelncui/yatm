@@ -70,7 +70,7 @@ func (m *demoPreviewManager) Capabilities(ctx context.Context) (*entity.GetPrevi
 	// Default setup advertises only the routes supplied by the bundled fixture.
 	return &entity.GetPreviewCapabilitiesResponse{
 		Available: true, Version: "bundled-demo-assets",
-		Kinds: []string{"image", "video"}, InputExtensions: []string{"png", "mp4"}, OutputFormats: []string{"png"},
+		OutputFormats: []string{"png"},
 		InputExtensionsByKind: map[string]*entity.PreviewInputFormats{
 			"image": {Extensions: []string{"png"}}, "video": {Extensions: []string{"mp4"}},
 		},

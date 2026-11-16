@@ -25,11 +25,13 @@ func (r *runner) prepareInputs(ctx context.Context, config *Config, target *enti
 		}
 
 		// Retain parent-owned Location identities in the companion's resource history.
+		seen := make(map[int64]bool)
 		return r.eachEntry(ctx, &Scope{}, func(row *Entry) error {
 			id := row.Expected.GetOriginalLocationId()
-			if id <= 0 {
+			if id <= 0 || seen[id] {
 				return nil
 			}
+			seen[id] = true
 			return r.exe.AddJobProperties(ctx, r.job.ID, executor.JobProperty{Key: executor.JobPropertyLocation, Value: id})
 		})
 	}
@@ -119,7 +121,7 @@ func (r *runner) prepareLogicalInputs(ctx context.Context, selections []*entity.
 			}
 			originals[original.LocationID][original.Path] = original
 			if err := walkSelection(ctx, r.exe, local.source, original.Path, func(name string, info os.FileInfo) error {
-				row, err := local.observation(name, original.Path, info, policy)
+				row, err := local.observation(name, info, policy)
 				if err != nil {
 					return err
 				}
@@ -192,15 +194,7 @@ type IndexedSource func(context.Context, func(string, *entity.ExpectedFile) erro
 
 func CreateIndexed(ctx context.Context, exe *executor.Executor, priority int64, spec *entity.ScanJobSpec, source IndexedSource) (*executor.Job, error) {
 	// Companion scans share the runner and manifest, without rescanning or admitting their parent's inputs.
-	if spec == nil || source == nil {
-		return nil, fmt.Errorf("indexed Scan input is missing")
-	}
-	if !previewEnabled(spec.PreviewPolicy) {
-		return nil, fmt.Errorf("indexed Scan requires Preview generation")
-	}
-	if _, ok := entity.PreviewPolicy_name[int32(spec.PreviewPolicy)]; !ok {
-		return nil, fmt.Errorf("invalid Scan Preview policy")
-	}
+	// The parent validated the Preview policy and supplies complete archived content facts.
 	if exe.Previews() == nil {
 		return nil, fmt.Errorf("Preview module is not configured")
 	}
@@ -221,9 +215,6 @@ func CreateIndexed(ctx context.Context, exe *executor.Executor, priority int64, 
 			return err
 		}
 		return source(ctx, func(filename string, expected *entity.ExpectedFile) error {
-			if expected == nil || len(expected.Sha256) != 32 || expected.SizeBytes < 0 {
-				return fmt.Errorf("indexed Scan expected content is incomplete")
-			}
 			if !exe.Previews().Supports(filename, previewSettings) {
 				return nil
 			}

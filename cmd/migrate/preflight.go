@@ -53,23 +53,10 @@ func preflight(ctx context.Context, db *gorm.DB, listen string, serviceStopped b
 }
 
 func quiesceService(ctx context.Context, listen string, servicePID int) ([]int64, error) {
-	// Alpha 1's status response identifies the process, but its quiesce
-	// response predates that field. Validate the same endpoint immediately
-	// before closing admission, then accept the missing field only in the
-	// mutating response. Newer services still have their response checked.
-	status, err := requestUpgradeStatus(ctx, listen, false, servicePID)
+	// Preflight already bound the endpoint to the systemd process and found no running Job.
+	status, err := requestUpgradeStatus(ctx, listen, true, servicePID)
 	if err != nil {
 		return nil, err
-	}
-	if len(status.RunningJobIDs) > 0 {
-		return status.RunningJobIDs, nil
-	}
-	status, err = requestUpgradeStatusResponse(ctx, listen, true)
-	if err != nil {
-		return nil, err
-	}
-	if status.ProcessID != 0 && status.ProcessID != servicePID {
-		return nil, fmt.Errorf("upgrade endpoint belongs to process %d, expected systemd process %d", status.ProcessID, servicePID)
 	}
 	return status.RunningJobIDs, nil
 }
@@ -130,17 +117,7 @@ func upgradeStatusURL(listen string) (string, error) {
 }
 
 func localServerURL(listen string) (string, error) {
-	if strings.Contains(listen, "://") {
-		parsed, err := url.Parse(listen)
-		if err != nil {
-			return "", fmt.Errorf("parse service listen URL failed, %w", err)
-		}
-		if parsed.Scheme != "http" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
-			return "", fmt.Errorf("upgrade requires a direct local HTTP listen address")
-		}
-		listen = parsed.Host
-	}
-
+	// The service listens on a host:port address, never a URL.
 	host, port, err := net.SplitHostPort(listen)
 	if err != nil {
 		return "", fmt.Errorf("parse service listen address failed, %w", err)

@@ -77,9 +77,6 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 		`</extent></extentinfo></file></contents></directory>` +
 		`</contents></directory></ltfsindex>`
 	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
-	legacyMarker := filepath.Join(root, "jobs", "11", "state.db")
-	require.NoError(t, os.MkdirAll(filepath.Dir(legacyMarker), 0o755))
-	require.NoError(t, os.WriteFile(legacyMarker, []byte("legacy"), 0o644))
 
 	// Prepare a complete current catalog and one independent state database per Job.
 	restoreRoot := filepath.Join(t.TempDir(), "configured-restore-output")
@@ -99,7 +96,6 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	require.DirExists(t, filepath.Join(root, "jobs", "1", "tapes"))
 	require.NoDirExists(t, filepath.Join(root, "jobs", "1", "logs"))
 	require.NoDirExists(t, filepath.Join(root, "jobs", "1", "reports"))
-	require.FileExists(t, filepath.Join(root, legacyJobsDirectory, "11", "state.db"))
 
 	// Verify Archive processing state rolls back to the last submitted item.
 	archiveDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
@@ -183,7 +179,6 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 		}
 	}
 	require.DirExists(t, filepath.Join(root, "jobs"))
-	require.FileExists(t, filepath.Join(root, legacyJobsDirectory, "11", "state.db"))
 	var catalogs []*catalogJob
 	require.NoError(t, db.Table("jobs").Order("id").Find(&catalogs).Error)
 	require.Equal(t, []int64{1, 2}, []int64{catalogs[0].Revision, catalogs[1].Revision})
@@ -219,7 +214,6 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	require.False(t, db.Migrator().HasTable("tapes_legacy"))
 	require.False(t, db.Migrator().HasTable("positions_legacy"))
 	require.DirExists(t, filepath.Join(root, "jobs"))
-	require.NoDirExists(t, filepath.Join(root, legacyJobsDirectory))
 }
 
 func TestPrepareRecoversArchiveMediaFromLegacyJobLog(t *testing.T) {
@@ -330,6 +324,10 @@ func TestPrepareMigratesLibraryAcrossBatches(t *testing.T) {
 	require.Equal(t, physicalCount, report.LibraryTapes)
 	require.Equal(t, physicalCount, report.LibraryPositions)
 	require.Equal(t, 1, report.LibraryDirectories)
+	// Rebuilding the directory index keeps each physical row's legacy owner.
+	var owner int64
+	require.NoError(t, db.Raw("SELECT file_id FROM positions_staging WHERE id = ?", physicalCount).Scan(&owner).Error)
+	require.Equal(t, int64(physicalCount), owner)
 	require.NoError(t, Commit(ctx, db, root))
 
 	// Verify the last rows crossed the cursor boundary and remain directly listable.
@@ -599,226 +597,6 @@ func TestPrepareMigratesEmptyJobsAsCompleted(t *testing.T) {
 	}
 }
 
-func TestPrepareRecoversTransitionalJobDatabases(t *testing.T) {
-	// Build legacy jobs and Library positions referenced by the transitional manifests.
-	ctx := context.Background()
-	db := newLegacyTestDB(t)
-	root := t.TempDir()
-	hashA := sha256.Sum256([]byte("restore-a"))
-	hashB := sha256.Sum256([]byte("restore-b"))
-	restoreState := func() *legacypb.JobState {
-		return &legacypb.JobState{State: &legacypb.JobState_Restore{Restore: &legacypb.JobRestoreState{}}}
-	}
-	records := []*legacyJob{
-		{
-			ID: 1, Status: legacypb.JobStatus_PROCESSING, Priority: 1, CreateTime: time.Unix(1, 0),
-			State: &legacypb.JobState{State: &legacypb.JobState_Archive{Archive: &legacypb.JobArchiveState{}}},
-		},
-		{ID: 2, Status: legacypb.JobStatus_PROCESSING, Priority: 2, CreateTime: time.Unix(2, 0), State: restoreState()},
-		{ID: 3, Status: legacypb.JobStatus_PROCESSING, Priority: 3, CreateTime: time.Unix(3, 0), State: restoreState()},
-	}
-	require.NoError(t, db.Create(records).Error)
-	require.NoError(t, db.Create([]*legacyLibraryFile{
-		{ID: 100, Name: "a.txt", Mode: 0o644, Size: 3, Hash: hashA[:]},
-		{ID: 101, Name: "b.txt", Mode: 0o644, Size: 4, Hash: hashB[:]},
-	}).Error)
-	require.NoError(t, db.Create([]*legacyLibraryTape{
-		{ID: 7, Barcode: "TAPE007"},
-		{ID: 8, Barcode: "TAPE008"},
-	}).Error)
-	require.NoError(t, db.Create([]*legacyLibraryPosition{
-		{ID: 30, FileID: 100, TapeID: 7, Path: "a.txt", Mode: 0o644, Size: 3, Hash: hashA[:]},
-		{ID: 31, FileID: 100, TapeID: 8, Path: "copies/a.txt", Mode: 0o644, Size: 3, Hash: hashA[:]},
-		{ID: 32, FileID: 101, TapeID: 7, Path: "b.txt", Mode: 0o644, Size: 4, Hash: hashB[:]},
-	}).Error)
-	indexRoot := filepath.Join(root, legacyLTFSIndexDirectory)
-	require.NoError(t, os.MkdirAll(indexRoot, 0o755))
-	index := `<ltfsindex><directory><name>TAPE007</name><contents>` +
-		`<file><name>a.txt</name><length>3</length><extentinfo><extent>` +
-		`<partition>b</partition><startblock>10</startblock><byteoffset>0</byteoffset>` +
-		`<bytecount>3</bytecount><fileoffset>0</fileoffset></extent></extentinfo></file>` +
-		`<file><name>b.txt</name><length>4</length><extentinfo><extent>` +
-		`<partition>b</partition><startblock>20</startblock><byteoffset>0</byteoffset>` +
-		`<bytecount>4</bytecount><fileoffset>0</fileoffset></extent></extentinfo></file>` +
-		`</contents></directory></ltfsindex>`
-	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "TAPE007.schema"), []byte(index), 0o644))
-
-	// Store the auxiliary Archive manifest used by the empty legacy protobuf shell.
-	archiveDB := newTransitionalJobTestDB(t, root, 1)
-	require.NoError(t, archiveDB.Table("files").AutoMigrate(&transitionalArchiveItem{}))
-	require.NoError(t, archiveDB.Table("files").Create([]*transitionalArchiveItem{
-		{ID: 10, Base: root, Path: sortPath("directory/a.txt"), Size: 1, Status: legacypb.CopyStatus_SUBMITED},
-		{ID: 11, Base: root, Path: sortPath("directory/b.txt"), Size: 2, Status: legacypb.CopyStatus_RUNNING},
-	}).Error)
-	_ = resource.CloseDB(archiveDB)
-
-	// Cover both transitional Restore table names with the same physical candidates.
-	for _, fixture := range []struct {
-		jobID int64
-		table string
-	}{
-		{jobID: 2, table: "files"},
-		{jobID: 3, table: "restore_files"},
-	} {
-		restoreDB := newTransitionalJobTestDB(t, root, fixture.jobID)
-		require.NoError(t, restoreDB.Table(fixture.table).AutoMigrate(&transitionalRestoreCopy{}))
-		require.NoError(t, restoreDB.Table(fixture.table).Create([]*transitionalRestoreCopy{
-			{
-				ID: 20, FileID: 100, TapeID: 7, Path: sortPath("a.txt"), PositionID: 30,
-				TargetPath: "target/a.txt", Size: 3, Hash: hashA[:], Status: legacypb.CopyStatus_PENDING,
-			},
-			{
-				ID: 21, FileID: 100, TapeID: 8, Path: sortPath("copies/a.txt"), PositionID: 31,
-				TargetPath: "target/a.txt", Size: 3, Hash: hashA[:], Status: legacypb.CopyStatus_SUBMITED,
-			},
-			{
-				ID: 22, FileID: 101, TapeID: 7, Path: sortPath("b.txt"), PositionID: 32,
-				TargetPath: "target/b.txt", Size: 4, Hash: hashB[:], Status: legacypb.CopyStatus_RUNNING,
-			},
-		}).Error)
-		_ = resource.CloseDB(restoreDB)
-	}
-
-	// Prefer the auxiliary manifests and preserve all physical Restore candidates.
-	report, err := prepareLegacy(ctx, db, root)
-	require.NoError(t, err)
-	require.True(t, report.Success)
-	require.Equal(t, 2, report.ArchiveItems)
-	require.Equal(t, 4, report.RestoreItems)
-	require.Equal(t, 2, report.LibraryStoragePositions)
-	require.NotContains(t, report.Warnings, "job 1 has an empty archive manifest; migrated as completed")
-	require.NotContains(t, report.Warnings, "job 2 has an empty restore manifest; migrated as completed")
-
-	// Verify Archive item identity and checkpoint status.
-	archiveCurrent, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
-	require.NoError(t, err)
-	var archiveItems []*archive.Item
-	require.NoError(t, archiveCurrent.Order("id").Find(&archiveItems).Error)
-	require.Len(t, archiveItems, 2)
-	require.Equal(t, "directory/a.txt", archiveItems[0].TargetPath)
-	require.Empty(t, archiveItems[0].MediaPath)
-	require.Equal(t, filepath.Join(root, "directory", "a.txt"), archiveItems[0].Data.SourcePath)
-	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, archiveItems[0].Status)
-	require.Equal(t, "directory/b.txt", archiveItems[1].TargetPath)
-	require.Empty(t, archiveItems[1].MediaPath)
-	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, archiveItems[1].Status)
-	_ = resource.CloseDB(archiveCurrent)
-
-	// Verify both Restore schemas inherit indexed order and retain path fallback.
-	for _, jobID := range []int64{2, 3} {
-		restoreCurrent, err := resource.OpenSQLite(filepath.Join(root, "jobs", fmt.Sprint(jobID), "state.db"))
-		require.NoError(t, err)
-		var copies []*restore.Copy
-		require.NoError(t, restoreCurrent.Order("id").Find(&copies).Error)
-		require.Len(t, copies, 3)
-		require.Equal(t, entity.CopyStatus_COPY_STATUS_COMPLETED, copies[0].Status)
-		require.Equal(t, entity.CopyStatus_COPY_STATUS_COMPLETED, copies[1].Status)
-		require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, copies[2].Status)
-		require.Equal(t, "copies/a.txt", copies[1].MediaPath)
-		require.Len(t, copies[0].StorageOrder, 17)
-		require.Empty(t, copies[1].StorageOrder)
-		require.Len(t, copies[2].StorageOrder, 17)
-		var files []restore.File
-		require.NoError(t, restoreCurrent.Order("item_id").Find(&files).Error)
-		require.Len(t, files, 2, "several Media candidates share one selected content row")
-		require.True(t, files[0].Completed)
-		require.False(t, files[1].Completed)
-		require.Equal(t, files[0].ItemID, copies[0].ItemID)
-		require.Equal(t, files[0].ItemID, copies[1].ItemID)
-		require.Equal(t, files[0].Path, files[0].DesiredPath)
-		require.NotEmpty(t, files[0].Hash)
-		_ = resource.CloseDB(restoreCurrent)
-	}
-}
-
-func TestPreparePrefersCanonicalLegacyProtobuf(t *testing.T) {
-	// A non-empty origin/main protobuf remains authoritative even if an auxiliary directory exists.
-	ctx := context.Background()
-	db := newLegacyTestDB(t)
-	root := t.TempDir()
-	require.NoError(t, db.Create(&legacyJob{
-		ID: 1, Status: legacypb.JobStatus_JOB_PENDING,
-		State: &legacypb.JobState{State: &legacypb.JobState_Archive{Archive: &legacypb.JobArchiveState{Sources: []*legacypb.SourceState{
-			{Source: &legacypb.Source{Base: root, Path: []string{"protobuf.txt"}}, Size: 1},
-		}}}},
-	}).Error)
-	transitionalDB := newTransitionalJobTestDB(t, root, 1)
-	require.NoError(t, transitionalDB.Table("files").AutoMigrate(&transitionalArchiveItem{}))
-	require.NoError(t, transitionalDB.Table("files").Create(&transitionalArchiveItem{
-		ID: 10, Base: root, Path: sortPath("database.txt"), Size: 2,
-	}).Error)
-	_ = resource.CloseDB(transitionalDB)
-
-	report, err := prepareLegacy(ctx, db, root)
-	require.NoError(t, err)
-	require.Equal(t, 1, report.ArchiveItems)
-	jobDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
-	require.NoError(t, err)
-	var items []*archive.Item
-	require.NoError(t, jobDB.Find(&items).Error)
-	require.Len(t, items, 1)
-	require.Equal(t, "protobuf.txt", items[0].TargetPath)
-	require.Empty(t, items[0].MediaPath)
-	_ = resource.CloseDB(jobDB)
-}
-
-func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
-	// Commit the same empty Restore Bundle produced by the original migration bug.
-	ctx := context.Background()
-	db := newLegacyTestDB(t)
-	root := t.TempDir()
-	hash := sha256.Sum256([]byte("restore"))
-	require.NoError(t, db.Create(&legacyJob{
-		ID: 1, Status: legacypb.JobStatus_PROCESSING, Priority: 4, CreateTime: time.Unix(1, 0),
-		State: &legacypb.JobState{State: &legacypb.JobState_Restore{Restore: &legacypb.JobRestoreState{}}},
-	}).Error)
-	frozenRoot := filepath.Join(t.TempDir(), "frozen-output")
-	backup := preserveTestBackup(t, db, root)
-	backup.RestoreRoot = filepath.Join(t.TempDir(), "new-config-output")
-	report, err := PrepareWithLTFSIndex(ctx, db, root, "", frozenRoot)
-	require.NoError(t, err)
-	require.Zero(t, report.RestoreItems)
-	require.NoError(t, Commit(ctx, db, root))
-
-	// Restore the preserved transitional manifest and repair only the affected Bundle.
-	transitionalPath := filepath.Join(backup.WorkRoot, "jobs", "1", "state.db")
-	require.NoError(t, os.MkdirAll(filepath.Dir(transitionalPath), 0o755))
-	transitionalDB, err := resource.OpenSQLite(transitionalPath)
-	require.NoError(t, err)
-	require.NoError(t, transitionalDB.Table("files").AutoMigrate(&transitionalRestoreCopy{}))
-	require.NoError(t, transitionalDB.Table("files").Create([]*transitionalRestoreCopy{
-		{ID: 10, FileID: 20, TapeID: 30, Path: sortPath("file.txt"), TargetPath: "file.txt", Size: 7, Hash: hash[:], Status: legacypb.CopyStatus_PENDING},
-		{ID: 11, FileID: 20, TapeID: 31, Path: sortPath("copy/file.txt"), TargetPath: "file.txt", Size: 7, Hash: hash[:], Status: legacypb.CopyStatus_PENDING},
-	}).Error)
-	_ = resource.CloseDB(transitionalDB)
-
-	require.NoError(t, db.Migrator().DropTable("jobs_legacy"))
-	require.NoError(t, RepairJob(ctx, db, root, 1, backup))
-	require.DirExists(t, filepath.Join(filepath.Dir(backup.Root), "jobs-before-repair", "1"))
-	repairedDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
-	require.NoError(t, err)
-	var copies []*restore.Copy
-	require.NoError(t, repairedDB.Order("id").Find(&copies).Error)
-	require.Len(t, copies, 2)
-	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, copies[0].Status)
-	require.Equal(t, int64(30), copies[0].MediaID)
-	require.Equal(t, int64(31), copies[1].MediaID)
-	var properties []executor.JobProperty
-	require.NoError(t, db.Where("job_id = ?", 1).Order("value").Find(&properties).Error)
-	require.Equal(t, []executor.JobProperty{
-		{JobID: 1, Key: executor.JobPropertyMedia, Value: 30},
-		{JobID: 1, Key: executor.JobPropertyMedia, Value: 31},
-	}, properties)
-	var config restore.Config
-	require.NoError(t, repairedDB.First(&config, 1).Error)
-	canonicalRoot, err := executor.CanonicalConfiguredPath(frozenRoot)
-	require.NoError(t, err)
-	require.Equal(t, canonicalRoot, config.LegacyRoot)
-	require.NoDirExists(t, frozenRoot)
-	_ = resource.CloseDB(repairedDB)
-	require.ErrorContains(t, RepairJob(ctx, db, root, 1, backup), "repair backup already exists")
-}
-
 func TestAbortRemovesOnlyPreparedCurrentData(t *testing.T) {
 	// Build one legacy Job without any legacy Job directory.
 	ctx := context.Background()
@@ -880,30 +658,6 @@ func TestEmptyLegacyInstanceCreatesFinalJobDirectory(t *testing.T) {
 	require.DirExists(t, filepath.Join(root, "jobs"))
 }
 
-func TestAbortRestoresLegacyJobDirectory(t *testing.T) {
-	// Simulate the auxiliary Job directory created by a later legacy deployment.
-	db := newLegacyTestDB(t)
-	root := t.TempDir()
-	marker := filepath.Join(root, "jobs", "keep")
-	require.NoError(t, os.MkdirAll(filepath.Dir(marker), 0o755))
-	require.NoError(t, os.WriteFile(marker, []byte("keep"), 0o644))
-
-	// Prepare preserves legacy files while creating the independent current Job directory.
-	report, err := prepareLegacy(context.Background(), db, root)
-	require.NoError(t, err)
-	require.True(t, report.Success)
-	require.True(t, db.Migrator().HasTable("jobs_staging"))
-	require.NoFileExists(t, marker)
-	require.FileExists(t, filepath.Join(root, legacyJobsDirectory, "keep"))
-
-	// Abort is retry-safe and restores the original path and contents.
-	require.NoError(t, Abort(db, root))
-	require.NoError(t, Abort(db, root))
-	require.FileExists(t, marker)
-	require.NoDirExists(t, filepath.Join(root, legacyJobsDirectory))
-	require.NoFileExists(t, filepath.Join(root, reportFilename))
-}
-
 func newLegacyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "main.db"))
@@ -914,11 +668,15 @@ func newLegacyTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func newTransitionalJobTestDB(t *testing.T, root string, jobID int64) *gorm.DB {
-	t.Helper()
-	filename := filepath.Join(root, "jobs", fmt.Sprint(jobID), "state.db")
-	require.NoError(t, os.MkdirAll(filepath.Dir(filename), 0o755))
-	db, err := resource.OpenSQLite(filename)
-	require.NoError(t, err)
-	return db
+func TestPrepareRefusesAnExistingJobDirectory(t *testing.T) {
+	// v0.1.x keeps no Job directory, so one with content is never adopted or moved aside.
+	db := newLegacyTestDB(t)
+	root := t.TempDir()
+	marker := filepath.Join(root, "jobs", "keep")
+	require.NoError(t, os.MkdirAll(filepath.Dir(marker), 0o755))
+	require.NoError(t, os.WriteFile(marker, []byte("keep"), 0o644))
+	_, err := prepareLegacy(context.Background(), db, root)
+	require.ErrorContains(t, err, "a Job directory already exists")
+	require.FileExists(t, marker)
+	require.False(t, db.Migrator().HasTable("jobs_staging"))
 }

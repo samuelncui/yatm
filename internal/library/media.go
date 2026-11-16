@@ -98,7 +98,8 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("decode Media profile failed, %w", err)
 	}
 
-	// Validate mutable geometry separately so it never becomes an immutable profile fact.
+	// Decode mutable geometry separately so it never becomes an immutable profile fact.
+	// Catalog import validates it through validateMedia.
 	var positionMap *entity.TapePositionMap
 	if len(decoded.TapePositionMap) > 0 && !bytes.Equal(decoded.TapePositionMap, []byte("null")) {
 		positionMap = new(entity.TapePositionMap)
@@ -106,16 +107,12 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("decode Media Tape position map failed, %w", err)
 		}
 	}
-	result := Media{
+	*value = Media{
 		ID: decoded.ID, Kind: decoded.Kind, Identity: decoded.Identity, Name: decoded.Name, Profile: profile,
 		CreatedAtNS: decoded.CreatedAtNS, DestroyedAtNS: decoded.DestroyedAtNS,
 		CapacityBytes: decoded.CapacityBytes, WrittenBytes: decoded.WrittenBytes,
 		TapePositionMap: positionMap,
 	}
-	if err := ValidateTapePositionMap(&result, positionMap); err != nil {
-		return err
-	}
-	*value = result
 	return nil
 }
 

@@ -20,7 +20,7 @@ import type { Job, Progress } from "@/entity";
 import { ViewLogDialog } from "@/components/job-log";
 import { Feedback } from "@/components/feedback";
 import { formatFilesize, runUIAction, useSharedIntersectionObserver } from "@/tools";
-import { RefreshContext } from "@/pages/jobs";
+import { RefreshContext } from "./job-list-state";
 import { useActionDialog } from "@/components/action-dialog";
 import { ActionRow } from "./action-row";
 import "./job-progress.less";
@@ -70,7 +70,6 @@ export const jobActivity = (job: Job): JobActivity => {
 
 // An admitted attempt offers Cancel even while queued for a shared Media resource.
 export const isJobRunning = (job: Job): boolean => jobActivity(job) !== "terminal";
-export const isJobWaiting = (job: Job): boolean => jobActivity(job) === "waiting";
 
 export const jobLabel = (kind: JobKind) => {
   const labels: Partial<Record<JobKind, string>> = {
@@ -89,9 +88,7 @@ const phaseLabel = (phase: JobPhase) => {
 
 export const jobStatusLabel = (job: Job) => {
   // A live phase names what the Job is doing; otherwise its durable state is the whole answer.
-  const activity = jobActivity(job);
-  if (activity === "active") return phaseLabel(job.phase);
-  if (activity === "waiting") return phaseLabel(job.phase);
+  if (jobActivity(job) !== "terminal") return phaseLabel(job.phase);
   if (job.status === JobStatus.COMPLETED) return "Completed";
   if (job.status === JobStatus.FAILED) return "Failed";
   if (job.status === JobStatus.READY) {
@@ -165,19 +162,16 @@ export const JobCard = ({
   job,
   detail,
   buttons,
-  visible,
   onVisibilityChange,
 }: {
   job: Job;
   detail?: ReactNode;
   buttons?: ReactNode;
-  visible?: boolean;
   onVisibilityChange?: (isVisible: boolean) => void;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
-  const isIntersecting = useSharedIntersectionObserver(containerRef);
-  const isVisible = visible !== undefined ? visible : isIntersecting;
+  const isVisible = useSharedIntersectionObserver(containerRef);
 
   useEffect(() => {
     if (onVisibilityChange) {
@@ -203,11 +197,7 @@ export const JobCard = ({
           </Typography>
           <span className={`job-status job-status-${status.toLowerCase()}`}>{jobStatusLabel(job)}</span>
         </div>
-        {job.status === JobStatus.FAILED ? (
-          <Feedback>{job.error || "The attempt recorded no reason."}</Feedback>
-        ) : (
-          job.error && <Feedback>{job.error}</Feedback>
-        )}
+        {(job.error || job.status === JobStatus.FAILED) && <Feedback>{job.error || "The attempt recorded no reason."}</Feedback>}
         {detail ? <div className="job-card-body">{detail}</div> : null}
       </CardContent>
       <Divider />
@@ -284,9 +274,7 @@ export function counterRows(view: StageView, progress: Progress | null): Progres
   const totalKnown = progress?.totalKnown === true;
   const rate = progress?.stage?.ratePerSecond;
   const completed = Number(progress?.copiedFileCount ?? 0n);
-  const copiedBytes = Number(progress?.copiedBytes ?? 0n);
   const totalFileCount = Number(progress?.totalFileCount ?? 0n);
-  const totalBytes = Number(progress?.totalBytes ?? 0n);
   return [
     { name: "Current Phase", value: phaseLabel(view.phase) },
     {
@@ -315,9 +303,9 @@ export function counterRows(view: StageView, progress: Progress | null): Progres
     // rather than the work this stage performed.
     ...(view.phase === JobPhase.GENERATING_PREVIEWS
       ? []
-      : [{ name: `${view.counterLabel} Bytes`, value: view.loading ? "--" : formatFilesize(BigInt(Math.max(0, copiedBytes))) }]),
+      : [{ name: `${view.counterLabel} Bytes`, value: view.loading ? "--" : formatFilesize(progress?.copiedBytes ?? 0n) }]),
     { name: "Total Files", value: totalKnown ? totalFileCount : "--" },
-    { name: "Total Bytes", value: totalKnown ? formatFilesize(BigInt(Math.max(0, totalBytes))) : "--" },
+    { name: "Total Bytes", value: totalKnown ? formatFilesize(progress?.totalBytes ?? 0n) : "--" },
   ];
 }
 

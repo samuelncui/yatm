@@ -46,14 +46,6 @@ export interface GetPreviewCapabilitiesResponse {
      */
     ffmpegVersion: string;
     /**
-     * @generated from protobuf field: repeated string kinds = 5
-     */
-    kinds: string[];
-    /**
-     * @generated from protobuf field: repeated string input_extensions = 6
-     */
-    inputExtensions: string[];
-    /**
      * @generated from protobuf field: repeated string output_formats = 7
      */
     outputFormats: string[];
@@ -126,14 +118,6 @@ export interface PreviewManifest {
      * @generated from protobuf field: bytes file_signature = 1
      */
     fileSignature: Uint8Array;
-    /**
-     * @generated from protobuf field: string generator = 2
-     */
-    generator: string;
-    /**
-     * @generated from protobuf field: bytes settings_json = 3
-     */
-    settingsJson: Uint8Array;
     /**
      * @generated from protobuf field: repeated yatm.v1.PreviewAsset assets = 4
      */
@@ -274,8 +258,6 @@ class GetPreviewCapabilitiesResponse$Type extends MessageType<GetPreviewCapabili
             { no: 2, name: "reason", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "version", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 4, name: "ffmpeg_version", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "kinds", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
-            { no: 6, name: "input_extensions", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
             { no: 7, name: "output_formats", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
             { no: 8, name: "input_extensions_by_kind", kind: "map", K: 9 /*ScalarType.STRING*/, V: { kind: "message", T: () => PreviewInputFormats } },
             { no: 9, name: "libraw_version", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
@@ -287,8 +269,6 @@ class GetPreviewCapabilitiesResponse$Type extends MessageType<GetPreviewCapabili
         message.reason = "";
         message.version = "";
         message.ffmpegVersion = "";
-        message.kinds = [];
-        message.inputExtensions = [];
         message.outputFormats = [];
         message.inputExtensionsByKind = {};
         message.librawVersion = "";
@@ -312,12 +292,6 @@ class GetPreviewCapabilitiesResponse$Type extends MessageType<GetPreviewCapabili
                     break;
                 case /* string ffmpeg_version */ 4:
                     message.ffmpegVersion = reader.string();
-                    break;
-                case /* repeated string kinds */ 5:
-                    message.kinds.push(reader.string());
-                    break;
-                case /* repeated string input_extensions */ 6:
-                    message.inputExtensions.push(reader.string());
                     break;
                 case /* repeated string output_formats */ 7:
                     message.outputFormats.push(reader.string());
@@ -368,12 +342,6 @@ class GetPreviewCapabilitiesResponse$Type extends MessageType<GetPreviewCapabili
         /* string ffmpeg_version = 4; */
         if (message.ffmpegVersion !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.ffmpegVersion);
-        /* repeated string kinds = 5; */
-        for (let i = 0; i < message.kinds.length; i++)
-            writer.tag(5, WireType.LengthDelimited).string(message.kinds[i]);
-        /* repeated string input_extensions = 6; */
-        for (let i = 0; i < message.inputExtensions.length; i++)
-            writer.tag(6, WireType.LengthDelimited).string(message.inputExtensions[i]);
         /* repeated string output_formats = 7; */
         for (let i = 0; i < message.outputFormats.length; i++)
             writer.tag(7, WireType.LengthDelimited).string(message.outputFormats[i]);
@@ -583,16 +551,12 @@ class PreviewManifest$Type extends MessageType<PreviewManifest> {
     constructor() {
         super("yatm.v1.PreviewManifest", [
             { no: 1, name: "file_signature", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
-            { no: 2, name: "generator", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "settings_json", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
             { no: 4, name: "assets", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => PreviewAsset }
         ]);
     }
     create(value?: PartialMessage<PreviewManifest>): PreviewManifest {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.fileSignature = new Uint8Array(0);
-        message.generator = "";
-        message.settingsJson = new Uint8Array(0);
         message.assets = [];
         if (value !== undefined)
             reflectionMergePartial<PreviewManifest>(this, message, value);
@@ -605,12 +569,6 @@ class PreviewManifest$Type extends MessageType<PreviewManifest> {
             switch (fieldNo) {
                 case /* bytes file_signature */ 1:
                     message.fileSignature = reader.bytes();
-                    break;
-                case /* string generator */ 2:
-                    message.generator = reader.string();
-                    break;
-                case /* bytes settings_json */ 3:
-                    message.settingsJson = reader.bytes();
                     break;
                 case /* repeated yatm.v1.PreviewAsset assets */ 4:
                     message.assets.push(PreviewAsset.internalBinaryRead(reader, reader.uint32(), options));
@@ -630,12 +588,6 @@ class PreviewManifest$Type extends MessageType<PreviewManifest> {
         /* bytes file_signature = 1; */
         if (message.fileSignature.length)
             writer.tag(1, WireType.LengthDelimited).bytes(message.fileSignature);
-        /* string generator = 2; */
-        if (message.generator !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.generator);
-        /* bytes settings_json = 3; */
-        if (message.settingsJson.length)
-            writer.tag(3, WireType.LengthDelimited).bytes(message.settingsJson);
         /* repeated yatm.v1.PreviewAsset assets = 4; */
         for (let i = 0; i < message.assets.length; i++)
             PreviewAsset.internalBinaryWrite(message.assets[i], writer.tag(4, WireType.LengthDelimited).fork(), options).join();

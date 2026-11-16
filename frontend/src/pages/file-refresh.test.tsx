@@ -48,7 +48,7 @@ vi.mock("react-virtuoso", () => ({
 }));
 
 import { File, FileScope, FileOperationKind, LocationEntriesPage, LocationEntry, LocationEntryRef, GetLocationResponse } from "@/entity";
-import { useFileBrowser } from "@/pages/file";
+import { useFileBrowser } from "@/components/use-file-browser";
 import type { FileOperations } from "@/components/file-operations";
 import { filesEntryData } from "@/components/files-browser";
 import { FilesEntry, FilesArchive, FilesCoverage, FilesIssue, OriginalAvailability } from "@/entity";
@@ -187,7 +187,7 @@ it("preserves a selected row and open context menu during refresh, then uses its
   let refresh: () => Promise<void>;
   function Harness() {
     const browser = useFileBrowser(handle, "refresh-pane", refreshAll, open, open, undefined, undefined, FileScope.ALL, { operations, confirmRemove: true });
-    refresh = () => browser.refresh(true);
+    refresh = () => browser.refresh();
     return (
       <>
         <FileBrowser ref={handle} {...browser.browserProps} disableDragAndDrop>

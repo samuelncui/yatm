@@ -49,7 +49,7 @@ vi.mock("@/components/scan-selection-dialog", () => ({
 }));
 
 import { ScanBrowser } from "./scan";
-import { scanPreferencesKey } from "./scan-preferences";
+import { scanPreferencesKey } from "@/components/scan-preferences";
 
 const call = (value: unknown) => ({ response: Promise.resolve(value) });
 const source = Location.create({ id: 1n, name: "Photos", rootPath: "/photos" });
@@ -272,21 +272,6 @@ describe("Scan form", () => {
     await act(async () => resolve({ location: source }));
     expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent("Files");
     expect(screen.queryByRole("combobox", { name: "Scope" })).not.toBeInTheDocument();
-  });
-
-  it("does not fall back to a whole Location when a legacy selected-path lookup fails", async () => {
-    fileGet.mockReturnValue({ response: Promise.reject(new Error("Missing path")) });
-    show({ pathname: "/scan", search: "?location=1", state: { paths: ["Projects"] } });
-    expect(await screen.findByText("Missing path")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-    expect(scan).not.toHaveBeenCalled();
-  });
-
-  it("rejects a shortcut range resolved for another Location", async () => {
-    fileGet.mockReturnValue(call({ detail: { entry: { reference: { target: { oneofKind: "location", location: { locationId: 9n, path: "Projects" } } } } } }));
-    show({ pathname: "/scan", search: "?location=1", state: { paths: ["Projects"] } });
-    expect(await screen.findByText("The selected Location has changed. Choose the range again.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
   });
 
   it("forces real reads and disables previews for sequential Tape verification", async () => {

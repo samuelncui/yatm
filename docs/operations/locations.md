@@ -48,4 +48,4 @@ These actions use the [shared organization engine](../architecture/library.md#sh
 
 **Locate original** changes an association, not a disk path. It refuses a target owned by another File. Use it when limited observations cannot reliably reconnect an external move. Automatic continuity follows path → valid available signature → native identity within the observed range; it cannot prove every move-versus-copy history.
 
-The [compatibility policy](../README.md#pre-stable-compatibility) preserves v0.1.x migration/import. Incompatible pre-stable v1 stores are rejected before modification and require an explicitly chosen conversion or reinstall. Cross-Location transfer, uploads, editing, permissions, scheduling, multi-Executor transport and snapshots are outside this workflow.
+The [compatibility policy](../README.md#pre-stable-compatibility) preserves v0.1.x migration/import. Cross-Location transfer, uploads, editing, permissions, scheduling, multi-Executor transport and snapshots are outside this workflow.

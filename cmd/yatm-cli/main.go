@@ -36,7 +36,6 @@ type runtime struct {
 
 	baseURL    string
 	httpClient *http.Client
-	prepared   bool
 }
 
 type commandError struct {

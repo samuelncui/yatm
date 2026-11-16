@@ -58,13 +58,13 @@ func (s *service) executeTree(spec *entity.FileOperationSpec, logical, dryRun bo
 	ctx := stream.Context()
 	var store treeops.Store
 	var transaction treeops.Transaction
-	var config *config
+	var location *library.Location
 	var err error
 	options := treeops.Options{NativeMove: true}
 	if logical {
 		store, transaction = s.exe.Lib().FileTree(), s.exe.Lib().FileTreeTransaction
 	} else {
-		config, err = s.validateLocation(ctx, spec)
+		location, err = s.validateLocation(ctx, spec)
 	}
 	if err != nil {
 		return err
@@ -75,11 +75,7 @@ func (s *service) executeTree(spec *entity.FileOperationSpec, logical, dryRun bo
 	}
 	defer func() { returnErr = errors.Join(returnErr, op.Close()) }()
 	if !logical {
-		location, err := op.currentLocation(ctx, config)
-		if err != nil {
-			return err
-		}
-		store = &locationTree{op: op, location: location, config: config}
+		store = &locationTree{op: op, location: location, operationID: uuid.New()}
 	}
 	engine, err := treeops.New(ctx, op.DB, store, options, transaction)
 	if err != nil {
@@ -240,17 +236,12 @@ func libraryReference(ref *entity.FileOperationRef) (bool, error) {
 	return false, fmt.Errorf("file operation reference is missing")
 }
 
-func (s *service) validateLocation(ctx context.Context, request *entity.FileOperationSpec) (*config, error) {
-	// Convert the already type-checked public references once at the physical boundary.
-	spec := &locationSpec{Kind: request.Kind, Name: request.Name, Destination: request.Destination.GetLocation()}
-	for _, ref := range request.Sources {
-		spec.Sources = append(spec.Sources, ref.GetLocation())
-	}
-
+func (s *service) validateLocation(ctx context.Context, request *entity.FileOperationSpec) (*library.Location, error) {
 	// One confirmed Location owns all sources and the destination for this entire request.
-	ref := spec.Destination
+	destination := request.Destination.GetLocation()
+	ref := destination
 	if ref == nil {
-		ref = spec.Sources[0]
+		ref = request.Sources[0].GetLocation()
 	}
 	if err := s.admitLocation(ref.GetLocationId()); err != nil {
 		return nil, err
@@ -259,13 +250,14 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 	if err != nil {
 		return nil, err
 	}
-	if spec.Destination != nil && !info.IsDir() {
+	if destination != nil && !info.IsDir() {
 		return nil, fmt.Errorf("operation destination is not a directory")
 	}
-	if spec.Destination != nil && library.IsLocationTrashPath(spec.Destination.Path) {
+	if destination != nil && library.IsLocationTrashPath(destination.Path) {
 		return nil, fmt.Errorf("Trash cannot be an operation destination")
 	}
-	for _, source := range spec.Sources {
+	for _, ref := range request.Sources {
+		source := ref.GetLocation()
 		if source.GetLocationId() != location.ID {
 			return nil, fmt.Errorf("operations must stay within one Location")
 		}
@@ -273,7 +265,7 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 			return nil, fmt.Errorf("Location roots cannot be moved or removed")
 		}
 		if library.IsLocationTrashPath(source.Path) {
-			if spec.Kind != entity.FileOperationKind_FILE_OPERATION_KIND_MOVE || !executor.IsLocationTrashContent(source.Path) {
+			if request.Kind != entity.FileOperationKind_FILE_OPERATION_KIND_MOVE || !executor.IsLocationTrashContent(source.Path) {
 				return nil, fmt.Errorf("Trash entries can only be moved out")
 			}
 			if err := validateTrash(location.RootPath); err != nil {
@@ -284,6 +276,5 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 			return nil, err
 		}
 	}
-	return &config{Spec: spec, OperationID: uuid.NewString(), LocationID: location.ID,
-		RootPath: location.RootPath}, nil
+	return location, nil
 }

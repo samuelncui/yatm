@@ -1,5 +1,5 @@
 import { Feedback } from "@/components/feedback";
-import { type ReactNode, Suspense, useCallback, useContext, useId, useRef, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useId, useRef, useState } from "react";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardHeader from "@mui/material/CardHeader";
@@ -12,7 +12,7 @@ import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import { ActionRow } from "@/components/action-row";
 import { PageHeading } from "@/components/page-heading";
 import { ActionDialog } from "@/components/action-dialog";
-import { UNSAFE_DataRouterContext, useBeforeUnload, useBlocker } from "react-router";
+import { useBeforeUnload, useBlocker } from "react-router";
 
 /**
  * A whole Settings surface: its heading and the settings it holds across the available width.
@@ -144,7 +144,7 @@ export const SettingsEditorFeedback = ({
   onReload: () => void;
 }) => (
   <>
-    <SettingsNavigationGuard dirty={dirty} label={label} />
+    <UnsavedChangesPrompt when={() => dirty}>Your {label} settings have not been saved.</UnsavedChangesPrompt>
     <SettingsLoading label={label} loading={loading} />
     {error && (
       <Feedback
@@ -163,23 +163,18 @@ export const SettingsEditorFeedback = ({
   </>
 );
 
-/** The application uses a data router; isolated editor consumers need no route blocker. */
-const SettingsNavigationGuard = ({ dirty, label }: { dirty: boolean; label: string }) => {
-  const router = useContext(UNSAFE_DataRouterContext);
-  return router ? <SettingsLeavePrompt dirty={dirty} label={label} /> : null;
-};
-
-const SettingsLeavePrompt = ({ dirty, label }: { dirty: boolean; label: string }) => {
-  const blocker = useBlocker(dirty);
+/** Confirms leaving a page with unsaved edits; `when` is read at the moment of navigation or unload. */
+export const UnsavedChangesPrompt = ({ when, children }: { when: () => boolean; children: ReactNode }) => {
+  const blocker = useBlocker(when);
   const confirmed = useRef(false);
   useBeforeUnload(
     useCallback(
       (event: BeforeUnloadEvent) => {
-        if (!dirty) return;
+        if (!when()) return;
         event.preventDefault();
         event.returnValue = "";
       },
-      [dirty],
+      [when],
     ),
   );
   if (blocker.state !== "blocked") return null;
@@ -198,7 +193,7 @@ const SettingsLeavePrompt = ({ dirty, label }: { dirty: boolean; label: string }
         confirmed.current = false;
       }}
     >
-      Your {label} settings have not been saved.
+      {children}
     </ActionDialog>
   );
 };

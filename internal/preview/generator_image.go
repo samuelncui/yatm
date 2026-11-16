@@ -26,7 +26,7 @@ func init() {
 
 func newImageGenerator(values map[string]any) (Generator, error) {
 	// Decode the configured command and derivative settings over safe defaults.
-	options := imageOptions{MaxInputPixels: 64_000_000, MaxWidth: 512, MaxHeight: 512, Format: "webp", Quality: 80}
+	options := imageOptions{MaxInputPixels: maxInputPixels, MaxWidth: 512, MaxHeight: 512, Format: "webp", Quality: 80}
 	if err := decodeOptions(values, &options); err != nil {
 		return nil, err
 	}

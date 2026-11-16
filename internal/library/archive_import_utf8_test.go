@@ -24,7 +24,7 @@ func TestArchiveImportPreservesLiteralUTF8Names(t *testing.T) {
 			require.NoError(t, db.Create(position).Error)
 			preview, err := lib.ImportArchivePositionSelection(ctx, []int64{position.ID}, nil, true)
 			require.NoError(t, err)
-			applied, err := lib.ImportArchivePositionRoots(ctx, []int64{position.ID})
+			applied, err := lib.ImportArchivePositionSelection(ctx, []int64{position.ID}, nil, false)
 			require.NoError(t, err)
 			require.Equal(t, preview.Files, applied.Files)
 			require.Len(t, applied.FileIDs, 1)

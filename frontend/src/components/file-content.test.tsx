@@ -21,7 +21,9 @@ import {
 } from "@/entity";
 import { ContentCopies, FileContent } from "./file-content";
 import { contentTime } from "./content-status";
-import { saveSelectionEntries, loadSelectionEntries } from "./selection-waitlist-state";
+import { loadSelectionEntries, selectionStorageKey } from "./selection-waitlist-state";
+import { selectionCodec } from "@/state/selections";
+import { writeStored } from "@/state/storage";
 const { preview, versions, copies, media, duplicates, removeVersion, updateMetadata, listTags, report, success, archiveCreate, restoreCreate } = vi.hoisted(
   () => ({
     preview: vi.fn(),
@@ -38,7 +40,8 @@ const { preview, versions, copies, media, duplicates, removeVersion, updateMetad
     restoreCreate: vi.fn(),
   }),
 );
-vi.mock("@/api", () => ({
+vi.mock("@/api", async (original) => ({
+  isMediaOnline: (await original<typeof import("@/api")>()).isMediaOnline,
   fileBase: "/files",
   filesCli: { removeVersion, updateMetadata, listVersions: versions, listCopies: copies, listDuplicates: duplicates },
   previewCli: { get: preview },
@@ -132,7 +135,7 @@ it("clears a previous Preview error when the current original's signature become
 it("paginates matching Library entries by their references without Location association IDs or detail reads", async () => {
   const entry = (fileId: bigint) => ({ reference: { target: { oneofKind: "fileId", fileId } }, name: `file-${fileId}`, path: `Folder/file-${fileId}` });
   duplicates.mockImplementation(({ afterFileId }) => call({ entries: afterFileId ? [entry(9n)] : [entry(7n), entry(8n)], hasMore: !afterFileId }));
-  render(<ContentCopies signature={new Uint8Array([1])} fileID={7n} />);
+  render(<ContentCopies signature={new Uint8Array([1])} fileID={7n} />, { wrapper: MemoryRouter });
   await userEvent.click(await screen.findByRole("button", { name: "Find matching files" }));
   expect(await screen.findByRole("link", { name: /file-8/ })).toHaveAttribute("href", "/file?file=8");
   expect(screen.queryByRole("link", { name: /file-7/ })).not.toBeInTheDocument();
@@ -257,15 +260,20 @@ it("puts each list action first in the bottom row of its detail section", async 
 });
 it("adds the selected FileVersion to Restore and replaces that File's automatic selection", async () => {
   const selection = FileSelection.create({ target: { oneofKind: "library", library: { fileId: 7n } }, scope: FileScope.SAVED });
-  saveSelectionEntries("restore", [
-    {
-      key: FileSelection.toJsonString(selection),
-      name: "image.jpg",
-      path: "image.jpg",
-      fileID: "7",
-      selection,
-    },
-  ]);
+  writeStored(
+    "session",
+    selectionStorageKey("restore"),
+    [
+      {
+        key: FileSelection.toJsonString(selection),
+        name: "image.jpg",
+        path: "image.jpg",
+        fileID: "7",
+        selection,
+      },
+    ],
+    selectionCodec,
+  );
   render(<FileContent detail={detail()} onRefresh={refresh} />, { wrapper: MemoryRouter });
 
   await userEvent.click(screen.getByRole("tab", { name: "Saved versions" }));
@@ -392,27 +400,15 @@ it("previews the newest saved version, labelled, when the original is unavailabl
   value.contentReference = undefined;
   value.contentSignature = new Uint8Array();
   value.entry!.status!.original = OriginalAvailability.UNAVAILABLE;
+  value.latestVersion = saved;
   preview.mockReturnValue(call({ availability: PreviewAvailability.READY, assets: [{ role: "thumbnail", url: "/saved-image" }] }));
   const { container } = render(<FileContent detail={value} onRefresh={refresh} />, { wrapper: MemoryRouter });
   expect(screen.getByTitle(/Local file unavailable/)).toBeInTheDocument();
   await waitFor(() => expect(container.querySelector("img")).toHaveAttribute("src", "/saved-image"));
-  expect(versions).toHaveBeenCalledWith({ fileId: 7n, afterId: 0n, limit: 100 }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
   expect(preview).toHaveBeenCalledWith({ signature: saved.signature }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
   expect(screen.getByText("Preview of the latest saved version")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("tab", { name: "Saved versions" }));
   expect(await screen.findByRole("region", { name: "Archived copies" })).toBeInTheDocument();
-});
-it("finds the newest archive time within one millisecond across version pages for an archive-only Preview", async () => {
-  const value = detail();
-  value.contentReference = undefined;
-  value.contentSignature = new Uint8Array();
-  const older = FileVersion.create({ ...saved, id: 3n, firstArchivedAtNs: 1700000000000000001n });
-  const newer = FileVersion.create({ ...saved, id: 1n, signature: new Uint8Array([3]), lastArchivedAtNs: 1700000000000000002n });
-  versions.mockImplementation(({ afterId }) => call(afterId ? { versions: [newer], hasMore: false } : { versions: [older], hasMore: true }));
-  render(<FileContent detail={value} onRefresh={refresh} />, { wrapper: MemoryRouter });
-  await waitFor(() => expect(preview).toHaveBeenCalledWith({ signature: newer.signature }, expect.objectContaining({ abort: expect.any(AbortSignal) })));
-  expect(preview).not.toHaveBeenCalledWith({ signature: older.signature }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
-  expect(versions).toHaveBeenCalledWith({ fileId: 7n, afterId: 3n, limit: 100 }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
 });
 it("shows no Preview when neither the original nor a saved version exists", async () => {
   versions.mockReturnValue(call({ versions: [], hasMore: false }));
@@ -421,9 +417,6 @@ it("shows no Preview when neither the original nor a saved version exists", asyn
   value.contentReference = undefined;
   value.contentSignature = new Uint8Array();
   const { container } = render(<FileContent detail={value} onRefresh={refresh} />, { wrapper: MemoryRouter });
-  await waitFor(() =>
-    expect(versions).toHaveBeenCalledWith({ fileId: 7n, afterId: 0n, limit: 100 }, expect.objectContaining({ abort: expect.any(AbortSignal) })),
-  );
   expect(preview).not.toHaveBeenCalled();
   await waitFor(() => expect(container.querySelector(".file-detail-preview")).not.toBeInTheDocument());
   expect(screen.getByText("Location")).toBeInTheDocument();
@@ -441,6 +434,7 @@ it("replaces a current Preview with the labelled saved version once its guarded 
   const value = detail();
   value.contentReference = undefined;
   value.contentSignature = new Uint8Array();
+  value.latestVersion = saved;
   rerender(<FileContent detail={value} onRefresh={refresh} />);
   await waitFor(() => expect(container.querySelector("img")).toHaveAttribute("src", "/saved-image"));
   expect(screen.getByText("Preview of the latest saved version")).toBeInTheDocument();
@@ -579,23 +573,4 @@ it("cancels an obsolete history refresh before reading its next page", async () 
   await act(async () => complete({ versions: [saved], hasMore: true }));
   expect(versions).toHaveBeenCalledTimes(4);
   expect(screen.getAllByRole("button", { name: /Archive date not recorded/ })).toHaveLength(1);
-});
-
-it("stops an archive-only Preview lookup at a cancelled page boundary", async () => {
-  let complete!: (reply: unknown) => void;
-  versions.mockReturnValueOnce({
-    response: new Promise((resolve) => {
-      complete = resolve;
-    }),
-  });
-  const original = detail();
-  original.contentReference = undefined;
-  original.contentSignature = new Uint8Array();
-  const page = render(<FileContent detail={original} onRefresh={refresh} />, { wrapper: MemoryRouter });
-  const signal = versions.mock.calls[0][1].abort as AbortSignal;
-  page.rerender(<FileContent detail={detail()} onRefresh={refresh} />);
-  expect(signal.aborted).toBe(true);
-  await act(async () => complete({ versions: [saved], hasMore: true }));
-  expect(versions).toHaveBeenCalledOnce();
-  expect(preview.mock.calls.map(([request]) => request.signature)).toEqual([currentSignature]);
 });

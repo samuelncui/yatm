@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
@@ -51,19 +50,6 @@ func (l *Library) AutoMigrate() error {
 	if err := dataformat.InitializeCatalog(l.db); err != nil {
 		return err
 	}
-	if l.db.Migrator().HasTable(&Location{}) {
-		if !l.db.Migrator().HasColumn(&Location{}, "config") {
-			return fmt.Errorf("Location configuration layout requires one-time conversion before startup")
-		}
-		var missing int64
-		if err := l.db.Model(&Location{}).Where("config IS NULL OR config = 'null'").Count(&missing).Error; err != nil {
-			return err
-		}
-		if missing > 0 {
-			return fmt.Errorf("%d Locations require one-time configuration conversion before startup", missing)
-		}
-	}
-
 	// Organization, originals and saved content have separate authoritative records.
 	if err := l.db.AutoMigrate(ModelFile, ModelFileTag, ModelMedia, ModelPosition, &Location{},
 		&FileLocation{}, &FileVersion{}, &FileVersionArchive{}, &FileTrackingKey{}); err != nil {

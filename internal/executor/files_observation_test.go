@@ -42,17 +42,16 @@ func TestObserveFileRowsWithMixedOriginals(t *testing.T) {
 
 func TestParentGuardChecksEachLocationSeparately(t *testing.T) {
 	// Two Locations with the same relative parent must retain their own access decisions.
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	firstRoot := filepath.Join(base, "first")
 	secondRoot := filepath.Join(base, "second")
 	for _, root := range []string{firstRoot, secondRoot} {
 		require.NoError(t, os.MkdirAll(filepath.Join(root, "shared"), 0755))
 	}
-	exe := New(nil, nil, nil, Paths{Access: []AccessRange{{Root: base}}}, Scripts{}, nil)
+	exe := New(nil, nil, nil, Paths{Access: []AccessRange{{Root: firstRoot}, {Root: secondRoot, Ignore: "/shared\n"}}}, Scripts{}, nil)
 	first := &library.Location{ID: 1, RootPath: firstRoot}
-	second := &library.Location{ID: 2, RootPath: secondRoot, AccessAllowed: func(relative string, _ bool) bool {
-		return relative != "shared"
-	}}
+	second := &library.Location{ID: 2, RootPath: secondRoot}
 
 	// The first successful guard cannot authorize the second Location's excluded parent.
 	guards := make(map[fileParentGuardKey]pathGuard)

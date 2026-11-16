@@ -132,9 +132,6 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 
 func (a *jobRestoreRunner) frozenReadTarget(ctx context.Context, target *entity.ReadMediaTarget) (*entity.ReadMediaTarget, error) {
 	// Resolve only the physical selector; expectations always come from frozen pending candidates.
-	if target == nil {
-		return nil, fmt.Errorf("Restore Media target is missing")
-	}
 	selected := &entity.ReadMediaTarget{}
 	var copy Copy
 	switch backend := target.Backend.(type) {
@@ -193,9 +190,6 @@ func (a *jobRestoreRunner) frozenReadTarget(ctx context.Context, target *entity.
 			if err != nil {
 				return nil, err
 			}
-			if resolved == nil {
-				return nil, fmt.Errorf("Restore Tape identification returned no Media")
-			}
 			return resolved, nil
 		}
 
@@ -225,9 +219,6 @@ func (a *jobRestoreRunner) frozenReadTarget(ctx context.Context, target *entity.
 	}
 
 	// Rebuild trusted expectations instead of allowing the caller to substitute a cartridge profile.
-	if copy.MediaProfile == nil {
-		return nil, fmt.Errorf("Restore candidate Media profile is missing")
-	}
 	selected.ExpectedMediaId, selected.ExpectedIdentity = copy.MediaID, copy.MediaIdentity
 	selected.ExpectedProfile = proto.Clone(copy.MediaProfile).(*entity.MediaProfile)
 	return selected, nil

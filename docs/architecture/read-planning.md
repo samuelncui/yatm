@@ -83,8 +83,9 @@ LOCATE(10)/LOCATE(16), REWIND and synchronous UNLOAD each form one record. A fir
 and a READ that crosses a filemark together with its following data READ are single records. Other
 data READs form a READ segment: the contiguous READs between any other commands, split only where
 the discard label changes, never by time. Successful nonmoving restoration preserves the cursor but
-ends READ continuity. SPACE is not decoded, so it withdraws nothing and records nothing; command
-observations do not expose RECOVERED ERROR sense, so records carry no recovered-error count.
+ends READ continuity. SPACE is not decoded, so like a failed command it withdraws the cursor and
+records nothing; command observations do not expose RECOVERED ERROR sense, so records carry no
+recovered-error count.
 
 Each record keeps raw facts only: the logical address of both endpoints (partition, logical object
 and file number when known), their wrap and longitudinal offset within the wrap's interpolation span

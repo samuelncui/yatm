@@ -1,7 +1,8 @@
 import { act, screen, waitFor } from "@testing-library/react";
-import { render } from "@/state/test-render";
+import { renderPage, routed } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { RpcError } from "@protobuf-ts/runtime-rpc";
 import { JobExecutionSettings, JobSettings, SettingsValue } from "@/entity";
 
 const { get, update } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
@@ -23,7 +24,7 @@ describe("Job Settings", () => {
   it("uses shared loading feedback only until settings arrive and keeps saved values on revisit", async () => {
     let finish!: (reply: { value: SettingsValue }) => void;
     get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
-    const page = render(<JobSettingsBrowser />);
+    const page = renderPage(<JobSettingsBrowser />);
     expect(screen.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     // Every editor keeps the same page action row while its values load.
@@ -36,7 +37,7 @@ describe("Job Settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Job settings saved.");
     page.rerender(<></>);
-    page.rerender(<JobSettingsBrowser />);
+    page.rerender(routed(<JobSettingsBrowser />));
     await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     expect(screen.getByRole("spinbutton", { name: "Manifest batch (items)" })).toHaveValue(128);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
@@ -45,13 +46,12 @@ describe("Job Settings", () => {
   });
 
   it("saves pipeline limits through the shared typed Settings API", async () => {
-    render(<JobSettingsBrowser />);
+    renderPage(<JobSettingsBrowser />);
     await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await waitFor(() => expect(batch).toHaveValue(256));
     await userEvent.clear(batch);
     await userEvent.type(batch, "128");
-    expect(screen.getByRole("spinbutton", { name: "Results per update" })).toHaveAttribute("max", "4096");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(update).toHaveBeenCalledExactlyOnceWith({
       value: { value: { oneofKind: "job", job: { execution: execution(128) } } },
@@ -60,22 +60,25 @@ describe("Job Settings", () => {
     expect(screen.getByText("Job settings saved.")).toBeInTheDocument();
   });
 
-  it("refuses a write batch larger than its buffer before asking the service", async () => {
-    render(<JobSettingsBrowser />);
+  it("keeps a draft the service rejects and expands its section for correction", async () => {
+    update.mockImplementationOnce(() => ({
+      response: Promise.reject(new RpcError("write batch size must not exceed the write buffer", "INVALID_ARGUMENT")),
+    }));
+    renderPage(<JobSettingsBrowser />);
     await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Results per update" });
     await waitFor(() => expect(batch).toHaveValue(256));
     await userEvent.clear(batch);
     await userEvent.type(batch, "8192");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/Results per update must not exceed the queued results limit/)).toBeInTheDocument();
+    expect(await screen.findByText("write batch size must not exceed the write buffer")).toBeInTheDocument();
     // A rejected draft is corrected in place; reloading would discard it.
     expect(screen.queryByRole("button", { name: /Reload saved settings|Retry/ })).not.toBeInTheDocument();
-    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole("spinbutton", { name: "Results per update" })).toHaveValue(8192);
   });
 
   it("cancels unsaved changes", async () => {
-    render(<JobSettingsBrowser />);
+    renderPage(<JobSettingsBrowser />);
     await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
@@ -88,7 +91,7 @@ describe("Job Settings", () => {
   it("disables every input until the authoritative Save response returns", async () => {
     let finish!: (reply: { value: SettingsValue }) => void;
     update.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
-    render(<JobSettingsBrowser />);
+    renderPage(<JobSettingsBrowser />);
     await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
@@ -104,7 +107,7 @@ describe("Job Settings", () => {
   it("keeps a failed Save draft editable and its error visible while retrying", async () => {
     let reject!: (error: Error) => void;
     update.mockImplementation(() => ({ response: new Promise((_, fail) => (reject = fail)) }));
-    render(<JobSettingsBrowser />);
+    renderPage(<JobSettingsBrowser />);
     await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
@@ -127,7 +130,7 @@ describe("Job Settings", () => {
 
 it("retries a failed initial read without defaults and keeps its form while explicitly reloading", async () => {
   get.mockReturnValueOnce({ response: Promise.reject(new Error("Read unavailable")) });
-  render(<JobSettingsBrowser />);
+  renderPage(<JobSettingsBrowser />);
   expect(await screen.findByText("Read unavailable")).toBeVisible();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();

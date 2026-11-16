@@ -196,7 +196,7 @@ func archiveFixtureItems(t *testing.T, exe *executor.Executor, sources []*archiv
 			if err := entity.ValidateRelativePath(target); err != nil {
 				return err
 			}
-			expected, err := executor.VerifyObservedContent(ctx, filename, info)
+			expected, err := executor.VerifyObservedContent(ctx, filename)
 			if err != nil {
 				return err
 			}

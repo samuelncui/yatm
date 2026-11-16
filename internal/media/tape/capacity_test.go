@@ -307,7 +307,7 @@ func TestIssuedCapacitySamplePrecedesActualQueuedWrite(t *testing.T) {
 	close(release)
 	sample := <-observed
 	if sample == nil || sample.Partition != 7 || sample.Quality != CapacityEstimate || sample.RemainingBytes == nil ||
-		*sample.RemainingBytes != 100_000_000 || sample.ErrorBytes != nil || sample.UnreflectedBytes != nil || sample.CompletedAt.Before(sample.IssuedAt) {
+		*sample.RemainingBytes != 100_000_000 || sample.CompletedAt.Before(sample.IssuedAt) {
 		t.Fatalf("sample=%+v", sample)
 	}
 	if err := <-written; err != nil {
@@ -447,7 +447,7 @@ func TestCapacityCounterSupportDoesNotDisappearWithUnknownValue(t *testing.T) {
 	}
 }
 
-func TestCapacityPreparationKeepsEstimateAllowancesAndQualificationUnknown(t *testing.T) {
+func TestCapacityPreparationKeepsEstimateQualificationUnknown(t *testing.T) {
 	// A configured single partition permits one estimate without enabling continuous polling.
 	d := fixtureDevice(t, newDeviceFixture())
 	if _, err := d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512}, Read); err != nil {
@@ -459,12 +459,11 @@ func TestCapacityPreparationKeepsEstimateAllowancesAndQualificationUnknown(t *te
 	}
 	sample := capacity.Initial
 	if sample.Partition != 0 || sample.Quality != CapacityEstimate || sample.RemainingBytes == nil || *sample.RemainingBytes != 100_000_000 ||
-		sample.ErrorBytes != nil || sample.UnreflectedBytes != nil || sample.IssuedAt.IsZero() || sample.CompletedAt.Before(sample.IssuedAt) {
+		sample.IssuedAt.IsZero() || sample.CompletedAt.Before(sample.IssuedAt) {
 		t.Fatalf("estimate=%+v", sample)
 	}
 	f := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING)
-	if f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED ||
-		f.GetCapacity().ObservationErrorBytes != nil || f.GetCapacity().UnreflectedBytes != nil {
+	if f.Validation != entity.DeviceFeatureValidation_DEVICE_FEATURE_VALIDATION_UNVALIDATED {
 		t.Fatalf("sample self-qualified: %v", f)
 	}
 	if err := d.Cleanup(context.Background()); err != nil {

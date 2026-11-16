@@ -29,7 +29,7 @@ func TestErrorInterceptorsMapSentinelsAndKeepStatuses(t *testing.T) {
 			message: "get job failed, id=7, job not found"},
 		{name: "status", err: created, code: codes.OutOfRange, message: "created deep inside"},
 		{name: "wrapped status", err: fmt.Errorf("refresh failed: %w", created), code: codes.OutOfRange},
-		{name: "status beside sentinel", err: errors.Join(created, library.ErrLocationBusy), code: codes.OutOfRange},
+		{name: "status beside sentinel", err: errors.Join(created, library.ErrLocationUnverified), code: codes.OutOfRange},
 		{name: "unknown", err: errors.New("plain failure"), code: codes.Unknown, message: "plain failure"},
 	}
 	for _, test := range tests {

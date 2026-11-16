@@ -109,13 +109,13 @@ func (api *API) Uploader() *gin.Engine {
 		}
 	})
 	r.POST("/library/_import", func(ctx *gin.Context) {
-		logrus.WithContext(ctx).Infof("get library import request, %t %t", ctx == nil, ctx.Request == nil)
-
 		// A dry run validates the snapshot and rolls the replacement back.
 		dryRun := ctx.Query("dryrun") == "true"
 		defer ctx.Request.Body.Close()
 		if err := api.lib.Import(ctx, ctx.Request.Body, dryRun); err != nil && !errors.Is(err, library.ErrImportDryRun) {
-			panic(err)
+			logrus.WithContext(ctx).WithError(err).Error("import library failed")
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"reason": err.Error()})
+			return
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{"result": "ok", "dryrun": dryRun})

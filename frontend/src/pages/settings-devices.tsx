@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { isWritableTapeFormat } from "@/components/tape-format";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
 import { mediaCli } from "@/api";
@@ -32,17 +32,13 @@ export const DeviceSettingsBrowser = () => {
   const [inspecting, setInspecting] = useState(false);
   const [parametersDirty, setParametersDirty] = useState(false);
   const sequence = useRef(0);
-  const refreshDevices = useCallback(async () => {
-    const listed = await loadDevices();
-    if (listed) setSelected((value) => value || listed[0]?.device || "");
-  }, [loadDevices]);
   useEffect(() => {
-    void refreshDevices();
+    void loadDevices();
     const current = sequence;
     return () => {
       current.current++;
     };
-  }, [refreshDevices]);
+  }, [loadDevices]);
   const names = [...new Set([...(devices ?? []).map((value) => value.device), ...(editor.draft?.devices ?? []).map((value) => value.device)])];
   // A selection that is neither listed nor saved falls back to the first remaining entry.
   const device = names.includes(selected) ? selected : names[0] || "";
@@ -284,7 +280,7 @@ export const DeviceSettingsBrowser = () => {
           </>
         )}
         <SettingsActions dirty={editor.dirty} loading={editor.loading} saving={editor.saving} onCancel={editor.cancel}>
-          <Button type="button" disabled={listing || editor.saving} onClick={() => void refreshDevices()}>
+          <Button type="button" disabled={listing || editor.saving} onClick={() => void loadDevices()}>
             Refresh devices
           </Button>
         </SettingsActions>

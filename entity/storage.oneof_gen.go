@@ -19,25 +19,6 @@ func (x *StorageMetadata) Unpack() OneofStorageMetadata {
 	}
 }
 
-func PackStorageMetadata(param OneofStorageMetadata) *StorageMetadata {
-	switch param := param.(type) {
-	case *LtfsMetadata:
-		return &StorageMetadata{
-			Backend: &StorageMetadata_Ltfs{
-				Ltfs: param,
-			},
-		}
-	case *TarMetadata:
-		return &StorageMetadata{
-			Backend: &StorageMetadata_Tar{
-				Tar: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *LtfsMetadata) Pack() *StorageMetadata {
 	return &StorageMetadata{
 		Backend: &StorageMetadata_Ltfs{

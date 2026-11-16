@@ -5,7 +5,7 @@ import { Button, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/m
 import { Link } from "react-router";
 import { jobCli } from "@/api";
 import type { Job } from "@/entity";
-import { jobLabel, jobStatusLabel } from "@/components/job-card";
+import { jobLabel, jobStatusLabel } from "@/components/job-progress";
 import { contentTime } from "@/components/content-status";
 import { errorMessage } from "@/tools";
 

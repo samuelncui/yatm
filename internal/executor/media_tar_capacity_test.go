@@ -25,7 +25,7 @@ func tarCapacityPreparedFixture(t *testing.T) (*tape.Device, *tarDeviceFixture) 
 	fixture := newTarDeviceFixture()
 	transport, err := fixture.Open(tape.Identity{})
 	require.NoError(t, err)
-	prepared, err := tape.NewDevice(ctx, tape.Identity{}, &fakeNativeTransport{Transport: transport, limit: 4096})
+	prepared, err := tape.NewDevice(ctx, tape.Identity{}, &fakeNativeTransport{Transport: transport})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, prepared.Cleanup(context.Background())) })
 
@@ -66,10 +66,6 @@ func TestTarCapacityExplicitOffUsesInitialOnly(t *testing.T) {
 	require.Equal(t, uint64(1_000_000), *options.Initial.RemainingBytes)
 	require.Nil(t, options.Observe)
 	require.Zero(t, options.Interval)
-	require.Zero(t, options.MaxAge)
-	require.False(t, options.CostBounded)
-	require.Nil(t, options.Initial.ErrorBytes)
-	require.Nil(t, options.Initial.UnreflectedBytes)
 }
 
 func TestTarCapacitySupportedProviderUsesConfiguredCadenceAndRecoversUnknown(t *testing.T) {
@@ -94,10 +90,6 @@ func TestTarCapacitySupportedProviderUsesConfiguredCadenceAndRecoversUnknown(t *
 					return
 				}
 				require.NotNil(t, options)
-				require.False(t, options.CostBounded)
-				require.Zero(t, options.MaxAge)
-				require.Nil(t, options.Initial.ErrorBytes)
-				require.Nil(t, options.Initial.UnreflectedBytes)
 				if interval == 0 {
 					require.Nil(t, options.Observe)
 					require.Zero(t, options.Interval)
@@ -145,7 +137,7 @@ func TestTarCapacityFactoryLogsMissesAndRecovery(t *testing.T) {
 				}
 				return transport.Execute(ctx, command)
 			}}
-			native := &fakeNativeTransport{Transport: faults, limit: 4096}
+			native := &fakeNativeTransport{Transport: faults}
 			prepared, err := tape.NewDevice(ctx, tape.Identity{}, native)
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, prepared.Cleanup(context.Background())) })

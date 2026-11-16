@@ -22,7 +22,8 @@ type Projection = {
   range?: [number, number];
 };
 
-function rowFileID(row: IdenticalRow | undefined) {
+/** The Library File a member row stands for, if any. */
+export function rowFileID(row: IdenticalRow | undefined) {
   const entry = row?.member?.entry;
   return entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
 }
@@ -66,10 +67,6 @@ export function useIdenticalSparse(
   const pinnedRef = useRef(pinned);
   const collapsedRef = useRef(collapsed);
   const resultId = result?.id;
-  useEffect(() => {
-    pinnedRef.current = pinned;
-  }, [pinned]);
-
   useEffect(() => {
     const epochRef = epoch;
     const pendingRequests = pending.current;
@@ -147,6 +144,11 @@ export function useIdenticalSparse(
         const viewport = range.current;
         const selected = pinnedRef.current;
         const collapsedGroups = collapsedRef.current;
+        // A selection, collapse or viewport change since this pass started restarts it.
+        const stale = () =>
+          selected !== pinnedRef.current ||
+          collapsedGroups !== collapsedRef.current ||
+          (!!nextPages && (viewport[0] !== range.current[0] || viewport[1] !== range.current[1]));
         if (!resultId) return { pins: new Map(selected), pages: nextPages };
         if (resort) {
           for (const [id, interval] of collapsedGroups) {
@@ -184,12 +186,7 @@ export function useIdenticalSparse(
           for (const position of reply.positions) positions.set(String(position.fileId), position);
         }
         if (ids.some((id) => !positions.has(String(id)))) throw new Error("Could not locate selected files in this result. Find again.");
-        if (
-          selected !== pinnedRef.current ||
-          collapsedGroups !== collapsedRef.current ||
-          (nextPages && (viewport[0] !== range.current[0] || viewport[1] !== range.current[1]))
-        )
-          continue;
+        if (stale()) continue;
         const next = new Map<string, { row: IdenticalRow; file: FileData }>();
         for (const [fileId, value] of selected) {
           const id = rowFileID(value.row);
@@ -239,12 +236,7 @@ export function useIdenticalSparse(
             while (nextPages.size > maxPages) nextPages.delete(nextPages.keys().next().value!);
           }
         }
-        if (
-          selected !== pinnedRef.current ||
-          collapsedGroups !== collapsedRef.current ||
-          (nextPages && (viewport[0] !== range.current[0] || viewport[1] !== range.current[1]))
-        )
-          continue;
+        if (stale()) continue;
         return {
           pins: next,
           pages: nextPages,
@@ -404,8 +396,7 @@ export function useIdenticalSparse(
     const rows: SparseRow[] = [];
     for (const row of allRows) {
       if (!row.group || removedGroups.has(row.group.id)) continue;
-      const entry = row.member?.entry;
-      const fileId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
+      const fileId = rowFileID(row);
       if (fileId !== undefined && removed.has(String(fileId))) continue;
       const index = toDisplayPosition(Number(row.position), exclusions);
       if (index === undefined) continue;
@@ -435,8 +426,7 @@ export function useIdenticalSparse(
       if (file && visibleIds.has(file.id)) next.set(file.id, file);
     }
     for (const [id, value] of pinned) {
-      const entry = value.row.member?.entry;
-      const fileId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
+      const fileId = rowFileID(value.row);
       if (removedGroups.has(value.row.group?.id ?? "") || (fileId !== undefined && removed.has(String(fileId)))) continue;
       next.set(id, memberFile(value.row) ?? value.file);
     }

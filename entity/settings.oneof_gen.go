@@ -15,19 +15,6 @@ func (x *DeviceConfig) Unpack() OneofDeviceConfig {
 	}
 }
 
-func PackDeviceConfig(param OneofDeviceConfig) *DeviceConfig {
-	switch param := param.(type) {
-	case *TapeDeviceSettings:
-		return &DeviceConfig{
-			Options: &DeviceConfig_Tape{
-				Tape: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *TapeDeviceSettings) Pack() *DeviceConfig {
 	return &DeviceConfig{
 		Options: &DeviceConfig_Tape{
@@ -54,25 +41,6 @@ func (x *PreviewGeneratorSettings) Unpack() OneofPreviewGeneratorSettings {
 		return param.Image
 	case *PreviewGeneratorSettings_Video:
 		return param.Video
-	default:
-		return nil
-	}
-}
-
-func PackPreviewGeneratorSettings(param OneofPreviewGeneratorSettings) *PreviewGeneratorSettings {
-	switch param := param.(type) {
-	case *ImagePreviewSettings:
-		return &PreviewGeneratorSettings{
-			Options: &PreviewGeneratorSettings_Image{
-				Image: param,
-			},
-		}
-	case *VideoPreviewSettings:
-		return &PreviewGeneratorSettings{
-			Options: &PreviewGeneratorSettings_Video{
-				Video: param,
-			},
-		}
 	default:
 		return nil
 	}
@@ -124,37 +92,6 @@ func (x *SettingsValue) Unpack() OneofSettingsValue {
 		return param.Library
 	case *SettingsValue_Preview:
 		return param.Preview
-	default:
-		return nil
-	}
-}
-
-func PackSettingsValue(param OneofSettingsValue) *SettingsValue {
-	switch param := param.(type) {
-	case *DeviceSettings:
-		return &SettingsValue{
-			Value: &SettingsValue_Device{
-				Device: param,
-			},
-		}
-	case *JobSettings:
-		return &SettingsValue{
-			Value: &SettingsValue_Job{
-				Job: param,
-			},
-		}
-	case *LibrarySettings:
-		return &SettingsValue{
-			Value: &SettingsValue_Library{
-				Library: param,
-			},
-		}
-	case *PreviewSettings:
-		return &SettingsValue{
-			Value: &SettingsValue_Preview{
-				Preview: param,
-			},
-		}
 	default:
 		return nil
 	}

@@ -11,10 +11,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type identicalOriginal struct {
-	FileLocation
-}
-
 func (s *IdenticalSnapshot) collect(tx *gorm.DB, scope IdenticalScope) error {
 	// Stage organization separately so Trash descendants can be pruned without recursive in-memory trees.
 	if scope.Source == IdenticalLibrary {
@@ -54,7 +50,7 @@ func (s *IdenticalSnapshot) collect(tx *gorm.DB, scope IdenticalScope) error {
 	}
 
 	// Library retains every original for fingerprints; Locations group only signed originals.
-	request := tx.Model(&identicalOriginal{}).Table("file_locations").Select("file_locations.*").
+	request := tx.Model(&FileLocation{}).Select("file_locations.*").
 		Order("file_locations.file_id")
 	if scope.Source == IdenticalLocations {
 		ids := make([]int64, 0, len(scope.Roots))
@@ -63,7 +59,7 @@ func (s *IdenticalSnapshot) collect(tx *gorm.DB, scope IdenticalScope) error {
 		}
 		request = request.Where("location_id IN ? AND signature IS NOT NULL AND length(signature)>0", uniqueFileIDs(ids))
 	}
-	var originals []identicalOriginal
+	var originals []FileLocation
 	if err := request.FindInBatches(&originals, identicalBatch, func(_ *gorm.DB, _ int) error {
 		// Retain bounded batches for both node updates and content evidence.
 		nodes := make([]identicalNode, 0, len(originals))
@@ -83,7 +79,7 @@ func (s *IdenticalSnapshot) collect(tx *gorm.DB, scope IdenticalScope) error {
 			}
 		}
 		for _, o := range originals {
-			if scope.Source == IdenticalLocations && !identicalInRoots(o.FileLocation, scope.Roots) {
+			if scope.Source == IdenticalLocations && IsLocationTrashPath(o.Path) {
 				continue
 			}
 			if scope.Source == IdenticalLibrary {
@@ -92,7 +88,7 @@ func (s *IdenticalSnapshot) collect(tx *gorm.DB, scope IdenticalScope) error {
 				}
 			}
 			nodes = append(nodes, identicalNode{FileID: o.FileID, Component: o.FileID, Name: filepath.Base(o.Path), Path: o.Path,
-				Kind: entity.FileKind_FILE_KIND_REGULAR, Size: &o.Size, Original: &o.FileLocation})
+				Kind: entity.FileKind_FILE_KIND_REGULAR, Size: &o.Size, Original: &o})
 			if len(o.Signature) > 0 {
 				edges = append(edges, identicalEdge{FileID: o.FileID, Signature: o.Signature})
 			}
@@ -205,17 +201,6 @@ func (s *IdenticalSnapshot) stageIdenticalPaths() error {
 	}
 }
 
-func identicalInRoots(o FileLocation, roots []IdenticalRoot) bool {
-	if IsLocationTrashPath(o.Path) {
-		return false
-	}
-	for _, r := range roots {
-		if r.LocationID == o.LocationID {
-			return true
-		}
-	}
-	return false
-}
 func (s *IdenticalSnapshot) connect() error {
 	// Exclude logical Trash and non-files before traversing shared signatures.
 	if err := s.db.Where("excluded = ? OR kind <> ?", true, entity.FileKind_FILE_KIND_REGULAR).Delete(&identicalNode{}).Error; err != nil {

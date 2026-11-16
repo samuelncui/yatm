@@ -26,12 +26,9 @@ export const archiveFilters = [
   { value: "unknown", label: "Content not checked", query: "has:original AND has:unknown" },
 ] as const;
 
-export const buildLibraryQuery = (text: string, advanced: boolean, location: string, status: string, duplicates = false) => {
+export const buildLibraryQuery = (text: string, location: string, status: string, duplicates = false) => {
   const parts: string[] = [];
-  if (text.trim()) {
-    const value = JSON.stringify(text.trim());
-    parts.push(advanced ? `(${text.trim()})` : `(name:${value} OR tag:${value} OR note:${value})`);
-  }
+  if (text.trim()) parts.push(`(${text.trim()})`);
   if (/^[1-9]\d*$/.test(location)) parts.push(`location:${location}`);
   const filter = archiveFilters.find((filter) => filter.value === status)?.query;
   if (filter) parts.push(`(${filter})`);
@@ -47,7 +44,7 @@ export const LibraryFilters = ({
   locationScope,
   searchActive = false,
 }: {
-  onSearch: (query: string, grouped: boolean) => void;
+  onSearch: (query: string) => void;
   onClear: () => void;
   initialQuery?: string;
   scopeLabel?: string;
@@ -72,10 +69,10 @@ export const LibraryFilters = ({
       onClear();
       return;
     }
-    onSearch(value, false);
+    onSearch(value);
   };
   const apply = () => {
-    const parts = [buildLibraryQuery(text, true, locationScope && !duplicates ? "all" : String(location?.id ?? "all"), status, duplicates)];
+    const parts = [buildLibraryQuery(text, locationScope && !duplicates ? "all" : String(location?.id ?? "all"), status, duplicates)];
     if (tag.trim()) parts.push(`tag:${JSON.stringify(tag.trim())}`);
     if (note.trim()) parts.push(`note:${JSON.stringify(note.trim())}`);
     const query = parts.filter(Boolean).join(" AND ");

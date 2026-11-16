@@ -171,10 +171,7 @@ func (c *analyzeCreateCommand) Execute(_ []string) error {
 	if err := positiveID("Location ID", c.Args.ID); err != nil {
 		return err
 	}
-	preview, err := parsePreviewPolicy(c.PreviewPolicy)
-	if err != nil {
-		return err
-	}
+	preview := previewPolicy(c.PreviewPolicy)
 
 	// Freeze the selected roots and one explicit analysis policy in the managed Job.
 	mode := entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING
@@ -215,13 +212,7 @@ func (c *analyzeEntriesCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.ListScanJobEntriesRequest, entity.ListScanJobEntriesResponse](ctx, c.runtime, entity.ScanJobService_ListEntries_FullMethodName, &entity.ListScanJobEntriesRequest{
-		Id: c.Args.ID, Limit: c.pageLimit(), Cursor: c.Cursor, Order: c.order(), Offset: c.Offset, IncludeTotal: c.IncludeTotal,
-	})
-	if err != nil {
-		return err
-	}
-	return writeProto(c.runtime.stdout, reply)
+	return c.writeScanEntries(ctx, c.runtime, c.Args.ID)
 }
 
 func (c *locationConfigOptions) location() (*entity.Location, error) {

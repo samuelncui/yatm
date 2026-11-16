@@ -109,8 +109,8 @@ func TestLocationIgnoreCannotExpandAccessAndRestoreNeedsNoScanOrRecommendation(t
 	require.NoError(t, err)
 	_, err = api.exe.CheckLocation(location)
 	require.NoError(t, err)
-	require.True(t, location.Excluded("secret/file.txt", false))
-	require.True(t, location.Excluded("local-only/file.txt", false))
+	require.True(t, api.exe.LocationExcluded(location, "secret/file.txt", false))
+	require.True(t, api.exe.LocationExcluded(location, "local-only/file.txt", false))
 	require.NoError(t, os.Mkdir(filepath.Join(root, "local-only"), 0755))
 	require.NoError(t, os.Mkdir(filepath.Join(root, "secret"), 0755))
 	browser := &filesService{api: api}

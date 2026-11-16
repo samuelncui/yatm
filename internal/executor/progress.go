@@ -8,7 +8,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-const SpeedLen = 30
+const speedLen = 30
 
 type speedEvent struct {
 	bytes int64
@@ -16,8 +16,7 @@ type speedEvent struct {
 }
 
 type Progress struct {
-	// stage is the attempt-local sampling window; it is created on first use so a Progress value
-	// that a runner constructs directly still samples with the default clock.
+	// stage is the attempt-local sampling window; it is created on first use with the Progress clock.
 	stage     *stageMeter
 	stageOnce sync.Once
 	startTime time.Time
@@ -35,7 +34,6 @@ type Progress struct {
 	// locked fields
 	lock        sync.Mutex
 	speedEvents []speedEvent
-	speedLen    int
 	speedIdx    int
 }
 
@@ -51,8 +49,7 @@ func NewProgress() *Progress {
 	return &Progress{
 		startTime:   time.Now(),
 		now:         time.Now,
-		speedEvents: make([]speedEvent, SpeedLen),
-		speedLen:    SpeedLen,
+		speedEvents: make([]speedEvent, speedLen),
 	}
 }
 
@@ -105,7 +102,7 @@ func (p *Progress) UpdateSessionCurrent(bytes, files int64) {
 	p.speedEvents[p.speedIdx] = speedEvent{bytes: bytes, time: now}
 	for earliest := p.speedIdx; ; {
 		earliest++
-		if earliest >= p.speedLen {
+		if earliest >= speedLen {
 			earliest = 0
 		}
 		if earliest == p.speedIdx {
@@ -122,7 +119,7 @@ func (p *Progress) UpdateSessionCurrent(bytes, files int64) {
 	}
 
 	p.speedIdx++
-	if p.speedIdx >= p.speedLen {
+	if p.speedIdx >= speedLen {
 		p.speedIdx = 0
 	}
 }

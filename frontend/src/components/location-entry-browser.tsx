@@ -19,7 +19,7 @@ import { chonkyI18n, errorMessage } from "@/tools";
 import { fileLocationReference } from "@/components/location-files";
 import { listDirectory, locationDirectoryReference } from "@/components/files-browser";
 import { fileOperationReference } from "@/components/file-operations";
-import { DetailModal } from "@/pages/file-detail";
+import { DetailModal } from "./file-detail";
 
 const ChooseFileAction = defineFileAction({
   id: "choose-location-file",

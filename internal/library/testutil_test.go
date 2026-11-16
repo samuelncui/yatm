@@ -1,10 +1,13 @@
 package library
 
 import (
+	"context"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/treeops"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -30,4 +33,19 @@ func createFileRows(t testing.TB, db *gorm.DB, files ...*File) {
 	for _, file := range files {
 		require.NoError(t, createFileRow(db, file))
 	}
+}
+
+func mergeFiles(ctx context.Context, lib *Library, targetID int64, sourceIDs ...int64) error {
+	_, err := lib.MergeFileMembers(ctx, targetID, func(yield func([]int64) error) error { return yield(sourceIDs) }, false)
+	return err
+}
+
+// trashFiles runs the shared logical Remove operation for the selected Files.
+func trashFiles(ctx context.Context, lib *Library, ids ...int64) error {
+	refs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		refs = append(refs, strconv.FormatInt(id, 10))
+	}
+	_, err := lib.organizeTree(ctx, treeops.Request{Kind: treeops.Delete, Sources: refs})
+	return err
 }

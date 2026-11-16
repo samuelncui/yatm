@@ -5,8 +5,8 @@ import { Button } from "@mui/material";
 import { MemoryRouter } from "react-router";
 
 import { Job, JobKind, JobPhase, JobStatus } from "@/entity";
-import { JobCard, jobStatusLabel } from "@/components/job-card";
-import { RefreshContext } from "@/pages/jobs";
+import { JobCard, jobStatusLabel } from "@/components/job-progress";
+import { RefreshContext } from "./job-list-state";
 
 const { deleteJob, toastError } = vi.hoisted(() => ({ deleteJob: vi.fn(), toastError: vi.fn() }));
 vi.mock("@/api", () => ({ jobCli: { delete: deleteJob } }));
@@ -15,10 +15,6 @@ vi.mock("@/tools", async (original) => ({
   ...(await original<typeof import("@/tools")>()),
   useSharedIntersectionObserver: () => false,
 }));
-vi.mock("@/pages/jobs", async () => {
-  const { createContext } = await import("react");
-  return { RefreshContext: createContext(async () => {}) };
-});
 beforeEach(() => {
   vi.clearAllMocks();
   deleteJob.mockReturnValue({ response: Promise.resolve({}) });
@@ -87,7 +83,7 @@ describe("Job confirmations", () => {
     const visibility = vi.fn();
     render(
       <MemoryRouter>
-        <JobCard job={Job.create({ id: 8n, kind: JobKind.SCAN })} visible={false} onVisibilityChange={visibility} detail={<div>Stable metrics</div>} />
+        <JobCard job={Job.create({ id: 8n, kind: JobKind.SCAN })} onVisibilityChange={visibility} detail={<div>Stable metrics</div>} />
       </MemoryRouter>,
     );
     expect(screen.getByText("Stable metrics").parentElement).toHaveClass("job-card-body");
@@ -97,7 +93,7 @@ describe("Job confirmations", () => {
   it("uses the shared body wrapper for consistent title-to-progress spacing", () => {
     render(
       <MemoryRouter>
-        <JobCard job={Job.create({ id: 8n, kind: JobKind.SCAN, status: JobStatus.COMPLETED })} visible detail={<div>Job details</div>} />
+        <JobCard job={Job.create({ id: 8n, kind: JobKind.SCAN, status: JobStatus.COMPLETED })} detail={<div>Job details</div>} />
       </MemoryRouter>,
     );
 

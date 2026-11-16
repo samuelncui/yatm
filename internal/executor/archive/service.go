@@ -89,8 +89,8 @@ func (s *service) Create(ctx context.Context, req *entity.CreateArchiveJobReques
 }
 
 func (s *service) WriteMedia(ctx context.Context, req *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaResponse, error) {
-	if err := validateWriteMedia(req); err != nil {
-		return nil, err
+	if req == nil || req.Target == nil {
+		return nil, fmt.Errorf("archive Media target is missing")
 	}
 
 	// Start one asynchronous Archive Media attempt through the common executor lifecycle.

@@ -28,6 +28,7 @@ func main() {
 	})
 
 	// Prepare the complete fixture before reporting its review surface.
+	tools.CancelOnShutdownSignal()
 	err := demo.Prepare(tools.ShutdownContext, options)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "prepare Demo failed: %v\n", err)

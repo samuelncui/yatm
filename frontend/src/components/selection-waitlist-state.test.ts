@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FileScope, FileSelection, FileVersion } from "@/entity";
-import { loadSelectionEntries, mergeSelectionEntries, saveSelectionEntries, selectionStorageKey, type SelectionEntry } from "./selection-waitlist-state";
+import { loadSelectionEntries, mergeSelectionEntries, selectionStorageKey, type SelectionEntry } from "./selection-waitlist-state";
+import { selectionCodec } from "@/state/selections";
+import { writeStored } from "@/state/storage";
 
 const automatic = (fileID = "7"): SelectionEntry => {
   const selection = FileSelection.create({
@@ -32,7 +34,7 @@ beforeEach(() => sessionStorage.clear());
 
 describe("selection waitlist state", () => {
   it("round-trips automatic selections and exact FileVersion IDs through the browser session", () => {
-    saveSelectionEntries("restore", [automatic(), explicit()]);
+    writeStored("session", selectionStorageKey("restore"), [automatic(), explicit()], selectionCodec);
 
     const restored = loadSelectionEntries("restore");
     expect(restored).toHaveLength(2);

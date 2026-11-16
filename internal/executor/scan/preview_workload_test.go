@@ -41,7 +41,7 @@ func TestPreviewWorkloadStreamsDuplicateGroupsWithoutRowQueries(t *testing.T) {
 			if index == 0 {
 				name += ".txt"
 			}
-			entries = append(entries, &Entry{LocationID: 1, ScopePath: "selected", Path: name, SourcePath: name, SHA256: hash[:], Size: 12})
+			entries = append(entries, &Entry{LocationID: 1, Path: name, SourcePath: name, SHA256: hash[:], Size: 12})
 		}
 		require.NoError(t, r.db.CreateInBatches(entries, 100).Error)
 	}
@@ -56,7 +56,7 @@ func TestPreviewWorkloadStreamsDuplicateGroupsWithoutRowQueries(t *testing.T) {
 	require.NoError(t, r.db.Callback().Query().After("gorm:query").Register("count-workload", func(*gorm.DB) { queries++ }))
 	total, err := r.previewWorkload(context.Background(),
 		frozenLimits(&Config{Spec: &entity.ScanJobSpec{PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}),
-		&Scope{ID: 1, LocationID: 1, Path: "selected"})
+		&Scope{LocationID: 1})
 	require.NoError(t, err)
 	require.EqualValues(t, 3, total)
 	require.Equal(t, 1, queries)

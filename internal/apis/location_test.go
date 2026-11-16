@@ -22,10 +22,7 @@ func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
 	require.NoError(t, err)
 	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
 	require.NoError(t, err)
-	settings := settingspkg.New(db, settingspkg.PreviewDefinition{
-		Default:  func() (*entity.PreviewSettings, error) { return preview.SettingsFromConfig(preview.Config{}) },
-		Validate: preview.ValidateSettings,
-	})
+	settings := settingspkg.New(db, preview.SettingsDefinition())
 	l := library.NewWithSettings(db, settings)
 	work := t.TempDir()
 	require.NoError(t, l.PrepareTemporary(work))

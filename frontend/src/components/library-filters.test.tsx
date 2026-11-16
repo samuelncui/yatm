@@ -30,7 +30,7 @@ describe("Files query bar", () => {
     view.rerender(<LibraryFilters onSearch={onSearch} onClear={onClear} scopeLabel="Photos" locationScope={{ id: "7", name: "Photos" }} />);
     expect(screen.getByRole("textbox", { name: "Search query" })).toHaveValue("tag:travel");
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
-    expect(onSearch).toHaveBeenCalledWith("tag:travel", false);
+    expect(onSearch).toHaveBeenCalledWith("tag:travel");
     await userEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(onClear).toHaveBeenCalledOnce();
   });
@@ -43,7 +43,7 @@ describe("Files query bar", () => {
     expect(clear).toBeDisabled();
 
     await userEvent.type(input, "tag:travel{Enter}");
-    expect(onSearch).toHaveBeenCalledWith("tag:travel", false);
+    expect(onSearch).toHaveBeenCalledWith("tag:travel");
     view.rerender(<LibraryFilters onSearch={onSearch} onClear={onClear} searchActive />);
     await userEvent.clear(input);
     expect(clear).toBeEnabled();
@@ -59,7 +59,7 @@ describe("Files query bar", () => {
     await userEvent.click(await screen.findByRole("option", { name: "Photos" }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Duplicates in Locations" }));
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-    expect(onSearch).toHaveBeenCalledWith('(name:*.jpg OR tag:travel) AND location:9 AND has:duplicates AND note:"review"', false);
+    expect(onSearch).toHaveBeenCalledWith('(name:*.jpg OR tag:travel) AND location:9 AND has:duplicates AND note:"review"');
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("textbox", { name: "Search query" })).toHaveValue(onSearch.mock.lastCall?.[0]);
   });
@@ -82,7 +82,7 @@ describe("Files query bar", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Duplicates in Locations" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Tag" }), "travel");
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-    expect(onSearch).toHaveBeenCalledWith('tag:"travel"', false);
+    expect(onSearch).toHaveBeenCalledWith('tag:"travel"');
   });
   it("shares an unfinished catalog read across closing and reopening", async () => {
     let resolve!: (value: { locations: Location[]; hasMore: boolean }) => void;
@@ -126,12 +126,12 @@ describe("Files query bar", () => {
     expect(list).toHaveBeenCalledTimes(3);
     expect(screen.getByRole("combobox", { name: "Location" })).toHaveTextContent("Documents");
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-    expect(onSearch).toHaveBeenCalledWith("location:12", false);
+    expect(onSearch).toHaveBeenCalledWith("location:12");
   });
   it("retains incoming expressions and boolean grouping", () => {
     render(<LibraryFilters initialQuery="location:99" onSearch={vi.fn()} onClear={vi.fn()} />);
     expect(screen.getByRole("textbox", { name: "Search query" })).toHaveValue("location:99");
-    expect(buildLibraryQuery("tag:a OR tag:b", true, "9", "needed")).toBe(
+    expect(buildLibraryQuery("tag:a OR tag:b", "9", "needed")).toBe(
       "(tag:a OR tag:b) AND location:9 AND (has:original AND NOT has:unknown AND NOT has:archive)",
     );
   });

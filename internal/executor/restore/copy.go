@@ -32,7 +32,6 @@ type copyCandidate struct {
 	MediaPath       string
 	StorageOrder    []byte
 	StorageMetadata *entity.StorageMetadata
-	PositionID      int64
 
 	FileID        int64
 	FileVersionID int64

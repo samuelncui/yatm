@@ -24,7 +24,7 @@ vi.mock("@/api", () => ({
   },
 }));
 vi.mock("@/components/file-metadata-dialog", () => ({ FileMetadataDialog: () => null }));
-vi.mock("./file-detail", () => ({ FileInspector: ({ name }: { name?: string }) => <aside aria-label="Inspector">{name ?? "No selection"}</aside> }));
+vi.mock("@/components/file-detail", () => ({ FileInspector: ({ name }: { name?: string }) => <aside aria-label="Inspector">{name ?? "No selection"}</aside> }));
 
 // Use the installed Chonky browser, toolbar, selection store and file rows.
 // Only the virtual viewport is replaced because jsdom has no layout geometry.

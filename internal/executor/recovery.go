@@ -101,20 +101,14 @@ func (e *Executor) validateBundle(jobID int64) (complete bool, returnErr error) 
 		return false, nil
 	}
 
-	// Validate bundle identity before reading its kind-specific durable manifest.
-	metadataPath := filepath.Join(e.jobWorkPath(jobID), "job.json")
+	// CheckBundles already validated the bundle metadata; the state DB must be a real file.
 	statePath := e.stateDBPath(jobID)
-	for _, filename := range []string{metadataPath, statePath} {
-		info, err := os.Lstat(filename)
-		if err != nil {
-			return false, fmt.Errorf("inspect Job bundle file failed, path=%q, %w", filename, err)
-		}
-		if !info.Mode().IsRegular() {
-			return false, fmt.Errorf("Job bundle file is not regular, path=%q", filename)
-		}
+	info, err := os.Lstat(statePath)
+	if err != nil {
+		return false, fmt.Errorf("inspect Job bundle file failed, path=%q, %w", statePath, err)
 	}
-	if err := dataformat.CheckBundle(e.jobWorkPath(jobID), jobID); err != nil {
-		return false, err
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("Job bundle file is not regular, path=%q", statePath)
 	}
 
 	// This validation owns its state connection and reports cleanup failures with the original error.
@@ -144,7 +138,7 @@ func (e *Executor) validateBundle(jobID int64) (complete bool, returnErr error) 
 		return false, fmt.Errorf("committed Job bundle is missing manifest table, id=%d table=%q", jobID, manifestTable)
 	}
 	if record.Kind == entity.JobKind_JOB_KIND_SCAN ||
-		manifestPosition(record.Checkpoint) == entity.JobStatus_JOB_STATUS_PREPARING {
+		record.Checkpoint == entity.JobStatus_JOB_STATUS_PREPARING {
 		if !db.Migrator().HasTable("config") {
 			return false, fmt.Errorf("committed Job bundle is missing config table, id=%d", jobID)
 		}

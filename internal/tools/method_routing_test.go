@@ -21,70 +21,55 @@ func (r *routeRequest) Unpack() routeInput {
 type firstRequest struct{}
 
 func (*firstRequest) routeInput()           {}
-func (r *firstRequest) Pack() *routeRequest { return &routeRequest{value: r} }
 func (r *firstRequest) ToOneof() routeInput { return r }
 
 type secondRequest struct{}
 
 func (*secondRequest) routeInput()           {}
-func (r *secondRequest) Pack() *routeRequest { return &routeRequest{value: r} }
 func (r *secondRequest) ToOneof() routeInput { return r }
 
-type routeOutput interface{ routeOutput() }
-
-type routeReply struct{ value routeOutput }
-
-func (r *routeReply) Unpack() routeOutput { return r.value }
-
-type firstReply struct{}
-
-func (*firstReply) routeOutput()           {}
-func (r *firstReply) Pack() *routeReply    { return &routeReply{value: r} }
-func (r *firstReply) ToOneof() routeOutput { return r }
-
-func TestRouterDispatchesAndUnpacksOnce(t *testing.T) {
-	router := NewRouter[*routeRequest, *routeReply, routeInput, routeOutput](
-		Method(func(context.Context, *firstRequest) (*firstReply, error) {
-			return &firstReply{}, nil
+func TestActionRouterDispatchesAndUnpacksOnce(t *testing.T) {
+	called := ""
+	router := NewActionRouter[*routeRequest](
+		ActionMethod(func(context.Context, *firstRequest) error {
+			called = "first"
+			return nil
+		}),
+		ActionMethod(func(context.Context, *secondRequest) error {
+			called = "second"
+			return nil
 		}),
 	)
-	request := &routeRequest{value: &firstRequest{}}
+	request := &routeRequest{value: &secondRequest{}}
 
-	reply, err := router(context.Background(), request)
-	if err != nil {
+	if err := router(context.Background(), request); err != nil {
 		t.Fatalf("route request: %v", err)
 	}
-	if _, ok := reply.Unpack().(*firstReply); !ok {
-		t.Fatalf("unexpected reply type %T", reply.Unpack())
+	if called != "second" {
+		t.Fatalf("called %q, want second", called)
 	}
 	if request.unpacks != 1 {
 		t.Fatalf("unpack count = %d, want 1", request.unpacks)
 	}
 }
 
-func TestRouterRejectsUnsupportedRequest(t *testing.T) {
-	router := NewRouter[*routeRequest, *routeReply, routeInput, routeOutput](
-		Method(func(context.Context, *firstRequest) (*firstReply, error) {
-			return &firstReply{}, nil
-		}),
+func TestActionRouterRejectsUnsupportedRequest(t *testing.T) {
+	router := NewActionRouter[*routeRequest](
+		ActionMethod(func(context.Context, *firstRequest) error { return nil }),
 	)
 
-	_, err := router(context.Background(), &routeRequest{value: &secondRequest{}})
-	if err == nil {
+	if err := router(context.Background(), &routeRequest{value: &secondRequest{}}); err == nil {
 		t.Fatal("expected unsupported request error")
 	}
 }
 
-func TestRouterPreservesHandlerError(t *testing.T) {
+func TestActionRouterPreservesHandlerError(t *testing.T) {
 	want := errors.New("handler failed")
-	router := NewRouter[*routeRequest, *routeReply, routeInput, routeOutput](
-		Method(func(context.Context, *firstRequest) (*firstReply, error) {
-			return nil, want
-		}),
+	router := NewActionRouter[*routeRequest](
+		ActionMethod(func(context.Context, *firstRequest) error { return want }),
 	)
 
-	_, err := router(context.Background(), &routeRequest{value: &firstRequest{}})
-	if !errors.Is(err, want) {
+	if err := router(context.Background(), &routeRequest{value: &firstRequest{}}); !errors.Is(err, want) {
 		t.Fatalf("route error = %v, want %v", err, want)
 	}
 }

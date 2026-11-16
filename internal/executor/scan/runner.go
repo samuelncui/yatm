@@ -31,7 +31,6 @@ type runner struct {
 	// published before those phases become observable and replaced for the next source scope.
 	content       *contentStream
 	previewTiming previewTiming
-	activeScope   *Scope
 	// counts are the manifest counters the work path maintains; countsKnown is false until an
 	// attempt or the first request counted them.
 	counts      manifestCounts
@@ -96,9 +95,6 @@ func (r *runner) Index(ctx context.Context) (returnErr error) {
 	var config Config
 	if err := r.db.WithContext(ctx).First(&config, 1).Error; err != nil {
 		return err
-	}
-	if config.Spec == nil {
-		return fmt.Errorf("Scan specification is missing")
 	}
 
 	// Sequential Media require explicit drive selection after their expectation has been frozen.
@@ -196,9 +192,6 @@ func (r *runner) openSession(ctx context.Context, config *Config, requested *ent
 			return nil, fmt.Errorf("Scan Tape hint differs from frozen Media %d", stored.ID)
 		}
 		tape.Device = strings.TrimSpace(tape.Device)
-		if tape.MediaId != nil && tape.GetMediaId() <= 0 {
-			return nil, fmt.Errorf("Scan Tape Media hint is invalid")
-		}
 	}
 	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, config.MediaIdentity, config.MediaProfile
 	return r.exe.NewMediaBackend(r.job.ID, r.logger, r.mediaWait).NewReadSession(ctx, target)

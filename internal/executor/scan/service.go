@@ -34,9 +34,6 @@ func Create(ctx context.Context, exe *executor.Executor, req *entity.CreateScanJ
 
 func validateSpec(spec *entity.ScanJobSpec) error {
 	// Reject unknown policy values before source-specific validation or Job creation.
-	if spec == nil {
-		return fmt.Errorf("Scan specification is missing")
-	}
 	if _, ok := entity.ScanSignaturePolicy_name[int32(spec.SignaturePolicy)]; !ok {
 		return fmt.Errorf("invalid Scan signature policy")
 	}
@@ -50,30 +47,9 @@ func validateSpec(spec *entity.ScanJobSpec) error {
 		return fmt.Errorf("Scan source identifiers cannot be negative")
 	}
 
-	// Select either physical Media or a bounded set of Location/Library roots.
+	// Select either physical Media or selections; FreezeSelections validates each selection root.
 	if (spec.MediaId > 0) == (len(spec.Selections) > 0) {
 		return fmt.Errorf("Scan requires Media or selections")
-	}
-	if len(spec.Selections) > 1000 {
-		return fmt.Errorf("Scan supports at most 1000 selection roots")
-	}
-	for _, selection := range spec.Selections {
-		if selection == nil || selection.Target == nil {
-			return fmt.Errorf("Scan selection is missing")
-		}
-		if local := selection.GetLocation(); local != nil {
-			if local.LocationId <= 0 {
-				return fmt.Errorf("Scan Location is missing")
-			}
-			if local.Path != "" {
-				if err := entity.ValidateRelativePath(local.Path); err != nil {
-					return err
-				}
-			}
-		}
-		if logical := selection.GetLibrary(); logical != nil && logical.FileId < 0 {
-			return fmt.Errorf("Scan Library File ID is invalid")
-		}
 	}
 
 	// Publication and verification policies must match their source and acquisition guarantees.
@@ -181,11 +157,6 @@ func (s *service) Create(ctx context.Context, req *entity.CreateScanJobRequest) 
 			return err
 		}
 		return db.Create(config).Error
-	}, func(value executor.Runner) error {
-		if _, ok := value.(*runner); !ok {
-			return fmt.Errorf("unexpected Scan runner %T", value)
-		}
-		return nil
 	})
 	if err != nil {
 		return nil, err

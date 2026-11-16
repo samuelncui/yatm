@@ -32,19 +32,18 @@ func IsLocationTrashPath(relative string) bool {
 }
 
 type Location struct {
-	ID            int64                   `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name          string                  `gorm:"type:varchar(256);not null" json:"name"`
-	ExecutorID    string                  `gorm:"type:varchar(128);not null;uniqueIndex:idx_locations_root,priority:1" json:"executor_id"`
-	RootPath      string                  `gorm:"type:varchar(4096);not null;uniqueIndex:idx_locations_root,priority:2,length:600" json:"root_path"`
-	Config        *entity.LocationConfig  `gorm:"serializer:json;type:text" json:"config"`
-	RestoreTarget bool                    `json:"restore_target"`
-	Revision      int64                   `gorm:"not null" json:"revision"`
-	CreatedAtNS   int64                   `gorm:"autoCreateTime:nano" json:"created_at_ns,string"`
-	UpdatedAtNS   int64                   `gorm:"autoUpdateTime:nano" json:"updated_at_ns,string"`
-	LastSyncAtNS  int64                   `json:"last_sync_at_ns,string"`
-	LastSyncJobID int64                   `json:"last_sync_job_id"`
-	LastJobID     int64                   `json:"last_job_id"`
-	AccessAllowed func(string, bool) bool `gorm:"-" json:"-"`
+	ID            int64                  `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name          string                 `gorm:"type:varchar(256);not null" json:"name"`
+	ExecutorID    string                 `gorm:"type:varchar(128);not null;uniqueIndex:idx_locations_root,priority:1" json:"executor_id"`
+	RootPath      string                 `gorm:"type:varchar(4096);not null;uniqueIndex:idx_locations_root,priority:2,length:600" json:"root_path"`
+	Config        *entity.LocationConfig `gorm:"serializer:json;type:text" json:"config"`
+	RestoreTarget bool                   `json:"restore_target"`
+	Revision      int64                  `gorm:"not null" json:"revision"`
+	CreatedAtNS   int64                  `gorm:"autoCreateTime:nano" json:"created_at_ns,string"`
+	UpdatedAtNS   int64                  `gorm:"autoUpdateTime:nano" json:"updated_at_ns,string"`
+	LastSyncAtNS  int64                  `json:"last_sync_at_ns,string"`
+	LastSyncJobID int64                  `json:"last_sync_job_id"`
+	LastJobID     int64                  `json:"last_job_id"`
 	matcher       *ignore.Matcher
 }
 
@@ -67,28 +66,10 @@ func (s *Location) BeforeSave(*gorm.DB) error {
 	return nil
 }
 
+// AfterFind compiles the Ignore rules that every save already validated.
 func (s *Location) AfterFind(*gorm.DB) error {
-	if s.Config == nil {
-		return fmt.Errorf("Location configuration is missing; convert this pre-v1 catalog before use")
-	}
-	if _, err := NormalizeIgnoreRules(s.Config.Ignore); err != nil {
-		return err
-	}
-	s.matcher = compileLocationIgnore(s.Config.Ignore)
+	s.matcher = compileLocationIgnore(s.Config.GetIgnore())
 	return nil
-}
-
-// AccessExcluded applies administrator boundaries and YATM storage resources without user Ignore.
-func (s *Location) AccessExcluded(value string, directory bool) bool {
-	if s.AccessAllowed != nil && !s.AccessAllowed(value, directory) {
-		return true
-	}
-	return false
-}
-
-// Excluded applies one decision for browsing and collection, including user Ignore.
-func (s *Location) Excluded(value string, directory bool) bool {
-	return s.AccessExcluded(value, directory) || s.Ignored(value, directory)
 }
 
 // Ignored applies this Location's user Ignore rules to one relative path.
@@ -100,12 +81,6 @@ func (s *Location) Ignored(value string, directory bool) bool {
 // that directory is then decided by name, independently of path depth.
 func (s *Location) IgnoreScope(relative string) *ignore.Scope {
 	return s.ignoreMatcher().Scope(relative)
-}
-
-// ExcludedIn applies one directory's Ignore scope plus the administrator boundary to a
-// single enumerated entry. It is the per-entry form of Excluded for listings and walks.
-func (s *Location) ExcludedIn(scope *ignore.Scope, relative, name string, directory bool) bool {
-	return s.AccessExcluded(relative, directory) || scope.Ignores(name, directory)
 }
 
 // ignoreMatcher returns the compiled user Ignore matcher, compiling on demand for a
@@ -182,7 +157,7 @@ func validateLocation(s *Location) error {
 }
 
 func (l *Library) CreateLocation(ctx context.Context, s *Location) error {
-	// Serialize registration against maintenance while database uniqueness resolves root conflicts.
+	// Validate the registration; database uniqueness resolves root conflicts.
 	if err := validateLocation(s); err != nil {
 		return err
 	}

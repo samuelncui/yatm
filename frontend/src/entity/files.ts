@@ -13,9 +13,9 @@ import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 import { LocationEntryRef } from "./file";
 import { Position } from "./position";
-import { FileVersion } from "./file";
 import { FileOperationResult } from "./file_operation";
 import { FileScope } from "./file";
+import { FileVersion } from "./file";
 import { FileOperationKind } from "./file_operation";
 import { FileOperationRef } from "./file_operation";
 import { OriginalAvailability } from "./file";
@@ -238,6 +238,12 @@ export interface FilesDetail {
      * @generated from protobuf field: bytes content_signature = 5
      */
     contentSignature: Uint8Array;
+    /**
+     * The File's most recently archived saved version, absent when it has none.
+     *
+     * @generated from protobuf field: yatm.v1.FileVersion latest_version = 6
+     */
+    latestVersion?: FileVersion;
 }
 /**
  * ListFilesRequest names one directory. A directory read carries no query and no cursor.
@@ -330,7 +336,7 @@ export interface SearchFilesRequest {
     include: FilesInclude[];
 }
 /**
- * SearchFilesResponse is one page of a query. total is absent when the query cannot state it.
+ * SearchFilesResponse is one page of a query.
  *
  * @generated from protobuf message yatm.v1.SearchFilesResponse
  */
@@ -355,10 +361,6 @@ export interface SearchFilesResponse {
      * @generated from protobuf field: repeated yatm.v1.FilesEntry breadcrumbs = 5
      */
     breadcrumbs: FilesEntry[];
-    /**
-     * @generated from protobuf field: optional int64 total_entry_count = 6
-     */
-    totalEntryCount?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.GetFileRequest
@@ -759,12 +761,6 @@ export interface ListIdenticalGroupsRequest {
      */
     limit: number;
     /**
-     * Optional initial member projection; zero skips member hydration and physical observations.
-     *
-     * @generated from protobuf field: int32 member_limit = 4
-     */
-    memberLimit: number;
-    /**
      * @generated from protobuf field: string result_id = 5
      */
     resultId: string;
@@ -781,10 +777,6 @@ export interface ListIdenticalGroupsResponse {
      * @generated from protobuf field: string next_cursor = 2
      */
     nextCursor: string;
-    /**
-     * @generated from protobuf field: repeated yatm.v1.ListIdenticalMembersResponse member_pages = 3
-     */
-    memberPages: ListIdenticalMembersResponse[];
     /**
      * @generated from protobuf field: string result_id = 4
      */
@@ -1882,7 +1874,8 @@ class FilesDetail$Type extends MessageType<FilesDetail> {
             { no: 2, name: "organization", kind: "message", T: () => FilesOrganization },
             { no: 3, name: "original", kind: "message", T: () => FilesOriginal },
             { no: 4, name: "content_reference", kind: "message", T: () => FileOperationRef },
-            { no: 5, name: "content_signature", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+            { no: 5, name: "content_signature", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
+            { no: 6, name: "latest_version", kind: "message", T: () => FileVersion }
         ]);
     }
     create(value?: PartialMessage<FilesDetail>): FilesDetail {
@@ -1912,6 +1905,9 @@ class FilesDetail$Type extends MessageType<FilesDetail> {
                 case /* bytes content_signature */ 5:
                     message.contentSignature = reader.bytes();
                     break;
+                case /* yatm.v1.FileVersion latest_version */ 6:
+                    message.latestVersion = FileVersion.internalBinaryRead(reader, reader.uint32(), options, message.latestVersion);
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1939,6 +1935,9 @@ class FilesDetail$Type extends MessageType<FilesDetail> {
         /* bytes content_signature = 5; */
         if (message.contentSignature.length)
             writer.tag(5, WireType.LengthDelimited).bytes(message.contentSignature);
+        /* yatm.v1.FileVersion latest_version = 6; */
+        if (message.latestVersion)
+            FileVersion.internalBinaryWrite(message.latestVersion, writer.tag(6, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2214,8 +2213,7 @@ class SearchFilesResponse$Type extends MessageType<SearchFilesResponse> {
             { no: 2, name: "next_cursor", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "scope", kind: "enum", T: () => ["yatm.v1.FileScope", FileScope, "FILE_SCOPE_"] },
             { no: 4, name: "directory", kind: "message", T: () => FilesEntry },
-            { no: 5, name: "breadcrumbs", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FilesEntry },
-            { no: 6, name: "total_entry_count", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 5, name: "breadcrumbs", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FilesEntry }
         ]);
     }
     create(value?: PartialMessage<SearchFilesResponse>): SearchFilesResponse {
@@ -2248,9 +2246,6 @@ class SearchFilesResponse$Type extends MessageType<SearchFilesResponse> {
                 case /* repeated yatm.v1.FilesEntry breadcrumbs */ 5:
                     message.breadcrumbs.push(FilesEntry.internalBinaryRead(reader, reader.uint32(), options));
                     break;
-                case /* optional int64 total_entry_count */ 6:
-                    message.totalEntryCount = reader.int64().toBigInt();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2278,9 +2273,6 @@ class SearchFilesResponse$Type extends MessageType<SearchFilesResponse> {
         /* repeated yatm.v1.FilesEntry breadcrumbs = 5; */
         for (let i = 0; i < message.breadcrumbs.length; i++)
             FilesEntry.internalBinaryWrite(message.breadcrumbs[i], writer.tag(5, WireType.LengthDelimited).fork(), options).join();
-        /* optional int64 total_entry_count = 6; */
-        if (message.totalEntryCount !== undefined)
-            writer.tag(6, WireType.Varint).int64(message.totalEntryCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -3684,7 +3676,6 @@ class ListIdenticalGroupsRequest$Type extends MessageType<ListIdenticalGroupsReq
             { no: 1, name: "scope", kind: "message", T: () => IdenticalScope },
             { no: 2, name: "cursor", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "limit", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
-            { no: 4, name: "member_limit", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
             { no: 5, name: "result_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
@@ -3692,7 +3683,6 @@ class ListIdenticalGroupsRequest$Type extends MessageType<ListIdenticalGroupsReq
         const message = globalThis.Object.create((this.messagePrototype!));
         message.cursor = "";
         message.limit = 0;
-        message.memberLimit = 0;
         message.resultId = "";
         if (value !== undefined)
             reflectionMergePartial<ListIdenticalGroupsRequest>(this, message, value);
@@ -3711,9 +3701,6 @@ class ListIdenticalGroupsRequest$Type extends MessageType<ListIdenticalGroupsReq
                     break;
                 case /* int32 limit */ 3:
                     message.limit = reader.int32();
-                    break;
-                case /* int32 member_limit */ 4:
-                    message.memberLimit = reader.int32();
                     break;
                 case /* string result_id */ 5:
                     message.resultId = reader.string();
@@ -3739,9 +3726,6 @@ class ListIdenticalGroupsRequest$Type extends MessageType<ListIdenticalGroupsReq
         /* int32 limit = 3; */
         if (message.limit !== 0)
             writer.tag(3, WireType.Varint).int32(message.limit);
-        /* int32 member_limit = 4; */
-        if (message.memberLimit !== 0)
-            writer.tag(4, WireType.Varint).int32(message.memberLimit);
         /* string result_id = 5; */
         if (message.resultId !== "")
             writer.tag(5, WireType.LengthDelimited).string(message.resultId);
@@ -3761,7 +3745,6 @@ class ListIdenticalGroupsResponse$Type extends MessageType<ListIdenticalGroupsRe
         super("yatm.v1.ListIdenticalGroupsResponse", [
             { no: 1, name: "groups", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => IdenticalGroup },
             { no: 2, name: "next_cursor", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "member_pages", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => ListIdenticalMembersResponse },
             { no: 4, name: "result_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
@@ -3769,7 +3752,6 @@ class ListIdenticalGroupsResponse$Type extends MessageType<ListIdenticalGroupsRe
         const message = globalThis.Object.create((this.messagePrototype!));
         message.groups = [];
         message.nextCursor = "";
-        message.memberPages = [];
         message.resultId = "";
         if (value !== undefined)
             reflectionMergePartial<ListIdenticalGroupsResponse>(this, message, value);
@@ -3785,9 +3767,6 @@ class ListIdenticalGroupsResponse$Type extends MessageType<ListIdenticalGroupsRe
                     break;
                 case /* string next_cursor */ 2:
                     message.nextCursor = reader.string();
-                    break;
-                case /* repeated yatm.v1.ListIdenticalMembersResponse member_pages */ 3:
-                    message.memberPages.push(ListIdenticalMembersResponse.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 case /* string result_id */ 4:
                     message.resultId = reader.string();
@@ -3810,9 +3789,6 @@ class ListIdenticalGroupsResponse$Type extends MessageType<ListIdenticalGroupsRe
         /* string next_cursor = 2; */
         if (message.nextCursor !== "")
             writer.tag(2, WireType.LengthDelimited).string(message.nextCursor);
-        /* repeated yatm.v1.ListIdenticalMembersResponse member_pages = 3; */
-        for (let i = 0; i < message.memberPages.length; i++)
-            ListIdenticalMembersResponse.internalBinaryWrite(message.memberPages[i], writer.tag(3, WireType.LengthDelimited).fork(), options).join();
         /* string result_id = 4; */
         if (message.resultId !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.resultId);

@@ -15,15 +15,14 @@ import {
   Button,
   styled,
 } from "@mui/material";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
-import { filesCli, mediaCli } from "@/api";
+import { filesCli, isMediaOnline, mediaCli } from "@/api";
 import {
   EntryKind,
   FileOperationKind,
-  MediaAccess,
   MediaKind,
   PositionHealth,
   type FilesEntry,
@@ -58,7 +57,7 @@ import { InlineFileMetadata } from "./file-inline-metadata";
 import { allowsFileOperation, filesEntryData, filesEntryLibraryID } from "./files-browser";
 import { archiveEntryForDetail, restoreVersionEntry, selectionAddMessage, type SelectionKind } from "./selection-waitlist-state";
 import { useContentPreview } from "./use-content-preview";
-import { compareVersionDates, useFileVersionPages, useLatestSavedVersion } from "./use-file-versions";
+import { compareVersionDates, useFileVersionPages } from "./use-file-versions";
 
 const sortVersions = (versions: FileVersion[]) => [...versions].sort(compareVersionDates);
 
@@ -305,10 +304,8 @@ const OverviewTechnical = ({ detail }: { detail: FilesDetail }) => {
 // A File whose current original is not available still has saved content with a Preview. The
 // region names the version it shows, so archived assets are never read as the original's.
 const SavedPreview = ({ detail, reserveSpace = false }: { detail: FilesDetail; reserveSpace?: boolean }) => {
-  const fileID = detail.entry ? filesEntryLibraryID(detail.entry) : undefined;
-  const version = useLatestSavedVersion(fileID, detail);
-  if (version === null) return null;
-  if (!version) return reserveSpace ? <ContentPreview signature={new Uint8Array()} label="Preview · saved version" reserveSpace /> : null;
+  const version = detail.latestVersion;
+  if (!version) return null;
   return <ContentPreview signature={version.signature} refresh={detail} label="Preview of the latest saved version" reserveSpace={reserveSpace} />;
 };
 
@@ -541,7 +538,7 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
         const value = media.get(position.mediaId);
         const health = position.health ?? PositionHealth.UNKNOWN;
         const normalCopy = health === PositionHealth.UNKNOWN || health === PositionHealth.HEALTHY;
-        const online = value?.kind === MediaKind.VOLUME && value.mounted === true && value.capabilities?.read === MediaAccess.CONCURRENT_RANDOM;
+        const online = isMediaOnline(value);
         return (
           <ArchivedCopy className="copy-card" key={String(position.id)} disableGutters elevation={0}>
             <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} aria-controls={`copy-${position.id}-details`} id={`copy-${position.id}-summary`}>
@@ -564,7 +561,7 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
                 <dt>Last check</dt>
                 <dd>{position.checkedAtNs ? contentTime(position.checkedAtNs) : "Not checked"}</dd>
               </dl>
-              {position.healthJobId ? <a href={`/jobs/${position.healthJobId}`}>Check results</a> : null}
+              {position.healthJobId ? <Link to={`/jobs/${position.healthJobId}`}>Check results</Link> : null}
               {!normalCopy && (
                 <Feedback severity="warning">
                   Not used by normal Restore.
@@ -647,10 +644,10 @@ const ContentDuplicates = ({ signature, fileID }: { signature: Uint8Array; fileI
         </Feedback>
       )}
       {matches.map((file) => (
-        <a key={String(filesEntryLibraryID(file))} href={`/file?file=${filesEntryLibraryID(file)}`}>
+        <Link key={String(filesEntryLibraryID(file))} to={`/file?file=${filesEntryLibraryID(file)}`}>
           <strong>{file.name}</strong>
           <small>{file.path || "Open in Library"}</small>
-        </a>
+        </Link>
       ))}
       {!loading && !error && matches.length === 0 && <p className="product-muted">No other matching files on this page.</p>}
       {more && (

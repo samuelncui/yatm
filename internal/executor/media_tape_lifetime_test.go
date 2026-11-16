@@ -108,8 +108,6 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 					require.Contains(t, diagnostics.String(), "requested_read_order=TAPE_READ_ORDER_AUTO")
 					require.Contains(t, diagnostics.String(), "effective_read_order=TAPE_READ_ORDER_LOGICAL")
 					require.Contains(t, diagnostics.String(), "read_order_reason=")
-				} else {
-					require.NotContains(t, diagnostics.String(), "LTFS read order")
 				}
 			} else {
 				session, err := backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{

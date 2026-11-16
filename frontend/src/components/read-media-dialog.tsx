@@ -9,7 +9,7 @@ import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect"
 import { TapeDeviceChoice, soleAvailableDevice, DeviceInspectionResult } from "@/components/tape-device-choice";
 import { useTapeDevices } from "@/components/use-tape-devices";
 import { tapeEncryption } from "@/components/media-inspector";
-import { RefreshContext } from "@/pages/jobs";
+import { RefreshContext } from "./job-list-state";
 import { errorMessage, runUIAction } from "@/tools";
 
 export const ReadMediaDialog = ({

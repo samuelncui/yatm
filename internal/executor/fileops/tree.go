@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
@@ -14,9 +15,9 @@ import (
 )
 
 type locationTree struct {
-	op       *operation
-	location *library.Location
-	config   *config
+	op          *operation
+	location    *library.Location
+	operationID uuid.UUID
 }
 
 func (s *locationTree) Stat(ctx context.Context, ref string) (treeops.Node, error) {

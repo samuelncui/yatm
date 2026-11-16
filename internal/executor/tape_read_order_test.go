@@ -8,6 +8,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -23,6 +24,11 @@ func readyReadOrderJob(t *testing.T, exe *Executor, kind entity.JobKind) *Job {
 	require.NoError(t, err)
 	exe.runners[job.ID] = &testRunner{exe: exe, job: stored}
 	return stored
+}
+
+func admittedTapeReadOrder(ctx context.Context, backend *mediaBackend) (entity.TapeReadOrder, error) {
+	defaults, err := backend.tapeDefaults(ctx, "/dev/nst0")
+	return settingspkg.TapeDefaultReadOrder(defaults), err
 }
 
 func TestTapeReadOrderFreezesAtEveryJobAdmission(t *testing.T) {
@@ -41,13 +47,13 @@ func TestTapeReadOrderFreezesAtEveryJobAdmission(t *testing.T) {
 			release := make(chan struct{})
 			require.NoError(t, exe.StartJob(ctx, job.ID, kind, func(runCtx context.Context, _ Runner) error {
 				backend := &mediaBackend{executor: exe}
-				order, err := backend.resolveTapeReadOrder(runCtx, "/dev/nst0")
+				order, err := admittedTapeReadOrder(runCtx, backend)
 				if err != nil {
 					return err
 				}
 				observed <- order
 				<-release
-				order, err = backend.resolveTapeReadOrder(runCtx, "/dev/nst0")
+				order, err = admittedTapeReadOrder(runCtx, backend)
 				if err != nil {
 					return err
 				}
@@ -65,7 +71,7 @@ func TestTapeReadOrderFreezesAtEveryJobAdmission(t *testing.T) {
 			// A fresh Job observes the edit without restarting the failed Scan or resetting any lifecycle.
 			fresh := readyReadOrderJob(t, exe, kind)
 			require.NoError(t, exe.StartJob(ctx, fresh.ID, kind, func(runCtx context.Context, _ Runner) error {
-				order, err := (&mediaBackend{executor: exe}).resolveTapeReadOrder(runCtx, "/dev/nst0")
+				order, err := admittedTapeReadOrder(runCtx, &mediaBackend{executor: exe})
 				if err == nil {
 					observed <- order
 				}

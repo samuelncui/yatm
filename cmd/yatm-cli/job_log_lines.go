@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/samuelncui/yatm/entity"
 )
 
@@ -22,11 +20,10 @@ func (c *jobLogLinesCommand) Execute(_ []string) error {
 	if err := validateOffset("log cursor", c.Cursor); err != nil {
 		return err
 	}
+	// The flag parser restricts --direction to older and newer.
 	direction := entity.JobLogDirection_JOB_LOG_DIRECTION_OLDER
 	if c.Direction == "newer" {
 		direction = entity.JobLogDirection_JOB_LOG_DIRECTION_NEWER
-	} else if c.Direction != "older" {
-		return usageError(fmt.Errorf("invalid log direction %q", c.Direction))
 	}
 
 	ctx, cancel := c.runtime.context()

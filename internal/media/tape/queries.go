@@ -108,9 +108,7 @@ func query(ctx context.Context, transport Transport, cdb []byte, length int) ([]
 	if err := CheckResponse(response); err != nil {
 		return nil, err
 	}
-	if response.Residual < 0 || int(response.Residual) > length {
-		return nil, &UncertainError{Cause: ErrMalformed}
-	}
+	// The serialized transport rejects a residual outside the transfer as uncertain.
 	return command.Data[:length-int(response.Residual)], nil
 }
 

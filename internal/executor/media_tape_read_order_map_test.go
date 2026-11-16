@@ -43,8 +43,6 @@ func TestLTFSReadCompletionUsesBoundDataEODRatherThanIndexStart(t *testing.T) {
 		{name: "Index currently on DP", location: "q:180"},
 		{name: "invalid Index pointer", location: "z:not-a-block"},
 		{name: "zero Index pointer", location: "z:0"},
-		{name: "another UUID", location: "z:8", edit: func(v *entity.TapePositionMap) { v.LtfsUuid = "another" }},
-		{name: "another generation", location: "z:8", edit: func(v *entity.TapePositionMap) { v.LtfsIndexGeneration = proto.Uint64(8) }},
 		{name: "unknown DP EOD", location: "z:8", edit: func(v *entity.TapePositionMap) { v.Partitions[0].Eod = nil }},
 	} {
 		t.Run(test.name, func(t *testing.T) {

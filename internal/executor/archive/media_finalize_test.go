@@ -26,9 +26,7 @@ func TestKeepVerifiedPrefixStopsAtFirstUnverifiedFile(t *testing.T) {
 	require.NoError(t, attachCompletedStorage(db, reconciliationIndexEntry("c.txt", 1)))
 
 	// A full Tape retains only the contiguous verified physical prefix.
-	kept, err := keepVerifiedPrefix(db)
-	require.NoError(t, err)
-	require.Equal(t, int64(1), kept)
+	require.NoError(t, keepVerifiedPrefix(db))
 	var items []*Item
 	require.NoError(t, db.Order("target_path").Find(&items).Error)
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_STAGED, items[0].Status)

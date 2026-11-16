@@ -167,59 +167,49 @@ it.each([undefined, false, true])("keeps passive encryption state %s distinct fr
   expect(screen.getByText(`Encryption enabled: ${encryptionEnabled === undefined ? "Unknown" : String(encryptionEnabled)}`)).toBeVisible();
 });
 
-it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.LOWER_BOUND, TapeCapacityQuality.UNSPECIFIED])(
-  "keeps capacity quality %s, exact bytes and missing allowances distinct",
-  (quality) => {
-    const issuedAtNs = 1792029600000000000n;
-    const completedAtNs = issuedAtNs + 60000000000n;
-    render(
-      <DeviceInspectionResult
-        reply={InspectDeviceResponse.create({
-          device: available,
-          report: {
-            oneofKind: "tape",
-            tape: {
-              recommendationDetail: "",
-              features: [
-                DeviceFeature.create({
-                  feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
-                  support: DeviceFeatureSupport.SUPPORTED,
-                  availability: DeviceFeatureAvailability.READY,
-                  validation: DeviceFeatureValidation.UNVALIDATED,
-                  evidence: DeviceFeatureEvidence.REPORTED,
-                  limits: {
-                    oneofKind: "capacity",
-                    capacity: TapeCapacityLimits.create({
-                      quality,
-                      partition: 0,
-                      remainingBytes: 18446744073709551615n,
-                      observationErrorBytes: 0n,
-                      issuedAtNs,
-                      completedAtNs,
-                    }),
-                  },
-                }),
-              ],
-            },
+it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.UNSPECIFIED])("keeps capacity quality %s and exact bytes distinct", (quality) => {
+  const issuedAtNs = 1792029600000000000n;
+  const completedAtNs = issuedAtNs + 60000000000n;
+  render(
+    <DeviceInspectionResult
+      reply={InspectDeviceResponse.create({
+        device: available,
+        report: {
+          oneofKind: "tape",
+          tape: {
+            recommendationDetail: "",
+            features: [
+              DeviceFeature.create({
+                feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
+                support: DeviceFeatureSupport.SUPPORTED,
+                availability: DeviceFeatureAvailability.READY,
+                validation: DeviceFeatureValidation.UNVALIDATED,
+                evidence: DeviceFeatureEvidence.REPORTED,
+                limits: {
+                  oneofKind: "capacity",
+                  capacity: TapeCapacityLimits.create({
+                    quality,
+                    partition: 0,
+                    remainingBytes: 18446744073709551615n,
+                    issuedAtNs,
+                    completedAtNs,
+                  }),
+                },
+              }),
+            ],
           },
-        })}
-      />,
-    );
-    expect(
-      screen.getByText(
-        `Capacity quality: ${quality === TapeCapacityQuality.ESTIMATE ? "Estimate" : quality === TapeCapacityQuality.LOWER_BOUND ? "Lower bound" : "Unknown"}`,
-      ),
-    ).toBeVisible();
-    expect(screen.getByText("Native space before early warning: 18446744073709551615 bytes")).toBeVisible();
-    expect(screen.getByText("Partition: 0")).toBeVisible();
-    expect(screen.getByText("Observation error allowance: 0 bytes")).toBeVisible();
-    expect(screen.getByText("Unreflected write allowance: Unknown")).toBeVisible();
-    expect(screen.getByText("Observation started: 2026-10-15T02:00:00.000Z")).toBeVisible();
-    expect(screen.getByText("Observation completed: 2026-10-15T02:01:00.000Z")).toBeVisible();
-    expect(screen.getByText(/does not guarantee that a file will fit/)).toBeVisible();
-    expect(screen.getByText(/Validation: unvalidated/)).toBeVisible();
-  },
-);
+        },
+      })}
+    />,
+  );
+  expect(screen.getByText(`Capacity quality: ${quality === TapeCapacityQuality.ESTIMATE ? "Estimate" : "Unknown"}`)).toBeVisible();
+  expect(screen.getByText("Native space before early warning: 18446744073709551615 bytes")).toBeVisible();
+  expect(screen.getByText("Partition: 0")).toBeVisible();
+  expect(screen.getByText("Observation started: 2026-10-15T02:00:00.000Z")).toBeVisible();
+  expect(screen.getByText("Observation completed: 2026-10-15T02:01:00.000Z")).toBeVisible();
+  expect(screen.getByText(/does not guarantee that a file will fit/)).toBeVisible();
+  expect(screen.getByText(/Validation: unvalidated/)).toBeVisible();
+});
 
 it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct", (remainingBytes) => {
   render(
@@ -242,7 +232,6 @@ it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct",
   );
   expect(screen.getByText(`Native space before early warning: ${remainingBytes === undefined ? "Unknown" : "0 bytes"}`)).toBeVisible();
   expect(screen.getByText("Partition: Unknown")).toBeVisible();
-  expect(screen.getByText("Observation error allowance: Unknown")).toBeVisible();
   expect(screen.getByText("Observation started: Unknown")).toBeVisible();
   expect(screen.getByText("Observation completed: Unknown")).toBeVisible();
 });
@@ -338,7 +327,7 @@ it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero witho
   expect(screen.queryByText("Tar FORMAT recommendations")).not.toBeInTheDocument();
 });
 
-it.each([undefined, false, true])("shows map freshness %s and reported all-wrap command form without qualifying Auto", (fresh) => {
+it("shows the reported all-wrap command form without qualifying Auto", () => {
   render(
     <DeviceInspectionResult
       reply={InspectDeviceResponse.create({
@@ -353,7 +342,7 @@ it.each([undefined, false, true])("shows map freshness %s and reported all-wrap 
                 detail: "No qualified geometry and timing model; effective order is Logical",
                 limits: {
                   oneofKind: "geometry",
-                  geometry: TapeGeometryLimits.create({ allWraps: true, reportedWraps: 0, fresh, source: "synthetic REOWP response" }),
+                  geometry: TapeGeometryLimits.create({ allWraps: true, reportedWraps: 0, source: "synthetic REOWP response" }),
                 },
               }),
             ],
@@ -364,14 +353,13 @@ it.each([undefined, false, true])("shows map freshness %s and reported all-wrap 
   );
   expect(screen.getByText("All wraps: true")).toBeVisible();
   expect(screen.getByText("Reported wraps: 0")).toBeVisible();
-  expect(screen.getByText(`Fresh: ${fresh === undefined ? "Unknown" : String(fresh)}`)).toBeVisible();
   expect(screen.getByText("Source: synthetic REOWP response")).toBeVisible();
   expect(screen.getByText(/reported command form, not qualified full coverage/)).toBeVisible();
   expect(screen.getByText("No qualified geometry and timing model; effective order is Logical")).toBeVisible();
   expect(screen.queryByText("Tar FORMAT recommendations")).not.toBeInTheDocument();
 });
 
-it("keeps reported wraps and freshness unknown when only the command form is reported", () => {
+it("keeps reported wraps unknown when only the command form is reported", () => {
   render(
     <DeviceInspectionResult
       reply={InspectDeviceResponse.create({
@@ -392,6 +380,5 @@ it("keeps reported wraps and freshness unknown when only the command form is rep
   );
   expect(screen.getByText("All wraps: true")).toBeVisible();
   expect(screen.getByText("Reported wraps: Unknown")).toBeVisible();
-  expect(screen.getByText("Fresh: Unknown")).toBeVisible();
   expect(screen.getByText(/reported command form, not qualified full coverage/)).toBeVisible();
 });

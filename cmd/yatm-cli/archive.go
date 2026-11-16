@@ -133,10 +133,7 @@ func registerArchiveCommands(root *flags.Command, commandRuntime *runtime) error
 
 func (c *archiveCreateCommand) Execute(_ []string) error {
 	// Validate Preview policy combinations before resolving any server paths.
-	preview, err := parsePreviewPolicy(c.PreviewPolicy)
-	if err != nil {
-		return err
-	}
+	preview := previewPolicy(c.PreviewPolicy)
 	if preview == entity.PreviewPolicy_PREVIEW_POLICY_NONE && c.ForceRehash {
 		return usageError(fmt.Errorf("force-rehash requires a Preview generation policy"))
 	}

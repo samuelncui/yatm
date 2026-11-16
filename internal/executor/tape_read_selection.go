@@ -15,9 +15,6 @@ func (e *Executor) ResolveTapeReadMedia(
 	selectMedia func(context.Context, string) (*entity.ReadMediaTarget, error),
 ) (selected *entity.ReadMediaTarget, returnErr error) {
 	// Reuse the attempt's drive hold and validate access before passive identification.
-	if target == nil || selectMedia == nil {
-		return nil, fmt.Errorf("Tape identification requires frozen candidate selection")
-	}
 	device := target.Device
 	if err := e.AcquireTapeDevice(ctx, jobID, device, nil); err != nil {
 		return nil, err

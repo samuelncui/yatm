@@ -433,7 +433,7 @@ func (a *jobRestoreRunner) storeCompletion(
 			return err
 		}
 		a.releaseOutput(ctx, job.copy)
-		return itemFailure(job, result.Err)
+		return itemFailure(result.Err)
 	}
 	damaged, err := a.completeCopy(ctx, job, result)
 	if err != nil {
@@ -443,7 +443,7 @@ func (a *jobRestoreRunner) storeCompletion(
 	// Staged verified bytes carry the version's metadata, which a later attempt compares instead of rereading.
 	if !damaged && job.copy.FileVersionID != 0 {
 		if err := a.restoreMetadata(job.copy.TargetPath, job.copy.Mode, job.copy.MtimeNS); err != nil {
-			return itemFailure(job, fmt.Errorf("restore output metadata failed, path=%q, %w", job.copy.TargetPath, err))
+			return itemFailure(fmt.Errorf("restore output metadata failed, path=%q, %w", job.copy.TargetPath, err))
 		}
 	}
 	// The staged facts come from ACP's real transferred bytes, never from a reread target.
@@ -461,10 +461,7 @@ type restoreItemError struct{ error }
 
 func (e *restoreItemError) Unwrap() error { return e.error }
 
-func itemFailure(job *copyJob, err error) error {
-	if err == nil {
-		err = fmt.Errorf("ACP abandoned the Restore item, media_path=%q", job.copy.MediaPath)
-	}
+func itemFailure(err error) error {
 	return &restoreItemError{err}
 }
 
@@ -488,23 +485,19 @@ func (a *jobRestoreRunner) completeCopy(
 ) (bool, error) {
 	copy := job.copy
 
-	// The submitted Item owns its resolved source; endpoint identifiers are never filesystem paths.
-	if job.source == "" || (job.content != nil && job.source != copy.MediaPath) {
-		return false, itemFailure(job, fmt.Errorf("restore copy result source mismatch, media_path=%q", copy.MediaPath))
-	}
 	if len(result.Targets) != 1 {
-		return false, itemFailure(job, fmt.Errorf("restore file did not finish, media_path=%q", copy.MediaPath))
+		return false, itemFailure(fmt.Errorf("restore file did not finish, media_path=%q", copy.MediaPath))
 	}
 	target := &result.Targets[0]
 	if target.Err != nil {
 		// Target errors keep their identity, so an exhausted destination stays recognizable.
-		return false, itemFailure(job, fmt.Errorf("restore target failed, media_path=%q, %w", copy.MediaPath, target.Err))
+		return false, itemFailure(fmt.Errorf("restore target failed, media_path=%q, %w", copy.MediaPath, target.Err))
 	}
 	if filepath.Clean(target.Path) != a.restoreTarget(copy.TargetPath) {
-		return false, itemFailure(job, fmt.Errorf("restore copy result path mismatch, media_path=%q", copy.MediaPath))
+		return false, itemFailure(fmt.Errorf("restore copy result path mismatch, media_path=%q", copy.MediaPath))
 	}
 	if len(result.SHA256) != 32 {
-		return false, itemFailure(job, fmt.Errorf("Restore returned invalid content hash, media_path=%q", copy.MediaPath))
+		return false, itemFailure(fmt.Errorf("Restore returned invalid content hash, media_path=%q", copy.MediaPath))
 	}
 
 	// Record the read outcome before deciding whether its bytes may be published.
@@ -525,7 +518,7 @@ func (a *jobRestoreRunner) completeCopy(
 	// rejected mismatch is removed so the same operation can retry it.
 	mismatch := fmt.Errorf("restore file checksum mismatch, media_path=%q", copy.MediaPath)
 	if removeErr := os.Remove(a.restoreTarget(copy.TargetPath)); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-		return false, itemFailure(job, errors.Join(mismatch, removeErr))
+		return false, itemFailure(errors.Join(mismatch, removeErr))
 	}
-	return false, itemFailure(job, mismatch)
+	return false, itemFailure(mismatch)
 }

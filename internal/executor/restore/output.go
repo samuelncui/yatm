@@ -110,9 +110,6 @@ func (a *jobRestoreRunner) createOutput(ctx context.Context, relative string) (b
 	if err := os.MkdirAll(parent, os.ModePerm); err != nil {
 		return false, &restoreItemError{fmt.Errorf("create Restore output directory failed, path=%q, %w", relative, err)}
 	}
-	if info, err := os.Lstat(parent); err != nil || !info.IsDir() {
-		return false, &restoreItemError{fmt.Errorf("Restore output parent is not a real directory: %q", relative)}
-	}
 	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if errors.Is(err, fs.ErrExist) {
 		return false, nil
@@ -159,7 +156,7 @@ func (a *jobRestoreRunner) outputMatches(ctx context.Context, relative string, h
 	}
 
 	// Actual-byte verification can fail per file; cancellation still stops the whole attempt.
-	facts, err := executor.VerifyObservedContent(ctx, filename, info)
+	facts, err := executor.VerifyObservedContent(ctx, filename)
 	if err != nil {
 		if stopped := ctx.Err(); stopped != nil {
 			return false, true, stopped

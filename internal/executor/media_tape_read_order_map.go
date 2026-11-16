@@ -107,7 +107,7 @@ func ltfsReadDataEnd(facts *ltfsReadFacts, value *entity.TapePositionMap,
 		return nil, "LTFS current Index location is invalid"
 	}
 	partition, known := facts.partitions[facts.dataSymbol]
-	if !known || value.GetLtfsUuid() != facts.uuid || value.GetLtfsIndexGeneration() != facts.generation {
+	if !known {
 		return nil, "LTFS data partition end is not bound to the mounted Index"
 	}
 	for _, end := range value.Partitions {

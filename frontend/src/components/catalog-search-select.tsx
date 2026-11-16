@@ -240,13 +240,8 @@ export const MediaSearchSelect = (props: SelectionProps<Media>) => {
       onOpenChange={setOpen}
       query={query}
       onQueryChange={(text) => {
-        if (text !== query || afterId !== 0n) {
-          ++request.current;
-          failed.current = false;
-          loaded.current = undefined;
-          setOptions([]);
-          setHasMore(false);
-        }
+        // The search effect replaces the options for the new query or first page.
+        if (text !== query || afterId !== 0n) failed.current = false;
         setCursors([0n]);
         setQuery(text);
       }}

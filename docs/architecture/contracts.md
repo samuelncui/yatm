@@ -32,7 +32,7 @@ These are package-level names, so they carry the full operation and resource:
 `GetArchiveJobProgressResponse`. The paired names differ only by `Request` and `Response`. No RPC
 returns an entity directly, reuses another RPC's envelope, or uses `Req`, `Resp`, or `Reply`.
 The `Request` and `Response` suffixes are reserved for RPC envelopes; reusable messages have noun
-names such as `FileOperationResult` or `LocationEntryQuery`.
+names such as `FileOperationResult` or `IdenticalScope`.
 
 Message and enum type names use `PascalCase`; initialisms are ordinary words in protobuf names,
 such as `LtfsMetadata` and `Sha256Digest`. Field and oneof names use `lower_snake_case`. Repeated
@@ -48,7 +48,7 @@ These names follow the [protobuf style guide](https://protobuf.dev/programming-g
 enforces package, type, RPC-envelope and field syntax, plus unambiguous unit and plural cases during
 generation and `make check`. Review the subject and units of other fields against their actual values.
 
-The shared typed router handles protobuf oneof-to-oneof dispatch; conversion, validation,
+The shared typed action router dispatches a request oneof to per-variant handlers; conversion, validation,
 migration, and external events can use direct type switches.
 
 ## Time values

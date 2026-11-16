@@ -109,13 +109,8 @@ func validateImportedTree(ctx context.Context, tx *gorm.DB) error {
 			return nil
 		}
 		files := fileViews(rows)
+		// Row insertion already validated each name as one path component.
 		for _, file := range files {
-			if err := entity.ValidateRelativePath(file.Name); err != nil {
-				return err
-			}
-			if strings.Contains(file.Name, "/") {
-				return fmt.Errorf("File name contains a path separator")
-			}
 			parentID := file.ParentID
 			for depth := 0; parentID != 0; depth++ {
 				if parentID == file.ID || depth >= 256 {

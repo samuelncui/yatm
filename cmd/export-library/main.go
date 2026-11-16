@@ -42,18 +42,16 @@ func main() {
 	ctx, stop := exportContext()
 	defer stop()
 	if err := exportLibrary(ctx, *configOpt, *typesOpt, *outputOpt); err != nil {
-		panic(err)
+		stop()
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
 func exportContext() (context.Context, context.CancelFunc) {
 	// Release signal interception after cancellation even when a native stream cannot return for cleanup.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	context.AfterFunc(ctx, func() {
-		stop()
-		// This executable owns termination; imported package subscriptions cannot swallow a second signal.
-		signal.Reset(os.Interrupt, syscall.SIGTERM)
-	})
+	context.AfterFunc(ctx, stop)
 	return ctx, stop
 }
 

@@ -189,7 +189,7 @@ export async function searchFiles(directory: FileOperationRef, scope: FileScope,
   return {
     files: reply.entries.map((entry) => ({ ...filesEntryData(entry), ...(recursive ? { name: entry.path || entry.name } : {}) })),
     nextCursor: reply.nextCursor,
-    total: reply.totalEntryCount,
+    total: undefined,
     scope: reply.scope,
     directory: reply.directory,
     breadcrumbs: reply.breadcrumbs,

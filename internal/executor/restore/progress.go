@@ -18,21 +18,16 @@ func (a *jobRestoreRunner) progressLocked() *executor.Progress {
 
 	a.progress = executor.NewProgress()
 
-	// Aggregate each version once even when it has multiple Media copies.
-	totalQuery := a.db.Model(&File{}).Select("item_id, size")
+	// Each File row is one selected version, whatever number of Media copies it has.
 	var totalFiles, totalBytes int64
-	if err := a.db.Table("(?) AS files", totalQuery).
-		Select("count(item_id)", "coalesce(sum(size), 0)").
+	if err := a.db.Model(&File{}).Select("count(*)", "coalesce(sum(size), 0)").
 		Row().Scan(&totalFiles, &totalBytes); err != nil {
 		a.logger.WithError(err).Error("query restore total progress failed")
 	}
 	a.progress.SetGlobalTotal(totalBytes, totalFiles)
 
-	// Completed alternatives share one status, so group them by version.
-	copiedQuery := a.db.Model(&File{}).Select("item_id, size").Where("completed = ?", true)
 	var copiedFiles, copiedBytes int64
-	if err := a.db.Table("(?) AS files", copiedQuery).
-		Select("count(item_id)", "coalesce(sum(size), 0)").
+	if err := a.db.Model(&File{}).Select("count(*)", "coalesce(sum(size), 0)").Where("completed = ?", true).
 		Row().Scan(&copiedFiles, &copiedBytes); err != nil {
 		a.logger.WithError(err).Error("query restore copied progress failed")
 	}

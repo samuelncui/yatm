@@ -70,6 +70,6 @@ func TestTapeReadFinalizeDoesNotRequireASecondInventoryCapture(t *testing.T) {
 		tapeDir: root, indexPath: index, recycleKey: func() {}}
 
 	// Finalization consumes no second inventory or cartridge probe after the current mount's read.
-	require.NoError(t, session.readInventory(context.Background(), nil))
+	require.NoError(t, session.readInventory(context.Background(), func(*mediapkg.LTFSIndexEntry) error { return nil }))
 	require.NoError(t, session.Finalize(context.Background(), nil))
 }

@@ -69,10 +69,9 @@ func TestTarPositionMapRejectsWrongInitializationAndProfile(t *testing.T) {
 
 	// Saved geometry cannot override a different initialization or written profile.
 	for name, change := range map[string]func(*library.Media){
-		"different initialization":       func(media *library.Media) { media.TapePositionMap.InitializationId = "different" },
-		"outside final EOD":              func(media *library.Media) { media.TapePositionMap.Wraps[2].Endpoint = proto.Uint64(25) },
-		"compressed written profile":     func(media *library.Media) { media.Profile.GetTape().Tar.HardwareCompression = true },
-		"invalid written record profile": func(media *library.Media) { media.Profile.GetTape().Tar.RecordBytes = 513 },
+		"different initialization":   func(media *library.Media) { media.TapePositionMap.InitializationId = "different" },
+		"outside final EOD":          func(media *library.Media) { media.TapePositionMap.Wraps[2].Endpoint = proto.Uint64(25) },
+		"compressed written profile": func(media *library.Media) { media.Profile.GetTape().Tar.HardwareCompression = true },
 		"unbounded spatial error": func(media *library.Media) {
 			media.TapePositionMap.Wraps[0].EndpointUncertaintyObjects = proto.Uint64(10)
 		},

@@ -13,12 +13,8 @@ vi.mock("@/api", async (importOriginal) => ({
   volumeSpaceLabel: (await importOriginal<typeof import("@/api")>()).volumeSpaceLabel,
   mediaCli: { list: mediaList, listDevices: deviceList, inspect: mediaInspect, inspectDevice: deviceInspect },
 }));
-vi.mock("@/pages/jobs", async () => {
-  const { createContext } = await import("react");
-  return { RefreshContext: createContext(async () => {}) };
-});
 import { ReadMediaDialog } from "./read-media-dialog";
-import { RefreshContext } from "@/pages/jobs";
+import { RefreshContext } from "./job-list-state";
 
 const tape = Media.create({
   id: 4n,

@@ -49,8 +49,8 @@ func convertConfiguration(original []byte, conf *config.Config, source, target s
 		expected.Paths.Source, expected.Paths.Target = "", ""
 		if conf.Paths.Access == nil {
 			expected.Paths.Access = []executor.AccessRange{}
-			for _, path := range []string{source, target} {
-				if path == "" || len(expected.Paths.Access) > 0 && expected.Paths.Access[0].Root == path {
+			for index, path := range []string{source, target} {
+				if path == "" || index == 1 && path == source {
 					continue
 				}
 				expected.Paths.Access = append(expected.Paths.Access, executor.AccessRange{Root: path})

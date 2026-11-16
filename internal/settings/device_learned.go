@@ -25,10 +25,6 @@ func (g DeviceGroup) Current(ctx context.Context) (*entity.DeviceSettings, error
 	return g.group.Current(ctx)
 }
 
-func (g DeviceGroup) Read(ctx context.Context) (Stored[*entity.DeviceSettings], error) {
-	return g.group.Read(ctx)
-}
-
 func (g DeviceGroup) Save(ctx context.Context, value *entity.DeviceSettings) (*entity.DeviceSettings, error) {
 	// Client values describe user-owned settings only; stale or forged learning fields cannot replace facts.
 	if value == nil {

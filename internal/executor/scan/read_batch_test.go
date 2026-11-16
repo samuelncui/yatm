@@ -153,8 +153,6 @@ func TestContentHashPolicyFollowsPhaseAndResultPolicy(t *testing.T) {
 		{"Media fill-missing reuses the cache", media, &sequentialCheckSession{checkSession{}}, acp.HashCachedOrReadRefresh},
 		{"Media verification never reuses a stored hash", verify, &sequentialCheckSession{checkSession{}}, acp.HashRead},
 		{"Forced Media read cannot reuse a stored hash", forced, &sequentialCheckSession{checkSession{}}, acp.HashReadRefresh},
-		{"Known-only is expressed as cache-only", &entity.ScanJobSpec{Selections: scanLocationSelections(1), SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY},
-			nil, acp.HashCachedOnly},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, contentHashPolicy(frozenLimits(&Config{Spec: tc.spec}), tc.session))

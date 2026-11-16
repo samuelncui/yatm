@@ -45,11 +45,6 @@ type Capabilities struct {
 	Write Access
 }
 
-// OnlineReadable reports whether consumers can use the Media without extraction.
-func (c Capabilities) OnlineReadable() bool {
-	return c.Read == AccessConcurrentRandom
-}
-
 // Backend creates concrete read and write sessions from public Media targets.
 type Backend interface {
 	NewReadSession(context.Context, *entity.ReadMediaTarget) (ReadSession, error)

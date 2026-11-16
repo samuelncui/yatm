@@ -54,7 +54,7 @@ Concurrent random access uses configured ACP concurrency, random access uses a s
 
 ## Volume
 
-[Volume Sessions](../../internal/executor/media_volume.go) manage only already-mounted filesystems. [Volume discovery](../../internal/media/volume.go) accepts configured roots or direct children, resolves the immutable `.yatm.json` UUID/profile, and rejects duplicate mounted identities, profile changes, symlink path components, and path escapes. An absent marker is skipped; a present but unreadable/invalid marker fails discovery, including checks separating originals from archive storage. YATM does not mount, unmount, or eject Volumes; current discovery validates the directory/marker rather than requiring an OS mount-point record.
+[Volume Sessions](../../internal/executor/media_volume.go) manage only already-mounted filesystems. [Volume discovery](../../internal/media/volume.go) accepts configured roots or direct children, resolves the immutable `.yatm.json` UUID/profile, and rejects duplicate mounted identities and profile changes. A configured root resolves through symlinks to its canonical directory, and symlinked children are not candidates; [Media file paths](../../internal/media/path.go) reject symlink components and escapes. An absent marker is skipped; a present but unreadable/invalid marker fails discovery, including checks separating originals from archive storage. YATM does not mount, unmount, or eject Volumes; current discovery validates the directory/marker rather than requiring an OS mount-point record.
 
 [Initialize/Register](../../internal/apis/volume.go) creates a marker and Media row or re-registers an existing marker after metadata-only deletion. The read-only candidate listing reports each configured discovery candidate with its registration state, so an unreadable marker stays visible instead of failing that listing; identity discovery still rejects it. Initializing without an explicit serial number reads the block-device serial from sysfs on Linux; the Volume type is never detected and remains the caller's choice. Unknown devices, other platforms and file-backed mounts keep an empty serial instead of guessing. Initialization failure removes only a marker created by that request. Runtime mounted/available-space state is not persisted as a Library fact.
 
@@ -112,8 +112,8 @@ linear outputs close after their data writing, then finish metadata/cache work o
 path. Archive and Restore retain `Overwrite(false)`, so ACP never replaces an existing destination.
 Archive targets that alias on the Volume filesystem compete through exclusive rename: only the
 completed file is published, and the refused file remains pending for another Media choice. Restore
-reserves distinct native output names during preparation, including case and Unicode aliases.
-Failed copies clean up only their
+assigns distinct logical output paths during preparation without reserving case or Unicode aliases;
+an aliasing output never replaces the existing destination. Failed copies clean up only their
 owned temporary output and preserve existing destinations; cleanup failures remain alongside the copy
 error without losing no-space error identities. Linear targets skip preallocation and per-file Sync;
 successful LTFS unmount and the final Index still govern LTFS publication. Tar uses its physical

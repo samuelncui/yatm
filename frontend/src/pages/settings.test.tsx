@@ -1,8 +1,7 @@
 import { act, screen, waitFor } from "@testing-library/react";
-import { render } from "@/state/test-render";
+import { renderPage } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 import { LibrarySettings, Location, SettingsValue } from "@/entity";
 import { createAppStore } from "@/state/store";
@@ -15,12 +14,7 @@ import { SettingsBrowser } from "./settings";
 
 const initial = LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true });
 const value = (settings = initial) => SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.clone(settings) } });
-const open = () =>
-  render(
-    <MemoryRouter>
-      <SettingsBrowser />
-    </MemoryRouter>,
-  );
+const open = () => renderPage(<SettingsBrowser />);
 
 beforeEach(() => {
   list.mockReset().mockReturnValue({ response: Promise.resolve({ locations: [], hasMore: false }) });
@@ -153,7 +147,7 @@ describe("Library Settings", () => {
       const { locations } = useLocationChoices({ enabled: true });
       return <output aria-label="Configured choices">{locations.map((location) => location.name).join(",")}</output>;
     };
-    render(
+    renderPage(
       <>
         <SettingsBrowser />
         <Choices />

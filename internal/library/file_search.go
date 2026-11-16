@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	querystring "github.com/bytedance/go-querystring-parser"
 	"github.com/samuelncui/yatm/entity"
 )
 
@@ -17,16 +16,6 @@ const (
 	maxFileSearchRunes     = 4096
 	maxFilePathDepth       = entity.MaxPathDepth
 )
-
-type FileSearchResult struct {
-	File *File
-	Path string
-}
-
-type FileSearchPage struct {
-	Results    []*FileSearchResult
-	NextCursor string
-}
 
 type Tag struct {
 	Name      string
@@ -43,78 +32,6 @@ type filePathState struct {
 	parts    []string
 	// inTrash records whether the File or any ancestor is the Library Trash.
 	inTrash bool
-}
-
-func (l *Library) SearchFilesIn(ctx context.Context, query, cursor string, limit int64, scope entity.FileScope) (*FileSearchPage, error) {
-	// Use the configured reader, retaining transaction-scoped Library views.
-	db := l.readDB()
-	scope, err := l.ResolveFileScope(ctx, scope)
-	if err != nil {
-		return nil, err
-	}
-
-	// Validate and parse the complete user query before touching the database.
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, fmt.Errorf("File search query must not be empty")
-	}
-	if utf8.RuneCountInString(query) > maxFileSearchRunes {
-		return nil, fmt.Errorf("File search query exceeds %d characters", maxFileSearchRunes)
-	}
-	pageLimit, err := normalizeFileSearchLimit(limit)
-	if err != nil {
-		return nil, err
-	}
-	condition, err := querystring.Parse(query)
-	if err != nil {
-		return nil, fmt.Errorf("parse File search query failed, %w", err)
-	}
-	if condition == nil {
-		return nil, fmt.Errorf("File search query must not be empty")
-	}
-	expression, err := compileFileQuery(db, condition)
-	if err != nil {
-		return nil, fmt.Errorf("compile File search query failed, %w", err)
-	}
-	cursorInput := fmt.Sprintf("%s/%d", query, scope)
-	afterName, afterID, hasCursor, err := decodePageCursor(cursor, searchCursorKind, cursorInput)
-	if err != nil {
-		return nil, fmt.Errorf("validate File search cursor failed, %w", err)
-	}
-
-	// Query one deterministic page with a look-ahead row for the next cursor.
-	rows := make([]*fileRow, 0, pageLimit+1)
-	request := filterFileScope(l.readDB().WithContext(ctx).Model(ModelFile).Where(expression), scope)
-	if hasCursor {
-		request = request.Where("name > ? OR (name = ? AND id > ?)", afterName, afterName, afterID)
-	}
-	result := request.Order("name ASC").Order("id ASC").Limit(pageLimit + 1).Find(&rows)
-	if result.Error != nil {
-		return nil, fmt.Errorf("query Library Files failed, %w", result.Error)
-	}
-	files := fileViews(rows)
-	hasMore := len(files) > pageLimit
-	if hasMore {
-		files = files[:pageLimit]
-	}
-
-	// Attach the compatibility projection and resolve paths for only the returned page.
-	if err := hydrateFileViews(l.readDB().WithContext(ctx), files...); err != nil {
-		return nil, fmt.Errorf("hydrate Library search results failed, %w", err)
-	}
-	paths, err := l.ReadFilePaths(ctx, files)
-	if err != nil {
-		return nil, err
-	}
-	page := &FileSearchPage{Results: make([]*FileSearchResult, 0, len(files))}
-	for _, file := range files {
-		page.Results = append(page.Results, &FileSearchResult{File: file, Path: paths[file.ID]})
-	}
-	if hasMore && len(files) > 0 {
-		last := files[len(files)-1]
-		page.NextCursor = encodePageCursor(searchCursorKind, cursorInput, last.Name, last.ID)
-	}
-	return page, nil
 }
 
 func (l *Library) ListTags(ctx context.Context, prefix, cursor string, limit int64) (*TagPage, error) {

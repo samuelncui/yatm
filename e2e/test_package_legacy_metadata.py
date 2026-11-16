@@ -285,15 +285,6 @@ class MetadataAuditTest(unittest.TestCase):
                 with self.assertRaisesRegex(NotImplementedError, "Only submitted inline Archive"):
                     audit.check(self.original, self.migrated)
 
-    def test_transitional_manifest_is_not_treated_as_an_empty_inline_job(self):
-        directory = self.original / "jobs" / "1"
-        directory.mkdir(parents=True)
-        (directory / "state.db").write_bytes(b"synthetic transitional manifest")
-        self.sql(self.original / "tapes.db", "UPDATE jobs SET state=X'0A00' WHERE id=1")
-        self.sql(self.state_db, "DELETE FROM items")
-        with self.assertRaisesRegex(NotImplementedError, "Transitional Job manifests"):
-            audit.check(self.original, self.migrated)
-
     def test_matching_content_on_another_media_does_not_establish_job_ownership(self):
         self.sql(self.original / "tapes.db", """INSERT INTO tapes
             SELECT 2,'SECOND',name,create_time,destroy_time,capacity_bytes,writen_bytes,encryption FROM tapes WHERE id=1""")

@@ -354,18 +354,11 @@ func (a *jobArchiveRunner) flushOutcomes(ctx context.Context, batch []itemOutcom
 	staged := 0
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, outcome := range batch {
-			if outcome.copyResult == nil || outcome.id == 0 {
-				return fmt.Errorf("archive copy outcome is incomplete, id=%d source=%q", outcome.id, outcome.source)
-			}
-			updated := tx.Model(&Item{}).Where("id = ? AND status = ?", outcome.id, entity.CopyStatus_COPY_STATUS_PENDING).
+			if err := tx.Model(&Item{}).Where("id = ?", outcome.id).
 				Updates(map[string]any{
 					"status": entity.CopyStatus_COPY_STATUS_STAGED, "media_path": outcome.mediaPath, "result": outcome.copyResult,
-				})
-			if updated.Error != nil {
-				return fmt.Errorf("stage archive item failed, id=%d, %w", outcome.id, updated.Error)
-			}
-			if updated.RowsAffected != 1 {
-				return fmt.Errorf("stage archive item failed, id=%d affected=%d", outcome.id, updated.RowsAffected)
+				}).Error; err != nil {
+				return fmt.Errorf("stage archive item failed, id=%d, %w", outcome.id, err)
 			}
 			staged++
 		}
@@ -415,9 +408,6 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 	if !result.Mode.IsRegular() {
 		return outcome, fmt.Errorf("archive source is not an ordinary file, source=%q", item.Data.SourcePath)
 	}
-	if len(result.SHA256) != 32 {
-		return outcome, fmt.Errorf("archive file has invalid SHA-256, source=%q", item.Data.SourcePath)
-	}
 	mtime, err := dataformat.Nanoseconds(result.ModTime)
 	if err != nil {
 		return outcome, err
@@ -436,9 +426,6 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 	}
 	if err := copyResult.Validate(); err != nil {
 		return outcome, err
-	}
-	if err := entity.ValidateRelativePath(item.TargetPath); err != nil {
-		return outcome, fmt.Errorf("invalid archive Media path, source=%q, %w", item.Data.SourcePath, err)
 	}
 	outcome.mediaPath = item.TargetPath
 	outcome.copyResult = copyResult

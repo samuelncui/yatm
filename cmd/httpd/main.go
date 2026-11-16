@@ -73,6 +73,7 @@ func main() {
 	))
 
 	flag.Parse()
+	tools.CancelOnShutdownSignal()
 	conf := config.GetConfig(*configOpt)
 	if conf.Paths.Source != "" || conf.Paths.Target != "" {
 		panic("legacy source/target configuration requires yatm-migrate config-apply")
@@ -96,10 +97,7 @@ func main() {
 	}()
 
 	// Initialize the validated catalog and server-owned Settings defaults.
-	appSettings := settingspkg.NewWithCatalog(catalog.Write, catalog.Read, settingspkg.PreviewDefinition{
-		Default:  func() (*entity.PreviewSettings, error) { return preview.SettingsFromConfig(preview.Config{}) },
-		Validate: preview.ValidateSettings,
-	})
+	appSettings := settingspkg.NewWithCatalog(catalog.Write, catalog.Read, preview.SettingsDefinition())
 	lib := library.NewWithCatalog(catalog.Write, catalog.Read, appSettings)
 	// Configure one disposable root and keep age-based cleanup within the service lifetime.
 	if err := lib.PrepareTemporary(conf.Paths.Work); err != nil {

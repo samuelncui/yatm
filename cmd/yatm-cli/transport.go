@@ -50,11 +50,6 @@ func (t *basicAuthTransport) RoundTrip(request *http.Request) (*http.Response, e
 }
 
 func (r *runtime) prepare() error {
-	// Reuse the one transport prepared for this command invocation.
-	if r.prepared {
-		return nil
-	}
-
 	// Validate connection settings before reading credentials or creating a client.
 	if r.options.Timeout < 0 {
 		return usageError(fmt.Errorf("timeout must not be negative, timeout=%s", r.options.Timeout))
@@ -99,7 +94,6 @@ func (r *runtime) prepare() error {
 			return http.ErrUseLastResponse
 		},
 	}
-	r.prepared = true
 	return nil
 }
 

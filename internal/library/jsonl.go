@@ -321,7 +321,7 @@ func importCatalogRecord(ctx context.Context, tx *gorm.DB, record *jsonlInputRec
 		if (file.ID <= 0 && file.ID != TrashFileID) || (file.Kind != entity.FileKind_FILE_KIND_REGULAR && file.Kind != entity.FileKind_FILE_KIND_DIRECTORY) {
 			return fmt.Errorf("invalid imported File identity")
 		}
-		return insertJSONLFiles(ctx, tx, []*File{file})
+		return insertJSONLFile(ctx, tx, file)
 	case recordTypeMedia:
 		media := new(Media)
 		if err := decodeCatalogJSON(record.Data, media, "created_at_ns"); err != nil {
@@ -343,7 +343,7 @@ func importCatalogRecord(ctx context.Context, tx *gorm.DB, record *jsonlInputRec
 			return fmt.Errorf("Location ID is required")
 		}
 		if source.Config == nil {
-			return fmt.Errorf("Location configuration is missing; convert this pre-v1 backup before import")
+			return fmt.Errorf("Location configuration is required")
 		}
 		if err := validateLocation(source); err != nil {
 			return err
@@ -395,10 +395,6 @@ func importCatalogRecord(ctx context.Context, tx *gorm.DB, record *jsonlInputRec
 	case *FileVersion:
 		if row.ID <= 0 {
 			return fmt.Errorf("FileVersion ID is required")
-		}
-	case *FileLocation:
-		if row.ParentPath != originalParent(row.Path) {
-			return fmt.Errorf("inconsistent original parent path")
 		}
 	case *FileTrackingKey:
 		if row.Kind != TrackingNative {
@@ -708,40 +704,25 @@ func insertJSONLRows[T any](tx *gorm.DB, recordType string, rows []*T) error {
 	return nil
 }
 
-func insertJSONLFiles(ctx context.Context, tx *gorm.DB, files []*File) error {
-	if len(files) == 0 {
-		return nil
+func insertJSONLFile(ctx context.Context, tx *gorm.DB, file *File) error {
+	// Validate the annotation group before insertion.
+	if err := validateFileNote(file.Note); err != nil {
+		return fmt.Errorf("validate imported File %d note failed, %w", file.ID, err)
+	}
+	tags, err := normalizeTags(file.Tags)
+	if err != nil {
+		return fmt.Errorf("validate imported File %d Tags failed, %w", file.ID, err)
 	}
 
-	// Validate the complete annotation group before insertion.
-	rows := make([]*FileTag, 0)
-	persisted := make([]*fileRow, 0, len(files))
-	for _, file := range files {
-		if err := validateFileNote(file.Note); err != nil {
-			return fmt.Errorf("validate imported File %d note failed, %w", file.ID, err)
-		}
-		tags, err := normalizeTags(file.Tags)
-		if err != nil {
-			return fmt.Errorf("validate imported File %d Tags failed, %w", file.ID, err)
-		}
-		file.Tags = tags
-		for _, tag := range tags {
-			rows = append(rows, &FileTag{FileID: file.ID, Tag: tag})
-		}
-		persisted = append(persisted, fileRowFromFile(file))
-	}
-
-	// Insert the File identities before their dependent Tag relations.
+	// Insert the File identity before its dependent Tag relations.
 	// Imported zero timestamps remain zero without disabling name-validation hooks.
 	insert := tx.Session(&gorm.Session{NowFunc: func() time.Time { return time.Unix(0, 0) }})
-	if err := insertJSONLRows(insert, recordTypeFile, persisted); err != nil {
+	if err := insertJSONLRows(insert, recordTypeFile, []*fileRow{fileRowFromFile(file)}); err != nil {
 		return err
 	}
-	if len(rows) == 0 {
-		return nil
+	rows := make([]*FileTag, 0, len(tags))
+	for _, tag := range tags {
+		rows = append(rows, &FileTag{FileID: file.ID, Tag: tag})
 	}
-	if result := tx.WithContext(ctx).CreateInBatches(rows, batchSize); result.Error != nil {
-		return fmt.Errorf("insert library File Tag records failed, %w", result.Error)
-	}
-	return nil
+	return insertJSONLRows(tx.WithContext(ctx), "File Tag", rows)
 }

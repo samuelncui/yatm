@@ -41,7 +41,7 @@ vi.mock("@/api", async (original) => ({
     }),
   },
 }));
-vi.mock("@/pages/file", () => ({
+vi.mock("@/components/use-file-browser", () => ({
   useFileBrowser: () => ({
     refresh: async () => {},
     scope: FileScope.ALL,

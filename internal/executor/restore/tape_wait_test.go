@@ -75,7 +75,7 @@ func TestRestoreTapeWaitDoesNotProbeAnotherAttemptDevice(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, failed.Error, "Restore Media identity is unavailable")
 	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, failed.Phase)
-	require.Equal(t, []string{"/dev/nst0"}, exe.ListAvailableDevices())
+	require.False(t, exe.ListDevices()[0].Busy)
 
 	// A valid identity reaches Session setup using the same lease; no real encryption script runs.
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nprintf x >> '"+marker+"'\n"+
@@ -89,5 +89,5 @@ func TestRestoreTapeWaitDoesNotProbeAnotherAttemptDevice(t *testing.T) {
 	probes, err := os.ReadFile(marker)
 	require.NoError(t, err)
 	require.Equal(t, "xx", string(probes), "identity resolution and Session setup both own the drive")
-	require.Equal(t, []string{"/dev/nst0"}, exe.ListAvailableDevices())
+	require.False(t, exe.ListDevices()[0].Busy)
 }

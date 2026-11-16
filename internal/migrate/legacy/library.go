@@ -147,7 +147,7 @@ func prepareLibrary(ctx context.Context, db *gorm.DB, indexRoot string, report *
 	if err != nil {
 		return err
 	}
-	if _, _, err := copyLibraryPositions(ctx, db); err != nil {
+	if err := copyLibraryPositions(ctx, db); err != nil {
 		return err
 	}
 
@@ -388,8 +388,9 @@ func rebuildStagedTapePositionIndex(ctx context.Context, db *gorm.DB, tapeID int
 			if len(positions) == 0 {
 				return nil
 			}
+			// Physical rows already hold every other fact; only derived directories are new rows.
 			result := tx.Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "id"}}, UpdateAll: true,
+				Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.AssignmentColumns([]string{"parent_path"}),
 			}).CreateInBatches(positions, 256)
 			if result.Error != nil {
 				return fmt.Errorf("write migrated Position index failed, tape_id=%d, %w", tapeID, result.Error)
@@ -398,17 +399,14 @@ func rebuildStagedTapePositionIndex(ctx context.Context, db *gorm.DB, tapeID int
 			return nil
 		}
 
-		// Preserve legacy-only ownership across the synchronous tree builder, outside the target Position model.
-		owners := make(map[int64]int64)
 		yield := func(position *library.Position) error {
 			positions = append(positions, &stagedLibraryPosition{
-				ID: position.ID, FileID: owners[position.ID], MediaID: position.MediaID, Path: position.Path,
+				ID: position.ID, MediaID: position.MediaID, Path: position.Path,
 				ParentPath: position.ParentPath, IsDir: position.IsDir,
 				Mode: position.Mode, MtimeNS: position.MtimeNS, WrittenAtNS: position.WrittenAtNS,
 				Size: position.Size, Hash: position.Hash, StorageOrder: position.StorageOrder,
 				StorageMetadata: position.StorageMetadata,
 			})
-			delete(owners, position.ID)
 			if len(positions) == cap(positions) {
 				return flush()
 			}
@@ -435,7 +433,6 @@ func rebuildStagedTapePositionIndex(ctx context.Context, db *gorm.DB, tapeID int
 					return nil
 				}
 				for _, file := range files {
-					owners[file.ID] = file.FileID
 					if err := emit(&library.Position{
 						ID: file.ID, MediaID: file.MediaID, Path: file.Path,
 						ParentPath: file.ParentPath, IsDir: file.IsDir,
@@ -466,6 +463,7 @@ func copyLibraryFiles(ctx context.Context, db *gorm.DB) (int, error) {
 	count := 0
 	for {
 		var source []*legacyLibraryFile
+		// The first page has no lower bound because the legacy Trash row has a negative ID.
 		query := db.WithContext(ctx).Order("id").Limit(256)
 		if count > 0 {
 			query = query.Where("id > ?", cursor)
@@ -559,102 +557,38 @@ func copyLibraryTapes(ctx context.Context, db *gorm.DB) (int, error) {
 	}
 }
 
-func copyLibraryPositions(ctx context.Context, db *gorm.DB) (int, int, error) {
-	// Reserve derived directory IDs above every physical legacy Position ID.
-	var nextID int64
-	if err := db.WithContext(ctx).Model(&legacyLibraryPosition{}).
-		Select("COALESCE(MAX(id), 0)").Scan(&nextID).Error; err != nil {
-		return 0, 0, fmt.Errorf("read legacy Position maximum ID failed, %w", err)
-	}
-	var tapeIDs []int64
-	if err := db.WithContext(ctx).Model(&legacyLibraryPosition{}).
-		Distinct("tape_id").Order("tape_id").Pluck("tape_id", &tapeIDs).Error; err != nil {
-		return 0, 0, fmt.Errorf("list legacy Position tapes failed, %w", err)
-	}
-
-	// Build each Tape's tree from bounded pages of checked legacy instants.
-	physicalCount := 0
-	directoryCount := 0
-	for _, tapeID := range tapeIDs {
-		rows := make([]*stagedLibraryPosition, 0, 256)
-		flush := func() error {
-			if len(rows) == 0 {
-				return nil
-			}
-			if err := db.WithContext(ctx).CreateInBatches(rows, 256).Error; err != nil {
-				return fmt.Errorf("write current Positions failed, tape_id=%d, %w", tapeID, err)
-			}
-			rows = rows[:0]
+func copyLibraryPositions(ctx context.Context, db *gorm.DB) error {
+	// Copy physical rows only; rebuildStagedPositionIndex derives parents and directories after reconciliation.
+	var cursor int64
+	for {
+		var source []*legacyLibraryPosition
+		if err := db.WithContext(ctx).Where("id > ?", cursor).Order("id").Limit(256).Find(&source).Error; err != nil {
+			return fmt.Errorf("read legacy Positions failed, cursor=%d, %w", cursor, err)
+		}
+		if len(source) == 0 {
 			return nil
 		}
 
-		// Preserve legacy-only ownership across the synchronous tree builder, outside the target Position model.
-		owners := make(map[int64]int64)
-		yield := func(position *library.Position) error {
-			if position.IsDir {
-				nextID++
-				position.ID = nextID
-				directoryCount++
-			} else {
-				physicalCount++
+		// Reject unsupported timestamps before they enter the current nanosecond model.
+		rows := make([]*stagedLibraryPosition, 0, len(source))
+		for _, position := range source {
+			mtimeNS, err := dataformat.Nanoseconds(position.ModTime)
+			if err != nil {
+				return fmt.Errorf("convert legacy Position %d mtime failed, %w", position.ID, err)
+			}
+			writtenAtNS, err := dataformat.Nanoseconds(position.WriteTime)
+			if err != nil {
+				return fmt.Errorf("convert legacy Position %d write time failed, %w", position.ID, err)
 			}
 			rows = append(rows, &stagedLibraryPosition{
-				ID: position.ID, FileID: owners[position.ID], MediaID: position.MediaID, Path: position.Path,
-				ParentPath: position.ParentPath, IsDir: position.IsDir,
-				Mode: position.Mode, MtimeNS: position.MtimeNS, WrittenAtNS: position.WrittenAtNS,
-				Size: position.Size, Hash: position.Hash, StorageOrder: position.StorageOrder,
+				ID: position.ID, FileID: position.FileID, MediaID: position.TapeID, Path: position.Path,
+				Mode: position.Mode, MtimeNS: mtimeNS, WrittenAtNS: writtenAtNS,
+				Size: position.Size, Hash: position.Hash, StorageOrder: []byte{},
 			})
-			delete(owners, position.ID)
-			if len(rows) == 256 {
-				return flush()
-			}
-			return nil
 		}
-
-		// Reject unsupported timestamps before yielding their physical Position to the tree builder.
-		var cursorPath string
-		var cursorID int64
-		source := func(_ context.Context, emit func(*library.Position) error) error {
-			for {
-				var positions []*legacyLibraryPosition
-				result := db.WithContext(ctx).Where(
-					"tape_id = ? AND (path > ? OR (path = ? AND id > ?))",
-					tapeID, cursorPath, cursorPath, cursorID,
-				).Order("path, id").Limit(256).Find(&positions)
-				if result.Error != nil {
-					return fmt.Errorf("read legacy Positions failed, tape_id=%d path=%q id=%d, %w", tapeID, cursorPath, cursorID, result.Error)
-				}
-				if len(positions) == 0 {
-					return nil
-				}
-				for _, position := range positions {
-					mtimeNS, err := dataformat.Nanoseconds(position.ModTime)
-					if err != nil {
-						return fmt.Errorf("convert legacy Position %d mtime failed, %w", position.ID, err)
-					}
-					writtenAtNS, err := dataformat.Nanoseconds(position.WriteTime)
-					if err != nil {
-						return fmt.Errorf("convert legacy Position %d write time failed, %w", position.ID, err)
-					}
-					owners[position.ID] = position.FileID
-					if err := emit(&library.Position{
-						ID: position.ID, MediaID: position.TapeID,
-						Path: position.Path, Mode: position.Mode, MtimeNS: mtimeNS,
-						WrittenAtNS: writtenAtNS, Size: position.Size, Hash: position.Hash,
-					}); err != nil {
-						return err
-					}
-					cursorPath = position.Path
-					cursorID = position.ID
-				}
-			}
+		if err := db.WithContext(ctx).CreateInBatches(rows, 256).Error; err != nil {
+			return fmt.Errorf("write current Positions failed, cursor=%d, %w", cursor, err)
 		}
-		if err := library.BuildPositionTree(ctx, source, yield); err != nil {
-			return 0, 0, fmt.Errorf("index legacy Positions failed, tape_id=%d, %w", tapeID, err)
-		}
-		if err := flush(); err != nil {
-			return 0, 0, err
-		}
+		cursor = source[len(source)-1].ID
 	}
-	return physicalCount, directoryCount, nil
 }

@@ -462,21 +462,19 @@ func (l *Library) walkPhysicalSelection(ctx context.Context, root selectionRoot,
 		if err != nil {
 			return err
 		}
-		files := make([]*File, 0, len(byID))
-		for _, original := range originals {
-			if file := byID[original.FileID]; file != nil {
-				files = append(files, file)
-			}
-		}
-		paths, err := l.ReadFilePaths(ctx, files)
-		if err != nil {
-			return err
-		}
+		files := make([]*File, 0, len(originals))
 		for _, original := range originals {
 			file := byID[original.FileID]
 			if file == nil {
 				return fmt.Errorf("Location references missing File %d", original.FileID)
 			}
+			files = append(files, file)
+		}
+		paths, err := l.ReadFilePaths(ctx, files)
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
 			if err := yield(file, strings.TrimPrefix(paths[file.ID], "/")); err != nil {
 				return err
 			}

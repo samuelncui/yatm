@@ -17,6 +17,7 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
 	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
+	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
@@ -211,10 +212,7 @@ func inspectInstallation(
 }
 
 func inspectBackupScope(conf *config.Config, configPath, root string, report *installationReport) error {
-	// External databases require an operator-managed coordinated backup.
-	if conf.Database.Dialect != "sqlite" {
-		return errors.New("automatic upgrade requires SQLite; back up the external database and use the manual migration guide")
-	}
+	// main admits only SQLite installations to automatic upgrade.
 	dbPath, _, err := sqliteFile(conf.Database.DSN)
 	if err != nil {
 		return err
@@ -261,7 +259,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	}
 
 	// Previews are regenerable derivatives; an installation backup leaves them in place.
-	previewRoot, err := executor.CanonicalConfiguredPath(resolvePreviewRoot(conf))
+	previewRoot, err := executor.CanonicalConfiguredPath(preview.ResolveRoot(conf.Preview.Root, conf.Paths.Work))
 	if err != nil {
 		return err
 	}
@@ -319,18 +317,6 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		}
 		return nil
 	})
-}
-
-// resolvePreviewRoot mirrors the service: a relative Preview root lives under the Work directory.
-func resolvePreviewRoot(conf *config.Config) string {
-	root := strings.TrimSpace(conf.Preview.Root)
-	if root == "" {
-		root = "previews"
-	}
-	if filepath.IsAbs(root) {
-		return root
-	}
-	return filepath.Join(conf.Paths.Work, root)
 }
 
 // Unmodified v0.1.x templates hide failures: encrypt exits 0 after every stenc attempt fails,

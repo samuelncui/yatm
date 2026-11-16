@@ -185,7 +185,7 @@ func TestCartridgeDirectoryCapture(t *testing.T) {
 
 	// Exact exclusive endpoints include both filemark totals and the partial final wrap.
 	if len(want) != 23 || !reflect.DeepEqual(observed.Endpoints, want) || !observed.Valid() || !observed.AllWraps ||
-		observed.Fresh != nil || observed.ObservedAt.IsZero() || !bytes.Equal(before, data) {
+		observed.ObservedAt.IsZero() || !bytes.Equal(before, data) {
 		t.Fatalf("captured CM map=%+v", observed)
 	}
 

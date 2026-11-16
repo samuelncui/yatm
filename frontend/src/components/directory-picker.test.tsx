@@ -139,9 +139,6 @@ it.each([
   ["missing directory", undefined],
   ["no write capability", FilesEntry.create({ ...entry(""), operations: [] })],
   ["non-directory", FilesEntry.create({ ...entry(""), kind: EntryKind.FILE })],
-  ["wrong path", entry("other")],
-  ["wrong location", entry("", 2n)],
-  ["missing reference", FilesEntry.create({ ...entry(""), reference: undefined })],
 ])("does not choose or create within a %s", async (_, directory) => {
   list.mockReturnValue(stream({ ...page(), directory }));
   render(<DirectoryPicker locationID={1n} onNewDirectory={vi.fn()} onChoose={vi.fn()} onClose={vi.fn()} />);

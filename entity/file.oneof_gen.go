@@ -19,25 +19,6 @@ func (x *FileSelection) Unpack() OneofFileSelection {
 	}
 }
 
-func PackFileSelection(param OneofFileSelection) *FileSelection {
-	switch param := param.(type) {
-	case *LibrarySelection:
-		return &FileSelection{
-			Target: &FileSelection_Library{
-				Library: param,
-			},
-		}
-	case *LocationSelection:
-		return &FileSelection{
-			Target: &FileSelection_Location{
-				Location: param,
-			},
-		}
-	default:
-		return nil
-	}
-}
-
 func (p *LibrarySelection) Pack() *FileSelection {
 	return &FileSelection{
 		Target: &FileSelection_Library{

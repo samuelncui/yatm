@@ -23,6 +23,9 @@ func tarTestReadModel(parameters *entity.TapeReadParameters, profile *entity.Tar
 	geometry *tape.WrapMap,
 ) (*mediapkg.ReadCostModel, string) {
 	// Both live observations and retained geometry use the same derived traversal and cost compiler.
+	if reason := tarReportedWrapsReason(geometry); reason != "" {
+		return nil, reason
+	}
 	value, reason := deriveTarPositionMap(parameters, profile, geometry)
 	if value == nil {
 		return nil, reason

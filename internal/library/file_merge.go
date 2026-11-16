@@ -33,21 +33,6 @@ func (l *Library) RemoveFileVersion(ctx context.Context, fileID, versionID int64
 	return removed, nil
 }
 
-// MergeFiles combines a caller-owned source list in deterministic order.
-func (l *Library) MergeFiles(ctx context.Context, targetID int64, sourceIDs []int64) error {
-	// Preserve the existing slice interface while sharing the bounded mutation path.
-	ids := uniqueFileIDs(sourceIDs)
-	_, err := l.MergeFileMembers(ctx, targetID, func(yield func([]int64) error) error {
-		for batch := range slices.Chunk(ids, batchSize) {
-			if err := yield(batch); err != nil {
-				return err
-			}
-		}
-		return nil
-	}, false)
-	return err
-}
-
 // MergeFileMembers combines an ordered source stream in one metadata transaction.
 // visit yields unique ascending source IDs in bounded batches and propagates yield errors.
 func (l *Library) MergeFileMembers(ctx context.Context, targetID int64,
@@ -107,7 +92,7 @@ func (l *Library) MergeFileMembers(ctx context.Context, targetID int64,
 					if source.ID == target.ID || source.Kind != entity.FileKind_FILE_KIND_REGULAR {
 						return fmt.Errorf("merge source must be a different regular File")
 					}
-					if _, err := l.mergeFileMetadata(ctx, tx, source, target); err != nil {
+					if err := l.mergeFileMetadata(ctx, tx, source, target); err != nil {
 						return err
 					}
 					if err := mergeVersions(tx, source.ID, target.ID); err != nil {

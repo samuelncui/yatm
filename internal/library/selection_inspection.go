@@ -28,7 +28,7 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 		return nil, err
 	}
 
-	// Keep import from replacing identities while inspecting an independent request snapshot.
+	// Freezing selections rewrites them; inspect a copy instead of the caller's request.
 	request = proto.Clone(request).(*entity.SelectionInspection)
 
 	// Compute every total against the same metadata view.

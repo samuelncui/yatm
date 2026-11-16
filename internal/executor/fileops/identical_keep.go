@@ -116,8 +116,8 @@ func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scop
 	aggregate := &keepResults{ResultStream: stream, summary: summary}
 	var afterLocation, afterFile int64
 	for {
-		var rows []keepMember
-		if err := stage.Where("location_id > ? OR (location_id = ? AND file_id > ?)", afterLocation, afterLocation, afterFile).Order("location_id, file_id").Limit(256).Find(&rows).Error; err != nil {
+		rows, err := keepPage(stage, afterLocation, afterFile)
+		if err != nil {
 			return err
 		}
 		if len(rows) == 0 {
@@ -160,9 +160,8 @@ func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scop
 func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOperationSummary, stream ResultStream) error {
 	var afterLocation, afterFile int64
 	for {
-		var rows []keepMember
-		if err := stage.WithContext(ctx).Where("location_id > ? OR (location_id = ? AND file_id > ?)", afterLocation, afterLocation, afterFile).
-			Order("location_id, file_id").Limit(256).Find(&rows).Error; err != nil {
+		rows, err := keepPage(stage, afterLocation, afterFile)
+		if err != nil {
 			return err
 		}
 		if len(rows) == 0 {
@@ -180,6 +179,14 @@ func reportKeepPlan(ctx context.Context, stage *gorm.DB, summary *entity.FileOpe
 	}
 	summary.Completed = true
 	return stream.Send(&entity.FileOperationResult{Summary: summary})
+}
+
+// keepPage reads staged copies in (Location, File) keyset order.
+func keepPage(stage *gorm.DB, afterLocation, afterFile int64) ([]keepMember, error) {
+	var rows []keepMember
+	err := stage.Where("location_id > ? OR (location_id = ? AND file_id > ?)", afterLocation, afterLocation, afterFile).
+		Order("location_id, file_id").Limit(256).Find(&rows).Error
+	return rows, err
 }
 
 func openKeepStage(ctx context.Context, exe *executor.Executor) (*gorm.DB, func() error, error) {

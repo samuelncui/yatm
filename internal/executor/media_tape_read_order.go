@@ -40,10 +40,9 @@ type ltfsSessionReadOrder struct {
 func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 	profile *entity.TapeMediaProfile,
 ) (*ltfsReadSnapshot, error) {
-	// Old adapters and callers without an admitted preference retain their original preparation path.
-	value, _ := ctx.Value(deviceSettingsKey{}).(*entity.DeviceSettings)
-	if value == nil {
-		return nil, nil
+	value, err := b.deviceSettings(ctx)
+	if err != nil {
+		return nil, err
 	}
 	snapshot := &ltfsReadSnapshot{settings: value, defaults: settingspkg.TapeDefaults(value, device)}
 	if settingspkg.TapeDefaultReadOrder(snapshot.defaults) != entity.TapeReadOrder_TAPE_READ_ORDER_AUTO {
@@ -67,14 +66,7 @@ func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 	started := time.Now()
 	geometry, observeErr := prepared.Geometry(ctx)
 	snapshot.report = prepared.Report()
-	for _, feature := range snapshot.report.GetTape().GetFeatures() {
-		if feature.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER {
-			b.logger.WithContext(ctx).WithFields(map[string]any{
-				"device": device, "elapsed_ms": time.Since(started).Milliseconds(), "detail": feature.Detail,
-			}).Info("LTFS read directory preparation")
-			break
-		}
-	}
+	b.logReadDirectoryPreparation(ctx, device, started, snapshot.report, "LTFS read directory preparation")
 	if observeErr == nil && geometry.Complete() {
 		snapshot.endpoints = append([]tape.WrapEndpoint(nil), geometry.Endpoints...)
 		snapshot.source, snapshot.observedAt = geometry.Source, geometry.ObservedAt
@@ -105,13 +97,24 @@ func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 	return snapshot, nil
 }
 
+// logReadDirectoryPreparation reports the drive's read-directory preparation detail.
+func (b *mediaBackend) logReadDirectoryPreparation(ctx context.Context, device string, started time.Time,
+	report *entity.InspectDeviceResponse, message string,
+) {
+	for _, feature := range report.GetTape().GetFeatures() {
+		if feature.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER {
+			b.logger.WithContext(ctx).WithFields(map[string]any{
+				"device": device, "elapsed_ms": time.Since(started).Milliseconds(), "detail": feature.Detail,
+			}).Info(message)
+			return
+		}
+	}
+}
+
 func (s *tapeReadSession) prepareReadOrder(ctx context.Context, stored *library.Media,
 	snapshot *ltfsReadSnapshot,
 ) error {
 	// Construction always leaves the native path available; only cancellation interrupts optional facts.
-	if snapshot == nil {
-		return nil
-	}
 	s.readOrder = &ltfsSessionReadOrder{reason: snapshot.reason}
 	s.readOrder.valid.Store(true)
 	requested := settingspkg.TapeDefaultReadOrder(snapshot.defaults)

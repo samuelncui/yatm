@@ -87,10 +87,6 @@ message FileLocation {
   bytes sha256 = 9;
 }
 
-message LocationRef {
-  int64 id = 1;
-}
-message LocationEntryQuery { int64 location_id = 1; string path = 2; }
 message CreateLocationRequest { Location location = 1; }
 message UpdateLocationRequest { Location location = 1; }
 message GetLocationRequest { int64 id = 1; }

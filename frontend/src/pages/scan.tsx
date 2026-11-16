@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 import { ScanForm } from "@/components/scan-form";
-import { initialScan } from "./scan-input";
+import { initialScan } from "@/components/scan-input";
 import { scanJobCli } from "@/api";
 import { JobCreationLoader, readCreationEntries } from "@/components/job-creation";
-import type { InitialScan } from "./scan-input";
+import type { InitialScan } from "@/components/scan-input";
 
 const loadCreation = async (id: bigint, signal: AbortSignal): Promise<InitialScan> => {
   const { request, unavailableReason } = await scanJobCli.getCreation({ id }, { abort: signal }).response;

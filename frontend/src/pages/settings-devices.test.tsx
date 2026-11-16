@@ -2,7 +2,7 @@ import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
-import { render } from "@/state/test-render";
+import { render, renderPage } from "@/state/test-render";
 import { DeviceSettings, InspectDeviceResponse, SettingsValue, TapeDeviceReport, TapeReadOrder, TapeReadParameters, TapeRecordMode } from "@/entity";
 const { get, update, listDevices, inspectDevice } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), listDevices: vi.fn(), inspectDevice: vi.fn() }));
 vi.mock("@/api", () => ({ settingsCli: { get, update }, mediaCli: { listDevices, inspectDevice } }));
@@ -32,7 +32,7 @@ beforeEach(() => {
   listDevices.mockReturnValue({ response: Promise.resolve({ devices: [{ device: "drive", kind: 1, busy: false, detail: "" }] }) });
 });
 it("saves explicit learning Off and a planning budget above 600 seconds without hardware access", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   fireEvent.change(screen.getByRole("spinbutton", { name: "Read planning budget (seconds)" }), { target: { value: "1800" } });
@@ -46,7 +46,7 @@ it("saves explicit learning Off and a planning budget above 600 seconds without 
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 it("rejects a zero planning budget and preserves unspecified defaults when cleared", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   await userEvent.click(advanced);
@@ -67,7 +67,7 @@ it("rejects a zero planning budget and preserves unspecified defaults when clear
   expect(tape.passiveReadLearning).toBeUndefined();
 });
 it("retains inactive tar settings and explicit false without hardware access on Save", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   expect(inspectDevice).not.toHaveBeenCalled();
   const advanced = screen.getByRole("button", { name: /Advanced/ });
@@ -83,7 +83,7 @@ it("retains inactive tar settings and explicit false without hardware access on 
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 it("expands Advanced for an invalid retained size and keeps the draft", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   await userEvent.click(advanced);
@@ -97,7 +97,7 @@ it("expands Advanced for an invalid retained size and keeps the draft", async ()
 });
 
 it.each([undefined, false, true])("saves compression setting %s with presence intact and no hardware access", async (hardwareCompression) => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   await userEvent.click(screen.getByRole("combobox", { name: "Tar hardware compression" }));
@@ -113,7 +113,7 @@ it.each([undefined, false, true])("saves compression setting %s with presence in
 });
 
 it("keeps read order visible and page actions together while encryption belongs to scripts", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   expect(screen.getByRole("combobox", { name: "Read order" })).toBeVisible();
   expect(screen.getByRole("button", { name: /Advanced/ })).toHaveAttribute("aria-expanded", "false");
@@ -141,7 +141,7 @@ it("keeps read order visible and page actions together while encryption belongs 
 });
 
 it("edits Auto offline, preserves unspecified and inactive read-order settings", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   await userEvent.click(advanced);
@@ -166,7 +166,7 @@ it("keeps unsupported read order visible outside Advanced", async () => {
   if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
   saved.value.device.devices[0].options.tape.readOrder = 99 as TapeReadOrder;
   get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   expect(advanced).toHaveAttribute("aria-expanded", "false");
@@ -186,7 +186,7 @@ it("keeps unsupported read order visible outside Advanced", async () => {
 });
 
 it.each([undefined, 0, 5, 30, 4294967295])("saves capacity polling %s with optional presence and other defaults intact", async (seconds) => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   expect(advanced).toHaveAttribute("aria-expanded", "false");
@@ -219,7 +219,7 @@ it("loads an explicit Off setting, restores it on Cancel and clears it back to A
   if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
   saved.value.device.devices[0].options.tape.capacityPollIntervalSeconds = 0;
   get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   expect(advanced).toHaveTextContent("capacity polling Off");
@@ -238,7 +238,7 @@ it("loads an explicit Off setting, restores it on Cancel and clears it back to A
 });
 
 it.each(["-1", "1", "4", "5.5", "4294967296"])("rejects capacity polling interval %s before Save and expands Advanced", async (seconds) => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const advanced = screen.getByRole("button", { name: /Advanced/ });
   await userEvent.click(advanced);
@@ -255,7 +255,7 @@ it.each(["-1", "1", "4", "5.5", "4294967296"])("rejects capacity polling interva
 
 it("keeps the custom polling interval and save error for a retry without hardware access", async () => {
   update.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Device settings could not be saved")) }));
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   const interval = screen.getByRole("spinbutton", { name: "Tar capacity polling interval (seconds)" });
@@ -278,7 +278,7 @@ const editParameters = async () => {
 };
 
 it("applies partial parameters only to the page draft, and Save persists them without hardware access", async () => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const dialog = await editParameters();
   expect(dialog.getByText(/Incomplete parameters may keep Logical order/)).toBeVisible();
@@ -319,7 +319,7 @@ it("applies partial parameters only to the page draft, and Save persists them wi
 });
 
 it.each(["cancel", "escape"])("protects unapplied JSON on %s and discards it without changing the page draft", async (close) => {
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const dialog = await editParameters();
   const field = dialog.getByRole("textbox", { name: "Read parameters JSON" });
@@ -370,7 +370,7 @@ it("fills JSON from the existing report without activating it or retargeting old
       }),
     ),
   });
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   let dialog = await editParameters();
   expect(dialog.getByRole("button", { name: "From device details" })).toBeDisabled();
@@ -414,7 +414,7 @@ it("fills JSON from the existing report without activating it or retargeting old
 it("discards late Device details after changing the selected drive", async () => {
   let finish!: (value: InspectDeviceResponse) => void;
   inspectDevice.mockReturnValue({ response: new Promise((resolve) => (finish = resolve)) });
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: /Device details/ }));
   await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
@@ -429,7 +429,7 @@ it("discards late Device details after changing the selected drive", async () =>
 it("opens Device details for an inspection error even when collapsed while the read was pending", async () => {
   let reject!: (error: Error) => void;
   inspectDevice.mockReturnValue({ response: new Promise((_, fail) => (reject = fail)) });
-  render(<DeviceSettingsBrowser />);
+  renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   const details = screen.getByRole("button", { name: /Device details/ });
   await userEvent.click(details);
