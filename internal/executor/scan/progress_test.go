@@ -295,8 +295,7 @@ func TestVerifyCopiesWaitingForMediaReportsNoPercentage(t *testing.T) {
 	// A verification Job freezes its baseline before it waits for a drive. No work in that phase can
 	// advance the frozen count, so the stage must not offer a denominator a card would render as 0%.
 	r := newProgressRunner(t)
-	r.phase = entity.JobPhase_JOB_PHASE_QUEUED
-	require.NoError(t, r.db.Create(&Config{ID: 1, Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}}).Error)
+	r.phase, r.checking = entity.JobPhase_JOB_PHASE_QUEUED, true
 	require.NoError(t, r.db.Create(&[]*Entry{
 		{Path: "one", Change: entity.ScanChange_SCAN_CHANGE_UNCHANGED, Size: 10},
 		{Path: "two", Change: entity.ScanChange_SCAN_CHANGE_UNCHANGED, Size: 20},

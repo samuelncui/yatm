@@ -24,6 +24,7 @@ type copySource struct {
 
 	cursor    string
 	page      []*Item
+	originals *executor.OriginalResolver
 	index     int
 	prepared  []*copyItem
 	locations map[int64]bool
@@ -71,7 +72,23 @@ func (s *copySource) loadPage(ctx context.Context) error {
 	if len(page) == 0 {
 		return io.EOF
 	}
-	s.page, s.index = page, 0
+
+	// Resolve the page's selected originals together instead of once per copied file.
+	ids := make([]int64, 0, len(page))
+	for _, item := range page {
+		if item.Data.LibrarySelected && item.Data.Expected != nil {
+			ids = append(ids, item.Data.Expected.FileId)
+		}
+	}
+	s.page, s.index, s.originals = page, 0, nil
+	if len(ids) == 0 {
+		return nil
+	}
+	originals, err := s.runner.exe.NewOriginalResolver(ctx, ids)
+	if err != nil {
+		return err
+	}
+	s.originals = originals
 	return nil
 }
 
@@ -157,7 +174,7 @@ func (s *copySource) resolveSource(ctx context.Context, copy *copyItem) error {
 	}
 
 	// Resolve the selected File's current original without re-admitting live roots.
-	filename, locationID, err := s.runner.exe.ResolveOriginal(ctx, item.Data.Expected)
+	filename, locationID, err := s.originals.Resolve(ctx, item.Data.Expected)
 	if err != nil {
 		return err
 	}
@@ -174,6 +191,11 @@ func (s *copySource) resolveSource(ctx context.Context, copy *copyItem) error {
 		s.readModes[locationID] = useMmap
 	}
 	copy.useMmap = useMmap
+	if filename == item.Data.SourcePath {
+		return nil
+	}
+
+	// Record a relocated original before its bytes enter ACP.
 	item.Data.SourcePath = filename
 	if err := s.runner.db.WithContext(ctx).Model(&Item{}).
 		Where("id = ? AND status = ?", item.ID, entity.CopyStatus_COPY_STATUS_PENDING).

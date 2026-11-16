@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -189,6 +191,9 @@ func (a *jobArchiveRunner) commitStagedMedia(
 		if record.Status != entity.JobStatus_JOB_STATUS_READY {
 			return fmt.Errorf("Archive commit requires READY Job, status=%s", record.Status)
 		}
+		if err := recordArchivedContent(tx); err != nil {
+			return err
+		}
 		updated := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_STAGED).
 			Updates(map[string]any{
 				"status": entity.CopyStatus_COPY_STATUS_SUBMITTED, "media_id": stored.ID, "result": nil,
@@ -216,6 +221,45 @@ func (a *jobArchiveRunner) commitStagedMedia(
 		return nil, 0, 0, err
 	}
 	return stored, bytes, files, nil
+}
+
+// recordArchivedContent keeps each submitted item's content facts as the copy read them, the same
+// facts Library publication recorded, because the copy result itself is dropped at submission.
+func recordArchivedContent(tx *gorm.DB) error {
+	var cursor int64
+	for {
+		var items []*Item
+		if err := tx.Where("status = ? AND id > ?", entity.CopyStatus_COPY_STATUS_STAGED, cursor).
+			Order("id").Limit(batchSize).Find(&items).Error; err != nil {
+			return fmt.Errorf("query staged Archive items failed, %w", err)
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		for _, item := range items {
+			cursor = item.ID
+			expected, result := item.Data.GetExpected(), item.Result
+			if expected == nil || result == nil {
+				return fmt.Errorf("staged Archive item is incomplete, id=%d", item.ID)
+			}
+			if bytes.Equal(expected.Sha256, result.Sha256) && expected.SizeBytes == result.SizeBytes && len(expected.Signature) > 0 {
+				continue
+			}
+			signature := expected.Signature
+			if !library.KeepsSignature(expected, result.SizeBytes, result.Sha256) {
+				var err error
+				if signature, err = library.NewFileSignature(result.Sha256, result.SizeBytes); err != nil {
+					return err
+				}
+			}
+			data := proto.Clone(item.Data).(*entity.ArchiveManifestFile)
+			data.Expected.Signature, data.Expected.Sha256 = signature, result.Sha256
+			data.Expected.SizeBytes, data.Expected.Mode, data.Expected.MtimeNs = result.SizeBytes, result.Mode, result.ModTimeNs
+			if err := tx.Model(&Item{}).Where("id = ?", item.ID).Update("data", data).Error; err != nil {
+				return fmt.Errorf("record archived content failed, id=%d, %w", item.ID, err)
+			}
+		}
+	}
 }
 
 func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapkg.WriteSession) error {

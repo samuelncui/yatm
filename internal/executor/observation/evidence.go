@@ -1,8 +1,6 @@
 package observation
 
 import (
-	"bytes"
-
 	"github.com/samuelncui/yatm/internal/library"
 )
 
@@ -34,18 +32,4 @@ func (e Evidence) Keys() []*library.FileTrackingKey {
 			Details: library.TrackingDetails{BirthNS: e.BirthNS, Generation: e.Generation}})
 	}
 	return keys
-}
-
-func (e Evidence) ReplacedNative(keys []*library.FileTrackingKey) bool {
-	// Missing native evidence proves neither continuity nor replacement; metadata rules still apply.
-	if e.NativeScope == "" || len(e.NativeKey) == 0 {
-		return false
-	}
-	for _, key := range keys {
-		if key.Kind == library.TrackingNative && len(key.KeyValue) > 0 {
-			return key.Scope != e.NativeScope || !bytes.Equal(key.KeyValue, e.NativeKey) ||
-				key.Details.BirthNS != e.BirthNS || key.Details.Generation != e.Generation
-		}
-	}
-	return false
 }

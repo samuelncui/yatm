@@ -41,6 +41,7 @@ func (r *runner) prepareInputs(ctx context.Context, config *Config, target *enti
 	if err := r.db.WithContext(ctx).Where("1 = 1").Delete(&Entry{}).Error; err != nil {
 		return err
 	}
+	r.resetCounts()
 	// Collapse overlapping Location roots before traversal; Library roots retain their own scope.
 	var logical []*entity.FileSelection
 	physical := make(map[int64][]string)
@@ -156,6 +157,7 @@ func (r *runner) freezeMedia(ctx context.Context, config *Config) error {
 	if err := r.db.WithContext(ctx).Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Entry{}).Error; err != nil {
 		return err
 	}
+	r.resetCounts()
 	if err := r.exe.Lib().SnapshotMediaPositions(ctx, config.Spec.MediaId, func(p *library.Position) error {
 		change := entity.ScanChange_SCAN_CHANGE_REMOVED
 		if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
@@ -171,6 +173,9 @@ func (r *runner) freezeMedia(ctx context.Context, config *Config) error {
 		}
 		if err := r.db.WithContext(ctx).Create(entry).Error; err != nil {
 			return err
+		}
+		if change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+			r.advanceCounts(executor.Counts{Files: 1, Bytes: entry.Size}, executor.Counts{})
 		}
 		return nil
 	}); err != nil {

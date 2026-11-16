@@ -91,7 +91,7 @@ func TestScanEndpointReadsActualFactsWithoutNativePath(t *testing.T) {
 		ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}})
 
 	// The content page binds the endpoint from frozen storage and real ACP writes the verification result.
-	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session))
+	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil))
 	var stored Entry
 	require.NoError(t, r.db.First(&stored, entry.ID).Error)
 
@@ -135,7 +135,7 @@ func TestScanVerifyRawDeviceFailureDoesNotInventFindings(t *testing.T) {
 				ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}})
 
 			// Real ACP returns the device cause; its result writer must not publish file findings.
-			err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session)
+			err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil)
 			require.ErrorIs(t, err, cause)
 			var rows []Entry
 			require.NoError(t, r.db.Order("id").Find(&rows).Error)
@@ -162,7 +162,7 @@ func TestScanLogicalEndpointStopFindsOnlyActuallyOpenedMember(t *testing.T) {
 	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{MediaId: 1,
 		SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
 		ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}})
-	err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session)
+	err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil)
 	require.ErrorIs(t, err, cause)
 	require.Equal(t, 1, source.opens)
 

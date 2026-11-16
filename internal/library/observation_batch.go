@@ -94,20 +94,9 @@ func (b *observationBatch) admit(tx *gorm.DB, location *Location, p *ObservedEnt
 		return nil, ErrLocationConflict
 	}
 
-	// Missing evidence retains content; contradictory native evidence invalidates it.
-	unchanged := previous.Size == p.Size && previous.Mode == p.Mode && previous.MtimeNS == p.MtimeNS
-	if unchanged {
-		for _, old := range b.tracking[previous.FileID] {
-			if old.Kind != TrackingNative {
-				continue
-			}
-			for _, key := range p.TrackingKeys {
-				if key.Kind == TrackingNative && (key.Scope != old.Scope || !bytes.Equal(key.KeyValue, old.KeyValue) || key.Details != old.Details) {
-					unchanged = false
-				}
-			}
-		}
-	}
+	// Missing or differently scoped evidence retains content; contradictory native evidence invalidates it.
+	unchanged := previous.Size == p.Size && previous.Mode == p.Mode && previous.MtimeNS == p.MtimeNS &&
+		!NativeReplaced(b.tracking[previous.FileID], p.TrackingKeys)
 	if len(p.Signature) == 0 && len(p.Hash) == 0 && unchanged {
 		p.Signature, p.Hash = previous.Signature, previous.Hash
 	}

@@ -193,7 +193,7 @@ func archiveFixtureItems(t *testing.T, exe *executor.Executor, sources []*archiv
 			if err := entity.ValidateRelativePath(target); err != nil {
 				return err
 			}
-			expected, err := executor.HashObservedContent(ctx, filename, info)
+			expected, err := executor.VerifyObservedContent(ctx, filename, info)
 			if err != nil {
 				return err
 			}
@@ -244,7 +244,22 @@ func TestArchivePreviewPoliciesPropagateToCompanionPreview(t *testing.T) {
 	})
 	require.NoError(t, err)
 	waitIndexed(t, exe, reply.Job.Id)
-	progress, err := (&service{exe: exe}).GetProgress(context.Background(), &entity.GetArchiveJobProgressRequest{Id: reply.Job.Id})
+
+	// Preparation reads no content, so the companion waits for the copy's facts.
+	api := &service{exe: exe}
+	progress, err := api.GetProgress(context.Background(), &entity.GetArchiveJobProgressRequest{Id: reply.Job.Id})
+	require.NoError(t, err)
+	require.Zero(t, progress.PreviewJobId)
+	items, err := api.ListFiles(context.Background(), &entity.ListArchiveJobFilesRequest{Id: reply.Job.Id})
+	require.NoError(t, err)
+	require.Len(t, items.Items, 1)
+	archiveToVolume(t, exe, reply.Job.Id)
+	items, err = api.ListFiles(context.Background(), &entity.ListArchiveJobFilesRequest{Id: reply.Job.Id})
+	require.NoError(t, err)
+	want := sha256.Sum256([]byte("preview source"))
+	require.Equal(t, want[:], items.Items[0].File.Expected.Sha256)
+	require.NotEmpty(t, items.Items[0].File.Expected.Signature)
+	progress, err = api.GetProgress(context.Background(), &entity.GetArchiveJobProgressRequest{Id: reply.Job.Id})
 	require.NoError(t, err)
 	require.Empty(t, progress.PreviewError)
 	require.Positive(t, progress.PreviewJobId)
@@ -271,8 +286,8 @@ func TestArchivePreviewPoliciesPropagateToCompanionPreview(t *testing.T) {
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, record.Status)
 }
 
-func TestArchiveCompanionFailurePreservesPreparedArchive(t *testing.T) {
-	// A helper that disappears after admission cannot undo the successfully prepared Archive.
+func TestArchiveCompanionFailurePreservesCompletedArchive(t *testing.T) {
+	// A helper that disappears after admission cannot undo the completed Archive.
 	exe := setupTestExecutorWithPreviewer(t, executor.Scripts{}, &disappearingPreviewer{})
 	_, file, _ := publishArchiveOriginal(t, exe, "without-previewer", []byte("archive content"))
 	api := &service{exe: exe}
@@ -282,6 +297,7 @@ func TestArchiveCompanionFailurePreservesPreparedArchive(t *testing.T) {
 	require.NoError(t, err)
 	job := waitIndexed(t, exe, reply.Job.Id)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, job.Status)
+	archiveToVolume(t, exe, job.ID)
 	progress, err := api.GetProgress(context.Background(), &entity.GetArchiveJobProgressRequest{Id: job.ID})
 	require.NoError(t, err)
 	require.Zero(t, progress.PreviewJobId)
@@ -290,6 +306,33 @@ func TestArchiveCompanionFailurePreservesPreparedArchive(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, items.Items, 1)
 	require.Equal(t, file.ID, items.Items[0].File.Expected.FileId)
+}
+
+// archiveToVolume writes a READY Archive to a new Volume and waits for completion.
+func archiveToVolume(t *testing.T, exe *executor.Executor, id int64) {
+	t.Helper()
+	ctx := context.Background()
+	root := filepath.Join(exe.Paths().Volumes[0], "archive")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	volume, err := mediapkg.InitializeVolume(root, &entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD})
+	require.NoError(t, err)
+	_, err = exe.Lib().CreateMedia(ctx, &library.Media{
+		Kind: entity.MediaKind_MEDIA_KIND_VOLUME, Identity: volume.Marker.UUID, Name: "Archive",
+		Profile: volume.Marker.Profile.Pack(), CreatedAtNS: volume.Marker.CreatedAtNS,
+	})
+	require.NoError(t, err)
+	value, err := exe.GetJobRunner(ctx, id)
+	require.NoError(t, err)
+	runner := value.(*jobArchiveRunner)
+	_, err = (&service{exe: exe}).WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
+		Id: id, Target: (&entity.ArchiveVolumeTarget{Uuid: volume.Marker.UUID}).Pack(),
+	})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		record := new(executor.JobRecord)
+		err := runner.db.First(record, 1).Error
+		return err == nil && record.Status == entity.JobStatus_JOB_STATUS_COMPLETED && !exe.IsRunning(id)
+	}, 15*time.Second, 10*time.Millisecond)
 }
 
 func waitIndexed(t *testing.T, exe *executor.Executor, id int64) *executor.Job {

@@ -25,15 +25,20 @@ func (r *runner) previewWorkload(ctx context.Context, config *Config, scope *Sco
 	var size, total int64
 	var candidate bool
 	finish := func() error {
-		if !candidate || config.Spec.PreviewPolicy == entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL {
-			if candidate {
-				total++
-			}
+		if !candidate {
 			return nil
 		}
 		signature, err := library.NewFileSignature(hash, size)
 		if err != nil {
 			return err
+		}
+		// Content this attempt already generated or failed is shared, never decoded again.
+		if r.previewSettled(signature) {
+			return nil
+		}
+		if config.Spec.PreviewPolicy == entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL {
+			total++
+			return nil
 		}
 		exists, err := r.exe.Previews().Exists(signature)
 		if err != nil {

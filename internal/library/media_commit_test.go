@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -123,6 +125,52 @@ func TestCommitMediaStreamsLTFSInventoryAndAppendsIt(t *testing.T) {
 	require.Equal(t, secondWrite.UnixNano(), *stats.LastWrittenAtNS)
 }
 
+func TestCommitMediaAppendMatchesFullPositionIndexRebuild(t *testing.T) {
+	ctx := context.Background()
+	db, lib := newTestLibrary(t)
+	file := func(path string, size int64, mtime, written int64) *MediaFile {
+		value := &MediaFile{Path: path, Size: size, Mode: 0o644}
+		if mtime != 0 {
+			value.ModTime = time.Unix(0, mtime)
+		}
+		if written != 0 {
+			value.WriteTime = time.Unix(0, written)
+		}
+		return value
+	}
+	media, err := lib.CommitMedia(ctx, testTapeMedia("ABC001", TapeFormatLTFSV0), mediaFileSource(
+		file("a/b/one", 1, 50, 0), file("a/c/two", 2, 0, 70), file("a/three", 4, -10, 5), file("root", 8, 1, 1),
+	))
+	require.NoError(t, err)
+
+	// Append into existing, new and sibling directories, including unknown and pre-epoch times.
+	_, err = lib.CommitMedia(ctx, media, mediaFileSource(
+		file("a/b-x/six", 64, -20, 0), file("a/b/c/four", 16, 40, 90), file("a/b/five", 32, 0, 0),
+		file("a/c/seven", 128, 60, 10), file("d/e/eight", 256, 0, -5), file("root2", 512, 2, 2),
+	))
+	require.NoError(t, err)
+
+	// Directory IDs are derived; compare every other column against a full rebuild.
+	snapshot := func() []Position {
+		var rows []Position
+		require.NoError(t, db.Where("media_id = ?", media.ID).Order("path").Find(&rows).Error)
+		for index := range rows {
+			if rows[index].IsDir {
+				rows[index].ID = 0
+			}
+		}
+		return rows
+	}
+	appended := snapshot()
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		return rebuildMediaPositionIndex(ctx, tx, media.ID)
+	}))
+	require.Equal(t, snapshot(), appended)
+	var directories int64
+	require.NoError(t, db.Model(&Position{}).Where("media_id = ? AND is_dir = ?", media.ID, true).Count(&directories).Error)
+	require.Equal(t, int64(7), directories)
+}
+
 func TestCommitMediaRejectsDuplicateLTFSPathAtomically(t *testing.T) {
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -166,6 +214,49 @@ func TestPositionMediaIndexes(t *testing.T) {
 	require.Equal(t, []string{"media_id", "parent_path", "path"}, columns["idx_positions_media_parent"])
 	require.Equal(t, []string{"media_id", "is_dir", "written_at_ns"}, columns["idx_positions_media_files"])
 	require.True(t, unique["idx_positions_media_path"])
+}
+
+func BenchmarkCommitMediaAppend(b *testing.B) {
+	// Append selected Archive files to a Media that already holds a large inventory.
+	ctx := context.Background()
+	db, err := resource.OpenSQLite(filepath.Join(b.TempDir(), "library.db"))
+	require.NoError(b, err)
+	lib := New(db)
+	require.NoError(b, lib.PrepareTemporary(b.TempDir()))
+	require.NoError(b, lib.AutoMigrate())
+	const existing, appended = 20000, 100
+	media, err := lib.CommitMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
+		Identity: "11111111-1111-1111-1111-111111111111", Profile: (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()},
+		func(_ context.Context, yield func(*MediaFile) error) error {
+			for index := 0; index < existing; index++ {
+				if err := yield(&MediaFile{Path: fmt.Sprintf("old/%03d/%05d", index/100, index), Size: 1, Mode: 0o644}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	require.NoError(b, err)
+	files := make([]*File, appended)
+	for index := range files {
+		files[index] = &File{Name: fmt.Sprintf("file-%03d", index)}
+		require.NoError(b, lib.SaveFile(ctx, files[index]))
+	}
+
+	// Each append publishes new paths and new content for the same selected Files.
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		_, err := lib.CommitMedia(ctx, media, func(_ context.Context, yield func(*MediaFile) error) error {
+			for index, file := range files {
+				hash := sha256.Sum256(fmt.Appendf(nil, "%d/%d", iteration, index))
+				if err := yield(&MediaFile{Path: fmt.Sprintf("new/%06d/%03d", iteration, index), Size: 7, Mode: 0o644,
+					Hash: hash[:], Expected: &entity.ExpectedFile{FileId: file.ID}}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		require.NoError(b, err)
+	}
 }
 
 func testTapeMedia(identity, format string) *Media {

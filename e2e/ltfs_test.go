@@ -173,7 +173,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	archiveClient := entity.NewArchiveJobServiceClient(conn)
 	restoreClient := entity.NewRestoreJobServiceClient(conn)
 
-	// Create and index the Archive and its independent Preview Job.
+	// Create and index the Archive; its independent Preview Job waits for the archived content.
 	created, err := archiveClient.Create(ctx, &entity.CreateArchiveJobRequest{
 		PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
 		Spec:          &entity.ArchiveJobSpec{Selections: indexedSelections(t, ctx, conn, paths.Source, "dataset")},
@@ -184,9 +184,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	prepared, err := archiveClient.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: archiveID})
 	require.NoError(t, err)
 	require.Empty(t, prepared.PreviewError)
-	previewID := prepared.PreviewJobId
-	require.Positive(t, previewID)
-	waitForCompletedJob(t, ctx, jobClient, previewID)
+	require.Zero(t, prepared.PreviewJobId)
 
 	// Fail once after a real LTFS unmount and verify that no checkpoint was published.
 	_, err = archiveClient.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
@@ -267,6 +265,12 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		require.Equal(t, entity.CopyStatus_COPY_STATUS_SUBMITTED, item.Status)
 		require.NotNil(t, item.MediaId)
 	}
+	completed, err := archiveClient.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: archiveID})
+	require.NoError(t, err)
+	require.Empty(t, completed.PreviewError)
+	previewID := completed.PreviewJobId
+	require.Positive(t, previewID)
+	waitForCompletedJob(t, ctx, jobClient, previewID)
 	originalTape, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
 	require.NotNil(t, originalTape)

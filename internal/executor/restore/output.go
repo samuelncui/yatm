@@ -148,10 +148,34 @@ func (a *jobRestoreRunner) outputMatches(ctx context.Context, relative string, h
 	return bytes.Equal(facts.Sha256, hash) && facts.SizeBytes == size, true, nil
 }
 
+// outputUnchanged trusts an output staged by this Job without reading it: verified bytes received
+// the selected version's mode/mtime before staging, so an unchanged size, mode and mtime suffice.
+// Damaged bytes keep no version metadata and are always verified by content.
+func (a *jobRestoreRunner) outputUnchanged(ctx context.Context, copy *copyCandidate, output *File) (bool, error) {
+	if output.Damaged || copy.FileVersionID == 0 {
+		return false, nil
+	}
+	filename, err := a.exe.RestoreOutputPath(ctx, a.destination, output.Path)
+	if err != nil {
+		return false, err
+	}
+	// The content verification that follows a mismatch reports inspection failures.
+	info, err := os.Lstat(filename)
+	if err != nil {
+		return false, nil
+	}
+	return info.Mode().IsRegular() && info.Size() == output.ActualSize &&
+		info.Mode()&restoredModeBits == fs.FileMode(copy.Mode)&restoredModeBits &&
+		info.ModTime().UnixNano() == copy.MtimeNS, nil
+}
+
+// restoredModeBits are the mode bits a Restore applies from the selected version.
+const restoredModeBits = fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky
+
 func (a *jobRestoreRunner) restoreMetadata(relative string, mode uint32, mtime int64) error {
 	// Metadata belongs to the selected version, independently of the shared archive copy.
 	filename := a.restoreTarget(relative)
-	permissions := fs.FileMode(mode) & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky)
+	permissions := fs.FileMode(mode) & restoredModeBits
 	if err := os.Chmod(filename, permissions); err != nil {
 		return err
 	}

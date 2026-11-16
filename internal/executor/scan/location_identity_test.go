@@ -102,6 +102,62 @@ func TestNativeRelocationPreservesOpaqueObservedSignature(t *testing.T) {
 	require.Equal(t, rows[0].Signature, current[0].Signature)
 }
 
+func TestKnownOnlyHashReuseComparesNativeIdentityWithinOneScope(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*library.FileTrackingKey)
+		reuse  bool
+	}{
+		// A remount can assign another device number; that alone must not discard the recorded hash.
+		{"different scope", func(key *library.FileTrackingKey) { key.Scope, key.KeyValue = key.Scope+"-remounted", []byte("other") }, true},
+		{"same scope other inode", func(key *library.FileTrackingKey) { key.KeyValue = []byte("replaced") }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			exe, source := setupAnalyze(t)
+			writeAnalyzeFile(t, source, "file", "recorded content")
+			run := func() {
+				reply, err := (&service{exe: exe}).Create(ctx, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID), SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY}})
+				require.NoError(t, err)
+				require.Eventually(t, func() bool { return !exe.IsRunning(reply.Job.Id) }, 15*time.Second, 10*time.Millisecond)
+				runner, err := exe.GetJobRunner(ctx, reply.Job.Id)
+				require.NoError(t, err)
+				require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, runner.Phase())
+			}
+			run()
+			rows, err := exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)
+			require.NoError(t, err)
+			row := rows[0]
+			require.Empty(t, row.Hash)
+			tracking, err := exe.Lib().ReadFileTrackingKeys(ctx, []int64{row.FileID})
+			require.NoError(t, err)
+			keys := tracking[row.FileID]
+			if len(keys) == 0 {
+				t.Skip("filesystem provides no native tracking identity")
+			}
+
+			// Record a hash with the native evidence the next observation is compared against.
+			hash := sha256.Sum256([]byte("recorded content"))
+			tc.mutate(keys[0])
+			observation := &library.ObservedEntry{Path: row.Path, FileID: row.FileID, Size: row.Size, Mode: row.Mode,
+				MtimeNS: row.MtimeNS, Hash: hash[:], TrackingKeys: keys}
+			_, err = exe.Lib().PublishAnalyzed(ctx, source.ID, 9,
+				func(_ context.Context, yield func(*library.ObservedEntry) error) error { return yield(observation) }, nil)
+			require.NoError(t, err)
+
+			run()
+			current, err := exe.Lib().GetFileLocationAtPath(ctx, source.ID, "file")
+			require.NoError(t, err)
+			require.Equal(t, row.FileID, current.FileID)
+			if tc.reuse {
+				require.Equal(t, hash[:], current.Hash)
+			} else {
+				require.Empty(t, current.Hash)
+			}
+		})
+	}
+}
+
 func TestHashFactsCorrectMetadataOnlyChangeClassification(t *testing.T) {
 	// A valid new cache may disprove an unchanged metadata tuple; it must appear in the Diff.
 	before, after := sha256.Sum256([]byte("before")), sha256.Sum256([]byte("after!"))

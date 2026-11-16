@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"context"
 	"database/sql/driver"
 	"encoding/json"
@@ -35,6 +36,23 @@ func (d *TrackingDetails) Scan(value any) error {
 }
 
 func (d TrackingDetails) Value() (driver.Value, error) { return json.Marshal(d) }
+
+// NativeReplaced reports whether observed native evidence proves that the recorded object was replaced.
+// Native keys are comparable only within one scope: a different scope, such as a new device number after
+// a remount, proves neither continuity nor replacement, so metadata rules decide as without native evidence.
+func NativeReplaced(recorded, observed []*FileTrackingKey) bool {
+	for _, old := range recorded {
+		if old.Kind != TrackingNative || old.Scope == "" || len(old.KeyValue) == 0 {
+			continue
+		}
+		for _, key := range observed {
+			if key.Kind == TrackingNative && key.Scope == old.Scope && (!bytes.Equal(key.KeyValue, old.KeyValue) || key.Details != old.Details) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // FileTrackingKey supplies candidates, not unique ownership of an observed identifier.
 type FileTrackingKey struct {

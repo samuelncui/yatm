@@ -159,7 +159,7 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		// Exact path continuity wins before every relocation rule; the batched lookup already resolved it.
 		row.FileID = old.FileID
 		row.Before, row.Change = old.Observation(), entity.ScanChange_SCAN_CHANGE_CHANGED
-		unchanged := row.Size == old.Size && row.Mode == old.Mode && row.MtimeNS == old.MtimeNS && !row.Evidence.ReplacedNative(keys[old.FileID])
+		unchanged := row.Size == old.Size && row.Mode == old.Mode && row.MtimeNS == old.MtimeNS && !library.NativeReplaced(keys[old.FileID], row.Evidence.Keys())
 		if unchanged && policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ {
 			row.Change = entity.ScanChange_SCAN_CHANGE_UNCHANGED
 			if len(old.Hash) == 32 && len(row.SHA256) == 0 {
@@ -171,8 +171,38 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		}
 	}
 
+	// Physical roots are collapsed and visited once, so only logical leaves can repeat a path the
+	// manifest already holds or that appears earlier in the same batch.
+	present := make(map[string]bool, len(rows))
+	if originals != nil {
+		names := make([]string, 0, len(rows))
+		for _, row := range rows {
+			names = append(names, row.Path)
+		}
+		var existing []string
+		if err := s.db.WithContext(ctx).Model(&Entry{}).Where("location_id = ? AND path IN ?", s.source.ID, names).
+			Pluck("path", &existing).Error; err != nil {
+			return err
+		}
+		for _, name := range existing {
+			present[name] = true
+		}
+	}
+	var added executor.Counts
+	for _, row := range rows {
+		if present[row.Path] {
+			continue
+		}
+		present[row.Path] = true
+		added.Files, added.Bytes = added.Files+1, added.Bytes+row.Size
+	}
+
 	// The existing Location/path key owns overlap removal; no second selection table is needed.
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, batchSize).Error
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, batchSize).Error; err != nil {
+		return err
+	}
+	s.advanceCounts(added, executor.Counts{})
+	return nil
 }
 
 func (s *locationStage) reconcile(ctx context.Context) error {

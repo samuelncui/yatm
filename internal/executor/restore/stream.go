@@ -326,12 +326,19 @@ func (s *copyItems) reuseOutput(ctx context.Context, copy *copyCandidate) (bool,
 		if output.ReadMediaID != s.mediaID {
 			return false, fmt.Errorf("pending Restore output requires finalization of Media %d", output.ReadMediaID)
 		}
-		matched, _, err := s.runner.outputMatches(ctx, output.Path, output.ActualHash, output.ActualSize)
+		// Bytes this Job staged keep the metadata it applied; only a changed output is read again.
+		unchanged, err := s.runner.outputUnchanged(ctx, copy, &output)
 		if err != nil {
 			return false, err
 		}
-		if !matched {
-			return false, &restoreItemError{fmt.Errorf("pending Restore output changed: %q", output.Path)}
+		if !unchanged {
+			matched, _, err := s.runner.outputMatches(ctx, output.Path, output.ActualHash, output.ActualSize)
+			if err != nil {
+				return false, err
+			}
+			if !matched {
+				return false, &restoreItemError{fmt.Errorf("pending Restore output changed: %q", output.Path)}
+			}
 		}
 		return true, s.runner.stageOutput(ctx, copy, output.ActualHash, output.ActualSize, output.Damaged)
 	}
@@ -437,6 +444,12 @@ func (a *jobRestoreRunner) storeCompletion(
 	damaged, err := a.completeCopy(ctx, job, result)
 	if err != nil {
 		return err
+	}
+	// Staged verified bytes carry the version's metadata, which a later attempt compares instead of rereading.
+	if !damaged && job.copy.FileVersionID != 0 {
+		if err := a.restoreMetadata(job.copy.TargetPath, job.copy.Mode, job.copy.MtimeNS); err != nil {
+			return itemFailure(job, fmt.Errorf("restore output metadata failed, path=%q, %w", job.copy.TargetPath, err))
+		}
 	}
 	// The staged facts come from ACP's real transferred bytes, never from a reread target.
 	if err := a.stageOutput(ctx, job.copy, result.SHA256, result.Size, damaged); err != nil {

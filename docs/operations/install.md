@@ -118,7 +118,7 @@ Automatic upgrade and the documented offline migration cover standard SQLite lay
 
 ## Service Configuration
 
-`database.sqlite_wal: true` optionally permits Catalog reads during a write; it defaults to false.
+`database.sqlite_wal` permits Catalog reads during a write, so a long Library write does not stall the UI or other Jobs; it defaults to true for SQLite.
 Keep the SQLite database on a local disk even when the service runs on a NAS. Do not place it on an
 SMB/NFS share; [Backups](#backups) explains how to copy it safely. Turning the
 option off restores DELETE journal mode on startup; an unsuccessful switch prevents startup.

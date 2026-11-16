@@ -27,7 +27,7 @@ func TestCachedObservedContentUsesObservedMetadata(t *testing.T) {
 
 	// Prime a real disposable cache through ACP before testing already-observed metadata.
 	filename, observed := writeObservedFile(t, "cached", []byte("observed content"))
-	facts, err := HashObservedContent(context.Background(), filename, observed)
+	facts, err := VerifyObservedContent(context.Background(), filename, observed)
 	require.NoError(t, err)
 	_, valid, err := acp.ReadCachedSignature(filename)
 	require.NoError(t, err)

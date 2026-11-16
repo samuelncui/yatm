@@ -199,25 +199,44 @@ func (e *Executor) originalAccess(root string) func(string, bool) bool {
 	}
 }
 
-// ResolveOriginal returns the current validated path for one selected File's original.
-func (e *Executor) ResolveOriginal(ctx context.Context, expected *entity.ExpectedFile) (string, int64, error) {
+// OriginalResolver resolves selected Files' current originals for one bounded page. The page
+// shares one catalog read, one admission per Location and one ancestor check per parent directory.
+type OriginalResolver struct {
+	exe       *Executor
+	originals map[int64]*library.FileLocation
+	locations map[int64]*library.Location
+	roots     map[int64]string
+	parents   map[string]error
+}
+
+// NewOriginalResolver reads the recorded originals of the given Files once.
+func (e *Executor) NewOriginalResolver(ctx context.Context, ids []int64) (*OriginalResolver, error) {
+	facts, err := e.lib.ReadFileFacts(ctx, ids, false, false)
+	if err != nil {
+		return nil, err
+	}
+	originals := make(map[int64]*library.FileLocation, len(facts))
+	for id, row := range facts {
+		if row.Original != nil {
+			originals[id] = row.Original
+		}
+	}
+	return &OriginalResolver{exe: e, originals: originals, locations: make(map[int64]*library.Location),
+		roots: make(map[int64]string), parents: make(map[string]error)}, nil
+}
+
+// Resolve returns the current validated path for one selected File's original.
+func (r *OriginalResolver) Resolve(ctx context.Context, expected *entity.ExpectedFile) (string, int64, error) {
 	if expected == nil || expected.FileId <= 0 {
 		return "", 0, fmt.Errorf("selected File identity is missing")
 	}
 
 	// The one-to-one recorded original is authoritative; another File's equal content is not a fallback.
-	original, err := e.lib.GetFileLocation(ctx, expected.FileId)
-	if err != nil {
-		return "", 0, err
-	}
+	original := r.originals[expected.FileId]
 	if original == nil {
 		return "", 0, fmt.Errorf("File %d has no original; automatic Restore is not supported", expected.FileId)
 	}
-	location, err := e.lib.GetLocation(ctx, original.LocationID)
-	if err != nil {
-		return "", 0, err
-	}
-	filename, info, err := e.CheckLocationPath(location, original.Path)
+	filename, info, err := r.check(ctx, original)
 	if err != nil {
 		return "", 0, fmt.Errorf("File %d original is unavailable: %w", expected.FileId, err)
 	}
@@ -225,4 +244,42 @@ func (e *Executor) ResolveOriginal(ctx context.Context, expected *entity.Expecte
 		return "", 0, fmt.Errorf("File %d original is not an ordinary file", expected.FileId)
 	}
 	return filename, original.LocationID, nil
+}
+
+func (r *OriginalResolver) check(ctx context.Context, original *library.FileLocation) (string, os.FileInfo, error) {
+	// Admit each Location once per page.
+	location, root := r.locations[original.LocationID], r.roots[original.LocationID]
+	if location == nil {
+		var err error
+		if location, err = r.exe.lib.GetLocation(ctx, original.LocationID); err != nil {
+			return "", nil, err
+		}
+		if root, err = r.exe.CheckLocation(location); err != nil {
+			return "", nil, err
+		}
+		r.locations[location.ID], r.roots[location.ID] = location, root
+	}
+
+	// Validate physical ancestors once per parent directory, then the leaf itself.
+	if err := entity.ValidateRelativePath(original.Path); err != nil {
+		return "", nil, err
+	}
+	full := filepath.Join(root, filepath.FromSlash(original.Path))
+	parent := filepath.Dir(full)
+	err, checked := r.parents[parent]
+	if !checked {
+		_, err = r.exe.LocationRoot(parent)
+		r.parents[parent] = err
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	info, err := os.Lstat(full)
+	if err != nil {
+		return "", nil, err
+	}
+	if location.AccessExcluded(original.Path, info.IsDir()) {
+		return "", nil, ErrAccessExcluded
+	}
+	return full, info, nil
 }

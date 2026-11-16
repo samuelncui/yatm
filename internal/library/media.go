@@ -294,7 +294,7 @@ func (l *Library) CommitMedia(
 			return err
 		}
 
-		// Insert the bounded file stream and rebuild only this Media's derived directory index.
+		// Insert the bounded file stream and update only the derived directories above it.
 		written, err := insertMediaFiles(ctx, tx, stored, source)
 		if err != nil {
 			return err
@@ -407,8 +407,9 @@ func insertMediaFiles(
 	media *Media,
 	source MediaFileSource,
 ) (int64, error) {
-	// Keep physical inserts bounded inside the caller's publication transaction.
+	// Keep physical inserts and directory summary merges bounded inside the caller's publication transaction.
 	positions := make([]*Position, 0, batchSize)
+	directories := make([]*Position, 0, batchSize)
 	flush := func() error {
 		if len(positions) == 0 {
 			return nil
@@ -419,86 +420,116 @@ func insertMediaFiles(
 		positions = positions[:0]
 		return nil
 	}
-
-	// Validate the ordered stream and publish selected content with its physical evidence.
-	var previous string
-	var written int64
-	if err := source(ctx, func(file *MediaFile) error {
-		// Validate physical facts before resolving any explicitly selected logical identity.
-		if err := validateMediaFile(media, file, previous); err != nil {
+	flushDirectories := func() error {
+		if len(directories) == 0 {
+			return nil
+		}
+		if err := mergeMediaDirectories(tx, media.ID, directories); err != nil {
 			return err
 		}
-		mtimeNS, err := dataformat.Nanoseconds(file.ModTime)
-		if err != nil {
-			return fmt.Errorf("convert Media file mtime, path=%q: %w", file.Path, err)
-		}
-		writtenAtNS, err := dataformat.Nanoseconds(file.WriteTime)
-		if err != nil {
-			return fmt.Errorf("convert Media file write time, path=%q: %w", file.Path, err)
-		}
-		previous = file.Path
-		written += file.Size
-		var fileID int64
-		var signature []byte
-		if len(file.Hash) > 0 {
-			var err error
-			signature, err = NewFileSignature(file.Hash, file.Size)
-			if err != nil {
-				return err
+		directories = directories[:0]
+		return nil
+	}
+	yield := func(position *Position) error {
+		if position.IsDir {
+			directories = append(directories, position)
+			if len(directories) == batchSize {
+				return flushDirectories()
 			}
-		}
-		if expected := file.Expected; expected != nil {
-			var stored fileRow
-			if expected.FileId <= 0 || len(expected.Signature) == 0 {
-				return fmt.Errorf("selected Archive File identity is missing")
-			}
-			if err := tx.First(&stored, expected.FileId).Error; err != nil {
-				return err
-			}
-			if stored.Kind != entity.FileKind_FILE_KIND_REGULAR {
-				return fmt.Errorf("Archive target File is not regular, file_id=%d", expected.FileId)
-			}
-			mode, versionMtimeNS := uint32(file.Mode), mtimeNS
-			if len(expected.Sha256) == 32 && file.Size == expected.SizeBytes && bytes.Equal(file.Hash, expected.Sha256) {
-				signature = expected.Signature
-				mode, versionMtimeNS = expected.Mode, expected.MtimeNs
-			}
-			fileID = stored.ID
-			now := time.Now().UnixNano()
-			if _, err := recordVersion(tx, &FileVersion{FileID: fileID, Signature: signature, Hash: file.Hash, Size: file.Size,
-				Mode: mode, MtimeNS: versionMtimeNS, FirstArchivedAtNS: &now, LastArchivedAtNS: &now}); err != nil {
-				return err
-			}
-		}
-
-		// Physical inventory has no File owner; verified versions resolve it by content.
-		position := &Position{
-			Signature: signature,
-			MediaID:   media.ID, Path: file.Path, Mode: uint32(file.Mode), MtimeNS: mtimeNS,
-			WrittenAtNS: writtenAtNS, Size: file.Size, Hash: file.Hash,
-			StorageOrder: file.StorageOrder, StorageMetadata: file.StorageMetadata,
-		}
-		if file.CheckedAtNS != 0 && len(file.Hash) == 32 {
-			position.Health = entity.PositionHealth_POSITION_HEALTH_HEALTHY
-			position.CheckedAtNS, position.HealthJobID = file.CheckedAtNS, file.HealthJobID
+			return nil
 		}
 		positions = append(positions, position)
 		if len(positions) == batchSize {
 			return flush()
 		}
 		return nil
-	}); err != nil {
-		return 0, fmt.Errorf("read Media files failed, media_id=%d, %w", media.ID, err)
 	}
 
-	// Finish the last batch before deriving directory summaries from the complete inventory.
+	// Validate the ordered stream and publish selected content with its physical evidence.
+	var previous string
+	var written int64
+	files := func(ctx context.Context, emit func(*Position) error) error {
+		return source(ctx, func(file *MediaFile) error {
+			position, err := publishMediaFile(tx, media, file, previous)
+			if err != nil {
+				return err
+			}
+			previous = file.Path
+			written += file.Size
+			return emit(position)
+		})
+	}
+
+	// New paths are unique on the Media, so only their ancestors' summaries change.
+	if err := BuildPositionTree(ctx, files, yield); err != nil {
+		return 0, fmt.Errorf("read Media files failed, media_id=%d, %w", media.ID, err)
+	}
 	if err := flush(); err != nil {
 		return 0, err
 	}
-	if err := rebuildMediaPositionIndex(ctx, tx, media.ID); err != nil {
+	if err := flushDirectories(); err != nil {
 		return 0, err
 	}
 	return written, nil
+}
+
+// publishMediaFile validates one streamed file, records its selected version and returns its Position.
+func publishMediaFile(tx *gorm.DB, media *Media, file *MediaFile, previous string) (*Position, error) {
+	// Validate physical facts before resolving any explicitly selected logical identity.
+	if err := validateMediaFile(media, file, previous); err != nil {
+		return nil, err
+	}
+	mtimeNS, err := dataformat.Nanoseconds(file.ModTime)
+	if err != nil {
+		return nil, fmt.Errorf("convert Media file mtime, path=%q: %w", file.Path, err)
+	}
+	writtenAtNS, err := dataformat.Nanoseconds(file.WriteTime)
+	if err != nil {
+		return nil, fmt.Errorf("convert Media file write time, path=%q: %w", file.Path, err)
+	}
+	var signature []byte
+	if len(file.Hash) > 0 {
+		signature, err = NewFileSignature(file.Hash, file.Size)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if expected := file.Expected; expected != nil {
+		var stored fileRow
+		if expected.FileId <= 0 {
+			return nil, fmt.Errorf("selected Archive File identity is missing")
+		}
+		if err := tx.Select("id", "kind").First(&stored, expected.FileId).Error; err != nil {
+			return nil, err
+		}
+		if stored.Kind != entity.FileKind_FILE_KIND_REGULAR {
+			return nil, fmt.Errorf("Archive target File is not regular, file_id=%d", expected.FileId)
+		}
+		mode, versionMtimeNS := uint32(file.Mode), mtimeNS
+		// A recorded identity survives unless the copy read other content; unknown content takes the copy's facts.
+		if KeepsSignature(expected, file.Size, file.Hash) {
+			signature = expected.Signature
+			mode, versionMtimeNS = expected.Mode, expected.MtimeNs
+		}
+		now := time.Now().UnixNano()
+		if _, err := recordRegularVersion(tx, &FileVersion{FileID: stored.ID, Signature: signature, Hash: file.Hash, Size: file.Size,
+			Mode: mode, MtimeNS: versionMtimeNS, FirstArchivedAtNS: &now, LastArchivedAtNS: &now}); err != nil {
+			return nil, err
+		}
+	}
+
+	// Physical inventory has no File owner; verified versions resolve it by content.
+	position := &Position{
+		Signature: signature,
+		MediaID:   media.ID, Path: file.Path, Mode: uint32(file.Mode), MtimeNS: mtimeNS,
+		WrittenAtNS: writtenAtNS, Size: file.Size, Hash: file.Hash,
+		StorageOrder: file.StorageOrder, StorageMetadata: file.StorageMetadata,
+	}
+	if file.CheckedAtNS != 0 && len(file.Hash) == 32 {
+		position.Health = entity.PositionHealth_POSITION_HEALTH_HEALTHY
+		position.CheckedAtNS, position.HealthJobID = file.CheckedAtNS, file.HealthJobID
+	}
+	return position, nil
 }
 
 func validateMediaFile(media *Media, file *MediaFile, previous string) error {
@@ -590,4 +621,14 @@ func NormalizeMediaIdentity(kind entity.MediaKind, identity string) string {
 		return strings.ToUpper(identity)
 	}
 	return identity
+}
+
+// KeepsSignature reports whether an Archive keeps the original's recorded content identity: the copy
+// read the same size and, when a hash was recorded, the same hash. An imported opaque identity without
+// a hash is kept as the observation recorded it.
+func KeepsSignature(expected *entity.ExpectedFile, size int64, hash []byte) bool {
+	if len(expected.Signature) == 0 || expected.SizeBytes != size {
+		return false
+	}
+	return len(expected.Sha256) == 0 || bytes.Equal(expected.Sha256, hash)
 }

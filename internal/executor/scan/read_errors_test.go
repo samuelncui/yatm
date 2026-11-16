@@ -53,7 +53,7 @@ func TestScanReadFailureRetainsResultWriteFailure(t *testing.T) {
 					require.NoError(t, r.db.Callback().Create().Remove("test:result-write-failure"))
 				})
 			}
-			err = r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session)
+			err = r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil)
 
 			// Distinct failures retain both identities and messages; a single cause needs no multierror wrapper.
 			require.Equal(t, test.source, errors.Is(err, os.ErrPermission))

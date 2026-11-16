@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
@@ -25,9 +26,9 @@ func (v *FileVersionArchive) BeforeSave(*gorm.DB) error {
 }
 
 func recordVersionArchives(tx *gorm.DB, versionID int64, dates ...*int64) error {
-	// Repeated publication of an evidenced endpoint cannot create another observation.
-	for _, date := range dates {
-		if date == nil {
+	// Repeated publication of an evidenced endpoint cannot create another observation; equal endpoints insert once.
+	for index, date := range dates {
+		if date == nil || slices.ContainsFunc(dates[:index], func(earlier *int64) bool { return earlier != nil && *earlier == *date }) {
 			continue
 		}
 		observation := &FileVersionArchive{VersionID: versionID, ArchivedAtNS: *date}

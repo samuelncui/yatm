@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// Reject unsupported catalog and Job formats before any automatic schema writes.
-	catalog, err := resource.OpenCatalog(conf.Database.Dialect, conf.Database.DSN, conf.Database.SQLiteWAL, func(db *gorm.DB) error {
+	catalog, err := resource.OpenCatalog(conf.Database.Dialect, conf.Database.DSN, conf.CatalogWAL(), func(db *gorm.DB) error {
 		return dataformat.CheckAdmission(db, conf.Paths.Work)
 	})
 	if err != nil {

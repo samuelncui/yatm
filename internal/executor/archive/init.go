@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/dataformat"
 	"gorm.io/gorm"
 )
 
@@ -37,12 +37,15 @@ func (a *jobArchiveRunner) resetManifest(ctx context.Context) error {
 
 // captureRawInput also prepares unfinished legacy manifests, which did not carry frozen content identities.
 func (a *jobArchiveRunner) captureRawInput(ctx context.Context, item *Item) error {
-	// Legacy pending items acquire content facts once in their existing manifest.
+	// Legacy pending items record their observed facts once; the copy itself reads the content.
 	info, err := os.Lstat(item.Data.SourcePath)
 	if err != nil {
 		return err
 	}
-	expected, err := executor.HashObservedContent(ctx, item.Data.SourcePath, info)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("content input is not an ordinary file")
+	}
+	mtime, err := dataformat.Nanoseconds(info.ModTime())
 	if err != nil {
 		return err
 	}
@@ -51,9 +54,8 @@ func (a *jobArchiveRunner) captureRawInput(ctx context.Context, item *Item) erro
 	if err != nil {
 		return err
 	}
-	expected.FileId = file.ID
-	item.Size = expected.SizeBytes
-	item.Data.Expected = expected
+	item.Size = info.Size()
+	item.Data.Expected = &entity.ExpectedFile{FileId: file.ID, SizeBytes: info.Size(), Mode: uint32(info.Mode()), MtimeNs: mtime}
 
 	return nil
 }

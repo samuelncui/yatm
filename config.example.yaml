@@ -10,9 +10,10 @@ debug_listen: 127.0.0.1:8081
 database:
   dialect: sqlite
   dsn: ./tapes.db
-  # Optional concurrent Catalog reads. The SQLite database must be on a local filesystem.
-  # Restart after changing this setting. Job databases keep their existing journal mode.
-  sqlite_wal: false
+  # Concurrent Catalog reads during a write; on by default for SQLite. The SQLite database
+  # must be on a local filesystem. Restart after changing this setting. Job databases always
+  # use WAL.
+  sqlite_wal: true
 
 # Volume-only installations leave this empty. For one Tape drive, use its actual
 # non-rewinding device path, for example: tape_devices: [/dev/nst0]

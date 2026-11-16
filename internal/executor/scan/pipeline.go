@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -66,8 +67,28 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 		}
 	}
 
+	// Preview follows the rows whose content facts this attempt already saved, so it overlaps
+	// content reading and comparison. It never stops them: its own failure fails the scope only
+	// after they finish, while their failure or cancellation stops Preview before the scope returns.
+	var settled *settledRows
+	waitPreviews := func() error { return nil }
+	if previewEnabled(config.Spec.PreviewPolicy) {
+		settled = newSettledRows()
+		previewCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { done <- r.generatePreviews(previewCtx, config, scope, settled) }()
+		var once sync.Once
+		var previewErr error
+		waitPreviews = func() error {
+			once.Do(func() { previewErr = <-done; cancel() })
+			return previewErr
+		}
+		defer func() { cancel(); _ = waitPreviews() }()
+	}
+
 	// Every source uses the same content policy, comparison and derivative sequence.
-	readErr := r.readContent(ctx, config, scope, local, session)
+	readErr := r.readContent(ctx, config, scope, local, session, settled)
+	settled.finish()
 	checking := config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES
 	if readErr != nil && !checking {
 		return readErr
@@ -79,8 +100,11 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 		}
 	}
 	if previewEnabled(config.Spec.PreviewPolicy) {
+		// The phase reports Preview once it is the only remaining work, after every content fact
+		// is known and its remaining generation workload can be classified.
 		r.setPhase(entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS)
-		previewErr := r.generatePreviews(ctx, config, scope)
+		previewErr := r.classifyPreviews(ctx, config, scope)
+		previewErr = errors.Join(waitPreviews(), previewErr)
 		if previewErr != nil {
 			return errors.Join(readErr, previewErr)
 		}
@@ -130,6 +154,11 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+		// The discovered counters replace this row's earlier contribution, if it had one.
+		var found executor.Counts
+		if err == nil && row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+			found = executor.Counts{Files: -1, Bytes: -row.Size}
+		}
 		row.Path = file.Path
 		row.Size, row.Mode, row.MtimeNS = facts.SizeBytes, facts.Mode, facts.MtimeNs
 		placementUnchanged := bytes.Equal(row.Storage.GetOrder(), file.Storage.GetOrder()) && proto.Equal(row.Storage.GetMetadata(), file.Storage.GetMetadata())
@@ -172,6 +201,7 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 		if err := r.db.WithContext(ctx).Save(&row).Error; err != nil {
 			return err
 		}
+		r.advanceCounts(executor.Counts{Files: found.Files + 1, Bytes: found.Bytes + row.Size}, executor.Counts{})
 		return nil
 	}); err != nil {
 		return err
@@ -278,43 +308,175 @@ func (r *runner) compareContent(ctx context.Context, scope *Scope) error {
 			row.MatchingCopies = count
 		}
 		row.Compared = true
-		return r.db.WithContext(ctx).Model(row).Updates(map[string]any{
+		if err := r.db.WithContext(ctx).Model(row).Updates(map[string]any{
 			"matching_copies": row.MatchingCopies,
 			"compared":        true,
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		r.advanceCounts(executor.Counts{}, executor.Counts{Files: 1, Bytes: row.Size})
+		return nil
 	})
 }
 
-func (r *runner) eachPreviewEntry(ctx context.Context, scope *Scope, concurrency int, use func(context.Context, *Entry) error) error {
-	// Keep at most one bounded manifest page and a fixed number of active file callbacks in memory.
-	var after int64
-	for {
-		var rows []*Entry
-		if err := r.scopeQuery(ctx, scope).Where("id > ?", after).Order("id").Limit(batchSize).Find(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) == 0 {
-			return nil
-		}
-		group, work := errgroup.WithContext(ctx)
-		group.SetLimit(concurrency)
-		for _, row := range rows {
-			if work.Err() != nil {
-				break
-			}
-			group.Go(func() error { return use(work, row) })
-		}
-		if err := group.Wait(); err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		after = rows[len(rows)-1].ID
+// settledRows reports how far, in manifest ID order, this attempt has saved the content facts of
+// the rows its content stage reads, so Preview can follow the read instead of waiting for all of
+// it. Every row at or below the bound is either one the stage does not read or one whose result
+// is saved. Only a stage that submits rows in ID order advances the bound; any other order leaves
+// it until finish. A nil value is already finished.
+type settledRows struct {
+	lock    sync.Mutex
+	changed chan struct{}
+	pending []int64 // submitted IDs, ascending, front still unsaved
+	saved   map[int64]bool
+	last    int64
+	bound   int64
+	final   bool
+}
+
+func newSettledRows() *settledRows {
+	return &settledRows{changed: make(chan struct{}), saved: make(map[int64]bool)}
+}
+
+// submit records rows handed to the read in ascending ID order.
+func (s *settledRows) submit(ids []int64) {
+	if s == nil || len(ids) == 0 {
+		return
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.pending = append(s.pending, ids...)
+	s.last = ids[len(ids)-1]
+	s.advance()
+}
+
+// save records rows whose results the stage persisted.
+func (s *settledRows) save(ids []int64) {
+	if s == nil || len(ids) == 0 {
+		return
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for _, id := range ids {
+		s.saved[id] = true
+	}
+	s.advance()
+}
+
+// advance moves the bound past the saved prefix of the submitted order; the caller holds the lock.
+func (s *settledRows) advance() {
+	for len(s.pending) > 0 && s.saved[s.pending[0]] {
+		delete(s.saved, s.pending[0])
+		s.pending = s.pending[1:]
+	}
+	bound := s.last
+	if len(s.pending) > 0 {
+		bound = s.pending[0] - 1
+	}
+	if bound > s.bound {
+		s.bound = bound
+		close(s.changed)
+		s.changed = make(chan struct{})
 	}
 }
 
-func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Scope) (returnErr error) {
+// finish releases every remaining row once the content stage has returned.
+func (s *settledRows) finish() {
+	if s == nil {
+		return
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if !s.final {
+		s.final = true
+		close(s.changed)
+	}
+}
+
+// wait returns once the bound exceeds after or the stage finished.
+func (s *settledRows) wait(ctx context.Context, after int64) (int64, bool, error) {
+	if s == nil {
+		return 0, true, ctx.Err()
+	}
+	for {
+		s.lock.Lock()
+		bound, final, changed := s.bound, s.final, s.changed
+		s.lock.Unlock()
+		if final || bound > after {
+			return bound, final, nil
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return 0, false, ctx.Err()
+		}
+	}
+}
+
+func (r *runner) eachPreviewEntry(ctx context.Context, scope *Scope, concurrency int, settled *settledRows, use func(context.Context, *Entry) error) error {
+	// Keep at most one bounded manifest page and a fixed number of active file callbacks in memory.
+	// The bound rolls over pages, so one slow file holds only its own slot.
+	group, work := errgroup.WithContext(ctx)
+	group.SetLimit(concurrency)
+	feed := func() error {
+		var after int64
+		for {
+			bound, final, err := settled.wait(work, after)
+			if err != nil {
+				return err
+			}
+			query := r.scopeQuery(work, scope).Where("id > ?", after)
+			if !final {
+				query = query.Where("id <= ?", bound)
+			}
+			var rows []*Entry
+			if err := query.Order("id").Limit(batchSize).Find(&rows).Error; err != nil {
+				return err
+			}
+			if len(rows) == 0 {
+				if final {
+					return nil
+				}
+				after = bound
+				continue
+			}
+			for _, row := range rows {
+				if err := work.Err(); err != nil {
+					return err
+				}
+				group.Go(func() error { return use(work, row) })
+			}
+			after = rows[len(rows)-1].ID
+		}
+	}
+	feedErr := feed()
+	if err := group.Wait(); err != nil {
+		return err
+	}
+	if feedErr != nil {
+		return feedErr
+	}
+	return ctx.Err()
+}
+
+// classifyPreviews classifies the scope's remaining unique generation workload once every content
+// fact is known, and opens the Preview stage window. Generations this attempt already settled are
+// part of its samples, not of the remaining workload.
+func (r *runner) classifyPreviews(ctx context.Context, config *Config, scope *Scope) error {
+	remaining, err := r.previewWorkload(ctx, config, scope)
+	if err != nil {
+		return err
+	}
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if !r.previewTiming.workKnown {
+		r.previewTiming.workTotal, r.previewTiming.workKnown = r.previewTiming.samples+remaining, true
+	}
+	r.samplePreview()
+	return nil
+}
+
+func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Scope, settled *settledRows) (returnErr error) {
 	// Sample this scope's Preview workload from the already complete input manifest.
 	var total int64
 	if err := r.scopeQuery(ctx, scope).Model(&Entry{}).
@@ -343,21 +505,19 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 		})
 	}()
 
-	// Classify unique work with bounded memory; failure still releases the active progress range.
-	workTotal, err := r.previewWorkload(ctx, config, scope)
-	if err != nil {
-		return err
+	// Without a content stage to follow, every content fact is known now; classify unique work
+	// with bounded memory. Failure still releases the active progress range.
+	if settled == nil {
+		if err := r.classifyPreviews(ctx, config, scope); err != nil {
+			return err
+		}
 	}
-	r.lock.Lock()
-	r.previewTiming.workTotal, r.previewTiming.workKnown = workTotal, true
-	r.samplePreview()
-	r.lock.Unlock()
 
 	// Traverse bounded pages, allowing skips and reused assets to inform the observed workload mix.
 	// The Preview manager applies live capacity at each file slot; this traversal only sets a
 	// bounded upstream ceiling.
 	concurrency := 16
-	return r.eachPreviewEntry(ctx, scope, concurrency, func(ctx context.Context, row *Entry) error {
+	return r.eachPreviewEntry(ctx, scope, concurrency, settled, func(ctx context.Context, row *Entry) error {
 		// Only observed, supported content with usable facts can produce derivative assets.
 		if row.Change == entity.ScanChange_SCAN_CHANGE_REMOVED {
 			return nil
@@ -475,9 +635,10 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 
 // recordPreviewFailure is the phase's only per-entry write: the bundle a Preview needs could not
 // be produced, and this is why. Everything else about a Preview is the content store's answer.
+// It writes only its own column, because comparison may update the same row concurrently.
 func (r *runner) recordPreviewFailure(ctx context.Context, row *Entry, message string) error {
 	row.PreviewError = message
-	return r.db.WithContext(ctx).Save(row).Error
+	return r.db.WithContext(ctx).Model(row).Update("preview_error", message).Error
 }
 
 // clearPreviewFailure drops a reason a previous attempt recorded for the same entry.

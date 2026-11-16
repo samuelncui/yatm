@@ -58,106 +58,148 @@ func (r *runner) progressSnapshot(ctx context.Context) (*entity.Progress, error)
 	return result, nil
 }
 
+// manifestCounts are the manifest's cumulative counters over its non-removed entries. The work
+// path counts them once when a phase that reports them starts and advances them as it writes rows,
+// so a progress request never aggregates the manifest.
+type manifestCounts struct {
+	found     executor.Counts
+	processed executor.Counts // entries whose content facts are settled
+	compared  executor.Counts
+}
+
+// countedPhase reports whether a phase reports manifest counters outside the content stage window.
+func countedPhase(phase entity.JobPhase) bool {
+	switch phase {
+	case entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_UNSPECIFIED, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT,
+		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS, entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE,
+		entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA, entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
+		entity.JobPhase_JOB_PHASE_COMPLETED, entity.JobPhase_JOB_PHASE_QUEUED:
+		return true
+	}
+	return false
+}
+
+// countManifest reads every manifest counter in one statement.
+func (r *runner) countManifest(ctx context.Context) (manifestCounts, error) {
+	var row struct {
+		FoundFiles, FoundBytes, ProcessedFiles, ProcessedBytes, ComparedFiles, ComparedBytes int64
+	}
+	err := r.db.WithContext(ctx).Model(&Entry{}).Where("change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED).Select(
+		"COUNT(*) AS found_files, COALESCE(SUM(size), 0) AS found_bytes, " +
+			"COALESCE(SUM(CASE WHEN needs_hash THEN 0 ELSE 1 END), 0) AS processed_files, " +
+			"COALESCE(SUM(CASE WHEN needs_hash THEN 0 ELSE size END), 0) AS processed_bytes, " +
+			"COALESCE(SUM(CASE WHEN compared THEN 1 ELSE 0 END), 0) AS compared_files, " +
+			"COALESCE(SUM(CASE WHEN compared THEN size ELSE 0 END), 0) AS compared_bytes").Scan(&row).Error
+	return manifestCounts{
+		found:     executor.Counts{Files: row.FoundFiles, Bytes: row.FoundBytes},
+		processed: executor.Counts{Files: row.ProcessedFiles, Bytes: row.ProcessedBytes},
+		compared:  executor.Counts{Files: row.ComparedFiles, Bytes: row.ComparedBytes},
+	}, err
+}
+
+// lockedCounts returns the maintained counters. A runner that no attempt has counted yet, such as
+// a reopened idle Job, counts its unchanging manifest once. The caller holds the runner lock.
+func (r *runner) lockedCounts(ctx context.Context) (manifestCounts, error) {
+	if r.countsKnown {
+		return r.counts, nil
+	}
+	counts, err := r.countManifest(ctx)
+	if err != nil {
+		return manifestCounts{}, err
+	}
+	r.counts, r.countsKnown = counts, true
+	return counts, nil
+}
+
+// resetCounts records that the work path emptied the manifest.
+func (r *runner) resetCounts() {
+	r.lock.Lock()
+	r.counts, r.countsKnown = manifestCounts{}, true
+	r.lock.Unlock()
+}
+
+// advanceCounts applies the work path's own row changes. Unknown counters stay unknown, so the
+// next count reads them instead of adding to an unknown base.
+func (r *runner) advanceCounts(found, compared executor.Counts) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if !r.countsKnown {
+		return
+	}
+	r.counts.found.Files += found.Files
+	r.counts.found.Bytes += found.Bytes
+	r.counts.compared.Files += compared.Files
+	r.counts.compared.Bytes += compared.Bytes
+}
+
 // stageInput assembles the stage report one phase may show. A phase without a denominator reports
 // its counters only, and the rule decides whether a percentage or an estimate exists at all.
 func (r *runner) stageInput(ctx context.Context, phase entity.JobPhase) (executor.StageInput, error) {
-	switch phase {
-	case entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT, entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA:
+	if phase == entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT || phase == entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA {
 		// The running attempt is the only owner of these phases: its snapshot carries the scope
 		// denominator and the manifest's cumulative counters.
 		in := r.contentStageInput()
 		if in == nil {
-			// An attempt that has not published its snapshot yet reports the durable manifest.
-			found, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
+			// An attempt that has not published its snapshot yet reports the manifest.
+			counts, err := r.lockedCounts(ctx)
 			if err != nil {
 				return executor.StageInput{}, err
 			}
+			found := counts.found
 			in = &executor.StageInput{Phase: phase, Completed: found, Total: &found, Manifest: &found}
 		}
 		in.TotalKnown = true
 		return *in, nil
-	case entity.JobPhase_JOB_PHASE_INDEXING:
-		// Enumeration may still add rows, so only the discovered count is reportable.
-		discovered, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-		if err != nil {
-			return executor.StageInput{}, err
-		}
-		return executor.StageInput{Phase: phase, Completed: discovered}, nil
+	}
+	if !countedPhase(phase) {
+		return executor.StageInput{Phase: phase}, nil
+	}
+	counts, err := r.lockedCounts(ctx)
+	if err != nil {
+		return executor.StageInput{}, err
+	}
+	found := counts.found
+	switch phase {
 	case entity.JobPhase_JOB_PHASE_UNSPECIFIED:
 		// A failed attempt retains its observed manifest and processed counters, but this phase
 		// cannot prove that enumeration finished, so the manifest total remains provisional.
-		discovered, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-		if err != nil {
-			return executor.StageInput{}, err
-		}
-		if discovered.Files == 0 {
+		if found.Files == 0 {
 			return executor.StageInput{Phase: phase}, nil
 		}
-		processed, err := r.entryProgress(ctx, "change != ? AND needs_hash = ?", entity.ScanChange_SCAN_CHANGE_REMOVED, false)
-		if err != nil {
-			return executor.StageInput{}, err
-		}
-		return executor.StageInput{Phase: phase, Completed: processed, Manifest: &discovered}, nil
+		return executor.StageInput{Phase: phase, Completed: counts.processed, Manifest: &found}, nil
 	case entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
-		in, err := r.entryStageInput(ctx, phase, "change != ? AND compared = ?", entity.ScanChange_SCAN_CHANGE_REMOVED, true)
-		in.TotalKnown = true
-		return in, err
-	case entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS:
-		in, err := r.previewStageInput(ctx, phase)
-		if err != nil {
-			return executor.StageInput{}, err
-		}
+		in := denominated(phase, counts.compared, found)
 		in.TotalKnown = true
 		return in, nil
-	case entity.JobPhase_JOB_PHASE_VALIDATING_SOURCE, entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
-		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE:
-		// These stages have no meaningful denominator, but completed discovery must not disappear.
-		observed, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-		if err != nil {
-			return executor.StageInput{}, err
-		}
-		return executor.StageInput{Phase: phase, Completed: observed}, nil
-	case entity.JobPhase_JOB_PHASE_COMPLETED:
-		in, err := r.entryStageInput(ctx, phase, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
+	case entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS:
+		in := r.previewStageInput(phase, found)
 		in.TotalKnown = true
-		return in, err
+		return in, nil
+	case entity.JobPhase_JOB_PHASE_COMPLETED:
+		in := denominated(phase, found, found)
+		in.TotalKnown = true
+		return in, nil
 	case entity.JobPhase_JOB_PHASE_QUEUED:
 		// Verification freezes its baseline before waiting for a drive, so the waiting card reports
 		// what the manifest holds. It never carries a denominator: no work in that phase can advance
 		// a percentage.
-		var config Config
-		if err := r.db.WithContext(ctx).First(&config, 1).Error; err != nil {
-			return executor.StageInput{}, err
-		}
-		if config.Spec.GetResultPolicy() != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
+		if !r.checking {
 			return executor.StageInput{Phase: phase}, nil
-		}
-		found, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-		if err != nil {
-			return executor.StageInput{}, err
 		}
 		return executor.StageInput{Phase: phase, Completed: found}, nil
 	default:
-		return executor.StageInput{Phase: phase}, nil
+		// Enumeration may still add rows, and validation, finalization and publication have no
+		// meaningful denominator, but completed discovery must not disappear.
+		return executor.StageInput{Phase: phase, Completed: found}, nil
 	}
 }
 
-// entryStageInput reports the manifest's processed and total counters of one predicate.
-func (r *runner) entryStageInput(
-	ctx context.Context, phase entity.JobPhase, predicate string, args ...any,
-) (executor.StageInput, error) {
-	total, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-	if err != nil {
-		return executor.StageInput{}, err
-	}
-	processed, err := r.entryProgress(ctx, predicate, args...)
-	if err != nil {
-		return executor.StageInput{}, err
-	}
+// denominated reports processed counters against the manifest total once it has rows.
+func denominated(phase entity.JobPhase, processed, total executor.Counts) executor.StageInput {
 	if total.Files == 0 {
-		return executor.StageInput{Phase: phase, Completed: processed}, nil
+		return executor.StageInput{Phase: phase, Completed: processed}
 	}
-	return executor.StageInput{Phase: phase, Completed: processed, Total: &total}, nil
+	return executor.StageInput{Phase: phase, Completed: processed, Total: &total}
 }
 
 // contentStageInput assembles the running content attempt's durable snapshot. It is called under
@@ -226,11 +268,7 @@ func (r *runner) sampleContentStage() {
 // successful Preview is durable, so the attempt's own counters are its settled work: outcomes
 // accumulated by finished scopes plus the scope in flight. The manifest still supplies the stage
 // denominator, and only decoder completions advance the samples.
-func (r *runner) previewStageInput(ctx context.Context, phase entity.JobPhase) (executor.StageInput, error) {
-	total, err := r.entryProgress(ctx, "change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED)
-	if err != nil {
-		return executor.StageInput{}, err
-	}
+func (r *runner) previewStageInput(phase entity.JobPhase, total executor.Counts) executor.StageInput {
 	timing := r.previewTiming
 	processed := r.previewOutcomes.ready + r.previewOutcomes.skipped + r.previewOutcomes.failed + timing.completed
 	settled := executor.StageInput{Phase: phase, Key: r.stageKey(r.contentScope), Completed: executor.Counts{Files: processed}}
@@ -240,7 +278,7 @@ func (r *runner) previewStageInput(ctx context.Context, phase entity.JobPhase) (
 	settled.Work, settled.Minimum = executor.Counts{Files: timing.samples}, previewMinimumSamples
 	// A classified workload may be zero, which reports counters without a fabricated estimate.
 	settled.WorkKnown, settled.WorkTotal = timing.workKnown, &executor.Counts{Files: timing.workTotal}
-	return settled, nil
+	return settled
 }
 
 // stageKey identifies one attempt's phase window; a new attempt, phase or source range discards
@@ -256,6 +294,10 @@ func (r *runner) stageKey(scope *Scope) string {
 func (r *runner) samplePreview() {
 	// Called under the phase lock by worker completions; estimation does not depend on UI polling.
 	// Only the sampled work matters here, so the settled counters are left to the request path.
+	// Preview that overlaps an earlier phase never samples into that phase's window.
+	if r.phase != entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS {
+		return
+	}
 	r.progress.ObserveStage(executor.StageInput{Key: r.stageKey(r.contentScope), Phase: r.phase,
 		Work: executor.Counts{Files: r.previewTiming.samples}, Minimum: previewMinimumSamples,
 		WorkKnown: r.previewTiming.workKnown, WorkTotal: &executor.Counts{Files: r.previewTiming.workTotal}})

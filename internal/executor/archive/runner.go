@@ -73,7 +73,6 @@ func (a *jobArchiveRunner) Index(ctx context.Context) (returnErr error) {
 	if err := a.applySpec(ctx, config.Spec); err != nil {
 		return err
 	}
-	a.createCompanionPreview(ctx, config)
 
 	// Publish the durable checkpoint before exposing the Media-ready phase.
 	if err := a.exe.UpdateJobStatus(ctx, a.job.ID, entity.JobStatus_JOB_STATUS_PREPARING, entity.JobStatus_JOB_STATUS_READY); err != nil {
@@ -108,6 +107,7 @@ func (a *jobArchiveRunner) writeMedia(ctx context.Context, param *entity.WriteAr
 			a.transition(archiveStateWaitingForMedia))
 	}
 	if record.Status == entity.JobStatus_JOB_STATUS_COMPLETED {
+		a.createCompanionPreview(context.WithoutCancel(ctx))
 		return errors.Join(archiveErr, a.transition(archiveStateCompleted))
 	}
 	return errors.Join(archiveErr, a.transition(archiveStateWaitingForMedia))

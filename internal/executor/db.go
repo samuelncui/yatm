@@ -37,7 +37,7 @@ func (e *Executor) createBundle(
 	}
 
 	// Initialize the singleton common record before kind-specific tables.
-	db, err := resource.OpenSQLite(e.stateDBPath(job.ID))
+	db, err := resource.OpenWALSQLite(e.stateDBPath(job.ID))
 	if err != nil {
 		return fmt.Errorf("create Job DB failed, id=%d, %w", job.ID, err)
 	}
@@ -67,7 +67,7 @@ func (e *Executor) NewStateDB(_ context.Context, jobID int64) (*gorm.DB, error) 
 	if _, err := os.Stat(e.stateDBPath(jobID)); err != nil {
 		return nil, fmt.Errorf("open Job DB failed, id=%d, %w", jobID, err)
 	}
-	db, err := resource.OpenSQLite(e.stateDBPath(jobID))
+	db, err := resource.OpenWALSQLite(e.stateDBPath(jobID))
 	if err != nil {
 		return nil, fmt.Errorf("open Job DB failed, id=%d, %w", jobID, err)
 	}

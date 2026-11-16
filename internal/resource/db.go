@@ -2,6 +2,7 @@ package resource
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -39,6 +40,24 @@ func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
 
 func OpenSQLite(filename string) (*gorm.DB, error) {
 	return NewDBConn("sqlite", filename)
+}
+
+// OpenWALSQLite opens a writable SQLite file in WAL mode, so a commit costs one fsync and
+// readers proceed alongside the writer. The mode persists in the file; its -wal and -shm
+// sidecars belong to it.
+func OpenWALSQLite(filename string) (*gorm.DB, error) {
+	db, err := OpenSQLite(filename)
+	if err != nil {
+		return nil, err
+	}
+	var mode string
+	if err := db.Raw("PRAGMA journal_mode=WAL").Scan(&mode).Error; err != nil || !strings.EqualFold(mode, "wal") {
+		if sqlDB, closeErr := db.DB(); closeErr == nil {
+			_ = sqlDB.Close()
+		}
+		return nil, fmt.Errorf("set SQLite journal mode to WAL failed, mode=%q, %w", mode, err)
+	}
+	return db, nil
 }
 
 type GORMScope func(db *gorm.DB) *gorm.DB

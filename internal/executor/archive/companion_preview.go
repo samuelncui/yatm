@@ -8,8 +8,14 @@ import (
 	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
 )
 
-func (a *jobArchiveRunner) createCompanionPreview(ctx context.Context, config *Config) {
-	// Prepare the child only after Archive admission settles, using the recorded manifest rather than rewalking roots.
+func (a *jobArchiveRunner) createCompanionPreview(ctx context.Context) {
+	// Prepare the child only after every item is archived, from the content facts the copies read
+	// rather than rewalking roots or reading the originals again for their hashes.
+	config := new(Config)
+	if err := a.db.WithContext(ctx).First(config, 1).Error; err != nil {
+		a.logger.WithError(err).Error("read archive job config for companion Preview failed")
+		return
+	}
 	if config.Preview == nil || config.PreviewJobID != 0 {
 		return
 	}
@@ -26,7 +32,7 @@ func (a *jobArchiveRunner) createCompanionPreview(ctx context.Context, config *C
 				}
 				for _, item := range items {
 					if item.Data == nil || item.Data.Expected == nil {
-						return fmt.Errorf("Archive item %d lacks prepared content", item.ID)
+						return fmt.Errorf("Archive item %d lacks archived content", item.ID)
 					}
 					if err := yield(item.Data.SourcePath, item.Data.Expected); err != nil {
 						return err
@@ -44,7 +50,7 @@ func (a *jobArchiveRunner) createCompanionPreview(ctx context.Context, config *C
 	} else {
 		config.PreviewJobID = job.ID
 	}
-	if err := a.db.WithContext(context.WithoutCancel(ctx)).Save(config).Error; err != nil {
+	if err := a.db.WithContext(ctx).Save(config).Error; err != nil {
 		a.logger.WithError(err).Error("record companion Preview result failed")
 	}
 }

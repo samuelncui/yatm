@@ -53,6 +53,22 @@ func (r *runner) beginPreviewGeneration(signature []byte) (*previewGeneration, b
 	return generation, true
 }
 
+// previewSettled reports whether this attempt already finished generating one content.
+func (r *runner) previewSettled(signature []byte) bool {
+	r.lock.Lock()
+	generation := r.previewContent[string(signature)]
+	r.lock.Unlock()
+	if generation == nil {
+		return false
+	}
+	select {
+	case <-generation.done:
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *runner) finishPreviewGeneration(generation *previewGeneration, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()

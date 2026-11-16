@@ -32,10 +32,16 @@ type runner struct {
 	content       *contentStream
 	previewTiming previewTiming
 	activeScope   *Scope
-	exe           *executor.Executor
-	job           *executor.Job
-	db            *gorm.DB
-	progress      *executor.Progress
+	// counts are the manifest counters the work path maintains; countsKnown is false until an
+	// attempt or the first request counted them.
+	counts      manifestCounts
+	countsKnown bool
+	// checking reports that the running attempt verifies recorded copies.
+	checking bool
+	exe      *executor.Executor
+	job      *executor.Job
+	db       *gorm.DB
+	progress *executor.Progress
 	// previewOutcomes is the current attempt's Preview classification; it survives the phase
 	// that produced it so the Job reports it after the phase ends.
 	previewOutcomes previewOutcomes
@@ -119,6 +125,9 @@ func (r *runner) readMedia(ctx context.Context, target *entity.ReadMediaTarget) 
 }
 
 func (r *runner) execute(ctx context.Context, config *Config, target *entity.ReadMediaTarget, status entity.JobStatus) error {
+	r.lock.Lock()
+	r.checking = config.Spec.GetResultPolicy() == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES
+	r.lock.Unlock()
 	// Freeze every selected input before any Location starts content processing or publication.
 	if err := r.prepareInputs(ctx, config, target); err != nil {
 		return err
@@ -201,14 +210,23 @@ func (r *runner) setPhase(phase entity.JobPhase) {
 	// Close the previous phase's timing before exposing the next stage.
 	r.lock.Lock()
 	previous, started := r.phase, r.phaseStarted
+	r.lock.Unlock()
 	if previous == phase && !started.IsZero() {
-		r.lock.Unlock()
 		return
+	}
+	// A phase that reports manifest counters counts them once, before it becomes observable; its
+	// own work path advances them from there. A failed count leaves them to the next request.
+	var counts manifestCounts
+	var err error
+	if countedPhase(phase) && r.db != nil {
+		counts, err = r.countManifest(context.Background())
+	}
+	r.lock.Lock()
+	if countedPhase(phase) && r.db != nil {
+		r.counts, r.countsKnown = counts, err == nil
 	}
 	r.phase = phase
 	r.phaseStarted = time.Now()
-	r.contentScope = nil
-	r.previewTiming = previewTiming{}
 	r.lock.Unlock()
 	if !started.IsZero() {
 		r.logResult("Scan phase finished", started, nil, logrus.Fields{"phase": previous.String()})

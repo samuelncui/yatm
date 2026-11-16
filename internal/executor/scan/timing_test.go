@@ -74,7 +74,7 @@ func TestScanReadTimingStartsBeforeFirstACPResult(t *testing.T) {
 
 	// The committed average includes initial source preparation even with no intermediate progress event.
 	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil,
-		&delayedTimingSession{checkSession{root: root}}))
+		&delayedTimingSession{checkSession{root: root}}, nil))
 	average := r.progress.ToEntity().HistoricalAverageSpeedBytesPerSecond
 	require.LessOrEqual(t, average, int64(33))
 	require.Nil(t, r.contentScope)
@@ -90,14 +90,14 @@ func TestScanReadPreparationFailureReachesJobLog(t *testing.T) {
 	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY}})
 
 	// The original read failure remains authoritative while the Job gains actionable evidence.
-	err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, nil)
+	err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, nil, nil)
 	require.ErrorIs(t, err, os.ErrNotExist)
 	require.Contains(t, logs.String(), "Scan content file failed")
 	require.Contains(t, logs.String(), "level=warning")
 	require.Contains(t, logs.String(), "path=lost.jpg")
 }
 
-func TestScanPhaseTransitionClearsReadSpeedsAndPreviewSamples(t *testing.T) {
+func TestScanPhaseTransitionClearsReadSpeedsAndPreviewEstimates(t *testing.T) {
 	// Preserve historical ACP measurements internally while changing to a non-read stage.
 	r := newProgressRunner(t)
 	r.progress.UpdateSessionCurrent(1<<20, 1)
@@ -118,8 +118,8 @@ func TestScanPhaseTransitionClearsReadSpeedsAndPreviewSamples(t *testing.T) {
 	require.Zero(t, progress.AverageSpeedBytesPerSecond)
 	require.Zero(t, progress.HistoricalAverageSpeedBytesPerSecond)
 	require.Nil(t, progress.Stage.RemainingSeconds)
-	require.Nil(t, r.contentScope)
-	require.Equal(t, previewTiming{}, r.previewTiming)
+	// Preview that overlapped earlier phases owns its counters; only its window starts anew.
+	require.EqualValues(t, 3, r.previewTiming.samples)
 	require.Contains(t, logs.String(), "Scan phase started")
 	require.Contains(t, logs.String(), "Scan phase finished")
 	require.Contains(t, logs.String(), "elapsed_ms=")
@@ -177,7 +177,7 @@ func TestScanPreviewSamplingExcludesReusedAndSkippedEntries(t *testing.T) {
 			}
 
 			require.NoError(t, r.generatePreviews(context.Background(), frozenLimits(&Config{Spec: &entity.ScanJobSpec{
-				PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}), &Scope{}))
+				PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}), &Scope{}, nil))
 
 			// Published content never reaches the generator, so a cached scope costs no decoder call
 			// and contributes no work sample; a missing scope classifies its four unique contents.

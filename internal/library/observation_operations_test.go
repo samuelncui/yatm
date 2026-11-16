@@ -10,7 +10,7 @@ import (
 
 func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing.T) {
 	for _, publisher := range []string{"single", "batch", "selected"} {
-		for _, change := range []string{"unchanged", "metadata", "native", "known-hash", "explicit-signature"} {
+		for _, change := range []string{"unchanged", "metadata", "native", "remount", "known-hash", "explicit-signature"} {
 			t.Run(publisher+"/"+change, func(t *testing.T) {
 				// A recorded content identity can be valid without retaining its producer's hash.
 				ctx := context.Background()
@@ -42,6 +42,10 @@ func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing
 					after.MtimeNS++
 				case "native":
 					after.TrackingKeys[0].KeyValue = []byte("replacement")
+				case "remount":
+					// Another scope proves nothing about the recorded inode, so unchanged metadata decides.
+					after.TrackingKeys[0].Scope, after.TrackingKeys[0].KeyValue = "remounted", []byte("other inode")
+					want = opaque
 				case "explicit-signature":
 					after.Signature = []byte("another producer identity")
 					want = after.Signature
@@ -64,6 +68,20 @@ func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing
 			})
 		}
 	}
+}
+
+func TestNativeReplacedComparesOnlyWithinOneScope(t *testing.T) {
+	recorded := []*FileTrackingKey{{Kind: TrackingNative, Scope: "local/fs/1", KeyValue: []byte("42"), Details: TrackingDetails{BirthNS: 7}}}
+	observed := func(scope, key string, birth int64) []*FileTrackingKey {
+		return []*FileTrackingKey{{Kind: TrackingNative, Scope: scope, KeyValue: []byte(key), Details: TrackingDetails{BirthNS: birth}}}
+	}
+	require.False(t, NativeReplaced(recorded, observed("local/fs/1", "42", 7)))
+	require.True(t, NativeReplaced(recorded, observed("local/fs/1", "43", 7)))
+	require.True(t, NativeReplaced(recorded, observed("local/fs/1", "42", 8)))
+	require.False(t, NativeReplaced(recorded, observed("local/fs/2", "43", 8)))
+	require.False(t, NativeReplaced(recorded, observed("local/fs/2", "42", 7)))
+	require.False(t, NativeReplaced(recorded, nil))
+	require.False(t, NativeReplaced(nil, observed("local/fs/1", "43", 7)))
 }
 
 func TestSingleAndBatchObservationPreserveTrackingDecisions(t *testing.T) {

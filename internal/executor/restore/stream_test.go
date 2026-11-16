@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -116,6 +117,7 @@ func TestRestoreItemFailureDoesNotStopLaterResultBatches(t *testing.T) {
 		var output File
 		return runner.db.First(&output, copies[0].ItemID).Error == nil && output.ResultMessage != ""
 	}, 5*time.Second, time.Millisecond)
+	writeOutput(t, runner, copies[1], []byte("second"))
 	require.NoError(t, buffer.onResults([]acp.Result{result(copies[1], nil)}))
 	require.ErrorIs(t, buffer.Close(), acp.ErrTargetNoSpace)
 	var output File
@@ -143,6 +145,62 @@ func TestRestoreReusedReadyOutputRetainsDamage(t *testing.T) {
 	require.True(t, output.Ready)
 	require.True(t, output.Damaged)
 	require.Equal(t, hash[:], output.ActualHash)
+}
+
+// writeOutput stands in for the bytes ACP writes before it reports a completed target.
+func writeOutput(t *testing.T, runner *jobRestoreRunner, copy *copyCandidate, content []byte) {
+	t.Helper()
+	target := runner.restoreTarget(copy.TargetPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
+	require.NoError(t, os.WriteFile(target, content, 0o600))
+}
+
+// TestRestoreRetryTrustsUnchangedStagedOutput stages one output through the results path, then
+// replaces its bytes with different content of the same size while keeping the applied mode and
+// mtime. A retry that read the content would reject it; an unchanged output is trusted by Lstat,
+// and changing its mtime brings back the content verification.
+func TestRestoreRetryTrustsUnchangedStagedOutput(t *testing.T) {
+	ctx := context.Background()
+	runner, _, copies := setupVolumeRestore(t, "staged-reuse", map[string][]byte{"file.txt": []byte("saved")})
+	copy := copies[0]
+	writeOutput(t, runner, copy, []byte("saved"))
+	require.NoError(t, completeCandidate(t, runner, copy, acp.Result{Size: copy.Size, SHA256: copy.Hash,
+		Targets: []acp.TargetResult{{Path: runner.restoreTarget(copy.TargetPath), Size: copy.Size}}}))
+
+	// Staging applied the selected version's metadata to the complete bytes.
+	target := runner.restoreTarget(copy.TargetPath)
+	info, err := os.Lstat(target)
+	require.NoError(t, err)
+	require.Equal(t, copy.MtimeNS, info.ModTime().UnixNano())
+	require.Equal(t, fs.FileMode(copy.Mode).Perm(), info.Mode().Perm())
+
+	// Same size, mode and mtime: the retry settles the item without reading its bytes.
+	require.NoError(t, os.WriteFile(target, []byte("other"), 0o600))
+	modified := time.Unix(0, copy.MtimeNS)
+	require.NoError(t, os.Chtimes(target, modified, modified))
+	source := &copyItems{runner: runner, mediaID: copy.MediaID, session: &testReadSession{root: "/media"}, batch: 1}
+	reused, err := source.reuseOutput(ctx, copy)
+	require.NoError(t, err)
+	require.True(t, reused)
+
+	// A changed mtime is not trusted: content verification rejects the different bytes.
+	changed := modified.Add(time.Second)
+	require.NoError(t, os.Chtimes(target, changed, changed))
+	_, err = source.reuseOutput(ctx, copy)
+	var local *restoreItemError
+	require.ErrorAs(t, err, &local)
+	require.ErrorContains(t, err, "pending Restore output changed")
+
+	// A changed size is not trusted either, while verified original bytes are still reused.
+	require.NoError(t, os.WriteFile(target, []byte("longer"), 0o600))
+	require.NoError(t, os.Chtimes(target, modified, modified))
+	_, err = source.reuseOutput(ctx, copy)
+	require.ErrorContains(t, err, "pending Restore output changed")
+	require.NoError(t, os.WriteFile(target, []byte("saved"), 0o600))
+	require.NoError(t, os.Chtimes(target, changed, changed))
+	reused, err = source.reuseOutput(ctx, copy)
+	require.NoError(t, err)
+	require.True(t, reused)
 }
 
 // TestRestoreEveryTargetFailedIsStillACompletion keeps the completion path reachable for an
@@ -177,6 +235,7 @@ func TestRestoreResultsArePersistedByTheSharedWriter(t *testing.T) {
 		_ = runner.db.Callback().Create().Remove("test:callback-create-io")
 	})
 
+	writeOutput(t, runner, copy, []byte("saved"))
 	err := completeCandidate(t, runner, copy, acp.Result{Size: copy.Size, SHA256: copy.Hash,
 		Targets: []acp.TargetResult{{Path: runner.restoreTarget(copy.TargetPath), Size: copy.Size}}})
 	require.NoError(t, err)

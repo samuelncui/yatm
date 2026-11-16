@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCaptureOriginalKeepsOpaqueSignatureAfterLearningHash(t *testing.T) {
+func TestCaptureOriginalKeepsOpaqueSignatureWithoutReadingContent(t *testing.T) {
 	// Imported opaque content can have no SHA-256, and a fresh file has no ACP cache.
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
@@ -37,8 +37,7 @@ func TestCaptureOriginalKeepsOpaqueSignatureAfterLearningHash(t *testing.T) {
 	_, valid, _ := acp.ReadCachedSignature(name)
 	require.False(t, valid)
 
-	// A later capture must retain the content identity whether or not the first read cached its hash.
-	hash := sha256.Sum256(content)
+	// Capture keeps the recorded identity and leaves the unknown hash for the copy to read.
 	ids := make([]int64, 257)
 	ids[0], ids[len(ids)-1] = file.ID, file.ID
 	var captures []*entity.ExpectedFile
@@ -51,8 +50,10 @@ func TestCaptureOriginalKeepsOpaqueSignatureAfterLearningHash(t *testing.T) {
 	require.Len(t, captures, 2)
 	for _, expected := range captures {
 		require.Equal(t, opaque, expected.Signature)
-		require.Equal(t, hash[:], expected.Sha256)
+		require.Empty(t, expected.Sha256)
 	}
+	_, valid, _ = acp.ReadCachedSignature(name)
+	require.False(t, valid, "capture must not read the original")
 	_, again, err := exe.CaptureOriginal(ctx, file.ID)
 	require.NoError(t, err)
 	require.Equal(t, opaque, again.Signature)

@@ -280,6 +280,47 @@ func rebuildPositionIndex(ctx context.Context, db *gorm.DB) error {
 	return nil
 }
 
+// mergeMediaDirectories adds summaries derived from newly appended files to the Media's directory index.
+// The appended paths are new, so combining each partial summary with the stored one equals a full rebuild.
+func mergeMediaDirectories(tx *gorm.DB, mediaID int64, directories []*Position) error {
+	paths := make([]string, 0, len(directories))
+	for _, directory := range directories {
+		paths = append(paths, directory.Path)
+	}
+	var stored []*Position
+	if err := tx.Where("media_id = ? AND is_dir = ? AND path IN ?", mediaID, true, paths).Find(&stored).Error; err != nil {
+		return fmt.Errorf("read Position directories failed, media_id=%d, %w", mediaID, err)
+	}
+	byPath := make(map[string]*Position, len(stored))
+	for _, directory := range stored {
+		byPath[directory.Path] = directory
+	}
+
+	// Update existing summaries in place and insert directories first reached by this append.
+	created := make([]*Position, 0, len(directories))
+	for _, directory := range directories {
+		existing, ok := byPath[directory.Path]
+		if !ok {
+			created = append(created, directory)
+			continue
+		}
+		addPositionSummary(existing, directory)
+	}
+	if len(stored) > 0 {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "id"}}, UpdateAll: true,
+		}).CreateInBatches(stored, batchSize).Error; err != nil {
+			return fmt.Errorf("update Position directories failed, media_id=%d, %w", mediaID, err)
+		}
+	}
+	if len(created) > 0 {
+		if err := tx.CreateInBatches(created, batchSize).Error; err != nil {
+			return fmt.Errorf("create Position directories failed, media_id=%d, %w", mediaID, err)
+		}
+	}
+	return nil
+}
+
 func rebuildMediaPositionIndex(ctx context.Context, tx *gorm.DB, mediaID int64) error {
 	if err := tx.Where("media_id = ? AND is_dir = ?", mediaID, true).Delete(&Position{}).Error; err != nil {
 		return fmt.Errorf("clear derived Position directories failed, media_id=%d, %w", mediaID, err)

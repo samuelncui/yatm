@@ -168,7 +168,7 @@ func TestContentKnownOnlyNeverReadsContent(t *testing.T) {
 	entry := contentEntries(t, r, 1, "content")[0]
 	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{Selections: scanLocationSelections(1), SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
 		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY}})
-	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil))
+	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil, nil))
 
 	var stored Entry
 	require.NoError(t, r.db.First(&stored, entry.ID).Error)
@@ -184,7 +184,7 @@ func TestContentReadsTheStoredSourcePath(t *testing.T) {
 	session := &countingSourceSession{checkSession: checkSession{root: t.TempDir()}}
 	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{MediaId: 1, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
 		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_INVENTORY}})
-	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session))
+	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, session, nil))
 	require.Zero(t, session.resolutions, "the stored path is authoritative")
 
 	var stored Entry
@@ -212,7 +212,7 @@ func TestContentFlushPersistsBatchedStatements(t *testing.T) {
 	recorder := recordStatements(t, r.db)
 	config := flushLimits(8, 2, 60000)
 	ctx := executor.WithJobExecutionSettings(context.Background(), flushSettings(8, 2, 60000))
-	require.NoError(t, r.readContent(ctx, config, &Scope{LocationID: 1}, nil, nil))
+	require.NoError(t, r.readContent(ctx, config, &Scope{LocationID: 1}, nil, nil, nil))
 
 	// The shared writer persists one statement per batch, and one batch carries at most two rows.
 	require.GreaterOrEqual(t, recorder.createCount(), (len(entries)+1)/2, "results are batched")
@@ -332,7 +332,7 @@ func TestContentFailureStopsScopeUnlessVerifying(t *testing.T) {
 			require.NoError(t, r.db.Create(entry).Error)
 			config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{MediaId: 1, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
 				ResultPolicy: tc.policy}})
-			err := r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil)
+			err := r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil, nil)
 
 			var stored Entry
 			require.NoError(t, r.db.First(&stored, entry.ID).Error)

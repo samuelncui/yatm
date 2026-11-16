@@ -53,6 +53,8 @@ type contentStream struct {
 
 	// totals is the attempt's durable denominator and completed base, read before ACP starts.
 	totals contentTotals
+	// settled tells a following Preview which rows have saved content facts; nil without Preview.
+	settled *settledRows
 
 	pageLimit    int
 	readModes    map[int64]acp.ReadMode
@@ -133,7 +135,9 @@ func newContentStream(
 	return stream, nil
 }
 
-func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, local *locationStage, session mediapkg.ReadSession) error {
+func (r *runner) readContent(
+	ctx context.Context, config *Config, scope *Scope, local *locationStage, session mediapkg.ReadSession, settled *settledRows,
+) error {
 	// Durable rows remain the authority for work earlier attempts completed. Read this attempt's
 	// denominator and completed base once and publish them before the phase becomes observable, so
 	// a request that sees the content phase always reads the attempt's snapshot instead of querying.
@@ -157,7 +161,7 @@ func (r *runner) readContent(ctx context.Context, config *Config, scope *Scope, 
 	// The writer drains accepted results on every return path, including a phase that returns
 	// before it ever feeds ACP. Close is idempotent, so the run path below reads its error again.
 	defer func() { _ = stream.writer.Close() }()
-	stream.totals = totals
+	stream.totals, stream.settled = totals, settled
 	r.publishContentStage(stream)
 
 	// Reading is the only Scan phase that can expose ACP throughput.
@@ -340,6 +344,19 @@ func (s *contentStream) nextPage(ctx context.Context) ([]acp.Item, error) {
 	}
 	if len(items) == 0 {
 		return nil, io.EOF
+	}
+	// Only ID order lets Preview follow the read; a sequential source orders by storage instead.
+	if s.session == nil || s.session.Capabilities().Read != mediapkg.AccessSequential {
+		ids := make([]int64, len(items))
+		for i, item := range items {
+			switch value := item.(type) {
+			case *contentItem:
+				ids[i] = value.ID
+			case *indexedContentItem:
+				ids[i] = value.ID
+			}
+		}
+		s.settled.submit(ids)
 	}
 	return items, nil
 }
@@ -720,7 +737,11 @@ func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) er
 	for _, item := range batch {
 		// An item failure is a per-file finding under verification and a scope stop otherwise.
 		if item.cause != nil {
-			note(s.recordReadError(ctx, item.row, item.cause))
+			err := s.recordReadError(ctx, item.row, item.cause)
+			if err == nil {
+				s.settled.save([]int64{item.row.ID})
+			}
+			note(err)
 			continue
 		}
 		rows = append(rows, item.row)
@@ -734,9 +755,12 @@ func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) er
 		}
 		return errors.Join(failure, err)
 	}
-	for _, row := range rows {
+	ids := make([]int64, len(rows))
+	for i, row := range rows {
 		s.logFinished(row)
+		ids[i] = row.ID
 	}
+	s.settled.save(ids)
 	return failure
 }
 

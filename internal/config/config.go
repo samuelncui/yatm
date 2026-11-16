@@ -18,13 +18,21 @@ type Config struct {
 	Database struct {
 		Dialect   string `yaml:"dialect"`
 		DSN       string `yaml:"dsn"`
-		SQLiteWAL bool   `yaml:"sqlite_wal"`
+		SQLiteWAL *bool  `yaml:"sqlite_wal"`
 	} `yaml:"database"`
 
 	Paths       executor.Paths   `yaml:"paths"`
 	TapeDevices []string         `yaml:"tape_devices"`
 	Scripts     executor.Scripts `yaml:"scripts"`
 	Preview     preview.Config   `yaml:"preview"`
+}
+
+// CatalogWAL reports whether the Catalog uses WAL: an explicit setting, otherwise on for SQLite.
+func (c *Config) CatalogWAL() bool {
+	if c.Database.SQLiteWAL != nil {
+		return *c.Database.SQLiteWAL
+	}
+	return c.Database.Dialect == "sqlite"
 }
 
 func GetConfig(path string) *Config {

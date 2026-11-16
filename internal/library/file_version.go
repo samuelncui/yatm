@@ -53,6 +53,14 @@ func recordVersion(tx *gorm.DB, value *FileVersion) (*FileVersion, error) {
 	if owner.Kind != entity.FileKind_FILE_KIND_REGULAR {
 		return nil, fmt.Errorf("directories cannot own FileVersions")
 	}
+	return recordRegularVersion(tx, value)
+}
+
+// recordRegularVersion records content for a File the caller has already resolved as regular.
+func recordRegularVersion(tx *gorm.DB, value *FileVersion) (*FileVersion, error) {
+	if err := value.BeforeSave(tx); err != nil {
+		return nil, err
+	}
 	var stored FileVersion
 	if err := tx.Where("file_id = ? AND signature = ?", value.FileID, value.Signature).Limit(1).Find(&stored).Error; err != nil {
 		return nil, fmt.Errorf("find archived content failed, %w", err)

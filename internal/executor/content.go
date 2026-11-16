@@ -15,37 +15,15 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 )
 
-// HashObservedContent obtains content facts through ACP, outside any Library transaction.
-func HashObservedContent(ctx context.Context, filename string, observed os.FileInfo) (*entity.ExpectedFile, error) {
-	return hashObservedContent(ctx, filename, observed, false, false)
-}
-
-// HashOriginalContent applies the registered Location's read mode to a current original.
-func HashOriginalContent(ctx context.Context, filename string, observed os.FileInfo, source *library.Location) (*entity.ExpectedFile, error) {
-	return hashObservedContent(ctx, filename, observed, false, source.Config.GetUseMmap())
-}
-
 // VerifyObservedContent reads actual bytes when satisfying a Restore from an existing output.
 func VerifyObservedContent(ctx context.Context, filename string, observed os.FileInfo) (*entity.ExpectedFile, error) {
-	return hashObservedContent(ctx, filename, observed, true, false)
-}
-
-func hashObservedContent(ctx context.Context, filename string, observed os.FileInfo, force, mapped bool) (*entity.ExpectedFile, error) {
 	if !observed.Mode().IsRegular() {
 		return nil, fmt.Errorf("content input is not an ordinary file")
 	}
 
 	// One caller-owned item carries the content facts back through the results callback.
 	source := &observedHash{filename: filename}
-	policy := acp.HashCachedOrReadRefresh
-	if force {
-		policy = acp.HashReadRefresh
-	}
-	options := []acp.Option{acp.WithHashPolicy(policy)}
-	if mapped {
-		options = append(options, acp.SetFromDevice(acp.WithReadMode(acp.ReadMapped)))
-	}
-	engine, err := acp.NewStream(ctx, source.accept, options...)
+	engine, err := acp.NewStream(ctx, source.accept, acp.WithHashPolicy(acp.HashReadRefresh))
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +121,7 @@ func (s *observedHash) expected() *entity.ExpectedFile {
 	return s.result
 }
 
-// CaptureOriginal observes the one original selected by File identity, hashing only when needed.
+// CaptureOriginal observes the one original selected by File identity.
 func (e *Executor) CaptureOriginal(ctx context.Context, fileID int64) (string, *entity.ExpectedFile, error) {
 	var filename string
 	var expected *entity.ExpectedFile
@@ -161,7 +139,7 @@ func (e *Executor) CaptureOriginal(ctx context.Context, fileID int64) (string, *
 }
 
 // CaptureOriginals prepares bounded batches in input order, omitting Files without originals.
-// All other observation, admission and content failures stop preparation.
+// All other observation and admission failures stop preparation.
 func (e *Executor) CaptureOriginals(ctx context.Context, ids []int64, yield func(int64, string, *entity.ExpectedFile) error) error {
 	for start := 0; start < len(ids); start += 256 {
 		if err := e.captureOriginalBatch(ctx, ids[start:min(start+256, len(ids))], yield); err != nil {
@@ -264,7 +242,7 @@ func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield 
 		}
 	}
 
-	// Return content in selection order, hashing only originals without complete content facts.
+	// Return recorded facts in selection order; unknown content stays unknown until a copy reads it.
 	for _, id := range ids {
 		original := originals[id]
 		if original == nil {
@@ -272,17 +250,6 @@ func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield 
 		}
 		expected := &entity.ExpectedFile{FileId: id, Signature: original.Signature, Sha256: original.Hash, SizeBytes: original.Size,
 			Mode: original.Mode, MtimeNs: original.MtimeNS, OriginalLocationId: original.LocationID}
-		if len(expected.Signature) == 0 || len(expected.Sha256) != 32 {
-			known, err := HashOriginalContent(ctx, filenames[id], infos[id], locations[original.LocationID])
-			if err != nil {
-				return err
-			}
-			known.FileId, known.OriginalLocationId = id, original.LocationID
-			if len(expected.Signature) > 0 {
-				known.Signature = expected.Signature
-			}
-			expected = known
-		}
 		if err := yield(id, filenames[id], expected); err != nil {
 			return err
 		}
