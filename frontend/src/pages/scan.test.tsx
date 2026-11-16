@@ -14,14 +14,16 @@ import {
   MediaAccess,
   MediaKind,
   PreviewPolicy,
+  ScanJobSpec,
   ScanResultPolicy as Result,
   ScanSignaturePolicy as Signature,
 } from "@/entity";
 
-const { get, mediaList, scan, fileGet, capabilities, previewSettings, importPositions } = vi.hoisted(() => ({
+const { get, mediaList, scan, latest, fileGet, capabilities, previewSettings, importPositions } = vi.hoisted(() => ({
   get: vi.fn(),
   mediaList: vi.fn(),
   scan: vi.fn(),
+  latest: vi.fn(),
   fileGet: vi.fn(),
   capabilities: vi.fn(),
   previewSettings: vi.fn(),
@@ -31,7 +33,7 @@ vi.mock("@/api", () => ({
   locationCli: { get },
   mediaCli: { list: mediaList },
   filesCli: { get: fileGet, importPositions },
-  scanJobCli: { create: scan },
+  scanJobCli: { create: scan, getCreation: latest },
   previewCli: { getCapabilities: capabilities },
   settingsCli: { get: previewSettings },
 }));
@@ -49,7 +51,6 @@ vi.mock("@/components/scan-selection-dialog", () => ({
 }));
 
 import { ScanBrowser } from "./scan";
-import { scanPreferencesKey } from "@/components/scan-preferences";
 
 const call = (value: unknown) => ({ response: Promise.resolve(value) });
 const source = Location.create({ id: 1n, name: "Photos", rootPath: "/photos" });
@@ -64,6 +65,21 @@ const selection = (path: string) =>
       }),
     },
     scope: FileScope.ALL,
+  });
+// The most recently created Scan, as the latest creation read returns it.
+const lastScan = (spec: Partial<ScanJobSpec>) =>
+  call({
+    request: {
+      priority: 1n,
+      spec: ScanJobSpec.create({
+        signaturePolicy: Signature.KNOWN_ONLY,
+        resultPolicy: Result.REPORT_ONLY,
+        compareLibrary: false,
+        previewPolicy: PreviewPolicy.NONE,
+        writeSignatureCache: false,
+        ...spec,
+      }),
+    },
   });
 const filesState = (paths = ["Projects"]) => ({
   scan: {
@@ -121,6 +137,8 @@ beforeEach(() => {
   get.mockReturnValue(call({ location: source }));
   mediaList.mockReturnValue(call({ media: [disk], hasMore: false }));
   scan.mockReturnValue(call({ job: { id: 43n } }));
+  // No Scan was created before.
+  latest.mockReturnValue(call({}));
   fileGet.mockReturnValue(call({}));
   importPositions.mockReturnValue(call({ fileCount: 12n, directoryCount: 3n, skippedFileCount: 2n, existingCount: 1n, skippedUnsignedCount: 0n }));
 });
@@ -222,32 +240,95 @@ describe("Scan form", () => {
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
   });
 
-  it("saves only after success and Files retains the prior Location target", async () => {
-    const saved = {
-      kind: "location",
-      location: { id: "1", rootPath: "/photos" },
-      signaturePolicy: Signature.FILL_MISSING,
-      resultPolicy: Result.PUBLISH_ORIGINALS,
-      compare: true,
-      previewPolicy: PreviewPolicy.NONE,
-    };
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
-    show({ pathname: "/scan", state: filesState() });
-    await screen.findByText("Projects");
-    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
-    await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
+  it("starts from the latest Scan's whole Location and options without writing browser storage", async () => {
+    latest.mockReturnValue(lastScan({ selections: [selection("")] }));
+    show();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+    expect(latest).toHaveBeenCalledExactlyOnceWith({ id: 0n, latest: true }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
+    expect(get).toHaveBeenCalledWith({ id: 1n }, expect.objectContaining({ abort: expect.anything() }));
+    expect(screen.queryByText(/confirmation|Confirm imported/)).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent("Location");
+    expect(screen.getByRole("combobox", { name: "Results" })).toHaveTextContent("View results only");
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
     expect(await screen.findByText("Job 43")).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toMatchObject({ ...saved, signaturePolicy: Signature.KNOWN_ONLY });
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({
+          mediaId: 0n,
+          selections: [selection("")],
+          signaturePolicy: Signature.KNOWN_ONLY,
+          resultPolicy: Result.REPORT_ONLY,
+          compareLibrary: false,
+          writeSignatureCache: false,
+        }),
+      }),
+    );
+    expect(localStorage.getItem("scan:last-options")).toBeNull();
+  });
 
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
+  it("starts from the latest Scan's Media", async () => {
+    latest.mockReturnValue(lastScan({ mediaId: 3n }));
+    show();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+    expect(screen.getByRole("combobox", { name: "Source" })).toHaveTextContent("Media");
+    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({ spec: expect.objectContaining({ mediaId: 3n, selections: [], resultPolicy: Result.REPORT_ONLY }) }),
+    );
+  });
+
+  it("keeps a routed Files target and applies the latest Scan's options to it", async () => {
+    latest.mockReturnValue(lastScan({ selections: [selection("")] }));
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    expect(get).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({ selections: [selection("Projects")], signaturePolicy: Signature.KNOWN_ONLY, compareLibrary: false }),
+      }),
+    );
+  });
+
+  it("applies the options of a latest Scan of selected files and leaves the Location to choose", async () => {
+    latest.mockReturnValue(lastScan({ selections: [selection("Projects")] }));
+    show();
+    expect(await screen.findByRole("combobox", { name: "Source" })).toHaveTextContent("Location");
+    expect(screen.getByRole("combobox", { name: "Results" })).toHaveTextContent("View results only");
+    expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no Scan was created before", () => call({})],
+    ["the latest Scan cannot be read", () => ({ response: Promise.reject(new Error("Offline")) })],
+  ])("starts from the built-in options when %s", async (_, reply) => {
+    latest.mockImplementation(reply);
+    show({ pathname: "/scan", state: filesState() });
+    await screen.findByText("Projects");
+    expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({
+          signaturePolicy: Signature.FILL_MISSING,
+          resultPolicy: Result.PUBLISH_ORIGINALS,
+          compareLibrary: true,
+          previewPolicy: PreviewPolicy.NONE,
+          writeSignatureCache: true,
+        }),
+      }),
+    );
+  });
+
+  it("keeps the draft and writes no browser storage after failed creation", async () => {
     scan.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Busy")) }));
     show({ pathname: "/scan", state: filesState() });
     await screen.findByText("Projects");
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
     expect(await screen.findByText("Busy")).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toEqual(saved);
+    expect(screen.getByText("Projects")).toBeInTheDocument();
+    expect(localStorage.getItem("scan:last-options")).toBeNull();
   });
 
   it("reinitializes when the same route receives a new scan state", async () => {
@@ -266,7 +347,7 @@ describe("Scan form", () => {
       }),
     });
     show("/scan?location=1");
-    expect(screen.getByRole("status")).toHaveTextContent("Loading source…");
+    expect(await screen.findByRole("status")).toHaveTextContent("Loading source…");
     await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
     await userEvent.click(screen.getByRole("option", { name: "Files" }));
     await act(async () => resolve({ location: source }));
@@ -296,43 +377,12 @@ describe("Scan form", () => {
     );
   });
 
-  it.each([
-    ["moved Location", Location.create({ ...source, rootPath: "/moved" }), "last Location has changed"],
-    ["removed Location", undefined, "unavailable"],
-  ])("does not restore a remembered %s", async (_, location, message) => {
-    localStorage.setItem(
-      scanPreferencesKey,
-      JSON.stringify({
-        kind: "location",
-        location: { id: "1", rootPath: "/photos" },
-        signaturePolicy: Signature.FILL_MISSING,
-        resultPolicy: Result.PUBLISH_ORIGINALS,
-        compare: true,
-        previewPolicy: PreviewPolicy.NONE,
-      }),
-    );
-    get.mockReturnValue(call({ location }));
+  it("does not start from the latest Scan's Location after it is removed", async () => {
+    latest.mockReturnValue(lastScan({ selections: [selection("")] }));
+    get.mockReturnValue(call({}));
     show();
-    expect(await screen.findByText(new RegExp(message))).toBeInTheDocument();
+    expect(await screen.findByText(/unavailable/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start scan" })).toBeDisabled();
-  });
-
-  it("reuses a remembered Location without a confirmation step", async () => {
-    localStorage.setItem(
-      scanPreferencesKey,
-      JSON.stringify({
-        kind: "location",
-        location: { id: "1", rootPath: "/photos" },
-        signaturePolicy: Signature.FILL_MISSING,
-        resultPolicy: Result.PUBLISH_ORIGINALS,
-        compare: true,
-        previewPolicy: PreviewPolicy.NONE,
-      }),
-    );
-    show();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
-    expect(get).toHaveBeenCalledWith({ id: 1n }, expect.objectContaining({ abort: expect.anything() }));
-    expect(screen.queryByText(/confirmation|Confirm imported/)).not.toBeInTheDocument();
   });
 
   it("submits at most once while creation is pending", async () => {

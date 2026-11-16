@@ -137,6 +137,18 @@ beforeEach(() => {
   for (const create of [mocks.archiveCreate, mocks.restoreCreate, mocks.scanCreate]) create.mockReturnValue(call({ job: { id: 90n } }));
 });
 
+it("keeps an Archive's unrecorded Preview policy unset so the form asks for one", async () => {
+  // An imported Job records no Preview policy; Recreate must not default it silently.
+  const request = CreateArchiveJobRequest.create({ priority: 1n, spec: { selections: [selection(7n, FileScope.SAVED)] } });
+  mocks.archiveRead.mockReturnValue(call({ request, unavailableReason: "" }));
+  show("/archive?recreate=1");
+  await screen.findByText("File 7");
+  await userEvent.click(screen.getByRole("button", { name: "Archive…" }));
+  expect(await screen.findByText("Choose a Preview option before preparing.")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Prepare archive" })).toBeDisabled();
+  expect(mocks.archiveCreate).not.toHaveBeenCalled();
+});
+
 it("opens Archive without submitting and preserves roots, scope, Preview, force rehash and priority through a fresh estimate", async () => {
   const request = CreateArchiveJobRequest.create({
     priority: 23n,
@@ -144,11 +156,16 @@ it("opens Archive without submitting and preserves roots, scope, Preview, force 
     previewPolicy: PreviewPolicy.REGENERATE_ALL,
     forceRehash: true,
   });
-  // The original Job's choices win over different remembered ones.
-  localStorage.setItem("archive:last-options", JSON.stringify({ writeSignatureCache: true, targetMediaCount: 1 }));
-  mocks.archiveRead.mockReturnValue(call({ request, unavailableReason: "" }));
+  // The original Job's choices win; the most recently created Archive is not read.
+  mocks.archiveRead.mockImplementation(({ latest }: { latest: boolean }) =>
+    call({
+      request: latest ? CreateArchiveJobRequest.create({ spec: { writeSignatureCache: true, targetMediaCount: 1 } }) : request,
+      unavailableReason: "",
+    }),
+  );
   show("/archive?recreate=1");
   await screen.findByText("File 7");
+  expect(mocks.archiveRead).toHaveBeenCalledExactlyOnceWith({ id: 1n, latest: false }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
   expect(mocks.archiveCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Archive…" }));
   await userEvent.click(screen.getByRole("button", { name: /^Advanced Preview/ }));
@@ -166,7 +183,6 @@ it("opens Archive without submitting and preserves roots, scope, Preview, force 
 it.each([1700000000789123456n, -1n, 0n, minUnixNs, maxUnixNs])(
   "preserves Restore's exact cutoff %s, versions, destination and options until manual submission",
   async (cutoff) => {
-    localStorage.setItem("restore:last-target", JSON.stringify({ locationID: "99", rootPath: "/other", path: "unrelated" }));
     const request = CreateRestoreJobRequest.create({
       priority: 27n,
       spec: {
@@ -180,10 +196,14 @@ it.each([1700000000789123456n, -1n, 0n, minUnixNs, maxUnixNs])(
         writeTargetSignatureCache: true,
       },
     });
-    localStorage.setItem("restore:last-options", JSON.stringify({ writeSourceSignatureCache: true, writeTargetSignatureCache: false }));
-    mocks.restoreRead.mockReturnValue(call({ request, unavailableReason: "" }));
+    // The original Job's choices win; the most recently created Restore is not read.
+    const other = CreateRestoreJobRequest.create({
+      spec: { destination: { locationId: 99n, path: "unrelated" }, writeSourceSignatureCache: true, writeTargetSignatureCache: false },
+    });
+    mocks.restoreRead.mockImplementation(({ latest }: { latest: boolean }) => call({ request: latest ? other : request, unavailableReason: "" }));
     const { store } = show("/restore?recreate=1");
     await screen.findByText("File 7");
+    expect(mocks.restoreRead).toHaveBeenCalledExactlyOnceWith({ id: 1n, latest: false }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
     expect(restoreCutoff(store.getState().selections.versionPolicy)).toBe(cutoff);
     expect(mocks.restoreCreate).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Restore…" }));
@@ -360,10 +380,13 @@ it("retains Scan Media and verification options", async () => {
       previewPolicy: PreviewPolicy.NONE,
     },
   });
-  mocks.scanRead.mockReturnValue(call({ request, unavailableReason: "" }));
+  // The original Job's choices win; the most recently created Scan is not read.
+  const other = CreateScanJobRequest.create({ spec: { mediaId: 16n, signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: true } });
+  mocks.scanRead.mockImplementation(({ latest }: { latest: boolean }) => call({ request: latest ? other : request, unavailableReason: "" }));
   mocks.media.mockReturnValue(call({ media: [Media.create({ id: 15n, kind: MediaKind.VOLUME, capabilities: { read: MediaAccess.RANDOM } })] }));
   show("/scan?recreate=1");
   await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  expect(mocks.scanRead).toHaveBeenCalledExactlyOnceWith({ id: 1n, latest: false }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
   expect(mocks.scanCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   // A Job without a recorded signature cache choice wrote the cache; the form submits that explicitly.
@@ -454,11 +477,14 @@ it("uses an edited cutoff and drops explicit version IDs when the operator appli
   });
 });
 
-it("preserves missing destination identity without accepting an unrelated remembered target", async () => {
-  localStorage.setItem("restore:last-target", JSON.stringify({ locationID: "99", rootPath: "/other", path: "unrelated" }));
-  mocks.restoreRead.mockReturnValue(
+it("preserves missing destination identity without accepting the latest Restore's target", async () => {
+  mocks.restoreRead.mockImplementation(({ latest }: { latest: boolean }) =>
     call({
-      request: CreateRestoreJobRequest.create({ spec: { selections: [selection(7n)], destination: { locationId: 404n, path: "original" } } }),
+      request: CreateRestoreJobRequest.create({
+        spec: latest
+          ? { destination: { locationId: 99n, path: "unrelated" } }
+          : { selections: [selection(7n)], destination: { locationId: 404n, path: "original" } },
+      }),
       unavailableReason: "",
     }),
   );

@@ -17,14 +17,16 @@ import {
   FileOperationKind,
   FilesEntry,
   ListFilesResponse,
+  CreateRestoreJobRequest,
   type EstimateRestoreJobRequest,
 } from "@/entity";
-const { parents, getVersion, listVersions, listCopies, create, list, get, listFiles, inspect, browserFiles } = vi.hoisted(() => ({
+const { parents, getVersion, listVersions, listCopies, create, latest, list, get, listFiles, inspect, browserFiles } = vi.hoisted(() => ({
   parents: vi.fn(),
   getVersion: vi.fn(),
   listVersions: vi.fn(),
   listCopies: vi.fn(),
   create: vi.fn(),
+  latest: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   listFiles: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock("@/api", async (original) => ({
 
   restoreJobCli: {
     create,
+    getCreation: latest,
     estimate: (...args: unknown[]) => ({ response: inspect(...args).response.then((result: unknown) => ({ result })) }),
   },
   locationCli: { list, get },
@@ -142,8 +145,8 @@ const ChooseAnother = () => {
   );
 };
 const Destination = () => <div>Job {useParams().id}</div>;
-const show = (route = "/restore?version_id=19") =>
-  render(
+const show = async (route = "/restore?version_id=19") => {
+  const page = render(
     <MemoryRouter initialEntries={[route]}>
       <Routes>
         <Route path="/restore" element={<ChooseAnother />} />
@@ -151,6 +154,10 @@ const show = (route = "/restore?version_id=19") =>
       </Routes>
     </MemoryRouter>,
   );
+  // The form mounts with its starting options once the latest Restore read settles.
+  await screen.findByRole("button", { name: "Restore…" });
+  return page;
+};
 const target = async (path = "") => {
   if (!screen.queryByRole("dialog", { name: "Restore" })) {
     await waitFor(() => expect(screen.getByRole("button", { name: "Restore…" })).toBeEnabled());
@@ -218,6 +225,8 @@ beforeEach(() => {
     }),
   );
   create.mockReturnValue(call({ job: { id: 42n } }));
+  // No Restore was created before.
+  latest.mockReturnValue(call({}));
 });
 describe("Version Restore selection", () => {
   it("does not add a delayed deep-linked version after the route selects another version", async () => {
@@ -231,7 +240,7 @@ describe("Version Restore selection", () => {
           }
         : call({ version: FileVersion.create({ id, fileId: 7n, sizeBytes: 100n }) }),
     );
-    show();
+    await show();
     await waitFor(() => expect(getVersion).toHaveBeenCalledWith({ id: 19n }));
     await userEvent.click(screen.getByRole("button", { name: "Add another version" }));
     await screen.findByText("Selected · 1");
@@ -242,7 +251,7 @@ describe("Version Restore selection", () => {
 
   it("retains a directory root and sends a nested custom version as an override", async () => {
     browserFiles.current = [{ id: "1", name: "Trips", isDir: true }];
-    show("/restore");
+    await show("/restore");
     await userEvent.click(screen.getByRole("button", { name: "Add Trips" }));
     await userEvent.click(await screen.findByRole("button", { name: "Choose nested file version" }));
     await userEvent.click(await screen.findByRole("button", { name: /Version #20/ }));
@@ -282,7 +291,7 @@ describe("Version Restore selection", () => {
         }),
       ),
     );
-    show("/restore");
+    await show("/restore");
     await userEvent.click(screen.getByRole("button", { name: "Add organized.jpg" }));
     await userEvent.click(screen.getByRole("button", { name: "Add Trips" }));
     await target();
@@ -305,7 +314,7 @@ describe("Version Restore selection", () => {
     );
   });
   it("keeps explicit versions across time changes and can reset all overrides into a deduplicated File selection", async () => {
-    show();
+    await show();
     await screen.findByText("Trips/organized.jpg");
     await userEvent.click(screen.getByRole("button", { name: "Add another version" }));
     await target();
@@ -337,7 +346,7 @@ describe("Version Restore selection", () => {
         }),
       ),
     );
-    show("/restore");
+    await show("/restore");
     await userEvent.click(screen.getByRole("button", { name: "Add organized.jpg" }));
     await target();
     await before("2026-09-01T12:00");
@@ -366,7 +375,7 @@ describe("Version Restore selection", () => {
         }),
       ),
     );
-    show();
+    await show();
     await target();
     await before("2026-09-01T12:00");
     await userEvent.click(await screen.findByRole("button", { name: "Skip 1 item" }));
@@ -374,7 +383,7 @@ describe("Version Restore selection", () => {
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
     expect(create).not.toHaveBeenCalled();
   });
-  it("discards an older policy response and remembers the selected policy with the waitlist", async () => {
+  it("discards an older policy response and keeps the selected policy with the waitlist", async () => {
     let resolveOld!: (value: SelectionInspectionResult) => void;
     const oldCutoff = BigInt(new Date("2026-09-01T12:00").getTime()) * 1_000_000n;
     inspect.mockImplementation((request: EstimateRestoreJobRequest) => {
@@ -386,7 +395,7 @@ describe("Version Restore selection", () => {
         };
       return call(SelectionInspectionResult.create({ selections: request.selections, fileCount: 1n, totalBytes: 100n }));
     });
-    const page = show();
+    const page = await show();
     await target();
     await before("2026-09-01T12:00");
     await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
@@ -395,7 +404,7 @@ describe("Version Restore selection", () => {
     await act(async () => resolveOld(SelectionInspectionResult.create({ missingCopyCount: 1n, fileCount: 1n })));
     expect(screen.queryByText("1 item has no usable archived copy.")).not.toBeInTheDocument();
     page.unmount();
-    show("/restore");
+    await show("/restore");
     await userEvent.click(screen.getByRole("button", { name: "Restore…" }));
     const picker = await screen.findByRole("group", { name: "Restore time" });
     expect(within(picker).getByRole("spinbutton", { name: "Day" })).toHaveTextContent("02");
@@ -405,7 +414,7 @@ describe("Version Restore selection", () => {
     inspect.mockImplementation(({ selections, destination }: { selections: FileSelection[]; destination?: unknown }) =>
       call(SelectionInspectionResult.create({ selections, fileCount: 1n, ignoredOutputCount: destination ? 1n : 0n })),
     );
-    show();
+    await show();
     await target();
     expect(await screen.findByText(/1 outputs match Ignore rules/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled();
@@ -414,7 +423,7 @@ describe("Version Restore selection", () => {
     inspect.mockImplementation(({ selections, allowDamagedCopies }: { selections: FileSelection[]; allowDamagedCopies: boolean }) =>
       call(SelectionInspectionResult.create({ selections, fileCount: 1n, missingCopyCount: allowDamagedCopies ? 0n : 1n })),
     );
-    show();
+    await show();
     await target();
     await screen.findByText("1 item has no usable archived copy.");
     expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
@@ -426,8 +435,74 @@ describe("Version Restore selection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ allowDamagedCopies: true }) }));
   });
-  it("chooses the signature cache for Media and restored files separately and remembers both", async () => {
-    show();
+  it("starts from the latest Restore's signature cache choices and destination, and from nothing else", async () => {
+    latest.mockReturnValue(
+      call({
+        request: CreateRestoreJobRequest.create({
+          priority: 9n,
+          spec: {
+            selections: [FileSelection.create({ target: { oneofKind: "library", library: { fileId: 99n } }, scope: FileScope.SAVED })],
+            destination: { locationId: 3n, path: "review", rootPath: "/restored" },
+            allowDamagedCopies: true,
+            versionPolicy: { beforeAtNs: 1700000000000000000n },
+            skipUnmatchedVersions: true,
+            writeSourceSignatureCache: true,
+            writeTargetSignatureCache: false,
+          },
+        }),
+      }),
+    );
+    await show();
+    expect(latest).toHaveBeenCalledExactlyOnceWith({ id: 0n, latest: true }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
+    expect(await screen.findByText("Selected · 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Restore…" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Recovered files / review"));
+    expect(screen.getByRole("combobox", { name: "Versions" })).toHaveTextContent("Latest saved version");
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+    expect(screen.getByRole("checkbox", { name: "Allow damaged copies" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto Media" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto restored files" })).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare restore" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Prepare restore" }));
+    expect(create).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        priority: 1n,
+        spec: expect.objectContaining({
+          selections: [],
+          fileVersionIds: [19n],
+          destination: expect.objectContaining({ locationId: 3n, path: "review" }),
+          allowDamagedCopies: false,
+          versionPolicy: { beforeAtNs: undefined },
+          skipUnmatchedVersions: false,
+          writeSourceSignatureCache: true,
+          writeTargetSignatureCache: false,
+        }),
+      }),
+    );
+  });
+  it("does not start from the latest Restore's destination after its Location moved", async () => {
+    latest.mockReturnValue(
+      call({ request: CreateRestoreJobRequest.create({ spec: { destination: { locationId: 3n, path: "review", rootPath: "/elsewhere" } } }) }),
+    );
+    await show();
+    await userEvent.click(await screen.findByRole("button", { name: "Restore…" }));
+    expect(await screen.findByText(/last restore target is no longer available/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
+    expect(screen.getByRole("button", { name: "Prepare restore" })).toBeDisabled();
+  });
+  it("starts from the built-in options when the latest Restore cannot be read", async () => {
+    latest.mockImplementation(() => ({ response: Promise.reject(new Error("Offline")) }));
+    await show();
+    await userEvent.click(await screen.findByRole("button", { name: "Restore…" }));
+    expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
+    expect(get).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto Media" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Write signature cache onto restored files" })).toBeChecked();
+  });
+  it("chooses the signature cache for Media and restored files separately without writing browser storage", async () => {
+    await show();
     await target();
     await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
     const media = screen.getByRole("checkbox", { name: "Write signature cache onto Media" });
@@ -440,10 +515,12 @@ describe("Version Restore selection", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ spec: expect.objectContaining({ writeSourceSignatureCache: false, writeTargetSignatureCache: true }) }),
     );
-    expect(JSON.parse(localStorage.getItem("restore:last-options")!)).toEqual({ writeSourceSignatureCache: false, writeTargetSignatureCache: true });
+    await screen.findByText("Job 42");
+    expect(localStorage.getItem("restore:last-options")).toBeNull();
+    expect(localStorage.getItem("restore:last-target")).toBeNull();
   });
   it("submits an explicit version with a restore-only destination that needs no scan", async () => {
-    show();
+    await show();
     await screen.findByText("Trips/organized.jpg");
     expect(screen.queryByRole("button", { name: "Prepare restore" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Restore…" })).toBeEnabled();
@@ -458,7 +535,7 @@ describe("Version Restore selection", () => {
     );
   });
   it("keeps multiple versions of one File and lets the backend reserve non-conflicting outputs", async () => {
-    show();
+    await show();
     await screen.findByText("Trips/organized.jpg");
     await userEvent.click(screen.getByRole("button", { name: "Add another version" }));
     expect(await screen.findByText("Selected · 2")).toBeInTheDocument();
@@ -471,14 +548,14 @@ describe("Version Restore selection", () => {
   it("keeps a version with no remaining copy visible but blocks creation", async () => {
     listCopies.mockReturnValue(call({ positions: [], hasMore: false }));
     inspect.mockImplementation(() => call(SelectionInspectionResult.create({ fileCount: 1n, missingCopyCount: 1n })));
-    show();
+    await show();
     await target();
     await screen.findByText("1 item has no usable archived copy.");
     expect(await screen.findByRole("button", { name: "Prepare restore" })).toBeDisabled();
     expect(create).not.toHaveBeenCalled();
   });
   it("keeps the confirmed target and version choice when configuration is cancelled", async () => {
-    show();
+    await show();
     expect(screen.queryByRole("heading", { name: /New restore/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Locations" })).not.toBeInTheDocument();
     await screen.findByText("Trips/organized.jpg");

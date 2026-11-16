@@ -11,8 +11,12 @@ func (s *service) GetCreation(
 	ctx context.Context, req *entity.GetRestoreJobCreationRequest,
 ) (*entity.GetRestoreJobCreationResponse, error) {
 	// Keep every recorded selection, destination and version policy, including cutoff presence.
+	id, err := s.exe.CreationJobID(ctx, entity.JobKind_JOB_KIND_RESTORE, req.GetId(), req.GetLatest())
+	if err != nil || req.GetLatest() && id == 0 {
+		return &entity.GetRestoreJobCreationResponse{}, err
+	}
 	var config Config
-	priority, err := s.exe.ReadJobConfig(ctx, req.GetId(), entity.JobKind_JOB_KIND_RESTORE, &config)
+	priority, err := s.exe.ReadJobConfig(ctx, id, entity.JobKind_JOB_KIND_RESTORE, &config)
 	if err != nil {
 		return nil, err
 	}

@@ -1,55 +1,33 @@
-import { MediaKind, PreviewPolicy, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
-import { readStored, writeStored, type StorageCodec } from "@/state/storage";
+import { FileScope, PreviewPolicy, ScanResultPolicy, ScanSignaturePolicy, type ScanJobSpec } from "@/entity";
 
-export const scanPreferencesKey = "scan:last-options";
-export type ScanPreferences = {
+/** The source and options of the most recently created Scan, which a new Scan starts from. */
+export type LastScan = {
   kind: "location" | "media";
-  location?: { id: string; rootPath: string };
-  media?: { id: string; kind: MediaKind; identity: string };
+  // Empty when that Scan read selected files, which a new Scan does not repeat.
+  id: string;
   signaturePolicy: ScanSignaturePolicy;
   resultPolicy: ScanResultPolicy;
   compare: boolean;
   previewPolicy: PreviewPolicy;
-  // Absent in choices saved before this option existed; the form then writes the cache.
-  writeSignatureCache?: boolean;
+  writeSignatureCache: boolean;
 };
 
-const preferencesCodec: StorageCodec<ScanPreferences> = {
-  encode: (value) => JSON.stringify(value),
-  decode: (raw) => {
-    const value = JSON.parse(raw) as ScanPreferences | null;
-    if (!value || !["location", "media"].includes(value.kind) || typeof value.compare !== "boolean") throw new Error("Invalid Scan preferences");
-    if (![ScanSignaturePolicy.FILL_MISSING, ScanSignaturePolicy.KNOWN_ONLY, ScanSignaturePolicy.FORCE_READ].includes(value.signaturePolicy))
-      throw new Error("Invalid Scan signature policy");
-    if (
-      ![ScanResultPolicy.REPORT_ONLY, ScanResultPolicy.PUBLISH_ORIGINALS, ScanResultPolicy.PUBLISH_INVENTORY, ScanResultPolicy.VERIFY_COPIES].includes(
-        value.resultPolicy,
-      )
-    )
-      throw new Error("Invalid Scan result policy");
-    if (![PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(value.previewPolicy))
-      throw new Error("Invalid Scan Preview policy");
-    if (value.writeSignatureCache !== undefined && typeof value.writeSignatureCache !== "boolean") throw new Error("Invalid Scan signature cache choice");
-    if (value.location && (typeof value.location.id !== "string" || !/^[1-9]\d*$/.test(value.location.id) || typeof value.location.rootPath !== "string"))
-      throw new Error("Invalid Scan Location preference");
-    if (
-      value.media &&
-      (typeof value.media.id !== "string" ||
-        !/^[1-9]\d*$/.test(value.media.id) ||
-        typeof value.media.identity !== "string" ||
-        ![MediaKind.TAPE, MediaKind.VOLUME].includes(value.media.kind))
-    )
-      throw new Error("Invalid Scan Media preference");
-    return value;
-  },
-};
-
-export function loadScanPreferences(): ScanPreferences | undefined {
-  return readStored("local", scanPreferencesKey, preferencesCodec);
-}
-
-export function saveScanPreferences(value: ScanPreferences) {
-  writeStored("local", scanPreferencesKey, value, preferencesCodec);
+export function lastScan(spec: ScanJobSpec): LastScan {
+  const [selection] = spec.selections;
+  const whole =
+    spec.selections.length === 1 && selection.target.oneofKind === "location" && selection.target.location.path === "" && selection.scope === FileScope.ALL
+      ? String(selection.target.location.locationId)
+      : "";
+  return {
+    kind: spec.mediaId > 0n ? "media" : "location",
+    id: spec.mediaId > 0n ? String(spec.mediaId) : whole,
+    signaturePolicy: spec.signaturePolicy,
+    resultPolicy: spec.resultPolicy,
+    compare: spec.compareLibrary,
+    previewPolicy: spec.previewPolicy,
+    // A Job created before this choice existed wrote the cache.
+    writeSignatureCache: spec.writeSignatureCache ?? true,
+  };
 }
 
 export function resultForSource(kind: string, result?: ScanResultPolicy) {

@@ -44,6 +44,13 @@ func TestRestoreGetCreationPreservesSelectionsDestinationAndCutoff(t *testing.T)
 			reply.Request.Spec.Destination.Path = "edited"
 		}
 
+		// The latest read resolves the newest Restore itself and takes no Job ID.
+		latest, err := service.GetCreation(context.Background(), &entity.GetRestoreJobCreationRequest{Latest: true})
+		require.NoError(t, err)
+		require.True(t, proto.Equal(spec, latest.Request.Spec))
+		_, err = service.GetCreation(context.Background(), &entity.GetRestoreJobCreationRequest{Id: 7, Latest: true})
+		require.ErrorContains(t, err, "takes no Job ID")
+
 		// The stored policy, manifest-frozen flag, failure and destination never change.
 		after, err := os.ReadFile(filepath.Join(directory, "state.db"))
 		require.NoError(t, err)

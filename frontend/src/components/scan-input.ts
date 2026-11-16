@@ -1,6 +1,6 @@
 import { FileSelection, PreviewPolicy, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
 import type { ScanSelectionEntry } from "@/components/scan-selection";
-import { loadScanPreferences, resultForSource } from "./scan-preferences";
+import { resultForSource, type LastScan } from "./scan-preferences";
 
 export type ScanOptions = {
   signaturePolicy: ScanSignaturePolicy;
@@ -68,8 +68,7 @@ function checkedPrefill(value: unknown): ScanPrefill {
   return input;
 }
 
-export function initialScan(params: URLSearchParams, state: unknown) {
-  const saved = loadScanPreferences();
+export function initialScan(params: URLSearchParams, state: unknown, saved?: LastScan) {
   let prefill: ScanPrefill = {};
   let error = "";
   try {
@@ -98,9 +97,7 @@ export function initialScan(params: URLSearchParams, state: unknown) {
     prefill = { target: { kind: "files", entries: [] } };
   }
   const explicit = !!prefill.target;
-  const target =
-    prefill.target ??
-    (saved?.kind === "media" ? { kind: "media" as const, id: saved.media?.id ?? "" } : { kind: "location" as const, id: saved?.location?.id ?? "" });
+  const target = prefill.target ?? (saved?.kind === "media" ? { kind: "media" as const, id: saved.id } : { kind: "location" as const, id: saved?.id ?? "" });
   const options: ScanOptions = {
     signaturePolicy: saved?.signaturePolicy ?? ScanSignaturePolicy.FILL_MISSING,
     compare: saved?.compare ?? true,
@@ -109,7 +106,7 @@ export function initialScan(params: URLSearchParams, state: unknown) {
     ...prefill.options,
     resultPolicy: resultForSource(target.kind, prefill.options?.resultPolicy ?? saved?.resultPolicy),
   };
-  return { target, options, error, explicit, saved };
+  return { target, options, error, explicit };
 }
 
 export type InitialScan = ReturnType<typeof initialScan> & { priority?: bigint; creationReason?: string };

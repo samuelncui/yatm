@@ -191,6 +191,13 @@ export interface GetScanJobCreationRequest {
      * @generated from protobuf field: int64 id = 1
      */
     id: bigint;
+    /**
+     * Reads the most recently created Job of this kind instead of id, which must then be zero.
+     * The response carries no request when there is none.
+     *
+     * @generated from protobuf field: bool latest = 2
+     */
+    latest: boolean;
 }
 /**
  * @generated from protobuf message yatm.v1.GetScanJobCreationResponse
@@ -946,12 +953,14 @@ export const CreateScanJobResponse = new CreateScanJobResponse$Type();
 class GetScanJobCreationRequest$Type extends MessageType<GetScanJobCreationRequest> {
     constructor() {
         super("yatm.v1.GetScanJobCreationRequest", [
-            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 1, name: "id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 2, name: "latest", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<GetScanJobCreationRequest>): GetScanJobCreationRequest {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.id = 0n;
+        message.latest = false;
         if (value !== undefined)
             reflectionMergePartial<GetScanJobCreationRequest>(this, message, value);
         return message;
@@ -963,6 +972,9 @@ class GetScanJobCreationRequest$Type extends MessageType<GetScanJobCreationReque
             switch (fieldNo) {
                 case /* int64 id */ 1:
                     message.id = reader.int64().toBigInt();
+                    break;
+                case /* bool latest */ 2:
+                    message.latest = reader.bool();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -979,6 +991,9 @@ class GetScanJobCreationRequest$Type extends MessageType<GetScanJobCreationReque
         /* int64 id = 1; */
         if (message.id !== 0n)
             writer.tag(1, WireType.Varint).int64(message.id);
+        /* bool latest = 2; */
+        if (message.latest !== false)
+            writer.tag(2, WireType.Varint).bool(message.latest);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

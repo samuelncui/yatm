@@ -36,7 +36,7 @@ JobService exposes no Job retry/restart operation. Job listings filter by kind, 
 
 Calibration has no `GetCreation`: its specification is only a device and one option, so a new
 Calibration is simply created again. Each other kind's `GetCreation` reads the existing Job configuration and priority under the Job deletion
-guard, through a read-only bundle connection. It returns that kind's typed Create request and an
+guard, through a read-only bundle connection. With `latest` and no ID it reads the most recently created Job of that kind that is not deleted (for Scan, skipping up to 16 companion Scans of Archives) and returns no request when there is none; the web forms start a new Job's options from it, and `create` never applies it. It returns that kind's typed Create request and an
 `unavailable_reason` when original inputs cannot be recovered completely. Imported Jobs and indexed
 companion Scans can lack original selection roots; their processed manifests are not substituted
 for those selections. The read does not construct a runner, change state or submit another Job.

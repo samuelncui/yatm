@@ -11,7 +11,10 @@ import (
 type jobCreationCommand struct {
 	runtime *runtime
 	kind    entity.JobKind
-	Args    fileIDArgs `positional-args:"yes"`
+	Latest  bool `long:"latest" description:"Read the most recently created Job of this kind instead of naming one"`
+	Args    struct {
+		ID int64 `positional-arg-name:"ID"`
+	} `positional-args:"yes"`
 }
 
 func registerJobCreationCommands(root *flags.Command, commandRuntime *runtime) error {
@@ -36,8 +39,13 @@ func registerJobCreationCommands(root *flags.Command, commandRuntime *runtime) e
 
 func (c *jobCreationCommand) Execute(_ []string) error {
 	// Reject invalid IDs before making the single typed read under the invocation's deadline.
-	if err := positiveID("Job ID", c.Args.ID); err != nil {
-		return err
+	if c.Latest && c.Args.ID != 0 {
+		return usageError(fmt.Errorf("--latest takes no Job ID, value=%d", c.Args.ID))
+	}
+	if !c.Latest {
+		if err := positiveID("Job ID", c.Args.ID); err != nil {
+			return err
+		}
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
@@ -49,17 +57,17 @@ func (c *jobCreationCommand) Execute(_ []string) error {
 	case entity.JobKind_JOB_KIND_ARCHIVE:
 		reply, err = callRPC[entity.GetArchiveJobCreationRequest, entity.GetArchiveJobCreationResponse](
 			ctx, c.runtime, entity.ArchiveJobService_GetCreation_FullMethodName,
-			&entity.GetArchiveJobCreationRequest{Id: c.Args.ID},
+			&entity.GetArchiveJobCreationRequest{Id: c.Args.ID, Latest: c.Latest},
 		)
 	case entity.JobKind_JOB_KIND_RESTORE:
 		reply, err = callRPC[entity.GetRestoreJobCreationRequest, entity.GetRestoreJobCreationResponse](
 			ctx, c.runtime, entity.RestoreJobService_GetCreation_FullMethodName,
-			&entity.GetRestoreJobCreationRequest{Id: c.Args.ID},
+			&entity.GetRestoreJobCreationRequest{Id: c.Args.ID, Latest: c.Latest},
 		)
 	case entity.JobKind_JOB_KIND_SCAN:
 		reply, err = callRPC[entity.GetScanJobCreationRequest, entity.GetScanJobCreationResponse](
 			ctx, c.runtime, entity.ScanJobService_GetCreation_FullMethodName,
-			&entity.GetScanJobCreationRequest{Id: c.Args.ID},
+			&entity.GetScanJobCreationRequest{Id: c.Args.ID, Latest: c.Latest},
 		)
 	default:
 		return runtimeError("internal", fmt.Errorf("unsupported Job kind, kind=%s", c.kind))

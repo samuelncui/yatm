@@ -5,7 +5,17 @@ import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { EntryKind, FileOperationKind, FilesEntry, FilesInclude, ListFilesResponse, Location, LocationEntry, type ListFilesRequest } from "@/entity";
+import {
+  EntryKind,
+  FileOperationKind,
+  FilesEntry,
+  FilesInclude,
+  ListFilesResponse,
+  Location,
+  LocationEntry,
+  RestoreDestination,
+  type ListFilesRequest,
+} from "@/entity";
 import { RestoreDestinationPicker, type RestoreTarget } from "./restore-destination";
 
 const { list, get, getEntry, execute, collect, browsePaths, listFiles } = vi.hoisted(() => ({
@@ -46,15 +56,16 @@ const directoryRequest = (locationId: bigint, path: string) =>
     directory: expect.objectContaining({ target: { oneofKind: "location", location: expect.objectContaining({ locationId, path }) } }),
   });
 const preferred = (id = 3n, name = "Recovered files") => Location.create({ id, name, rootPath: `/targets/${id}`, restoreTarget: true });
-const stored = (path = "photos") => JSON.stringify({ locationID: "3", rootPath: "/targets/3", path });
-const Fixture = () => {
+// The destination of the most recent Restore, as the form passes it.
+const lastTarget = (path = "photos") => RestoreDestination.create({ locationId: 3n, rootPath: "/targets/3", path });
+const Fixture = ({ last }: { last?: RestoreDestination }) => {
   const [target, setTarget] = useState<RestoreTarget>();
-  return <RestoreDestinationPicker value={target} onChange={setTarget} disabled={false} />;
+  return <RestoreDestinationPicker value={target} onChange={setTarget} disabled={false} last={last} />;
 };
-const show = () =>
+const show = (last?: RestoreDestination) =>
   render(
     <MemoryRouter>
-      <Fixture />
+      <Fixture last={last} />
     </MemoryRouter>,
   );
 const open = async () => {
@@ -142,7 +153,8 @@ it("uses a compact Location selector above the directory browser in a preferred-
   await userEvent.dblClick(await screen.findByRole("button", { name: "photos" }));
   await confirm();
   expect(screen.getByText("Recovered files / photos")).toBeInTheDocument();
-  expect(localStorage.getItem("restore:last-target")).toBe(stored());
+  // Choosing a target writes nothing to browser storage.
+  expect(localStorage.length).toBe(0);
 });
 
 it("does not fall back to all Locations when there are no preferred targets", async () => {
@@ -182,14 +194,8 @@ it("serializes pages, deduplicates IDs, and supports preferred targets beyond th
   expect(screen.getByText("Next preferred")).toBeInTheDocument();
 });
 
-it("remembers the preferred target and subdirectory across page reloads", async () => {
-  const view = show();
-  await open();
-  await select();
-  await userEvent.dblClick(await screen.findByRole("button", { name: "photos" }));
-  await confirm();
-  view.unmount();
-  show();
+it("starts from the last Restore's target and subdirectory without writing browser storage", async () => {
+  show(lastTarget());
   expect(await screen.findByText("Recovered files / photos")).toBeInTheDocument();
   expect(get).toHaveBeenCalledWith({ id: 3n }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
   expect(listFiles).toHaveBeenLastCalledWith(
@@ -198,12 +204,12 @@ it("remembers the preferred target and subdirectory across page reloads", async 
   );
   expect(browsePaths).not.toHaveBeenCalled();
   expect(collect).not.toHaveBeenCalled();
-  expect(list).toHaveBeenCalledTimes(1);
+  expect(list).not.toHaveBeenCalled();
+  expect(localStorage.length).toBe(0);
   await open();
   await screen.findByRole("button", { name: "New folder" });
   await userEvent.click(within(screen.getByRole("navigation", { name: "Destination path" })).getByRole("button", { name: "Recovered files" }));
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(localStorage.getItem("restore:last-target")).toBe(stored("photos"));
   expect(screen.getByText("Recovered files / photos")).toBeInTheDocument();
 });
 
@@ -246,10 +252,9 @@ it.each([
   ["missing", undefined],
   ["not writable", FilesEntry.create({ ...directory(3n, "photos"), operations: [] })],
   ["a file", FilesEntry.create({ ...directory(3n, "photos"), kind: EntryKind.FILE })],
-])("does not reuse a saved directory that is %s", async (_, entry) => {
-  localStorage.setItem("restore:last-target", stored());
+])("does not reuse a last directory that is %s", async (_, entry) => {
   listFiles.mockReturnValue(streamListing(ListFilesResponse.create({ directory: entry })));
-  show();
+  show(lastTarget());
   await screen.findByText(/last restore target is no longer available/);
   expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
   expect(browsePaths).not.toHaveBeenCalled();
@@ -257,10 +262,9 @@ it.each([
   expect(collect).not.toHaveBeenCalled();
 });
 
-it("does not fall back to Settings when a saved directory read fails", async () => {
-  localStorage.setItem("restore:last-target", stored());
+it("does not fall back to Settings when the last directory read fails", async () => {
   listFiles.mockReturnValue(streamListing(Promise.reject(new Error("Offline"))));
-  show();
+  show(lastTarget());
   await screen.findByText(/Could not load the last restore target/);
   expect(browsePaths).not.toHaveBeenCalled();
 });
@@ -278,30 +282,27 @@ it("rechecks folder creation capability before mutation", async () => {
   expect(execute).not.toHaveBeenCalled();
 });
 
-it("does not remember a cancelled first selection", async () => {
+it("leaves the target unset after a cancelled first selection", async () => {
   show();
   await open();
   await select();
   await userEvent.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  expect(localStorage.getItem("restore:last-target")).toBeNull();
-  expect(screen.getByRole("button", { name: "Choose restore target" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
 });
 
 it.each([
   ["no longer preferred", { location: Location.create({ ...preferred(), restoreTarget: false }) }],
   ["moved to another root path", { location: Location.create({ ...preferred(), rootPath: "/targets/moved" }) }],
   ["deleted", {}],
-])("does not reuse a saved target that is %s", async (_, reply) => {
-  localStorage.setItem("restore:last-target", stored());
+])("does not reuse a last target that is %s", async (_, reply) => {
   get.mockReturnValue(call(reply));
-  show();
+  show(lastTarget());
   expect(await screen.findByText(/last restore target is no longer available/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Choose restore target" })).toBeInTheDocument();
 });
 
-it("does not let a late remembered target override a new confirmed choice", async () => {
-  localStorage.setItem("restore:last-target", stored());
+it("does not let a late last target override a new confirmed choice", async () => {
   let resolveOld!: (value: unknown) => void;
   get.mockReturnValue({
     response: new Promise((resolve) => {
@@ -309,7 +310,7 @@ it("does not let a late remembered target override a new confirmed choice", asyn
     }),
   });
   list.mockReturnValue(call({ locations: [preferred(4n, "New target")], hasMore: false }));
-  show();
+  show(lastTarget());
   const signal = get.mock.calls[0][1].abort as AbortSignal;
   await open();
   await select("New target");
@@ -322,8 +323,7 @@ it("does not let a late remembered target override a new confirmed choice", asyn
   expect(screen.queryByText("Recovered files / photos")).not.toBeInTheDocument();
 });
 
-it("discards a late saved-directory validation after a new target is chosen", async () => {
-  localStorage.setItem("restore:last-target", stored());
+it("discards a late last-directory validation after a new target is chosen", async () => {
   let resolveOld!: (value: ListFilesResponse) => void;
   const pending = new Promise<ListFilesResponse>((resolve) => {
     resolveOld = resolve;
@@ -335,7 +335,7 @@ it("discards a late saved-directory validation after a new target is chosen", as
   const end = vi.fn().mockResolvedValue({ done: true });
   listFiles.mockReturnValueOnce({ responses: { [Symbol.asyncIterator]: () => ({ next, return: end }) } });
   list.mockReturnValue(call({ locations: [preferred(4n, "New target")], hasMore: false }));
-  show();
+  show(lastTarget());
   await waitFor(() => expect(listFiles).toHaveBeenCalledOnce());
   const signal = listFiles.mock.calls[0][1].abort as AbortSignal;
   await open();
@@ -388,7 +388,7 @@ it("changes Location without carrying the previous directory or changing the con
   await waitFor(() => expect(listFiles).toHaveBeenLastCalledWith(directoryRequest(4n, ""), expect.objectContaining({ abort: expect.any(AbortSignal) })));
   expect(screen.getByRole("button", { name: "Parent directory" })).toBeDisabled();
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(localStorage.getItem("restore:last-target")).toBeNull();
+  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
 });
 
 it("allows retrying a preferred-list error without widening the filter", async () => {
@@ -403,52 +403,17 @@ it("allows retrying a preferred-list error without widening the filter", async (
   expect(screen.queryByRole("option", { name: "Not preferred" })).not.toBeInTheDocument();
 });
 
-it("keeps a confirmed target when its preference write fails", async () => {
-  show();
-  await open();
-  await select();
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("Storage denied");
-  });
-  await confirm();
-  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Recovered files");
-  expect(screen.getByText("This browser could not remember the restore target.")).toBeInTheDocument();
-  expect(localStorage.getItem("restore:last-target")).toBeNull();
-});
-
-it("permits choosing a target when storage itself is unavailable", async () => {
-  vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
-    throw new Error("Storage unavailable");
-  });
-  show();
+it.each([
+  ["without a last Restore", undefined],
+  ["when the last Restore names no Location", RestoreDestination.create({ path: "photos", rootPath: "/targets/3" })],
+])("starts unset %s and ignores a target stored by an earlier version", (_, last) => {
+  localStorage.setItem("restore:last-target", JSON.stringify({ locationID: "3", rootPath: "/targets/3", path: "photos" }));
+  show(last);
   expect(get).not.toHaveBeenCalled();
-  await open();
-  await select();
-  await confirm();
-  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Recovered files");
-  expect(screen.getByText("This browser could not remember the restore target.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
 });
 
-it.each(["{", JSON.stringify({ locationID: "0", rootPath: "/output", path: "" }), JSON.stringify({ locationID: "3", rootPath: "/targets/3", path: 1 })])(
-  "ignores an invalid stored target: %s",
-  (raw) => {
-    localStorage.setItem("restore:last-target", raw);
-    show();
-    expect(get).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
-  },
-);
-
-it("revalidates a remembered target without rewriting the preference", async () => {
-  localStorage.setItem("restore:last-target", stored());
-  const write = vi.spyOn(Storage.prototype, "setItem");
-  show();
-  await screen.findByText("Recovered files / photos");
-  expect(write).not.toHaveBeenCalled();
-});
-
-it("aborts a remembered directory stream when the Restore picker leaves", async () => {
-  localStorage.setItem("restore:last-target", stored());
+it("aborts the last directory stream when the Restore picker leaves", async () => {
   let complete!: (value: ListFilesResponse) => void;
   const pending = new Promise<ListFilesResponse>((resolve) => {
     complete = resolve;
@@ -459,7 +424,7 @@ it("aborts a remembered directory stream when the Restore picker leaves", async 
     .mockResolvedValue({ done: true });
   const end = vi.fn().mockResolvedValue({ done: true });
   listFiles.mockReturnValueOnce({ responses: { [Symbol.asyncIterator]: () => ({ next, return: end }) } });
-  const view = show();
+  const view = show(lastTarget());
   await waitFor(() => expect(listFiles).toHaveBeenCalledOnce());
   const signal = listFiles.mock.calls[0][1].abort as AbortSignal;
   view.unmount();
@@ -492,19 +457,8 @@ it.each([".", "..", "parent/child"])("rejects the invalid folder name %j before 
   expect(execute).not.toHaveBeenCalled();
 });
 
-it("ignores unrelated browser preferences while a recreated destination is unavailable", () => {
-  localStorage.setItem("restore:last-target", stored());
-  render(
-    <MemoryRouter>
-      <RestoreDestinationPicker onChange={vi.fn()} disabled={false} usePreference={false} />
-    </MemoryRouter>,
-  );
-  expect(get).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Choose restore target" })).toHaveTextContent("Choose folder…");
-});
-
-it("aborts remembered destination lookup when the caller supplies an explicit target", async () => {
-  localStorage.setItem("restore:last-target", stored());
+it("aborts the last target lookup when the caller supplies an explicit target", async () => {
+  const last = lastTarget();
   let complete!: (value: unknown) => void;
   get.mockReturnValueOnce({
     response: new Promise((resolve) => {
@@ -514,13 +468,13 @@ it("aborts remembered destination lookup when the caller supplies an explicit ta
   const onChange = vi.fn();
   const view = render(
     <MemoryRouter>
-      <RestoreDestinationPicker onChange={onChange} disabled={false} />
+      <RestoreDestinationPicker onChange={onChange} disabled={false} last={last} />
     </MemoryRouter>,
   );
   const signal = get.mock.calls[0][1].abort as AbortSignal;
   view.rerender(
     <MemoryRouter>
-      <RestoreDestinationPicker value={{ location: preferred(9n, "Explicit"), path: "exact" }} onChange={onChange} disabled={false} />
+      <RestoreDestinationPicker value={{ location: preferred(9n, "Explicit"), path: "exact" }} onChange={onChange} disabled={false} last={last} />
     </MemoryRouter>,
   );
   expect(signal.aborted).toBe(true);

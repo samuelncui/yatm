@@ -14,6 +14,7 @@ import (
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"gorm.io/gorm"
 )
 
 func TestScanGetCreationPreservesRetainedSpec(t *testing.T) {
@@ -81,6 +82,10 @@ func TestScanGetCreationExplainsIndexedAndMissingSources(t *testing.T) {
 		}
 		if config != nil && config.IndexedInput {
 			require.Contains(t, reply.UnavailableReason, "indexed Archive")
+			// An Archive's companion Scan is not a submitted Scan: with no other, there is no latest one.
+			latest, err := service.GetCreation(context.Background(), &entity.GetScanJobCreationRequest{Latest: true})
+			require.NoError(t, err)
+			require.Nil(t, latest.Request)
 		}
 
 		// Reporting incomplete input must not start the retained pipeline or rewrite its config.
@@ -94,6 +99,12 @@ func TestScanGetCreationExplainsIndexedAndMissingSources(t *testing.T) {
 
 func creationFixture(t *testing.T, config *Config) (*service, string) {
 	t.Helper()
+	service, directory, _ := creationCatalogFixture(t, config)
+	return service, directory
+}
+
+func creationCatalogFixture(t *testing.T, config *Config) (*service, string, *gorm.DB) {
+	t.Helper()
 	// Seed a retained bundle without a Library, runner, source access or background work.
 	root := t.TempDir()
 	catalog, err := resource.OpenSQLite(filepath.Join(root, "catalog.db"))
@@ -103,13 +114,20 @@ func creationFixture(t *testing.T, config *Config) (*service, string) {
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
 	exe := executor.New(catalog, nil, nil, executor.Paths{Work: root}, executor.Scripts{}, nil)
 	require.NoError(t, exe.AutoMigrate())
+	directory := seedCreationJob(t, exe, catalog, 7, config)
+	return &service{exe: exe}, directory, catalog
+}
+
+// seedCreationJob adds one retained Scan bundle with the given config and returns its directory.
+func seedCreationJob(t *testing.T, exe *executor.Executor, catalog *gorm.DB, id int64, config *Config) string {
+	t.Helper()
 	require.NoError(t, catalog.Model(executor.ModelJob).Create(map[string]any{
-		"id": 7, "executor_id": "local", "catalog_kind": entity.JobKind_JOB_KIND_SCAN,
+		"id": id, "executor_id": "local", "catalog_kind": entity.JobKind_JOB_KIND_SCAN,
 		"created_at_ns": 123, "updated_at_ns": 456, "revision": 3, "deleted_at_ns": 0,
 	}).Error)
-	directory, err := exe.EnsureJobWorkPath(context.Background(), 7)
+	directory, err := exe.EnsureJobWorkPath(context.Background(), id)
 	require.NoError(t, err)
-	metadata, err := json.Marshal(dataformat.NewBundle(7, 123*int64(time.Millisecond)))
+	metadata, err := json.Marshal(dataformat.NewBundle(id, 123*int64(time.Millisecond)))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "job.json"), metadata, 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(directory, "job.log"), []byte("retained evidence\n"), 0644))
@@ -129,5 +147,26 @@ func creationFixture(t *testing.T, config *Config) (*service, string) {
 	if config != nil {
 		require.NoError(t, db.Create(config).Error)
 	}
-	return &service{exe: exe}, directory
+	return directory
+}
+
+func TestScanGetCreationLatestSkipsABoundedRunOfCompanionScans(t *testing.T) {
+	// Job 7 is the submitted Scan; newer companion Scans of Archives are skipped up to the bound.
+	submitted := &entity.ScanJobSpec{MediaId: 5, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY}
+	service, _, catalog := creationCatalogFixture(t, &Config{ID: 1, Spec: submitted})
+	companion := func(id int64) {
+		seedCreationJob(t, service.exe, catalog, id, &Config{ID: 1, IndexedInput: true, Spec: &entity.ScanJobSpec{}})
+	}
+	for id := int64(8); id < 8+latestScanCandidates; id++ {
+		companion(id)
+	}
+	reply, err := service.GetCreation(context.Background(), &entity.GetScanJobCreationRequest{Latest: true})
+	require.NoError(t, err)
+	require.True(t, proto.Equal(submitted, reply.Request.GetSpec()), "the bound's worth of companions still reaches the submitted Scan")
+
+	// One companion more than the bound ends the walk without a latest Scan.
+	companion(8 + latestScanCandidates)
+	reply, err = service.GetCreation(context.Background(), &entity.GetScanJobCreationRequest{Latest: true})
+	require.NoError(t, err)
+	require.Nil(t, reply.Request)
 }

@@ -25,6 +25,8 @@ import {
   PreviewPolicy,
   RestoreJobSpec,
   EstimateRestoreJobRequest,
+  type CreateArchiveJobRequest,
+  type CreateRestoreJobRequest,
   type SelectionInspectionResult,
 } from "@/entity";
 import { RefreshListAction } from "@/actions";
@@ -41,8 +43,8 @@ import { libraryDirectoryReference } from "@/components/files-browser";
 
 import { useSelections } from "@/state/react";
 import { SelectionJobRecreate, type SelectionCreation } from "./selection-job-recreate";
-import { loadArchivePreferences, parseTargetMediaCount, saveArchivePreferences } from "./archive-preferences";
-import { loadRestorePreferences, saveRestorePreferences } from "./restore-preferences";
+import { parseTargetMediaCount } from "./archive-preferences";
+import { useLatestCreation } from "./latest-creation";
 
 const AddSelection = defineFileAction({ id: "add_job_selection", requiresSelection: true, button: { name: "Add to list", toolbar: true, contextMenu: true } });
 const labels = { archive: "Archive", restore: "Restore" };
@@ -56,11 +58,32 @@ export const SelectionJobPage = ({ kind }: { kind: keyof typeof labels }) => {
       {(initial) => <SelectionJobForm kind={kind} initial={initial} />}
     </SelectionJobRecreate>
   ) : (
-    <SelectionJobForm key={kind} kind={kind} />
+    <NewSelectionJob key={kind} kind={kind} />
   );
 };
 
-const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initial?: SelectionCreation }) => {
+type LatestCreation = { kind: "archive"; request: CreateArchiveJobRequest } | { kind: "restore"; request: CreateRestoreJobRequest };
+const loadLatestArchive = async (signal: AbortSignal): Promise<LatestCreation | undefined> => {
+  const { request } = await archiveJobCli.getCreation({ id: 0n, latest: true }, { abort: signal }).response;
+  return request && { kind: "archive", request };
+};
+const loadLatestRestore = async (signal: AbortSignal): Promise<LatestCreation | undefined> => {
+  const { request } = await restoreJobCli.getCreation({ id: 0n, latest: true }, { abort: signal }).response;
+  return request && { kind: "restore", request };
+};
+
+/** A new Job's form starts its options from the most recently created Job of its kind. */
+const NewSelectionJob = ({ kind }: { kind: keyof typeof labels }) => {
+  const latest = useLatestCreation(kind === "archive" ? loadLatestArchive : loadLatestRestore);
+  // The form reads its starting options once, so it mounts when the read settles.
+  if (!latest.settled) return null;
+  return <SelectionJobForm kind={kind} last={latest.value} />;
+};
+
+const SelectionJobForm = ({ kind, initial, last }: { kind: keyof typeof labels; initial?: SelectionCreation; last?: LatestCreation }) => {
+  // Recreate keeps the original Job's options; a new Job starts from the last created one's.
+  const lastArchive = !initial && last?.kind === "archive" ? last.request : undefined;
+  const lastRestore = !initial && last?.kind === "restore" ? last.request.spec : undefined;
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -78,23 +101,23 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   const creationTitleID = useId();
   const submitting = useRef(false);
   const [error, setError] = useState("");
-  const [previewPolicy, setPreviewPolicy] = useState(initial?.kind === "archive" ? initial.request.previewPolicy : PreviewPolicy.NONE);
+  const [previewPolicy, setPreviewPolicy] = useState<PreviewPolicy>(
+    // A Recreate keeps an unrecorded policy unset, so the form asks for one.
+    initial?.kind === "archive" ? initial.request.previewPolicy : lastArchive?.previewPolicy || PreviewPolicy.NONE,
+  );
   const validPreview = [PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(previewPolicy);
   const generation = usePreviewGeneration(kind === "archive" && configuring);
-  const [force, setForce] = useState(initial?.kind === "archive" && initial.request.forceRehash);
-  // Recreate keeps the original Job's choice; a new Archive starts from the last submitted one.
-  const [writeSignatureCache, setWriteSignatureCache] = useState(() =>
-    initial?.kind === "archive" ? (initial.request.spec?.writeSignatureCache ?? true) : (loadArchivePreferences()?.writeSignatureCache ?? true),
+  const [force, setForce] = useState(initial?.kind === "archive" ? initial.request.forceRehash : !!lastArchive?.forceRehash);
+  const [writeSignatureCache, setWriteSignatureCache] = useState(
+    (initial?.kind === "archive" ? initial.request.spec : lastArchive?.spec)?.writeSignatureCache ?? true,
   );
-  // A Restore chooses the Media files it reads and the restored files separately, under the same rule.
+  // A Restore chooses the Media files it reads and the restored files separately.
   const [restoreCache, setRestoreCache] = useState(() => {
-    const stored = initial?.kind === "restore" ? initial.request.spec : loadRestorePreferences();
-    return { source: stored?.writeSourceSignatureCache ?? true, target: stored?.writeTargetSignatureCache ?? true };
+    const spec = initial?.kind === "restore" ? initial.request.spec : lastRestore;
+    return { source: spec?.writeSourceSignatureCache ?? true, target: spec?.writeTargetSignatureCache ?? true };
   });
-  // The target Media count follows the same rule; empty is off.
-  const [targetMedia, setTargetMedia] = useState(() =>
-    String((initial?.kind === "archive" ? initial.request.spec?.targetMediaCount : loadArchivePreferences()?.targetMediaCount) ?? ""),
-  );
+  // An empty target Media count is off.
+  const [targetMedia, setTargetMedia] = useState(String((initial?.kind === "archive" ? initial.request.spec : lastArchive?.spec)?.targetMediaCount ?? ""));
   const targetMediaCount = kind === "archive" ? parseTargetMediaCount(targetMedia) : undefined;
   const validTarget = kind !== "archive" || targetMedia.trim() === "" || targetMediaCount !== undefined;
   const [destination, setDestination] = useState<RestoreTarget | undefined>(initial?.destination);
@@ -228,8 +251,6 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
               }),
             }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
-      if (kind === "archive") saveArchivePreferences({ writeSignatureCache, targetMediaCount });
-      else saveRestorePreferences({ writeSourceSignatureCache: restoreCache.source, writeTargetSignatureCache: restoreCache.target });
       submitted(revision);
       navigate(`/jobs/${reply.job.id}`);
     } catch (error) {
@@ -387,7 +408,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                     Apply current policy to all
                   </Button>
                 )}
-                <RestoreDestinationPicker value={destination} onChange={chooseDestination} disabled={busy} usePreference={!initial} />
+                <RestoreDestinationPicker value={destination} onChange={chooseDestination} disabled={busy} last={lastRestore?.destination} />
                 {destinationError && <Feedback severity="error">{destinationError}</Feedback>}
                 <SettingsSection
                   title="Advanced"

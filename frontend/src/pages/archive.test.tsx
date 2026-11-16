@@ -7,10 +7,22 @@ import { addSelectionEntries } from "@/state/selections";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Navigate, Routes, Route, useParams } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { File, FileScope, FileOperationKind, FileKind, EntryKind, SelectionInspectionResult, PreviewPolicy, FileSelection } from "@/entity";
+import {
+  ArchiveJobSpec,
+  CreateArchiveJobRequest,
+  File,
+  FileScope,
+  FileOperationKind,
+  FileKind,
+  EntryKind,
+  SelectionInspectionResult,
+  PreviewPolicy,
+  FileSelection,
+} from "@/entity";
 
-const { archiveCreate, parents, inspect, capabilities, previewSettings } = vi.hoisted(() => ({
+const { archiveCreate, latest, parents, inspect, capabilities, previewSettings } = vi.hoisted(() => ({
   archiveCreate: vi.fn(),
+  latest: vi.fn(),
   parents: vi.fn(),
   inspect: vi.fn(),
   capabilities: vi.fn(),
@@ -20,6 +32,7 @@ vi.mock("@/api", async (original) => ({
   ...(await original<typeof import("@/api")>()),
   archiveJobCli: {
     create: archiveCreate,
+    getCreation: latest,
     estimate: (...args: unknown[]) => ({ response: inspect(...args).response.then((result: unknown) => ({ result })) }),
   },
   previewCli: { getCapabilities: capabilities },
@@ -142,8 +155,12 @@ vi.mock("@/components/selection-waitlist", async (original) => ({
 }));
 const call = (value: unknown) => ({ response: Promise.resolve(value) });
 const Destination = () => <div>Job {useParams().id}</div>;
-const show = (store?: AppStore) =>
-  render(
+// The form mounts with its starting options once the latest Archive read settles.
+const settled = async () => {
+  await screen.findByRole("button", { name: "Archive…" });
+};
+const show = async (store?: AppStore) => {
+  const page = render(
     <MemoryRouter initialEntries={["/archive"]}>
       <Routes>
         <Route path="/archive" element={<ArchiveBrowser />} />
@@ -152,6 +169,9 @@ const show = (store?: AppStore) =>
     </MemoryRouter>,
     { store },
   );
+  await settled();
+  return page;
+};
 const configure = () => userEvent.click(screen.getByRole("button", { name: "Archive…" }));
 beforeEach(() => {
   capabilities.mockReturnValue(call({ available: true }));
@@ -161,7 +181,10 @@ beforeEach(() => {
     call(SelectionInspectionResult.create({ selections, fileCount: BigInt(selections.length), totalBytes: 100n })),
   );
   sessionStorage.clear();
+  localStorage.clear();
   archiveCreate.mockReturnValue(call({ job: { id: 42n } }));
+  // No Archive was created before.
+  latest.mockReturnValue(call({}));
   parents.mockImplementation(({ id }: { id: bigint }) =>
     call({
       parents: [
@@ -199,12 +222,13 @@ describe("Unified Archive selection", () => {
         </Routes>
       </MemoryRouter>,
     );
+    await settled();
     expect(await screen.findByText("Browsable folder")).toBeInTheDocument();
     expect(screen.getByText("Selected · 1")).toBeInTheDocument();
   });
 
   it("accepts the shared drag completion only for its waitlist and never turns it into a directory operation", async () => {
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Drag to directory" }));
     expect(screen.getByText("Selected · 0")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Drag to waitlist" }));
@@ -224,7 +248,7 @@ describe("Unified Archive selection", () => {
     inspect.mockImplementation(({ selections }: { selections: FileSelection[] }) =>
       call(SelectionInspectionResult.create({ selections, fileCount: 3n, totalBytes: 10n, unknownSizeFileCount: 1n })),
     );
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await waitFor(() => expect(inspect).toHaveBeenCalledOnce());
     await userEvent.click(screen.getByRole("button", { name: "Add another directory" }));
@@ -236,7 +260,7 @@ describe("Unified Archive selection", () => {
   });
   it("allows usable originals but invalidates the review when the selection changes", async () => {
     inspect.mockImplementation(({ selections }: { selections: FileSelection[] }) => call(SelectionInspectionResult.create({ selections, fileCount: 2n })));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -249,7 +273,7 @@ describe("Unified Archive selection", () => {
   });
   it("reports skipped originals while preparing the eligible files in a directory", async () => {
     inspect.mockReturnValue(call(SelectionInspectionResult.create({ fileCount: 3n, missingOriginalCount: 1n })));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add another directory" }));
     await screen.findByText("Selected · 1");
     await configure();
@@ -259,7 +283,7 @@ describe("Unified Archive selection", () => {
   });
   it("does not prepare a directory when every file lacks an original", async () => {
     inspect.mockReturnValue(call(SelectionInspectionResult.create({ fileCount: 0n, missingOriginalCount: 2n })));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add another directory" }));
     await configure();
     expect(await screen.findByText(/2 files have no linked original and will be skipped/)).toBeInTheDocument();
@@ -277,7 +301,7 @@ describe("Unified Archive selection", () => {
         }),
       ),
     );
-    show();
+    await show();
     expect(screen.queryByText(/Drag files or folders here/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await configure();
@@ -289,7 +313,7 @@ describe("Unified Archive selection", () => {
     expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled();
   });
   it("accumulates multiple files and directories across navigation and deduplicates repeated additions", async () => {
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Trips/photo.jpg");
     await userEvent.click(screen.getByRole("button", { name: "Add another directory" }));
@@ -312,17 +336,68 @@ describe("Unified Archive selection", () => {
     );
   });
   it("preserves selections when leaving and returning to creation", async () => {
-    const page = show();
+    const page = await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     page.unmount();
-    show();
+    await show();
     expect(screen.getByText("Selected · 2")).toBeInTheDocument();
     expect(screen.getByText("Trips/notes.md")).toBeInTheDocument();
   });
-  it("writes the signature cache by default and remembers the last submitted choice", async () => {
-    localStorage.clear();
-    const page = show();
+  it("starts from the latest Archive's options but not its selections", async () => {
+    latest.mockReturnValue(
+      call({
+        request: CreateArchiveJobRequest.create({
+          priority: 9n,
+          spec: ArchiveJobSpec.create({
+            selections: [FileSelection.create({ target: { oneofKind: "library", library: { fileId: 99n } }, scope: FileScope.ALL })],
+            writeSignatureCache: false,
+            targetMediaCount: 2,
+          }),
+          previewPolicy: PreviewPolicy.REGENERATE_ALL,
+          forceRehash: true,
+        }),
+      }),
+    );
+    await show();
+    expect(latest).toHaveBeenCalledExactlyOnceWith({ id: 0n, latest: true }, expect.objectContaining({ abort: expect.any(AbortSignal) }));
+    expect(screen.getByText("Selected · 0")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    expect(screen.getByRole("textbox", { name: "Target Media count" })).toHaveValue("2");
+    expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Regenerate all");
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced Preview/ }));
+    expect(screen.getByRole("checkbox", { name: "Recheck source hashes for previews" })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced No signature cache/ }));
+    expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
+    await screen.findByText("Job 42");
+    expect(archiveCreate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        priority: 1n,
+        spec: expect.objectContaining({ selections: expect.any(Array), writeSignatureCache: false, targetMediaCount: 2 }),
+        previewPolicy: PreviewPolicy.REGENERATE_ALL,
+        forceRehash: true,
+      }),
+    );
+    expect(archiveCreate.mock.calls[0][0].spec.selections).toHaveLength(2);
+  });
+  it("starts from the built-in options when the latest Archive cannot be read", async () => {
+    latest.mockImplementation(() => ({ response: Promise.reject(new Error("Offline")) }));
+    await show();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    expect(screen.queryByText("Offline")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Target Media count" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Previews" })).toHaveTextContent("Don’t generate");
+    await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    expect(screen.getByRole("checkbox", { name: "Write signature cache" })).toBeChecked();
+  });
+  it("writes the signature cache by default and submits the changed choice without writing browser storage", async () => {
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -335,20 +410,9 @@ describe("Unified Archive selection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
     await screen.findByText("Job 42");
     expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: false }) }));
-    expect(localStorage.getItem("archive:last-options")).toBe(JSON.stringify({ writeSignatureCache: false }));
-
-    // The next Archive starts from the remembered choice.
-    page.unmount();
-    show();
-    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
-    await screen.findByText("Selected · 2");
-    await configure();
-    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
-    expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
-    localStorage.clear();
+    expect(localStorage.getItem("archive:last-options")).toBeNull();
   });
-  it("starts the target Media count off, reviews its skips and remembers the last submitted value", async () => {
-    localStorage.clear();
+  it("starts the target Media count off, reviews its skips and submits the entered value", async () => {
     inspect.mockImplementation(({ selections, targetMediaCount }: { selections: FileSelection[]; targetMediaCount?: number }) =>
       call(
         SelectionInspectionResult.create({
@@ -359,7 +423,7 @@ describe("Unified Archive selection", () => {
         }),
       ),
     );
-    const page = show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -379,19 +443,10 @@ describe("Unified Archive selection", () => {
     await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
     await screen.findByText("Job 42");
     expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ targetMediaCount: 2 }) }));
-    expect(JSON.parse(localStorage.getItem("archive:last-options")!)).toEqual({ writeSignatureCache: true, targetMediaCount: 2 });
-
-    // The next Archive starts from the remembered value.
-    page.unmount();
-    show();
-    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
-    await screen.findByText("Selected · 2");
-    await configure();
-    expect(screen.getByRole("textbox", { name: "Target Media count" })).toHaveValue("2");
-    localStorage.clear();
+    expect(localStorage.getItem("archive:last-options")).toBeNull();
   });
   it("uses one Preview policy and never rehashes when Preview is disabled", async () => {
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -409,7 +464,7 @@ describe("Unified Archive selection", () => {
     expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: true }) }));
   });
   it("only checks generation for an open dialog and preserves an unavailable requested policy", async () => {
-    show();
+    await show();
     expect(capabilities).not.toHaveBeenCalled();
     expect(previewSettings).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
@@ -432,7 +487,7 @@ describe("Unified Archive selection", () => {
     await waitFor(() => expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ previewPolicy: PreviewPolicy.NONE, forceRehash: false })));
   });
   it("opens configuration without creating a Job and keeps the list and options after Cancel", async () => {
-    show();
+    await show();
     expect(screen.queryByRole("heading", { name: /New archive/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Locations" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Previews" })).not.toBeInTheDocument();
@@ -457,7 +512,7 @@ describe("Unified Archive selection", () => {
   });
   it("keeps creation failures in the modal and allows only its final action to submit", async () => {
     archiveCreate.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Archive is busy")) }));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -479,7 +534,7 @@ describe("Unified Archive selection", () => {
         finish = resolve;
       }),
     }));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();
@@ -497,7 +552,7 @@ describe("Unified Archive selection", () => {
     let finish!: (value: { job: { id: bigint } }) => void;
     archiveCreate.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
     const store = createAppStore();
-    show(store);
+    await show(store);
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await configure();
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
@@ -520,7 +575,7 @@ describe("Unified Archive selection", () => {
   });
   it("navigates after successful preparation even when persistence removal fails", async () => {
     const store = createAppStore();
-    show(store);
+    await show(store);
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await configure();
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
@@ -538,7 +593,7 @@ describe("Unified Archive selection", () => {
   });
   it("shows an estimate failure inside configuration and retries without creating a Job", async () => {
     inspect.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Could not inspect originals")) }));
-    show();
+    await show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
     await screen.findByText("Selected · 2");
     await configure();

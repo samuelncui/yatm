@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { FileScope, FileSelection, LocationSelection, PreviewPolicy, ScanResultPolicy as Result, ScanSignaturePolicy as Signature } from "@/entity";
-import { scanPreferencesKey } from "./scan-preferences";
+import type { LastScan } from "./scan-preferences";
 import { initialScan } from "./scan-input";
 
 const selection = FileSelection.create({
@@ -13,8 +13,16 @@ const selection = FileSelection.create({
   },
   scope: FileScope.ALL,
 });
-
-beforeEach(() => localStorage.clear());
+// The most recently created Scan read a whole Location.
+const last: LastScan = {
+  kind: "location",
+  id: "1",
+  signaturePolicy: Signature.KNOWN_ONLY,
+  resultPolicy: Result.REPORT_ONLY,
+  compare: false,
+  previewPolicy: PreviewPolicy.MISSING_ONLY,
+  writeSignatureCache: true,
+};
 
 describe("initialScan", () => {
   it("keeps a routed Files target and its editable policies", () => {
@@ -51,33 +59,36 @@ describe("initialScan", () => {
     });
   });
 
-  it("writes the signature cache unless the last submitted Scan chose otherwise", () => {
-    const saved = {
-      kind: "location",
-      location: { id: "1", rootPath: "/photos" },
-      signaturePolicy: Signature.FILL_MISSING,
-      resultPolicy: Result.PUBLISH_ORIGINALS,
-      compare: true,
-      previewPolicy: PreviewPolicy.NONE,
-    };
-    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
-    expect(initialScan(new URLSearchParams(), null).options.writeSignatureCache).toBe(true);
-    localStorage.setItem(scanPreferencesKey, JSON.stringify({ ...saved, writeSignatureCache: false }));
-    expect(initialScan(new URLSearchParams(), null).options.writeSignatureCache).toBe(false);
-  });
-
-  it("lets an explicit unified shortcut override saved and legacy collection options", () => {
-    localStorage.setItem(
-      scanPreferencesKey,
-      JSON.stringify({
-        kind: "location",
-        location: { id: "1", rootPath: "/photos" },
+  it("starts from built-in defaults when no Scan was created before", () => {
+    expect(initialScan(new URLSearchParams(), null)).toEqual({
+      target: { kind: "location", id: "" },
+      options: {
         signaturePolicy: Signature.FILL_MISSING,
         resultPolicy: Result.PUBLISH_ORIGINALS,
         compare: true,
         previewPolicy: PreviewPolicy.NONE,
-      }),
-    );
+        writeSignatureCache: true,
+      },
+      error: "",
+      explicit: false,
+    });
+  });
+
+  it("starts from the last Scan's source and options", () => {
+    const { kind, id, ...options } = last;
+    expect(initialScan(new URLSearchParams(), null, last)).toEqual({ target: { kind, id }, options, error: "", explicit: false });
+    expect(initialScan(new URLSearchParams(), null, { ...last, writeSignatureCache: false }).options.writeSignatureCache).toBe(false);
+    // A last Scan of selected files leaves the Location to choose.
+    expect(initialScan(new URLSearchParams(), null, { ...last, id: "" }).target).toEqual({ kind: "location", id: "" });
+  });
+
+  it("keeps a last Media source and maps a Location result policy to that source", () => {
+    const initial = initialScan(new URLSearchParams(), null, { ...last, kind: "media", id: "3", resultPolicy: Result.PUBLISH_ORIGINALS });
+    expect(initial.target).toEqual({ kind: "media", id: "3" });
+    expect(initial.options.resultPolicy).toBe(Result.PUBLISH_INVENTORY);
+  });
+
+  it("lets an explicit unified shortcut override the last Scan and legacy collection options", () => {
     const state = {
       scan: {
         target: { kind: "files" as const, entries: [{ selection, name: "Projects", path: "/photos/Projects", isDir: true }] },
@@ -90,27 +101,15 @@ describe("initialScan", () => {
       },
     };
 
-    expect(initialScan(new URLSearchParams("collect=1&result=verify&previews=1"), state)).toMatchObject({
+    expect(initialScan(new URLSearchParams("collect=1&result=verify&previews=1"), state, last)).toMatchObject({
       target: state.scan.target,
       options: state.scan.options,
       explicit: true,
     });
   });
 
-  it("uses a URL target while retaining remembered editable options", () => {
-    localStorage.setItem(
-      scanPreferencesKey,
-      JSON.stringify({
-        kind: "location",
-        location: { id: "1", rootPath: "/photos" },
-        signaturePolicy: Signature.KNOWN_ONLY,
-        resultPolicy: Result.REPORT_ONLY,
-        compare: false,
-        previewPolicy: PreviewPolicy.MISSING_ONLY,
-      }),
-    );
-
-    expect(initialScan(new URLSearchParams("media=3"), null)).toMatchObject({
+  it("uses a URL target while retaining the last Scan's editable options", () => {
+    expect(initialScan(new URLSearchParams("media=3"), null, last)).toMatchObject({
       target: { kind: "media", id: "3" },
       options: {
         signaturePolicy: Signature.KNOWN_ONLY,
@@ -127,20 +126,8 @@ describe("initialScan", () => {
     ["a malformed routed Files entry", new URLSearchParams(), { scan: { target: { kind: "files", entries: [null] } } }],
     ["an invalid Location id", new URLSearchParams(), { scan: { target: { kind: "location", id: "0" } } }],
     ["an invalid policy", new URLSearchParams(), { scan: { options: { compare: "yes" } } }],
-  ])("blocks %s instead of restoring a remembered whole target", (_, params, state) => {
-    localStorage.setItem(
-      scanPreferencesKey,
-      JSON.stringify({
-        kind: "location",
-        location: { id: "1", rootPath: "/photos" },
-        signaturePolicy: Signature.FILL_MISSING,
-        resultPolicy: Result.PUBLISH_ORIGINALS,
-        compare: true,
-        previewPolicy: PreviewPolicy.NONE,
-      }),
-    );
-
-    const initial = initialScan(params, state);
+  ])("blocks %s instead of starting from the last Scan's source", (_, params, state) => {
+    const initial = initialScan(params, state, last);
     expect(initial.error).not.toBe("");
     expect(initial.target).toEqual({ kind: "files", entries: [] });
     expect(initial.explicit).toBe(true);

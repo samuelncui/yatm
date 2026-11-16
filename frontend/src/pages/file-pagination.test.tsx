@@ -13,6 +13,11 @@ import { libraryLayouts, type LibraryLayout } from "@/pages/routes";
 import { streamListing } from "@/test/files-fixture";
 import { libraryPage, libraryDetail, livePage, type FilePageFixture, locationPageRequest } from "@/test/files-fixture";
 const filePageFixture = (value: FilePageFixture) => value;
+const selectionLabels = { archive: "Archive", restore: "Restore" };
+// The selection form mounts with its starting options once the latest Job read settles.
+const selectionFormSettled = async (kind: keyof typeof selectionLabels) => {
+  await screen.findByRole("region", { name: `${selectionLabels[kind]} selection` });
+};
 
 const { fileGet, locationEntries, inspectSelection } = vi.hoisted(() => ({
   fileGet: vi.fn(),
@@ -67,8 +72,11 @@ vi.mock("@/api", async (original) => {
       get: ({ id }: { id: bigint }) => call(GetLocationResponse.create({ location: { id, name: id === 4n ? "Photos" : "Documents" } })),
       listEntries: locationEntries,
     },
+    // No Archive or Restore was created before.
+    archiveJobCli: { ...api.archiveJobCli, getCreation: () => call({}) },
     restoreJobCli: {
       ...api.restoreJobCli,
+      getCreation: () => call({}),
       estimate: (...args: unknown[]) => ({ response: inspectSelection(...args).response.then((result: unknown) => ({ result })) }),
     },
     settingsCli: {
@@ -267,11 +275,11 @@ describe("Composed Chonky pagination", () => {
         <SelectionJobPage kind={kind} />
       </MemoryRouter>,
     );
+    await selectionFormSettled(kind);
     await screen.findAllByTitle("physical.jpg");
     await userEvent.click(within(screen.getByTestId("file-viewport")).getByRole("listitem"));
     await userEvent.click(screen.getByRole("button", { name: "Add to list" }));
-    const label = { archive: "Archive", restore: "Restore" }[kind];
-    const todo = screen.getByRole("region", { name: `${label} selection` });
+    const todo = screen.getByRole("region", { name: `${selectionLabels[kind]} selection` });
     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(`job-selection:${kind}`)!)).toHaveLength(1));
     expect(todo).toHaveTextContent(kind === "restore" ? "Subfolder" : "Photos/physical.jpg");
     const saved = JSON.parse(sessionStorage.getItem(`job-selection:${kind}`)!)[0];
@@ -315,6 +323,7 @@ describe("Composed Chonky pagination", () => {
         <SelectionJobPage kind={kind} />
       </MemoryRouter>,
     );
+    await selectionFormSettled(kind);
     await screen.findAllByTitle("0-first.txt");
     await screen.findAllByTitle("0-second.txt");
     fileGet.mockClear();

@@ -10,8 +10,12 @@ func (s *service) GetCreation(
 	ctx context.Context, req *entity.GetArchiveJobCreationRequest,
 ) (*entity.GetArchiveJobCreationResponse, error) {
 	// Read stored inputs without opening the runner or touching its manifest and Preview Job.
+	id, err := s.exe.CreationJobID(ctx, entity.JobKind_JOB_KIND_ARCHIVE, req.GetId(), req.GetLatest())
+	if err != nil || req.GetLatest() && id == 0 {
+		return &entity.GetArchiveJobCreationResponse{}, err
+	}
 	var config Config
-	priority, err := s.exe.ReadJobConfig(ctx, req.GetId(), entity.JobKind_JOB_KIND_ARCHIVE, &config)
+	priority, err := s.exe.ReadJobConfig(ctx, id, entity.JobKind_JOB_KIND_ARCHIVE, &config)
 	if err != nil {
 		return nil, err
 	}

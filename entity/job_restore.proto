@@ -69,6 +69,9 @@ message CreateRestoreJobResponse {
 
 message GetRestoreJobCreationRequest {
     int64 id = 1;
+    // Reads the most recently created Job of this kind instead of id, which must then be zero.
+    // The response carries no request when there is none.
+    bool latest = 2;
 }
 
 message GetRestoreJobCreationResponse {

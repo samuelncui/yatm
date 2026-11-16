@@ -66,7 +66,7 @@ describe("Integrity check Job", () => {
     expect(screen.getByText("Missing · Archived copy comparison not requested")).toBeInTheDocument();
     // The list spans its whole result set from the first load and reports its size.
     expect(entries).toHaveBeenCalledTimes(1);
-    expect(creation).toHaveBeenCalledExactlyOnceWith({ id: 4n });
+    expect(creation).toHaveBeenCalledExactlyOnceWith({ id: 4n, latest: false });
     expect(entries).toHaveBeenLastCalledWith(
       { id: 4n, limit: 200, cursor: "", order: JobResultOrder.ASCENDING, includeTotal: true },
       { abort: expect.any(AbortSignal) },

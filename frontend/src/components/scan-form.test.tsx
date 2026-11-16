@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes, useParams } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Location, PreviewPolicy, PreviewSettings, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
 import type { InitialScan } from "./scan-input";
-import { scanPreferencesKey } from "./scan-preferences";
 import { ScanForm } from "./scan-form";
 
 const { get, fileGet, create, capabilities, settings } = vi.hoisted(() => ({
@@ -34,7 +33,6 @@ const initial = (): InitialScan => ({
   target: { kind: "location", id: "1" },
   explicit: true,
   error: "",
-  saved: undefined,
   options: {
     signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY,
     resultPolicy: ScanResultPolicy.REPORT_ONLY,
@@ -64,35 +62,18 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-it("navigates to a successfully created Scan even when saving its preferences fails", async () => {
-  let complete!: (reply: unknown) => void;
-  create.mockReturnValueOnce({
-    response: new Promise((resolve) => {
-      complete = resolve;
-    }),
-  });
+it("navigates to a created Scan without writing its options to browser storage", async () => {
   show();
   const start = screen.getByRole("button", { name: "Start scan" });
   await waitFor(() => expect(start).toBeEnabled());
-  const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("Storage denied");
-  });
+  const write = vi.spyOn(Storage.prototype, "setItem");
   await userEvent.click(start);
-  expect(write).not.toHaveBeenCalled();
-  await act(async () => complete({ job: { id: 43n } }));
   await screen.findByText("Created Job 43");
-  expect(write).toHaveBeenCalledExactlyOnceWith(
-    scanPreferencesKey,
-    JSON.stringify({
-      kind: "location",
-      location: { id: "1", rootPath: "/source" },
-      ...initial().options,
-    }),
-  );
+  expect(write).not.toHaveBeenCalled();
   expect(create).toHaveBeenCalledOnce();
 });
 
-it("keeps the form's draft and does not write preferences after failed creation", async () => {
+it("keeps the form's draft after failed creation", async () => {
   create.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Creation offline")) }));
   show();
   const start = screen.getByRole("button", { name: "Start scan" });
@@ -137,7 +118,7 @@ it("keeps signature and comparison tuning folded with an effective summary", asy
     expect.objectContaining({ spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: false }) }),
   );
 });
-it("submits and remembers the signature cache choice for reading policies", async () => {
+it("submits the signature cache choice for reading policies", async () => {
   const input = initial();
   input.options.signaturePolicy = ScanSignaturePolicy.FILL_MISSING;
   show(input);
@@ -150,7 +131,6 @@ it("submits and remembers the signature cache choice for reading policies", asyn
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   await screen.findByText("Created Job 43");
   expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: false }) }));
-  expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toMatchObject({ writeSignatureCache: false });
 });
 it("disables the signature cache choice where the Scan writes no cache", async () => {
   const input = initial();
@@ -158,7 +138,7 @@ it("disables the signature cache choice where the Scan writes no cache", async (
   show(input);
   await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
-  // Known-only reuse never reads, so the remembered choice is kept but not shown as active.
+  // Known-only reuse never reads, so the choice is kept but not shown as active.
   expect(screen.getByRole("checkbox", { name: "Write signature cache" })).toBeDisabled();
   expect(screen.getByRole("button", { name: /Advanced/ })).not.toHaveTextContent("No signature cache");
   await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));

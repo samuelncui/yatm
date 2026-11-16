@@ -26,7 +26,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
     let pending: Promise<GetScanJobCreationResponse> | undefined;
     return () => {
       pending ??= scanJobCli
-        .getCreation({ id: job.id })
+        .getCreation({ id: job.id, latest: false })
         .response.then((reply) => {
           if (!reply.request?.spec) throw new Error("Scan comparison settings were not returned");
           return reply;

@@ -4,85 +4,60 @@ import { Link } from "react-router";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, ListItemText, MenuItem, TextField } from "@mui/material";
 import { UnfoldMore } from "@mui/icons-material";
 import { filesCli, locationCli } from "@/api";
-import { FileOperationKind, FileOperationSpec, type Location } from "@/entity";
+import { FileOperationKind, FileOperationSpec, type Location, type RestoreDestination } from "@/entity";
 import { locationDirectoryReference } from "@/components/files-browser";
 import { canChooseLocationDirectory, DirectoryPicker, listLocationDirectories } from "@/components/directory-picker";
 import { useActionDialog } from "@/components/action-dialog";
 import { useFileOperations } from "@/components/file-operations";
-import { readStored, writeStored, type StorageCodec } from "@/state/storage";
 import { useLocationChoices } from "./use-location-choices";
 
 export type RestoreTarget = { location: Location; path: string };
-const storageKey = "restore:last-target";
-type StoredTarget = { locationID: string; rootPath: string; path: string };
-
-const targetCodec: StorageCodec<StoredTarget> = {
-  encode: (value) => JSON.stringify(value),
-  decode: (raw) => {
-    const value = JSON.parse(raw) as StoredTarget | null;
-    if (
-      value &&
-      typeof value.locationID === "string" &&
-      /^[1-9]\d*$/.test(value.locationID) &&
-      typeof value.rootPath === "string" &&
-      typeof value.path === "string"
-    ) {
-      return value;
-    }
-    throw new Error("Invalid stored restore target");
-  },
-};
-
 export const RestoreDestinationPicker = ({
   value,
   onChange,
   disabled,
-  usePreference = true,
+  last,
 }: {
   value?: RestoreTarget;
   onChange: (target: RestoreTarget) => void;
   disabled: boolean;
-  usePreference?: boolean;
+  /** The destination of the most recent Restore, offered when it is still a valid target. */
+  last?: RestoreDestination;
 }) => {
   const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const restoreRequest = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (!usePreference || value) return;
-    const stored = readStored("local", storageKey, targetCodec);
-    if (!stored) return;
+    if (!last || last.locationId <= 0n || value) return;
     const controller = new AbortController();
     restoreRequest.current = controller;
     void locationCli
-      .get({ id: BigInt(stored.locationID) }, { abort: controller.signal })
+      .get({ id: last.locationId }, { abort: controller.signal })
       .response.then(async (reply) => {
         if (controller.signal.aborted) return;
         const location = reply.location;
-        if (!location?.restoreTarget || location.rootPath !== stored.rootPath) {
+        if (!location?.restoreTarget || location.rootPath !== last.rootPath) {
           setNotice("The last restore target is no longer available. Choose another target.");
           return;
         }
-        const page = await listLocationDirectories(location.id, stored.path, controller.signal);
+        const page = await listLocationDirectories(location.id, last.path, controller.signal);
         if (controller.signal.aborted) return;
         if (!canChooseLocationDirectory(page.directory)) {
           setNotice("The last restore target is no longer available. Choose another target.");
           return;
         }
-        onChange({ location, path: stored.path });
+        onChange({ location, path: last.path });
       })
       .catch(() => {
         if (!controller.signal.aborted) setNotice("Could not load the last restore target. Choose a target.");
       });
     return () => controller.abort();
-  }, [onChange, usePreference, value]);
+  }, [onChange, last, value]);
 
   const choose = (target: RestoreTarget) => {
     onChange(target);
     setNotice("");
     setOpen(false);
-    if (!writeStored("local", storageKey, { locationID: String(target.location.id), rootPath: target.location.rootPath, path: target.path }, targetCodec)) {
-      setNotice("This browser could not remember the restore target.");
-    }
   };
   return (
     <>

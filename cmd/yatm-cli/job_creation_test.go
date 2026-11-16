@@ -129,6 +129,15 @@ func TestJobCreationCommandsReadTypedInputsWithoutCreating(t *testing.T) {
 			require.Empty(t, stdout)
 			require.Contains(t, stderr, "positive")
 			require.Equal(t, 1, recorder.count(test.method))
+
+			// --latest names no Job and makes the same single read.
+			exit, stdout, stderr = executeTestCLI(server.URL, "", test.domain, "creation", "--latest")
+			require.Equal(t, exitSuccess, exit, stderr)
+			require.NotEmpty(t, stdout)
+			require.Equal(t, 2, recorder.count(test.method))
+			exit, _, stderr = executeTestCLI(server.URL, "", test.domain, "creation", "--latest", "7")
+			require.Equal(t, exitUsage, exit, stderr)
+			require.Equal(t, 2, recorder.count(test.method))
 		})
 	}
 }

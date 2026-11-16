@@ -64,6 +64,11 @@ the retained creation inputs; a nonempty `unavailable_reason` explains missing o
 inputs that require reselection. Reading does not create a Job or change the old Job.
 Review the selections and options, resolve missing inputs, and explicitly use the normal
 Create flow with its current validation and pre-submit checks to submit new work.
+`--latest` in place of the ID reads the most recently created Job of that kind (for `scan`, the
+most recent Scan a caller created, not an Archive's companion); the response has no `request` when
+there is none. The web forms start a new Job's options from that Job. The CLI never applies them by
+itself: `create` commands use only their flags and the documented defaults, so read the latest Job
+and pass the options you want to repeat.
 
 `identical groups` and `identical members` include a disposable `result_id` in their first
 reply. Later pages require `--result ID` with the returned cursor; an unavailable ID

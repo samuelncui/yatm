@@ -185,7 +185,7 @@ Persistent copy is limited to names, paths, facts and actions. Location names ar
 
 **Jobs → New → Scan** orders its controls as source, target, signature policy, result handling and Preview. Location and Media use required single-choice search fields; free text is not a selection. Location choices reuse the shared configured catalog. Media searches use bounded server ID-cursor pages. Search matches registered names and directory paths or Media identities, treating wildcard characters literally. Loading, empty results and retry stay in the chooser. Stale responses cannot overwrite a newer search or selection. Inventory update and recorded-copy verification are mutually exclusive policies. Verification forces real reads; sequential Media disallow Preview. The shared Preview select offers **Don’t generate / Generate missing / Regenerate all** in Scan and Archive. [Preview](preview.md) owns execution semantics. All modes use the same SCAN runner and result types.
 
-The browser remembers successfully submitted Scan choices in local storage. Returning reloads the selected target and checks eligibility/binding before enabling submission; incoming source/selection links take precedence. Invalid storage or unavailable targets cannot silently select another resource. Signature, result and Preview constraints still apply to remembered choices.
+A new Scan starts from the source and options of the most recently created Scan, read from the server: its Media, or its Location when that Scan read one whole Location; a Scan of selected files leaves the source unset. The form reloads that target and checks eligibility/binding before enabling submission; incoming source/selection links take precedence, and an unavailable target cannot silently select another resource. Signature, result and Preview constraints still apply to the starting choices.
 
 Ordinary Library and Location edits share [one controller](../../frontend/src/components/file-operations.tsx), Chonky action handling, name dialogs and `FilesService.Mkdir/Move/Remove`. Typed references select logical File IDs or live Location entries; mixed-scope requests are rejected before mutation. Copy is unsupported and must not silently become a move. Scope-specific primitives and deletion safety follow the [shared organization contract](library.md#shared-organization-interface).
 
@@ -253,15 +253,27 @@ Archive's **Recheck source hashes for previews** remains an advanced preparation
 changes hashing before the companion Preview Scan, not the integrity check performed while
 copying Archive content. Disabling Preview keeps its draft value without making it active.
 
+A new Job's creation form starts each option from the most recently created Job of that kind, and
+Recreate starts from the original Job's recorded options. The form reads that Job from the server
+with `GetCreation`'s `latest` request before it appears, so the starting options are the same in
+every browser and include Jobs created from the CLI; with no such Job, or when the read fails, the
+built-in defaults apply. Nothing about a Job's options is kept in browser storage. The exceptions
+are choices that consent to a risk or pick a physical target, which start unset on every new Job:
+Allow damaged copies, skipping unmatched versions, a FORMAT confirmation, Calibration's Write test
+data and the Media or device a Job step uses; selections and a Restore's version policy are not
+carried over either. Archive takes its Preview options, signature cache and target Media count;
+Restore its destination and its two signature cache choices; Scan its source and options as
+described above.
+
 Archive's collapsed **Advanced** section and Scan's Advanced section hold **Write signature cache**.
-Each starts from the browser's last successfully submitted choice for that Job type, or on when
-nothing is stored; Recreate uses the original Job's recorded choice, treating an unrecorded one as
+Each starts from the most recently created Job of that kind, or on when
+there is none; Recreate uses the original Job's recorded choice, treating an unrecorded one as
 on. The form always submits an explicit value, and a collapsed section's summary names the
 non-default **No signature cache**. Scan disables the control for verification and known-only
 reuse, which write no cache, without discarding the remembered choice.
 
 The Archive dialog's **Target Media count** field is empty (off) or a whole number of at least 1.
-It starts from the same `archive:last-options` preference as the signature cache, and Recreate
+It starts from the most recently created Archive like the signature cache, and Recreate
 uses the original Job's value, empty when it had none. A nonempty invalid value blocks preparation.
 With a target, the estimate is requested with it and the dialog states how many files already reach
 it; an Archive Job with a target shows both skip counts on its card.
@@ -273,7 +285,7 @@ Rows containing path or version details use content-measured heights in the shar
 Restore shows a compact destination path control. Its compact save-location dialog puts a preferred-Location selector above the live directory browser, compact breadcrumbs and **Choose / New folder / Cancel** actions. The dialog follows content height; only the directory list scrolls, without a fixed-height sidebar or empty space below its actions. Double-click enters a directory; Choose confirms the current directory. Re-selecting the current breadcrumb, including the root, is a no-op rather than a reload. New folder performs an immediate checked creation; Cancel does not undo it. Navigation and cancellation do not collect files or change Library. There is no preferred/all toggle or fallback; an empty preferred list links to Settings. Failed navigation clears old rows; Retry reloads the complete directory. Advanced damaged-copy recovery remains off by default; enabling it shows that complete mismatched
 output is retained without a verified original association. [Job indexing](jobs.md) freezes contents, logical targets, destination bindings and collision-safe outputs.
 
-The target picker filters preferred Locations on the server before pagination; additional-page requests cannot overlap or append duplicate IDs. Closing the modal invalidates its pending responses. Only a confirmed choice is saved in browser-local storage, including Location ID, root path and relative directory. Returning to Restore reloads that Location and reuses the choice only if it remains preferred with the same root path. Deleted, moved or ineligible targets require selection again; a late lookup cannot override a new choice. Cancel leaves the prior choice intact. This is a browser preference, not a change to CLI destinations or server write authorization.
+The target picker filters preferred Locations on the server before pagination; additional-page requests cannot overlap or append duplicate IDs. Closing the modal invalidates its pending responses. A new Restore starts from the destination of the most recently created Restore: the form reloads that Location and reuses the directory only if the Location remains preferred with the same root path. Deleted, moved or ineligible targets require selection again; a late lookup cannot override a new choice. Cancel leaves the prior choice intact. This starting value changes neither CLI destinations nor server write authorization.
 
 ### Jobs Pages
 

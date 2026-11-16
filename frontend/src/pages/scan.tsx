@@ -1,13 +1,14 @@
-import { useState } from "react";
 import { useLocation } from "react-router";
 import { ScanForm } from "@/components/scan-form";
 import { initialScan } from "@/components/scan-input";
 import { scanJobCli } from "@/api";
 import { JobCreationLoader, readCreationEntries } from "@/components/job-creation";
 import type { InitialScan } from "@/components/scan-input";
+import { useLatestCreation } from "@/components/latest-creation";
+import { lastScan } from "@/components/scan-preferences";
 
 const loadCreation = async (id: bigint, signal: AbortSignal): Promise<InitialScan> => {
-  const { request, unavailableReason } = await scanJobCli.getCreation({ id }, { abort: signal }).response;
+  const { request, unavailableReason } = await scanJobCli.getCreation({ id, latest: false }, { abort: signal }).response;
   signal.throwIfAborted();
   if (!request?.spec) throw new Error(unavailableReason || "The original Scan inputs are unavailable. Choose the sources and options again.");
   const spec = request.spec;
@@ -35,15 +36,25 @@ const loadCreation = async (id: bigint, signal: AbortSignal): Promise<InitialSca
       writeSignatureCache: spec.writeSignatureCache ?? true,
     },
     explicit: true,
-    saved: undefined,
     error: "",
     priority: request.priority,
     creationReason: unavailableReason,
   };
 };
 
+const loadLatest = async (signal: AbortSignal) => {
+  const { request } = await scanJobCli.getCreation({ id: 0n, latest: true }, { abort: signal }).response;
+  return request?.spec && lastScan(request.spec);
+};
+
+/** A new Scan starts from the source and options of the most recently created Scan. */
+const NewScan = ({ search, state }: { search: string; state: unknown }) => {
+  const latest = useLatestCreation(loadLatest);
+  if (!latest.settled) return null;
+  return <ScanForm initial={initialScan(new URLSearchParams(search), state, latest.value)} />;
+};
+
 const ScanEntry = ({ search, state }: { search: string; state: unknown }) => {
-  const [initial] = useState(() => initialScan(new URLSearchParams(search), state));
   const id = new URLSearchParams(search).get("recreate");
   if (id !== null)
     return (
@@ -51,7 +62,7 @@ const ScanEntry = ({ search, state }: { search: string; state: unknown }) => {
         {(creation) => <ScanForm initial={creation} />}
       </JobCreationLoader>
     );
-  return <ScanForm initial={initial} />;
+  return <NewScan search={search} state={state} />;
 };
 
 export const ScanBrowser = () => {

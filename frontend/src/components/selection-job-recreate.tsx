@@ -23,14 +23,14 @@ export type SelectionCreation = ({ kind: "archive"; request: CreateArchiveJobReq
 };
 
 const loadArchive = async (id: bigint, signal: AbortSignal): Promise<SelectionCreation> => {
-  const { request, unavailableReason } = await archiveJobCli.getCreation({ id }, { abort: signal }).response;
+  const { request, unavailableReason } = await archiveJobCli.getCreation({ id, latest: false }, { abort: signal }).response;
   signal.throwIfAborted();
   if (!request) throw new Error(unavailableReason || "The original Archive inputs are unavailable.");
   return { kind: "archive", request, reason: unavailableReason, entries: await readCreationEntries(request.spec?.selections ?? [], [], signal) };
 };
 
 const loadRestore = async (id: bigint, signal: AbortSignal): Promise<SelectionCreation> => {
-  const { request, unavailableReason } = await restoreJobCli.getCreation({ id }, { abort: signal }).response;
+  const { request, unavailableReason } = await restoreJobCli.getCreation({ id, latest: false }, { abort: signal }).response;
   signal.throwIfAborted();
   if (!request) throw new Error(unavailableReason || "The original Restore inputs are unavailable.");
   const entries = await readCreationEntries(request.spec?.selections ?? [], request.spec?.fileVersionIds ?? [], signal);

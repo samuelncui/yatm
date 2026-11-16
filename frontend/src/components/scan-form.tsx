@@ -21,7 +21,7 @@ import { mediaCli, locationCli, scanJobCli } from "@/api";
 import { FileScope, FileSelection, Location, Media, MediaKind, MediaAccess, PreviewPolicy, ScanJobSpec, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
 import { errorMessage } from "@/tools";
 import { type InitialScan, type ScanOptions } from "./scan-input";
-import { resultForSource, saveScanPreferences } from "./scan-preferences";
+import { resultForSource } from "./scan-preferences";
 import { LocationSearchSelect, MediaSearchSelect } from "./catalog-search-select";
 import { ImportPositionsDialog, useLibraryAdmission } from "./import-positions-dialog";
 import { PreviewPolicySelect, usePreviewGeneration } from "./preview-policy-select";
@@ -100,7 +100,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
         const location = (await locationCli.get({ id: BigInt(source.id) }, { abort: controller.signal }).response).location;
         if (controller.signal.aborted) return;
         if (!location || String(location.id) !== source.id) throw new Error("The selected Location is unavailable. Choose a Location.");
-        if (!initial.explicit && location.rootPath !== initial.saved?.location?.rootPath) throw new Error("The last Location has changed. Select it again.");
         setTarget({ kind: "location", location, partial: false, entries: [] });
         return;
       }
@@ -109,8 +108,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
       const media = reply.media.find((item) => String(item.id) === source.id);
       if (!media || ![MediaKind.TAPE, MediaKind.VOLUME].includes(media.kind))
         throw new Error(`Media ${source.id} is no longer available. Choose another Media.`);
-      if (!initial.explicit && (media.identity !== initial.saved?.media?.identity || media.kind !== initial.saved?.media?.kind))
-        throw new Error("The last Media has changed. Select it again.");
       setTarget({ kind: "media", media });
     };
     void load()
@@ -156,19 +153,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
       const spec = scanRequest(target, options);
       const reply = await scanJobCli.create({ priority: initial.priority ?? 1n, spec }).response;
       if (!reply.job) throw new Error("Job was not returned");
-      saveScanPreferences({
-        ...initial.saved,
-        kind: target.kind === "files" ? (initial.saved?.kind ?? "location") : target.kind,
-        ...(target.kind === "location" && target.location ? { location: { id: String(target.location.id), rootPath: target.location.rootPath } } : {}),
-        ...(target.kind === "media" && target.media
-          ? { media: { id: String(target.media.id), identity: target.media.identity, kind: target.media.kind } }
-          : {}),
-        signaturePolicy: spec.signaturePolicy,
-        resultPolicy: spec.resultPolicy,
-        compare: spec.compareLibrary,
-        previewPolicy: spec.previewPolicy,
-        writeSignatureCache: options.writeSignatureCache,
-      });
       if (active.current) navigate(`/jobs/${reply.job.id}`);
     } catch (failure) {
       if (active.current) setError(errorMessage(failure, "Could not create scan"));
