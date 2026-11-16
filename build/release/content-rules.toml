@@ -47,6 +47,16 @@ paths = ['''!ffmpeg-8\.0\.tar\.xz!ffmpeg-8\.0/tests/ref/fate/mxf-probe-dnxhd$'''
 regexTarget = "match"
 regexes = ['''^[/]Users[/]mark[/]$''']
 
+# Go lays short literals out back to back; the binary-string scan reads "key" + "Usage:" followed by
+# these fmt and reflect literals as a key assignment. It is public toolchain text, not a credential.
+[[allowlists]]
+description = "Adjacent Go fmt and reflect literals in an executable's string table"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)binaries/[0-9]+\.txt$''']
+regexTarget = "secret"
+regexes = ['''^booleanbdoUxXvintegercomplexfloat32float64$''']
+
 [[rules]]
 id = "personal-build-path"
 description = "Personal filesystem path in distributed content"
