@@ -249,37 +249,34 @@ func TestTapeRefreshReportsAuthoritativeScanAdmissionRejection(t *testing.T) {
 	}
 }
 
-func TestTarWritePreflightKeepsOptionalDiagnosticsSeparate(t *testing.T) {
+func TestTarWritePreflightFollowsServerVerdict(t *testing.T) {
 	for _, operation := range []string{"format", "append"} {
 		for _, test := range []struct {
-			name                              string
-			reason                            entity.DeviceReason
-			busy, missing, protected, allowed bool
+			name, detail string
+			allowed      bool
 		}{
-			{name: "ready", allowed: true},
-			{name: "optional unsupported", reason: entity.DeviceReason_DEVICE_REASON_UNSUPPORTED, allowed: true},
-			{name: "optional malformed", reason: entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, allowed: true},
-			{name: "optional not implemented", reason: entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED, allowed: true},
-			{name: "busy", busy: true},
-			{name: "missing medium", missing: true, reason: entity.DeviceReason_DEVICE_REASON_UNSUPPORTED},
-			{name: "write protected", protected: true},
-			{name: "not ready", reason: entity.DeviceReason_DEVICE_REASON_NOT_READY},
-			{name: "unknown ownership", reason: entity.DeviceReason_DEVICE_REASON_OWNERSHIP_UNCERTAIN},
+			{name: "writable", allowed: true},
+			{name: "optional diagnostic failure", detail: "Optional serial query is unsupported", allowed: true},
+			{name: "device unavailable", detail: "Tape device is unavailable: Tape device is in use"},
+			{name: "Media rejected", detail: "Tape already exists in the Library; delete its Media metadata explicitly before formatting"},
 		} {
 			t.Run(operation+"/"+test.name, func(t *testing.T) {
-				// Serve independent optional diagnostics and required physical availability facts.
+				// The server answers the exact requested write; the CLI applies no diagnostic allowlist of its own.
+				var requested *entity.InspectDeviceRequest
 				service := &stubService{
 					mediaList: func(context.Context, *entity.ListMediaRequest) (*entity.ListMediaResponse, error) {
-						if operation == "format" {
-							return &entity.ListMediaResponse{}, nil
-						}
 						return &entity.ListMediaResponse{Media: []*entity.Media{{Id: 8, Identity: "ABC123", Kind: entity.MediaKind_MEDIA_KIND_TAPE,
 							Profile: (&entity.TapeMediaProfile{Format: "tar_pax_v1"}).Pack()}}}, nil
 					},
-					deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
-						return &entity.InspectDeviceResponse{Reason: test.reason, Detail: test.name,
-							Device: &entity.DeviceSummary{Busy: test.busy},
-							Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{MediumPresent: proto.Bool(!test.missing), WriteProtected: proto.Bool(test.protected)}}}, nil
+					deviceInspect: func(_ context.Context, request *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
+						requested = proto.Clone(request).(*entity.InspectDeviceRequest)
+						reply := &entity.InspectDeviceResponse{Writable: test.allowed}
+						if test.allowed {
+							reply.Detail = test.detail
+						} else {
+							reply.WriteDetail = test.detail
+						}
+						return reply, nil
 					},
 				}
 				server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
@@ -296,11 +293,16 @@ func TestTarWritePreflightKeepsOptionalDiagnosticsSeparate(t *testing.T) {
 				}
 				exit, _, stderr := executeTestCLI(server.URL, "", args...)
 				require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
+				require.Equal(t, "/dev/nst0", requested.GetWriteTarget().GetDevice())
+				require.Equal(t, "ABC123", requested.GetWriteTarget().GetBarcode())
+				require.Equal(t, "tar_pax_v1", requested.GetWriteTarget().GetFormat())
+				require.Equal(t, operation == "format", requested.GetWriteTarget().GetMode() == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT)
 				if test.allowed {
 					require.Equal(t, exitSuccess, exit, stderr)
 					require.Equal(t, 1, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 				} else {
-					require.NotEqual(t, exitSuccess, exit)
+					require.Equal(t, exitUsage, exit)
+					require.Contains(t, stderr, test.detail)
 					require.Zero(t, recorder.count(entity.ArchiveJobService_WriteMedia_FullMethodName))
 				}
 			})

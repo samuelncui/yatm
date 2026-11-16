@@ -256,6 +256,12 @@ func (c *archiveWriteTapeAppendCommand) Execute(_ []string) error {
 		return usageError(fmt.Errorf("tar options are not accepted for LTFS"))
 	}
 
+	// Only explicitly supplied APPEND options are checked against the immutable stored profile.
+	target := &entity.ArchiveTapeTarget{
+		Device: device, Barcode: barcode, Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
+		Format: &format, TarOptions: options,
+	}
+
 	// LTFS retains its identity adapter; raw APPEND verifies the immutable label under the lease.
 	switch format {
 	case "ltfs_v1":
@@ -267,18 +273,13 @@ func (c *archiveWriteTapeAppendCommand) Execute(_ []string) error {
 			return safetyError(fmt.Errorf("inspected Tape does not match its registered Media"))
 		}
 	case "tar_pax_v1":
-		if _, err := inspectRawTapeDevice(ctx, c.runtime, device); err != nil {
+		if err := checkTarWrite(ctx, c.runtime, target); err != nil {
 			return err
 		}
 	default:
 		return safetyError(fmt.Errorf("Tape does not support append, format=%q", format))
 	}
-
-	// Only explicitly supplied APPEND options are checked against the immutable stored profile.
-	return writeArchiveTape(ctx, c.runtime, c.Args.ID, &entity.ArchiveTapeTarget{
-		Device: device, Barcode: barcode, Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
-		Format: &format, TarOptions: options,
-	})
+	return writeArchiveTape(ctx, c.runtime, c.Args.ID, target)
 }
 
 func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
@@ -314,6 +315,10 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+	target := &entity.ArchiveTapeTarget{
+		Device: device, Barcode: barcode, Name: c.Name, Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+		Format: &format, TarOptions: options,
+	}
 	switch format {
 	case "ltfs_v1":
 		if options != nil {
@@ -330,14 +335,7 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 			return safetyError(fmt.Errorf("Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q", barcode))
 		}
 	case "tar_pax_v1":
-		registered, err := findTapeMedia(ctx, c.runtime, barcode)
-		if err != nil {
-			return err
-		}
-		if registered != nil {
-			return safetyError(fmt.Errorf("Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q", barcode))
-		}
-		if _, err := inspectRawTapeDevice(ctx, c.runtime, device); err != nil {
+		if err := checkTarWrite(ctx, c.runtime, target); err != nil {
 			return err
 		}
 	default:
@@ -345,18 +343,7 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 	}
 
 	// Start one FORMAT using the confirmed barcode, including when MAM reports none.
-	return writeArchiveTape(
-		ctx,
-		c.runtime,
-		c.Args.ID,
-		&entity.ArchiveTapeTarget{
-			Device:  device,
-			Barcode: barcode,
-			Name:    c.Name,
-			Mode:    entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
-			Format:  &format, TarOptions: options,
-		},
-	)
+	return writeArchiveTape(ctx, c.runtime, c.Args.ID, target)
 }
 
 func inspectExpectedTape(

@@ -66,3 +66,88 @@ func TestTarAppendCapacityPollSettingUsesAdmittedSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, settingspkg.TapeCapacityPollInterval(again))
 }
+
+func TestCheckTarWriteReportsAttemptResolution(t *testing.T) {
+	// A completed real FORMAT registers ABC001; the requested writes are answered without opening hardware.
+	ctx := context.Background()
+	exe, backend, fixture, _ := tarFactoryFixture(t)
+	write, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+	require.NoError(t, err)
+	result, err := write.Finalize(ctx, nil)
+	require.NoError(t, err)
+	_, err = exe.Lib().CreateMedia(ctx, &library.Media{Kind: result.Media.Kind, Identity: result.Media.Identity, Profile: result.Media.Profile})
+	require.NoError(t, err)
+	opens := fixture.opens
+
+	saveDefaults := func(options *entity.TarWriteOptions) {
+		_, err := exe.settings.Device.Save(ctx, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
+			Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{TarWriteOptions: options}},
+		}}})
+		require.NoError(t, err)
+	}
+	target := func(barcode string, mode entity.ArchiveTapeWriteMode, options *entity.TarWriteOptions) *entity.ArchiveTapeTarget {
+		return &entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: barcode, Name: "Checked", Mode: mode,
+			Format: proto.String(library.TapeFormatTarPAXV1), TarOptions: options}
+	}
+	recommended := func(options *entity.TarWriteOptions) *entity.InspectDeviceResponse {
+		return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{RecommendedWriteOptions: options}}}
+	}
+	variable, fixed := entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(), entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED.Enum()
+	format, appendMode := entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND
+	for _, tc := range []struct {
+		name     string
+		saved    *entity.TarWriteOptions
+		report   *entity.InspectDeviceResponse
+		target   *entity.ArchiveTapeTarget
+		options  *entity.TarWriteOptions
+		rejected string
+	}{
+		{name: "default options", report: &entity.InspectDeviceResponse{}, target: target("ABC002", format, nil),
+			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288)}},
+		{name: "device defaults", saved: &entity.TarWriteOptions{RecordMode: fixed, RecordBytes: proto.Uint32(262144), HardwareCompression: proto.Bool(false)},
+			report: recommended(&entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}), target: target("ABC002", format, nil),
+			options: &entity.TarWriteOptions{RecordMode: fixed, RecordBytes: proto.Uint32(262144), HardwareCompression: proto.Bool(false)}},
+		{name: "recommendation fills only omitted compression", report: recommended(&entity.TarWriteOptions{RecordBytes: proto.Uint32(8192), HardwareCompression: proto.Bool(true)}),
+			target:  target("ABC002", format, nil),
+			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288), HardwareCompression: proto.Bool(true)}},
+		{name: "explicit choice wins", report: recommended(&entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}),
+			target:  target("ABC002", format, &entity.TarWriteOptions{RecordBytes: proto.Uint32(1048576), HardwareCompression: proto.Bool(false)}),
+			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(1048576), HardwareCompression: proto.Bool(false)}},
+		{name: "FORMAT on existing Media", report: &entity.InspectDeviceResponse{}, target: target("ABC001", format, nil),
+			options:  &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288)},
+			rejected: "Tape already exists in the Library; delete its Media metadata explicitly before formatting"},
+		{name: "APPEND uses the immutable profile", report: &entity.InspectDeviceResponse{}, target: target("ABC001", appendMode, nil),
+			options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(4096), HardwareCompression: proto.Bool(false)}},
+		{name: "APPEND identity mismatch", report: &entity.InspectDeviceResponse{}, target: target("ABC002", appendMode, nil),
+			rejected: "APPEND requires available registered Tape Media"},
+		{name: "APPEND options conflict", report: &entity.InspectDeviceResponse{}, target: target("ABC001", appendMode, &entity.TarWriteOptions{RecordBytes: proto.Uint32(8192)}),
+			rejected: "APPEND options differ from the immutable Tape profile"},
+		{name: "optional diagnostic failure", report: &entity.InspectDeviceResponse{Reason: entity.DeviceReason_DEVICE_REASON_UNSUPPORTED},
+			target: target("ABC001", appendMode, nil), options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(4096), HardwareCompression: proto.Bool(false)}},
+		{name: "busy device", report: &entity.InspectDeviceResponse{Device: &entity.DeviceSummary{Busy: true}, Reason: entity.DeviceReason_DEVICE_REASON_BUSY, Detail: "Tape device is in use"},
+			target: target("ABC002", format, nil), options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(524288)},
+			rejected: "Tape device is unavailable: Tape device is in use"},
+		{name: "write protected", report: &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{WriteProtected: proto.Bool(true)}}},
+			target: target("ABC001", appendMode, nil), options: &entity.TarWriteOptions{RecordMode: variable, RecordBytes: proto.Uint32(4096), HardwareCompression: proto.Bool(false)},
+			rejected: "Tape device is unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			saveDefaults(tc.saved)
+			request := proto.Clone(tc.target).(*entity.ArchiveTapeTarget)
+			require.NoError(t, exe.CheckTarWrite(ctx, tc.report, request))
+			require.True(t, proto.Equal(tc.target, request), "the request is not modified")
+			require.Equal(t, tc.rejected == "", tc.report.Writable)
+			if tc.rejected != "" {
+				require.Contains(t, tc.report.WriteDetail, tc.rejected)
+			} else {
+				require.Empty(t, tc.report.WriteDetail)
+			}
+			if tc.options == nil {
+				require.Nil(t, tc.report.ResolvedTarOptions)
+			} else {
+				require.True(t, proto.Equal(tc.options, tc.report.ResolvedTarOptions), "resolved=%v", tc.report.ResolvedTarOptions)
+			}
+			require.Equal(t, opens, fixture.opens)
+		})
+	}
+}

@@ -179,6 +179,9 @@ same command without `--dryrun` performs the resolved work.
   and requires an exact `--confirm-format`. Registered Media and identity conflicts stop before
   writing, and FORMAT erases the cartridge even when its cartridge memory barcode is empty.
 - `archive write tape append` uses the registered profile and rejects conflicting explicit options.
+- For tar, both commands first send the write as the passive device inspection's
+  [write target](../architecture/api.md#device-discovery) and submit only when the server answers
+  it as writable; otherwise they exit with the safety code and the server's `write_detail`.
 - `restore run tape`, Tape `verify run` and `scan run` take `--device`, an optional `--media-id` hint
   and `--refresh-position-map` (default false). Without a hint, the server identifies the Tape by its
   cartridge memory barcode; a hint never bypasses physical verification.

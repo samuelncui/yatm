@@ -12,6 +12,7 @@ import type { PartialMessage } from "@protobuf-ts/runtime";
 import { reflectionMergePartial } from "@protobuf-ts/runtime";
 import { MessageType } from "@protobuf-ts/runtime";
 import { TarWriteOptions } from "./media";
+import { ArchiveTapeTarget } from "./media";
 import { VolumeMediaProfile } from "./media";
 import { Position } from "./position";
 import { Media } from "./media";
@@ -354,6 +355,12 @@ export interface InspectDeviceRequest {
      * @generated from protobuf field: string device = 1
      */
     device: string;
+    /**
+     * Optional tar write to evaluate with the resolution and Media checks of its attempt.
+     *
+     * @generated from protobuf field: optional yatm.v1.ArchiveTapeTarget write_target = 2
+     */
+    writeTarget?: ArchiveTapeTarget;
 }
 /**
  * @generated from protobuf message yatm.v1.InspectDeviceResponse
@@ -421,6 +428,24 @@ export interface InspectDeviceResponse {
      * @generated from protobuf field: optional yatm.v1.TapePreparedRead prepared_read = 18
      */
     preparedRead?: TapePreparedRead;
+    /**
+     * Present only with write_target: the tar options it would use; absent compression is unresolved.
+     *
+     * @generated from protobuf field: optional yatm.v1.TarWriteOptions resolved_tar_options = 19
+     */
+    resolvedTarOptions?: TarWriteOptions;
+    /**
+     * Whether write_target can start; its attempt repeats the checks under the device lease.
+     *
+     * @generated from protobuf field: bool writable = 20
+     */
+    writable: boolean;
+    /**
+     * Why write_target is not writable.
+     *
+     * @generated from protobuf field: string write_detail = 21
+     */
+    writeDetail: string;
 }
 /**
  * @generated from protobuf message yatm.v1.TapePreparedRead
@@ -2311,7 +2336,8 @@ export const DeviceSummary = new DeviceSummary$Type();
 class InspectDeviceRequest$Type extends MessageType<InspectDeviceRequest> {
     constructor() {
         super("yatm.v1.InspectDeviceRequest", [
-            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "write_target", kind: "message", T: () => ArchiveTapeTarget }
         ]);
     }
     create(value?: PartialMessage<InspectDeviceRequest>): InspectDeviceRequest {
@@ -2329,6 +2355,9 @@ class InspectDeviceRequest$Type extends MessageType<InspectDeviceRequest> {
                 case /* string device */ 1:
                     message.device = reader.string();
                     break;
+                case /* optional yatm.v1.ArchiveTapeTarget write_target */ 2:
+                    message.writeTarget = ArchiveTapeTarget.internalBinaryRead(reader, reader.uint32(), options, message.writeTarget);
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2344,6 +2373,9 @@ class InspectDeviceRequest$Type extends MessageType<InspectDeviceRequest> {
         /* string device = 1; */
         if (message.device !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.device);
+        /* optional yatm.v1.ArchiveTapeTarget write_target = 2; */
+        if (message.writeTarget)
+            ArchiveTapeTarget.internalBinaryWrite(message.writeTarget, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2369,7 +2401,10 @@ class InspectDeviceResponse$Type extends MessageType<InspectDeviceResponse> {
             { no: 9, name: "reason", kind: "enum", T: () => ["yatm.v1.DeviceReason", DeviceReason, "DEVICE_REASON_"] },
             { no: 10, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 17, name: "tape", kind: "message", oneof: "report", T: () => TapeDeviceReport },
-            { no: 18, name: "prepared_read", kind: "message", T: () => TapePreparedRead }
+            { no: 18, name: "prepared_read", kind: "message", T: () => TapePreparedRead },
+            { no: 19, name: "resolved_tar_options", kind: "message", T: () => TarWriteOptions },
+            { no: 20, name: "writable", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 21, name: "write_detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<InspectDeviceResponse>): InspectDeviceResponse {
@@ -2377,6 +2412,8 @@ class InspectDeviceResponse$Type extends MessageType<InspectDeviceResponse> {
         message.reason = 0;
         message.detail = "";
         message.report = { oneofKind: undefined };
+        message.writable = false;
+        message.writeDetail = "";
         if (value !== undefined)
             reflectionMergePartial<InspectDeviceResponse>(this, message, value);
         return message;
@@ -2424,6 +2461,15 @@ class InspectDeviceResponse$Type extends MessageType<InspectDeviceResponse> {
                     break;
                 case /* optional yatm.v1.TapePreparedRead prepared_read */ 18:
                     message.preparedRead = TapePreparedRead.internalBinaryRead(reader, reader.uint32(), options, message.preparedRead);
+                    break;
+                case /* optional yatm.v1.TarWriteOptions resolved_tar_options */ 19:
+                    message.resolvedTarOptions = TarWriteOptions.internalBinaryRead(reader, reader.uint32(), options, message.resolvedTarOptions);
+                    break;
+                case /* bool writable */ 20:
+                    message.writable = reader.bool();
+                    break;
+                case /* string write_detail */ 21:
+                    message.writeDetail = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -2473,6 +2519,15 @@ class InspectDeviceResponse$Type extends MessageType<InspectDeviceResponse> {
         /* optional yatm.v1.TapePreparedRead prepared_read = 18; */
         if (message.preparedRead)
             TapePreparedRead.internalBinaryWrite(message.preparedRead, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        /* optional yatm.v1.TarWriteOptions resolved_tar_options = 19; */
+        if (message.resolvedTarOptions)
+            TarWriteOptions.internalBinaryWrite(message.resolvedTarOptions, writer.tag(19, WireType.LengthDelimited).fork(), options).join();
+        /* bool writable = 20; */
+        if (message.writable !== false)
+            writer.tag(20, WireType.Varint).bool(message.writable);
+        /* string write_detail = 21; */
+        if (message.writeDetail !== "")
+            writer.tag(21, WireType.LengthDelimited).string(message.writeDetail);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

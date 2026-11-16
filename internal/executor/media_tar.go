@@ -345,18 +345,8 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		return nil, err
 	}
 	format := target.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT
-	if format && stored != nil {
-		return nil, fmt.Errorf("FORMAT Tape already exists in Library; delete it first")
-	}
-	if !format && (stored == nil || stored.DestroyedAtNS != nil || stored.Profile.GetTape().GetFormat() != library.TapeFormatTarPAXV1) {
-		return nil, fmt.Errorf("tar APPEND Media is unavailable")
-	}
-	if !format {
-		key, err := decodeTarKey(stored.Profile.GetTape().Encryption)
-		if err != nil {
-			return nil, err
-		}
-		clear(key)
+	if err := checkTarWriteMedia(stored, target); err != nil {
+		return nil, err
 	}
 
 	// The attempt holds the device through initialization, adapter handoff and content settlement.
@@ -399,8 +389,8 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	// Apply qualified recommendations to still-omitted controls before any mutation.
 	operation := tape.Read
 	if format {
-		options := mergeTarOptions(prepared.Report().GetTape().GetRecommendedWriteOptions(), target.TarOptions)
-		if err := settingspkg.ValidateTarWriteOptions(options); err != nil {
+		options, err := formatTarOptions(prepared.Report(), target.TarOptions)
+		if err != nil {
 			return nil, err
 		}
 		stored = &library.Media{

@@ -206,11 +206,14 @@ Job cards offer no Job-level retry or restart, and offer a Media choice only for
 
 ### Tape Dialogs
 
-Tape Archive uses format-aware preflight. Raw tar FORMAT inspects the configured device passively,
-checks exact Library barcode registration, resolves supported record values and requires explicit
-barcode confirmation before destructive submission. Resetting recommendations reuses the loaded
-report and saved defaults; it does not perform another inspection. Changing FORMAT/APPEND retains
-the selected device and barcode-registration result while clearing only action-specific overrides.
+Tape Archive uses format-aware preflight. **Check Tape** for raw tar inspects the configured device
+passively with the chosen barcode and action as its [write target](api.md#device-discovery), and
+displays the exact Library registration. The server's answer decides whether the write can start
+and supplies the inherited record and compression values; the form shows its `write_detail` and
+overlays only the operator's explicit choices. FORMAT also requires explicit barcode confirmation
+and a resolved compression choice before destructive submission. Resetting a choice to inherit
+reuses that answer; it does not perform another inspection. Changing FORMAT/APPEND for a checked
+barcode requests the answer for the new action, retaining the selected device and barcode.
 Tar uses the encryption adapter without the LTFS formatting/mounting/readinfo workflow.
 The [read chooser](../../frontend/src/components/read-media-dialog.tsx) keeps **Refresh position map
 before reading** in Advanced and offers it only for known tar Restore or Scan VERIFY_COPIES.

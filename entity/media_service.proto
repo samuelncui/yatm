@@ -144,7 +144,11 @@ message DeviceSummary {
   string detail = 4;
 }
 
-message InspectDeviceRequest { string device = 1; }
+message InspectDeviceRequest {
+  string device = 1;
+  // Optional tar write to evaluate with the resolution and Media checks of its attempt.
+  optional ArchiveTapeTarget write_target = 2;
+}
 
 message InspectDeviceResponse {
   DeviceSummary device = 1;
@@ -162,6 +166,12 @@ message InspectDeviceResponse {
   oneof report { TapeDeviceReport tape = 17; }
   // Last prepared read in this process, not a claim about the currently loaded cartridge.
   optional TapePreparedRead prepared_read = 18;
+  // Present only with write_target: the tar options it would use; absent compression is unresolved.
+  optional TarWriteOptions resolved_tar_options = 19;
+  // Whether write_target can start; its attempt repeats the checks under the device lease.
+  bool writable = 20;
+  // Why write_target is not writable.
+  string write_detail = 21;
 }
 
 message TapePreparedRead {

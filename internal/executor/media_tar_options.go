@@ -158,3 +158,82 @@ func tarProfileOptions(profile *entity.TarMediaProfile) *entity.TarWriteOptions 
 		HardwareCompression: proto.Bool(profile.HardwareCompression),
 	}
 }
+
+// formatTarOptions applies qualified recommendations to still-omitted FORMAT controls.
+func formatTarOptions(report *entity.InspectDeviceResponse, options *entity.TarWriteOptions) (*entity.TarWriteOptions, error) {
+	resolved := mergeTarOptions(report.GetTape().GetRecommendedWriteOptions(), options)
+	return resolved, settingspkg.ValidateTarWriteOptions(resolved)
+}
+
+// checkTarWriteMedia admits FORMAT only for an unregistered identity and APPEND only for usable tar Media.
+func checkTarWriteMedia(stored *library.Media, target *entity.ArchiveTapeTarget) error {
+	if target.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT {
+		if stored != nil {
+			return fmt.Errorf("Tape already exists in the Library; delete its Media metadata explicitly before formatting, barcode=%q", target.Barcode)
+		}
+		return nil
+	}
+	if stored == nil || stored.DestroyedAtNS != nil || stored.Profile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 {
+		return fmt.Errorf("tar APPEND Media is unavailable")
+	}
+	key, err := decodeTarKey(stored.Profile.GetTape().Encryption)
+	if err != nil {
+		return err
+	}
+	clear(key)
+	return nil
+}
+
+// tarWriteDeviceDetail names a known physical blocker; optional diagnostic failures do not block a write.
+func tarWriteDeviceDetail(report *entity.InspectDeviceResponse) string {
+	tape := report.GetTape()
+	blocked := report.GetDevice().GetBusy() || tape != nil && (tape.MediumPresent != nil && !tape.GetMediumPresent() || tape.GetWriteProtected())
+	switch report.GetReason() {
+	case entity.DeviceReason_DEVICE_REASON_UNSPECIFIED, entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
+		entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED:
+	default:
+		blocked = true
+	}
+	if !blocked {
+		return ""
+	}
+	return "Tape device is unavailable: " + report.GetDetail()
+}
+
+// CheckTarWrite answers a requested tar write with the resolution and Media checks of its attempt.
+// The answer is advisory: the attempt repeats every check under its device lease.
+func (e *Executor) CheckTarWrite(ctx context.Context, report *entity.InspectDeviceResponse, target *entity.ArchiveTapeTarget) error {
+	resolved, err := (&mediaBackend{executor: e}).resolveTapeWrite(ctx, target)
+	if err != nil {
+		report.WriteDetail = err.Error()
+		return nil
+	}
+	if resolved.GetFormat() != library.TapeFormatTarPAXV1 {
+		report.WriteDetail = fmt.Sprintf("device inspection checks only tar writes, format=%q", resolved.GetFormat())
+		return nil
+	}
+
+	// FORMAT options are those the leased attempt derives from this report's recommendations.
+	report.ResolvedTarOptions = resolved.TarOptions
+	if resolved.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT {
+		report.ResolvedTarOptions, err = formatTarOptions(report, resolved.TarOptions)
+		if err != nil {
+			report.WriteDetail = err.Error()
+			return nil
+		}
+	}
+	stored, err := e.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, resolved.Barcode)
+	if err != nil {
+		return err
+	}
+	if err := checkTarWriteMedia(stored, resolved); err != nil {
+		report.WriteDetail = err.Error()
+		return nil
+	}
+	if detail := tarWriteDeviceDetail(report); detail != "" {
+		report.WriteDetail = detail
+		return nil
+	}
+	report.Writable = true
+	return nil
+}

@@ -70,6 +70,7 @@ export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; sub
           {tar && tape.deviceReport?.reason !== DeviceReason.UNSPECIFIED && tape.deviceReport && (
             <Alert severity="warning">{tape.deviceReport.detail || "Device compatibility is unavailable."}</Alert>
           )}
+          {tar && tape.writeDetail && <Feedback severity="error">{tape.writeDetail}</Feedback>}
           <TapeProfileNotes tape={tape} />
           {tape.formatMode && <FormatFields tape={tape} submitting={submitting} />}
           {tar && tape.deviceReport && (
@@ -133,9 +134,15 @@ const TapeProfileNotes = ({ tape }: { tape: ArchiveTape }) => {
 /** FORMAT confirmation, name and, for Tar, the record and compression options. */
 const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boolean }) => {
   const { effectiveOptions, optionError, resolved } = tape;
+  const recordMode =
+    effectiveOptions.recordMode === TapeRecordMode.FIXED ? "fixed" : effectiveOptions.recordMode === TapeRecordMode.VARIABLE ? "variable" : "unresolved";
+  const recordSize = effectiveOptions.recordBytes === undefined ? "size unresolved" : `${effectiveOptions.recordBytes} bytes`;
+  const compression = effectiveOptions.hardwareCompression === undefined ? "unresolved" : effectiveOptions.hardwareCompression ? "on" : "off";
   return (
     <>
-      {tape.existing && <Feedback severity="error">This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT.</Feedback>}
+      {!tape.tar && tape.existing && (
+        <Feedback severity="error">This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT.</Feedback>
+      )}
       <Alert severity="warning">FORMAT erases the Tape. Confirm its barcode before starting.</Alert>
       <TextField
         required
@@ -160,10 +167,12 @@ const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boo
           title="Advanced"
           collapsible
           hasError={!!optionError || !resolved}
-          description={`Tar records ${effectiveOptions.recordMode === TapeRecordMode.FIXED ? "fixed" : "variable"} · ${effectiveOptions.recordBytes} bytes · compression ${effectiveOptions.hardwareCompression === undefined ? "unresolved" : effectiveOptions.hardwareCompression ? "on" : "off"}`}
+          description={`Tar records ${recordMode} · ${recordSize} · compression ${compression}`}
         >
           <TarWriteOptionsFields value={tape.form.options} effective={effectiveOptions} disabled={submitting} onChange={tape.changeOptions} />
-          {!resolved && <Alert severity="info">Choose compression before writing; no device default or reported recommendation is available.</Alert>}
+          {tape.inherited && !resolved && (
+            <Alert severity="info">Choose compression before writing; no device default or reported recommendation is available.</Alert>
+          )}
         </SettingsSection>
       )}
     </>

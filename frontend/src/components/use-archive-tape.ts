@@ -1,17 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { mediaCli } from "@/api";
-import {
-  ArchiveTapeWriteMode,
-  DeviceReason,
-  DeviceSettings,
-  Media,
-  MediaKind,
-  SettingsGroup,
-  TapeRecordMode,
-  TarWriteOptions,
-  type InspectDeviceResponse,
-} from "@/entity";
+import { ArchiveTapeWriteMode, DeviceSettings, Media, MediaKind, SettingsGroup, TarWriteOptions, type InspectDeviceResponse } from "@/entity";
 import { useMediaInspect } from "@/components/media-inspect";
 import { getSettingsGroup } from "@/components/settings-editor";
 import { soleAvailableDevice } from "@/components/tape-device-choice";
@@ -56,6 +46,8 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
   const [checking, setChecking] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [checkedBarcode, setCheckedBarcode] = useState("");
+  const [checkedMode, setCheckedMode] = useState(ArchiveTapeWriteMode.UNSPECIFIED);
+  const checkingBarcode = useRef("");
   const inspection = useMediaInspect();
   const { reply: inspected, loading: inspecting, inspect, reset: resetInspection } = inspection;
   const request = useRef(0);
@@ -108,18 +100,25 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
       afterId = next;
     }
   };
-  const inspectRaw = async (device: string, barcode?: string) => {
+  /**
+   * Inspects the drive passively. With a barcode and action, the server also answers that tar write:
+   * the options it inherits (no explicit choices are sent) and whether the write can start.
+   */
+  const inspectRaw = async (device: string, barcode?: string, mode = ArchiveTapeWriteMode.UNSPECIFIED) => {
     const sequence = ++deviceRequest.current;
+    checkingBarcode.current = barcode ?? "";
     setChecking(true);
     onError("");
+    const writeTarget = barcode && mode !== ArchiveTapeWriteMode.UNSPECIFIED ? { device, barcode, name: "", mode, format: "tar_pax_v1" } : undefined;
     try {
       const [report, existing] = await Promise.all([
-        mediaCli.inspectDevice({ device }).response,
+        mediaCli.inspectDevice({ device, writeTarget }).response,
         barcode ? findRegistered(barcode) : Promise.resolve(undefined),
       ]);
       if (sequence !== deviceRequest.current) return;
       setDeviceReport(report);
       setCheckedBarcode(barcode ?? "");
+      setCheckedMode(writeTarget ? mode : ArchiveTapeWriteMode.UNSPECIFIED);
       setRegistered(existing);
       if (existing) {
         setForm((current) => (current.mode === ArchiveTapeWriteMode.APPEND ? { ...current, format: tapeFormatOf(existing), name: existing.name } : current));
@@ -156,6 +155,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     setConfirmation("");
     setChecking(false);
     setCheckedBarcode("");
+    setCheckedMode(ArchiveTapeWriteMode.UNSPECIFIED);
   };
   const selectDevice = (device: string) => {
     if (!defaults) {
@@ -218,7 +218,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
       mode: format === "tar_pax_v1" ? ArchiveTapeWriteMode.FORMAT : ArchiveTapeWriteMode.UNSPECIFIED,
     }));
     if (format === "ltfs_v1") void inspectTape(form.device, barcode || undefined);
-    else void inspectRaw(form.device, barcode || undefined);
+    else void inspectRaw(form.device, barcode || undefined, ArchiveTapeWriteMode.FORMAT);
   };
   const changeBarcode = (value: string) => {
     deviceRequest.current++;
@@ -230,8 +230,12 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     setConfirmation("");
     setForm((current) => ({ ...current, barcode: value, ...(tar ? {} : { mode: ArchiveTapeWriteMode.UNSPECIFIED }) }));
   };
-  const check = () => (tar ? void inspectRaw(form.device, barcode) : void inspectTape(form.device, barcode));
-  const changeMode = (mode: ArchiveTapeWriteMode) => setForm((value) => ({ ...value, mode }));
+  const check = () => (tar ? void inspectRaw(form.device, barcode, form.mode) : void inspectTape(form.device, barcode));
+  /** A checked or pending tar barcode is checked again, because the server answers one action. */
+  const changeMode = (mode: ArchiveTapeWriteMode) => {
+    setForm((value) => ({ ...value, mode }));
+    if (tar && barcode && (checkedBarcode === barcode || (checking && checkingBarcode.current === barcode))) void inspectRaw(form.device, barcode, mode);
+  };
   const changeName = (name: string) => setForm((value) => ({ ...value, name }));
   const changeOptions = (options: TarWriteOptions) => {
     const changed = { ...editedOptions.current };
@@ -250,32 +254,24 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
   const barcode = form.barcode.trim().toUpperCase();
   const tar = form.format === "tar_pax_v1";
   const formatMode = form.mode === ArchiveTapeWriteMode.FORMAT;
-  const tapeReport = deviceReport?.report.oneofKind === "tape" ? deviceReport.report.tape : undefined;
-  const selectedConfig = defaults?.devices.find((value) => value.device === form.device)?.options;
-  const deviceDefaults = selectedConfig?.oneofKind === "tape" ? selectedConfig.tape.tarWriteOptions : undefined;
-  const recommendation = tapeReport?.recommendedWriteOptions;
+  // The server's answer covers the checked barcode and action only; explicit choices override what it inherits.
+  const verdict = deviceReport && checkedBarcode === barcode && checkedMode === form.mode ? deviceReport : null;
+  const inherited = verdict?.resolvedTarOptions;
   const effectiveOptions: TarWriteOptions = {
-    recordMode: form.options.recordMode ?? deviceDefaults?.recordMode ?? TapeRecordMode.VARIABLE,
-    recordBytes: form.options.recordBytes ?? deviceDefaults?.recordBytes ?? 524288,
-    hardwareCompression: form.options.hardwareCompression ?? deviceDefaults?.hardwareCompression ?? recommendation?.hardwareCompression,
+    recordMode: form.options.recordMode ?? inherited?.recordMode,
+    recordBytes: form.options.recordBytes ?? inherited?.recordBytes,
+    hardwareCompression: form.options.hardwareCompression ?? inherited?.hardwareCompression,
   };
   const optionError = validateTarWriteOptions(effectiveOptions);
   const resolved = effectiveOptions.hardwareCompression !== undefined;
-  const inspectionAllowsWrite =
-    deviceReport !== null &&
-    !deviceReport.device?.busy &&
-    tapeReport?.mediumPresent !== false &&
-    tapeReport?.writeProtected !== true &&
-    [DeviceReason.UNSPECIFIED, DeviceReason.UNSUPPORTED, DeviceReason.MALFORMED_RESPONSE, DeviceReason.NOT_IMPLEMENTED].includes(deviceReport.reason);
+  const writeDetail = verdict && !verdict.writable ? verdict.writeDetail : "";
   const canSubmit =
     !devicesLoading &&
     !checking &&
     devices?.some((value) => value.device === form.device && !value.busy) &&
     /^[A-Z0-9]{6}$/.test(barcode) &&
     (tar
-      ? checkedBarcode === barcode &&
-        inspectionAllowsWrite &&
-        (formatMode ? !existing && !optionError && resolved : existing && tapeFormatOf(existing) === "tar_pax_v1")
+      ? !!verdict?.writable && (!formatMode || (!optionError && resolved))
       : form.format === "ltfs_v1" &&
         !inspecting &&
         inspected !== null &&
@@ -307,8 +303,10 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     checking,
     confirmation,
     effectiveOptions,
+    inherited: !!inherited,
     optionError,
     resolved,
+    writeDetail,
     canSubmit: !!canSubmit,
     target,
     load,

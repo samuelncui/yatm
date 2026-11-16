@@ -449,24 +449,17 @@ func findTapeMedia(ctx context.Context, rt *runtime, barcode string) (*entity.Me
 	}
 }
 
-// inspectRawTapeDevice requests passive diagnostics without invoking the LTFS cartridge adapter.
-func inspectRawTapeDevice(ctx context.Context, rt *runtime, device string) (*entity.InspectDeviceResponse, error) {
+// checkTarWrite asks the server's passive device inspection whether this tar write can be submitted,
+// without invoking the LTFS cartridge adapter.
+func checkTarWrite(ctx context.Context, rt *runtime, target *entity.ArchiveTapeTarget) error {
 	// Inspect once; the leased write attempt owns authoritative protocol qualification.
-	reply, err := callRPC[entity.InspectDeviceRequest, entity.InspectDeviceResponse](ctx, rt, entity.MediaService_InspectDevice_FullMethodName, &entity.InspectDeviceRequest{Device: device})
+	reply, err := callRPC[entity.InspectDeviceRequest, entity.InspectDeviceResponse](ctx, rt, entity.MediaService_InspectDevice_FullMethodName,
+		&entity.InspectDeviceRequest{Device: target.Device, WriteTarget: target})
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	// Optional diagnostic failures do not override explicit physical availability blockers.
-	tape := reply.GetTape()
-	if reply.GetDevice().GetBusy() || tape != nil && (tape.MediumPresent != nil && !tape.GetMediumPresent() || tape.GetWriteProtected()) {
-		return nil, safetyError(fmt.Errorf("Tape device is unavailable: %s", reply.Detail))
+	if !reply.Writable {
+		return safetyError(fmt.Errorf("%s", reply.WriteDetail))
 	}
-	switch reply.Reason {
-	case entity.DeviceReason_DEVICE_REASON_UNSPECIFIED, entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
-		entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED:
-		return reply, nil
-	default:
-		return nil, safetyError(fmt.Errorf("Tape device is unavailable: %s", reply.Detail))
-	}
+	return nil
 }

@@ -122,6 +122,16 @@ ownership have distinct reasons. No capability report is saved in the Catalog. T
 InspectDevice can include supported baseline tar write recommendations; absent recommendations
 remain unknown and never certify physical writes. The existing MediaService.Inspect retains its
 cartridge-oriented LTFS/Volume behavior. Tar label validation occurs under the operation lease.
+An optional `write_target` asks about one tar Archive write on the inspected device. The reply
+then answers with `resolved_tar_options`, the options the attempt would use after the
+[Tape option resolution](contracts.md#tape-options-and-selection) and this report's
+recommendations, and with `writable` and, when false, `write_detail`. The answer comes from the
+attempt's own resolution and Media checks (FORMAT needs an unregistered barcode, APPEND an
+available registered tar profile that explicit options match) plus known physical blockers: busy,
+missing medium, write protection, or a device reason other than an optional diagnostic
+(unsupported, malformed or unimplemented). Absent compression remains unresolved. The answer is
+advisory; the attempt repeats its checks under the device lease. An LTFS target is not writable
+through this answer.
 Settings Get/Update stores typed Device settings without issuing hardware commands or granting
 access to an unconfigured device. Media List exposes tar profiles without the saved key; Media responses
 report its presence only through `encryption_key_saved`; existing ScanEntry storage and

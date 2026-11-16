@@ -47,5 +47,7 @@ func TestDeviceDiscoveryListsBusyConfigurationWithoutCartridgeProbe(t *testing.T
 	require.Equal(t, entity.DeviceReason_DEVICE_REASON_TRANSPORT_UNAVAILABLE, missing.Reason)
 	_, err = client.InspectDevice(context.Background(), &entity.InspectDeviceRequest{Device: filepath.Join(root, "unconfigured")})
 	require.ErrorContains(t, err, "not configured")
+	_, err = client.InspectDevice(context.Background(), &entity.InspectDeviceRequest{Device: devices[1], WriteTarget: &entity.ArchiveTapeTarget{Device: devices[0]}})
+	require.ErrorContains(t, err, "write target device differs")
 	require.NoFileExists(t, trap)
 }

@@ -104,7 +104,7 @@ func (s *stubService) InspectDevice(
 	if s.deviceInspect != nil {
 		return s.deviceInspect(ctx, request)
 	}
-	return &entity.InspectDeviceResponse{}, nil
+	return &entity.InspectDeviceResponse{Writable: request.WriteTarget != nil}, nil
 }
 
 func (s *stubService) Trim(
