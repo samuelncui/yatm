@@ -1,6 +1,7 @@
 import { Feedback } from "@/components/feedback";
 import { type FormEvent, type ReactNode, useCallback, useId, useRef, useState } from "react";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, TextField } from "@mui/material";
+import { toast } from "react-toastify";
 import { errorMessage } from "@/tools";
 
 type ActionRequest = {
@@ -10,6 +11,8 @@ type ActionRequest = {
   children?: ReactNode;
   danger?: boolean;
   input?: { label: string; defaultValue?: string };
+  /** Offers "Don't show this again" on an advisory confirmation and stores a ticked choice after it is confirmed. */
+  onSkipNextTime?: () => Promise<void>;
   onConfirm: (value: string) => Promise<unknown> | void;
 };
 
@@ -21,9 +24,11 @@ export const ActionDialog = ({
   children,
   danger,
   input,
+  onSkipNextTime,
   onConfirm,
   onClose,
 }: ActionRequest & { onClose: () => void }) => {
+  const [skipNextTime, setSkipNextTime] = useState(false);
   const titleID = useId();
   const [value, setValue] = useState(input?.defaultValue ?? "");
   const [busy, setBusy] = useState(false);
@@ -41,6 +46,8 @@ export const ActionDialog = ({
     setError("");
     try {
       await onConfirm(value);
+      // The confirmed action already happened; a choice that cannot be stored only keeps the confirmation.
+      if (skipNextTime) await onSkipNextTime?.().catch(() => toast.info("Could not save this choice; the confirmation will appear again."));
       onClose();
     } catch (error) {
       setError(errorMessage(error, "Operation failed"));
@@ -93,6 +100,12 @@ export const ActionDialog = ({
               event.preventDefault();
               void submit();
             }}
+          />
+        )}
+        {onSkipNextTime && (
+          <FormControlLabel
+            control={<Checkbox checked={skipNextTime} disabled={busy} onChange={(_, checked) => setSkipNextTime(checked)} />}
+            label="Don’t show this again"
           />
         )}
         {error && <Feedback severity="error">{error}</Feedback>}

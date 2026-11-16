@@ -121,6 +121,11 @@ enum TapeReadOrder {
 message LibrarySettings {
   bool include_files_without_versions = 1;
   bool confirm_remove = 2;
+  // Advisory web confirmations the operator chose not to see again; false shows the confirmation.
+  // Adding selected Media inventory entries to the Library.
+  bool skip_add_entries_confirmation = 3;
+  // Adding one Media's whole recorded inventory to the Library.
+  bool skip_add_media_confirmation = 4;
 }
 // Executor preferences: how an attempt drives the pipeline its runner owns.
 message JobSettings {

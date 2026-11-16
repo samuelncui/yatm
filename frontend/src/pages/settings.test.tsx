@@ -54,6 +54,58 @@ describe("Library Settings", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("lists every confirmation as shown or hidden and saves a changed one with the inverted stored meaning", async () => {
+    get.mockReturnValue({ response: Promise.resolve({ value: value({ ...initial, skipAddMediaConfirmation: true }) }) });
+    open();
+    const remove = await screen.findByRole("checkbox", { name: "Confirm Delete" });
+    const entries = screen.getByRole("checkbox", { name: "Confirm adding selected inventory entries to Library" });
+    const media = screen.getByRole("checkbox", { name: "Confirm adding a Media’s whole inventory to Library" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    expect(screen.getByText("Confirmations")).toBeVisible();
+    expect(remove).toBeChecked();
+    expect(entries).toBeChecked();
+    expect(media).not.toBeChecked();
+    await userEvent.click(entries);
+    await userEvent.click(media);
+    expect(entries).not.toBeChecked();
+    expect(media).toBeChecked();
+    expect(update).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(update).toHaveBeenCalledExactlyOnceWith({
+      value: { value: { oneofKind: "library", library: { ...initial, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: false } } },
+    });
+    expect(await screen.findByText("Library settings saved.")).toBeVisible();
+  });
+
+  it("shows all confirmations again in the draft and offers that only while one is hidden", async () => {
+    get.mockReturnValue({
+      response: Promise.resolve({ value: value({ ...initial, confirmRemove: false, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: true }) }),
+    });
+    open();
+    const remove = await screen.findByRole("checkbox", { name: "Confirm Delete" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    const showAll = screen.getByRole("button", { name: "Show all confirmations" });
+    const confirmations = [
+      remove,
+      screen.getByRole("checkbox", { name: "Confirm adding selected inventory entries to Library" }),
+      screen.getByRole("checkbox", { name: "Confirm adding a Media’s whole inventory to Library" }),
+    ];
+    for (const confirmation of confirmations) expect(confirmation).not.toBeChecked();
+    await userEvent.click(showAll);
+    for (const confirmation of confirmations) expect(confirmation).toBeChecked();
+    expect(showAll).toBeDisabled();
+    expect(update).not.toHaveBeenCalled();
+    // Hiding any one confirmation offers the action again.
+    for (const confirmation of confirmations) {
+      await userEvent.click(confirmation);
+      expect(showAll).toBeEnabled();
+      await userEvent.click(confirmation);
+      expect(showAll).toBeDisabled();
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(update).toHaveBeenCalledExactlyOnceWith({ value: { value: { oneofKind: "library", library: initial } } });
+  });
+
   it("locks editable controls during Save and retains the draft and error after failure", async () => {
     let reject!: (error: Error) => void;
     update.mockImplementation(() => ({ response: new Promise((_, fail) => (reject = fail)) }));

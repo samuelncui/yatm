@@ -4,10 +4,7 @@ import { Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogConten
 import { toast } from "react-toastify";
 import { filesCli } from "@/api";
 import { errorMessage } from "@/tools";
-import { readStored, removeStored, writeStored, stringCodec } from "@/state/storage";
-
-/** Remembers that the operator accepted inventory admission without the count each time. */
-export const importPositionsPreferenceKey = "files:import-positions-without-prompt";
+import { useSkippableConfirmation } from "./confirmations";
 
 export const admissionToast = (files: bigint, existing: bigint, skipped: bigint) => {
   const skippedRecords = [existing > 0n ? `${existing} already in Library` : "", skipped > 0n ? `${skipped} without signatures` : ""]
@@ -23,7 +20,7 @@ export const admissionToast = (files: bigint, existing: bigint, skipped: bigint)
 /**
  * Admits one Media's recorded content as independent Library Files. The count comes from a dry
  * run, and the confirmed call repeats the same request to write. Once the operator asks not to
- * see the count again, a later click imports directly. Explicit review always performs a dry run.
+ * see the confirmation again, which Library settings record, a later click imports directly. Explicit review always performs a dry run.
  */
 export const useLibraryAdmission = (mediaID: bigint | undefined) => {
   const [state, setState] = useState<{ phase: "idle" | "calculating" | "confirm" | "importing" } | { phase: "error"; message: string }>({ phase: "idle" });
@@ -33,6 +30,7 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
   const [directories, setDirectories] = useState(0n);
   const [skipPrompt, setSkipPrompt] = useState(false);
   const [promptSuppressed, setPromptSuppressed] = useState(false);
+  const { skipped: confirmationSkipped, setSkipped: setConfirmationSkipped } = useSkippableConfirmation("skipAddMediaConfirmation");
 
   // The dry run answers one question per open dialog; a stale response cannot reopen it.
   useEffect(() => {
@@ -69,8 +67,10 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
     setState({ phase: "importing" });
     try {
       const reply = await filesCli.importPositions({ positionIds: [], mediaId: mediaID, dryrun: false }).response;
-      if (remember && skipPrompt) writeStored("local", importPositionsPreferenceKey, "1", stringCodec);
-      if (remember && !skipPrompt && promptSuppressed) removeStored("local", importPositionsPreferenceKey);
+      // The records are added; a choice that cannot be stored only keeps the confirmation as it was.
+      if (remember && skipPrompt !== promptSuppressed) {
+        await setConfirmationSkipped(skipPrompt).catch(() => toast.info("Could not save this choice."));
+      }
       admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
       close();
     } catch (error) {
@@ -80,9 +80,8 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
 
   const review = () => {
     if (!mediaID || state.phase === "calculating" || state.phase === "importing") return;
-    const suppressed = readStored("local", importPositionsPreferenceKey, stringCodec) === "1";
-    setPromptSuppressed(suppressed);
-    setSkipPrompt(suppressed);
+    setPromptSuppressed(confirmationSkipped);
+    setSkipPrompt(confirmationSkipped);
     setState({ phase: "calculating" });
   };
 
@@ -96,18 +95,18 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
     skipPrompt,
     setSkipPrompt,
     promptSuppressed,
-    restorePrompt: () => {
-      if (!removeStored("local", importPositionsPreferenceKey)) {
-        toast.info("Could not save this browser preference.");
-        return;
-      }
-      setPromptSuppressed(false);
-      setSkipPrompt(false);
-    },
+    restorePrompt: () =>
+      void setConfirmationSkipped(false).then(
+        () => {
+          setPromptSuppressed(false);
+          setSkipPrompt(false);
+        },
+        () => toast.info("Could not save this choice."),
+      ),
     review,
     ask: () => {
       if (!mediaID || state.phase === "calculating" || state.phase === "importing") return;
-      if (readStored("local", importPositionsPreferenceKey, stringCodec) === "1") {
+      if (confirmationSkipped) {
         void run(false);
         return;
       }
@@ -148,7 +147,7 @@ export const ImportPositionsDialog = ({ admission, name }: { admission: ReturnTy
                     onChange={(_, next) => admission.setSkipPrompt(next)}
                   />
                 }
-                label="Skip this confirmation for all Media in this browser"
+                label="Don’t show this again"
               />
             </>
           )}

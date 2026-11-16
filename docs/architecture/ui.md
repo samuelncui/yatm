@@ -265,6 +265,16 @@ carried over either. Archive takes its Preview options, signature cache and targ
 Restore its destination and its two signature cache choices; Scan its source and options as
 described above.
 
+A pop-up confirmation that only explains an action whose result can be undone is advisory and
+offers **Don't show this again**; the shared dialog stores a ticked choice after the action
+succeeds. Each such confirmation is one `skip_…` field of the server's Library settings, listed in
+the [confirmation registry](../../frontend/src/components/confirmations.ts) that the Settings
+**Confirmations** section renders as one checkbox per confirmation beside **Confirm Delete**, with
+**Show all confirmations**; nothing about them is kept in browser storage. Today these are adding
+selected inventory entries and adding a Media's whole inventory to the Library. Confirmations that
+guard a loss or interrupt running work, typed FORMAT confirmation, one-off consents, input dialogs
+and error messages never offer the option, and inline notices of a form are not dismissible.
+
 Archive's collapsed **Advanced** section and Scan's Advanced section hold **Write signature cache**.
 Each starts from the most recently created Job of that kind, or on when
 there is none; Recreate uses the original Job's recorded choice, treating an unrecorded one as
@@ -314,7 +324,7 @@ Job cards keep their bodies mounted while offscreen; visibility gates only a sha
 
 ### Media
 
-Media names stay separate from secondary capability/availability details so prompts and breadcrumbs identify only the target. A Media Scan exposes **Add existing inventory to Library** separately from starting the configured Scan. The default action reviews the dry-run count, including already-present and unsigned records, before writing. The existing browser opt-out may skip that confirmation after a successful admission, but **Review what will be added** always runs the dry run independently and lets the operator restore confirmation. Its label states that the preference applies across Media in this browser. This action admits already published inventory, not the entries a new Scan might later publish. Zero-result feedback distinguishes empty inventory, already-present Files and records skipped because signatures are missing. Mounted Volumes start scanning directly; Tape requires its explicit device/read step and fresh inventory through the selected format. **Add to Library** accepts signed regular archive entries or inventory directories; directory descendants expand in bounded Media-path pages and only ordinary signed content becomes independent Library Files. Empty or unsigned-only selections return an explicit result. Position copies are labeled **Archived copies**, inventory deletion is **Remove from Library**, and **Clean up Library** explains its retention scope before execution. Single-Media operations reject multiple eligible selections with an actionable notice rather than silently doing nothing or choosing one. Context actions use Chonky's filtered action selection.
+Media names stay separate from secondary capability/availability details so prompts and breadcrumbs identify only the target. A Media Scan exposes **Add existing inventory to Library** separately from starting the configured Scan. The default action reviews the dry-run count, including already-present and unsigned records, before writing. **Don't show this again** skips that confirmation after a successful admission, but **Review what will be added** always runs the dry run independently and lets the operator restore confirmation. This action admits already published inventory, not the entries a new Scan might later publish. Zero-result feedback distinguishes empty inventory, already-present Files and records skipped because signatures are missing. Mounted Volumes start scanning directly; Tape requires its explicit device/read step and fresh inventory through the selected format. **Add to Library** accepts signed regular archive entries or inventory directories; directory descendants expand in bounded Media-path pages and only ordinary signed content becomes independent Library Files. Empty or unsigned-only selections return an explicit result. Position copies are labeled **Archived copies**, inventory deletion is **Remove from Library**, and **Clean up Library** explains its retention scope before execution. Single-Media operations reject multiple eligible selections with an actionable notice rather than silently doing nothing or choosing one. Context actions use Chonky's filtered action selection.
 
 The [command-line interface](../operations/cli.md) exposes the same named methods and projections to scripts and agents; [CLI E2E](../development/e2e-test.md) records its executable acceptance and the [local Demo](../development/demo.md#local-demo) remains a review surface.
 

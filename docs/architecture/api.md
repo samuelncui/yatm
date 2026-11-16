@@ -19,7 +19,7 @@ methods, and [Interface contracts](contracts.md) owns the rules shared across su
 | [ScanJobService](../../entity/job_scan.proto) | Configurable source/content/result policies, GetCreation, ReadMedia, progress and paged entries |
 | [CalibrationJobService](../../entity/job_calibration.proto) | Create and run a Calibration on the cartridge loaded in the device: the data it holds, or test data written over it, progress with measured moves and fitted parameters |
 | [LocationService](../../entity/location.proto) | Register/list/get/update/delete, access summary and administrator discovery of unregistered paths |
-| [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation, Job pipeline limits and Device settings |
+| [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility, removal confirmation and skipped advisory confirmations, Preview generation, Job pipeline limits and Device settings |
 
 Archive/Restore use typed Tape/Volume operation targets. Archive Tape FORMAT carries optional
 format/write choices; APPEND uses the registered immutable profile. Read Tape targets carry an

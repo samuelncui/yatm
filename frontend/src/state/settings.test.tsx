@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { JobSettings, LibrarySettings, SettingsGroup, SettingsValue } from "@/entity";
-import { loadCommittedSettings, useCommittedSettings, useSettingsEditor } from "@/components/settings-editor";
+import { changeCommittedSettings, loadCommittedSettings, useCommittedSettings, useSettingsEditor } from "@/components/settings-editor";
 import { AppStateProvider } from "./react";
 import { createAppStore } from "./store";
 import { makeSelectSettings, settingsActions } from "./settings";
@@ -230,4 +230,32 @@ it("keeps an explicit reload pending when another reload supersedes it over cach
   expect(result.current.loading).toBe(false);
   expect(result.current.draft?.confirmRemove).toBe(false);
   expect(result.current.dirty).toBe(false);
+});
+
+it("changes one committed value from a fresh server read and commits the saved group", async () => {
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: value(true) }) });
+  const store = createAppStore();
+  await loadCommittedSettings(store, SettingsGroup.LIBRARY);
+  // Another client changed the group after this store read it.
+  const current = LibrarySettings.create({ confirmRemove: false, includeFilesWithoutVersions: true });
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: current } }) }) });
+  const stored = LibrarySettings.create({ ...current, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: true });
+  update.mockReturnValue({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: stored } }) }) });
+  const change = vi.fn((settings: LibrarySettings) => ({ ...settings, skipAddEntriesConfirmation: true }));
+  await expect(changeCommittedSettings(store, SettingsGroup.LIBRARY, change)).resolves.toEqual(stored);
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(change).toHaveBeenCalledExactlyOnceWith(current);
+  expect(update).toHaveBeenCalledExactlyOnceWith({
+    value: { value: { oneofKind: "library", library: { ...current, skipAddEntriesConfirmation: true } } },
+  });
+  // The store holds what the server saved, not what was sent.
+  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toEqual(SettingsValue.create({ value: { oneofKind: "library", library: stored } }));
+});
+
+it("leaves the committed value alone when a change cannot be saved", async () => {
+  get.mockReturnValue({ response: Promise.resolve({ value: value(true) }) });
+  update.mockReturnValue({ response: Promise.reject(new Error("Unavailable")) });
+  const store = createAppStore();
+  await expect(changeCommittedSettings(store, SettingsGroup.LIBRARY, (settings) => ({ ...settings, confirmRemove: false }))).rejects.toThrow("Unavailable");
+  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toEqual(value(true));
 });

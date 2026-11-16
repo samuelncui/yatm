@@ -40,6 +40,7 @@ import { DetailDialog, DetailSurface } from "@/components/detail-surface";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { RelatedJobs } from "@/components/related-jobs";
 import { useActionDialog } from "@/components/action-dialog";
+import { useSkippableConfirmation } from "@/components/confirmations";
 import { admissionToast } from "@/components/import-positions-dialog";
 
 const isArchiveInventoryEntry = (file: FileData | null | undefined): file is MediaPositionFileData => !!file && typeof file.position?.id === "bigint";
@@ -92,6 +93,7 @@ export const useMediaBrowser = (
   const request = useRef(0);
   const retryPage = useRef<BrowserPage>({ kind: "media", offset: 0n });
   const { ask, dialog } = useActionDialog();
+  const { skipped: skipAddEntries, setSkipped: setSkipAddEntries } = useSkippableConfirmation("skipAddEntriesConfirmation");
 
   // Each open reads every page in order, publishing rows as they arrive, so a listing is complete
   // without a manual continuation; a newer request abandons the remaining pages.
@@ -240,6 +242,14 @@ export const useMediaBrowser = (
           if (selected.length === 0) return;
           const directories = selected.filter((file) => file.isDir).length;
           const regularFiles = selected.length - directories;
+          const add = async () => {
+            const reply = await filesCli.importPositions({ positionIds: selected.map((file) => file.position.id), dryrun: false }).response;
+            admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
+          };
+          if (skipAddEntries) {
+            void add().catch((failure: unknown) => toast.error(errorMessage(failure, "Could not add these records")));
+            return;
+          }
           ask({
             title: "Add to Library?",
             confirmLabel: directories > 0 ? "Add folder contents" : "Add files",
@@ -250,16 +260,14 @@ export const useMediaBrowser = (
                 {regularFiles > 0 && `${regularFiles} ${regularFiles === 1 ? "file" : "files"}`} will be added as independent Library files.
               </p>
             ),
-            onConfirm: async () => {
-              const reply = await filesCli.importPositions({ positionIds: selected.map((file) => file.position.id), dryrun: false }).response;
-              admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
-            },
+            onSkipNextTime: () => setSkipAddEntries(true),
+            onConfirm: add,
           });
           return;
         }
       }
     },
-    [addVolume, inspectMedia, openFolder, scanMedia, selectFile, verifyMedia, relatedJobs, ask],
+    [addVolume, inspectMedia, openFolder, scanMedia, selectFile, verifyMedia, relatedJobs, ask, skipAddEntries, setSkipAddEntries],
   );
 
   // The Media whose rows the list currently shows: the row under the Media root, which stays the

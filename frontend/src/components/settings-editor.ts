@@ -98,6 +98,18 @@ export async function loadCommittedSettings<G extends keyof SettingsByGroup>(sto
   return load;
 }
 
+/** Applies one change to the server's current value of a group and commits the saved result. */
+export async function changeCommittedSettings<G extends keyof SettingsByGroup>(
+  store: AppStore,
+  group: G,
+  change: (current: SettingsByGroup[G]) => SettingsByGroup[G],
+): Promise<SettingsByGroup[G]> {
+  // The whole group is replaced on save, so the change starts from a fresh read.
+  const value = await updateSettingsGroup(group, change(await loadCommittedSettings(store, group, true)));
+  store.dispatch(settingsActions.saved({ group, value: SettingsValue.toJsonString(settingsValue(group, value)) }));
+  return value;
+}
+
 export function useCommittedSettings<G extends keyof SettingsByGroup>(group: G, active = true) {
   const store = useAppStore();
   const selector = useMemo(() => makeSelectSettings(group), [group]);

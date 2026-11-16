@@ -6,7 +6,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChonkyActions, type ChonkyFileActionData, type FileData } from "@samuelncui/chonky";
 
 import { DeleteMediaAction, InspectMediaAction, LoadMoreAction, ScanMediaAction, VerifyMediaAction, ImportPositionsAction, TrimLibraryAction } from "@/actions";
-import { Media, MediaAccess, MediaKind, Position, TapeMediaProfile, VolumeCandidateState, VolumeType } from "@/entity";
+import {
+  LibrarySettings,
+  Media,
+  MediaAccess,
+  MediaKind,
+  Position,
+  SettingsGroup,
+  SettingsValue,
+  TapeMediaProfile,
+  VolumeCandidateState,
+  VolumeType,
+} from "@/entity";
+import { loadCommittedSettings } from "@/components/settings-editor";
+import { AppStateProvider } from "@/state/react";
+import { createAppStore } from "@/state/store";
 
 const {
   deviceList,
@@ -20,7 +34,11 @@ const {
   libraryTrim,
   importPositions,
   createScan,
+  settingsGet,
+  settingsUpdate,
   toastInfo,
+  toastError,
+  toastSuccess,
 } = vi.hoisted(() => ({
   deviceList: vi.fn(),
   mediaGetPositions: vi.fn(),
@@ -33,7 +51,11 @@ const {
   libraryTrim: vi.fn(),
   importPositions: vi.fn(),
   createScan: vi.fn(),
+  settingsGet: vi.fn(),
+  settingsUpdate: vi.fn(),
   toastInfo: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
 }));
 
 vi.mock("@/api", async (original) => ({
@@ -51,6 +73,7 @@ vi.mock("@/api", async (original) => ({
   cli: { trim: libraryTrim },
   filesCli: { importPositions },
   scanJobCli: { create: createScan },
+  settingsCli: { get: settingsGet, update: settingsUpdate },
   convertMedia: (values: Array<{ id: bigint; name: string }>) =>
     values.map((value) => ({
       id: String(value.id),
@@ -81,7 +104,7 @@ vi.mock("@/api", async (original) => ({
     }),
 }));
 
-vi.mock("react-toastify", () => ({ toast: { info: toastInfo, error: vi.fn(), success: vi.fn() } }));
+vi.mock("react-toastify", () => ({ toast: { info: toastInfo, error: toastError, success: toastSuccess } }));
 vi.mock("@samuelncui/chonky", async (original) => {
   const actual = await original<typeof import("@samuelncui/chonky")>();
   return {
@@ -112,6 +135,46 @@ vi.mock("@samuelncui/chonky", async (original) => {
 import { AddVolumeDialog, InspectMediaDialog, MediaBrowser, useMediaBrowser } from "@/pages/media";
 
 const call = <T,>(response: T) => ({ response: Promise.resolve(response) });
+const librarySettings = (settings: Partial<LibrarySettings> = {}) =>
+  SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: true, ...settings }) } });
+const inventoryEntry = {
+  id: "7",
+  name: "Archive",
+  isMedia: true,
+  position: { id: 7n, signature: new Uint8Array([1]) },
+  media: Media.create({
+    id: 7n,
+    kind: MediaKind.TAPE,
+    encryptionKeySaved: true,
+    profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create() } },
+  }),
+};
+/** Requests one Media browser action for the selected inventory entry and shows the dialog it raises. */
+const ActionHarness = ({ operation }: { operation: { id: string } }) => {
+  const browser = useMediaBrowser(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+  );
+  return (
+    <>
+      <button
+        onClick={() =>
+          browser.browserProps.onFileAction({
+            id: operation.id,
+            state: { selectedFiles: [inventoryEntry], selectedFilesForAction: [inventoryEntry] },
+          } as any)
+        }
+      >
+        Request
+      </button>
+      {browser.dialog}
+    </>
+  );
+};
 const action = (id: string, targetFile?: FileData, selectedFiles: FileData[] = []) =>
   ({
     id,
@@ -137,6 +200,8 @@ beforeEach(() => {
   libraryTrim.mockReturnValue(call({}));
   importPositions.mockReturnValue(call({ fileIds: [8n], fileCount: 1n, directoryCount: 0n, existingCount: 0n, skippedFileCount: 0n }));
   createScan.mockReturnValue(call({ job: { id: 20n } }));
+  settingsGet.mockReset().mockReturnValue(call({ value: librarySettings() }));
+  settingsUpdate.mockReset().mockImplementation(({ value }: { value: SettingsValue }) => call({ value: SettingsValue.clone(value) }));
 });
 
 describe("Media page", () => {
@@ -199,15 +264,17 @@ describe("Media page", () => {
     mediaGetPositions
       .mockReturnValueOnce(call({ positions: [{ fileId: 10n, mediaId: 1n, path: "a/" }], hasMore: true }))
       .mockReturnValueOnce(call({ positions: [{ fileId: 11n, mediaId: 1n, path: "b/" }], hasMore: false }));
-    const { result } = renderHook(() =>
-      useMediaBrowser(
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-      ),
+    const { result } = renderHook(
+      () =>
+        useMediaBrowser(
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+        ),
+      { wrapper: AppStateProvider },
     );
     const sortIds = [ChonkyActions.SortFilesByName.id, ChonkyActions.SortFilesBySize.id, ChonkyActions.SortFilesByDate.id];
     const rootOptions = [ChonkyActions.ToggleHiddenFiles.id, ChonkyActions.ToggleShowFoldersFirst.id];
@@ -340,42 +407,8 @@ describe("Media page", () => {
     [TrimLibraryAction, "Clean up Library?", "Clean up", libraryTrim],
     [ImportPositionsAction, "Add to Library?", "Add files", importPositions],
   ] as const)("requires application confirmation for $0.id", async (operation, title, label, rpc) => {
-    const selected = {
-      id: "7",
-      name: "Archive",
-      isMedia: true,
-      position: { id: 7n, signature: new Uint8Array([1]) },
-      media: Media.create({
-        id: 7n,
-        kind: MediaKind.TAPE,
-        encryptionKeySaved: true,
-        profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create() } },
-      }),
-    };
     mediaList.mockReturnValue(call({ media: [], hasMore: false }));
-    const Harness = () => {
-      const browser = useMediaBrowser(
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-      );
-      return (
-        <>
-          <button
-            onClick={() =>
-              browser.browserProps.onFileAction({ id: operation.id, state: { selectedFiles: [selected], selectedFilesForAction: [selected] } } as any)
-            }
-          >
-            Request
-          </button>
-          {browser.dialog}
-        </>
-      );
-    };
-    render(<Harness />);
+    render(<ActionHarness operation={operation} />);
     await userEvent.click(screen.getByRole("button", { name: "Request" }));
     expect(rpc).not.toHaveBeenCalled();
     if (operation === DeleteMediaAction) {
@@ -387,6 +420,43 @@ describe("Media page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Request" }));
     await userEvent.click(within(screen.getByRole("dialog", { name: title })).getByRole("button", { name: label }));
     expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  it("offers to stop confirming added inventory entries and stores a ticked choice in Library settings", async () => {
+    mediaList.mockReturnValue(call({ media: [], hasMore: false }));
+    render(<ActionHarness operation={ImportPositionsAction} />);
+    await userEvent.click(screen.getByRole("button", { name: "Request" }));
+    const dialog = screen.getByRole("dialog", { name: "Add to Library?" });
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "Don’t show this again" }));
+    expect(settingsUpdate).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add files" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(importPositions).toHaveBeenCalledExactlyOnceWith({ positionIds: [7n], dryrun: false });
+    expect(settingsUpdate).toHaveBeenCalledExactlyOnceWith({
+      value: { value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: true, skipAddEntriesConfirmation: true }) } },
+    });
+    expect(toastInfo).not.toHaveBeenCalled();
+
+    // The stored choice adds the next selection directly.
+    await userEvent.click(screen.getByRole("button", { name: "Request" }));
+    await waitFor(() => expect(importPositions).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(settingsUpdate).toHaveBeenCalledOnce();
+  });
+
+  it.each(["added", "failed"])("adds inventory entries without a dialog once that confirmation is skipped (%s)", async (outcome) => {
+    mediaList.mockReturnValue(call({ media: [], hasMore: false }));
+    settingsGet.mockReturnValue(call({ value: librarySettings({ skipAddEntriesConfirmation: true }) }));
+    if (outcome === "failed") importPositions.mockImplementation(() => ({ response: Promise.reject(new Error("Import offline")) }));
+    const store = createAppStore();
+    await loadCommittedSettings(store, SettingsGroup.LIBRARY);
+    render(<ActionHarness operation={ImportPositionsAction} />, { store });
+    await userEvent.click(screen.getByRole("button", { name: "Request" }));
+    await waitFor(() => expect(outcome === "failed" ? toastError : toastSuccess).toHaveBeenCalledOnce());
+    expect(outcome === "failed" ? toastError : toastSuccess).toHaveBeenCalledWith(outcome === "failed" ? "Import offline" : "Added 1 Files to Library");
+    expect(importPositions).toHaveBeenCalledExactlyOnceWith({ positionIds: [7n], dryrun: false });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(settingsUpdate).not.toHaveBeenCalled();
   });
 
   it("registers an existing Volume without initialization fields", async () => {
@@ -576,15 +646,17 @@ describe("Media page", () => {
     mediaGetPositions
       .mockReturnValueOnce(call({ positions: [{ fileId: 10n, mediaId: 1n, path: "a/" }], hasMore: true }))
       .mockReturnValueOnce(call({ positions: [{ fileId: 11n, mediaId: 1n, path: "b/" }], hasMore: false }));
-    const { result } = renderHook(() =>
-      useMediaBrowser(
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-        () => {},
-      ),
+    const { result } = renderHook(
+      () =>
+        useMediaBrowser(
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+          () => {},
+        ),
+      { wrapper: AppStateProvider },
     );
 
     // Wait for the first real page instead of matching the initial null loading placeholder.
@@ -608,15 +680,17 @@ describe("Media page", () => {
   it("reports one selected recorded file for the panel and opens nothing", async () => {
     mediaList.mockReturnValue(call({ media: [], hasMore: false }));
     const selectFile = vi.fn();
-    const { result } = renderHook(() =>
-      useMediaBrowser(
-        () => {},
-        () => {},
-        () => {},
-        selectFile,
-        () => {},
-        () => {},
-      ),
+    const { result } = renderHook(
+      () =>
+        useMediaBrowser(
+          () => {},
+          () => {},
+          () => {},
+          selectFile,
+          () => {},
+          () => {},
+        ),
+      { wrapper: AppStateProvider },
     );
     await waitFor(() => expect(mediaList).toHaveBeenCalled());
 
@@ -642,15 +716,17 @@ describe("Media page", () => {
   it("never details a row that is not a recorded file", async () => {
     mediaList.mockReturnValue(call({ media: [], hasMore: false }));
     const viewFile = vi.fn();
-    const { result } = renderHook(() =>
-      useMediaBrowser(
-        () => {},
-        () => {},
-        () => {},
-        viewFile,
-        () => {},
-        () => {},
-      ),
+    const { result } = renderHook(
+      () =>
+        useMediaBrowser(
+          () => {},
+          () => {},
+          () => {},
+          viewFile,
+          () => {},
+          () => {},
+        ),
+      { wrapper: AppStateProvider },
     );
     await waitFor(() => expect(mediaList).toHaveBeenCalled());
 

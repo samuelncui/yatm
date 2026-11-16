@@ -1,10 +1,16 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Checkbox, FormControlLabel } from "@mui/material";
 import { ActionDialog, useActionDialog } from "./action-dialog";
 
+const { info } = vi.hoisted(() => ({ info: vi.fn() }));
+vi.mock("react-toastify", () => ({ toast: { info } }));
+const skipLabel = "Don’t show this again";
+
 describe("Application action dialog", () => {
+  beforeEach(() => info.mockReset());
+
   it.each([undefined, "Keep editing"])("focuses cancellation and supports operation-specific options with cancel label %s", async (cancelLabel) => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
@@ -122,5 +128,57 @@ describe("Application action dialog", () => {
     fireEvent.click(second);
     expect(within(screen.getByRole("dialog", { name: "Second" })).getByRole("textbox")).toHaveValue("second");
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("offers no opt-out on a confirmation that cannot be skipped", () => {
+    render(<ActionDialog title="Remove?" confirmLabel="Remove" onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: skipLabel })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["unticked and confirmed", false, "confirm", false],
+    ["ticked and cancelled", true, "cancel", false],
+    ["ticked and the action fails", true, "fail", false],
+    ["ticked and confirmed", true, "confirm", true],
+  ] as const)("stores the opt-out only when %s succeeds as a ticked confirmation", async (_, ticked, outcome, stored) => {
+    const onConfirm = vi.fn(async () => {
+      if (outcome === "fail") throw new Error("Media is busy");
+    });
+    const onSkipNextTime = vi.fn(async () => {});
+    const onClose = vi.fn();
+    render(<ActionDialog title="Add to Library?" confirmLabel="Add files" onSkipNextTime={onSkipNextTime} onConfirm={onConfirm} onClose={onClose} />);
+    const skip = screen.getByRole("checkbox", { name: skipLabel });
+    expect(skip).not.toBeChecked();
+    if (ticked) await userEvent.click(skip);
+    await userEvent.click(screen.getByRole("button", { name: outcome === "cancel" ? "Cancel" : "Add files" }));
+    if (outcome === "fail") {
+      expect(await screen.findByRole("alert")).toHaveTextContent("Media is busy");
+      expect(onClose).not.toHaveBeenCalled();
+      expect(skip).toBeChecked();
+    } else await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onConfirm).toHaveBeenCalledTimes(outcome === "cancel" ? 0 : 1);
+    expect(onSkipNextTime).toHaveBeenCalledTimes(stored ? 1 : 0);
+    if (stored) expect(onSkipNextTime.mock.invocationCallOrder[0]).toBeGreaterThan(onConfirm.mock.invocationCallOrder[0]);
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it("closes a confirmed action and reports an opt-out that could not be stored", async () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ActionDialog
+        title="Add to Library?"
+        confirmLabel="Add files"
+        onSkipNextTime={() => Promise.reject(new Error("Settings unavailable"))}
+        onConfirm={onConfirm}
+        onClose={onClose}
+      />,
+    );
+    await userEvent.click(screen.getByRole("checkbox", { name: skipLabel }));
+    await userEvent.click(screen.getByRole("button", { name: "Add files" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(info).toHaveBeenCalledExactlyOnceWith("Could not save this choice; the confirmation will appear again.");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

@@ -237,6 +237,19 @@ export interface LibrarySettings {
      * @generated from protobuf field: bool confirm_remove = 2
      */
     confirmRemove: boolean;
+    /**
+     * Advisory web confirmations the operator chose not to see again; false shows the confirmation.
+     * Adding selected Media inventory entries to the Library.
+     *
+     * @generated from protobuf field: bool skip_add_entries_confirmation = 3
+     */
+    skipAddEntriesConfirmation: boolean;
+    /**
+     * Adding one Media's whole recorded inventory to the Library.
+     *
+     * @generated from protobuf field: bool skip_add_media_confirmation = 4
+     */
+    skipAddMediaConfirmation: boolean;
 }
 /**
  * Executor preferences: how an attempt drives the pipeline its runner owns.
@@ -1101,13 +1114,17 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
     constructor() {
         super("yatm.v1.LibrarySettings", [
             { no: 1, name: "include_files_without_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 2, name: "confirm_remove", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+            { no: 2, name: "confirm_remove", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 3, name: "skip_add_entries_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 4, name: "skip_add_media_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<LibrarySettings>): LibrarySettings {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.includeFilesWithoutVersions = false;
         message.confirmRemove = false;
+        message.skipAddEntriesConfirmation = false;
+        message.skipAddMediaConfirmation = false;
         if (value !== undefined)
             reflectionMergePartial<LibrarySettings>(this, message, value);
         return message;
@@ -1122,6 +1139,12 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
                     break;
                 case /* bool confirm_remove */ 2:
                     message.confirmRemove = reader.bool();
+                    break;
+                case /* bool skip_add_entries_confirmation */ 3:
+                    message.skipAddEntriesConfirmation = reader.bool();
+                    break;
+                case /* bool skip_add_media_confirmation */ 4:
+                    message.skipAddMediaConfirmation = reader.bool();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1141,6 +1164,12 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
         /* bool confirm_remove = 2; */
         if (message.confirmRemove !== false)
             writer.tag(2, WireType.Varint).bool(message.confirmRemove);
+        /* bool skip_add_entries_confirmation = 3; */
+        if (message.skipAddEntriesConfirmation !== false)
+            writer.tag(3, WireType.Varint).bool(message.skipAddEntriesConfirmation);
+        /* bool skip_add_media_confirmation = 4; */
+        if (message.skipAddMediaConfirmation !== false)
+            writer.tag(4, WireType.Varint).bool(message.skipAddMediaConfirmation);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

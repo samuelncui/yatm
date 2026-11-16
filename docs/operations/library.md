@@ -67,6 +67,8 @@ mtime:>="2026-01-01T00:00:00Z" AND NOT tag:obsolete
 - **Include files without saved versions** affects only Library visibility. Saved-only mode retains editable logical directories and Files with any saved version, including versions whose last copy is lost. Location browsing and duplicate groups are independent.
 - **Confirm Delete** controls the browser's move-to-Trash dialog. Server checks always run; a CLI mutation reports its resolved plan under `--dryrun` and writes when the flag is omitted.
 
+The same **Confirmations** section lists the advisory confirmations that offer **Don't show this again**: adding selected inventory entries to the Library, and adding a Media's whole inventory to the Library. Ticking that box in a confirmation unchecks its line here once the action succeeds; check a line to see that confirmation again, or use **Show all confirmations**, then save. The choices are stored on the server, so they apply in every browser. Confirmations that guard a loss (deleting a Job, removing Media, FORMAT and the like) and one-off consents always appear and are not listed.
+
     yatm-cli settings library
     yatm-cli settings library --confirm-remove=false
     yatm-cli ls --file-id 0 --scope saved

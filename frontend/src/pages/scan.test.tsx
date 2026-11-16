@@ -1,4 +1,4 @@
-import { PreviewSettings } from "@/entity";
+import { LibrarySettings, PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
 import { act, screen, waitFor } from "@testing-library/react";
 import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
@@ -19,7 +19,7 @@ import {
   ScanSignaturePolicy as Signature,
 } from "@/entity";
 
-const { get, mediaList, scan, latest, fileGet, capabilities, previewSettings, importPositions } = vi.hoisted(() => ({
+const { get, mediaList, scan, latest, fileGet, capabilities, previewSettings, librarySettings, settingsUpdate, importPositions } = vi.hoisted(() => ({
   get: vi.fn(),
   mediaList: vi.fn(),
   scan: vi.fn(),
@@ -27,6 +27,8 @@ const { get, mediaList, scan, latest, fileGet, capabilities, previewSettings, im
   fileGet: vi.fn(),
   capabilities: vi.fn(),
   previewSettings: vi.fn(),
+  librarySettings: vi.fn(),
+  settingsUpdate: vi.fn(),
   importPositions: vi.fn(),
 }));
 vi.mock("@/api", () => ({
@@ -35,7 +37,11 @@ vi.mock("@/api", () => ({
   filesCli: { get: fileGet, importPositions },
   scanJobCli: { create: scan, getCreation: latest },
   previewCli: { getCapabilities: capabilities },
-  settingsCli: { get: previewSettings },
+  // Library settings hold the skipped confirmations; every other read is the Preview group the cases vary.
+  settingsCli: {
+    get: (request: { group: SettingsGroup }) => (request.group === SettingsGroup.LIBRARY ? librarySettings(request) : previewSettings(request)),
+    update: settingsUpdate,
+  },
 }));
 vi.mock("@/components/scan-selection-dialog", () => ({
   ScanSelectionDialog: ({ entries, onChoose, onClose }: { entries: unknown[]; onChoose: (entries: unknown[]) => void; onClose: () => void }) => (
@@ -134,6 +140,8 @@ beforeEach(() => {
   previewSettings.mockReturnValue(call({ value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } } }));
   vi.clearAllMocks();
   localStorage.clear();
+  librarySettings.mockReturnValue(call({ value: SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create() } }) }));
+  settingsUpdate.mockImplementation(({ value }: { value: SettingsValue }) => call({ value: SettingsValue.clone(value) }));
   get.mockReturnValue(call({ location: source }));
   mediaList.mockReturnValue(call({ media: [disk], hasMore: false }));
   scan.mockReturnValue(call({ job: { id: 43n } }));
@@ -411,12 +419,16 @@ describe("Scan form", () => {
     expect(screen.getByText("3 folder entries · 1 already in Library · 2 without signatures")).toBeInTheDocument();
     expect(importPositions).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: true }), expect.anything());
 
-    await userEvent.click(screen.getByRole("checkbox", { name: "Skip this confirmation for all Media in this browser" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Don’t show this again" }));
     await userEvent.click(screen.getByRole("button", { name: "Add to Library" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(importPositions).toHaveBeenLastCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
+    expect(settingsUpdate).toHaveBeenCalledExactlyOnceWith({
+      value: { value: { oneofKind: "library", library: LibrarySettings.create({ skipAddMediaConfirmation: true }) } },
+    });
+    expect(localStorage).toHaveLength(0);
 
-    // The remembered preference imports directly instead of asking for the count again.
+    // The stored choice imports directly instead of asking for the count again.
     await waitFor(() => expect(document.querySelector(".MuiBackdrop-root")).not.toBeInTheDocument());
     importPositions.mockClear();
     await userEvent.click(screen.getByRole("button", { name: "Add existing inventory to Library" }));

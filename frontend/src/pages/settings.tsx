@@ -11,6 +11,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 
 import { fileBase } from "@/api";
+import { skippableConfirmations } from "@/components/confirmations";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsField } from "@/components/settings-field";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
@@ -59,7 +60,10 @@ export const SettingsBrowser = () => {
                 }
               />
             </SettingsSection>
-            <SettingsSection title="File operations">
+            <SettingsSection
+              title="Confirmations"
+              description="Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here."
+            >
               <SettingsField
                 label="Confirm Delete"
                 description={!draft.confirmRemove ? "Delete moves selected items to Trash immediately." : undefined}
@@ -71,6 +75,32 @@ export const SettingsBrowser = () => {
                   />
                 }
               />
+              {skippableConfirmations.map(({ field, label }) => (
+                <SettingsField
+                  key={field}
+                  label={label}
+                  control={
+                    <Checkbox
+                      checked={!draft[field]}
+                      disabled={loading || saving}
+                      onChange={(_, shown) => setDraft((value) => (value ? { ...value, [field]: !shown } : value))}
+                    />
+                  }
+                />
+              ))}
+              <div>
+                <Button
+                  type="button"
+                  disabled={loading || saving || (draft.confirmRemove && skippableConfirmations.every(({ field }) => !draft[field]))}
+                  onClick={() =>
+                    setDraft((value) =>
+                      value ? { ...value, confirmRemove: true, ...Object.fromEntries(skippableConfirmations.map(({ field }) => [field, false])) } : value,
+                    )
+                  }
+                >
+                  Show all confirmations
+                </Button>
+              </div>
             </SettingsSection>
           </>
         )}
