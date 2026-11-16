@@ -52,12 +52,8 @@ func OpenWALSQLite(filename string) (*gorm.DB, error) {
 	}
 	var mode string
 	if err := db.Raw("PRAGMA journal_mode=WAL").Scan(&mode).Error; err != nil || !strings.EqualFold(mode, "wal") {
-		if sqlDB, closeErr := db.DB(); closeErr == nil {
-			_ = sqlDB.Close()
-		}
+		_ = CloseDB(db)
 		return nil, fmt.Errorf("set SQLite journal mode to WAL failed, mode=%q, %w", mode, err)
 	}
 	return db, nil
 }
-
-type GORMScope func(db *gorm.DB) *gorm.DB

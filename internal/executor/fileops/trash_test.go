@@ -170,7 +170,7 @@ func TestConcurrentFirstRemoveInitializesTrashWithoutSerializingPhysicalMoves(t 
 
 	// Both payloads occupy separate containers beneath one valid ownership marker.
 	require.NoError(t, validateTrash(f.root))
-	entries, err := os.ReadDir(filepath.Join(f.root, executor.LocationTrashDirectory))
+	entries, err := os.ReadDir(filepath.Join(f.root, library.LocationTrashDirectory))
 	require.NoError(t, err)
 	require.Len(t, entries, 3)
 	require.NotEqual(t, filepath.Dir(targets["first.txt"]), filepath.Dir(targets["second.txt"]))
@@ -234,12 +234,12 @@ func TestRemoveRejectsUnownedTrash(t *testing.T) {
 		f := setup(t)
 		f.write(t, "keep.txt", "keep")
 		marker := "X" + trashIdentity[1:]
-		f.write(t, filepath.Join(executor.LocationTrashDirectory, executor.LocationTrashMarker), marker)
+		f.write(t, filepath.Join(library.LocationTrashDirectory, executor.LocationTrashMarker), marker)
 		stream := f.execute(t, &entity.FileOperationSpec{Kind: entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE,
 			Sources: []*entity.FileOperationRef{f.ref(t, "keep.txt")}}, nil)
 		require.EqualValues(t, 1, stream.summary().FailedCount)
 		require.FileExists(t, filepath.Join(f.root, "keep.txt"))
-		data, err := os.ReadFile(filepath.Join(f.root, executor.LocationTrashDirectory, executor.LocationTrashMarker))
+		data, err := os.ReadFile(filepath.Join(f.root, library.LocationTrashDirectory, executor.LocationTrashMarker))
 		require.NoError(t, err)
 		require.Equal(t, marker, string(data))
 	})

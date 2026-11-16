@@ -39,7 +39,7 @@ func (s *TemporaryDB) Close() error {
 	// Release SQLite and its sidecars before removing the uniquely owned directory.
 	var result error
 	if s.DB != nil {
-		result = closeDB(s.DB)
+		result = CloseDB(s.DB)
 		s.DB = nil
 	}
 	if s.owner != nil {

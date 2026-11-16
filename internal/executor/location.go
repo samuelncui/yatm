@@ -71,9 +71,9 @@ func authorizedDirectory(root string, matcher *ignore.Matcher, value string) (st
 	if err != nil {
 		return "", err
 	}
-	if !withinLocationPath(relative) {
+	if !filepath.IsLocal(relative) {
 		relative, err = filepath.Rel(canonical, filepath.Clean(value))
-		if err != nil || !withinLocationPath(relative) {
+		if err != nil || !filepath.IsLocal(relative) {
 			return "", fmt.Errorf("online root escapes source boundary %q: %w", value, ErrAccessExcluded)
 		}
 	}
@@ -111,11 +111,8 @@ func authorizedDirectory(root string, matcher *ignore.Matcher, value string) (st
 	return resolved, nil
 }
 
-func withinLocationPath(relative string) bool {
-	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
-}
-
 // CanonicalConfiguredPath freezes a trusted configuration path, including nonexistent descendants.
+// A dangling symlink is followed, so the result names where a write through the path would land.
 func CanonicalConfiguredPath(value string) (string, error) {
 	// Resolve existing administrator-owned ancestors even before a Job/SQLite sidecar is created.
 	absolute, err := filepath.Abs(value)
@@ -130,6 +127,23 @@ func CanonicalConfiguredPath(value string) (string, error) {
 		}
 		if !os.IsNotExist(err) {
 			return "", err
+		}
+
+		// The deepest existing component can only be a dangling link; continue from its target.
+		if info, lstatErr := os.Lstat(ancestor); lstatErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(ancestor)
+			if err != nil {
+				return "", err
+			}
+			if !filepath.IsAbs(target) {
+				directory, err := filepath.EvalSymlinks(filepath.Dir(ancestor))
+				if err != nil {
+					return "", err
+				}
+				target = filepath.Join(directory, target)
+			}
+			ancestor = filepath.Clean(target)
+			continue
 		}
 		parent := filepath.Dir(ancestor)
 		if parent == ancestor {
@@ -172,7 +186,7 @@ func (e *Executor) locationAccessRanges(root string) []locationAccessRange {
 			continue
 		}
 		relative, err := filepath.Rel(base, root)
-		if err != nil || !withinLocationPath(relative) {
+		if err != nil || !filepath.IsLocal(relative) {
 			continue
 		}
 		if relative == "." {

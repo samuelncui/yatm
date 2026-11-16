@@ -51,7 +51,7 @@ func (e *Executor) ReadJobConfig(ctx context.Context, jobID int64, kind entity.J
 	if err != nil {
 		return 0, fmt.Errorf("open read-only Job DB failed, id=%d, %w", jobID, err)
 	}
-	defer closeGORMDB(db)
+	defer resource.CloseDB(db)
 
 	// The common record owns kind and priority; the typed caller owns the config shape.
 	var record JobRecord

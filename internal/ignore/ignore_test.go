@@ -64,8 +64,11 @@ func TestRules(t *testing.T) {
 
 func TestLiteralSubtree(t *testing.T) {
 	// Escaped syntax remains a literal name and excludes only that anchored subtree.
-	for _, name := range []string{"name ", "!keep", "#comment", "a*b", "[a]", "a?b", "a\\b", "nested/file"} {
-		matcher := Compile(Literal(name))
+	for name, rule := range map[string]string{
+		"name ": `/name\ `, "!keep": `/\!keep`, "#comment": `/\#comment`, "a*b": `/a\*b`,
+		"[a]": `/\[a\]`, "a?b": `/a\?b`, `a\b`: `/a\\b`, "nested/file": "/nested/file",
+	} {
+		matcher := Compile(rule)
 		if !matcher.Match(name, false) || !matcher.Match(name+"/child", false) || matcher.Match("other/"+name, false) {
 			t.Errorf("literal %q did not preserve its anchored subtree", name)
 		}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/samuelncui/yatm/entity"
 )
@@ -63,8 +62,7 @@ func parseDirectoryPath(value string) (string, string, error) {
 				return "", "", fmt.Errorf("decode Location name failed, %w", err)
 			}
 			name = decoded
-			if strings.TrimSpace(name) == "" || name == "." || name == ".." ||
-				strings.ContainsAny(name, "/\\\x00") || !utf8.ValidString(name) {
+			if strings.TrimSpace(name) == "" || entity.ValidatePathComponent(name) != nil {
 				return "", "", fmt.Errorf("Location URI requires a valid full Location name")
 			}
 		default:
@@ -78,25 +76,9 @@ func parseDirectoryPath(value string) (string, string, error) {
 	}
 
 	// Normalize within the selected root, rejecting escape instead of clamping it to that root.
-	var parts []string
-	for _, part := range strings.Split(relative, "/") {
-		switch part {
-		case "", ".":
-			continue
-		case "..":
-			if len(parts) == 0 {
-				return "", "", fmt.Errorf("PATH escapes the selected root")
-			}
-			parts = parts[:len(parts)-1]
-		default:
-			if err := entity.ValidatePathComponent(part); err != nil {
-				return "", "", fmt.Errorf("invalid PATH, %w", err)
-			}
-			parts = append(parts, part)
-			if len(parts) > 256 {
-				return "", "", fmt.Errorf("PATH exceeds 256 directory levels")
-			}
-		}
+	parts, err := entity.NormalizeRelativePath(relative)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid PATH, %w", err)
 	}
 	return name, strings.Join(parts, "/"), nil
 }

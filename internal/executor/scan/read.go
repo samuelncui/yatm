@@ -71,6 +71,8 @@ type contentStream struct {
 type contentWrite struct {
 	row   *Entry
 	cause error
+	// loaded removes the row's result contribution as it was read from the manifest.
+	loaded resultCounts
 }
 
 // contentItem is one manifest entry as an ACP item. It carries its own row, which is the state
@@ -80,6 +82,14 @@ type contentItem struct {
 	content acp.ContentSource
 	opened  atomic.Bool
 	reads   *mediapkg.ReadBatch
+	// loaded removes the row's result contribution before the content stage changes it.
+	loaded resultCounts
+}
+
+func newContentItem(row *Entry) *contentItem {
+	item := &contentItem{Entry: row}
+	item.loaded.add(row, -1)
+	return item
 }
 
 func (i *contentItem) Source() string {
@@ -290,6 +300,7 @@ func (s *contentStream) onResults(results []acp.Result) error {
 			result.Err = errors.Join(mediapkg.ErrReadUnavailable, result.Err)
 		}
 		if accepted, ok := s.accept(item.Entry, result); ok {
+			accepted.loaded = item.loaded
 			batch = append(batch, accepted)
 		}
 	}
@@ -320,7 +331,7 @@ func (s *contentStream) nextPage(ctx context.Context) ([]acp.Item, error) {
 		if err != nil {
 			return nil, err
 		}
-		item := &contentItem{Entry: row}
+		item := newContentItem(row)
 		// Native paths stay frozen; endpoints bind the recorded path and storage at submission.
 		if s.session != nil && row.SourcePath == "" {
 			source, err := s.session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
@@ -436,7 +447,7 @@ func (s *contentStream) prepareSequence(ctx context.Context) error {
 	if !ok || s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
 		return nil
 	}
-	provider, reason, err := ordered.ReadOrder(ctx)
+	provider, _, err := ordered.ReadOrder(ctx)
 	if err != nil {
 		return err
 	}
@@ -446,26 +457,16 @@ func (s *contentStream) prepareSequence(ctx context.Context) error {
 
 	// Independent input traversal leaves a complete manifest fallback available after a soft stop.
 	s.provider, s.trackReads = provider, true
-	started := time.Now()
-	sequence, err := readplan.Plan(ctx, s.runner.exe.Paths().Work, provider, s.readSpans(ctx))
-	elapsed := time.Since(started).Nanoseconds()
-	order := entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL
-	switch {
-	case errors.Is(err, readplan.ErrBudget):
-		s.provider = nil
-		reason = "LOGICAL: read planning budget expired before the complete index was ready"
-	case err != nil:
+	sequence, err := executor.PlanReadOrder(
+		ctx, s.runner.logger, "Scan", s.runner.exe.Paths().Work, ordered, provider, s.readSpans(ctx),
+	)
+	if err != nil {
 		return err
-	default:
-		s.sequence, order, reason = sequence, sequence.Order(), sequence.Reason()
 	}
-	ordered.ReadOrderPlanned(order, reason)
-
-	// One attempt reports its strategy once; page size controls only the subsequent handoff.
-	if s.runner.logger != nil {
-		s.runner.logger.WithContext(ctx).WithField("read_order", reason).
-			WithField("planning_ns", elapsed).Info("Scan read order prepared")
+	if sequence == nil {
+		s.provider = nil
 	}
+	s.sequence = sequence
 	return nil
 }
 
@@ -582,7 +583,7 @@ func (s *contentStream) nextOrderedPage(ctx context.Context) ([]acp.Item, error)
 		items := make([]*contentItem, 0, len(page))
 		endpoints := s.trackReads
 		for _, row := range page {
-			item := &contentItem{Entry: row}
+			item := newContentItem(row)
 			if row.SourcePath == "" {
 				source, err := s.session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
 				if err == nil {
@@ -728,6 +729,7 @@ func (s *contentStream) recordReadError(ctx context.Context, row *Entry, cause e
 // the results it already reported.
 func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) error {
 	rows := make([]*Entry, 0, len(batch))
+	var saved resultCounts
 	var failure error
 	note := func(err error) {
 		if err != nil && failure == nil {
@@ -740,11 +742,15 @@ func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) er
 			err := s.recordReadError(ctx, item.row, item.cause)
 			if err == nil {
 				s.settled.save([]int64{item.row.ID})
+				results := item.loaded
+				results.add(item.row, 1)
+				s.runner.advanceResults(results)
 			}
 			note(err)
 			continue
 		}
 		rows = append(rows, item.row)
+		saved.merge(item.loaded)
 	}
 	if len(rows) == 0 {
 		return failure
@@ -759,7 +765,9 @@ func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) er
 	for i, row := range rows {
 		s.logFinished(row)
 		ids[i] = row.ID
+		saved.add(row, 1)
 	}
+	s.runner.advanceResults(saved)
 	s.settled.save(ids)
 	return failure
 }

@@ -94,29 +94,6 @@ func (l *Library) GetPosition(ctx context.Context, id int64) (*Position, error) 
 	return position, nil
 }
 
-func (l *Library) MGetPositionByFileID(ctx context.Context, fileIDs ...int64) (map[int64][]*Position, error) {
-	if len(fileIDs) == 0 {
-		return map[int64][]*Position{}, nil
-	}
-
-	var positions []struct {
-		OwnerID int64
-		Position
-	}
-	if err := l.readDB().WithContext(ctx).Model(ModelPosition).Select("positions.*, file_versions.file_id AS owner_id").
-		Joins("JOIN file_versions ON file_versions.signature = positions.signature").
-		Where("file_versions.file_id IN ? AND positions.is_dir = ?", fileIDs, false).Scan(&positions).Error; err != nil {
-		return nil, fmt.Errorf("find positions by file ID failed, %w", err)
-	}
-
-	results := make(map[int64][]*Position, len(positions))
-	for index := range positions {
-		row := &positions[index]
-		results[row.OwnerID] = append(results[row.OwnerID], &row.Position)
-	}
-	return results, nil
-}
-
 func (l *Library) ListPositions(ctx context.Context, mediaID int64, parentPath string) ([]*Position, error) {
 	positions := make([]*Position, 0, 128)
 	if err := l.readDB().WithContext(ctx).

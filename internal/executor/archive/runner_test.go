@@ -579,8 +579,6 @@ func TestStageCopyResultRecordsPathOnlyAfterSuccess(t *testing.T) {
 			require.Empty(t, item.MediaPath)
 			require.Nil(t, item.MediaID)
 			require.Nil(t, item.Result)
-			flushed, _ := reporter.counters()
-			require.Zero(t, flushed)
 		})
 	}
 
@@ -650,9 +648,6 @@ func TestArchiveReporterPersistsTheBatchItReceives(t *testing.T) {
 	}}))
 	require.NoError(t, reporter.Close())
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_STAGED, readItemStatus(t, runner, 1))
-	flushed, failures := reporter.counters()
-	require.Equal(t, int64(1), flushed)
-	require.Zero(t, failures)
 }
 
 func TestArchiveReporterReportsAFailedFlush(t *testing.T) {
@@ -683,8 +678,6 @@ func TestArchiveReporterReportsAFailedFlush(t *testing.T) {
 	// Draining always observes the error and must leave the manifest item unchanged.
 	require.ErrorIs(t, reporter.Close(), failure)
 	require.ErrorIs(t, reporter.err(), failure)
-	flushed, _ := reporter.counters()
-	require.Zero(t, flushed)
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, readItemStatus(t, runner, 1))
 }
 
@@ -784,9 +777,6 @@ func TestArchiveCopyConsumesItemsThroughACP(t *testing.T) {
 
 	// Every result was staged by the writer that received it.
 	require.NoError(t, reporter.Close())
-	flushed, failures := reporter.counters()
-	require.Equal(t, int64(2), flushed)
-	require.Zero(t, failures)
 	require.NoError(t, reporter.err())
 	var staged []*Item
 	require.NoError(t, runner.db.Order("target_path").Find(&staged).Error)
@@ -1017,8 +1007,5 @@ func TestArchiveCompletedItemLogsOneTerminalOutcome(t *testing.T) {
 
 	err := reporter.err()
 	require.ErrorIs(t, err, mediapkg.ErrTargetNoSpace)
-	flushed, failures := reporter.counters()
-	require.Zero(t, flushed)
-	require.Equal(t, int64(1), failures)
-	require.Contains(t, output.String(), "reason=no_space")
+	require.Equal(t, 2, strings.Count(output.String(), "reason=no_space"))
 }

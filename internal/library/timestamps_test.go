@@ -189,7 +189,7 @@ func TestLibraryNanosecondAutoTimestamps(t *testing.T) {
 	require.Equal(t, now.UnixNano(), FileRowTime(projected))
 
 	// Directory search compares the stored instant directly without a millisecond multiplier.
-	page, err := lib.SearchFiles(ctx, `mtime:"`+now.Format(time.RFC3339Nano)+`"`, "", 10)
+	page, err := lib.SearchFilesIn(ctx, `mtime:"`+now.Format(time.RFC3339Nano)+`"`, "", 10, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	require.Equal(t, file.ID, page.Results[0].File.ID)

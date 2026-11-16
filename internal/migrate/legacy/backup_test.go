@@ -82,7 +82,7 @@ func TestValidateDetectsManifestDamageAndCleanupPreservesBackup(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "job-logs", "7.log"), []byte("historical log\n"), 0o600))
 	backup := preserveTestBackup(t, db, root)
 	hashes := backupHashes(t, backup.Root)
-	_, err := Prepare(ctx, db, root)
+	_, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.NoError(t, Commit(ctx, db, root))
 	report, err := Validate(ctx, db, root, backup)
@@ -98,7 +98,7 @@ func TestValidateDetectsManifestDamageAndCleanupPreservesBackup(t *testing.T) {
 	require.Error(t, Cleanup(ctx, db, root, backup))
 	require.True(t, db.Migrator().HasTable("jobs_legacy"))
 	require.NoError(t, jobDB.Model(&archive.Item{}).Where("id = ?", 290).Update("size", 290).Error)
-	closeDB(jobDB)
+	_ = resource.CloseDB(jobDB)
 
 	// Failure halfway through table cleanup rolls the entire metadata transaction back.
 	require.NoError(t, db.Callback().Raw().Before("gorm:raw").Register("test:cleanup-failure", func(tx *gorm.DB) {
@@ -159,7 +159,7 @@ func TestValidateDetectsChangedArchivedLog(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "job-logs"), 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "job-logs", "1.log"), []byte("original\n"), 0o600))
 	backup := preserveTestBackup(t, db, root)
-	_, err := Prepare(ctx, db, root)
+	_, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.NoError(t, Commit(ctx, db, root))
 

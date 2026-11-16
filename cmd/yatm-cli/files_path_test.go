@@ -47,6 +47,7 @@ func TestParseDirectoryPath(t *testing.T) {
 		{input: " leading/trailing / \t\n", path: " leading/trailing / \t\n"},
 		{input: "library:///back%5Cslash/%20%09%0A", path: "back\\slash/ \t\n"},
 		{input: "location://NAS/back%5Cslash/%20%09%0A", location: "NAS", path: "back\\slash/ \t\n"},
+		{input: "location://NAS%5Cother/DCIM", location: `NAS\other`, path: "DCIM"},
 	} {
 		t.Run(test.input, func(t *testing.T) {
 			location, path, err := parseDirectoryPath(test.input)
@@ -64,7 +65,7 @@ func TestLSPathRejectsInvalidInputBeforeNetwork(t *testing.T) {
 		"location://NAS/%2e%2e/etc", "location://NAS/DCIM/../../etc", "library:///%2F../etc",
 		"library://host/Photos", "location:///DCIM",
 		"location://.", "location://..", "location://%20/", "location://NAS%2Fother/DCIM",
-		"location://NAS%5Cother/DCIM", "location://NAS%00/DCIM", "location://%FF/DCIM",
+		"location://NAS%00/DCIM", "location://%FF/DCIM",
 		"library:///bad%", "location://bad%/", "library:///bad%00", "library:///bad%FF",
 		"library:///a?query", "location://NAS/a#fragment", "hdfs://host/Photos",
 		"Photos\x00", "Photos\xff", strings.Repeat("dir/", 257),

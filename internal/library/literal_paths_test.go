@@ -3,6 +3,7 @@ package library
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
@@ -125,5 +126,14 @@ func TestNewRestoredFilePreservesLiteralUTF8(t *testing.T) {
 	for _, name := range []string{"invalid\xff", "nul\x00", "a/b", ".."} {
 		_, err := newRestoredFile(lib.db, 0, name, 17)
 		require.Error(t, err)
+	}
+}
+
+func TestGetByPathRejectsEscapeAndExcessDepth(t *testing.T) {
+	// Lookup shares the relative-path normalizer, so neither request reaches a missing-name result.
+	lib := newJSONLTestLibrary(t)
+	for _, path := range []string{"..", "a/../../b", strings.Repeat("d/", entity.MaxPathDepth+1)} {
+		_, err := lib.GetByPath(context.Background(), 0, path)
+		require.ErrorContains(t, err, "invalid Library path", "%q", path)
 	}
 }

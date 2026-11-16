@@ -23,7 +23,7 @@ func TestExecutorRejectsUnsupportedBundleBeforeWrites(t *testing.T) {
 			catalogPath := filepath.Join(t.TempDir(), "catalog.db")
 			db, err := resource.OpenSQLite(catalogPath)
 			require.NoError(t, err)
-			t.Cleanup(func() { require.NoError(t, closeGORMDB(db)) })
+			t.Cleanup(func() { require.NoError(t, resource.CloseDB(db)) })
 			exe := New(db, &library.Library{}, nil, Paths{Work: t.TempDir()}, Scripts{}, nil)
 			require.NoError(t, exe.AutoMigrate())
 			job := createTestCatalogJob(t, exe, kind)

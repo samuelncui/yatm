@@ -137,6 +137,10 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 			"preview_error": ""}).Error; err != nil {
 			return err
 		}
+		// The work path is the only writer here, so one count replaces the bulk reset's results.
+		if err := r.recountResults(ctx); err != nil {
+			return err
+		}
 		// Indexing retains native paths; content endpoints are bound only while feeding ACP.
 		return r.resolveMediaSources(ctx, session)
 	}
@@ -156,8 +160,12 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 		}
 		// The discovered counters replace this row's earlier contribution, if it had one.
 		var found executor.Counts
-		if err == nil && row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
-			found = executor.Counts{Files: -1, Bytes: -row.Size}
+		var results resultCounts
+		if err == nil {
+			results.add(&row, -1)
+			if row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+				found = executor.Counts{Files: -1, Bytes: -row.Size}
+			}
 		}
 		row.Path = file.Path
 		row.Size, row.Mode, row.MtimeNS = facts.SizeBytes, facts.Mode, facts.MtimeNs
@@ -202,6 +210,8 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 			return err
 		}
 		r.advanceCounts(executor.Counts{Files: found.Files + 1, Bytes: found.Bytes + row.Size}, executor.Counts{})
+		results.add(&row, 1)
+		r.advanceResults(results)
 		return nil
 	}); err != nil {
 		return err
@@ -224,7 +234,9 @@ func (r *runner) resolveMediaSources(ctx context.Context, session mediapkg.ReadS
 		if len(rows) == 0 {
 			return nil
 		}
+		var results resultCounts
 		for _, row := range rows {
+			results.add(row, -1)
 			after = row.ID
 			source, err := session.Source(mediapkg.ReadRequest{Path: row.Path, Storage: row.Storage})
 			if err == nil {
@@ -249,6 +261,10 @@ func (r *runner) resolveMediaSources(ctx context.Context, session mediapkg.ReadS
 		if err := r.saveEntries(ctx, rows); err != nil {
 			return err
 		}
+		for _, row := range rows {
+			results.add(row, 1)
+		}
+		r.advanceResults(results)
 	}
 }
 
@@ -637,8 +653,19 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 // be produced, and this is why. Everything else about a Preview is the content store's answer.
 // It writes only its own column, because comparison may update the same row concurrently.
 func (r *runner) recordPreviewFailure(ctx context.Context, row *Entry, message string) error {
+	var results resultCounts
+	if row.PreviewError != "" {
+		results.previewFailures--
+	}
 	row.PreviewError = message
-	return r.db.WithContext(ctx).Model(row).Update("preview_error", message).Error
+	if err := r.db.WithContext(ctx).Model(row).Update("preview_error", message).Error; err != nil {
+		return err
+	}
+	if message != "" {
+		results.previewFailures++
+	}
+	r.advanceResults(results)
+	return nil
 }
 
 // clearPreviewFailure drops a reason a previous attempt recorded for the same entry.

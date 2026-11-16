@@ -272,8 +272,6 @@ type reporter struct {
 	writer *executor.ResultWriter[itemOutcome]
 
 	mutex    sync.Mutex
-	flushed  int64
-	failed   int64
 	flushErr error
 }
 
@@ -302,7 +300,7 @@ func (r *reporter) onResults(results []acp.Result) error {
 		if result.Err != nil {
 			// An item ACP could not process, or one a graceful stop abandoned, keeps its
 			// PENDING row, because it produced no durable result this attempt.
-			item.runner.handleItemFailure(item.item, result.Err, r)
+			item.runner.logUnwritten(item.item, result.Err)
 			continue
 		}
 		outcome, err := item.runner.acceptCopyResult(item, result)
@@ -316,15 +314,12 @@ func (r *reporter) onResults(results []acp.Result) error {
 	return r.writer.Enqueue(batch...)
 }
 
-// writeBatch stages one batch of outcomes and counts what a durable row records.
+// writeBatch stages one batch of outcomes.
 func (r *reporter) writeBatch(ctx context.Context, batch []itemOutcome) error {
 	if err := r.store(ctx, batch); err != nil {
 		r.recordError(err)
 		return err
 	}
-	r.mutex.Lock()
-	r.flushed += int64(len(batch))
-	r.mutex.Unlock()
 	return nil
 }
 
@@ -338,19 +333,6 @@ func (r *reporter) err() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return r.flushErr
-}
-
-// counters reports the persisted results and the items ACP could not process.
-func (r *reporter) counters() (int64, int64) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	return r.flushed, r.failed
-}
-
-func (r *reporter) addFailed() {
-	r.mutex.Lock()
-	r.failed++
-	r.mutex.Unlock()
 }
 
 // recordError keeps the first per-item error that no durable result can express.
@@ -463,13 +445,6 @@ func (a *jobArchiveRunner) acceptCopyResult(c *copyItem, result acp.Result) (ite
 	return outcome, nil
 }
 
-// handleItemFailure records an item ACP could not process at all. The item keeps its
-// PENDING row, because it produced no durable result this attempt.
-func (a *jobArchiveRunner) handleItemFailure(item *Item, err error, reporter *reporter) {
-	reporter.addFailed()
-	a.logUnwritten(item, err)
-}
-
 // logUnwritten reports one file this attempt did not write, classifying target failures through
 // stable error identity for diagnostic logs.
 func (a *jobArchiveRunner) logUnwritten(item *Item, err error) {
@@ -478,8 +453,7 @@ func (a *jobArchiveRunner) logUnwritten(item *Item, err error) {
 	}
 	source, size := item.Data.GetSourcePath(), item.Size
 	switch {
-	case errors.Is(err, acp.ErrTargetNoSpace), errors.Is(err, mediapkg.ErrTargetNoSpace),
-		errors.Is(err, mediapkg.ErrCapacityBoundary):
+	case mediapkg.IsTargetNoSpace(err):
 		a.logger.WithField("reason", archiveMediaNoSpaceReason).Warnf(
 			"archive file not written, source=%q size=%d", source, size,
 		)

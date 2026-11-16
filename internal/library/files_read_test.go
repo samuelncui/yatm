@@ -94,7 +94,7 @@ func TestFilePresentationIsLoadedExplicitly(t *testing.T) {
 	require.Equal(t, uint32(0o640), loaded.Mode)
 	require.Equal(t, int64(7), loaded.Size)
 	require.Equal(t, []byte("signature"), loaded.Signature)
-	page, err := lib.SearchFiles(ctx, "name:explicit.txt", "", 10)
+	page, err := lib.SearchFilesIn(ctx, "name:explicit.txt", "", 10, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	require.Equal(t, []byte("signature"), page.Results[0].File.Signature)

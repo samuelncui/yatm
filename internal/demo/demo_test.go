@@ -131,11 +131,11 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	var invoices int64
 	require.NoError(t, db.Model(library.ModelFileTag).Where("tag = ?", "invoice").Count(&invoices).Error)
 	require.Equal(t, int64(101), invoices)
-	firstPage, err := lib.SearchFiles(context.Background(), "tag:invoice", "", 100)
+	firstPage, err := lib.SearchFilesIn(context.Background(), "tag:invoice", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, firstPage.Results, 100)
 	require.NotEmpty(t, firstPage.NextCursor)
-	secondPage, err := lib.SearchFiles(context.Background(), "tag:invoice", firstPage.NextCursor, 100)
+	secondPage, err := lib.SearchFilesIn(context.Background(), "tag:invoice", firstPage.NextCursor, 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, secondPage.Results, 1)
 	require.Empty(t, secondPage.NextCursor)
@@ -305,11 +305,11 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	require.Nil(t, extra)
 
 	// Unknown content remains unsigned, while known coverage supplies a version without another copy.
-	unknown, err := lib.SearchFiles(context.Background(), "has:unknown", "", 100)
+	unknown, err := lib.SearchFilesIn(context.Background(), "has:unknown", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, unknown.Results, 1)
 	require.Equal(t, "notes.txt", unknown.Results[0].File.Name)
-	page, err := lib.SearchFiles(context.Background(), "name:handbook.md AND has:original AND has:archive", "", 100)
+	page, err := lib.SearchFilesIn(context.Background(), "name:handbook.md AND has:original AND has:archive", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	require.Equal(t, "handbook.md", page.Results[0].File.Name)
@@ -323,13 +323,13 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	require.Len(t, covered, 1)
 
 	// The product review tag works through the same quoted simple query used by the frontend.
-	review, err := lib.SearchFiles(
-		context.Background(), `(name:"archive-review" OR tag:"archive-review" OR note:"archive-review")`, "", 100,
+	review, err := lib.SearchFilesIn(
+		context.Background(), `(name:"archive-review" OR tag:"archive-review" OR note:"archive-review")`, "", 100, entity.FileScope_FILE_SCOPE_ALL,
 	)
 	require.NoError(t, err)
 	require.Len(t, review.Results, 5)
-	needsArchive, err := lib.SearchFiles(
-		context.Background(), `(tag:"archive-review") AND (has:original AND NOT has:unknown AND NOT has:archive)`, "", 100,
+	needsArchive, err := lib.SearchFilesIn(
+		context.Background(), `(tag:"archive-review") AND (has:original AND NOT has:unknown AND NOT has:archive)`, "", 100, entity.FileScope_FILE_SCOPE_ALL,
 	)
 	require.NoError(t, err)
 	require.Len(t, needsArchive.Results, 3,
@@ -349,7 +349,7 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 
 	// Exercise the normal Trash allocation without colliding with the visible dot-directory fixture.
 	require.NoError(t, lib.Delete(context.Background(), []int64{budget.ID}))
-	parents, err := lib.ListParents(context.Background(), budget.ID)
+	parents, err := lib.ReadFileAncestors(context.Background(), budget.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, parents)
 	require.Equal(t, int64(library.TrashFileID), parents[0].ID)
@@ -362,7 +362,7 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	require.NoError(t, os.WriteFile(reviewerFile, []byte("keep"), 0o644))
 	require.NoError(t, Prepare(context.Background(), Options{Root: root, Listen: "127.0.0.1:18080"}))
 	require.FileExists(t, reviewerFile)
-	parents, err = lib.ListParents(context.Background(), budget.ID)
+	parents, err = lib.ReadFileAncestors(context.Background(), budget.ID)
 	require.NoError(t, err)
 	require.Equal(t, int64(library.TrashFileID), parents[0].ID)
 }
@@ -486,7 +486,7 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	ids := make(map[int64]struct{})
 	cursor := ""
 	for {
-		page, err := lib.SearchFiles(ctx, "tag:duplicate-review AND has:duplicates", cursor, 2)
+		page, err := lib.SearchFilesIn(ctx, "tag:duplicate-review AND has:duplicates", cursor, 2, entity.FileScope_FILE_SCOPE_ALL)
 		require.NoError(t, err)
 		for _, result := range page.Results {
 			require.NotContains(t, ids, result.File.ID)
@@ -507,10 +507,10 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	require.ElementsMatch(t, []int{2, 3, 4}, sizes)
 
 	// All members are discoverable by tag; a Location filter does not erase matches elsewhere.
-	page, err := lib.SearchFiles(ctx, "tag:duplicate-review AND has:duplicates", "", 100)
+	page, err := lib.SearchFilesIn(ctx, "tag:duplicate-review AND has:duplicates", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 9)
-	page, err = lib.SearchFiles(ctx, "location:"+strconv.FormatInt(documentsID, 10)+" AND has:duplicates", "", 100)
+	page, err = lib.SearchFilesIn(ctx, "location:"+strconv.FormatInt(documentsID, 10)+" AND has:duplicates", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	require.Equal(t, "original-only.txt", page.Results[0].File.Name)

@@ -105,12 +105,8 @@ func Prepare(ctx context.Context, options Options) (returnErr error) {
 	if err != nil {
 		return fmt.Errorf("open Demo database failed, %w", err)
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("get Demo database pool failed, %w", err)
-	}
 	defer func() {
-		if err := sqlDB.Close(); err != nil {
+		if err := resource.CloseDB(db); err != nil {
 			returnErr = errors.Join(returnErr, fmt.Errorf("close Demo database failed, %w", err))
 		}
 	}()
@@ -251,7 +247,7 @@ func pathWithin(target, base string) bool {
 	if err != nil {
 		return false
 	}
-	return relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+	return relative != "." && filepath.IsLocal(relative)
 }
 
 func requireEmptyRoot(root string) error {

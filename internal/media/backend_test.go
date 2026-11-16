@@ -2,7 +2,10 @@ package media
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io/fs"
+	"syscall"
 	"testing"
 
 	"github.com/samuelncui/acp"
@@ -38,5 +41,18 @@ func TestReferencesRequireExactlyOneVariant(t *testing.T) {
 			require.Equal(t, test.valid, test.source.Validate() == nil)
 			require.Equal(t, test.valid, test.target.Validate() == nil)
 		})
+	}
+}
+
+func TestIsTargetNoSpace(t *testing.T) {
+	// Every target-full identity is recognized through wrapping; other failures are not.
+	for _, err := range []error{
+		ErrTargetNoSpace, ErrCapacityBoundary, acp.ErrTargetNoSpace, syscall.ENOSPC,
+		fmt.Errorf("write, %w", syscall.ENOSPC), errors.Join(errors.New("other"), acp.ErrTargetNoSpace),
+	} {
+		require.True(t, IsTargetNoSpace(err), err)
+	}
+	for _, err := range []error{nil, errors.New("other"), syscall.EIO} {
+		require.False(t, IsTargetNoSpace(err), err)
 	}
 }

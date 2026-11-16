@@ -217,51 +217,23 @@ func (s *service) GetProgress(ctx context.Context, req *entity.GetScanJobProgres
 	// Read a consistent typed snapshot while excluding deletion and a new attempt.
 	reply := &entity.GetScanJobProgressResponse{}
 	err := s.useRunner(ctx, req.Id, func(r *runner) error {
-		// Aggregate one manifest without loading result rows or traversing filesystem state.
-		var groups []struct {
-			Change       entity.ScanChange
-			Finding      entity.ScanFinding
-			Count, Bytes int64
-		}
-		if err := r.db.WithContext(ctx).Model(&Entry{}).Select("change, finding, COUNT(*) AS count, COALESCE(SUM(size),0) AS bytes").Group("change,finding").Find(&groups).Error; err != nil {
+		// The work path maintains the manifest's result counters; a request only reads them.
+		r.lock.Lock()
+		results, err := r.lockedResults(ctx)
+		if err != nil {
+			r.lock.Unlock()
 			return err
 		}
-		for _, g := range groups {
-			switch g.Change {
-			case entity.ScanChange_SCAN_CHANGE_ADDED:
-				reply.AddedCount += g.Count
-			case entity.ScanChange_SCAN_CHANGE_CHANGED:
-				reply.ChangedCount += g.Count
-			case entity.ScanChange_SCAN_CHANGE_REMOVED:
-				reply.RemovedCount += g.Count
-			case entity.ScanChange_SCAN_CHANGE_UNCHANGED:
-				reply.UnchangedCount += g.Count
-			}
-			if g.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
-				reply.ProcessedBytes += g.Bytes
-			}
-			switch g.Finding {
-			case entity.ScanFinding_SCAN_FINDING_MATCH:
-				reply.MatchedCount += g.Count
-			case entity.ScanFinding_SCAN_FINDING_MISMATCH:
-				reply.DamagedCount += g.Count
-			case entity.ScanFinding_SCAN_FINDING_MISSING:
-				reply.MissingCount += g.Count
-			case entity.ScanFinding_SCAN_FINDING_UNREADABLE:
-				reply.UnreadableCount += g.Count
-			case entity.ScanFinding_SCAN_FINDING_UNVERIFIABLE:
-				reply.UnverifiableCount += g.Count
-			}
-		}
-
+		changes, findings := results.changes, results.findings
+		reply.AddedCount, reply.ChangedCount = changes[entity.ScanChange_SCAN_CHANGE_ADDED], changes[entity.ScanChange_SCAN_CHANGE_CHANGED]
+		reply.RemovedCount, reply.UnchangedCount = changes[entity.ScanChange_SCAN_CHANGE_REMOVED], changes[entity.ScanChange_SCAN_CHANGE_UNCHANGED]
+		reply.ProcessedBytes = results.bytes
+		reply.MatchedCount, reply.DamagedCount = findings[entity.ScanFinding_SCAN_FINDING_MATCH], findings[entity.ScanFinding_SCAN_FINDING_MISMATCH]
+		reply.MissingCount, reply.UnreadableCount = findings[entity.ScanFinding_SCAN_FINDING_MISSING], findings[entity.ScanFinding_SCAN_FINDING_UNREADABLE]
+		reply.UnverifiableCount = findings[entity.ScanFinding_SCAN_FINDING_UNVERIFIABLE]
 		// Preview outcomes are the attempt's own, like its speed: a content's assets are the
 		// store's answer, so the manifest holds only the entries whose Preview failed and why.
-		var failedPreviews int64
-		if err := r.db.WithContext(ctx).Model(&Entry{}).Where("preview_error <> ''").Count(&failedPreviews).Error; err != nil {
-			return err
-		}
-		r.lock.Lock()
-		reply.PreviewsReadyCount, reply.PreviewsSkippedCount, reply.PreviewsFailedCount = r.previewOutcomes.ready, r.previewOutcomes.skipped, failedPreviews
+		reply.PreviewsReadyCount, reply.PreviewsSkippedCount, reply.PreviewsFailedCount = r.previewOutcomes.ready, r.previewOutcomes.skipped, results.previewFailures
 		r.lock.Unlock()
 
 		// Combine phase-local progress with the shared latest-attempt duration.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/library"
 )
 
 const trashIdentity = "YATM Location Trash\n1\n"
@@ -20,7 +21,7 @@ var trashInitialization sync.Mutex
 
 func validateTrash(root string) error {
 	// An existing directory is accepted only with the exact bounded ownership marker.
-	directory := filepath.Join(root, executor.LocationTrashDirectory)
+	directory := filepath.Join(root, library.LocationTrashDirectory)
 	info, err := os.Lstat(directory)
 	if err != nil {
 		return fmt.Errorf("inspect Trash failed, %w", err)
@@ -53,16 +54,16 @@ func validateTrash(root string) error {
 
 func (s *locationTree) trashTarget(ctx context.Context, item *Item) (string, error) {
 	// Validate boundaries before creating any managed directories.
-	if executor.IsLocationTrashPath(item.SourcePath) {
+	if library.IsLocationTrashPath(item.SourcePath) {
 		return "", fmt.Errorf("Trash entries cannot be removed")
 	}
-	if err := s.op.protectedRange(ctx, s.location, executor.LocationTrashDirectory, true); err != nil {
+	if err := s.op.protectedRange(ctx, s.location, library.LocationTrashDirectory, true); err != nil {
 		return "", err
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	directory := filepath.Join(s.location.RootPath, executor.LocationTrashDirectory)
+	directory := filepath.Join(s.location.RootPath, library.LocationTrashDirectory)
 	if err := ensureTrash(s.location.RootPath); err != nil {
 		return "", err
 	}
@@ -80,7 +81,7 @@ func (s *locationTree) trashTarget(ctx context.Context, item *Item) (string, err
 		return "", fmt.Errorf("invalid operation identity, %w", err)
 	}
 	batch := uuid.NewSHA1(operationID, []byte(strconv.FormatInt(item.ID, 10))).String()
-	container := path.Join(executor.LocationTrashDirectory, batch)
+	container := path.Join(library.LocationTrashDirectory, batch)
 	if err := os.Mkdir(filepath.Join(s.location.RootPath, filepath.FromSlash(container)), 0700); err != nil {
 		return "", fmt.Errorf("reserve Trash container failed, %w", err)
 	}
@@ -96,7 +97,7 @@ func ensureTrash(root string) error {
 	// Serialize only first-use creation and validation, including a marker still being written.
 	trashInitialization.Lock()
 	defer trashInitialization.Unlock()
-	directory := filepath.Join(root, executor.LocationTrashDirectory)
+	directory := filepath.Join(root, library.LocationTrashDirectory)
 	if err := os.Mkdir(directory, 0700); err != nil {
 		if !os.IsExist(err) {
 			return fmt.Errorf("create Trash failed, %w", err)

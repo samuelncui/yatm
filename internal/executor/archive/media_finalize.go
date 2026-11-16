@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"syscall"
 
-	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/library"
@@ -227,8 +225,7 @@ func resetOneItem(tx *gorm.DB, id int64) error {
 }
 
 func targetNoSpaceError(err error) error {
-	if errors.Is(err, acp.ErrTargetNoSpace) || errors.Is(err, syscall.ENOSPC) ||
-		errors.Is(err, mediapkg.ErrTargetNoSpace) || errors.Is(err, mediapkg.ErrCapacityBoundary) {
+	if mediapkg.IsTargetNoSpace(err) {
 		return mediapkg.ErrTargetNoSpace
 	}
 	return nil

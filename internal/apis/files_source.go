@@ -37,18 +37,20 @@ func (s *librarySource) List(ctx context.Context, req files.ListRequest, emit fu
 	}
 	total := int64(len(page.Files))
 	reader := s.service.api.exe.NewFileRowReader()
-	return emitListBatches(page.Files, req.BatchSize,
-		func(batch []*library.File) ([]*entity.FilesEntry, error) {
-			entries, _, _, err := s.service.libraryEntriesObserved(ctx, batch, projection, false, reader)
-			return entries, err
-		},
-		func(entries []*entity.FilesEntry, first bool) error {
-			reply := files.ListReply{Entries: entries, Scope: page.Scope}
-			if first {
-				reply.Directory, reply.Breadcrumbs, reply.Total = directory, breadcrumbs, &total
+	return emitListBatches(len(page.Files), req.BatchSize, func(start, end int) error {
+		reply := files.ListReply{Scope: page.Scope}
+		if start < end {
+			entries, _, _, err := s.service.libraryEntriesObserved(ctx, page.Files[start:end], projection, false, reader)
+			if err != nil {
+				return err
 			}
-			return emit(reply)
-		})
+			reply.Entries = entries
+		}
+		if start == 0 {
+			reply.Directory, reply.Breadcrumbs, reply.Total = directory, breadcrumbs, &total
+		}
+		return emit(reply)
+	})
 }
 
 // enumerate validates one Library directory and reads every row it holds, without projecting
@@ -152,24 +154,17 @@ func (s *librarySource) navigation(ctx context.Context, parentID int64, projecti
 	return breadcrumbs[len(breadcrumbs)-1], breadcrumbs, nil
 }
 
-// emitListBatches hands one enumerated directory to the consumer in bounded batches,
-// projecting a batch only once the previous one has left. The first rows therefore reach
-// the client after one batch of work instead of after the whole directory, and the server
-// never holds a projected listing in memory.
-func emitListBatches[T any](rows []T, batchSize int, project func([]T) ([]*entity.FilesEntry, error), emit func([]*entity.FilesEntry, bool) error) error {
+// emitListBatches hands one enumerated directory of n rows to the consumer in bounded
+// [start, end) batches, so a batch is projected only once the previous one has left. The
+// first rows therefore reach the client after one batch of work instead of after the whole
+// directory, and the server never holds a projected listing in memory. The first batch, the
+// one starting at zero, carries the listing header; an empty directory still sends it.
+func emitListBatches(n, batchSize int, send func(start, end int) error) error {
 	if batchSize <= 0 {
 		batchSize = files.DefaultBatchSize
 	}
-	if len(rows) == 0 {
-		return emit(nil, true)
-	}
-	for start := 0; start < len(rows); start += batchSize {
-		end := min(start+batchSize, len(rows))
-		entries, err := project(rows[start:end])
-		if err != nil {
-			return err
-		}
-		if err := emit(entries, start == 0); err != nil {
+	for start := 0; start < n || start == 0; start += batchSize {
+		if err := send(start, min(start+batchSize, n)); err != nil {
 			return err
 		}
 	}
@@ -238,15 +233,11 @@ func (s *locationSource) List(ctx context.Context, req files.ListRequest, emit f
 	}
 	directory, breadcrumbs := locationNavigation(read.Location, read.Parent, projection)
 	total := int64(read.Len())
-	size := req.BatchSize
-	if size <= 0 {
-		size = files.DefaultBatchSize
-	}
-	for start := 0; start < read.Len() || start == 0; start += size {
+	return emitListBatches(read.Len(), req.BatchSize, func(start, end int) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		rows, infos, err := read.Read(ctx, start, min(start+size, read.Len()))
+		rows, infos, err := read.Read(ctx, start, end)
 		if err != nil {
 			return apiError(err)
 		}
@@ -258,14 +249,8 @@ func (s *locationSource) List(ctx context.Context, req files.ListRequest, emit f
 		if start == 0 {
 			reply.Directory, reply.Breadcrumbs, reply.Total = directory, breadcrumbs, &total
 		}
-		if err := emit(reply); err != nil {
-			return err
-		}
-		if read.Len() == 0 {
-			break
-		}
-	}
-	return nil
+		return emit(reply)
+	})
 }
 
 // Search answers one bounded page of a live query, keeping its cursor for continuation.

@@ -36,9 +36,7 @@ func TestDeviceSavePreservesServerOwnedLearning(t *testing.T) {
 	editor, err := module.Device.Current(ctx)
 	require.NoError(t, err)
 	model := learnedTapeModel("tape")
-	applied, err := module.Device.PublishTapeReadModel(ctx, nil, model)
-	require.NoError(t, err)
-	require.True(t, applied)
+	require.NoError(t, module.Device.PublishTapeReadModel(ctx, model))
 
 	// An old form can replace user-owned settings but cannot erase or forge automatic observations.
 	editor.Devices = []*entity.DeviceConfig{{Device: "tape", Options: &entity.DeviceConfig_Tape{
@@ -64,41 +62,24 @@ func TestDeviceSavePreservesServerOwnedLearning(t *testing.T) {
 	require.Equal(t, 3.0, current.LearnedReadParameters[0].Parameters.Positioning.GetBaseSeconds())
 }
 
-func TestLearnedReadParametersPublicationSkipsStaleBase(t *testing.T) {
-	// The validated candidate names the exact incumbent it was compared with.
+func TestLearnedReadParametersPublicationReplacesSameScope(t *testing.T) {
+	// A refit replaces the model of its own applicability and leaves other applicabilities alone.
 	ctx := context.Background()
 	module := testModule(t)
 	first := learnedTapeModel("tape")
-	applied, err := module.Device.PublishTapeReadModel(ctx, nil, first)
-	require.NoError(t, err)
-	require.True(t, applied)
+	require.NoError(t, module.Device.PublishTapeReadModel(ctx, first))
 	second := proto.Clone(first).(*entity.TapeLearnedReadParameters)
 	second.Parameters.Positioning.BaseSeconds = proto.Float64(2)
 	second.UpdatedAtNs++
-	applied, err = module.Device.PublishTapeReadModel(ctx, first, second)
-	require.NoError(t, err)
-	require.True(t, applied)
-
-	// A concurrent fit against the old base cannot overwrite the newer model or mutate other scope.
-	stale := proto.Clone(first).(*entity.TapeLearnedReadParameters)
-	stale.Parameters.Positioning.BaseSeconds = proto.Float64(1)
-	applied, err = module.Device.PublishTapeReadModel(ctx, first, stale)
-	require.NoError(t, err)
-	require.False(t, applied)
-	applied, err = module.Device.PublishTapeReadModel(ctx, nil, stale)
-	require.NoError(t, err)
-	require.False(t, applied)
-	stale.Parameters.AppliesTo.RecordBytes = proto.Uint32(256 * 1024)
-	applied, err = module.Device.PublishTapeReadModel(ctx, first, stale)
-	require.ErrorIs(t, err, ErrInvalid)
-	require.False(t, applied)
-	applied, err = module.Device.PublishTapeReadModel(ctx, nil, stale)
-	require.NoError(t, err)
-	require.True(t, applied)
+	require.NoError(t, module.Device.PublishTapeReadModel(ctx, second))
+	other := proto.Clone(first).(*entity.TapeLearnedReadParameters)
+	other.Parameters.AppliesTo.RecordBytes = proto.Uint32(256 * 1024)
+	require.NoError(t, module.Device.PublishTapeReadModel(ctx, other))
 	current, err := module.Device.Current(ctx)
 	require.NoError(t, err)
 	require.Len(t, current.LearnedReadParameters, 2)
 	require.True(t, proto.Equal(second, current.LearnedReadParameters[0]))
+	require.True(t, proto.Equal(other, current.LearnedReadParameters[1]))
 }
 
 func TestConcurrentDeviceWritersRetainBothOwners(t *testing.T) {
@@ -118,8 +99,7 @@ func TestConcurrentDeviceWritersRetainBothOwners(t *testing.T) {
 				errors <- err
 				return
 			}
-			_, err := module.Device.PublishTapeReadModel(ctx, nil, learnedTapeModel(fmt.Sprintf("tape-%d", i)))
-			errors <- err
+			errors <- module.Device.PublishTapeReadModel(ctx, learnedTapeModel(fmt.Sprintf("tape-%d", i)))
 		}()
 	}
 	pending.Wait()

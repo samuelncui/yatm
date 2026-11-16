@@ -214,10 +214,12 @@ func (d *LocationDirectoryReader) ReadEntries(ctx context.Context, visit func([]
 		return err
 	}
 	defer directory.Close()
-	return readLocationEntries(ctx, directory.ReadDir, visit)
+	return ReadLocationEntries(ctx, directory.ReadDir, visit)
 }
 
-func readLocationEntries(ctx context.Context, read func(int) ([]os.DirEntry, error), visit func([]os.DirEntry) error) error {
+// ReadLocationEntries visits one opened directory in fixed 256-entry batches until its end,
+// stopping on cancellation, a read failure or the first visit failure.
+func ReadLocationEntries(ctx context.Context, read func(int) ([]os.DirEntry, error), visit func([]os.DirEntry) error) error {
 	// Keep sequential consumption independent of filtering, projection and workflow publication.
 	for {
 		if err := ctx.Err(); err != nil {

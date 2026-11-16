@@ -315,3 +315,14 @@ func TestMigrationGuideLinksTheBuildCommit(t *testing.T) {
 	require.Equal(t, "https://github.com/samuelncui/yatm/blob/44402cfd571b3d554662860c25d3501d6decd608/docs/operations/migration.md#tape-script-adaptation",
 		migrationGuide("tape-script-adaptation"))
 }
+
+func TestWithinRootIsLexicallyLocal(t *testing.T) {
+	// The root itself and dot-prefixed children are contained; parents and prefix-sharing siblings are not.
+	root := filepath.Join(string(filepath.Separator), "srv", "yatm")
+	for path, want := range map[string]bool{
+		root: true, filepath.Join(root, "..child"): true, filepath.Join(root, "a", "b"): true,
+		filepath.Dir(root): false, root + "x": false, filepath.Join(root, "..", "other"): false,
+	} {
+		require.Equal(t, want, withinRoot(root, path), path)
+	}
+}

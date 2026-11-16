@@ -129,7 +129,7 @@ func TestImportedFilesReuseExplicitDirectoryKinds(t *testing.T) {
 	require.Equal(t, entity.FileKind_FILE_KIND_REGULAR, second.Kind)
 
 	// All persisted ancestors are directories without a Mode-derived save hook.
-	parents, err := lib.ListParents(ctx, first.ParentID)
+	parents, err := lib.ReadFileAncestors(ctx, first.ParentID)
 	require.NoError(t, err)
 	require.Len(t, parents, 2)
 	for _, parent := range parents {

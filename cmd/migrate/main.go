@@ -11,6 +11,7 @@ import (
 	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
 	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
+	"github.com/samuelncui/yatm/internal/resource"
 	gormlogger "gorm.io/gorm/logger"
 )
 
@@ -83,8 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if db != nil {
-		sqlDB, _ := db.DB()
-		defer sqlDB.Close()
+		defer resource.CloseDB(db)
 	}
 
 	// Run exactly one requested migration phase.

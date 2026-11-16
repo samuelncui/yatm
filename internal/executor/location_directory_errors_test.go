@@ -104,7 +104,7 @@ func TestLocationDirectoryReadFailureIsNotAChildError(t *testing.T) {
 	// A failed directory stream cannot establish an exact total, even if it returned some children.
 	failure := errors.New("directory read failed")
 	visited := false
-	err := readLocationEntries(context.Background(), func(int) ([]os.DirEntry, error) {
+	err := ReadLocationEntries(context.Background(), func(int) ([]os.DirEntry, error) {
 		return make([]os.DirEntry, 1), failure
 	}, func([]os.DirEntry) error {
 		visited = true
@@ -116,7 +116,7 @@ func TestLocationDirectoryReadFailureIsNotAChildError(t *testing.T) {
 	// Cancellation after directory enumeration remains an operation failure through its consumer.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	err = readLocationEntries(ctx, func(int) ([]os.DirEntry, error) {
+	err = ReadLocationEntries(ctx, func(int) ([]os.DirEntry, error) {
 		return make([]os.DirEntry, 1), io.EOF
 	}, func([]os.DirEntry) error {
 		cancel()

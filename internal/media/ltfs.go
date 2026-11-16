@@ -439,8 +439,8 @@ func decodeLTFSName(name ltfsXMLName) (string, error) {
 		}
 		value = decoded
 	}
-	if value == "" || value == "." || value == ".." || strings.ContainsAny(value, "/\\\x00") {
-		return "", fmt.Errorf("invalid LTFS path component, value=%q", value)
+	if err := entity.ValidatePathComponent(value); err != nil {
+		return "", fmt.Errorf("invalid LTFS path component, %w", err)
 	}
 	return value, nil
 }

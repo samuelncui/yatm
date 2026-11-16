@@ -113,6 +113,35 @@ func ValidatePathComponent(value string) error {
 	return nil
 }
 
+// MaxPathDepth bounds the components of a relative path and the ancestry of a Library File.
+const MaxPathDepth = 256
+
+// NormalizeRelativePath resolves empty, "." and ".." components within the selected root.
+// A ".." above that root is rejected instead of clamped; other components keep their literal text.
+func NormalizeRelativePath(value string) ([]string, error) {
+	var parts []string
+	for part := range strings.SplitSeq(value, "/") {
+		switch part {
+		case "", ".":
+			continue
+		case "..":
+			if len(parts) == 0 {
+				return nil, fmt.Errorf("path escapes the selected root, path=%q", value)
+			}
+			parts = parts[:len(parts)-1]
+		default:
+			if err := ValidatePathComponent(part); err != nil {
+				return nil, fmt.Errorf("invalid relative path %q, %w", value, err)
+			}
+			parts = append(parts, part)
+			if len(parts) > MaxPathDepth {
+				return nil, fmt.Errorf("path exceeds %d directory levels, path=%q", MaxPathDepth, value)
+			}
+		}
+	}
+	return parts, nil
+}
+
 // ValidateRelativePath requires slash-separated literal components, without cleaning their identity.
 func ValidateRelativePath(value string) error {
 	for component := range strings.SplitSeq(value, "/") {

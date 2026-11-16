@@ -36,6 +36,10 @@ type runner struct {
 	// attempt or the first request counted them.
 	counts      manifestCounts
 	countsKnown bool
+	// results are the result counters the work path maintains; resultsKnown is false until an
+	// attempt or the first request counted them.
+	results      resultCounts
+	resultsKnown bool
 	// checking reports that the running attempt verifies recorded copies.
 	checking bool
 	exe      *executor.Executor
@@ -128,6 +132,10 @@ func (r *runner) execute(ctx context.Context, config *Config, target *entity.Rea
 	r.lock.Lock()
 	r.checking = config.Spec.GetResultPolicy() == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES
 	r.lock.Unlock()
+	// Result counters are counted before this attempt's first write; its work path advances them.
+	if err := r.recountResults(ctx); err != nil {
+		return err
+	}
 	// Freeze every selected input before any Location starts content processing or publication.
 	if err := r.prepareInputs(ctx, config, target); err != nil {
 		return err

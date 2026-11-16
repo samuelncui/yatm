@@ -336,22 +336,9 @@ func readFileRows(tx *gorm.DB, ids ...int64) (map[int64]*File, error) {
 
 func (l *Library) GetByPath(ctx context.Context, parentID int64, name string) (*File, error) {
 	// Resolve slash shortcuts within the selected root while preserving every literal component.
-	var parts []string
-	for _, part := range strings.Split(name, "/") {
-		switch part {
-		case "", ".":
-			continue
-		case "..":
-			if len(parts) == 0 {
-				return nil, fmt.Errorf("Library path escapes the selected root, path=%q", name)
-			}
-			parts = parts[:len(parts)-1]
-		default:
-			if err := entity.ValidatePathComponent(part); err != nil {
-				return nil, fmt.Errorf("invalid Library path, %w", err)
-			}
-			parts = append(parts, part)
-		}
+	parts, err := entity.NormalizeRelativePath(name)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Library path, %w", err)
 	}
 
 	// The starting directory is the caller's explicit Library root, never a physical working directory.
@@ -413,21 +400,6 @@ func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*Fil
 		return nil, fmt.Errorf("hydrate files fail, %w", err)
 	}
 	return files, nil
-}
-
-func (l *Library) ListParents(ctx context.Context, id int64) ([]*File, error) {
-	return l.listParents(l.readDB().WithContext(ctx), id)
-}
-
-func (l *Library) listParents(tx *gorm.DB, id int64) ([]*File, error) {
-	result, err := listFileRowParents(tx, id)
-	if err != nil {
-		return nil, err
-	}
-	if err := hydrateFileViews(tx, result...); err != nil {
-		return nil, fmt.Errorf("hydrate File ancestry failed, %w", err)
-	}
-	return result, nil
 }
 
 func listFileRowParents(tx *gorm.DB, id int64) ([]*File, error) {

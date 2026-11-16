@@ -186,7 +186,7 @@ func TestLibrarySearchCatalogContentAndPagination(t *testing.T) {
 	} {
 		t.Run(test.query, func(t *testing.T) {
 			// Compare the public source with the existing Catalog search for the same explicit expectation.
-			catalog, err := api.lib.SearchFiles(ctx, test.query, "", 100)
+			catalog, err := api.lib.SearchFilesIn(ctx, test.query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 			require.NoError(t, err)
 			var catalogIDs []int64
 			idsToMatch := make([]int64, 0, len(files))

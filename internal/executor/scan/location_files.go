@@ -21,7 +21,7 @@ func walk(ctx context.Context, exe *executor.Executor, source *library.Location,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if executor.IsLocationTrashPath(relative) || source.IgnoreScope(relative).Ignored() {
+	if library.IsLocationTrashPath(relative) || source.IgnoreScope(relative).Ignored() {
 		return nil
 	}
 	if depth > 256 {
@@ -45,7 +45,7 @@ func walk(ctx context.Context, exe *executor.Executor, source *library.Location,
 			if err := entity.ValidateRelativePath(name); err != nil {
 				return fmt.Errorf("invalid Location entry %q, %w", name, err)
 			}
-			if executor.IsLocationTrashPath(name) || reader.Excluded(entry) {
+			if library.IsLocationTrashPath(name) || reader.Excluded(entry) {
 				continue
 			}
 			info, err := entry.Info()
@@ -189,12 +189,14 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		}
 	}
 	var added executor.Counts
+	inserted := make([]*Entry, 0, len(rows))
 	for _, row := range rows {
 		if present[row.Path] {
 			continue
 		}
 		present[row.Path] = true
 		added.Files, added.Bytes = added.Files+1, added.Bytes+row.Size
+		inserted = append(inserted, row)
 	}
 
 	// The existing Location/path key owns overlap removal; no second selection table is needed.
@@ -202,6 +204,8 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		return err
 	}
 	s.advanceCounts(added, executor.Counts{})
+	// Results are read after the insert, whose save hook settles the default change and finding.
+	s.advanceResults(addedResults(inserted))
 	return nil
 }
 
@@ -258,7 +262,7 @@ func (s *locationStage) recordAbsent(ctx context.Context, scope *Scope, rows []*
 	paths := make([]string, 0, len(rows))
 	absent := make(map[string]*library.FileLocation, len(rows))
 	for _, row := range rows {
-		if executor.IsLocationTrashPath(row.Path) || s.source.Excluded(row.Path, false) {
+		if library.IsLocationTrashPath(row.Path) || s.source.Excluded(row.Path, false) {
 			continue
 		}
 		paths = append(paths, row.Path)
@@ -286,7 +290,11 @@ func (s *locationStage) recordAbsent(ctx context.Context, scope *Scope, rows []*
 		entries = append(entries, &Entry{LocationID: s.source.ID, Path: row.Path, ScopePath: scope.Path,
 			Change: entity.ScanChange_SCAN_CHANGE_REMOVED, Before: row.Observation()})
 	}
-	return s.saveEntries(ctx, entries)
+	if err := s.saveEntries(ctx, entries); err != nil {
+		return err
+	}
+	s.advanceResults(addedResults(entries))
+	return nil
 }
 
 func (s *locationStage) explicitScope(name string) *Scope {
@@ -301,7 +309,7 @@ func (s *locationStage) explicitScope(name string) *Scope {
 // walkSelection resolves selected paths under one Location, applying Ignore to files and directories.
 func walkSelection(ctx context.Context, exe *executor.Executor, source *library.Location, selected string, yield func(string, os.FileInfo) error) error {
 	// openLocation admitted the Location once; the path guard rejects symlink ancestors and paths outside its root.
-	if executor.IsLocationTrashPath(selected) {
+	if library.IsLocationTrashPath(selected) {
 		return fmt.Errorf("Trash content cannot be selected for Scan")
 	}
 	if selected == "" {

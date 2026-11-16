@@ -28,7 +28,7 @@ func (e *Executor) AdmitLocationEntries(ctx context.Context, refs []*entity.Loca
 		if ref == nil || ref.LocationId != refs[0].LocationId {
 			return nil, library.ErrLocationConflict
 		}
-		if IsLocationTrashPath(ref.Path) {
+		if library.IsLocationTrashPath(ref.Path) {
 			return nil, fmt.Errorf("Trash content cannot be added to Library")
 		}
 	}

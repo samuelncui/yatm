@@ -94,7 +94,7 @@ func basicLocationEntry(live *entity.LocationEntry, projection filesProjection) 
 }
 
 func locationOperations(relative string, kind entity.EntryKind) []entity.FileOperationKind {
-	if executor.IsLocationTrashPath(relative) {
+	if library.IsLocationTrashPath(relative) {
 		if executor.IsLocationTrashContent(relative) {
 			return []entity.FileOperationKind{entity.FileOperationKind_FILE_OPERATION_KIND_MOVE}
 		}

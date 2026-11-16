@@ -185,7 +185,75 @@ func (a *jobRestoreRunner) queryFiles(ctx context.Context, param *entity.ListRes
 	return reply, nil
 }
 
+// restoreSummary are the per-item result counters a progress reply reports. A Restore Media attempt
+// counts them before its first checkpoint and every checkpoint advances them, so a progress request
+// never aggregates the manifest.
+type restoreSummary struct {
+	verified, damaged, unlinked, pending int64
+}
+
+// add adds one item's contribution n times: a pending item, or a completed item with its optional
+// output row.
+func (s *restoreSummary) add(pending bool, output *File, n int64) {
+	if pending {
+		s.pending += n
+		return
+	}
+	if output != nil && output.Damaged {
+		s.damaged += n
+	} else {
+		s.verified += n
+	}
+	if output == nil || !output.Linked {
+		s.unlinked += n
+	}
+}
+
+func (s restoreSummary) toEntity() *entity.RestoreSummary {
+	return &entity.RestoreSummary{VerifiedFiles: s.verified, DamagedFiles: s.damaged, UnlinkedFiles: s.unlinked, PendingFiles: s.pending}
+}
+
+// resultSummary returns the maintained counters. A runner that no attempt has counted yet, such as
+// a reopened idle Job, counts its manifest once.
 func (a *jobRestoreRunner) resultSummary(ctx context.Context) (*entity.RestoreSummary, error) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	if !a.summaryKnown {
+		summary, err := a.countSummary(ctx)
+		if err != nil {
+			return nil, err
+		}
+		a.summary, a.summaryKnown = summary, true
+	}
+	return a.summary.toEntity(), nil
+}
+
+// recountSummary counts the summary on the work path, before its checkpoints advance it.
+func (a *jobRestoreRunner) recountSummary(ctx context.Context) error {
+	summary, err := a.countSummary(ctx)
+	if err != nil {
+		return err
+	}
+	a.lock.Lock()
+	a.summary, a.summaryKnown = summary, true
+	a.lock.Unlock()
+	return nil
+}
+
+// advanceSummary applies one committed checkpoint. Unknown counters stay unknown.
+func (a *jobRestoreRunner) advanceSummary(d restoreSummary) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	if !a.summaryKnown {
+		return
+	}
+	a.summary.verified += d.verified
+	a.summary.damaged += d.damaged
+	a.summary.unlinked += d.unlinked
+	a.summary.pending += d.pending
+}
+
+func (a *jobRestoreRunner) countSummary(ctx context.Context) (restoreSummary, error) {
 	// Completed items remain authoritative for migrated legacy manifests without modern output provenance.
 	items := a.db.Model(&Copy{}).Select("item_id").Where("status = ?", entity.CopyStatus_COPY_STATUS_COMPLETED).Group("item_id")
 	var counts struct {
@@ -198,15 +266,15 @@ func (a *jobRestoreRunner) resultSummary(ctx context.Context) (*entity.RestoreSu
 			"COALESCE(SUM(CASE WHEN damaged = ? THEN 1 ELSE 0 END), 0) AS damaged_files, "+
 			"COALESCE(SUM(CASE WHEN COALESCE(linked, ?) = ? THEN 1 ELSE 0 END), 0) AS unlinked_files", false, false, true, false, false).
 		Scan(&counts).Error; err != nil {
-		return nil, fmt.Errorf("query Restore result summary failed, %w", err)
+		return restoreSummary{}, fmt.Errorf("query Restore result summary failed, %w", err)
 	}
 
 	// Pending candidates share completion state, but count only distinct restore items.
 	var pending int64
 	if err := a.db.WithContext(ctx).Model(&Copy{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).
 		Distinct("item_id").Count(&pending).Error; err != nil {
-		return nil, fmt.Errorf("query pending Restore summary failed, %w", err)
+		return restoreSummary{}, fmt.Errorf("query pending Restore summary failed, %w", err)
 	}
-	return &entity.RestoreSummary{VerifiedFiles: counts.VerifiedFiles, DamagedFiles: counts.DamagedFiles,
-		UnlinkedFiles: counts.UnlinkedFiles, PendingFiles: pending}, nil
+	return restoreSummary{verified: counts.VerifiedFiles, damaged: counts.DamagedFiles,
+		unlinked: counts.UnlinkedFiles, pending: pending}, nil
 }

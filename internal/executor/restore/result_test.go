@@ -218,3 +218,53 @@ func TestRestorePrefersUsableCopiesAndNeverSelectsKnownMissingBytes(t *testing.T
 	require.False(t, config.ManifestFrozen)
 	require.ErrorContains(t, newRunner.applySpec(ctx, config.Spec), "no archived copy")
 }
+
+func TestRestoreMaintainedSummaryMatchesManifestAggregation(t *testing.T) {
+	ctx := context.Background()
+	exe, lib := setupTestExecutor(t)
+	_, good := createMediaFile(t, lib, newTapeMedia("SUMMARYA"), ".", "good.txt", []byte("good"), nil)
+	_, bad := createMediaFile(t, lib, newTapeMedia("SUMMARYB"), ".", "bad.txt", []byte("saved"), nil)
+	_, idle := createMediaFile(t, lib, newTapeMedia("SUMMARYC"), ".", "idle.txt", []byte("idle"), nil)
+	var versions []int64
+	for _, file := range []*library.File{good, bad, idle} {
+		version, err := lib.LatestFileVersion(ctx, file.ID)
+		require.NoError(t, err)
+		versions = append(versions, version.ID)
+	}
+	job, err := Create(ctx, exe, 0, &entity.RestoreJobSpec{FileVersionIds: versions, AllowDamagedCopies: true,
+		Destination: &entity.RestoreDestination{LocationId: 1}})
+	require.NoError(t, err)
+	waitIndexed(t, exe, job.ID)
+	value, err := exe.GetJobRunner(ctx, job.ID)
+	require.NoError(t, err)
+	runner := value.(*jobRestoreRunner)
+	requireSummary := func(r *jobRestoreRunner, pending int64) *entity.RestoreSummary {
+		t.Helper()
+		got, err := r.resultSummary(ctx)
+		require.NoError(t, err)
+		want, err := r.countSummary(ctx)
+		require.NoError(t, err)
+		require.Equal(t, want.toEntity(), got)
+		require.Equal(t, pending, got.PendingFiles)
+		return got
+	}
+	require.True(t, runner.summaryKnown, "indexing counts the summary once")
+	requireSummary(runner, 3)
+
+	candidate := func(versionID int64) *copyCandidate {
+		var copy Copy
+		require.NoError(t, runner.db.First(&copy, "item_id = ?", versionID).Error)
+		return loadTestCopyCandidate(t, runner, &copy)
+	}
+	require.NoError(t, finishRestoreCopy(t, runner, candidate(versions[0]), []byte("good")))
+	requireSummary(runner, 2)
+	require.NoError(t, finishRestoreCopy(t, runner, candidate(versions[1]), []byte("damaged")))
+	require.EqualValues(t, 1, requireSummary(runner, 1).DamagedFiles)
+
+	// A repeated checkpoint replaces the completed item's earlier output facts.
+	require.NoError(t, runner.checkpointResult(ctx, candidate(versions[0]), &library.RestoreResult{Outcome: library.RestoreDamaged}))
+	require.EqualValues(t, 2, requireSummary(runner, 1).DamagedFiles)
+
+	// A reopened idle runner counts its unchanging manifest once.
+	requireSummary(&jobRestoreRunner{db: runner.db}, 1)
+}

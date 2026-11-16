@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/samuelncui/acp"
@@ -22,6 +23,12 @@ var (
 	// ErrReadUnavailable identifies a stopped Session lane, not corruption of an unread file.
 	ErrReadUnavailable = errors.New("Media read session is unavailable")
 )
+
+// IsTargetNoSpace reports whether err identifies a full target or a reached capacity boundary.
+func IsTargetNoSpace(err error) bool {
+	return errors.Is(err, ErrTargetNoSpace) || errors.Is(err, ErrCapacityBoundary) ||
+		errors.Is(err, acp.ErrTargetNoSpace) || errors.Is(err, syscall.ENOSPC)
+}
 
 // Access describes the strongest supported access pattern for one direction.
 type Access int

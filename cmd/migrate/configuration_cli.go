@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/samuelncui/yatm/internal/config"
+	"github.com/samuelncui/yatm/internal/resource"
 )
 
 func runConfigurationPhase(ctx context.Context, phase string, conf *config.Config, filename, planFile string, stopped bool) error {
@@ -34,11 +35,7 @@ func runConfigurationPhase(ctx context.Context, phase string, conf *config.Confi
 		return err
 	}
 	if db != nil {
-		sqlDB, err := db.DB()
-		if err != nil {
-			return err
-		}
-		defer sqlDB.Close()
+		defer resource.CloseDB(db)
 	}
 
 	// Review artifacts contain configuration values; create them exclusively with private permissions.

@@ -57,7 +57,7 @@ func TestSearchFilesSupportsFieldsBooleanTagsAndPaths(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			page, err := lib.SearchFiles(ctx, test.query, "", 100)
+			page, err := lib.SearchFilesIn(ctx, test.query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 			require.NoError(t, err)
 			ids := make([]int64, 0, len(page.Results))
 			paths := make([]string, 0, len(page.Results))
@@ -75,13 +75,13 @@ func TestSearchFilesRejectsUnsupportedQueries(t *testing.T) {
 	_, lib := newTestLibrary(t)
 	for _, query := range []string{"", "path:docs", "type:image", "size:-1", "name:/report.*/"} {
 		t.Run(query, func(t *testing.T) {
-			_, err := lib.SearchFiles(context.Background(), query, "", 100)
+			_, err := lib.SearchFilesIn(context.Background(), query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 			require.Error(t, err)
 		})
 	}
-	_, err := lib.SearchFiles(context.Background(), strings.Repeat("a", maxFileSearchRunes+1), "", 100)
+	_, err := lib.SearchFilesIn(context.Background(), strings.Repeat("a", maxFileSearchRunes+1), "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.ErrorContains(t, err, "exceeds")
-	_, err = lib.SearchFiles(context.Background(), "name:report", "", maxFileSearchLimit+1)
+	_, err = lib.SearchFilesIn(context.Background(), "name:report", "", maxFileSearchLimit+1, entity.FileScope_FILE_SCOPE_ALL)
 	require.ErrorContains(t, err, "page limit")
 	_, err = lib.ListTags(context.Background(), "", "", -1)
 	require.ErrorContains(t, err, "page limit")
@@ -103,15 +103,15 @@ func TestSearchFilesAndTagListUseQueryBoundOpaqueCursors(t *testing.T) {
 	}))
 
 	// Page through same-name Files and reject cursor reuse with another query.
-	first, err := lib.SearchFiles(ctx, "name:same", "", 1)
+	first, err := lib.SearchFilesIn(ctx, "name:same", "", 1, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, first.Results, 1)
 	require.NotEmpty(t, first.NextCursor)
-	second, err := lib.SearchFiles(ctx, "name:same", first.NextCursor, 1)
+	second, err := lib.SearchFilesIn(ctx, "name:same", first.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, second.Results, 1)
 	require.NotEqual(t, first.Results[0].File.ID, second.Results[0].File.ID)
-	_, err = lib.SearchFiles(ctx, "name:other", first.NextCursor, 1)
+	_, err = lib.SearchFilesIn(ctx, "name:other", first.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
 	require.ErrorContains(t, err, "another query")
 
 	// Page the canonical Tag projection and bind its cursor to the normalized prefix.
@@ -125,9 +125,9 @@ func TestSearchFilesAndTagListUseQueryBoundOpaqueCursors(t *testing.T) {
 	require.NotEqual(t, tags.Tags[0].Name, next.Tags[0].Name)
 	_, err = lib.ListTags(ctx, "other", tags.NextCursor, 1)
 	require.ErrorContains(t, err, "another query")
-	_, err = lib.SearchFiles(ctx, "name:same", tags.NextCursor, 1)
+	_, err = lib.SearchFilesIn(ctx, "name:same", tags.NextCursor, 1, entity.FileScope_FILE_SCOPE_ALL)
 	require.ErrorContains(t, err, "another operation")
-	_, err = lib.SearchFiles(ctx, "name:same", "not-a-cursor", 1)
+	_, err = lib.SearchFilesIn(ctx, "name:same", "not-a-cursor", 1, entity.FileScope_FILE_SCOPE_ALL)
 	require.ErrorContains(t, err, "page cursor")
 }
 

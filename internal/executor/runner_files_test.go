@@ -21,7 +21,7 @@ func TestIdleRunnerFilesReleaseDescriptorsWithoutReplacingHandles(t *testing.T) 
 	defer func() { require.NoError(t, log.Close()) }()
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "job.db"))
 	require.NoError(t, err)
-	defer func() { require.NoError(t, closeGORMDB(db)) }()
+	defer func() { require.NoError(t, resource.CloseDB(db)) }()
 	connections, err := db.DB()
 	require.NoError(t, err)
 

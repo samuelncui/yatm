@@ -23,6 +23,18 @@ func locationTestSource(t *testing.T, l *Library) *Location {
 	return s
 }
 
+func TestLocationNameUsesThePathComponentRule(t *testing.T) {
+	// A Location name is one import-directory component and may hold literal backslashes.
+	_, lib := newTestLibrary(t)
+	accepted := &Location{Name: `Home\NAS`, ExecutorID: "local", RootPath: filepath.Join(t.TempDir(), "source")}
+	require.NoError(t, lib.CreateLocation(context.Background(), accepted))
+
+	for _, name := range []string{"", " ", ".", "..", "a/b", "a\x00b", "bad\xff", strings.Repeat("n", 201)} {
+		s := &Location{Name: name, ExecutorID: "local", RootPath: filepath.Join(t.TempDir(), "source")}
+		require.ErrorContains(t, lib.CreateLocation(context.Background(), s), "invalid Location name", "%q", name)
+	}
+}
+
 func TestLocationConfigStoredAsJSON(t *testing.T) {
 	ctx := context.Background()
 	db, lib := newTestLibrary(t)
@@ -419,12 +431,12 @@ func TestLocationFileSearchUsesPublishedLocations(t *testing.T) {
 	source, err := lib.PublishAnalyzed(ctx, source.ID, 1, observedTestManifest(observedTestEntry("one", "first"), observedTestEntry("two", "second")), nil)
 	require.NoError(t, err)
 	for _, query := range []string{fmt.Sprintf("location:%d", source.ID), "has:original", "has:original AND NOT has:archive"} {
-		page, err := lib.SearchFiles(ctx, query, "", 100)
+		page, err := lib.SearchFilesIn(ctx, query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 		require.NoError(t, err)
 		require.Len(t, page.Results, 2, query)
 	}
 	for _, query := range []string{"location:0", "location:unknown", "has:backup"} {
-		_, err := lib.SearchFiles(ctx, query, "", 100)
+		_, err := lib.SearchFilesIn(ctx, query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 		require.Error(t, err)
 	}
 }
@@ -437,7 +449,7 @@ func TestLocationLongNamesOnlySuffixNewNodes(t *testing.T) {
 	name := strings.Repeat("日", 80) + ".txt"
 	source = publishComplete(t, lib, source.ID, 1, observedTestEntry(name, "old"))
 	publishComplete(t, lib, source.ID, 2, observedTestEntry(name, "new"))
-	page, err := lib.SearchFiles(ctx, "type:file", "", 100)
+	page, err := lib.SearchFilesIn(ctx, "type:file", "", 100, entity.FileScope_FILE_SCOPE_ALL)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 2)
 	for _, row := range page.Results {

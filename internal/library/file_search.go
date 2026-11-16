@@ -15,7 +15,7 @@ const (
 	defaultFileSearchLimit = 100
 	maxFileSearchLimit     = 500
 	maxFileSearchRunes     = 4096
-	maxFilePathDepth       = 256
+	maxFilePathDepth       = entity.MaxPathDepth
 )
 
 type FileSearchResult struct {
@@ -42,10 +42,6 @@ type filePathState struct {
 	parentID int64
 	parts    []string
 	seen     map[int64]struct{}
-}
-
-func (l *Library) SearchFiles(ctx context.Context, query, cursor string, limit int64) (*FileSearchPage, error) {
-	return l.SearchFilesIn(ctx, query, cursor, limit, entity.FileScope_FILE_SCOPE_ALL)
 }
 
 func (l *Library) SearchFilesIn(ctx context.Context, query, cursor string, limit int64, scope entity.FileScope) (*FileSearchPage, error) {
@@ -105,7 +101,7 @@ func (l *Library) SearchFilesIn(ctx context.Context, query, cursor string, limit
 	if err := hydrateFileViews(l.readDB().WithContext(ctx), files...); err != nil {
 		return nil, fmt.Errorf("hydrate Library search results failed, %w", err)
 	}
-	paths, err := l.resolveFilePaths(ctx, files)
+	paths, err := l.ReadFilePaths(ctx, files)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +191,8 @@ func normalizeFileSearchLimit(limit int64) (int, error) {
 	return int(limit), nil
 }
 
-func (l *Library) resolveFilePaths(ctx context.Context, files []*File) (map[int64]string, error) {
+// ReadFilePaths resolves only page ancestry and never hydrates the parents' content.
+func (l *Library) ReadFilePaths(ctx context.Context, files []*File) (map[int64]string, error) {
 	states, err := l.resolveFilePathStates(ctx, files)
 	if err != nil {
 		return nil, err

@@ -50,7 +50,7 @@ func (l *Library) WalkRestoreSelections(ctx context.Context, selections []*entit
 		if err != nil {
 			return err
 		}
-		paths, err := l.resolveFilePaths(ctx, []*File{file})
+		paths, err := l.ReadFilePaths(ctx, []*File{file})
 		if err != nil {
 			return err
 		}

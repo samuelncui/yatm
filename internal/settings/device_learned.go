@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -54,60 +55,37 @@ func (g DeviceGroup) Save(ctx context.Context, value *entity.DeviceSettings) (*e
 	return saved, err
 }
 
-// PublishTapeReadModel replaces one exact applicability only if its prior model still matches.
-// expected nil means this configuration had no model when the refit began. A stale fit is skipped.
-// The caller owns fitting; this method owns isolated, conflict-safe persistence.
-func (g DeviceGroup) PublishTapeReadModel(ctx context.Context, expected, next *entity.TapeLearnedReadParameters) (bool, error) {
-	// Freeze the result before accessing storage and reject cross-configuration replacement.
+// PublishTapeReadModel replaces the stored model of the same device and applicability, or adds it.
+// The caller owns fitting and serializes refits per device; this method owns isolated persistence.
+func (g DeviceGroup) PublishTapeReadModel(ctx context.Context, next *entity.TapeLearnedReadParameters) error {
+	// Freeze the result before accessing storage.
 	if err := validateLearnedReadParameters(next); err != nil {
-		return false, fmt.Errorf("%w: %v", ErrInvalid, err)
+		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	if proto.Size(next) > learnedReadParametersBytes {
-		return false, fmt.Errorf("%w: learned read parameters exceed their device budget", ErrInvalid)
+		return fmt.Errorf("%w: learned read parameters exceed their device budget", ErrInvalid)
 	}
 	next = clone(next)
-	if expected != nil {
-		expected = clone(expected)
-		if !sameTapeModelScope(expected, next) {
-			return false, fmt.Errorf("%w: learned read parameters applicability changed", ErrInvalid)
-		}
-	}
 
-	// Retain the latest user-owned settings and other configurations while comparing the fitted base.
-	applied := false
-	err := g.group.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// Retain the latest user-owned settings and other configurations.
+	return g.group.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		group := newGroup(tx, g.group.definition)
 		current, err := group.Current(ctx)
 		if err != nil {
 			return err
 		}
-		index := -1
-		for i, model := range current.GetLearnedReadParameters() {
-			if sameTapeModelScope(model, next) {
-				index = i
-				break
-			}
-		}
-		var previous *entity.TapeLearnedReadParameters
-		if index >= 0 {
-			previous = current.LearnedReadParameters[index]
-		}
-		if !proto.Equal(previous, expected) {
-			return nil
-		}
+		index := slices.IndexFunc(current.GetLearnedReadParameters(), func(model *entity.TapeLearnedReadParameters) bool {
+			return sameTapeModelScope(model, next)
+		})
 		if index < 0 {
 			current.LearnedReadParameters = append(current.LearnedReadParameters, next)
 		} else {
 			current.LearnedReadParameters[index] = next
 		}
 		current.LearnedReadParameters = retainTapeReadModels(current.LearnedReadParameters, next, learnedReadParametersBytes)
-		if _, err := group.Save(ctx, current); err != nil {
-			return err
-		}
-		applied = true
-		return nil
+		_, err = group.Save(ctx, current)
+		return err
 	})
-	return applied && err == nil, err
 }
 
 func retainTapeReadModels(values []*entity.TapeLearnedReadParameters, next *entity.TapeLearnedReadParameters, limit int) []*entity.TapeLearnedReadParameters {

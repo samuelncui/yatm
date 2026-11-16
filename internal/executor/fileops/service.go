@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/treeops"
 	"google.golang.org/protobuf/proto"
 )
@@ -261,7 +262,7 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 	if spec.Destination != nil && !info.IsDir() {
 		return nil, fmt.Errorf("operation destination is not a directory")
 	}
-	if spec.Destination != nil && executor.IsLocationTrashPath(spec.Destination.Path) {
+	if spec.Destination != nil && library.IsLocationTrashPath(spec.Destination.Path) {
 		return nil, fmt.Errorf("Trash cannot be an operation destination")
 	}
 	for _, source := range spec.Sources {
@@ -271,7 +272,7 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 		if source.Path == "" {
 			return nil, fmt.Errorf("Location roots cannot be moved or removed")
 		}
-		if executor.IsLocationTrashPath(source.Path) {
+		if library.IsLocationTrashPath(source.Path) {
 			if spec.Kind != entity.FileOperationKind_FILE_OPERATION_KIND_MOVE || !executor.IsLocationTrashContent(source.Path) {
 				return nil, fmt.Errorf("Trash entries can only be moved out")
 			}

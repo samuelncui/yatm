@@ -45,6 +45,10 @@ func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJo
 			return err
 		}
 	}
+	// Output preparation may checkpoint items, which advance the summary from this count.
+	if err := a.recountSummary(ctx); err != nil {
+		return err
+	}
 	if err := a.prepareOutputs(ctx, names); err != nil {
 		return err
 	}

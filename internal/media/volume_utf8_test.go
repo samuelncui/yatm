@@ -34,7 +34,7 @@ func TestVolumeRootPreservesLiteralUTF8Names(t *testing.T) {
 			require.Equal(t, want, selected)
 			discovered, err := DiscoverVolume([]string{root}, volume.Marker.UUID)
 			require.NoError(t, err)
-			require.True(t, SameVolume(volume, discovered))
+			requireSameVolume(t, volume, discovered)
 		})
 	}
 }

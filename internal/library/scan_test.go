@@ -75,12 +75,12 @@ func TestApplyScanUpdatesPhysicalPositionsAtomically(t *testing.T) {
 	require.Equal(t, oldFile.Hash, newFile.Hash)
 	preserved, err := lib.GetFile(ctx, oldFile.ID)
 	require.NoError(t, err)
-	parents, err := lib.ListParents(ctx, preserved.ID)
+	parents, err := lib.ReadFileAncestors(ctx, preserved.ID)
 	require.NoError(t, err)
 	require.NotEqual(t, int64(TrashFileID), parents[0].ID)
-	copies, err := lib.MGetPositionByFileID(ctx, oldFile.ID)
+	copies, _, err := lib.ListContentCopies(ctx, oldFile.Signature, 0, 10)
 	require.NoError(t, err)
-	require.Empty(t, copies[oldFile.ID])
+	require.Empty(t, copies)
 }
 
 func TestApplyScanRollsBackInvalidDiff(t *testing.T) {

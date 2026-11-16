@@ -60,7 +60,13 @@ func listOlderLogLines(reader *os.File, size int64, req *entity.ListJobLogLinesR
 		end = *req.Cursor
 	}
 	start := end
-	var data []byte
+	// head holds [start, cut), the leading bytes not yet split. The lines of [cut, end) follow a
+	// newline that is not the region's last byte, so older bytes never change them: each chunk is
+	// split and matched once, and groups keeps their matches with the newest group first.
+	cut := end
+	var head []byte
+	var groups [][]logLineSpan
+	whole := 0
 	var matched []logLineSpan
 	for start > 0 && end-start < jobLogScanBytes {
 		chunkStart := max(int64(0), start-jobLogReadChunk, end-jobLogScanBytes)
@@ -68,17 +74,36 @@ func listOlderLogLines(reader *os.File, size int64, req *entity.ListJobLogLinesR
 		if err != nil {
 			return nil, err
 		}
-		data = append(chunk, data...)
+		head = append(chunk, head...)
 		start = chunkStart
+		if newline := bytes.IndexByte(chunk, '\n'); newline >= 0 && start+int64(newline) < end-1 {
+			boundary := start + int64(newline) + 1
+			spans, err := splitLogLines(reader, boundary, head[boundary-start:])
+			if err != nil {
+				return nil, err
+			}
+			group := matchingLogLines(spans, req)
+			groups, whole = append(groups, group), whole+len(group)
+			head, cut = head[:boundary-start], boundary
+		}
 
 		// Prefer whole lines, leaving the leading incomplete line for the next older page.
-		pageStart, pageData := olderLogBoundary(start, data)
-		spans, err := splitLogLines(reader, pageStart, pageData)
-		if err != nil {
-			return nil, err
+		pageStart := cut
+		var leading []logLineSpan
+		if start == 0 || cut == end {
+			var data []byte
+			pageStart, data = olderLogBoundary(start, head)
+			spans, err := splitLogLines(reader, pageStart, data)
+			if err != nil {
+				return nil, err
+			}
+			leading = matchingLogLines(spans, req)
 		}
-		matched = matchingLogLines(spans, req)
-		if len(matched) >= jobLogPageLines || start == 0 || end-start == jobLogScanBytes {
+		if len(leading)+whole >= jobLogPageLines || start == 0 || end-start == jobLogScanBytes {
+			matched = leading
+			for i := len(groups) - 1; i >= 0; i-- {
+				matched = append(matched, groups[i]...)
+			}
 			start = pageStart
 			break
 		}
@@ -96,7 +121,12 @@ func listNewerLogLines(reader *os.File, size int64, req *entity.ListJobLogLinesR
 		start = min(*req.Cursor, size)
 	}
 	end := start
-	var data []byte
+	// tail holds [cut, end), the bytes after the last newline, not yet split. The lines of
+	// [start, cut) end in a newline, so newer bytes never change them: each chunk is split and
+	// matched once.
+	cut := start
+	var tail []byte
+	var whole []logLineSpan
 	var matched []logLineSpan
 	for end < size && end-start < jobLogScanBytes {
 		chunkEnd := min(size, end+jobLogReadChunk, start+jobLogScanBytes)
@@ -104,17 +134,32 @@ func listNewerLogLines(reader *os.File, size int64, req *entity.ListJobLogLinesR
 		if err != nil {
 			return nil, err
 		}
-		data = append(data, chunk...)
+		tail = append(tail, chunk...)
+		if newline := bytes.LastIndexByte(chunk, '\n'); newline >= 0 {
+			boundary := end + int64(newline) + 1
+			spans, err := splitLogLines(reader, cut, tail[:boundary-cut])
+			if err != nil {
+				return nil, err
+			}
+			whole = append(whole, matchingLogLines(spans, req)...)
+			tail, cut = tail[boundary-cut:], boundary
+		}
 		end = chunkEnd
 
 		// Stop on a line boundary when the next page can take the remaining bytes.
-		pageEnd, pageData := newerLogBoundary(start, end, size, data)
-		spans, err := splitLogLines(reader, start, pageData)
-		if err != nil {
-			return nil, err
+		pageEnd := cut
+		var trailing []logLineSpan
+		if end == size || cut == start {
+			var data []byte
+			pageEnd, data = newerLogBoundary(cut, end, size, tail)
+			spans, err := splitLogLines(reader, cut, data)
+			if err != nil {
+				return nil, err
+			}
+			trailing = matchingLogLines(spans, req)
 		}
-		matched = matchingLogLines(spans, req)
-		if len(matched) >= jobLogPageLines || end == size || end-start == jobLogScanBytes {
+		if len(whole)+len(trailing) >= jobLogPageLines || end == size || end-start == jobLogScanBytes {
+			matched = append(whole, trailing...)
 			end = pageEnd
 			break
 		}

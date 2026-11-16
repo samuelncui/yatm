@@ -1,6 +1,8 @@
 package entity
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,6 +26,31 @@ func TestPathComponentRejectsInvalidIdentity(t *testing.T) {
 		t.Run(value, func(t *testing.T) {
 			require.Error(t, ValidatePathComponent(value))
 		})
+	}
+}
+
+func TestNormalizeRelativePathStaysWithinRootAndDepth(t *testing.T) {
+	for input, want := range map[string][]string{
+		"": nil, "/": nil, ".": nil, "./a//b/": {"a", "b"}, "a/../b/./c": {"b", "c"},
+		"a/..": nil, `back\slash/ x `: {`back\slash`, " x "},
+		strings.Repeat("d/", MaxPathDepth): slices.Repeat([]string{"d"}, MaxPathDepth),
+	} {
+		parts, err := NormalizeRelativePath(input)
+		require.NoError(t, err, "%q", input)
+		if len(want) == 0 {
+			require.Empty(t, parts, "%q", input)
+			continue
+		}
+		require.Equal(t, want, parts, "%q", input)
+	}
+
+	// Escape is rejected rather than clamped, and depth is capped before later ".." segments.
+	for _, input := range []string{
+		"..", "/../a", "a/../../b", "a/\x00", "a/\xff",
+		strings.Repeat("d/", MaxPathDepth+1), strings.Repeat("d/", MaxPathDepth+1) + "../..",
+	} {
+		_, err := NormalizeRelativePath(input)
+		require.Error(t, err, "%q", input)
 	}
 }
 

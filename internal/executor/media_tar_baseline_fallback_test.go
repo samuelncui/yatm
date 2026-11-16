@@ -71,12 +71,10 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 				parameters.AppliesTo.EncryptionAlgorithm = proto.String("AES-256-GCM-128")
 				parameters.Geometry.NominalWraps = proto.Uint32(80)
 				parameters.SourceReference = "Synthetic independently validated timing fixture"
-				applied, err := exe.settings.Device.PublishTapeReadModel(t.Context(), nil, &entity.TapeLearnedReadParameters{
+				require.NoError(t, exe.settings.Device.PublishTapeReadModel(t.Context(), &entity.TapeLearnedReadParameters{
 					Device: "/dev/nst0", Parameters: parameters, FitVersion: "native-linear-1", UpdatedAtNs: time.Now().UnixNano(),
 					TrainingObservations: 32, MaeSeconds: 1, MaxErrorSeconds: 2,
-				})
-				require.NoError(t, err)
-				require.True(t, applied)
+				}))
 			}
 			ctx, err := exe.withDeviceSettings(t.Context())
 			require.NoError(t, err)

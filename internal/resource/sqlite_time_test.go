@@ -13,7 +13,7 @@ func TestSQLiteTimestampRoundTrip(t *testing.T) {
 	// The supported legacy reader must preserve time.Time values, including source timezone offsets.
 	db, err := OpenSQLite(filepath.Join(t.TempDir(), "time.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, closeDB(db)) })
+	t.Cleanup(func() { require.NoError(t, CloseDB(db)) })
 	type timestamp struct {
 		ID    int
 		Value time.Time
@@ -39,7 +39,7 @@ func TestSQLiteNanosecondIntegerRoundTrip(t *testing.T) {
 	// Current persistence uses signed integers rather than the legacy driver's text date encoding.
 	db, err := OpenSQLite(filepath.Join(t.TempDir(), "nanoseconds.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, closeDB(db)) })
+	t.Cleanup(func() { require.NoError(t, CloseDB(db)) })
 	type instant struct {
 		ID         int
 		AtNS       int64

@@ -8,10 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
@@ -359,8 +357,7 @@ func (s *tapeWriteSession) Finalize(ctx context.Context, cause error) (*mediapkg
 		return nil, errors.Join(mediapkg.ErrFinalizeUnusable, err)
 	}
 	return &mediapkg.WriteResult{
-		Media: s.media, PathPrefix: s.pathPrefix, VerifiedPrefix: errors.Is(cause, acp.ErrTargetNoSpace) || errors.Is(cause, syscall.ENOSPC) ||
-			errors.Is(cause, mediapkg.ErrTargetNoSpace) || errors.Is(cause, mediapkg.ErrCapacityBoundary), Inventory: inventory,
+		Media: s.media, PathPrefix: s.pathPrefix, VerifiedPrefix: mediapkg.IsTargetNoSpace(cause), Inventory: inventory,
 	}, nil
 }
 

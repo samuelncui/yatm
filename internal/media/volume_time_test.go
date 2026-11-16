@@ -61,13 +61,3 @@ func TestVolumeMarkerRejectsOldOrMissingTimeBeforeWrites(t *testing.T) {
 		})
 	}
 }
-
-func TestVolumeIdentityDistinguishesSameMillisecond(t *testing.T) {
-	// Creation times one nanosecond apart must not compare equal after a millisecond round trip.
-	first := &Volume{Root: "/volume", Marker: VolumeMarker{UUID: "volume", CreatedAtNS: 1_700_000_000_123_456_789,
-		Profile: &entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}}}
-	second := *first
-	require.True(t, SameVolume(first, &second))
-	second.Marker.CreatedAtNS++
-	require.False(t, SameVolume(first, &second))
-}

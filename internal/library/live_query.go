@@ -23,16 +23,6 @@ type LiveQueryRow struct {
 	HasArchive         bool
 }
 
-// FilesQueryDependencies separates physical predicates from optional catalog observations.
-func FilesQueryDependencies(query string) (catalog, content bool, err error) {
-	condition, err := parseFilesQuery(query)
-	if err != nil {
-		return false, false, err
-	}
-	catalog, content = queryDependencies(condition)
-	return
-}
-
 func queryDependencies(condition querystring.Condition) (catalog, content bool) {
 	// Location attributes are always observed; only annotations and content need extra Catalog facts.
 	var visit func(querystring.Condition)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -19,7 +20,7 @@ func TestBundleValidationReleasesStateDatabase(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// A committed fixture exercises the validation connection, never a running Job.
 			exe := setupTestExecutor(t)
-			t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+			t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 			job := createTestCatalogJob(t, exe, entity.JobKind_JOB_KIND_ARCHIVE)
 			require.NoError(t, exe.createBundle(context.Background(), job, &JobRecord{
 				ID: singletonJobID, Kind: entity.JobKind_JOB_KIND_ARCHIVE, Status: entity.JobStatus_JOB_STATUS_COMPLETED,

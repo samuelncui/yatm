@@ -118,11 +118,7 @@ func streamLibrary(ctx context.Context, configPath string, output io.Writer, typ
 		return err
 	}
 	defer func() {
-		sqlDB, err := db.DB()
-		if err == nil {
-			err = sqlDB.Close()
-		}
-		if err != nil {
+		if err := resource.CloseDB(db); err != nil {
 			returnErr = errors.Join(returnErr, fmt.Errorf("close export database failed, %w", err))
 		}
 	}()

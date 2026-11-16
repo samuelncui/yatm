@@ -172,7 +172,11 @@ rounds follows the batch size. Location reads never use index fallback.
 
 Ordinary names and paths preserve legal UTF-8 text exactly, including literal backslashes,
 spaces, tabs and newlines. Slash separates components; NUL, dot/dot-dot components and root
-escape are rejected at operation boundaries. The string protocol does not support arbitrary
+escape are rejected at operation boundaries. Root-relative lookup, in Library path
+resolution and the CLI, drops empty and `.` components, applies `..` without clamping
+and rejects more than 256 components. Location and Volume names and LTFS Index names
+follow the same single-component rule; a Location name is also nonblank and at most 200
+bytes, and a Volume name is trimmed of surrounding whitespace. The string protocol does not support arbitrary
 non-UTF-8 filename bytes. Such a listed name is escaped for display, with an explicit
 `FilesEntry.error` and no actionable reference. A child's attribute-read failure likewise
 retains its row and reason. Unknown size, time and kind remain absent or unspecified;

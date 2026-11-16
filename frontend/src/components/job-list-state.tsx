@@ -15,7 +15,7 @@ export const useJobListState = (key: string) => {
       const value = typeof update === "function" ? update(before) : update;
       if (!value) return;
       const previous = store.getState().jobLists[key];
-      store.dispatch(jobListActions.saved({ key, snapshot: encodeJobList(value, value.jobs === before?.jobs ? previous?.jobs : undefined) }));
+      store.dispatch(jobListActions.saved({ key, snapshot: encodeJobList(value, before && previous && { jobs: before.jobs, encoded: previous.jobs }) }));
     },
     [getSnapshot, key, store],
   );

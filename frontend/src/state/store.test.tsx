@@ -133,3 +133,30 @@ it("retains filter-specific Jobs snapshots without decoding rows on scroll or un
   expect(select(store.getState())!.jobs).toBe(initial.jobs);
   expect(makeSelectJobList("restore")(store.getState())).toBeUndefined();
 });
+
+it("re-encodes and decodes only the Jobs a change replaced", () => {
+  const store = createAppStore();
+  const select = makeSelectJobList("all");
+  const save = (jobs: Job[]) => {
+    const before = select(store.getState());
+    const previous = store.getState().jobLists.all;
+    const value = { jobs, revision: 5n, snapshotRevision: 2n, hasMore: false, scrollTop: 0 };
+    store.dispatch(jobListActions.saved({ key: "all", snapshot: encodeJobList(value, before && previous && { jobs: before.jobs, encoded: previous.jobs }) }));
+  };
+  save([Job.create({ id: 2n, revision: 4n }), Job.create({ id: 1n, revision: 3n })]);
+  const initial = select(store.getState())!;
+  const encoded = store.getState().jobLists.all!.jobs;
+
+  const toJson = vi.spyOn(Job, "toJsonString");
+  const fromJson = vi.spyOn(Job, "fromJsonString");
+  save([Job.create({ id: 2n, revision: 5n }), initial.jobs[1]]);
+  const changed = select(store.getState())!;
+
+  expect(toJson).toHaveBeenCalledTimes(1);
+  expect(fromJson).toHaveBeenCalledTimes(1);
+  expect(store.getState().jobLists.all!.jobs[1]).toBe(encoded[1]);
+  expect(changed.jobs[1]).toBe(initial.jobs[1]);
+  expect(changed.jobs[0]).toMatchObject({ id: 2n, revision: 5n });
+  toJson.mockRestore();
+  fromJson.mockRestore();
+});

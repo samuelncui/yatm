@@ -93,8 +93,7 @@ func (s *mediaService) RegisterVolume(
 		return nil, err
 	}
 	if existing != nil {
-		profile := existing.Profile.GetVolume()
-		if profile == nil || !mediapkg.SameVolumeProfile(profile, volume.Marker.Profile) {
+		if !mediapkg.SameVolumeProfile(existing.Profile, volume.Marker) {
 			return nil, fmt.Errorf("Volume marker conflicts with Library, uuid=%q", volume.Marker.UUID)
 		}
 		converted, err := convertMedia(existing)
@@ -182,8 +181,7 @@ func (s *mediaService) classifyInitializedCandidate(
 		item.State = entity.VolumeCandidateState_VOLUME_CANDIDATE_STATE_UNREGISTERED
 		return nil
 	}
-	profile := stored.Profile.GetVolume()
-	if profile == nil || !mediapkg.SameVolumeProfile(profile, candidate.Marker.Profile) {
+	if !mediapkg.SameVolumeProfile(stored.Profile, *candidate.Marker) {
 		item.State = entity.VolumeCandidateState_VOLUME_CANDIDATE_STATE_CONFLICT
 		item.Detail = "Volume marker conflicts with the Library profile"
 		return nil
@@ -234,8 +232,8 @@ func (s *mediaService) createVolumeMedia(
 
 func validateVolumeName(value string) (string, error) {
 	name := strings.TrimSpace(value)
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
-		return "", fmt.Errorf("invalid Volume name, name=%q", value)
+	if err := entity.ValidatePathComponent(name); err != nil {
+		return "", fmt.Errorf("invalid Volume name, %w", err)
 	}
 	return name, nil
 }

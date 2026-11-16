@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 )
@@ -99,10 +100,9 @@ func (l *Library) listFileQuery(ctx context.Context, parent int64, scope entity.
 func (l *Library) ReadFileRows(ctx context.Context, ids []int64) (map[int64]*File, error) {
 	result := make(map[int64]*File, len(ids))
 	ids = uniqueFileIDs(ids)
-	for start := 0; start < len(ids); start += batchSize {
-		end := min(start+batchSize, len(ids))
+	for batch := range slices.Chunk(ids, batchSize) {
 		var rows []*fileRow
-		if err := l.readDB().WithContext(ctx).Where("id IN ?", ids[start:end]).Find(&rows).Error; err != nil {
+		if err := l.readDB().WithContext(ctx).Where("id IN ?", batch).Find(&rows).Error; err != nil {
 			return nil, fmt.Errorf("read File rows failed, %w", err)
 		}
 		for _, row := range rows {
@@ -133,9 +133,9 @@ func (l *Library) ListFileQueryRows(ctx context.Context, parent int64, scope ent
 // ReadFileOriginalsAt resolves one live page's optional associations with one query per batch.
 func (l *Library) ReadFileOriginalsAt(ctx context.Context, locationID int64, paths []string) (map[string]*FileLocation, error) {
 	result := make(map[string]*FileLocation, len(paths))
-	for start := 0; start < len(paths); start += batchSize {
+	for batch := range slices.Chunk(paths, batchSize) {
 		var rows []*FileLocation
-		if err := l.readDB().WithContext(ctx).Where("location_id = ? AND path IN ?", locationID, paths[start:min(start+batchSize, len(paths))]).Find(&rows).Error; err != nil {
+		if err := l.readDB().WithContext(ctx).Where("location_id = ? AND path IN ?", locationID, batch).Find(&rows).Error; err != nil {
 			return nil, fmt.Errorf("read live associations failed, %w", err)
 		}
 		for _, row := range rows {
@@ -153,8 +153,7 @@ func (l *Library) ReadFileFacts(ctx context.Context, ids []int64, attributes, st
 	for _, id := range ids {
 		result[id] = &FileReadFacts{}
 	}
-	for start := 0; start < len(ids); start += batchSize {
-		batch := ids[start:min(start+batchSize, len(ids))]
+	for batch := range slices.Chunk(ids, batchSize) {
 		var originals []*FileLocation
 		if err := l.readDB().WithContext(ctx).Where("file_id IN ?", batch).Find(&originals).Error; err != nil {
 			return nil, err
@@ -225,11 +224,6 @@ func (l *Library) ReadFileFacts(ctx context.Context, ids []int64, attributes, st
 // ReadFileAncestors returns navigation metadata without loading any content projection.
 func (l *Library) ReadFileAncestors(ctx context.Context, id int64) ([]*File, error) {
 	return listFileRowParents(l.readDB().WithContext(ctx), id)
-}
-
-// ReadFilePaths resolves only page ancestry and never hydrates the parents' content.
-func (l *Library) ReadFilePaths(ctx context.Context, files []*File) (map[int64]string, error) {
-	return l.resolveFilePaths(ctx, files)
 }
 
 // FileRowTime uses the metadata timestamp only for logical directories.

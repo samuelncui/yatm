@@ -15,13 +15,17 @@ type StoredSnapshot = Omit<JobListSnapshot, "jobs" | "revision" | "snapshotRevis
   snapshotRevision: string;
   beforeID?: string;
 };
-export const encodeJobList = (value: JobListSnapshot, jobs?: string[]): StoredSnapshot => ({
-  ...value,
-  jobs: jobs ?? value.jobs.map((job) => Job.toJsonString(job)),
-  revision: String(value.revision),
-  snapshotRevision: String(value.snapshotRevision),
-  beforeID: value.beforeID?.toString(),
-});
+// Reuse the stored encoding of every Job object carried over from the previous snapshot.
+export const encodeJobList = (value: JobListSnapshot, previous?: { jobs: Job[]; encoded: string[] }): StoredSnapshot => {
+  const known = new Map(previous?.jobs.map((job, index) => [job, previous.encoded[index]]));
+  return {
+    ...value,
+    jobs: previous && value.jobs === previous.jobs ? previous.encoded : value.jobs.map((job) => known.get(job) ?? Job.toJsonString(job)),
+    revision: String(value.revision),
+    snapshotRevision: String(value.snapshotRevision),
+    beforeID: value.beforeID?.toString(),
+  };
+};
 export type JobsState = Record<string, StoredSnapshot | undefined>;
 const jobs = createSlice({
   name: "jobLists",
@@ -40,7 +44,19 @@ export const jobListActions = jobs.actions;
 export const jobListsReducer = jobs.reducer;
 export const makeSelectJobList = (key: string) => {
   const selectStored = (state: { jobLists: JobsState }) => state.jobLists[key];
-  const selectJobs = createSelector([(state: { jobLists: JobsState }) => state.jobLists[key]?.jobs], (jobs) => jobs?.map((job) => Job.fromJsonString(job)));
+  // Decode only changed rows, so unchanged Jobs keep their object identity for memoized cards.
+  let decoded = new Map<string, Job>();
+  const selectJobs = createSelector([(state: { jobLists: JobsState }) => state.jobLists[key]?.jobs], (jobs) => {
+    if (!jobs) return undefined;
+    const next = new Map<string, Job>();
+    const result = jobs.map((json) => {
+      const job = decoded.get(json) ?? Job.fromJsonString(json);
+      next.set(json, job);
+      return job;
+    });
+    decoded = next;
+    return result;
+  });
   return createSelector([selectStored, selectJobs], (value, jobs): JobListSnapshot | undefined =>
     value && jobs
       ? {

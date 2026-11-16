@@ -25,7 +25,7 @@ func (n *outputNames) seedOwners(ctx context.Context, parent, shadow string) err
 	if err != nil {
 		return err
 	}
-	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+	if !filepath.IsLocal(relative) {
 		return fmt.Errorf("Restore probe parent is outside its Location")
 	}
 	var components []string

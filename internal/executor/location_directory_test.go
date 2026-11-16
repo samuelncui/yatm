@@ -27,7 +27,7 @@ func TestLocationDirectoryConsumesEntriesOnceAndStops(t *testing.T) {
 	for _, stop := range []bool{false, true} {
 		reads, consumed, visits := 0, 0, 0
 		sentinel := errors.New("consumer stopped")
-		err := readLocationEntries(context.Background(), func(n int) ([]os.DirEntry, error) {
+		err := ReadLocationEntries(context.Background(), func(n int) ([]os.DirEntry, error) {
 			reads++
 			if consumed == 100001 {
 				return nil, io.EOF

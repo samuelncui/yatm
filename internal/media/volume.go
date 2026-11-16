@@ -342,19 +342,10 @@ func VolumeCapabilities(volumeType entity.VolumeType) (Capabilities, error) {
 	}
 }
 
-// SameVolume reports whether a mounted marker still identifies the same immutable Volume.
-func SameVolume(first, second *Volume) bool {
-	if first == nil || second == nil {
-		return false
-	}
-	return first.Root == second.Root && first.Marker.Version == second.Marker.Version &&
-		first.Marker.UUID == second.Marker.UUID && first.Marker.CreatedAtNS == second.Marker.CreatedAtNS &&
-		proto.Equal(first.Marker.Profile, second.Marker.Profile)
-}
-
-// SameVolumeProfile compares the immutable profile stored in a marker and the Library.
-func SameVolumeProfile(first, second *entity.VolumeMediaProfile) bool {
-	return proto.Equal(first, second)
+// SameVolumeProfile reports whether a stored Volume profile matches a mounted marker.
+func SameVolumeProfile(stored *entity.MediaProfile, marker VolumeMarker) bool {
+	profile := stored.GetVolume()
+	return profile != nil && proto.Equal(profile, marker.Profile)
 }
 
 // VolumeCapacity returns total and currently available bytes.

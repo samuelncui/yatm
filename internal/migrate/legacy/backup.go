@@ -60,12 +60,7 @@ func openSnapshotCatalog(work, filename string) (_ *gorm.DB, _ func() error, ret
 	cleanup := func() error {
 		var result error
 		if db != nil {
-			sqlDB, err := db.DB()
-			if err != nil {
-				result = err
-			} else {
-				result = sqlDB.Close()
-			}
+			result = resource.CloseDB(db)
 			db = nil
 		}
 		return errors.Join(result, owner.Close())

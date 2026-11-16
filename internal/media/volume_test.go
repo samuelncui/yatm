@@ -9,7 +9,18 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
+
+func requireSameVolume(t *testing.T, want, got *Volume) {
+	// Compare the marker profile by protobuf value and every other identity field exactly.
+	t.Helper()
+	require.True(t, proto.Equal(want.Marker.Profile, got.Marker.Profile))
+	wantMarker, gotMarker := want.Marker, got.Marker
+	wantMarker.Profile, gotMarker.Profile = nil, nil
+	require.Equal(t, want.Root, got.Root)
+	require.Equal(t, wantMarker, gotMarker)
+}
 
 func TestInitializeAndDiscoverVolume(t *testing.T) {
 	discoveryRoot := t.TempDir()
@@ -27,7 +38,7 @@ func TestInitializeAndDiscoverVolume(t *testing.T) {
 
 	discovered, err := DiscoverVolume([]string{discoveryRoot}, strings.ToUpper(initialized.Marker.UUID))
 	require.NoError(t, err)
-	require.True(t, SameVolume(initialized, discovered))
+	requireSameVolume(t, initialized, discovered)
 	capabilities, err := CapabilitiesForProfile(discovered.Marker.Profile.Pack())
 	require.NoError(t, err)
 	require.Equal(t, AccessConcurrentRandom, capabilities.Read)
@@ -44,7 +55,7 @@ func TestInitializeVolumeDoesNotReplaceMarker(t *testing.T) {
 	require.ErrorContains(t, err, "marker already exists")
 	opened, err := OpenVolume(root)
 	require.NoError(t, err)
-	require.True(t, SameVolume(first, opened))
+	requireSameVolume(t, first, opened)
 }
 
 func TestOpenVolumeRejectsChangedProfile(t *testing.T) {
@@ -137,7 +148,7 @@ func TestListVolumesDistinguishesAbsentAndInvalidMarkers(t *testing.T) {
 	volumes, err := ListVolumes([]string{root})
 	require.NoError(t, err)
 	require.Len(t, volumes, 1)
-	require.True(t, SameVolume(volume, volumes[0]))
+	requireSameVolume(t, volume, volumes[0])
 
 	// Existing malformed metadata is a discovery failure, never permission to drop the directory.
 	require.NoError(t, os.WriteFile(filepath.Join(ordinary, VolumeMarkerName), []byte("{invalid"), 0644))
@@ -173,7 +184,7 @@ func TestListVolumeCandidatesKeepsEveryCandidateVisible(t *testing.T) {
 	require.Equal(t, VolumeCandidateUninitialized, states["new-disk"].State)
 	require.Nil(t, states["new-disk"].Marker)
 	require.Equal(t, VolumeCandidateInitialized, states["registered"].State)
-	require.True(t, SameVolume(volume, &Volume{Root: states["registered"].Root, Marker: *states["registered"].Marker}))
+	requireSameVolume(t, volume, &Volume{Root: states["registered"].Root, Marker: *states["registered"].Marker})
 	require.Equal(t, VolumeCandidateInvalid, states["broken"].State)
 	require.Contains(t, states["broken"].Detail, "decode Volume marker failed")
 

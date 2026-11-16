@@ -48,7 +48,7 @@ func TestListParentsRetainsDeepRootAndRejectsInvalidAncestry(t *testing.T) {
 	lib := newJSONLTestLibrary(t)
 	leaf, err := lib.MkdirAll(ctx, 0, strings.Repeat("folder/", 39)+"leaf", 0o755)
 	require.NoError(t, err)
-	parents, err := lib.ListParents(ctx, leaf.ID)
+	parents, err := lib.ReadFileAncestors(ctx, leaf.ID)
 	require.NoError(t, err)
 	require.Len(t, parents, 40)
 	require.Zero(t, parents[0].ParentID)
@@ -57,7 +57,7 @@ func TestListParentsRetainsDeepRootAndRejectsInvalidAncestry(t *testing.T) {
 	// Malformed imported or manually edited catalogs must produce an error rather than a partial root.
 	cycle := &File{ID: 1000, ParentID: 1000, Name: "cycle", Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 	require.NoError(t, lib.SaveFile(ctx, cycle))
-	_, err = lib.ListParents(ctx, cycle.ID)
+	_, err = lib.ReadFileAncestors(ctx, cycle.ID)
 	require.ErrorContains(t, err, "cycle")
 	var parentID int64
 	for index := 0; index <= maxFilePathDepth; index++ {
@@ -65,7 +65,7 @@ func TestListParentsRetainsDeepRootAndRejectsInvalidAncestry(t *testing.T) {
 		require.NoError(t, lib.SaveFile(ctx, file))
 		parentID = file.ID
 	}
-	_, err = lib.ListParents(ctx, parentID)
+	_, err = lib.ReadFileAncestors(ctx, parentID)
 	require.ErrorContains(t, err, "exceeds")
 }
 

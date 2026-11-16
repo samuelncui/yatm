@@ -42,7 +42,7 @@ func TestLogicalRemoveAndMergeShareTrashPlacement(t *testing.T) {
 	require.NoError(t, lib.MergeFiles(ctx, target.ID, []int64{first.ID}))
 	retired, err := lib.GetFile(ctx, first.ID)
 	require.NoError(t, err)
-	parents, err := lib.ListParents(ctx, first.ID)
+	parents, err := lib.ReadFileAncestors(ctx, first.ID)
 	require.NoError(t, err)
 	require.Equal(t, int64(TrashFileID), parents[0].ID)
 	require.Len(t, parents, 4)

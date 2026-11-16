@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { convertFiles, convertMedia, convertPositions, convertSourceFiles, MODE_DIR } from "@/api";
-import { File, Media, MediaAccess, MediaKind, Position, SourceFile, VolumeType } from "@/entity";
+import { convertFiles, convertMedia, convertPositions, MODE_DIR } from "@/api";
+import { File, Media, MediaAccess, MediaKind, Position, VolumeType } from "@/entity";
 
-it("keeps original ns for row sorting and converts File, source, Media and Position dates only for display", () => {
+it("keeps original ns for row sorting and converts File, Media and Position dates only for display", () => {
   const ns = 1_700_000_000_123_999_999n;
   const rows = [
     ...convertFiles([File.create({ mtimeNs: ns })]),
-    ...convertSourceFiles([SourceFile.create({ mtimeNs: ns })]),
     ...convertMedia([Media.create({ createdAtNs: ns })]),
     ...convertPositions([Position.create({ writtenAtNs: ns })]),
   ];

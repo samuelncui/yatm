@@ -143,7 +143,7 @@ func TestCatalogRejectsFormatBeforeChangingJournalMode(t *testing.T) {
 		var mode string
 		require.NoError(t, db.Raw("PRAGMA journal_mode").Scan(&mode).Error)
 		require.Equal(t, map[bool]string{false: "delete", true: "wal"}[wal], mode)
-		require.NoError(t, closeDB(db))
+		require.NoError(t, CloseDB(db))
 	}
 }
 
@@ -207,7 +207,7 @@ func TestCatalogWriteContentionReturnsWithoutChangingTheOwner(t *testing.T) {
 	require.NoError(t, tx.Exec("UPDATE example SET value = 2").Error)
 	other, err := OpenSQLite(path)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, closeDB(other)) })
+	t.Cleanup(func() { require.NoError(t, CloseDB(other)) })
 	// Use a short test-only wait; normal Catalog connections retain the policy tested above.
 	require.NoError(t, other.Exec("PRAGMA busy_timeout=1").Error)
 	require.ErrorContains(t, other.Exec("UPDATE example SET value = 3").Error, "locked")
@@ -221,7 +221,7 @@ func TestSQLiteIncludesWALResetFix(t *testing.T) {
 	// Both build-tag-selected drivers must embed an engine with the upstream fix.
 	db, err := OpenSQLite(":memory:")
 	require.NoError(t, err)
-	defer func() { require.NoError(t, closeDB(db)) }()
+	defer func() { require.NoError(t, CloseDB(db)) }()
 	var version string
 	require.NoError(t, db.Raw("SELECT sqlite_version()").Scan(&version).Error)
 	parts := strings.Split(version, ".")

@@ -189,24 +189,11 @@ func (s *copyItems) prepareSequence(ctx context.Context) error {
 	}
 
 	// The attempt holds its disposable index under the shared Work temporary root.
-	started := time.Now()
-	sequence, err := readplan.Plan(ctx, s.runner.exe.Paths().Work, provider, s.readSpans(ctx, provider))
-	elapsed := time.Since(started).Nanoseconds()
-	order := entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL
-	switch {
-	case errors.Is(err, readplan.ErrBudget):
-		reason = "LOGICAL: read planning budget expired"
-	case err != nil:
-		return err
-	default:
-		s.sequence, order, reason = sequence, sequence.Order(), sequence.Reason()
-	}
-
-	// Explain the selected strategy once without mixing planned ranks with physical observations.
-	ordered.ReadOrderPlanned(order, reason)
-	s.runner.logger.WithContext(ctx).WithField("read_order", reason).
-		WithField("planning_ns", elapsed).Info("Restore read order prepared")
-	return nil
+	sequence, err := executor.PlanReadOrder(
+		ctx, s.runner.logger, "Restore", s.runner.exe.Paths().Work, ordered, provider, s.readSpans(ctx, provider),
+	)
+	s.sequence = sequence
+	return err
 }
 
 func (s *copyItems) readSpans(ctx context.Context, provider media.ReadOrderProvider) iter.Seq2[readplan.Span, error] {

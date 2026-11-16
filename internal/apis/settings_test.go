@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
@@ -57,6 +58,39 @@ func TestSettingsBrowseEnforcesAdministratorRulesBeforePagination(t *testing.T) 
 		_, err := service.BrowsePaths(ctx, &entity.BrowsePathsRequest{Path: denied})
 		require.Equal(t, codes.PermissionDenied, status.Code(err), denied)
 	}
+}
+
+func TestSettingsBrowsePagesAcrossDirectoryReadBatches(t *testing.T) {
+	// Pages over more than one 256-entry read batch return every directory once, in lexical order.
+	ctx := context.Background()
+	api, _, root := setupLocationAPI(t)
+	api.exe = executor.New(nil, api.lib, nil, executor.Paths{
+		Work: api.exe.Paths().Work, Access: []executor.AccessRange{{Root: root}},
+	}, executor.Scripts{}, nil)
+	service := &locationService{api: api}
+	var want []string
+	for index := 0; index < 600; index++ {
+		name := fmt.Sprintf("d-%03d", (index*389)%600)
+		require.NoError(t, os.Mkdir(filepath.Join(root, name), 0755))
+		want = append(want, name)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(root, "d-file"), nil, 0644))
+	sort.Strings(want)
+	var got []string
+	cursor := ""
+	for {
+		page, err := service.BrowsePaths(ctx, &entity.BrowsePathsRequest{Path: root, Cursor: cursor, Limit: 37})
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(page.Directories), 37)
+		for _, directory := range page.Directories {
+			got = append(got, directory.Name)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	require.Equal(t, want, got)
 }
 
 func TestLocationIgnoreCannotExpandAccessAndRestoreNeedsNoScanOrRecommendation(t *testing.T) {

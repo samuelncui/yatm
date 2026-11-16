@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 	"gorm.io/gorm"
@@ -37,8 +38,8 @@ func (l *Library) MergeFiles(ctx context.Context, targetID int64, sourceIDs []in
 	// Preserve the existing slice interface while sharing the bounded mutation path.
 	ids := uniqueFileIDs(sourceIDs)
 	_, err := l.MergeFileMembers(ctx, targetID, func(yield func([]int64) error) error {
-		for start := 0; start < len(ids); start += batchSize {
-			if err := yield(ids[start:min(start+batchSize, len(ids))]); err != nil {
+		for batch := range slices.Chunk(ids, batchSize) {
+			if err := yield(batch); err != nil {
 				return err
 			}
 		}
@@ -92,8 +93,7 @@ func (l *Library) MergeFileMembers(ctx context.Context, targetID int64,
 
 		// Bounded metadata reads and shared placement preserve source order without per-File hydration.
 		if err := visit(func(ids []int64) error {
-			for start := 0; start < len(ids); start += batchSize {
-				batch := ids[start:min(start+batchSize, len(ids))]
+			for batch := range slices.Chunk(ids, batchSize) {
 				stored, err := readFileRows(tx, batch...)
 				if err != nil {
 					return err

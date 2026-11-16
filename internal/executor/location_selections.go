@@ -96,7 +96,7 @@ func (e *Executor) walkLocationSelection(ctx context.Context, location *library.
 	if depth > 256 {
 		return fmt.Errorf("selected directory exceeds depth limit")
 	}
-	if IsLocationTrashPath(ref.Path) {
+	if library.IsLocationTrashPath(ref.Path) {
 		if recursive {
 			return nil
 		}

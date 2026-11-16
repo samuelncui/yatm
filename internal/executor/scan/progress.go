@@ -115,7 +115,120 @@ func (r *runner) lockedCounts(ctx context.Context) (manifestCounts, error) {
 func (r *runner) resetCounts() {
 	r.lock.Lock()
 	r.counts, r.countsKnown = manifestCounts{}, true
+	r.results, r.resultsKnown = resultCounts{}, true
 	r.lock.Unlock()
+}
+
+// resultCounts are the manifest's result counters a progress reply reports: entries per change
+// and finding, the bytes of non-removed entries and the entries whose Preview failed. An attempt
+// counts them before its first write and its work path advances them from its own writes, so a
+// progress request never aggregates the manifest.
+type resultCounts struct {
+	changes         [entity.ScanChange_SCAN_CHANGE_UNCHANGED + 1]int64
+	findings        [entity.ScanFinding_SCAN_FINDING_UNVERIFIABLE + 1]int64
+	bytes           int64
+	previewFailures int64
+}
+
+// add adds one row's contribution n times; a negative n removes it.
+func (c *resultCounts) add(row *Entry, n int64) {
+	if change := int(row.Change); change >= 0 && change < len(c.changes) {
+		c.changes[change] += n
+	}
+	if finding := int(row.Finding); finding >= 0 && finding < len(c.findings) {
+		c.findings[finding] += n
+	}
+	if row.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+		c.bytes += n * row.Size
+	}
+	if row.PreviewError != "" {
+		c.previewFailures += n
+	}
+}
+
+// countResults reads every result counter in one statement.
+func (r *runner) countResults(ctx context.Context) (resultCounts, error) {
+	var groups []struct {
+		Change                 entity.ScanChange
+		Finding                entity.ScanFinding
+		Count, Bytes, Failures int64
+	}
+	var counts resultCounts
+	if err := r.db.WithContext(ctx).Model(&Entry{}).
+		Select("change, finding, COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes, " +
+			"COALESCE(SUM(CASE WHEN preview_error <> '' THEN 1 ELSE 0 END), 0) AS failures").
+		Group("change, finding").Find(&groups).Error; err != nil {
+		return resultCounts{}, err
+	}
+	for _, g := range groups {
+		if change := int(g.Change); change >= 0 && change < len(counts.changes) {
+			counts.changes[change] += g.Count
+		}
+		if finding := int(g.Finding); finding >= 0 && finding < len(counts.findings) {
+			counts.findings[finding] += g.Count
+		}
+		if g.Change != entity.ScanChange_SCAN_CHANGE_REMOVED {
+			counts.bytes += g.Bytes
+		}
+		counts.previewFailures += g.Failures
+	}
+	return counts, nil
+}
+
+// recountResults counts the result counters on the work path, before its writes depend on them.
+func (r *runner) recountResults(ctx context.Context) error {
+	counts, err := r.countResults(ctx)
+	if err != nil {
+		return err
+	}
+	r.lock.Lock()
+	r.results, r.resultsKnown = counts, true
+	r.lock.Unlock()
+	return nil
+}
+
+// lockedResults returns the maintained result counters. A runner that no attempt has counted yet,
+// such as a reopened idle Job, counts its unchanging manifest once. The caller holds the runner lock.
+func (r *runner) lockedResults(ctx context.Context) (resultCounts, error) {
+	if r.resultsKnown {
+		return r.results, nil
+	}
+	counts, err := r.countResults(ctx)
+	if err != nil {
+		return resultCounts{}, err
+	}
+	r.results, r.resultsKnown = counts, true
+	return counts, nil
+}
+
+// advanceResults applies the difference the work path's own writes made. Unknown counters stay
+// unknown, so the next count reads them instead of adding to an unknown base.
+func (r *runner) advanceResults(d resultCounts) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if r.resultsKnown {
+		r.results.merge(d)
+	}
+}
+
+func (c *resultCounts) merge(d resultCounts) {
+	for i, n := range d.changes {
+		c.changes[i] += n
+	}
+	for i, n := range d.findings {
+		c.findings[i] += n
+	}
+	c.bytes += d.bytes
+	c.previewFailures += d.previewFailures
+}
+
+// addedResults is the contribution of rows the work path inserted.
+func addedResults(rows []*Entry) resultCounts {
+	var d resultCounts
+	for _, row := range rows {
+		d.add(row, 1)
+	}
+	return d
 }
 
 // advanceCounts applies the work path's own row changes. Unknown counters stay unknown, so the

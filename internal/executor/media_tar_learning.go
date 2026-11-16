@@ -315,15 +315,12 @@ func (e *Executor) refitTapeReadModel(ctx context.Context, logger *logrus.Logger
 	if model == nil {
 		return
 	}
-	applied, err := e.settings.Device.PublishTapeReadModel(ctx, expected, model)
-	if err != nil {
+	if err := e.settings.Device.PublishTapeReadModel(ctx, model); err != nil {
 		logger.WithContext(ctx).WithError(err).Warn("save learned Tape read parameters failed")
 		return
 	}
-	if applied {
-		logger.WithContext(ctx).WithFields(map[string]any{
-			"device": device, "training_observations": model.TrainingObservations,
-			"mae_seconds": model.MaeSeconds, "max_error_seconds": model.MaxErrorSeconds,
-		}).Info("learned Tape read parameters are available for later operations")
-	}
+	logger.WithContext(ctx).WithFields(map[string]any{
+		"device": device, "training_observations": model.TrainingObservations,
+		"mae_seconds": model.MaeSeconds, "max_error_seconds": model.MaxErrorSeconds,
+	}).Info("learned Tape read parameters are available for later operations")
 }

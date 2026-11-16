@@ -37,10 +37,6 @@ func resolvePath(root, relative string, purpose pathPurpose) (string, error) {
 		return "", err
 	}
 	result := filepath.Join(canonical, filepath.FromSlash(relative))
-	local, err := filepath.Rel(canonical, result)
-	if err != nil || local == ".." || strings.HasPrefix(local, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("Media path escapes root, path=%q", relative)
-	}
 
 	// Walk every existing component so a symlink cannot redirect Media I/O outside the root.
 	current := canonical

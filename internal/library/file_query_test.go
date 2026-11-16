@@ -116,7 +116,7 @@ func TestFileQueryNumericNegationFactsAndUnknowns(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			// Legacy Catalog search uses the same compiler directly on recorded rows.
 			t.Run("Library", func(t *testing.T) {
-				page, err := lib.SearchFiles(ctx, test.query, "", 100)
+				page, err := lib.SearchFilesIn(ctx, test.query, "", 100, entity.FileScope_FILE_SCOPE_ALL)
 				require.NoError(t, err)
 				var names []string
 				for _, result := range page.Results {

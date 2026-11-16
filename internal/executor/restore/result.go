@@ -80,7 +80,38 @@ func (a *jobRestoreRunner) completeOutput(ctx context.Context, copy *copyCandida
 
 func (a *jobRestoreRunner) checkpointResult(ctx context.Context, copy *copyCandidate, result *library.RestoreResult) error {
 	// Keep per-item output facts and all equivalent Media candidates in one Job checkpoint.
-	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var summary restoreSummary
+	if err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Every candidate of an item shares its state, so completing its pending candidates also
+		// tells the summary what the item reported before this checkpoint.
+		summary = restoreSummary{}
+		updated := tx.Model(&Copy{}).Where("item_id = ? AND status = ?", copy.ItemID, entity.CopyStatus_COPY_STATUS_PENDING).
+			Update("status", entity.CopyStatus_COPY_STATUS_COMPLETED)
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected != 0 {
+			summary.add(true, nil, -1)
+		} else {
+			// A repeated checkpoint replaces the earlier outcome of an already completed item.
+			var completed []int64
+			if err := tx.Model(&Copy{}).Where("item_id = ?", copy.ItemID).Limit(1).Pluck("id", &completed).Error; err != nil {
+				return err
+			}
+			if len(completed) == 0 {
+				return fmt.Errorf("Restore item is missing, item_id=%d", copy.ItemID)
+			}
+			var previous []File
+			if err := tx.Where("item_id = ?", copy.ItemID).Limit(1).Find(&previous).Error; err != nil {
+				return err
+			}
+			var old *File
+			if len(previous) != 0 {
+				old = &previous[0]
+			}
+			summary.add(false, old, -1)
+		}
+
 		message := "Restored"
 		switch result.Outcome {
 		case library.RestoreReconnected:
@@ -100,13 +131,7 @@ func (a *jobRestoreRunner) checkpointResult(ctx context.Context, copy *copyCandi
 		}).Create(output).Error; err != nil {
 			return err
 		}
-		updated := tx.Model(&Copy{}).Where("item_id = ?", copy.ItemID).Update("status", entity.CopyStatus_COPY_STATUS_COMPLETED)
-		if updated.Error != nil {
-			return updated.Error
-		}
-		if updated.RowsAffected == 0 {
-			return fmt.Errorf("Restore item is missing, item_id=%d", copy.ItemID)
-		}
+		summary.add(false, output, 1)
 
 		// Indexing owns its final checkpoint; only the existence of an unsatisfied item matters.
 		var pending []int64
@@ -121,5 +146,9 @@ func (a *jobRestoreRunner) checkpointResult(ctx context.Context, copy *copyCandi
 		// Completion moves the manifest position with the state: both describe the same Job.
 		return tx.Model(&executor.JobRecord{}).Where("id = ? AND status = ?", 1, entity.JobStatus_JOB_STATUS_READY).
 			Updates(map[string]any{"status": entity.JobStatus_JOB_STATUS_COMPLETED, "checkpoint": entity.JobStatus_JOB_STATUS_COMPLETED}).Error
-	})
+	}); err != nil {
+		return err
+	}
+	a.advanceSummary(summary)
+	return nil
 }

@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -146,17 +147,9 @@ func normalizeFileEditIDs(ids []int64) ([]int64, error) {
 }
 
 func uniqueFileIDs(ids []int64) []int64 {
-	seen := make(map[int64]struct{}, len(ids))
-	unique := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		unique = append(unique, id)
-	}
-	sort.Slice(unique, func(i, j int) bool { return unique[i] < unique[j] })
-	return unique
+	unique := append(make([]int64, 0, len(ids)), ids...)
+	slices.Sort(unique)
+	return slices.Compact(unique)
 }
 
 func normalizeTags(tags []string) ([]string, error) {

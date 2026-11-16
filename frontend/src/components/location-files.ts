@@ -1,5 +1,5 @@
 import type { FileData } from "@samuelncui/chonky";
-import { convertFiles } from "@/api";
+import { convertFiles, MODE_SYMLINK, MODE_TYPE } from "@/api";
 import { dateFromNs } from "@/tools/time";
 import { FileSelection, FileScope, LocationEntryRef, type Location, type LocationEntry } from "@/entity";
 import { filesPage, locationDirectoryReference } from "@/components/files-browser";
@@ -37,9 +37,8 @@ export function locationEntryFile(entry: LocationEntry, location: Location): Fil
       id: entry.directory ? locationDirectoryID(entry.path) : `location-file:${location.id}:${entry.path}`,
       name,
       isDir: entry.directory,
-      isSymlink: !!facts && (facts.mode & 0x08000000) !== 0,
-      // Go FileMode type bits: directory, link, device, pipe, socket, character device and irregular.
-      isRegularFile: !!facts && (facts.mode & 0x8f280000) === 0,
+      isSymlink: !!facts && (facts.mode & MODE_SYMLINK) !== 0,
+      isRegularFile: !!facts && (facts.mode & MODE_TYPE) === 0,
       size: entry.directory ? undefined : facts ? Number(facts.sizeBytes) : undefined,
       modDate: dateFromNs(facts?.mtimeNs),
       modDateNs: facts?.mtimeNs,

@@ -81,23 +81,13 @@ type Report struct {
 	Error                   string   `json:"error,omitempty"`
 }
 
-// Prepare converts legacy data using the conventional captured-index directory.
-func Prepare(ctx context.Context, db *gorm.DB, workRoot string) (*Report, error) {
-	return PrepareWithLTFSIndex(
-		ctx,
-		db,
-		workRoot,
-		filepath.Join(workRoot, legacyLTFSIndexDirectory),
-	)
-}
-
 // PrepareWithLTFSIndex converts legacy data and imports physical positions from indexRoot.
 func PrepareWithLTFSIndex(
 	ctx context.Context,
 	db *gorm.DB,
 	workRoot string,
 	indexRoot string,
-	restoreRoot ...string,
+	restoreRoot string,
 ) (_ *Report, rerr error) {
 	// Reject unsupported inputs before reports, staging tables or Job directories are written.
 	schema, err := DetectSchema(db)
@@ -214,7 +204,7 @@ func PrepareWithLTFSIndex(
 			legacyJobsRoot,
 			workRoot,
 			job,
-			restoreRoot...,
+			restoreRoot,
 		)
 		if err != nil {
 			return report, fmt.Errorf("migrate legacy job failed, id=%d, %w", job.ID, err)
@@ -236,7 +226,7 @@ func PrepareWithLTFSIndex(
 		if readErr == nil {
 			readErr = migrateJobProperties(ctx, db, stateDB, job.ID, record.Kind)
 		}
-		closeDB(stateDB)
+		_ = resource.CloseDB(stateDB)
 		if readErr != nil {
 			return report, fmt.Errorf("read migrated Job projection failed, id=%d, %w", job.ID, readErr)
 		}
@@ -272,7 +262,7 @@ func prepareJob(
 	legacyJobsRoot string,
 	legacyWorkRoot string,
 	job *legacyJob,
-	restoreRoot ...string,
+	restoreRoot string,
 ) (_ itemCounts, _ []string, returnErr error) {
 	// Reject an undecodable legacy row before creating staging artifacts.
 	if job.State == nil {
@@ -307,7 +297,7 @@ func prepareJob(
 	if err != nil {
 		return itemCounts{}, nil, fmt.Errorf("create current Job DB failed, %w", err)
 	}
-	defer closeDB(jobDB)
+	defer resource.CloseDB(jobDB)
 
 	switch state := job.State.State.(type) {
 	case *legacypb.JobState_Archive:
@@ -368,9 +358,9 @@ func prepareJob(
 			state.Restore,
 		)
 		var warnings []string
-		if err == nil && len(restoreRoot) > 0 && restoreRoot[0] != "" {
+		if err == nil && restoreRoot != "" {
 			var root string
-			root, err = executor.CanonicalConfiguredPath(restoreRoot[0])
+			root, err = executor.CanonicalConfiguredPath(restoreRoot)
 			if err == nil {
 				err = jobDB.Model(&restore.Config{}).Where("id = ?", 1).Update("legacy_root", root).Error
 			}
@@ -378,7 +368,7 @@ func prepareJob(
 		if err == nil && count == 0 {
 			warnings = append(warnings, fmt.Sprintf("job %d has an empty restore manifest; migrated as completed", job.ID))
 		}
-		if count > 0 && (len(restoreRoot) == 0 || restoreRoot[0] == "") {
+		if count > 0 && restoreRoot == "" {
 			warnings = append(warnings, fmt.Sprintf("job %d has no configured legacy restore target; its history is readable but execution requires a prepared restore target", job.ID))
 		}
 		return itemCounts{restore: count}, warnings, err
@@ -1402,7 +1392,7 @@ func RepairJob(ctx context.Context, db *gorm.DB, workRoot string, jobID int64, b
 		}
 		var config restore.Config
 		err = activeDB.WithContext(ctx).Select("legacy_root").First(&config, 1).Error
-		closeDB(activeDB)
+		_ = resource.CloseDB(activeDB)
 		if err != nil {
 			return fmt.Errorf("read frozen Restore destination failed, id=%d, %w", jobID, err)
 		}
@@ -1637,13 +1627,6 @@ func readReport(workRoot string) (*Report, error) {
 		return nil, fmt.Errorf("decode migration report failed, %w", err)
 	}
 	return report, nil
-}
-
-func closeDB(db *gorm.DB) {
-	sqlDB, err := db.DB()
-	if err == nil {
-		_ = sqlDB.Close()
-	}
 }
 
 func exists(filename string) bool {

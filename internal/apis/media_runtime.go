@@ -39,8 +39,7 @@ func applyVolumeRuntime(
 	if volume == nil {
 		return nil
 	}
-	profile := stored.Profile.GetVolume()
-	if profile == nil || !mediapkg.SameVolumeProfile(profile, volume.Marker.Profile) {
+	if !mediapkg.SameVolumeProfile(stored.Profile, volume.Marker) {
 		return nil
 	}
 

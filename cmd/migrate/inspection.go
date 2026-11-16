@@ -15,6 +15,7 @@ import (
 	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/executor"
 	legacy "github.com/samuelncui/yatm/internal/migrate/legacy"
 	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
@@ -239,7 +240,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	}
 
 	// Resolve existing ancestors as well as missing future directories without creating them.
-	canonicalRoot, err := canonicalExisting(root)
+	canonicalRoot, err := executor.CanonicalConfiguredPath(root)
 	if err != nil {
 		return err
 	}
@@ -249,7 +250,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		}
 	}
 	for _, path := range paths {
-		canonical, err := canonicalExisting(path)
+		canonical, err := executor.CanonicalConfiguredPath(path)
 		if err != nil {
 			return err
 		}
@@ -260,7 +261,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 	}
 
 	// Previews are regenerable derivatives; an installation backup leaves them in place.
-	previewRoot, err := canonicalExisting(resolvePreviewRoot(conf))
+	previewRoot, err := executor.CanonicalConfiguredPath(resolvePreviewRoot(conf))
 	if err != nil {
 		return err
 	}
@@ -299,7 +300,7 @@ func inspectBackupScope(conf *config.Config, configPath, root string, report *in
 		if entry.Type()&os.ModeSymlink == 0 {
 			return nil
 		}
-		target, err := canonicalExisting(path)
+		target, err := executor.CanonicalConfiguredPath(path)
 		if err == nil && target == previewRoot {
 			return nil
 		}
@@ -406,11 +407,11 @@ func inspectBusinessPath(root, path string) error {
 	if path == "" {
 		return nil
 	}
-	canonicalRoot, err := canonicalExisting(root)
+	canonicalRoot, err := executor.CanonicalConfiguredPath(root)
 	if err != nil {
 		return err
 	}
-	canonical, err := canonicalExisting(path)
+	canonical, err := executor.CanonicalConfiguredPath(path)
 	if err != nil {
 		return err
 	}
@@ -429,32 +430,5 @@ func inspectBusinessPath(root, path string) error {
 
 func withinRoot(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-func canonicalExisting(path string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err == nil || !errors.Is(err, fs.ErrNotExist) {
-		return resolved, err
-	}
-	if info, statErr := os.Lstat(abs); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(abs)
-		if err != nil {
-			return "", err
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(abs), target)
-		}
-		return canonicalExisting(target)
-	}
-	parent := filepath.Dir(abs)
-	if parent == abs {
-		return "", err
-	}
-	resolved, err = canonicalExisting(parent)
-	return filepath.Join(resolved, filepath.Base(abs)), err
+	return err == nil && filepath.IsLocal(rel)
 }

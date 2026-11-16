@@ -26,6 +26,10 @@ type jobRestoreRunner struct {
 	allowDamaged bool
 
 	progress *executor.Progress
+	// summary is the result summary the work path maintains; summaryKnown is false until an
+	// attempt or the first request counted it.
+	summary      restoreSummary
+	summaryKnown bool
 	// stageKey is the attempt identity of the sampling window this Media attempt opened.
 	stageKey string
 	logFile  *executor.JobLogWriter
@@ -135,6 +139,10 @@ func (a *jobRestoreRunner) restore(ctx context.Context, param *entity.RestoreMed
 		}
 	}()
 
+	// The summary is counted before this attempt's first checkpoint; its checkpoints advance it.
+	if err := a.recountSummary(ctx); err != nil {
+		return err
+	}
 	// The runner owns the copy flow while the Backend owns physical Media preparation and finalization.
 	if err := a.restoreMedia(ctx, param.Target); err != nil {
 		return err

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -123,7 +124,7 @@ func (e *Executor) OpenRunnerFiles(ctx context.Context, jobID int64) (*RunnerFil
 
 // CloseRunnerFiles releases a runner's state database and log independently, reporting each failure.
 func CloseRunnerFiles(db *gorm.DB, log *JobLogWriter) error {
-	dbErr := closeGORMDB(db)
+	dbErr := resource.CloseDB(db)
 	if err := log.Close(); err != nil {
 		return errors.Join(dbErr, fmt.Errorf("close job log failed, %w", err))
 	}

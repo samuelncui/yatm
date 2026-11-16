@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -339,8 +340,7 @@ func (s *fileTree) detach(ctx context.Context, source treeops.Node) (treeops.Rec
 // The caller owns the checkpoint, transaction and any history/original retirement policy.
 func placeInTrash(ctx context.Context, tx *gorm.DB, checkpointID int64, files []*File) error {
 	// Bound name lookup and directory creation even when a Merge visitor supplies a larger page.
-	for start := 0; start < len(files); start += batchSize {
-		batch := files[start:min(start+batchSize, len(files))]
+	for batch := range slices.Chunk(files, batchSize) {
 		names := make([]string, 0, len(batch))
 		for _, file := range batch {
 			if file == nil || file.ID <= 0 {

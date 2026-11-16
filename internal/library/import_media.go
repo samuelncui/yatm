@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"google.golang.org/protobuf/proto"
@@ -43,16 +44,12 @@ func validateRetainedImportMedia(tx *gorm.DB, owners map[int64]*Media) error {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	for start := 0; start < len(ids); start += batchSize {
-		end := start + batchSize
-		if end > len(ids) {
-			end = len(ids)
-		}
+	for batch := range slices.Chunk(ids, batchSize) {
 		var values []*Media
-		if err := tx.Where("id IN ?", ids[start:end]).Order("id").Find(&values).Error; err != nil {
+		if err := tx.Where("id IN ?", batch).Order("id").Find(&values).Error; err != nil {
 			return fmt.Errorf("read imported Position owners failed, %w", err)
 		}
-		if len(values) != end-start {
+		if len(values) != len(batch) {
 			return fmt.Errorf("Media-only import removes an owner of retained Positions")
 		}
 

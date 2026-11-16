@@ -24,7 +24,7 @@ func TestJobNanosecondsRoundTrip(t *testing.T) {
 	// Both endpoints must retain every bit through SQLite, the runtime snapshot and JSON.
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "timestamps.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, closeGORMDB(db)) })
+	t.Cleanup(func() { require.NoError(t, resource.CloseDB(db)) })
 	require.NoError(t, db.AutoMigrate(ModelJob))
 	for i, stamp := range []int64{math.MinInt64, math.MaxInt64} {
 		row := &jobCatalogRow{ID: int64(i + 1), CreatedAtNS: stamp, UpdatedAtNS: stamp, DeletedAtNS: soft_delete.DeletedAt(math.MaxInt64)}

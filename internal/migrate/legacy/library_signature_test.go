@@ -29,7 +29,7 @@ func TestPrepareKeepsIndependentLegacyFilesWithDuplicateContent(t *testing.T) {
 	require.NoError(t, db.Order("id").Find(&before).Error)
 
 	// Equal content does not merge independently organized legacy File IDs.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	var staged []*stagedLibraryFile
@@ -72,7 +72,7 @@ func TestPreparePreservesOpaqueAndUnsetFileSignatures(t *testing.T) {
 	require.NoError(t, db.Model(&legacyLibraryFile{}).Where("signature IS NULL").Count(&unsetBefore).Error)
 
 	// The staging table preserves original facts until archive evidence is classified.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	var staged []*stagedLibraryFile

@@ -2,6 +2,7 @@ package library
 
 import (
 	"io/fs"
+	"slices"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
@@ -27,8 +28,7 @@ func hydrateFileViews(tx *gorm.DB, files ...*File) error {
 
 	// Preserve original-before-history semantics with one bounded read per fact group.
 	projection := tx.Session(&gorm.Session{NewDB: true})
-	for start := 0; start < len(ids); start += batchSize {
-		batch := ids[start:min(start+batchSize, len(ids))]
+	for batch := range slices.Chunk(ids, batchSize) {
 		var originals []*FileLocation
 		if err := projection.Where("file_id IN ?", batch).Find(&originals).Error; err != nil {
 			return err

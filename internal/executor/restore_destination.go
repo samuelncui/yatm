@@ -61,7 +61,7 @@ func (e *Executor) RestoreOutputPath(ctx context.Context, destination *entity.Re
 		}
 	}
 	joined := filepath.Join(destination.Path, filepath.FromSlash(relative))
-	if IsLocationTrashPath(filepath.ToSlash(joined)) {
+	if library.IsLocationTrashPath(filepath.ToSlash(joined)) {
 		return "", fmt.Errorf("Restore output cannot be inside Trash")
 	}
 	full := filepath.Join(root, joined)
@@ -72,7 +72,7 @@ func (e *Executor) RestoreOutputPath(ctx context.Context, destination *entity.Re
 			continue
 		}
 		rel, err := filepath.Rel(base, full)
-		if err != nil || !withinLocationPath(rel) {
+		if err != nil || !filepath.IsLocal(rel) {
 			continue
 		}
 		if !access.matcher.Match(filepath.ToSlash(rel), relative == "") {

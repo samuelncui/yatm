@@ -14,6 +14,7 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/library"
 	legacypb "github.com/samuelncui/yatm/internal/migrate/legacy/pb"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -24,10 +25,10 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 	// Distinct source instants within one millisecond must survive the released legacy adapter.
 	ctx := context.Background()
 	db := newLegacyTestDB(t)
-	t.Cleanup(func() { closeDB(db) })
+	t.Cleanup(func() { _ = resource.CloseDB(db) })
 	seedLegacyTimestampRows(t, db)
 	root := t.TempDir()
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.NoError(t, Commit(ctx, db, root))
@@ -99,7 +100,7 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 func TestPreparePreservesZeroTimeAndNullableDestruction(t *testing.T) {
 	// Legacy zero times map to zero without triggering GORM's automatic timestamp population.
 	db := newLegacyTestDB(t)
-	t.Cleanup(func() { closeDB(db) })
+	t.Cleanup(func() { _ = resource.CloseDB(db) })
 	seedLegacyTimestampRows(t, db)
 	require.NoError(t, db.Delete(&legacyJob{}, 1).Error)
 	require.NoError(t, db.Model(&legacyLibraryFile{}).Where("id = ?", 1).Update("mod_time", time.Time{}).Error)
@@ -109,7 +110,7 @@ func TestPreparePreservesZeroTimeAndNullableDestruction(t *testing.T) {
 	require.NoError(t, db.Create(&legacyLibraryTape{ID: 2, Barcode: "ZERO02", DestroyTime: &zero}).Error)
 	require.NoError(t, db.Model(&legacyLibraryPosition{}).Where("id = ?", 1).
 		Updates(map[string]any{"mod_time": zero, "write_time": zero}).Error)
-	report, err := Prepare(context.Background(), db, t.TempDir())
+	report, err := prepareLegacy(context.Background(), db, t.TempDir())
 	require.NoError(t, err)
 	require.True(t, report.Success)
 
@@ -149,7 +150,7 @@ func TestPrepareRejectsOutOfRangeLegacyInstants(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%s/%d", field.table, field.column, year), func(t *testing.T) {
 				// Record the released source cell before attempting conversion into staging.
 				db := newLegacyTestDB(t)
-				t.Cleanup(func() { closeDB(db) })
+				t.Cleanup(func() { _ = resource.CloseDB(db) })
 				seedLegacyTimestampRows(t, db)
 				stamp := time.Date(year, 1, 2, 3, 4, 5, 123456789, time.UTC)
 				require.NoError(t, db.Table(field.table).Where("id = ?", 1).Update(field.column, stamp).Error)
@@ -157,7 +158,7 @@ func TestPrepareRejectsOutOfRangeLegacyInstants(t *testing.T) {
 				var before string
 				require.NoError(t, db.Raw(query).Scan(&before).Error)
 				root := t.TempDir()
-				report, err := Prepare(context.Background(), db, root)
+				report, err := prepareLegacy(context.Background(), db, root)
 				require.ErrorContains(t, err, field.message)
 				require.ErrorContains(t, err, "outside the signed Unix nanosecond range")
 				require.False(t, report.Success)

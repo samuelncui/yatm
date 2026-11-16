@@ -305,19 +305,6 @@ func (m *Matcher) level(name string, directory bool, states, next []uint64) bool
 	return best >= 0 && !include
 }
 
-// Literal converts an exact relative subtree into an anchored rule without pattern reinterpretation.
-func Literal(value string) string {
-	var result strings.Builder
-	result.WriteByte('/')
-	for _, ch := range value {
-		if strings.ContainsRune("\\*?[]#! ", ch) {
-			result.WriteByte('\\')
-		}
-		result.WriteRune(ch)
-	}
-	return result.String()
-}
-
 func closeStars(state []uint64, parts []string) {
 	for position, part := range parts {
 		if part == "**" && bitSet(state, position) {

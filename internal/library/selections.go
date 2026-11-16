@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
@@ -82,7 +83,7 @@ func (l *Library) ValidateOriginalSelections(ctx context.Context, selections []*
 // WalkOriginalSelections omits Trash from recursive original-content workflows.
 // Restore continues to use saved versions through the unrestricted metadata walker.
 func (l *Library) WalkOriginalSelections(ctx context.Context, selections []*entity.FileSelection, yield func(*File, string) error) error {
-	return l.WalkOriginalSelectionBatches(ctx, selections, selectionBatchYield(yield))
+	return l.walkFileSelections(ctx, selections, true, selectionBatchYield(yield))
 }
 
 // WalkOriginalSelectionBatches shares ordered expansion and overlap decisions with the row walker.
@@ -330,9 +331,9 @@ func (l *Library) selectionRemainder(ctx context.Context, files []*File, targets
 func (l *Library) savedSelectionFiles(ctx context.Context, ids []int64) (map[int64]bool, error) {
 	versions := make(map[int64]bool)
 	ids = uniqueFileIDs(ids)
-	for start := 0; start < len(ids); start += batchSize {
+	for batch := range slices.Chunk(ids, batchSize) {
 		var selected []int64
-		if err := l.readDB().WithContext(ctx).Model(&FileVersion{}).Distinct("file_id").Where("file_id IN ?", ids[start:min(start+batchSize, len(ids))]).Pluck("file_id", &selected).Error; err != nil {
+		if err := l.readDB().WithContext(ctx).Model(&FileVersion{}).Distinct("file_id").Where("file_id IN ?", batch).Pluck("file_id", &selected).Error; err != nil {
 			return nil, err
 		}
 		for _, id := range selected {
@@ -467,7 +468,7 @@ func (l *Library) walkPhysicalSelection(ctx context.Context, root selectionRoot,
 				files = append(files, file)
 			}
 		}
-		paths, err := l.resolveFilePaths(ctx, files)
+		paths, err := l.ReadFilePaths(ctx, files)
 		if err != nil {
 			return err
 		}

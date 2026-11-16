@@ -15,12 +15,15 @@ import {
   SettingsServiceClient,
   VolumeType,
 } from "@/entity";
-import type { File, Media, Position, SourceFile } from "@/entity";
+import type { File, Media, Position } from "@/entity";
 
 import { dateFromNs } from "@/tools/time";
 import { formatFilesize } from "@/tools/tools";
 
 export const MODE_DIR = 2147483648n; // d: is a directory
+export const MODE_SYMLINK = 0x08000000; // L: symbolic link
+// Go FileMode type bits: directory, link, device, pipe, socket, character device and irregular.
+export const MODE_TYPE = 0x8f280000;
 
 const apiBase: string = (() => {
   const base = (window as any).apiBase as string;
@@ -114,27 +117,6 @@ export function convertFiles(files: Array<File>, dirWithSize: boolean = false): 
       tags: file.tags,
       note: file.note,
       detailsAvailable: true,
-    };
-  });
-}
-
-export function convertSourceFiles(files: Array<SourceFile>): FileData[] {
-  return files.map((file) => {
-    const isDir = (file.mode & MODE_DIR) > 0;
-
-    return {
-      id: file.path,
-      name: file.name,
-      ext: extname(file.name),
-      isDir,
-      isHidden: file.name.startsWith("."),
-      openable: isDir,
-      selectable: true,
-      draggable: true,
-      droppable: false,
-      size: isDir ? undefined : Number(file.sizeBytes),
-      modDate: dateFromNs(file.mtimeNs),
-      modDateNs: file.mtimeNs,
     };
   });
 }

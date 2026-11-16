@@ -96,15 +96,16 @@ func OpenCatalog(dialect, dsn string, wal bool, validate func(*gorm.DB) error) (
 func (c *Catalog) Close() error {
 	var result error
 	if c.Read != nil && c.Read != c.Write {
-		result = errors.Join(result, closeDB(c.Read))
+		result = errors.Join(result, CloseDB(c.Read))
 	}
 	if c.Write != nil {
-		result = errors.Join(result, closeDB(c.Write))
+		result = errors.Join(result, CloseDB(c.Write))
 	}
 	return result
 }
 
-func closeDB(db *gorm.DB) error {
+// CloseDB closes the connection pool behind a GORM handle.
+func CloseDB(db *gorm.DB) error {
 	connections, err := db.DB()
 	if err != nil {
 		return err

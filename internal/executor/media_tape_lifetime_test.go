@@ -11,6 +11,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Only local stand-in scripts touch these fixture paths; no device command runs.
 			exe := setupTestExecutor(t)
-			t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+			t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 			require.NoError(t, exe.lib.AutoMigrate())
 			exit := func(stage string) int {
 				if test.failure == stage {

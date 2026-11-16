@@ -41,7 +41,7 @@ func (e *Executor) createBundle(
 	if err != nil {
 		return fmt.Errorf("create Job DB failed, id=%d, %w", job.ID, err)
 	}
-	defer closeGORMDB(db)
+	defer resource.CloseDB(db)
 	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.AutoMigrate(&JobRecord{}); err != nil {
 			return fmt.Errorf("create common schema failed, %w", err)
@@ -79,20 +79,9 @@ func (e *Executor) openStateDB(jobID int64) (*gorm.DB, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return db, func() { _ = closeGORMDB(db) }, nil
+	return db, func() { _ = resource.CloseDB(db) }, nil
 }
 
 func (e *Executor) stateDBPath(jobID int64) string {
 	return filepath.Join(e.jobWorkPath(jobID), "state.db")
-}
-
-func closeGORMDB(db *gorm.DB) error {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("get SQL DB failed, %w", err)
-	}
-	if err := sqlDB.Close(); err != nil {
-		return fmt.Errorf("close SQL DB failed, %w", err)
-	}
-	return nil
 }

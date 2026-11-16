@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/files"
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
@@ -216,7 +215,7 @@ func (s *filesService) UpdateMetadata(ctx context.Context, req *entity.UpdateFil
 			return nil, status.Error(codes.InvalidArgument, "entry reference is required")
 		}
 		if live := ref.GetLocation(); live != nil {
-			if executor.IsLocationTrashPath(live.Path) {
+			if library.IsLocationTrashPath(live.Path) {
 				return nil, status.Error(codes.FailedPrecondition, "trash content cannot be annotated")
 			}
 			groups[live.LocationId] = append(groups[live.LocationId], live)

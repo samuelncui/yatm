@@ -83,8 +83,7 @@ func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequ
 		return reply, nil
 	}
 	if inspectedVolume != nil {
-		profile := stored.Profile.GetVolume()
-		if profile == nil || !mediapkg.SameVolumeProfile(profile, inspectedVolume.Marker.Profile) {
+		if !mediapkg.SameVolumeProfile(stored.Profile, inspectedVolume.Marker) {
 			return nil, fmt.Errorf("Volume marker conflicts with Library, uuid=%q", identity)
 		}
 	}

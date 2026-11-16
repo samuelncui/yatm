@@ -38,7 +38,7 @@ func TestLibraryOperationsPreserveOrganizationBoundaries(t *testing.T) {
 
 	// Library removal uses Trash and preserves the original, saved version and metadata.
 	f.execute(t, &entity.FileOperationSpec{Kind: entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE, Sources: []*entity.FileOperationRef{libraryRef(file.ID), libraryRef(file.ID)}}, nil)
-	parents, err := f.exe.Lib().ListParents(ctx, file.ID)
+	parents, err := f.exe.Lib().ReadFileAncestors(ctx, file.ID)
 	require.NoError(t, err)
 	require.EqualValues(t, library.TrashFileID, parents[0].ID)
 	original, err := f.exe.Lib().GetFileLocation(ctx, file.ID)

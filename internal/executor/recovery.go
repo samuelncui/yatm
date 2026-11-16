@@ -11,6 +11,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/resource"
 )
 
 var (
@@ -121,7 +122,7 @@ func (e *Executor) validateBundle(jobID int64) (complete bool, returnErr error) 
 	if err != nil {
 		return false, fmt.Errorf("job_id=%d, %w: %v", jobID, ErrBundleMissing, err)
 	}
-	defer func() { returnErr = errors.Join(returnErr, closeGORMDB(db)) }()
+	defer func() { returnErr = errors.Join(returnErr, resource.CloseDB(db)) }()
 	record := new(JobRecord)
 	if err := db.First(record, singletonJobID).Error; err != nil {
 		return false, fmt.Errorf("validate Job DB failed, id=%d, %w", jobID, err)
@@ -156,11 +157,12 @@ func (e *Executor) validateBundle(jobID int64) (complete bool, returnErr error) 
 		}
 		return true, nil
 	}
-	var count int64
-	if err := db.Table(manifestTable).Count(&count).Error; err != nil {
+	// Only emptiness matters, so one row answers without counting the manifest.
+	var present []int64
+	if err := db.Table(manifestTable).Limit(1).Pluck("id", &present).Error; err != nil {
 		return false, fmt.Errorf("validate Job manifest failed, id=%d, %w", jobID, err)
 	}
-	if count == 0 && record.Status != entity.JobStatus_JOB_STATUS_COMPLETED {
+	if len(present) == 0 && record.Status != entity.JobStatus_JOB_STATUS_COMPLETED {
 		return false, fmt.Errorf("committed Job bundle has empty unfinished manifest, id=%d", jobID)
 	}
 	return true, nil

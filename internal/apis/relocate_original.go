@@ -17,7 +17,7 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	if req.GetFileId() <= 0 || req.GetReference() == nil {
 		return nil, status.Error(codes.InvalidArgument, "File and original reference are required")
 	}
-	if executor.IsLocationTrashPath(req.Reference.Path) {
+	if library.IsLocationTrashPath(req.Reference.Path) {
 		return nil, status.Error(codes.FailedPrecondition, "move the file out of Trash before associating it")
 	}
 	location, _, info, err := s.api.exe.ResolveLocationEntry(ctx, req.Reference)

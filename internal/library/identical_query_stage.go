@@ -206,7 +206,7 @@ func (s *IdenticalSnapshot) stageIdenticalPaths() error {
 }
 
 func identicalInRoots(o FileLocation, roots []IdenticalRoot) bool {
-	if o.Path == ".trash" || strings.HasPrefix(o.Path, ".trash/") {
+	if IsLocationTrashPath(o.Path) {
 		return false
 	}
 	for _, r := range roots {

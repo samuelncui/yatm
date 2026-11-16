@@ -13,6 +13,7 @@ import { JobFilters, jobFilterFromParams } from "@/components/job-filters";
 
 import { JobCard, jobLabel } from "@/components/job-card";
 import { contentTime } from "@/components/content-status";
+import { isJobRunning } from "@/components/job-progress";
 import { PageHeading } from "@/components/page-heading";
 import { errorMessage } from "@/tools";
 import { ArchiveCard } from "@/components/job-archive";
@@ -77,20 +78,30 @@ const FocusedJob = ({ id }: { id: bigint }) => {
     }
   }, [id]);
   useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
     const pending = request;
-    const poll = async () => {
-      await refresh();
-      if (active) timer = setTimeout(() => void poll(), 2000);
-    };
-    void poll();
+    void refresh();
     return () => {
-      active = false;
       pending.current++;
-      clearTimeout(timer);
     };
   }, [refresh]);
+  // Like card progress, only a running Job polls; user actions refresh a settled one through RefreshContext.
+  const running = !!job && isJobRunning(job);
+  useEffect(() => {
+    if (!running) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () => {
+      timer = setTimeout(async () => {
+        await refresh();
+        if (active) poll();
+      }, 2000);
+    };
+    poll();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [running, refresh]);
   return (
     <RefreshContext.Provider value={refresh}>
       <Box className="browser-box jobs-page focused-job-page">
@@ -137,9 +148,17 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
   const generation = useRef(0);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const scrollTop = useRef<number>(undefined);
   useLayoutEffect(() => {
     if (listRef.current) listRef.current.scrollTop = initialScroll;
   }, [initialScroll]);
+  // Save the list position once when leaving it rather than on every scroll event.
+  useEffect(() => {
+    const latest = scrollTop;
+    return () => {
+      if (latest.current !== undefined) scroll(latest.current);
+    };
+  }, [scroll]);
 
   const loadJobs = useCallback(async () => {
     const request = generation.current;
@@ -251,8 +270,7 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
         aria-label="Jobs"
         ref={listRef}
         onScroll={(event) => {
-          const scrollTop = event.currentTarget.scrollTop;
-          scroll(scrollTop);
+          scrollTop.current = event.currentTarget.scrollTop;
         }}
       >
         {catalogError && (

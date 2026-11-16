@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +28,7 @@ func TestUtil_DB(t *testing.T) {
 	db, err := exe.NewStateDB(context.Background(), 1)
 	require.NoError(t, err)
 	require.NotNil(t, db)
-	require.NoError(t, closeGORMDB(db))
+	require.NoError(t, resource.CloseDB(db))
 }
 
 func TestUtil_Key(t *testing.T) {

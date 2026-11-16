@@ -22,6 +22,15 @@ var (
 	ErrLocationUnverified = errors.New("Location root is not usable for access")
 )
 
+// LocationTrashDirectory is the reserved, browsable recycle bin of a Location.
+const LocationTrashDirectory = ".trash"
+
+// IsLocationTrashPath identifies content excluded from collection and business selections.
+// It must not be used as a filesystem access exclusion: browsing and moving out are allowed.
+func IsLocationTrashPath(relative string) bool {
+	return relative == LocationTrashDirectory || strings.HasPrefix(relative, LocationTrashDirectory+"/")
+}
+
 type Location struct {
 	ID            int64                   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name          string                  `gorm:"type:varchar(256);not null" json:"name"`
@@ -150,11 +159,11 @@ func NormalizeIgnoreRules(value *entity.IgnoreRules) (*entity.IgnoreRules, error
 
 func validateLocation(s *Location) error {
 	// A display name is also one safe logical import-directory component.
-	if strings.TrimSpace(s.Name) == "" || len(s.Name) > 200 || !utf8.ValidString(s.Name) {
+	if strings.TrimSpace(s.Name) == "" || len(s.Name) > 200 {
 		return fmt.Errorf("invalid Location name %q", s.Name)
 	}
-	if s.Name == "." || s.Name == ".." || strings.ContainsAny(s.Name, "/\\\x00") {
-		return fmt.Errorf("invalid Location name %q", s.Name)
+	if err := entity.ValidatePathComponent(s.Name); err != nil {
+		return fmt.Errorf("invalid Location name, %w", err)
 	}
 
 	// Filesystem admission belongs to the Executor; persistence still rejects malformed paths.

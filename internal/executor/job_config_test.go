@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -54,7 +55,7 @@ func TestReadJobConfigIsReadOnlyInEveryState(t *testing.T) {
 		t.Run(state.String(), func(t *testing.T) {
 			// URI-sensitive characters must still address the existing bundle exactly.
 			exe := setupTestExecutor(t)
-			t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+			t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 			job := creationConfigJob(t, exe, state)
 			work := filepath.Join(t.TempDir(), "Jobs ?#")
 			require.NoError(t, os.Rename(exe.paths.Work, work))
@@ -102,7 +103,7 @@ func TestReadJobConfigIsReadOnlyInEveryState(t *testing.T) {
 func TestReadJobConfigDuringActiveAttempt(t *testing.T) {
 	// Represent an admitted operation without running a pipeline that could legitimately change the evidence.
 	exe := setupTestExecutor(t)
-	t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+	t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 	job := creationConfigJob(t, exe, entity.JobStatus_JOB_STATUS_READY)
 	ctx, cancel := context.WithCancelCause(context.Background())
 	defer cancel(nil)
@@ -126,7 +127,7 @@ func TestReadJobConfigDuringActiveAttempt(t *testing.T) {
 func TestReadJobConfigWithRelativeWorkPath(t *testing.T) {
 	// The configured work root may be relative to the server's working directory.
 	exe := setupTestExecutor(t)
-	t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+	t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 	job := creationConfigJob(t, exe, entity.JobStatus_JOB_STATUS_READY)
 	directory, err := os.Getwd()
 	require.NoError(t, err)
@@ -144,7 +145,7 @@ func TestReadJobConfigWithRelativeWorkPath(t *testing.T) {
 func TestReadJobConfigExcludesDeletion(t *testing.T) {
 	// Hold a typed config read after its SQLite query but before it releases the Job guard.
 	exe := setupTestExecutor(t)
-	t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+	t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 	job := creationConfigJob(t, exe, entity.JobStatus_JOB_STATUS_COMPLETED)
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
@@ -181,7 +182,7 @@ func TestReadJobConfigExcludesDeletion(t *testing.T) {
 func TestReadJobConfigRejectsInvalidOrMissingState(t *testing.T) {
 	// Admission errors must not manufacture a bundle or inspect a different kind's config.
 	exe := setupTestExecutor(t)
-	t.Cleanup(func() { require.NoError(t, closeGORMDB(exe.db)) })
+	t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 	job := creationConfigJob(t, exe, entity.JobStatus_JOB_STATUS_FAILED)
 	for _, id := range []int64{0, -1} {
 		_, err := exe.ReadJobConfig(context.Background(), id, entity.JobKind_JOB_KIND_ARCHIVE, &creationConfigProbe{})

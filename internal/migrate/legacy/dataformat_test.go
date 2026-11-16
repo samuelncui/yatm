@@ -19,7 +19,7 @@ func TestCommitRejectsUnsupportedPreparedBundle(t *testing.T) {
 	require.NoError(t, db.Create(&legacyJob{ID: 1, Status: legacypb.JobStatus_COMPLETED,
 		State: &legacypb.JobState{State: &legacypb.JobState_Archive{Archive: &legacypb.JobArchiveState{}}},
 	}).Error)
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	filename := filepath.Join(root, "jobs", "1", "job.json")
@@ -49,7 +49,7 @@ func TestOfflineOperationsRejectFutureCatalogWithoutWrites(t *testing.T) {
 	reportPath := filepath.Join(root, reportFilename)
 	evidence := []byte("retained report")
 	require.NoError(t, os.WriteFile(reportPath, evidence, 0o644))
-	_, err := Prepare(ctx, db, root)
+	_, err := prepareLegacy(ctx, db, root)
 	require.ErrorIs(t, err, dataformat.ErrUnsupportedCatalog)
 	require.ErrorIs(t, Commit(ctx, db, root), dataformat.ErrUnsupportedCatalog)
 	require.ErrorIs(t, Abort(db, root), dataformat.ErrUnsupportedCatalog)

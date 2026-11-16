@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/samuelncui/yatm/internal/config"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,7 @@ func TestMigrationBackupMapsEvidenceButPreservesRestoreDestination(t *testing.T)
 	require.Equal(t, filepath.Join(backupRoot, "tapes.db"), backup.CatalogPath)
 	require.Equal(t, backupRoot, backup.WorkRoot)
 	require.Equal(t, filepath.Join(backupRoot, "old-indexes"), backup.IndexRoot)
-	canonicalTarget, err := canonicalExisting(filepath.Join(root, "restore-here"))
+	canonicalTarget, err := executor.CanonicalConfiguredPath(filepath.Join(root, "restore-here"))
 	require.NoError(t, err)
 	require.Equal(t, canonicalTarget, backup.RestoreRoot)
 	require.NoDirExists(t, backup.RestoreRoot)

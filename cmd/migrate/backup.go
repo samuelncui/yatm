@@ -29,7 +29,7 @@ func migrationBackup(root, backupRoot, configPath string) (legacy.Backup, error)
 	if root == backupRoot {
 		return legacy.Backup{}, fmt.Errorf("backup root must not be the active installation")
 	}
-	canonicalBackup, err := canonicalExisting(backupRoot)
+	canonicalBackup, err := executor.CanonicalConfiguredPath(backupRoot)
 	if err != nil {
 		return legacy.Backup{}, err
 	}
@@ -45,7 +45,7 @@ func migrationBackup(root, backupRoot, configPath string) (legacy.Backup, error)
 			return "", err
 		}
 		mapped := filepath.Join(backupRoot, rel)
-		resolved, err := canonicalExisting(mapped)
+		resolved, err := executor.CanonicalConfiguredPath(mapped)
 		if err != nil {
 			return "", err
 		}

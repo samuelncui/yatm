@@ -22,6 +22,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// prepareLegacy prepares from the conventional captured-index directory without a Restore target.
+func prepareLegacy(ctx context.Context, db *gorm.DB, root string) (*Report, error) {
+	return PrepareWithLTFSIndex(ctx, db, root, filepath.Join(root, legacyLTFSIndexDirectory), "")
+}
+
 func TestPrepareCommitAndCleanup(t *testing.T) {
 	// Build representative legacy Archive and Restore rows, including an interrupted item.
 	ctx := context.Background()
@@ -112,7 +117,7 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	require.Equal(t, filepath.Join(root, "b.txt"), archiveItems[1].Data.SourcePath)
 	require.Nil(t, archiveItems[1].Data.Expected, "legacy pending content retains its explicit original source")
 	require.Contains(t, report.Warnings, "job 1 reset 1 submitted archive items because no Media ID was recoverable from the legacy Job log")
-	closeDB(archiveDB)
+	_ = resource.CloseDB(archiveDB)
 
 	// Verify an already-complete Restore preserves its selected candidate.
 	restoreDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "2", "state.db"))
@@ -144,7 +149,7 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	require.Equal(t, "restore.txt", restoreFile.Path)
 	require.Equal(t, restoreFile.Path, restoreFile.DesiredPath)
 	require.NoDirExists(t, restoreRoot, "preparation must not create output directories")
-	closeDB(restoreDB)
+	_ = resource.CloseDB(restoreDB)
 
 	// Activate the staged data once; a repeated commit must converge on the same layout.
 	require.NoError(t, Commit(ctx, db, root))
@@ -200,7 +205,7 @@ func TestPrepareCommitAndCleanup(t *testing.T) {
 	_, err = Validate(ctx, db, root, backup)
 	require.ErrorContains(t, err, "field size differs")
 	require.NoError(t, restoreDB.Model(&restore.File{}).Where("item_id = ?", restoreFile.ItemID).Update("size", restoreFile.Size).Error)
-	closeDB(restoreDB)
+	_ = resource.CloseDB(restoreDB)
 	require.NoError(t, db.Where("job_id = ?", 2).Delete(&executor.JobProperty{}).Error)
 	_, err = Validate(ctx, db, root, backup)
 	require.ErrorContains(t, err, "Media search properties differ")
@@ -268,7 +273,7 @@ func TestPrepareRecoversArchiveMediaFromLegacyJobLog(t *testing.T) {
 	require.NoError(t, os.MkdirAll(logRoot, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(logRoot, "1.log"), []byte(jobLog), 0o644))
 
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.Contains(t, report.Warnings, "job 1 reset 2 submitted archive items absent from or ambiguous across logged Media [9 10]")
 	copiedLog, err := os.ReadFile(filepath.Join(root, "jobs", "1", "job.log"))
@@ -277,7 +282,7 @@ func TestPrepareRecoversArchiveMediaFromLegacyJobLog(t *testing.T) {
 
 	jobDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
 	require.NoError(t, err)
-	defer closeDB(jobDB)
+	defer resource.CloseDB(jobDB)
 	var items []*archive.Item
 	require.NoError(t, jobDB.Order("id").Find(&items).Error)
 	require.Len(t, items, 3)
@@ -319,7 +324,7 @@ func TestPrepareMigratesLibraryAcrossBatches(t *testing.T) {
 	require.NoError(t, db.CreateInBatches(positions, 100).Error)
 
 	// Prepare and activate all Library tables with a rebuilt Position directory index.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.Equal(t, physicalCount+1, report.LibraryFiles)
 	require.Equal(t, physicalCount, report.LibraryTapes)
@@ -373,7 +378,7 @@ func TestPrepareImportsCapturedLTFSIndex(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
 
 	// Prepare the current Library and attach the matching physical Tape position.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Equal(t, 1, report.LibraryStoragePositions)
@@ -433,7 +438,7 @@ func TestPrepareOmitsCapturedLTFSIndexSizeMismatch(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "abc010.schema"), []byte(index), 0o644))
 
 	// Keep the File and its valid copy while removing the physically inconsistent Position.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Equal(t, 1, report.LibraryFiles)
@@ -470,7 +475,7 @@ func TestPrepareOmitsCapturedLTFSIndexSizeMismatch(t *testing.T) {
 	require.NoError(t, restoreDB.Find(&copies).Error)
 	require.Len(t, copies, 1)
 	require.Equal(t, int64(11), copies[0].MediaID)
-	closeDB(restoreDB)
+	_ = resource.CloseDB(restoreDB)
 
 	// Activation retains the current health fields with their unchecked defaults.
 	require.NoError(t, Commit(ctx, db, root))
@@ -511,7 +516,7 @@ func TestPrepareRejectsPendingRestoreWithoutValidPosition(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
 
 	// Refuse to create a pending Job that has no restorable physical candidate.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.ErrorContains(t, err, "pending Restore file has no valid migrated Position, file_id=20 tapes=[10]")
 	require.False(t, report.Success)
 }
@@ -534,7 +539,7 @@ func TestPrepareOmitsCapturedLTFSIndexMissingLibraryPosition(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(indexRoot, "ABC010.schema"), []byte(index), 0o644))
 
 	// Publish only the Position confirmed by the captured index.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Equal(t, 1, report.LibraryPositions)
@@ -550,7 +555,7 @@ func TestPrepareRejectsBarcodesThatNormalizeAlike(t *testing.T) {
 	// Two legacy Tapes differing only by case and spacing cannot share one current identity.
 	db := newLegacyTestDB(t)
 	require.NoError(t, db.Create([]*legacyLibraryTape{{ID: 10, Barcode: "abc010"}, {ID: 11, Barcode: "ABC010 "}}).Error)
-	_, err := Prepare(context.Background(), db, t.TempDir())
+	_, err := prepareLegacy(context.Background(), db, t.TempDir())
 	require.ErrorContains(t, err, `legacy Tapes "abc010" and "ABC010 " both normalize to barcode ABC010`)
 }
 
@@ -569,7 +574,7 @@ func TestPrepareMigratesEmptyJobsAsCompleted(t *testing.T) {
 		},
 	}).Error)
 
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Equal(t, 2, report.MigratedJobs)
@@ -590,7 +595,7 @@ func TestPrepareMigratesEmptyJobsAsCompleted(t *testing.T) {
 			require.NoError(t, jobDB.Model(&restore.Copy{}).Count(&count).Error)
 		}
 		require.Zero(t, count)
-		closeDB(jobDB)
+		_ = resource.CloseDB(jobDB)
 	}
 }
 
@@ -645,7 +650,7 @@ func TestPrepareRecoversTransitionalJobDatabases(t *testing.T) {
 		{ID: 10, Base: root, Path: sortPath("directory/a.txt"), Size: 1, Status: legacypb.CopyStatus_SUBMITED},
 		{ID: 11, Base: root, Path: sortPath("directory/b.txt"), Size: 2, Status: legacypb.CopyStatus_RUNNING},
 	}).Error)
-	closeDB(archiveDB)
+	_ = resource.CloseDB(archiveDB)
 
 	// Cover both transitional Restore table names with the same physical candidates.
 	for _, fixture := range []struct {
@@ -671,11 +676,11 @@ func TestPrepareRecoversTransitionalJobDatabases(t *testing.T) {
 				TargetPath: "target/b.txt", Size: 4, Hash: hashB[:], Status: legacypb.CopyStatus_RUNNING,
 			},
 		}).Error)
-		closeDB(restoreDB)
+		_ = resource.CloseDB(restoreDB)
 	}
 
 	// Prefer the auxiliary manifests and preserve all physical Restore candidates.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Equal(t, 2, report.ArchiveItems)
@@ -697,7 +702,7 @@ func TestPrepareRecoversTransitionalJobDatabases(t *testing.T) {
 	require.Equal(t, "directory/b.txt", archiveItems[1].TargetPath)
 	require.Empty(t, archiveItems[1].MediaPath)
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, archiveItems[1].Status)
-	closeDB(archiveCurrent)
+	_ = resource.CloseDB(archiveCurrent)
 
 	// Verify both Restore schemas inherit indexed order and retain path fallback.
 	for _, jobID := range []int64{2, 3} {
@@ -722,7 +727,7 @@ func TestPrepareRecoversTransitionalJobDatabases(t *testing.T) {
 		require.Equal(t, files[0].ItemID, copies[1].ItemID)
 		require.Equal(t, files[0].Path, files[0].DesiredPath)
 		require.NotEmpty(t, files[0].Hash)
-		closeDB(restoreCurrent)
+		_ = resource.CloseDB(restoreCurrent)
 	}
 }
 
@@ -742,9 +747,9 @@ func TestPreparePrefersCanonicalLegacyProtobuf(t *testing.T) {
 	require.NoError(t, transitionalDB.Table("files").Create(&transitionalArchiveItem{
 		ID: 10, Base: root, Path: sortPath("database.txt"), Size: 2,
 	}).Error)
-	closeDB(transitionalDB)
+	_ = resource.CloseDB(transitionalDB)
 
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.Equal(t, 1, report.ArchiveItems)
 	jobDB, err := resource.OpenSQLite(filepath.Join(root, "jobs", "1", "state.db"))
@@ -754,7 +759,7 @@ func TestPreparePrefersCanonicalLegacyProtobuf(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Equal(t, "protobuf.txt", items[0].TargetPath)
 	require.Empty(t, items[0].MediaPath)
-	closeDB(jobDB)
+	_ = resource.CloseDB(jobDB)
 }
 
 func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
@@ -785,7 +790,7 @@ func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
 		{ID: 10, FileID: 20, TapeID: 30, Path: sortPath("file.txt"), TargetPath: "file.txt", Size: 7, Hash: hash[:], Status: legacypb.CopyStatus_PENDING},
 		{ID: 11, FileID: 20, TapeID: 31, Path: sortPath("copy/file.txt"), TargetPath: "file.txt", Size: 7, Hash: hash[:], Status: legacypb.CopyStatus_PENDING},
 	}).Error)
-	closeDB(transitionalDB)
+	_ = resource.CloseDB(transitionalDB)
 
 	require.NoError(t, db.Migrator().DropTable("jobs_legacy"))
 	require.NoError(t, RepairJob(ctx, db, root, 1, backup))
@@ -810,7 +815,7 @@ func TestRepairJobRecoversCommittedTransitionalData(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, canonicalRoot, config.LegacyRoot)
 	require.NoDirExists(t, frozenRoot)
-	closeDB(repairedDB)
+	_ = resource.CloseDB(repairedDB)
 	require.ErrorContains(t, RepairJob(ctx, db, root, 1, backup), "repair backup already exists")
 }
 
@@ -829,7 +834,7 @@ func TestAbortRemovesOnlyPreparedCurrentData(t *testing.T) {
 	}).Error)
 
 	// Prepare writes final-path Bundles without changing the active legacy table.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Len(t, report.Warnings, 1)
@@ -860,7 +865,7 @@ func TestEmptyLegacyInstanceCreatesFinalJobDirectory(t *testing.T) {
 	require.ErrorIs(t, Cleanup(ctx, db, root, Backup{}), dataformat.ErrUnsupportedCatalog)
 
 	// Prepare creates the final empty directory while leaving the legacy table active.
-	report, err := Prepare(ctx, db, root)
+	report, err := prepareLegacy(ctx, db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.Zero(t, report.MigratedJobs)
@@ -884,7 +889,7 @@ func TestAbortRestoresLegacyJobDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(marker, []byte("keep"), 0o644))
 
 	// Prepare preserves legacy files while creating the independent current Job directory.
-	report, err := Prepare(context.Background(), db, root)
+	report, err := prepareLegacy(context.Background(), db, root)
 	require.NoError(t, err)
 	require.True(t, report.Success)
 	require.True(t, db.Migrator().HasTable("jobs_staging"))

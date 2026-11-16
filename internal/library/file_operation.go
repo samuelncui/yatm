@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
@@ -32,7 +33,7 @@ func (l *Library) PublishFileOperation(ctx context.Context, result *FileOperatio
 		if result.SourcePath == "" {
 			return fmt.Errorf("removal requires a non-root source")
 		}
-		if result.TargetPath != "" && !strings.HasPrefix(result.TargetPath, ".trash/") {
+		if result.TargetPath != "" && !strings.HasPrefix(result.TargetPath, LocationTrashDirectory+"/") {
 			return fmt.Errorf("removal output must be inside Trash")
 		}
 	case entity.FileOperationKind_FILE_OPERATION_KIND_MKDIR:
@@ -134,8 +135,7 @@ func moveOperationOriginals(tx *gorm.DB, result *FileOperation) error {
 // retireOriginals relinquishes both executable associations and their continuity evidence.
 // Scan absence intentionally retains tracking and therefore does not use this primitive.
 func retireOriginals(tx *gorm.DB, ids []int64) error {
-	for start := 0; start < len(ids); start += batchSize {
-		batch := ids[start:min(start+batchSize, len(ids))]
+	for batch := range slices.Chunk(ids, batchSize) {
 		for _, model := range []any{&FileTrackingKey{}, &FileLocation{}} {
 			if err := tx.Where("file_id IN ?", batch).Delete(model).Error; err != nil {
 				return err

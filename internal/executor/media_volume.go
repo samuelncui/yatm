@@ -217,13 +217,12 @@ func (b *mediaBackend) openVolume(
 	if stored == nil {
 		return nil, nil, mediapkg.Capabilities{}, fmt.Errorf("Volume is not in Library, uuid=%q", volume.Marker.UUID)
 	}
-	profile := stored.Profile.GetVolume()
-	if profile == nil || !mediapkg.SameVolumeProfile(profile, volume.Marker.Profile) {
+	if !mediapkg.SameVolumeProfile(stored.Profile, volume.Marker) {
 		return nil, nil, mediapkg.Capabilities{}, fmt.Errorf(
 			"Volume marker conflicts with Library, uuid=%q", volume.Marker.UUID,
 		)
 	}
-	capabilities, err := mediapkg.VolumeCapabilities(profile.Type)
+	capabilities, err := mediapkg.VolumeCapabilities(stored.Profile.GetVolume().Type)
 	if err != nil {
 		return nil, nil, mediapkg.Capabilities{}, err
 	}

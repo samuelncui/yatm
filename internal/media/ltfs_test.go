@@ -336,6 +336,16 @@ func TestParseLTFSIndexRejectsInvalidData(t *testing.T) {
 			want:  "extent is missing",
 		},
 		{
+			name:  "encoded NUL",
+			index: `<ltfsindex><directory><name>ABC001</name><contents><file><name percentencoded="true">bad%00</name><length>0</length></file></contents></directory></ltfsindex>`,
+			want:  "invalid LTFS path component",
+		},
+		{
+			name:  "encoded slash",
+			index: `<ltfsindex><directory><name>ABC001</name><contents><file><name percentencoded="true">a%2Fb</name><length>0</length></file></contents></directory></ltfsindex>`,
+			want:  "invalid LTFS path component",
+		},
+		{
 			name:  "invalid encoded name",
 			index: `<ltfsindex><directory><name>ABC001</name><contents><file><name percentencoded="true">bad%ZZ</name><length>0</length></file></contents></directory></ltfsindex>`,
 			want:  "invalid URL escape",
@@ -350,4 +360,17 @@ func TestParseLTFSIndexRejectsInvalidData(t *testing.T) {
 			require.ErrorContains(t, err, test.want)
 		})
 	}
+}
+
+func TestParseLTFSIndexPreservesLiteralBackslashes(t *testing.T) {
+	index := `<ltfsindex><directory><name>ABC001</name><contents>
+<directory><name>back\slash</name><contents>
+<file><name percentencoded="true">file%5Cname</name><length>0</length></file>
+</contents></directory></contents></directory></ltfsindex>`
+	var paths []string
+	require.NoError(t, ParseLTFSIndex(context.Background(), strings.NewReader(index), func(entry *LTFSIndexEntry) error {
+		paths = append(paths, entry.Path)
+		return nil
+	}))
+	require.Equal(t, []string{`back\slash/file\name`}, paths)
 }

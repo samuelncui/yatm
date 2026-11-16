@@ -228,7 +228,8 @@ describe("JobsBrowser", () => {
 
   it.each([false, true])("removes a focused job's stale card once deletion is confirmed (rpc=%s)", async (rpc) => {
     vi.useFakeTimers();
-    getJob.mockReturnValueOnce({ response: Promise.resolve({ job: job(42n, 100n, 9n) }) }).mockImplementation(() => ({
+    const running = { ...job(42n, 100n, 9n), phase: JobPhase.COPYING_TO_MEDIA };
+    getJob.mockReturnValueOnce({ response: Promise.resolve({ job: running }) }).mockImplementation(() => ({
       response: rpc ? Promise.reject(new RpcError("This job no longer exists", "NOT_FOUND")) : Promise.resolve({}),
     }));
     render(
@@ -244,6 +245,22 @@ describe("JobsBrowser", () => {
     expect(screen.getByText(/This job no longer exists/)).toBeInTheDocument();
     expect(screen.queryByTestId("job-card")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading your job…")).not.toBeInTheDocument();
+  });
+
+  it("reads a settled focused Job once instead of polling it", async () => {
+    vi.useFakeTimers();
+    getJob.mockReturnValue({ response: Promise.resolve({ job: job(42n, 100n, 9n, JobStatus.COMPLETED) }) });
+    render(
+      <MemoryRouter initialEntries={["/jobs/42"]}>
+        <Routes>
+          <Route path="/jobs/:id" element={<JobsBrowser />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("job-42-9-4")).toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTimeAsync(6000));
+    expect(getJob).toHaveBeenCalledTimes(1);
   });
 
   it("returns to loaded snapshot pages and scroll without resetting the list", async () => {
