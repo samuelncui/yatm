@@ -242,6 +242,6 @@ cannot produce a completed total. Unknown facts and inaccessible ranges retain k
 subtotals with an incomplete result. Library measurement uses stored original attributes
 or the latest saved version; Location measurement includes dot entries, omits entries
 matching Location Ignore, skips linked/special-file bytes, and preserves runtime,
-registration and mount boundaries. It never hashes, admits or creates a Job. Streaming
+registration and mount boundaries, which the [Executor's measurement reader](../../internal/executor/location_read_directory.go) owns. It never hashes, admits or creates a Job. Streaming
 consumers render the same scope, and an incomplete result is reported as incomplete
 rather than as a subtotal that stands for the whole.

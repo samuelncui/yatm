@@ -1,4 +1,4 @@
-package fileops
+package executor
 
 import (
 	"fmt"
@@ -6,7 +6,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func sameMount(root, filename string) (bool, error) {
+// SameMount checks the native mount identity without following a leaf symlink.
+func SameMount(root, filename string) (bool, error) {
 	// Device numbers alone cannot distinguish a bind mount of the same filesystem.
 	var rootStat, fileStat unix.Statx_t
 	flags := unix.AT_SYMLINK_NOFOLLOW | unix.AT_NO_AUTOMOUNT

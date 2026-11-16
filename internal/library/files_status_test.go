@@ -186,3 +186,44 @@ func TestFileStatusFactsCrossBatches(t *testing.T) {
 		require.True(t, facts[file.ID].HasVersions)
 	}
 }
+
+func TestFilesStatusMatrix(t *testing.T) {
+	// Independent original, coverage and history facts determine the compact display projection.
+	known := &FileLocation{Signature: []byte("known")}
+	unknown := &FileLocation{}
+	tests := []struct {
+		name     string
+		facts    FileReadFacts
+		original entity.OriginalAvailability
+		valid    bool
+		archive  entity.FilesArchive
+		coverage entity.FilesCoverage
+		issues   []entity.FilesIssue
+	}{
+		{"covered", FileReadFacts{Original: known, CurrentArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_COVERED, nil},
+		{"local only", FileReadFacts{Original: known}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_NONE, entity.FilesCoverage_FILES_COVERAGE_UNCOVERED, nil},
+		{"changed with history", FileReadFacts{Original: known, HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_UNCOVERED, nil},
+		{"unknown with history", FileReadFacts{Original: unknown, HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED, nil},
+		{"unknown without history", FileReadFacts{Original: unknown}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_UNSPECIFIED, entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED, nil},
+		{"missing saved", FileReadFacts{Original: known, HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING, false, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE, nil},
+		{"unlinked saved", FileReadFacts{HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNLINKED, false, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE, nil},
+		{"missing latest", FileReadFacts{Original: known, HasArchive: true, LatestUnavailable: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING, false, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE, []entity.FilesIssue{entity.FilesIssue_FILES_ISSUE_LATEST_VERSION_UNAVAILABLE}},
+		{"missing all copies", FileReadFacts{Original: known, HasVersions: true, LatestUnavailable: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING, false, entity.FilesArchive_FILES_ARCHIVE_NONE, entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE, []entity.FilesIssue{entity.FilesIssue_FILES_ISSUE_ALL_COPIES_UNAVAILABLE, entity.FilesIssue_FILES_ISSUE_LATEST_VERSION_UNAVAILABLE}},
+		{"missing no history", FileReadFacts{Original: known}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING, false, entity.FilesArchive_FILES_ARCHIVE_NONE, entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE, nil},
+		{"local bad backups", FileReadFacts{Original: known, HasVersions: true, HasBadCopies: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_NONE, entity.FilesCoverage_FILES_COVERAGE_UNCOVERED, []entity.FilesIssue{entity.FilesIssue_FILES_ISSUE_ALL_COPIES_UNAVAILABLE}},
+		{"unavailable saved", FileReadFacts{Original: known, HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNAVAILABLE, false, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED, nil},
+		{"unchecked saved", FileReadFacts{Original: known, HasArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNCHECKED, false, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED, nil},
+		{"partial bad", FileReadFacts{Original: known, HasArchive: true, HasBadCopies: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, true, entity.FilesArchive_FILES_ARCHIVE_AVAILABLE, entity.FilesCoverage_FILES_COVERAGE_UNCOVERED, []entity.FilesIssue{entity.FilesIssue_FILES_ISSUE_PARTIAL_COPIES_UNAVAILABLE}},
+		{"invalid observation does not claim coverage", FileReadFacts{Original: known, CurrentArchive: true}, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, false, entity.FilesArchive_FILES_ARCHIVE_UNSPECIFIED, entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// A valid observation knows the current content only when its original records a signature.
+			actual := test.facts.Status(test.original, test.valid && len(test.facts.Original.Signature) > 0)
+			require.Equal(t, test.original, actual.Original)
+			require.Equal(t, test.archive, actual.Archive)
+			require.Equal(t, test.coverage, actual.Current)
+			require.Equal(t, test.issues, actual.Issues)
+		})
+	}
+}

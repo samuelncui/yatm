@@ -2,13 +2,11 @@ package apis
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor/fileops"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,43 +35,19 @@ func (s *filesService) Measure(req *entity.MeasureFilesRequest, stream entity.Fi
 	var summary *entity.FilesMeasurement
 	switch source := req.Directory.Target.(type) {
 	case *entity.FileOperationRef_FileId:
-		if source.FileId < library.TrashFileID {
-			return status.Error(codes.InvalidArgument, "invalid Library directory")
-		}
-		if source.FileId != 0 {
-			file, readErr := s.readFile(ctx, source.FileId)
-			if readErr != nil {
-				return readErr
-			}
-			if file.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
-				return status.Error(codes.InvalidArgument, "entry is not a directory")
-			}
+		if err := s.api.lib.CheckFileDirectory(ctx, source.FileId); err != nil {
+			return err
 		}
 		summary, err = s.measureLibraryDirectory(ctx, source.FileId, scope, compiled, req.Recursive, false, 0, send)
 	case *entity.FileOperationRef_Location:
 		if source.Location == nil || req.Recursive {
 			return status.Error(codes.InvalidArgument, "Location measurement requires a single directory scope")
 		}
-		location, loadErr := s.api.lib.GetLocation(ctx, source.Location.LocationId)
-		if loadErr != nil {
-			return loadErr
+		measurement, prepareErr := s.api.exe.PrepareLocationMeasurement(ctx, source.Location)
+		if prepareErr != nil {
+			return prepareErr
 		}
-		_, info, checkErr := s.api.exe.CheckLocationPath(location, source.Location.Path)
-		if checkErr != nil {
-			return checkErr
-		}
-		if !info.IsDir() {
-			return library.ErrLocationConflict
-		}
-		// Location Ignore excludes this Location's content, so it also excludes a measured root.
-		if s.api.exe.LocationExcluded(location, source.Location.Path, true) {
-			return status.Error(codes.FailedPrecondition, "Location Ignore excludes the measured path")
-		}
-		boundaries, loadErr := s.api.lib.ReadLocationBoundaries(ctx, location)
-		if loadErr != nil {
-			return loadErr
-		}
-		summary, err = s.measureLocationDirectory(ctx, location, boundaries, source.Location.Path, compiled, false, 0, send)
+		summary, err = s.measureLocationDirectory(ctx, measurement, source.Location.Path, compiled, false, 0, send)
 	default:
 		return status.Error(codes.InvalidArgument, "unsupported Files source")
 	}
@@ -167,7 +141,7 @@ func (s *filesService) measureLibraryDirectory(ctx context.Context, parent int64
 	}
 }
 
-func (s *filesService) measureLocationDirectory(ctx context.Context, location *library.Location, boundaries []string, relative string, query *library.FilesQuery,
+func (s *filesService) measureLocationDirectory(ctx context.Context, measurement *executor.LocationMeasurement, relative string, query *library.FilesQuery,
 	included bool, depth int, send func(*entity.FilesMeasurement) error) (*entity.FilesMeasurement, error) {
 	// Preserve mount and registration ownership without following symbolic links.
 	total := &entity.FilesMeasurement{Complete: true}
@@ -175,21 +149,18 @@ func (s *filesService) measureLocationDirectory(ctx context.Context, location *l
 		total.Complete, total.Error = false, "directory depth exceeds measurement limit"
 		return total, nil
 	}
-	if err := measureLocationBoundary(location, boundaries, relative); err != nil {
-		total.Complete, total.Error = false, err.Error()
-		return total, nil
-	}
+	location := measurement.Location
 	var sendErr error
-	err := s.api.exe.ReadObservedLocationDirectory(ctx, location, relative, func(rows []*entity.LocationEntry, infos map[string]os.FileInfo) error {
+	err := measurement.ReadDirectory(ctx, relative, func(rows []*entity.LocationEntry, infos map[string]os.FileInfo) error {
 		// Only selection roots use the query; every accessible descendant contributes to selected folders.
 		matches := make(map[int]bool, len(rows))
 		if !included {
 			projection := filesProjection{entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES: true, entity.FilesInclude_FILES_INCLUDE_OPERATIONS: query.Catalog, entity.FilesInclude_FILES_INCLUDE_STATUS: query.Content}
-			entries, facts, _, err := s.locationEntriesObserved(ctx, rows, projection, location, infos)
+			entries, facts, observations, err := s.locationEntriesObserved(ctx, rows, projection, location, infos)
 			if err != nil {
 				return err
 			}
-			indexes, err := s.matchLocationRows(ctx, query, rows, entries, facts)
+			indexes, err := s.matchLocationRows(ctx, query, rows, entries, facts, observations)
 			if err != nil {
 				return err
 			}
@@ -204,7 +175,7 @@ func (s *filesService) measureLocationDirectory(ctx context.Context, location *l
 			entry := basicLocationEntry(row, filesProjection{entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES: true})
 			item := &entity.FilesMeasurement{Reference: entry.Reference, Complete: true}
 			if row.Directory {
-				nested, err := s.measureLocationDirectory(ctx, location, boundaries, row.Path, query, true, depth+1, send)
+				nested, err := s.measureLocationDirectory(ctx, measurement, row.Path, query, true, depth+1, send)
 				if err != nil {
 					return err
 				}
@@ -232,24 +203,4 @@ func (s *filesService) measureLocationDirectory(ctx context.Context, location *l
 		total.Complete, total.Error = false, err.Error()
 	}
 	return total, nil
-}
-
-func measureLocationBoundary(location *library.Location, boundaries []string, relative string) error {
-	// Reject nested mounts, including bind mounts, before enumerating their contents.
-	full := filepath.Join(location.RootPath, filepath.FromSlash(relative))
-	same, err := fileops.SameMount(location.RootPath, full)
-	if err != nil {
-		return err
-	}
-	if !same {
-		return fmt.Errorf("measurement cannot cross a mount boundary: %q", relative)
-	}
-
-	// Registration boundaries remain provider-owned even when directories are explicitly selected.
-	for _, root := range boundaries {
-		if full == root || strings.HasPrefix(full, root+string(filepath.Separator)) {
-			return fmt.Errorf("measurement crosses another registered Location at %q", root)
-		}
-	}
-	return nil
 }

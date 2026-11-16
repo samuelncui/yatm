@@ -265,7 +265,7 @@ func (s *service) validateLocation(ctx context.Context, request *entity.FileOper
 			return nil, fmt.Errorf("Location roots cannot be moved or removed")
 		}
 		if library.IsLocationTrashPath(source.Path) {
-			if request.Kind != entity.FileOperationKind_FILE_OPERATION_KIND_MOVE || !executor.IsLocationTrashContent(source.Path) {
+			if request.Kind != entity.FileOperationKind_FILE_OPERATION_KIND_MOVE || !library.IsLocationTrashContent(source.Path) {
 				return nil, fmt.Errorf("Trash entries can only be moved out")
 			}
 			if err := validateTrash(location.RootPath); err != nil {

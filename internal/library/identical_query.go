@@ -459,6 +459,22 @@ func (s *IdenticalSnapshot) Group(groupID string) (*IdenticalGroup, error) {
 	return &IdenticalGroup{ID: groupID, Name: row.Name, Count: row.Count, Fingerprint: row.Fingerprint}, nil
 }
 
+// CurrentGroup resolves the group a Keep or Merge names. A group that no longer exists, or whose
+// fingerprint differs from the one the caller reviewed, has changed and is rejected.
+func (s *IdenticalSnapshot) CurrentGroup(groupID, fingerprint string) (*IdenticalGroup, error) {
+	group, err := s.Group(groupID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrLocationConflict
+	}
+	if err != nil {
+		return nil, err
+	}
+	if group.Fingerprint != fingerprint {
+		return nil, ErrLocationConflict
+	}
+	return group, nil
+}
+
 // HasMember checks exact authoritative membership without loading a component's member list.
 func (s *IdenticalSnapshot) HasMember(groupID string, fileID int64) (bool, error) {
 	// Use both indexed identities so a large group needs no member hydration.

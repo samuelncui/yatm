@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -36,7 +35,7 @@ func TestRemoveRecyclesWholeDirectoryAndDisconnectsDescendants(t *testing.T) {
 		Sources: []*entity.FileOperationRef{f.ref(t, "folder"), f.ref(t, "folder/a.txt")}}, nil)
 	require.EqualValues(t, 1, stream.summary().SucceededCount)
 	target := stream.updates[1].Entry.TargetPath
-	require.True(t, executor.IsLocationTrashContent(target))
+	require.True(t, library.IsLocationTrashContent(target))
 	require.NoDirExists(t, filepath.Join(f.root, "folder"))
 	require.FileExists(t, filepath.Join(f.root, target, "a.txt"))
 	require.FileExists(t, filepath.Join(f.root, target, "nested/ignored.txt"))
@@ -176,7 +175,7 @@ func TestConcurrentFirstRemoveInitializesTrashWithoutSerializingPhysicalMoves(t 
 	require.NotEqual(t, filepath.Dir(targets["first.txt"]), filepath.Dir(targets["second.txt"]))
 	for name, content := range map[string]string{"first.txt": "first", "second.txt": "second"} {
 		require.NoFileExists(t, filepath.Join(f.root, name))
-		require.True(t, executor.IsLocationTrashContent(targets[name]))
+		require.True(t, library.IsLocationTrashContent(targets[name]))
 		data, err := os.ReadFile(filepath.Join(f.root, targets[name]))
 		require.NoError(t, err)
 		require.Equal(t, content, string(data))
@@ -234,12 +233,12 @@ func TestRemoveRejectsUnownedTrash(t *testing.T) {
 		f := setup(t)
 		f.write(t, "keep.txt", "keep")
 		marker := "X" + trashIdentity[1:]
-		f.write(t, filepath.Join(library.LocationTrashDirectory, executor.LocationTrashMarker), marker)
+		f.write(t, filepath.Join(library.LocationTrashDirectory, trashMarker), marker)
 		stream := f.execute(t, &entity.FileOperationSpec{Kind: entity.FileOperationKind_FILE_OPERATION_KIND_REMOVE,
 			Sources: []*entity.FileOperationRef{f.ref(t, "keep.txt")}}, nil)
 		require.EqualValues(t, 1, stream.summary().FailedCount)
 		require.FileExists(t, filepath.Join(f.root, "keep.txt"))
-		data, err := os.ReadFile(filepath.Join(f.root, library.LocationTrashDirectory, executor.LocationTrashMarker))
+		data, err := os.ReadFile(filepath.Join(f.root, library.LocationTrashDirectory, trashMarker))
 		require.NoError(t, err)
 		require.Equal(t, marker, string(data))
 	})
@@ -259,7 +258,7 @@ func TestTrashPublicationFailureRetainsOutputAndOriginalMetadata(t *testing.T) {
 		Sources: []*entity.FileOperationRef{f.ref(t, "source")}}, nil)
 	require.EqualValues(t, 1, stream.summary().PublicationPendingCount)
 	target := stream.updates[1].Entry.TargetPath
-	require.True(t, executor.IsLocationTrashContent(target))
+	require.True(t, library.IsLocationTrashContent(target))
 	require.FileExists(t, filepath.Join(f.root, target, "file.txt"))
 	original, err := readOriginal(context.Background(), f.exe.Lib(), file.ID)
 	require.NoError(t, err)

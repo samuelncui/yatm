@@ -185,7 +185,7 @@ accepted result; an attempt with an item failure still reports failure after dra
 already verified staged output preserves its damaged flag. A Media session installs finalization
 immediately after acquisition, including failures while constructing the pipeline.
 
-Default Restore candidates are healthy or unchecked and are still validated during transfer. `allow_damaged_copies`, frozen in the specification and off by default, additionally permits damaged/previously unreadable copies after normal candidates; known missing copies are not candidates. It never relaxes identity/path checks. Results distinguish verified, damaged, unlinked and pending items; merely producing a file is not verified success.
+Default Restore candidates are healthy or unchecked and are still validated during transfer; [one Library rule](../../internal/library/position_health.go) defines candidate health for Restore preparation and selection inspection. `allow_damaged_copies`, frozen in the specification and off by default, additionally permits damaged/previously unreadable copies after normal candidates; known missing copies are not candidates. It never relaxes identity/path checks. Results distinguish verified, damaged, unlinked and pending items; merely producing a file is not verified success.
 
 ## Scan
 

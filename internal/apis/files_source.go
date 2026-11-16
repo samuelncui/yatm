@@ -57,18 +57,8 @@ func (s *librarySource) List(ctx context.Context, req files.ListRequest, emit fu
 // any of them: a listing projects one batch at a time, as it emits.
 func (s *librarySource) enumerate(ctx context.Context, req files.ListRequest, projection filesProjection) (*library.FilePage, *entity.FilesEntry, []*entity.FilesEntry, error) {
 	parentID := req.Directory.ID
-	// Logical parent validation bypasses physical-fact hydration, including for basic ls.
-	if parentID < library.TrashFileID {
-		return nil, nil, nil, status.Error(codes.InvalidArgument, "invalid Library directory")
-	}
-	if parentID != 0 {
-		file, err := s.service.readFile(ctx, parentID)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if file.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
-			return nil, nil, nil, status.Error(codes.InvalidArgument, "entry is not a directory")
-		}
+	if err := s.service.api.lib.CheckFileDirectory(ctx, parentID); err != nil {
+		return nil, nil, nil, err
 	}
 	page, err := s.service.api.lib.ListAllFileRows(ctx, parentID, req.Scope, false, "")
 	if err != nil {
@@ -98,19 +88,9 @@ func (s *librarySource) readDirectory(ctx context.Context, req files.ListRequest
 		return nil, nil, nil, 0, "", err
 	}
 
-	// Logical parent validation bypasses physical-fact hydration, including for basic ls.
 	parentID := req.Directory.ID
-	if parentID < library.TrashFileID {
-		return nil, nil, nil, 0, "", status.Error(codes.InvalidArgument, "invalid Library directory")
-	}
-	if parentID != 0 {
-		file, err := s.service.readFile(ctx, parentID)
-		if err != nil {
-			return nil, nil, nil, 0, "", err
-		}
-		if file.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
-			return nil, nil, nil, 0, "", status.Error(codes.InvalidArgument, "entry is not a directory")
-		}
+	if err := s.service.api.lib.CheckFileDirectory(ctx, parentID); err != nil {
+		return nil, nil, nil, 0, "", err
 	}
 
 	// Catalog facts determine membership before pagination; observations only project returned rows.
@@ -205,7 +185,7 @@ func (s *librarySource) Get(ctx context.Context, entry files.Entry) (*files.Deta
 			detail.Original.Reference = detail.ContentReference
 		}
 	}
-	detail.ContentSignature = knownContentSignature(facts[entry.ID], observation)
+	detail.ContentSignature = observation.KnownSignature(facts[entry.ID])
 	return detail, nil
 }
 
@@ -270,11 +250,11 @@ func (s *locationSource) Search(ctx context.Context, req files.SearchRequest) (*
 	if req.Query != "" {
 		projection := filesProjection{entity.FilesInclude_FILES_INCLUDE_ATTRIBUTES: true, entity.FilesInclude_FILES_INCLUDE_OPERATIONS: query.Catalog, entity.FilesInclude_FILES_INCLUDE_STATUS: query.Content}
 		match = func(location *library.Location, live []*entity.LocationEntry, infos map[string]os.FileInfo) ([]int, error) {
-			entries, facts, _, err := s.service.locationEntriesObserved(ctx, live, projection, location, infos)
+			entries, facts, observations, err := s.service.locationEntriesObserved(ctx, live, projection, location, infos)
 			if err != nil {
 				return nil, err
 			}
-			indexes, err := s.service.matchLocationRows(ctx, query, live, entries, facts)
+			indexes, err := s.service.matchLocationRows(ctx, query, live, entries, facts, observations)
 			if err != nil {
 				return nil, err
 			}
@@ -395,7 +375,7 @@ func (s *locationSource) Get(ctx context.Context, entry files.Entry) (*files.Det
 	detail.Original = &entity.FilesOriginal{SourceName: location.Name, Path: live.Path, Reference: detail.Entry.Reference}
 	if detail.Entry.Kind == entity.EntryKind_ENTRY_KIND_FILE {
 		detail.ContentReference = detail.Entry.Reference
-		detail.ContentSignature = knownContentSignature(facts[detail.FileID], observations[detail.FileID])
+		detail.ContentSignature = observations[detail.FileID].KnownSignature(facts[detail.FileID])
 	}
 	return detail, nil
 }

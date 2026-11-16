@@ -20,6 +20,65 @@ type FileReadFacts struct {
 	LatestUnavailable                                bool
 }
 
+// Status derives the compact original, coverage and copy-health projection of one File's facts
+// without publishing anything. original is the observed availability of its original, UNLINKED when
+// nothing was observed; currentKnown reports that the live original still agrees with its recorded
+// signature.
+func (f *FileReadFacts) Status(original entity.OriginalAvailability, currentKnown bool) *entity.FilesStatus {
+	// A retained association and saved content are independent of current filesystem availability.
+	result := &entity.FilesStatus{Original: entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNLINKED, Archive: entity.FilesArchive_FILES_ARCHIVE_NONE, Current: entity.FilesCoverage_FILES_COVERAGE_NOT_APPLICABLE}
+	if f == nil {
+		return result
+	}
+	result.Original = original
+	if f.Original != nil && original != entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING {
+		result.Current = entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED
+	}
+	if currentKnown {
+		result.Current = entity.FilesCoverage_FILES_COVERAGE_UNCOVERED
+		if f.CurrentArchive {
+			result.Current = entity.FilesCoverage_FILES_COVERAGE_COVERED
+		}
+	}
+	hasArchive := f.archived(currentKnown)
+	if hasArchive {
+		result.Archive = entity.FilesArchive_FILES_ARCHIVE_AVAILABLE
+	} else if f.Original != nil && !currentKnown && original != entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING {
+		result.Archive = entity.FilesArchive_FILES_ARCHIVE_UNSPECIFIED
+	}
+
+	// Keep all applicable issues without deriving a health expiry or publishing new facts.
+	bad := f.HasBadCopies || currentKnown && f.CurrentBadCopies
+	if hasArchive && bad {
+		result.Issues = append(result.Issues, entity.FilesIssue_FILES_ISSUE_PARTIAL_COPIES_UNAVAILABLE)
+	}
+	if !hasArchive && (f.HasVersions || f.HasCopies || currentKnown && f.CurrentCopies) {
+		result.Issues = append(result.Issues, entity.FilesIssue_FILES_ISSUE_ALL_COPIES_UNAVAILABLE)
+	}
+	if f.LatestUnavailable {
+		result.Issues = append(result.Issues, entity.FilesIssue_FILES_ISSUE_LATEST_VERSION_UNAVAILABLE)
+	}
+	return result
+}
+
+// LiveQueryContent returns the content facts a live query matches for one observed original: its
+// recorded signature only while the observation still agrees with it, and whether a restorable copy exists.
+func (f *FileReadFacts) LiveQueryContent(currentKnown bool) ([]byte, bool) {
+	if f == nil {
+		return nil, false
+	}
+	var signature []byte
+	if currentKnown && f.Original != nil {
+		signature = f.Original.Signature
+	}
+	return signature, f.archived(currentKnown)
+}
+
+// archived reports a restorable saved copy, or one of the current content while that content is known.
+func (f *FileReadFacts) archived(currentKnown bool) bool {
+	return f.HasArchive || currentKnown && f.CurrentArchive
+}
+
 // fileListPage bounds one page read. A nil page reads every matching row.
 type fileListPage struct {
 	cursor string
@@ -110,6 +169,29 @@ func (l *Library) ReadFileRows(ctx context.Context, ids []int64) (map[int64]*Fil
 		}
 	}
 	return result, nil
+}
+
+// CheckFileDirectory validates one logical Library directory from its row alone, without
+// physical-fact hydration. The root and Trash are directories.
+func (l *Library) CheckFileDirectory(ctx context.Context, id int64) error {
+	if id < TrashFileID {
+		return ErrInvalidDirectory
+	}
+	if id == 0 {
+		return nil
+	}
+	rows, err := l.ReadFileRows(ctx, []int64{id})
+	if err != nil {
+		return err
+	}
+	file := rows[id]
+	if file == nil {
+		return ErrFileNotFound
+	}
+	if file.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
+		return ErrNotDirectory
+	}
+	return nil
 }
 
 // ListFileRows applies filters before pagination without loading omitted projections.

@@ -25,6 +25,17 @@ func InspectLocationFacts(info os.FileInfo) (*entity.LocationFileFacts, error) {
 	return &entity.LocationFileFacts{SizeBytes: info.Size(), Mode: uint32(info.Mode()), MtimeNs: mtime}, nil
 }
 
+// InspectOriginal converts one resolved original's stat into the observation its association
+// publishes, without another filesystem read or hashing.
+func InspectOriginal(relative, full string, info os.FileInfo) (*library.ObservedEntry, error) {
+	facts, err := InspectLocationFacts(info)
+	if err != nil {
+		return nil, fmt.Errorf("observe original failed, path=%q, %w", relative, err)
+	}
+	return &library.ObservedEntry{Path: relative, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs,
+		TrackingKeys: NewTracker().Observe(full, info)}, nil
+}
+
 // CheckLocationPath validates administrator boundaries, independently of index Ignore rules.
 // The leaf may be a symlink; no ancestor may be one.
 func (e *Executor) CheckLocationPath(location *library.Location, relative string) (string, os.FileInfo, error) {

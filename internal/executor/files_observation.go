@@ -25,6 +25,25 @@ type FileReadObservation struct {
 	Location     *library.Location
 }
 
+// KnownSignature is the recorded identity of content whose live observation still agrees with its
+// record: the one identity a content-addressed read may name. A nil observation knows none.
+func (o *FileReadObservation) KnownSignature(facts *library.FileReadFacts) []byte {
+	if o == nil || !o.Valid || facts == nil || facts.Original == nil {
+		return nil
+	}
+	return facts.Original.Signature
+}
+
+// Status projects one File's facts with this observation of its original; a nil observation
+// means the File has no observed original.
+func (o *FileReadObservation) Status(facts *library.FileReadFacts) *entity.FilesStatus {
+	original := entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNLINKED
+	if o != nil {
+		original = o.Availability
+	}
+	return facts.Status(original, len(o.KnownSignature(facts)) > 0)
+}
+
 // FileRowReader retains source and parent authorization for one read operation.
 // Read calls are sequential; only the physical observations within a batch run concurrently.
 type FileRowReader struct {

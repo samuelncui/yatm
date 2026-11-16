@@ -26,8 +26,11 @@ var statusCodes = []struct {
 	{settingspkg.ErrStored, codes.FailedPrecondition},
 	{gorm.ErrRecordNotFound, codes.NotFound},
 	{library.ErrFileNotFound, codes.NotFound},
+	{library.ErrInvalidDirectory, codes.InvalidArgument},
+	{library.ErrNotDirectory, codes.InvalidArgument},
 	{executor.ErrJobNotFound, codes.NotFound},
 	{executor.ErrInvalidRequest, codes.InvalidArgument},
+	{executor.ErrMeasureExcluded, codes.FailedPrecondition},
 	{fileops.ErrKeepNotMember, codes.InvalidArgument},
 }
 

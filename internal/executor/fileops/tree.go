@@ -56,7 +56,7 @@ func physicalNode(relative string, info os.FileInfo) treeops.Node {
 	}
 	return treeops.Node{Ref: "path:" + relative, Parent: parent, Name: info.Name(), Path: relative,
 		Directory: info.IsDir(), Exists: true, Size: size, Deletion: treeops.Recycle,
-		Protected: library.IsLocationTrashPath(relative) && !executor.IsLocationTrashContent(relative)}
+		Protected: library.IsLocationTrashPath(relative) && !library.IsLocationTrashContent(relative)}
 }
 
 func (s *locationTree) WalkChildren(ctx context.Context, parent treeops.Node, visit func(treeops.Node) error) error {

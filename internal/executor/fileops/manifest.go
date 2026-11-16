@@ -7,15 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 )
 
 const batchSize = 128
 
 func within(value, root string) bool { return value == root || strings.HasPrefix(value, root+"/") }
-
-// SameMount checks the native mount identity without following a leaf symlink.
-func SameMount(root, filename string) (bool, error) { return sameMount(root, filename) }
 
 func (r *operation) protected(ctx context.Context, location *library.Location, relative string, info os.FileInfo) error {
 	// A physical directory operation must not cross mount or registered-root responsibilities.
@@ -26,7 +24,7 @@ func (r *operation) protected(ctx context.Context, location *library.Location, r
 	if info.Mode()&os.ModeSymlink != 0 {
 		filename = filepath.Dir(filename)
 	}
-	same, err := sameMount(location.RootPath, filename)
+	same, err := executor.SameMount(location.RootPath, filename)
 	if err != nil {
 		return fmt.Errorf("check operation mount boundary failed, %w", err)
 	}

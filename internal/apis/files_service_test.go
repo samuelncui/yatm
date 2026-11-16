@@ -94,7 +94,7 @@ func TestOriginalObservationDistinguishesMissingAndUnavailable(t *testing.T) {
 	facts, present := observe()
 	require.Equal(t, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, present.Availability)
 	require.True(t, present.Valid)
-	require.Nil(t, knownContentSignature(facts, present), "a metadata read does not hash content")
+	require.Nil(t, present.KnownSignature(facts), "a metadata read does not hash content")
 	require.NoError(t, os.WriteFile(name, []byte("replacement content"), 0644))
 	_, changed := observe()
 	require.Equal(t, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT, changed.Availability)

@@ -242,7 +242,7 @@ func (s *filesService) UpdateMetadata(ctx context.Context, req *entity.UpdateFil
 		return nil, err
 	}
 	for _, logicalPath := range paths {
-		if strings.HasPrefix(logicalPath, "/.Trash/") || logicalPath == "/.Trash" {
+		if library.IsTrashPath(logicalPath) {
 			return nil, status.Error(codes.FailedPrecondition, "trash content cannot be annotated")
 		}
 	}

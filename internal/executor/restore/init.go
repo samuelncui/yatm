@@ -3,6 +3,7 @@ package restore
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -101,11 +102,11 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 				}
 				copies := make([]*Copy, 0, len(positions))
 				for _, position := range positions {
-					eligible := library.PositionRestoreEligible(position.Health)
-					if (pass == 0) != eligible {
+					// Eligible copies come first; requested damaged copies follow in the second pass.
+					if (pass == 0) != library.PositionRestoreEligible(position.Health) {
 						continue
 					}
-					if !eligible && position.Health != entity.PositionHealth_POSITION_HEALTH_DAMAGED && position.Health != entity.PositionHealth_POSITION_HEALTH_UNREADABLE {
+					if !slices.Contains(library.RestoreCandidateHealth(spec.AllowDamagedCopies), position.Health) {
 						continue
 					}
 					media, err := a.exe.Lib().GetMedia(ctx, position.MediaID)

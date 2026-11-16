@@ -48,15 +48,9 @@ func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scop
 			logrus.WithContext(ctx).WithError(err).Warn("clean up identical result failed")
 		}
 	}()
-	group, err := snapshot.Group(req.GroupId)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return library.ErrLocationConflict
-	}
+	group, err := snapshot.CurrentGroup(req.GroupId, req.Fingerprint)
 	if err != nil {
 		return err
-	}
-	if group.Fingerprint != req.Fingerprint {
-		return library.ErrLocationConflict
 	}
 	stage, closeStage, err := openKeepStage(ctx, exe)
 	if err != nil {

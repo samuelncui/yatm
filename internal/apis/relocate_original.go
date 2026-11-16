@@ -2,7 +2,6 @@ package apis
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -28,12 +27,10 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	}
 
 	// Publish the selected path's current facts without changing its bytes.
-	facts, err := executor.InspectLocationFacts(info)
+	observation, err := executor.InspectOriginal(req.Reference.Path, full, info)
 	if err != nil {
-		return nil, fmt.Errorf("observe original failed, path=%q, %w", req.Reference.Path, err)
+		return nil, err
 	}
-	observation := &library.ObservedEntry{Path: req.Reference.Path, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs,
-		TrackingKeys: executor.NewTracker().Observe(full, info)}
 	if err := s.api.lib.RelocateOriginal(ctx, req.FileId, location.ID, observation); err != nil {
 		return nil, err
 	}

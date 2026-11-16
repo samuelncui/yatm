@@ -1,10 +1,11 @@
 //go:build darwin || freebsd
 
-package fileops
+package executor
 
 import "golang.org/x/sys/unix"
 
-func sameMount(root, filename string) (bool, error) {
+// SameMount checks the native mount identity without following a leaf symlink.
+func SameMount(root, filename string) (bool, error) {
 	// Compare actual mount roots, not merely the device containing the objects.
 	var rootStat, fileStat unix.Statfs_t
 	if err := unix.Statfs(root, &rootStat); err != nil {

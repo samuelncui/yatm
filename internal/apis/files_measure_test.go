@@ -138,11 +138,13 @@ func TestMeasureLocationExcludesIgnoredContentsWithoutFollowingLinks(t *testing.
 	require.NoError(t, err)
 	require.Empty(t, originals)
 
-	// A measured root is Location content too, so an ignored root is an explicit error.
+	// A measured root is Location content too, so an ignored root is an explicit error; the
+	// server's interceptor maps it.
 	err = (&filesService{api: api}).Measure(&entity.MeasureFilesRequest{Directory: &entity.FileOperationRef{
 		Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: created.Location.Id, Path: "match/ignored"}},
 	}}, &measureTestStream{ctx: context.Background()})
-	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	require.Equal(t, codes.FailedPrecondition, status.Code(StatusError(err)))
+	require.Equal(t, "Location Ignore excludes the measured path", status.Convert(StatusError(err)).Message())
 }
 
 func TestMeasureCancellationDoesNotPublishFinalSummary(t *testing.T) {

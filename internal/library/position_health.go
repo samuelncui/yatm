@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 )
@@ -46,9 +47,19 @@ func (l *Library) PublishPositionHealth(ctx context.Context, observation *Positi
 	return nil
 }
 
+// RestoreCandidateHealth lists the Position health a Restore may read: unverified and healthy
+// copies, plus known damaged or unreadable copies only when the request allows them.
+func RestoreCandidateHealth(allowDamaged bool) []entity.PositionHealth {
+	health := []entity.PositionHealth{entity.PositionHealth_POSITION_HEALTH_UNKNOWN, entity.PositionHealth_POSITION_HEALTH_HEALTHY}
+	if allowDamaged {
+		health = append(health, entity.PositionHealth_POSITION_HEALTH_DAMAGED, entity.PositionHealth_POSITION_HEALTH_UNREADABLE)
+	}
+	return health
+}
+
 // PositionRestoreEligible keeps unverified inventory usable while excluding known unusable copies.
 func PositionRestoreEligible(health entity.PositionHealth) bool {
-	return health == entity.PositionHealth_POSITION_HEALTH_UNKNOWN || health == entity.PositionHealth_POSITION_HEALTH_HEALTHY
+	return slices.Contains(RestoreCandidateHealth(false), health)
 }
 
 func preservePositionHealth(updated, previous *Position) {

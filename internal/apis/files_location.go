@@ -95,7 +95,7 @@ func basicLocationEntry(live *entity.LocationEntry, projection filesProjection) 
 
 func locationOperations(relative string, kind entity.EntryKind) []entity.FileOperationKind {
 	if library.IsLocationTrashPath(relative) {
-		if executor.IsLocationTrashContent(relative) {
+		if library.IsLocationTrashContent(relative) {
 			return []entity.FileOperationKind{entity.FileOperationKind_FILE_OPERATION_KIND_MOVE}
 		}
 		return nil
@@ -168,12 +168,13 @@ func (s *filesService) locationEntriesObserved(ctx context.Context, live []*enti
 			observation = &executor.FileReadObservation{}
 		}
 		observation.Availability = entity.OriginalAvailability_ORIGINAL_AVAILABILITY_PRESENT
-		entries[index].Status = filesStatus(facts[original.FileID], observation)
+		entries[index].Status = observation.Status(facts[original.FileID])
 	}
 	return entries, facts, observations, nil
 }
 
-func (s *filesService) matchLocationRows(ctx context.Context, query *library.FilesQuery, live []*entity.LocationEntry, entries []*entity.FilesEntry, facts map[int64]*library.FileReadFacts) ([]int, error) {
+func (s *filesService) matchLocationRows(ctx context.Context, query *library.FilesQuery, live []*entity.LocationEntry, entries []*entity.FilesEntry,
+	facts map[int64]*library.FileReadFacts, observations map[int64]*executor.FileReadObservation) ([]int, error) {
 	ids := make([]int64, 0, len(entries))
 	for _, entry := range entries {
 		if id := entry.GetAssociatedFileId(); id != 0 {
@@ -187,12 +188,13 @@ func (s *filesService) matchLocationRows(ctx context.Context, query *library.Fil
 	rows := make([]library.LiveQueryRow, 0, len(entries))
 	for index, entry := range entries {
 		id := entry.GetAssociatedFileId()
-		row := library.LiveQueryRow{FileID: id, LocationID: live[index].Reference.LocationId, Name: entry.Name, Kind: entry.Kind, Size: entry.GetSizeBytes(), MtimeNS: entry.GetMtimeNs(), HasArchive: entry.GetStatus().GetArchive() == entity.FilesArchive_FILES_ARCHIVE_AVAILABLE}
+		row := library.LiveQueryRow{FileID: id, LocationID: live[index].Reference.LocationId, Name: entry.Name, Kind: entry.Kind, Size: entry.GetSizeBytes(), MtimeNS: entry.GetMtimeNs()}
 		if file := files[id]; file != nil {
 			row.Note = file.Note
 		}
-		if fact := facts[id]; fact != nil && entry.GetStatus().GetCurrent() != entity.FilesCoverage_FILES_COVERAGE_UNSPECIFIED && fact.Original != nil {
-			row.Signature = fact.Original.Signature
+		// Content facts come from the Library and the live observation, never from the projected status.
+		if entry.Kind == entity.EntryKind_ENTRY_KIND_FILE {
+			row.Signature, row.HasArchive = facts[id].LiveQueryContent(len(observations[id].KnownSignature(facts[id])) > 0)
 		}
 		rows = append(rows, row)
 	}

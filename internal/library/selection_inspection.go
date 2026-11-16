@@ -90,10 +90,7 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 			}
 
 			// Eligible inventory must agree with the selected version's immutable content.
-			allowed := []entity.PositionHealth{entity.PositionHealth_POSITION_HEALTH_UNKNOWN, entity.PositionHealth_POSITION_HEALTH_HEALTHY}
-			if request.AllowDamagedCopies {
-				allowed = append(allowed, entity.PositionHealth_POSITION_HEALTH_DAMAGED, entity.PositionHealth_POSITION_HEALTH_UNREADABLE)
-			}
+			allowed := RestoreCandidateHealth(request.AllowDamagedCopies)
 			var summary struct{ Candidates, Conflicts int64 }
 			err := tx.Model(&Position{}).Joins("LEFT JOIN media ON media.id = positions.media_id").
 				Where("positions.signature = ? AND positions.is_dir = ? AND positions.health IN ?", version.Signature, false, allowed).

@@ -17,6 +17,9 @@ import (
 
 const trashIdentity = "YATM Location Trash\n1\n"
 
+// trashMarker identifies a Trash directory owned by YATM rather than user content.
+const trashMarker = ".yatm-trash"
+
 var trashInitialization sync.Mutex
 
 func validateTrash(root string) error {
@@ -29,7 +32,7 @@ func validateTrash(root string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("Trash is not an owned directory")
 	}
-	marker := filepath.Join(directory, executor.LocationTrashMarker)
+	marker := filepath.Join(directory, trashMarker)
 	info, err = os.Lstat(marker)
 	if err != nil {
 		return fmt.Errorf("Trash ownership is unknown: %w", err)
@@ -64,7 +67,7 @@ func (s *locationTree) trashTarget(ctx context.Context, item *Item) (string, err
 	if err := ensureTrash(s.location.RootPath); err != nil {
 		return "", err
 	}
-	same, err := sameMount(s.location.RootPath, directory)
+	same, err := executor.SameMount(s.location.RootPath, directory)
 	if err != nil {
 		return "", fmt.Errorf("inspect Trash mount failed, %w", err)
 	}
@@ -97,7 +100,7 @@ func ensureTrash(root string) error {
 		}
 	} else {
 		// Exclusive creation must never overwrite an unrecognized user's marker.
-		file, err := os.OpenFile(filepath.Join(directory, executor.LocationTrashMarker), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		file, err := os.OpenFile(filepath.Join(directory, trashMarker), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			return fmt.Errorf("create Trash ownership failed, %w", err)
 		}

@@ -682,6 +682,8 @@ func newItemTestRunner(t *testing.T, items ...*Item) *jobArchiveRunner {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	require.NoError(t, ensureSchema(context.Background(), db))
+	// Every Archive bundle carries its frozen config, which copying reads.
+	require.NoError(t, db.Create(&Config{ID: 1, Spec: &entity.ArchiveJobSpec{}}).Error)
 	for _, item := range items {
 		require.NoError(t, db.Create(item).Error)
 	}

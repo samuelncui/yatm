@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/ignore"
 	"google.golang.org/protobuf/proto"
@@ -28,6 +29,16 @@ const LocationTrashDirectory = ".trash"
 // It must not be used as a filesystem access exclusion: browsing and moving out are allowed.
 func IsLocationTrashPath(relative string) bool {
 	return relative == LocationTrashDirectory || strings.HasPrefix(relative, LocationTrashDirectory+"/")
+}
+
+// IsLocationTrashContent distinguishes payload from the managed root and batch containers.
+func IsLocationTrashContent(relative string) bool {
+	parts := strings.SplitN(relative, "/", 3)
+	if len(parts) != 3 || parts[0] != LocationTrashDirectory || parts[2] == "" {
+		return false
+	}
+	_, err := uuid.Parse(parts[1])
+	return err == nil
 }
 
 type Location struct {

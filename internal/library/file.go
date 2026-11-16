@@ -25,6 +25,8 @@ var (
 	ErrFileNotFound          = fmt.Errorf("get file: file not found")
 	ErrMkdirNonDirFileExists = fmt.Errorf("mkdir: non dir exists")
 	ErrMkdirDirExists        = fmt.Errorf("mkdir: dir exists")
+	ErrInvalidDirectory      = fmt.Errorf("invalid Library directory")
+	ErrNotDirectory          = fmt.Errorf("entry is not a directory")
 
 	Root = &File{ID: 0, Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 )
@@ -227,7 +229,16 @@ func validateFileParent(tx *gorm.DB, parentID, movingID int64) error {
 
 const (
 	TrashFileID = -1
+	// TrashName is the logical name of the Library Trash directory under the root.
+	TrashName = ".Trash"
 )
+
+// IsTrashPath reports whether a logical path, with or without its leading slash, is the Library
+// Trash or inside it.
+func IsTrashPath(logicalPath string) bool {
+	logicalPath = strings.TrimPrefix(logicalPath, "/")
+	return logicalPath == TrashName || strings.HasPrefix(logicalPath, TrashName+"/")
+}
 
 func (l *Library) newTrash(ctx context.Context, tx *gorm.DB) (*File, error) {
 	// Load the stable Trash identity so user-owned metadata survives checkpoint creation.
@@ -244,7 +255,7 @@ func (l *Library) newTrash(ctx context.Context, tx *gorm.DB) (*File, error) {
 	trash := row.file()
 
 	// Refresh system-owned fields before allocating the timestamped checkpoint directory.
-	trash.Name = ".Trash"
+	trash.Name = TrashName
 	trash.Kind = entity.FileKind_FILE_KIND_DIRECTORY
 	trash.Mode = uint32(fs.ModePerm | fs.ModeDir)
 	trash.ModTime = now
