@@ -17,6 +17,30 @@ Preparation alone is not Archive completion. Choose Media on the resulting Job t
 
 Restore selects FileVersions and permits confirmed authorized destinations without previous analysis. The browser chooser lists Preferred Locations, remembers the last chosen directory and revalidates it when reopened; it does not collect browsed files. The [Restore contract](../architecture/jobs.md#restore) owns candidates, frozen paths, collisions, actual-content verification and automatic association. Existing originals are never displaced; ignored outputs stay unlinked. Explicit damaged-copy recovery never labels mismatched bytes as a verified version.
 
+## Target Media Count
+
+An Archive's optional **Target Media count** N archives only content held by fewer than N Media.
+The count is the number of different Media holding a usable copy of the same content, from any Job;
+several copies on one Media count once, and damaged or missing copies do not count. Leave it empty
+to archive every selected file.
+
+Only content whose current state is already known and confirmed is skipped. Preparation never reads
+a file to find out, so a new or changed file, or one whose content was never analyzed, is always
+archived. Preparation leaves out files already on N or more Media; if that leaves nothing, it fails
+and says so. While writing, a file is also skipped when the chosen Media already holds its content,
+including a copy this Job just wrote there, or when the copies written so far reach N. A skipped file
+is finished: it is not written to a later Media. The Job shows both skip counts, and the review
+before preparation shows how many files already reach N.
+
+N=1 archives only content that is not archived yet, such as newly added files. One Job may add
+more than one Media for some content, for example when duplicate files land on two Tapes. To give
+content a second copy, archive the same selection again with N=2 and write it to a different Tape;
+**Recreate** opens the earlier Job's form with its selections and choices, where N can be changed
+before submitting.
+
+    yatm-cli archive estimate --file-id 42 --target-media 2
+    yatm-cli archive create --file-id 42 --target-media 2
+
 ## Restore Saved Versions
 
 Add files or directories from multiple folders to the Restore waitlist. Ordinary

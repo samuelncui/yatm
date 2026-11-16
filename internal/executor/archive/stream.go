@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 
 	"github.com/samuelncui/acp"
@@ -32,6 +33,22 @@ type copySource struct {
 
 	// stopped is set once the Media refused the next file, so no later item is handed over.
 	stopped bool
+
+	// target is the Job's target Media count, or zero without one. mediaID is the chosen Media's
+	// registered ID, zero for a new Media; content holds the current page's Catalog Media per
+	// known signature and written the known content this attempt handed to the Media.
+	target  uint32
+	mediaID int64
+	content map[string][]int64
+	written map[string]bool
+	// skipped lists the items left out of this attempt; publication settles them.
+	skipped []skippedItem
+}
+
+// skippedItem is a manifest row this attempt did not copy because its known content needed no copy.
+type skippedItem struct {
+	id        int64
+	signature []byte
 }
 
 // nextPage returns the next bounded page of prepared items, or io.EOF once the manifest is
@@ -81,6 +98,21 @@ func (s *copySource) loadPage(ctx context.Context) error {
 		}
 	}
 	s.page, s.index, s.originals = page, 0, nil
+
+	// A target Media count reads the page's known content coverage once.
+	if s.target > 0 {
+		signatures := make([][]byte, 0, len(page))
+		for _, item := range page {
+			if signature := item.Data.GetExpected().GetSignature(); len(signature) > 0 {
+				signatures = append(signatures, signature)
+			}
+		}
+		content, err := s.runner.exe.Lib().ContentMedia(ctx, signatures)
+		if err != nil {
+			return err
+		}
+		s.content = content
+	}
 	if len(ids) == 0 {
 		return nil
 	}
@@ -109,6 +141,9 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 		item := &copyItem{runner: s.runner, item: s.page[s.index]}
 		s.index++
 		s.cursor = item.item.TargetPath
+		if s.skips(item.item) {
+			continue
+		}
 
 		// Translate one manifest row without retaining it after the bounded page advances.
 		if err := s.resolveSource(ctx, item); err != nil {
@@ -137,6 +172,9 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 		}
 		item.mediaTarget = target
 		s.prepared = append(s.prepared, item)
+		if signature := item.item.Data.GetExpected().GetSignature(); s.target > 0 && len(signature) > 0 {
+			s.written[string(signature)] = true
+		}
 	}
 
 	// Record relocated originals once per bounded page before the next manifest read.
@@ -153,6 +191,21 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 	batch := s.prepared
 	s.prepared = nil
 	return batch, nil
+}
+
+// skips leaves out an item whose known content this Media already holds, through the Catalog or a
+// copy this attempt handed over, or whose content already reaches the target Media count.
+func (s *copySource) skips(item *Item) bool {
+	signature := item.Data.GetExpected().GetSignature()
+	if s.target == 0 || len(signature) == 0 {
+		return false
+	}
+	media := s.content[string(signature)]
+	if !s.written[string(signature)] && !slices.Contains(media, s.mediaID) && len(media) < int(s.target) {
+		return false
+	}
+	s.skipped = append(s.skipped, skippedItem{id: item.ID, signature: signature})
+	return true
 }
 
 // resolveSource chooses the physical source path once before the item enters ACP.

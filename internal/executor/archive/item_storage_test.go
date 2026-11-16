@@ -354,7 +354,7 @@ func TestArchiveCopyPreservesPageAndStagingFailures(t *testing.T) {
 			require.NoError(t, err)
 
 			// Drain both independent failures instead of allowing the first page error to hide persistence failure.
-			err = runner.copyArchiveItems(ctx, session)
+			_, err = runner.copyArchiveItems(ctx, session)
 			require.NoError(t, ctx.Err())
 			require.Equal(t, failPage, errors.Is(err, pageErr))
 			require.ErrorIs(t, err, writeErr)

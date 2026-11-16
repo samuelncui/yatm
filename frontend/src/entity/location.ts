@@ -488,6 +488,12 @@ export interface SelectionInspection {
      * @generated from protobuf field: bool skip_unmatched_versions = 7
      */
     skipUnmatchedVersions: boolean;
+    /**
+     * Archive only: report Files whose recorded content already reaches this many Media.
+     *
+     * @generated from protobuf field: optional uint32 target_media_count = 8
+     */
+    targetMediaCount?: number;
 }
 /**
  * @generated from protobuf message yatm.v1.SelectionInspectionResult
@@ -535,6 +541,12 @@ export interface SelectionInspectionResult {
      * @generated from protobuf field: repeated yatm.v1.RestoreVersionResolution resolved_versions = 12
      */
     resolvedVersions: RestoreVersionResolution[];
+    /**
+     * Present when a target Media count was given.
+     *
+     * @generated from protobuf field: optional int64 skipped_target_reached_count = 13
+     */
+    skippedTargetReachedCount?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.RestoreVersionResolution
@@ -2096,7 +2108,8 @@ class SelectionInspection$Type extends MessageType<SelectionInspection> {
             { no: 4, name: "destination", kind: "message", T: () => RestoreDestination },
             { no: 5, name: "allow_damaged_copies", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 6, name: "version_policy", kind: "message", T: () => RestoreVersionPolicy },
-            { no: 7, name: "skip_unmatched_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+            { no: 7, name: "skip_unmatched_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 8, name: "target_media_count", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<SelectionInspection>): SelectionInspection {
@@ -2140,6 +2153,9 @@ class SelectionInspection$Type extends MessageType<SelectionInspection> {
                 case /* bool skip_unmatched_versions */ 7:
                     message.skipUnmatchedVersions = reader.bool();
                     break;
+                case /* optional uint32 target_media_count */ 8:
+                    message.targetMediaCount = reader.uint32();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2177,6 +2193,9 @@ class SelectionInspection$Type extends MessageType<SelectionInspection> {
         /* bool skip_unmatched_versions = 7; */
         if (message.skipUnmatchedVersions !== false)
             writer.tag(7, WireType.Varint).bool(message.skipUnmatchedVersions);
+        /* optional uint32 target_media_count = 8; */
+        if (message.targetMediaCount !== undefined)
+            writer.tag(8, WireType.Varint).uint32(message.targetMediaCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2200,7 +2219,8 @@ class SelectionInspectionResult$Type extends MessageType<SelectionInspectionResu
             { no: 9, name: "ignored_output_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 10, name: "unmatched_version_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 11, name: "skipped_version_count", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 12, name: "resolved_versions", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => RestoreVersionResolution }
+            { no: 12, name: "resolved_versions", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => RestoreVersionResolution },
+            { no: 13, name: "skipped_target_reached_count", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<SelectionInspectionResult>): SelectionInspectionResult {
@@ -2254,6 +2274,9 @@ class SelectionInspectionResult$Type extends MessageType<SelectionInspectionResu
                 case /* repeated yatm.v1.RestoreVersionResolution resolved_versions */ 12:
                     message.resolvedVersions.push(RestoreVersionResolution.internalBinaryRead(reader, reader.uint32(), options));
                     break;
+                case /* optional int64 skipped_target_reached_count */ 13:
+                    message.skippedTargetReachedCount = reader.int64().toBigInt();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2296,6 +2319,9 @@ class SelectionInspectionResult$Type extends MessageType<SelectionInspectionResu
         /* repeated yatm.v1.RestoreVersionResolution resolved_versions = 12; */
         for (let i = 0; i < message.resolvedVersions.length; i++)
             RestoreVersionResolution.internalBinaryWrite(message.resolvedVersions[i], writer.tag(12, WireType.LengthDelimited).fork(), options).join();
+        /* optional int64 skipped_target_reached_count = 13; */
+        if (message.skippedTargetReachedCount !== undefined)
+            writer.tag(13, WireType.Varint).int64(message.skippedTargetReachedCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

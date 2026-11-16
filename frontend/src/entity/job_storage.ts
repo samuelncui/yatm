@@ -26,6 +26,12 @@ export interface ArchiveJobSpec {
      * @generated from protobuf field: optional bool write_signature_cache = 4
      */
     writeSignatureCache?: boolean;
+    /**
+     * Set archives only content held by fewer than this many Media; it must be at least 1.
+     *
+     * @generated from protobuf field: optional uint32 target_media_count = 5
+     */
+    targetMediaCount?: number;
 }
 /**
  * @generated from protobuf message yatm.v1.RestoreJobSpec
@@ -209,7 +215,8 @@ class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
     constructor() {
         super("yatm.v1.ArchiveJobSpec", [
             { no: 3, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection },
-            { no: 4, name: "write_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
+            { no: 4, name: "write_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
+            { no: 5, name: "target_media_count", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<ArchiveJobSpec>): ArchiveJobSpec {
@@ -230,6 +237,9 @@ class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
                 case /* optional bool write_signature_cache */ 4:
                     message.writeSignatureCache = reader.bool();
                     break;
+                case /* optional uint32 target_media_count */ 5:
+                    message.targetMediaCount = reader.uint32();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -248,6 +258,9 @@ class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
         /* optional bool write_signature_cache = 4; */
         if (message.writeSignatureCache !== undefined)
             writer.tag(4, WireType.Varint).bool(message.writeSignatureCache);
+        /* optional uint32 target_media_count = 5; */
+        if (message.targetMediaCount !== undefined)
+            writer.tag(5, WireType.Varint).uint32(message.targetMediaCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

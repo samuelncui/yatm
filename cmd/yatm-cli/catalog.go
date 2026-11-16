@@ -44,9 +44,10 @@ type inspectSelectionCommand struct {
 	restorePolicyOptions
 	VersionIDs         []int64 `long:"version-id" description:"Explicit saved version; repeatable"`
 	Restore            bool
-	TargetLocation     int64  `long:"target-location" description:"Optional Restore destination for Ignore warnings"`
-	Directory          string `long:"directory" description:"Restore destination subdirectory"`
-	AllowDamagedCopies bool   `long:"allow-damaged-copies" description:"Include damaged copies in Restore availability estimates"`
+	TargetLocation     int64   `long:"target-location" description:"Optional Restore destination for Ignore warnings"`
+	Directory          string  `long:"directory" description:"Restore destination subdirectory"`
+	AllowDamagedCopies bool    `long:"allow-damaged-copies" description:"Include damaged copies in Restore availability estimates"`
+	TargetMedia        *uint32 `long:"target-media" value-name:"N" description:"Archive only: count files whose content is already held by N or more Media"`
 }
 
 func registerCatalogCommands(root *flags.Command, rt *runtime) error {
@@ -88,6 +89,12 @@ func (c *inspectSelectionCommand) Execute(_ []string) error {
 	if !c.Restore && (c.TargetLocation != 0 || c.Directory != "" || c.AllowDamagedCopies) {
 		return usageError(fmt.Errorf("destination and damaged copies options require restore"))
 	}
+	if c.Restore && c.TargetMedia != nil {
+		return usageError(fmt.Errorf("target-media requires archive"))
+	}
+	if err := validateTargetMedia(c.TargetMedia); err != nil {
+		return err
+	}
 	if c.Directory != "" && c.TargetLocation == 0 {
 		return usageError(fmt.Errorf("directory requires target-location"))
 	}
@@ -112,7 +119,7 @@ func (c *inspectSelectionCommand) Execute(_ []string) error {
 		}
 		reply = response.GetResult()
 	} else {
-		response, callErr := callRPC[entity.EstimateArchiveJobRequest, entity.EstimateArchiveJobResponse](ctx, c.runtime, entity.ArchiveJobService_Estimate_FullMethodName, &entity.EstimateArchiveJobRequest{Selections: selections})
+		response, callErr := callRPC[entity.EstimateArchiveJobRequest, entity.EstimateArchiveJobResponse](ctx, c.runtime, entity.ArchiveJobService_Estimate_FullMethodName, &entity.EstimateArchiveJobRequest{Selections: selections, TargetMediaCount: c.TargetMedia})
 		if callErr != nil {
 			return callErr
 		}

@@ -140,12 +140,12 @@ beforeEach(() => {
 it("opens Archive without submitting and preserves roots, scope, Preview, force rehash and priority through a fresh estimate", async () => {
   const request = CreateArchiveJobRequest.create({
     priority: 23n,
-    spec: { selections: [selection(7n, FileScope.SAVED), live], writeSignatureCache: false },
+    spec: { selections: [selection(7n, FileScope.SAVED), live], writeSignatureCache: false, targetMediaCount: 3 },
     previewPolicy: PreviewPolicy.REGENERATE_ALL,
     forceRehash: true,
   });
-  // The original Job's choice wins over a different remembered one.
-  localStorage.setItem("archive:last-options", JSON.stringify({ writeSignatureCache: true }));
+  // The original Job's choices win over different remembered ones.
+  localStorage.setItem("archive:last-options", JSON.stringify({ writeSignatureCache: true, targetMediaCount: 1 }));
   mocks.archiveRead.mockReturnValue(call({ request, unavailableReason: "" }));
   show("/archive?recreate=1");
   await screen.findByText("File 7");
@@ -155,8 +155,10 @@ it("opens Archive without submitting and preserves roots, scope, Preview, force 
   expect(screen.getByRole("checkbox", { name: "Recheck source hashes for previews" })).toBeChecked();
   await userEvent.click(screen.getByRole("button", { name: /^Advanced No signature cache/ }));
   expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
+  expect(screen.getByRole("textbox", { name: "Target Media count" })).toHaveValue("3");
   await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
   expect(mocks.archiveEstimate.mock.calls[0][0].selections).toEqual(request.spec!.selections);
+  expect(mocks.archiveEstimate.mock.calls[0][0].targetMediaCount).toBe(3);
   await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
   expect(mocks.archiveCreate).toHaveBeenCalledExactlyOnceWith(request);
 });

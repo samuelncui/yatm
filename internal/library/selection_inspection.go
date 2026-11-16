@@ -24,6 +24,9 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 	if !request.Restore && (request.VersionPolicy != nil || request.SkipUnmatchedVersions) {
 		return nil, fmt.Errorf("version policy requires a Restore selection")
 	}
+	if request.Restore && request.TargetMediaCount != nil {
+		return nil, fmt.Errorf("target Media count requires an Archive selection")
+	}
 	if err := ValidateRestoreVersionSelection(request.VersionPolicy, request.SkipUnmatchedVersions); err != nil {
 		return nil, err
 	}
@@ -33,6 +36,9 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 
 	// Compute every total against the same metadata view.
 	reply := &entity.SelectionInspectionResult{Selections: request.Selections}
+	if request.TargetMediaCount != nil {
+		reply.SkippedTargetReachedCount = new(int64)
+	}
 	err := l.readDB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Restore estimates include outputs excluded by the selected destination's Ignore rules.
 		view := &Library{db: tx, settings: l.settings.WithDB(tx)}
@@ -146,7 +152,16 @@ func (l *Library) InspectSelection(ctx context.Context, request *entity.Selectio
 					return err
 				}
 			}
-			return nil
+			if request.TargetMediaCount == nil {
+				return nil
+			}
+			originals := make([]*FileLocation, 0, len(files))
+			for _, file := range files {
+				originals = append(originals, facts[file.ID].Original)
+			}
+			skipped, err := view.CountReachedContent(ctx, originals, *request.TargetMediaCount)
+			*reply.SkippedTargetReachedCount += skipped
+			return err
 		})
 	})
 	return reply, err

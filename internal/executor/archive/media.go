@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -45,12 +46,84 @@ func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.Arch
 	if pending == 0 {
 		return fmt.Errorf("Archive manifest has no pending items")
 	}
+
+	// Content the chosen registered Media already settles needs no device; settlement completes
+	// the Job when nothing remains pending.
+	if err := a.settleBeforeMedia(ctx, target); err != nil {
+		return err
+	}
+	if err := a.db.WithContext(ctx).Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).Count(&pending).Error; err != nil {
+		return fmt.Errorf("count pending Archive items failed, %w", err)
+	}
+	if pending == 0 {
+		return nil
+	}
 	session, err := a.exe.OpenWriteSession(ctx, a.job.ID, a.logger, a.mediaWait, target)
 	if err != nil {
 		return err
 	}
 
 	return a.archivePreparedMedia(ctx, target, session)
+}
+
+// settleBeforeMedia applies the write-time skip rules to every pending known-content item before an
+// APPEND choice opens its registered Media. FORMAT is left alone: a new Media holds nothing yet.
+func (a *jobArchiveRunner) settleBeforeMedia(ctx context.Context, target *entity.ArchiveMediaTarget) error {
+	var config Config
+	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
+		return fmt.Errorf("read Archive config failed, %w", err)
+	}
+	if config.Spec.GetTargetMediaCount() == 0 {
+		return nil
+	}
+	mediaID, err := a.appendMediaID(ctx, target)
+	if err != nil || mediaID == 0 {
+		return err
+	}
+
+	// Collect the pending known content in bounded pages; settlement reads its Catalog counts.
+	var pending []skippedItem
+	var cursor int64
+	for {
+		var items []*Item
+		if err := a.db.WithContext(ctx).Select("id", "data").Where("status = ? AND id > ?", entity.CopyStatus_COPY_STATUS_PENDING, cursor).
+			Order("id").Limit(batchSize).Find(&items).Error; err != nil {
+			return fmt.Errorf("query pending Archive items failed, %w", err)
+		}
+		if len(items) == 0 {
+			return a.settleSkipped(ctx, mediaID, pending)
+		}
+		for _, item := range items {
+			cursor = item.ID
+			if signature := item.Data.GetExpected().GetSignature(); len(signature) > 0 {
+				pending = append(pending, skippedItem{id: item.ID, signature: signature})
+			}
+		}
+	}
+}
+
+// appendMediaID returns the registered Library Media an APPEND choice writes to, or zero for FORMAT
+// and for an identity the Library does not hold; opening the Media reports invalid choices.
+func (a *jobArchiveRunner) appendMediaID(ctx context.Context, target *entity.ArchiveMediaTarget) (int64, error) {
+	var media *library.Media
+	var err error
+	switch {
+	case target.GetTape() != nil:
+		if target.GetTape().GetMode() != entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND {
+			return 0, nil
+		}
+		media, err = a.exe.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, target.GetTape().GetBarcode())
+	case target.GetVolume() != nil:
+		uuid, normalizeErr := mediapkg.NormalizeVolumeUUID(target.GetVolume().GetUuid())
+		if normalizeErr != nil {
+			return 0, nil
+		}
+		media, err = a.exe.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_VOLUME, uuid)
+	}
+	if err != nil || media == nil {
+		return 0, err
+	}
+	return media.ID, nil
 }
 
 // archivePreparedMedia owns content execution, finalization and publication for one prepared Session.
@@ -70,9 +143,10 @@ func (a *jobArchiveRunner) archivePreparedMedia(ctx context.Context, target *ent
 	}()
 
 	// Run the shared ACP stream and always advance to Backend finalization after copying stops.
+	var skipped []skippedItem
 	copyErr := a.transition(archiveStateCopying)
 	if copyErr == nil {
-		copyErr = a.copyArchiveItems(ctx, session)
+		skipped, copyErr = a.copyArchiveItems(ctx, session)
 		if transitionErr := a.transition(archiveStateFinalizingMedia); transitionErr != nil {
 			copyErr = errors.Join(copyErr, transitionErr)
 		}
@@ -108,6 +182,14 @@ func (a *jobArchiveRunner) archivePreparedMedia(ctx context.Context, target *ent
 		stored, bytes, files, commitErr = a.commitFormattedTarMedia(cleanupCtx, result.Media)
 	} else {
 		stored, bytes, files, commitErr = a.commitStagedMedia(cleanupCtx, result.Media)
+	}
+	// Settle the left-out items against the published Catalog, which now includes this attempt's copies.
+	if commitErr == nil {
+		mediaID := result.Media.ID
+		if stored != nil {
+			mediaID = stored.ID
+		}
+		commitErr = a.settleSkipped(cleanupCtx, mediaID, skipped)
 	}
 	if commitErr == nil && (files > 0 || formattedTar) {
 		if files > 0 {
@@ -184,23 +266,102 @@ func (a *jobArchiveRunner) commitStagedMedia(
 			}).Error; err != nil {
 			return fmt.Errorf("submit Archive items failed, %w", err)
 		}
-		var pending int64
-		if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).Count(&pending).Error; err != nil {
-			return fmt.Errorf("count pending Archive items failed, %w", err)
-		}
-		if pending == 0 {
-			// Completion moves the manifest position with the state: both describe the same Job.
-			if err := tx.Model(&executor.JobRecord{}).Where("id = ?", 1).
-				Updates(map[string]any{"status": entity.JobStatus_JOB_STATUS_COMPLETED, "checkpoint": entity.JobStatus_JOB_STATUS_COMPLETED}).Error; err != nil {
-				return fmt.Errorf("complete Archive Job failed, %w", err)
-			}
-		}
-		return nil
+		return completeSettledJob(tx)
 	})
 	if err != nil {
 		return nil, 0, 0, err
 	}
 	return stored, bytes, files, nil
+}
+
+// completeSettledJob completes the Job when no manifest item remains pending.
+func completeSettledJob(tx *gorm.DB) error {
+	var pending int64
+	if err := tx.Model(&Item{}).Where("status = ?", entity.CopyStatus_COPY_STATUS_PENDING).Count(&pending).Error; err != nil {
+		return fmt.Errorf("count pending Archive items failed, %w", err)
+	}
+	if pending != 0 {
+		return nil
+	}
+	// Completion moves the manifest position with the state: both describe the same Job.
+	if err := tx.Model(&executor.JobRecord{}).Where("id = ?", 1).
+		Updates(map[string]any{"status": entity.JobStatus_JOB_STATUS_COMPLETED, "checkpoint": entity.JobStatus_JOB_STATUS_COMPLETED}).Error; err != nil {
+		return fmt.Errorf("complete Archive Job failed, %w", err)
+	}
+	return nil
+}
+
+// settleSkipped satisfies the items an attempt left out when the published Catalog confirms that
+// mediaID holds their content or that it reached the target Media count; any other item stays
+// PENDING, for example when the copy it relied on was not published. A satisfied item leaves the
+// manifest: its File's version already follows the existing copies through covered-original
+// reconciliation, and no later Media copies it.
+func (a *jobArchiveRunner) settleSkipped(ctx context.Context, mediaID int64, skipped []skippedItem) error {
+	var config Config
+	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
+		return fmt.Errorf("read Archive config failed, %w", err)
+	}
+	target := config.Spec.GetTargetMediaCount()
+	if target == 0 {
+		return nil
+	}
+
+	// Classify the left-out items in bounded Catalog reads.
+	var onMedia, reached []int64
+	for start := 0; start < len(skipped); start += batchSize {
+		page := skipped[start:min(start+batchSize, len(skipped))]
+		signatures := make([][]byte, 0, len(page))
+		for _, item := range page {
+			signatures = append(signatures, item.signature)
+		}
+		content, err := a.exe.Lib().ContentMedia(ctx, signatures)
+		if err != nil {
+			return err
+		}
+		for _, item := range page {
+			media := content[string(item.signature)]
+			switch {
+			case slices.Contains(media, mediaID):
+				onMedia = append(onMedia, item.id)
+			case len(media) >= int(target):
+				reached = append(reached, item.id)
+			}
+		}
+	}
+	a.logger.WithContext(ctx).Infof("archive skipped files settled, media_id=%d target_media_count=%d skipped_already_on_media=%d skipped_target_reached=%d",
+		mediaID, target, len(onMedia), len(reached))
+	if len(onMedia)+len(reached) == 0 {
+		return nil
+	}
+
+	// Remove the satisfied rows, count them and complete the Job together.
+	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ids := append(slices.Clone(onMedia), reached...)
+		for start := 0; start < len(ids); start += batchSize {
+			if err := tx.Where("id IN ? AND status = ?", ids[start:min(start+batchSize, len(ids))], entity.CopyStatus_COPY_STATUS_PENDING).
+				Delete(&Item{}).Error; err != nil {
+				return fmt.Errorf("settle skipped Archive items failed, %w", err)
+			}
+		}
+		if err := tx.Model(&Config{}).Where("id = ?", 1).Updates(map[string]any{
+			"skipped_already_on_media": gorm.Expr("skipped_already_on_media + ?", len(onMedia)),
+			"skipped_target_reached":   gorm.Expr("skipped_target_reached + ?", len(reached)),
+		}).Error; err != nil {
+			return fmt.Errorf("record Archive skipped files failed, %w", err)
+		}
+		return completeSettledJob(tx)
+	})
+	if err != nil {
+		return err
+	}
+
+	// The removed rows leave the manifest totals.
+	var totalFiles, totalBytes int64
+	if err := a.db.WithContext(ctx).Model(&Item{}).Select("count(id)", "coalesce(sum(size), 0)").Row().Scan(&totalFiles, &totalBytes); err != nil {
+		return fmt.Errorf("query archive total progress failed, %w", err)
+	}
+	a.getProgress().SetGlobalTotal(totalBytes, totalFiles)
+	return nil
 }
 
 // recordArchivedContent keeps each submitted item's content facts as the copy read them, the same
@@ -242,18 +403,20 @@ func recordArchivedContent(tx *gorm.DB) error {
 	}
 }
 
-func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapkg.WriteSession) error {
+// copyArchiveItems copies the pending manifest to the session and returns the items it left out
+// because their known content needed no copy on this Media.
+func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapkg.WriteSession) ([]skippedItem, error) {
 	// One attempt reads its pipeline tunables from the Library settings that own them.
 	settings, err := executor.JobExecutionSettings(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// The results callback only hands outcomes to the writer; the shared writer stages each batch
 	// of them outside the feed, so the copy pipeline never waits for a database write.
 	reporter, err := newReporter(context.WithoutCancel(ctx), a)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// The writer is drained on every return path; Close is idempotent, so the run path below reads
 	// its terminal error again.
@@ -262,14 +425,18 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 	// an unset choice keeps writing it.
 	var config Config
 	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
-		return fmt.Errorf("read Archive config failed, %w", err)
+		return nil, fmt.Errorf("read Archive config failed, %w", err)
 	}
 	hashPolicy := acp.HashRead
 	if choice := config.Spec.WriteSignatureCache; choice == nil || *choice {
 		hashPolicy = acp.HashReadRefresh
 	}
 
-	source := &copySource{runner: a, session: session, pageSize: int(settings.GetReadBatch())}
+	source := &copySource{runner: a, session: session, pageSize: int(settings.GetReadBatch()),
+		target: config.Spec.GetTargetMediaCount(), written: make(map[string]bool)}
+	if media := session.Media(); media != nil {
+		source.mediaID = media.ID
+	}
 	options := []acp.Option{
 		acp.WithHashPolicy(hashPolicy),
 		acp.SetToDevice(mediapkg.DeviceOptions(session.Capabilities().Write)...),
@@ -278,7 +445,7 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 	}
 	engine, err := acp.NewStream(ctx, reporter.onResults, append(options, executor.ACPOptions(settings)...)...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	copyErr := source.consume(ctx, engine)
 
@@ -295,9 +462,9 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 		}
 	}
 	if copyErr == nil {
-		return nil
+		return source.skipped, nil
 	}
-	return fmt.Errorf("stream Archive copy failed, %w", copyErr)
+	return source.skipped, fmt.Errorf("stream Archive copy failed, %w", copyErr)
 }
 
 func (a *jobArchiveRunner) stagedMediaFiles(ctx context.Context, yield func(*library.MediaFile) error) error {

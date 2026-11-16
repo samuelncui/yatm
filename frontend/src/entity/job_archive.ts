@@ -29,6 +29,10 @@ export interface EstimateArchiveJobRequest {
      * @generated from protobuf field: repeated yatm.v1.FileSelection selections = 1
      */
     selections: FileSelection[];
+    /**
+     * @generated from protobuf field: optional uint32 target_media_count = 2
+     */
+    targetMediaCount?: number;
 }
 /**
  * @generated from protobuf message yatm.v1.EstimateArchiveJobResponse
@@ -182,6 +186,17 @@ export interface GetArchiveJobProgressResponse {
      * @generated from protobuf field: string preview_error = 3
      */
     previewError: string;
+    /**
+     * Present when the Job has a target Media count: Files left out because their content
+     * already reached it, and Files left out because the chosen Media already held their content.
+     *
+     * @generated from protobuf field: optional int64 skipped_target_reached_count = 4
+     */
+    skippedTargetReachedCount?: bigint;
+    /**
+     * @generated from protobuf field: optional int64 skipped_already_on_media_count = 5
+     */
+    skippedAlreadyOnMediaCount?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.ListArchiveJobFilesRequest
@@ -237,7 +252,8 @@ export interface ListArchiveJobFilesResponse {
 class EstimateArchiveJobRequest$Type extends MessageType<EstimateArchiveJobRequest> {
     constructor() {
         super("yatm.v1.EstimateArchiveJobRequest", [
-            { no: 1, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection }
+            { no: 1, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection },
+            { no: 2, name: "target_media_count", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<EstimateArchiveJobRequest>): EstimateArchiveJobRequest {
@@ -255,6 +271,9 @@ class EstimateArchiveJobRequest$Type extends MessageType<EstimateArchiveJobReque
                 case /* repeated yatm.v1.FileSelection selections */ 1:
                     message.selections.push(FileSelection.internalBinaryRead(reader, reader.uint32(), options));
                     break;
+                case /* optional uint32 target_media_count */ 2:
+                    message.targetMediaCount = reader.uint32();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -270,6 +289,9 @@ class EstimateArchiveJobRequest$Type extends MessageType<EstimateArchiveJobReque
         /* repeated yatm.v1.FileSelection selections = 1; */
         for (let i = 0; i < message.selections.length; i++)
             FileSelection.internalBinaryWrite(message.selections[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* optional uint32 target_media_count = 2; */
+        if (message.targetMediaCount !== undefined)
+            writer.tag(2, WireType.Varint).uint32(message.targetMediaCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -835,7 +857,9 @@ class GetArchiveJobProgressResponse$Type extends MessageType<GetArchiveJobProgre
         super("yatm.v1.GetArchiveJobProgressResponse", [
             { no: 1, name: "progress", kind: "message", T: () => Progress },
             { no: 2, name: "preview_job_id", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "preview_error", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 3, name: "preview_error", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "skipped_target_reached_count", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
+            { no: 5, name: "skipped_already_on_media_count", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<GetArchiveJobProgressResponse>): GetArchiveJobProgressResponse {
@@ -860,6 +884,12 @@ class GetArchiveJobProgressResponse$Type extends MessageType<GetArchiveJobProgre
                 case /* string preview_error */ 3:
                     message.previewError = reader.string();
                     break;
+                case /* optional int64 skipped_target_reached_count */ 4:
+                    message.skippedTargetReachedCount = reader.int64().toBigInt();
+                    break;
+                case /* optional int64 skipped_already_on_media_count */ 5:
+                    message.skippedAlreadyOnMediaCount = reader.int64().toBigInt();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -881,6 +911,12 @@ class GetArchiveJobProgressResponse$Type extends MessageType<GetArchiveJobProgre
         /* string preview_error = 3; */
         if (message.previewError !== "")
             writer.tag(3, WireType.LengthDelimited).string(message.previewError);
+        /* optional int64 skipped_target_reached_count = 4; */
+        if (message.skippedTargetReachedCount !== undefined)
+            writer.tag(4, WireType.Varint).int64(message.skippedTargetReachedCount);
+        /* optional int64 skipped_already_on_media_count = 5; */
+        if (message.skippedAlreadyOnMediaCount !== undefined)
+            writer.tag(5, WireType.Varint).int64(message.skippedAlreadyOnMediaCount);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

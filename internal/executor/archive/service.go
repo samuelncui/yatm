@@ -26,7 +26,10 @@ func (s *service) Estimate(ctx context.Context, req *entity.EstimateArchiveJobRe
 	if req == nil {
 		return nil, fmt.Errorf("archive selection is required")
 	}
-	result, err := s.exe.InspectSelections(ctx, &entity.SelectionInspection{Selections: req.Selections})
+	if err := validateTargetMediaCount(req.TargetMediaCount); err != nil {
+		return nil, err
+	}
+	result, err := s.exe.InspectSelections(ctx, &entity.SelectionInspection{Selections: req.Selections, TargetMediaCount: req.TargetMediaCount})
 	if err != nil {
 		return nil, err
 	}
@@ -37,6 +40,9 @@ func (s *service) Create(ctx context.Context, req *entity.CreateArchiveJobReques
 	// Reject incomplete requests and force policies that have no Preview consumer.
 	if req == nil || req.Spec == nil {
 		return nil, fmt.Errorf("archive job spec is missing")
+	}
+	if err := validateTargetMediaCount(req.Spec.TargetMediaCount); err != nil {
+		return nil, err
 	}
 	policy := req.PreviewPolicy
 	if policy == entity.PreviewPolicy_PREVIEW_POLICY_UNSPECIFIED {
@@ -117,6 +123,9 @@ func (s *service) GetProgress(ctx context.Context, req *entity.GetArchiveJobProg
 			return err
 		}
 		reply = &entity.GetArchiveJobProgressResponse{Progress: runner.progressSnapshot(), PreviewJobId: config.PreviewJobID, PreviewError: config.PreviewError}
+		if config.Spec.TargetMediaCount != nil {
+			reply.SkippedTargetReachedCount, reply.SkippedAlreadyOnMediaCount = &config.SkippedTargetReached, &config.SkippedAlreadyOnMedia
+		}
 		return s.exe.ApplyAttemptProgress(ctx, req.Id, reply.Progress)
 	})
 	if err != nil {
@@ -136,6 +145,14 @@ func (s *service) ListFiles(ctx context.Context, req *entity.ListArchiveJobFiles
 		return nil, err
 	}
 	return reply, nil
+}
+
+// validateTargetMediaCount accepts an absent target or one of at least one Media.
+func validateTargetMediaCount(target *uint32) error {
+	if target != nil && *target == 0 {
+		return fmt.Errorf("%w: target Media count must be at least 1", executor.ErrInvalidRequest)
+	}
+	return nil
 }
 
 func (s *service) useRunner(ctx context.Context, id int64, use func(*jobArchiveRunner) error) error {

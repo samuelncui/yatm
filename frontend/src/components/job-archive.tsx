@@ -43,9 +43,14 @@ export const ArchiveCard = ({ job }: { job: Job }) => {
   );
 };
 
-/** The companion Preview the Archive started, or the reason it could not be created. */
+/** The target Media count skips, the companion Preview the Archive started, or the reason it could not be created. */
 export const archiveExtras = (reply: GetArchiveJobProgressResponse): ReactNode => (
   <>
+    {reply.skippedTargetReachedCount !== undefined && (
+      <span>
+        Skipped: target Media count reached {String(reply.skippedTargetReachedCount)} · already on this Media {String(reply.skippedAlreadyOnMediaCount ?? 0n)}
+      </span>
+    )}
     {!!reply.previewJobId && <Link to={`/jobs/${reply.previewJobId}`}>View preview job</Link>}
     {reply.previewError && <Feedback severity="warning">Preview creation failed: {reply.previewError}</Feedback>}
   </>

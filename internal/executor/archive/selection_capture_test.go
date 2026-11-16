@@ -86,11 +86,11 @@ func TestArchiveSelectionDeduplicatesBeforeCaptureAcrossBatches(t *testing.T) {
 func TestArchiveSelectionTargetOwnershipBeforeCapture(t *testing.T) {
 	ctx := context.Background()
 	runner := newItemTestRunner(t, &Item{TargetPath: "accepted", Data: &entity.ArchiveManifestFile{SourcePath: "/accepted", Expected: &entity.ExpectedFile{FileId: 1}}})
-	ids, err := runner.uncapturedSelectionIDs(ctx, []int64{1, 2, 2}, map[int64]string{1: "accepted", 2: "new"})
+	ids, err := runner.uncapturedSelectionIDs(ctx, []int64{1, 2, 2}, map[int64]string{1: "accepted", 2: "new"}, nil)
 	require.NoError(t, err)
 	require.Equal(t, []int64{2}, ids)
-	_, err = runner.uncapturedSelectionIDs(ctx, []int64{3}, map[int64]string{3: "accepted"})
+	_, err = runner.uncapturedSelectionIDs(ctx, []int64{3}, map[int64]string{3: "accepted"}, nil)
 	require.ErrorContains(t, err, "selection changed")
-	_, err = runner.uncapturedSelectionIDs(ctx, []int64{2, 3}, map[int64]string{2: "new", 3: "new"})
+	_, err = runner.uncapturedSelectionIDs(ctx, []int64{2, 3}, map[int64]string{2: "new", 3: "new"}, nil)
 	require.ErrorContains(t, err, "selection changed")
 }

@@ -18,6 +18,8 @@ message ArchiveJobSpec {
   repeated FileSelection selections = 3;
   // Unset writes the signature cache onto originals after reading them.
   optional bool write_signature_cache = 4;
+  // Set archives only content held by fewer than this many Media; it must be at least 1.
+  optional uint32 target_media_count = 5;
 }
 
 message RestoreJobSpec {

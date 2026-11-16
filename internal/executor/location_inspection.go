@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -48,6 +49,9 @@ func (e *Executor) InspectSelections(ctx context.Context, req *entity.SelectionI
 		}
 	}
 	reply.Selections = request.Selections
+	if request.TargetMediaCount != nil && reply.SkippedTargetReachedCount == nil {
+		reply.SkippedTargetReachedCount = new(int64)
+	}
 
 	// Only explicit roots are retained; descendant deduplication uses bounded ancestry checks.
 	for index, selection := range request.Selections {
@@ -95,15 +99,26 @@ func (e *Executor) InspectSelections(ctx context.Context, req *entity.SelectionI
 			if err != nil {
 				return err
 			}
+			counted := make([]*library.FileLocation, 0, len(batch))
 			for _, row := range batch {
-				if original := originals[row.Path]; original != nil && covered[original.FileID] {
+				original := originals[row.Path]
+				if original != nil && covered[original.FileID] {
 					continue
 				}
 				reply.FileCount++
 				reply.TotalBytes += row.Facts.SizeBytes
+				// Recorded content counts only while the observed size and modification time still agree.
+				if original != nil && original.Size == row.Facts.SizeBytes && original.MtimeNS == row.Facts.MtimeNs {
+					counted = append(counted, original)
+				}
 			}
 			batch = batch[:0]
-			return nil
+			if request.TargetMediaCount == nil {
+				return nil
+			}
+			skipped, err := e.lib.CountReachedContent(ctx, counted, *request.TargetMediaCount)
+			*reply.SkippedTargetReachedCount += skipped
+			return err
 		}
 		err = e.walkLiveSelection(ctx, location, ref, false, 0, func(row *entity.LocationEntryRef) error {
 			batch = append(batch, row)

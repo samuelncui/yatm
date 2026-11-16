@@ -21,6 +21,7 @@ service ArchiveJobService {
 
 message EstimateArchiveJobRequest {
     repeated FileSelection selections = 1;
+    optional uint32 target_media_count = 2;
 }
 message EstimateArchiveJobResponse { SelectionInspectionResult result = 1; }
 
@@ -75,6 +76,10 @@ message GetArchiveJobProgressResponse {
     Progress progress = 1;
     int64 preview_job_id = 2;
     string preview_error = 3;
+    // Present when the Job has a target Media count: Files left out because their content
+    // already reached it, and Files left out because the chosen Media already held their content.
+    optional int64 skipped_target_reached_count = 4;
+    optional int64 skipped_already_on_media_count = 5;
 }
 
 message ListArchiveJobFilesRequest {

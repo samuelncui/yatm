@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -71,6 +71,18 @@ describe("ArchiveCard", () => {
 
     expect(await screen.findByRole("button", { name: "Choose archive storage" })).toBeEnabled();
     expect(screen.getByRole("alert")).toHaveTextContent("Media unavailable");
+  });
+
+  it("shows both target Media count skip counts only for a Job with a target", async () => {
+    getProgress.mockReturnValue(call({ progress: Progress.create({ totalFileCount: 1n }), skippedTargetReachedCount: 4n, skippedAlreadyOnMediaCount: 2n }));
+    const page = render(<ArchiveCard job={Job.create(job)} />);
+    expect(await screen.findByText("Skipped: target Media count reached 4 · already on this Media 2")).toBeInTheDocument();
+    page.unmount();
+
+    getProgress.mockReturnValue(call({ progress: Progress.create({ totalFileCount: 1n }) }));
+    render(<ArchiveCard job={Job.create(job)} />);
+    await waitFor(() => expect(getProgress).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Skipped: target Media count/)).not.toBeInTheDocument();
   });
 
   it("does not offer Media for a terminal FAILED Archive even when manifest totals are known", async () => {

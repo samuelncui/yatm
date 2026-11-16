@@ -13,10 +13,11 @@ import (
 type archiveCreateCommand struct {
 	runtime *runtime
 	selectionOptions
-	Priority         int64  `long:"priority" default:"1" description:"Job priority"`
-	PreviewPolicy    string `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Companion Scan Preview generation policy"`
-	ForceRehash      bool   `long:"force-rehash" description:"Hash source content without using cached signatures"`
-	NoSignatureCache bool   `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
+	Priority         int64   `long:"priority" default:"1" description:"Job priority"`
+	PreviewPolicy    string  `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Companion Scan Preview generation policy"`
+	ForceRehash      bool    `long:"force-rehash" description:"Hash source content without using cached signatures"`
+	NoSignatureCache bool    `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
+	TargetMedia      *uint32 `long:"target-media" value-name:"N" description:"Archive only content held by fewer than N Media"`
 }
 
 type archiveFilesCommand struct {
@@ -138,6 +139,9 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 	if preview == entity.PreviewPolicy_PREVIEW_POLICY_NONE && c.ForceRehash {
 		return usageError(fmt.Errorf("force-rehash requires a Preview generation policy"))
 	}
+	if err := validateTargetMedia(c.TargetMedia); err != nil {
+		return err
+	}
 
 	// Send explicit selection roots; the server freezes their scope and content.
 	ctx, cancel := c.runtime.context()
@@ -156,8 +160,10 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 		c.runtime,
 		entity.ArchiveJobService_Create_FullMethodName,
 		&entity.CreateArchiveJobRequest{
-			Priority:      c.Priority,
-			Spec:          &entity.ArchiveJobSpec{Selections: selections, WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache)},
+			Priority: c.Priority,
+			Spec: &entity.ArchiveJobSpec{
+				Selections: selections, WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache), TargetMediaCount: c.TargetMedia,
+			},
 			PreviewPolicy: preview,
 			ForceRehash:   c.ForceRehash,
 		},
@@ -166,6 +172,14 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 		return err
 	}
 	return writeProto(c.runtime.stdout, reply)
+}
+
+// validateTargetMedia accepts an omitted target Media count or one of at least one.
+func validateTargetMedia(target *uint32) error {
+	if target != nil && *target == 0 {
+		return usageError(fmt.Errorf("target-media must be at least 1"))
+	}
+	return nil
 }
 
 func (c *archiveFilesCommand) Execute(_ []string) error {

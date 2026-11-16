@@ -176,6 +176,13 @@ signature cache onto files they read unless `--no-signature-cache` records the J
 Omitting the flag sends no choice, and the server writes the cache. The
 [Jobs guide](jobs.md#scan-signatures-and-previews) explains the cache.
 
+`archive create --target-media N` archives only content held by fewer than N Media; N must be at
+least 1, and omitting the flag archives every selected file. `archive estimate --target-media N`
+reports `skipped_target_reached_count` for the same selection. `job progress` on such an Archive
+prints `skipped_target_reached_count` and `skipped_already_on_media_count`; neither is printed for
+a Job without a target. The [Jobs guide](jobs.md#target-media-count) explains which files are
+skipped.
+
 ## Tape Commands
 
 - `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the user-owned

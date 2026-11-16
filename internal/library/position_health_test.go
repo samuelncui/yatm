@@ -186,3 +186,41 @@ func TestCommitMediaHealthRequiresExplicitPhysicalVerification(t *testing.T) {
 		})
 	}
 }
+
+func TestContentMediaCountsDistinctRestoreCandidateMedia(t *testing.T) {
+	// One content has two copies on Media 1, one on Media 2, and excluded copies elsewhere.
+	ctx := context.Background()
+	_, lib := newTestLibrary(t)
+	for id := int64(1); id <= 8; id++ {
+		media := &Media{ID: id, Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: fmt.Sprintf("TAPE%02d", id), Profile: (&entity.TapeMediaProfile{}).Pack()}
+		if id == 8 {
+			media.DestroyedAtNS = new(int64)
+		}
+		require.NoError(t, lib.db.Create(media).Error)
+	}
+	content, other := []byte("content"), []byte("other")
+	positions := []*Position{
+		{MediaID: 8, Path: "a", Signature: content},
+		{MediaID: 9, Path: "a", Signature: content},
+		{MediaID: 1, Path: "a", Signature: content},
+		{MediaID: 1, Path: "b", Signature: content, Health: entity.PositionHealth_POSITION_HEALTH_HEALTHY},
+		{MediaID: 2, Path: "a", Signature: content},
+		{MediaID: 3, Path: "a", Signature: content, Health: entity.PositionHealth_POSITION_HEALTH_DAMAGED},
+		{MediaID: 4, Path: "a", Signature: content, Health: entity.PositionHealth_POSITION_HEALTH_MISSING},
+		{MediaID: 5, Path: "a", Signature: content, Health: entity.PositionHealth_POSITION_HEALTH_UNREADABLE},
+		{MediaID: 6, Path: "dir/", Signature: content, IsDir: true},
+		{MediaID: 7, Path: "a", Signature: other},
+	}
+	for _, position := range positions {
+		require.NoError(t, lib.db.Create(position).Error)
+	}
+
+	// Same-Media copies count once; damaged, missing, unreadable, directory, destroyed-Media and
+	// unregistered-Media rows never count.
+	media, err := lib.ContentMedia(ctx, [][]byte{content, other, []byte("absent")})
+	require.NoError(t, err)
+	require.Equal(t, map[string][]int64{string(content): {1, 2}, string(other): {7}}, media)
+	empty, err := lib.ContentMedia(ctx, nil)
+	require.NoError(t, err)
+	require.Empty(t, empty)
+}

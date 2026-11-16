@@ -157,6 +157,52 @@ func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
 	require.Equal(t, "clip.mov", created.Spec.Selections[1].GetLocation().Path)
 }
 
+func TestArchiveTargetMediaFlag(t *testing.T) {
+	// Capture the frozen target on create and review, and print both skip counts with progress.
+	var created *entity.CreateArchiveJobRequest
+	var estimated *entity.EstimateArchiveJobRequest
+	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{
+			create: func(_ context.Context, request *entity.CreateArchiveJobRequest) (*entity.CreateArchiveJobResponse, error) {
+				created = proto.Clone(request).(*entity.CreateArchiveJobRequest)
+				return &entity.CreateArchiveJobResponse{Job: &entity.Job{Id: 9}}, nil
+			},
+			estimate: func(_ context.Context, request *entity.EstimateArchiveJobRequest) (*entity.EstimateArchiveJobResponse, error) {
+				estimated = proto.Clone(request).(*entity.EstimateArchiveJobRequest)
+				return &entity.EstimateArchiveJobResponse{Result: &entity.SelectionInspectionResult{FileCount: 3, SkippedTargetReachedCount: proto.Int64(0)}}, nil
+			},
+			getProgress: func(context.Context, *entity.GetArchiveJobProgressRequest) (*entity.GetArchiveJobProgressResponse, error) {
+				return &entity.GetArchiveJobProgressResponse{SkippedTargetReachedCount: proto.Int64(2), SkippedAlreadyOnMediaCount: proto.Int64(0)}, nil
+			},
+		})
+		entity.RegisterJobServiceServer(server, &stubJobService{get: func(_ context.Context, request *entity.GetJobRequest) (*entity.GetJobResponse, error) {
+			return &entity.GetJobResponse{Job: &entity.Job{Id: request.Id, Kind: entity.JobKind_JOB_KIND_ARCHIVE}}, nil
+		}})
+	}, nil, nil)
+
+	exit, _, stderr := executeTestCLI(server.URL, "", "archive", "create", "--file-id", "12", "--target-media", "2")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, proto.Uint32(2), created.Spec.TargetMediaCount)
+	exit, _, stderr = executeTestCLI(server.URL, "", "archive", "create", "--file-id", "12")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Nil(t, created.Spec.TargetMediaCount)
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "archive", "estimate", "--file-id", "12", "--target-media", "1")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Equal(t, proto.Uint32(1), estimated.TargetMediaCount)
+	require.JSONEq(t, `{"file_count":"3","skipped_target_reached_count":"0"}`, stdout)
+	exit, stdout, stderr = executeTestCLI(server.URL, "", "job", "progress", "9")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.JSONEq(t, `{"skipped_target_reached_count":"2","skipped_already_on_media_count":"0"}`, stdout)
+
+	// Zero and Restore use are rejected before any request.
+	before := recorder.count(entity.ArchiveJobService_Create_FullMethodName)
+	exit, _, _ = executeTestCLI(server.URL, "", "archive", "create", "--file-id", "12", "--target-media", "0")
+	require.Equal(t, exitUsage, exit)
+	exit, _, _ = executeTestCLI(server.URL, "", "restore", "estimate", "--file-id", "12", "--target-media", "1")
+	require.Equal(t, exitUsage, exit)
+	require.Equal(t, before, recorder.count(entity.ArchiveJobService_Create_FullMethodName))
+}
+
 func TestListPaginationRequests(t *testing.T) {
 	// Capture page controls across the three public pagination shapes.
 	var mediaRequest *entity.ListMediaRequest

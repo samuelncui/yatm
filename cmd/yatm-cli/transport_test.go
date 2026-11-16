@@ -120,6 +120,17 @@ type stubArchiveJobService struct {
 	create      func(context.Context, *entity.CreateArchiveJobRequest) (*entity.CreateArchiveJobResponse, error)
 	writeMedia  func(context.Context, *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaResponse, error)
 	getProgress func(context.Context, *entity.GetArchiveJobProgressRequest) (*entity.GetArchiveJobProgressResponse, error)
+	estimate    func(context.Context, *entity.EstimateArchiveJobRequest) (*entity.EstimateArchiveJobResponse, error)
+}
+
+func (s *stubArchiveJobService) Estimate(
+	ctx context.Context,
+	request *entity.EstimateArchiveJobRequest,
+) (*entity.EstimateArchiveJobResponse, error) {
+	if s.estimate != nil {
+		return s.estimate(ctx, request)
+	}
+	return &entity.EstimateArchiveJobResponse{}, nil
 }
 
 func (s *stubArchiveJobService) Create(

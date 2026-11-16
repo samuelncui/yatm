@@ -347,6 +347,49 @@ describe("Unified Archive selection", () => {
     expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
     localStorage.clear();
   });
+  it("starts the target Media count off, reviews its skips and remembers the last submitted value", async () => {
+    localStorage.clear();
+    inspect.mockImplementation(({ selections, targetMediaCount }: { selections: FileSelection[]; targetMediaCount?: number }) =>
+      call(
+        SelectionInspectionResult.create({
+          selections,
+          fileCount: BigInt(selections.length),
+          totalBytes: 100n,
+          skippedTargetReachedCount: targetMediaCount === undefined ? undefined : 1n,
+        }),
+      ),
+    );
+    const page = show();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    const target = screen.getByRole("textbox", { name: "Target Media count" });
+    expect(target).toHaveValue("");
+    expect(screen.getByText(/Files whose current content is not confirmed are archived normally/)).toBeInTheDocument();
+
+    // An invalid value blocks preparation; a valid one is reviewed with its skip count.
+    await userEvent.type(target, "0");
+    expect(screen.getByText("Enter a whole number of at least 1, or leave it empty.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare archive" })).toBeDisabled();
+    await userEvent.clear(target);
+    await userEvent.type(target, "2");
+    expect(await screen.findByText(/Target Media count 2: 1 file already reaches it/)).toBeInTheDocument();
+    expect(inspect).toHaveBeenLastCalledWith(expect.objectContaining({ targetMediaCount: 2 }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
+    await screen.findByText("Job 42");
+    expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ targetMediaCount: 2 }) }));
+    expect(JSON.parse(localStorage.getItem("archive:last-options")!)).toEqual({ writeSignatureCache: true, targetMediaCount: 2 });
+
+    // The next Archive starts from the remembered value.
+    page.unmount();
+    show();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    expect(screen.getByRole("textbox", { name: "Target Media count" })).toHaveValue("2");
+    localStorage.clear();
+  });
   it("uses one Preview policy and never rehashes when Preview is disabled", async () => {
     show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));

@@ -150,6 +150,8 @@ message SelectionInspection {
   bool allow_damaged_copies = 5;
   RestoreVersionPolicy version_policy = 6;
   bool skip_unmatched_versions = 7;
+  // Archive only: report Files whose recorded content already reaches this many Media.
+  optional uint32 target_media_count = 8;
 }
 message SelectionInspectionResult {
   int64 file_count = 1;
@@ -163,6 +165,8 @@ message SelectionInspectionResult {
   int64 skipped_version_count = 11;
   // Bounded to explicitly selected regular Files/versions, never expanded directory descendants.
   repeated RestoreVersionResolution resolved_versions = 12;
+  // Present when a target Media count was given.
+  optional int64 skipped_target_reached_count = 13;
 }
 
 enum RestoreVersionMatch {

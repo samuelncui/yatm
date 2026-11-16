@@ -237,6 +237,12 @@ on. The form always submits an explicit value, and a collapsed section's summary
 non-default **No signature cache**. Scan disables the control for verification and known-only
 reuse, which write no cache, without discarding the remembered choice.
 
+The Archive dialog's **Target Media count** field is empty (off) or a whole number of at least 1.
+It starts from the same `archive:last-options` preference as the signature cache, and Recreate
+uses the original Job's value, empty when it had none. A nonempty invalid value blocks preparation.
+With a target, the estimate is requested with it and the dialog states how many files already reach
+it; an Archive Job with a target shows both skip counts on its card.
+
 Archive and Restore waitlists use Chonky's optional `footer` slot for their creation-dialog entry action. One browser frame owns the outline, divider and outer corners; there is no separately rounded list inside another card. The list scrolls independently of its footer. Configuration scrolls inside the modal, with Cancel and final preparation in its action bar. The [shared component integration](../../frontend/README.md) documents the published dependency and consumer regression coverage.
 
 Rows containing path or version details use content-measured heights in the shared virtual list, including after details change. Ordinary single-line rows remain compact. Waitlists omit a secondary path when it is identical to the displayed name.

@@ -87,6 +87,10 @@ _Avoid_: Job, cross-Location transfer, filesystem transaction
 Copying selected content to Media, verifying physical publication, and recording the File's saved content version. It is also the word for the Job kind that performs it, on every surface.
 _Avoid_: backup, indexing an original in place
 
+**Target Media count**:
+An Archive's optional number N: it copies only content held by fewer than N distinct Media, counting usable copies from any Job. Only known, confirmed content can be skipped; unknown content is always copied.
+_Avoid_: backup count, min copies, min media
+
 **Restore**:
 Copying an explicitly selected FileVersion from an available matching Position and verifying the output.
 _Avoid_: direct original read, restoring unspecified current content

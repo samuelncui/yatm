@@ -20,14 +20,16 @@ const (
 )
 
 var archiveStateTransitions = map[[2]archiveState]struct{}{
-	{archiveStatePreparingMedia, archiveStateQueued}:           {},
-	{archiveStateQueued, archiveStatePreparingMedia}:           {},
-	{archiveStateUnspecified, archiveStateIndexing}:            {},
-	{archiveStateIndexing, archiveStateUnspecified}:            {},
-	{archiveStateIndexing, archiveStateWaitingForMedia}:        {},
-	{archiveStateWaitingForMedia, archiveStatePreparingMedia}:  {},
-	{archiveStatePreparingMedia, archiveStateCopying}:          {},
-	{archiveStatePreparingMedia, archiveStateWaitingForMedia}:  {},
+	{archiveStatePreparingMedia, archiveStateQueued}:          {},
+	{archiveStateQueued, archiveStatePreparingMedia}:          {},
+	{archiveStateUnspecified, archiveStateIndexing}:           {},
+	{archiveStateIndexing, archiveStateUnspecified}:           {},
+	{archiveStateIndexing, archiveStateWaitingForMedia}:       {},
+	{archiveStateWaitingForMedia, archiveStatePreparingMedia}: {},
+	{archiveStatePreparingMedia, archiveStateCopying}:         {},
+	{archiveStatePreparingMedia, archiveStateWaitingForMedia}: {},
+	// Settlement before opening the Media can satisfy every pending item.
+	{archiveStatePreparingMedia, archiveStateCompleted}:        {},
 	{archiveStateCopying, archiveStateFinalizingMedia}:         {},
 	{archiveStateCopying, archiveStateWaitingForMedia}:         {},
 	{archiveStateFinalizingMedia, archiveStateWaitingForMedia}: {},

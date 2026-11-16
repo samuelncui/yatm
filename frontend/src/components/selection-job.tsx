@@ -41,7 +41,7 @@ import { libraryDirectoryReference } from "@/components/files-browser";
 
 import { useSelections } from "@/state/react";
 import { SelectionJobRecreate, type SelectionCreation } from "./selection-job-recreate";
-import { loadArchivePreferences, saveArchivePreferences } from "./archive-preferences";
+import { loadArchivePreferences, parseTargetMediaCount, saveArchivePreferences } from "./archive-preferences";
 
 const AddSelection = defineFileAction({ id: "add_job_selection", requiresSelection: true, button: { name: "Add to list", toolbar: true, contextMenu: true } });
 const labels = { archive: "Archive", restore: "Restore" };
@@ -85,6 +85,12 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   const [writeSignatureCache, setWriteSignatureCache] = useState(() =>
     initial?.kind === "archive" ? (initial.request.spec?.writeSignatureCache ?? true) : (loadArchivePreferences()?.writeSignatureCache ?? true),
   );
+  // The target Media count follows the same rule; empty is off.
+  const [targetMedia, setTargetMedia] = useState(() =>
+    String((initial?.kind === "archive" ? initial.request.spec?.targetMediaCount : loadArchivePreferences()?.targetMediaCount) ?? ""),
+  );
+  const targetMediaCount = kind === "archive" ? parseTargetMediaCount(targetMedia) : undefined;
+  const validTarget = kind !== "archive" || targetMedia.trim() === "" || targetMediaCount !== undefined;
   const [destination, setDestination] = useState<RestoreTarget | undefined>(initial?.destination);
   const [destinationError, setDestinationError] = useState(initial?.destinationError ?? "");
   const chooseDestination = useCallback((target: RestoreTarget) => {
@@ -198,7 +204,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
         kind === "archive"
           ? await archiveJobCli.create({
               priority,
-              spec: ArchiveJobSpec.create({ selections, writeSignatureCache }),
+              spec: ArchiveJobSpec.create({ selections, writeSignatureCache, targetMediaCount }),
               previewPolicy,
               forceRehash: previewPolicy !== PreviewPolicy.NONE && force,
             }).response
@@ -214,7 +220,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
               }),
             }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
-      if (kind === "archive") saveArchivePreferences({ writeSignatureCache });
+      if (kind === "archive") saveArchivePreferences({ writeSignatureCache, targetMediaCount });
       submitted(revision);
       navigate(`/jobs/${reply.job.id}`);
     } catch (error) {
@@ -236,15 +242,15 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
       }),
     [entries, kind, destinationID, destinationPath, allowDamagedCopies, cutoff, skipUnmatchedVersions],
   );
-  const inspectionKey = JSON.stringify(inspection, (_, value) => (typeof value === "bigint" ? value.toString() : value));
-  const summary = validPolicy && review?.key === inspectionKey ? review.result : undefined;
+  const inspectionKey = `${JSON.stringify(inspection, (_, value) => (typeof value === "bigint" ? value.toString() : value))}|${targetMediaCount ?? ""}`;
+  const summary = validPolicy && validTarget && review?.key === inspectionKey ? review.result : undefined;
   useEffect(() => {
-    if (!entries.length || !validPolicy || unavailable) return;
+    if (!entries.length || !validPolicy || !validTarget || unavailable) return;
     let active = true;
     const timer = setTimeout(() => {
       setEstimating(true);
       setEstimateError("");
-      void (kind === "restore" ? restoreJobCli.estimate(inspection) : archiveJobCli.estimate({ selections: inspection.selections })).response
+      void (kind === "restore" ? restoreJobCli.estimate(inspection) : archiveJobCli.estimate({ selections: inspection.selections, targetMediaCount })).response
         .then((response) => {
           if (!response.result) throw new Error("Selection estimate is missing");
           if (active) setReview({ key: inspectionKey, result: response.result });
@@ -260,9 +266,10 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
       active = false;
       clearTimeout(timer);
     };
-  }, [inspection, inspectionKey, estimateAttempt, entries.length, validPolicy, kind, unavailable]);
+  }, [inspection, inspectionKey, estimateAttempt, entries.length, validPolicy, validTarget, targetMediaCount, kind, unavailable]);
   const canCreate =
     validPolicy &&
+    validTarget &&
     (kind !== "archive" || (validPreview && (previewPolicy === PreviewPolicy.NONE || generation.available))) &&
     !unavailable &&
     !estimating &&
@@ -387,6 +394,20 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
               </>
             ) : (
               <Stack spacing={2}>
+                <TextField
+                  fullWidth
+                  label="Target Media count"
+                  value={targetMedia}
+                  disabled={busy}
+                  error={!validTarget}
+                  slotProps={{ htmlInput: { inputMode: "numeric" } }}
+                  onChange={(event) => setTargetMedia(event.target.value)}
+                  helperText={
+                    validTarget
+                      ? "Optional. Content already on this many Media or more is skipped. Files whose current content is not confirmed are archived normally."
+                      : "Enter a whole number of at least 1, or leave it empty."
+                  }
+                />
                 <PreviewPolicySelect generation={generation} value={previewPolicy} onChange={setPreviewPolicy} disabled={busy} />
                 {!validPreview && <Feedback severity="warning">Choose a Preview option before preparing.</Feedback>}
                 {previewPolicy !== PreviewPolicy.NONE && (
@@ -439,6 +460,12 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                 }
               >
                 {String(summary.skippedVersionCount)} {summary.skippedVersionCount === 1n ? "item" : "items"} skipped.
+              </Feedback>
+            )}
+            {kind === "archive" && summary && targetMediaCount !== undefined && (
+              <Feedback severity="info">
+                Target Media count {targetMediaCount}: {String(summary.skippedTargetReachedCount ?? 0n)}{" "}
+                {summary.skippedTargetReachedCount === 1n ? "file already reaches it and will be skipped" : "files already reach it and will be skipped"}.
               </Feedback>
             )}
             {kind !== "restore" && summary && summary.missingOriginalCount > 0n && (

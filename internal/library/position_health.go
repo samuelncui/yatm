@@ -62,6 +62,54 @@ func PositionRestoreEligible(health entity.PositionHealth) bool {
 	return slices.Contains(RestoreCandidateHealth(false), health)
 }
 
+// ContentMedia lists, for each signature, the distinct undestroyed Media holding a regular Position of that
+// content that Restore may read; the list length is the content's Media count. Several copies on one
+// Media count once, and damaged, unreadable or missing copies do not count. Callers pass a bounded
+// batch of known signatures.
+func (l *Library) ContentMedia(ctx context.Context, signatures [][]byte) (map[string][]int64, error) {
+	result := make(map[string][]int64, len(signatures))
+	if len(signatures) == 0 {
+		return result, nil
+	}
+	var rows []struct {
+		Signature []byte
+		MediaID   int64
+	}
+	if err := l.readDB().WithContext(ctx).Model(ModelPosition).Distinct("positions.signature", "positions.media_id").
+		Joins("JOIN media ON media.id = positions.media_id AND media.destroyed_at_ns IS NULL").
+		Where("positions.signature IN ? AND positions.is_dir = ? AND positions.health IN ?", signatures, false, RestoreCandidateHealth(false)).
+		Order("positions.media_id").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("count content Media failed, %w", err)
+	}
+	for _, row := range rows {
+		key := string(row.Signature)
+		result[key] = append(result[key], row.MediaID)
+	}
+	return result, nil
+}
+
+// CountReachedContent counts the originals whose recorded content signature is already held by at
+// least target Media. Missing originals and unknown content never count.
+func (l *Library) CountReachedContent(ctx context.Context, originals []*FileLocation, target uint32) (int64, error) {
+	signatures := make([][]byte, 0, len(originals))
+	for _, original := range originals {
+		if original != nil && len(original.Signature) > 0 {
+			signatures = append(signatures, original.Signature)
+		}
+	}
+	media, err := l.ContentMedia(ctx, signatures)
+	if err != nil {
+		return 0, err
+	}
+	var count int64
+	for _, signature := range signatures {
+		if len(media[string(signature)]) >= int(target) {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func preservePositionHealth(updated, previous *Position) {
 	updated.Health = entity.PositionHealth_POSITION_HEALTH_UNKNOWN
 	updated.CheckedAtNS, updated.HealthJobID = 0, 0
