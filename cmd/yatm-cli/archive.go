@@ -13,9 +13,10 @@ import (
 type archiveCreateCommand struct {
 	runtime *runtime
 	selectionOptions
-	Priority      int64  `long:"priority" default:"1" description:"Job priority"`
-	PreviewPolicy string `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Companion Scan Preview generation policy"`
-	ForceRehash   bool   `long:"force-rehash" description:"Hash source content without using cached signatures"`
+	Priority         int64  `long:"priority" default:"1" description:"Job priority"`
+	PreviewPolicy    string `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Companion Scan Preview generation policy"`
+	ForceRehash      bool   `long:"force-rehash" description:"Hash source content without using cached signatures"`
+	NoSignatureCache bool   `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
 }
 
 type archiveFilesCommand struct {
@@ -156,7 +157,7 @@ func (c *archiveCreateCommand) Execute(_ []string) error {
 		entity.ArchiveJobService_Create_FullMethodName,
 		&entity.CreateArchiveJobRequest{
 			Priority:      c.Priority,
-			Spec:          &entity.ArchiveJobSpec{Selections: selections},
+			Spec:          &entity.ArchiveJobSpec{Selections: selections, WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache)},
 			PreviewPolicy: preview,
 			ForceRehash:   c.ForceRehash,
 		},

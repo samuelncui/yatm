@@ -144,7 +144,9 @@ always reads uncached content against old expected facts. The managed key is exc
 xattr copying. Native cache lookup uses the source's descriptor and indexed facts. Source Close can
 finish before hashing; cache refresh then uses the source path and finishes before result delivery.
 This follows the supported operating model in which selected files remain unchanged during an
-operation. A failed cache write is counted, never a Job failure. Read-only/unsupported xattrs do not
+operation. Each Archive and Scan Job's [signature cache choice](jobs.md#scan) selects a refreshing or
+non-refreshing hash policy; without refresh it writes no cache onto sources or targets, and lookups
+are unchanged. A failed cache write is counted, never a Job failure. Read-only/unsupported xattrs do not
 fail copying. Custom content sources have no native cache reuse/refresh capability; their optional
 Xattrs supplies ordinary metadata only. Tar stores neither this cache nor a checksum manifest.
 Restore hashes actual bytes and recreates a supported native output's cache under its selected policy.

@@ -19,6 +19,7 @@ import (
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -153,11 +154,28 @@ func TestContentHashPolicyFollowsPhaseAndResultPolicy(t *testing.T) {
 		{"Media fill-missing reuses the cache", media, &sequentialCheckSession{checkSession{}}, acp.HashCachedOrReadRefresh},
 		{"Media verification never reuses a stored hash", verify, &sequentialCheckSession{checkSession{}}, acp.HashRead},
 		{"Forced Media read cannot reuse a stored hash", forced, &sequentialCheckSession{checkSession{}}, acp.HashReadRefresh},
+		{"Location without signature cache writes reads only", noCache(location), nil, acp.HashRead},
+		{"Location with an explicit signature cache choice refreshes", withCache(location), nil, acp.HashReadRefresh},
+		{"Media fill-missing without signature cache reuses without refreshing", noCache(media), &sequentialCheckSession{checkSession{}}, acp.HashCachedOrRead},
+		{"Forced Media read without signature cache reads only", noCache(forced), &sequentialCheckSession{checkSession{}}, acp.HashRead},
+		{"Verification ignores the signature cache choice", withCache(verify), nil, acp.HashRead},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.want, contentHashPolicy(frozenLimits(&Config{Spec: tc.spec}), tc.session))
 		})
 	}
+}
+
+func noCache(spec *entity.ScanJobSpec) *entity.ScanJobSpec {
+	spec = proto.Clone(spec).(*entity.ScanJobSpec)
+	spec.WriteSignatureCache = proto.Bool(false)
+	return spec
+}
+
+func withCache(spec *entity.ScanJobSpec) *entity.ScanJobSpec {
+	spec = proto.Clone(spec).(*entity.ScanJobSpec)
+	spec.WriteSignatureCache = proto.Bool(true)
+	return spec
 }
 
 func TestContentKnownOnlyNeverReadsContent(t *testing.T) {

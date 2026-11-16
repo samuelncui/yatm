@@ -140,10 +140,12 @@ beforeEach(() => {
 it("opens Archive without submitting and preserves roots, scope, Preview, force rehash and priority through a fresh estimate", async () => {
   const request = CreateArchiveJobRequest.create({
     priority: 23n,
-    spec: { selections: [selection(7n, FileScope.SAVED), live] },
+    spec: { selections: [selection(7n, FileScope.SAVED), live], writeSignatureCache: false },
     previewPolicy: PreviewPolicy.REGENERATE_ALL,
     forceRehash: true,
   });
+  // The original Job's choice wins over a different remembered one.
+  localStorage.setItem("archive:last-options", JSON.stringify({ writeSignatureCache: true }));
   mocks.archiveRead.mockReturnValue(call({ request, unavailableReason: "" }));
   show("/archive?recreate=1");
   await screen.findByText("File 7");
@@ -151,6 +153,8 @@ it("opens Archive without submitting and preserves roots, scope, Preview, force 
   await userEvent.click(screen.getByRole("button", { name: "Archive…" }));
   await userEvent.click(screen.getByRole("button", { name: /^Advanced Preview/ }));
   expect(screen.getByRole("checkbox", { name: "Recheck source hashes for previews" })).toBeChecked();
+  await userEvent.click(screen.getByRole("button", { name: /^Advanced No signature cache/ }));
+  expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
   await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
   expect(mocks.archiveEstimate.mock.calls[0][0].selections).toEqual(request.spec!.selections);
   await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
@@ -302,6 +306,7 @@ it("recreates Scan selected roots and all options through the normal explicit St
       resultPolicy: ScanResultPolicy.PUBLISH_ORIGINALS,
       compareLibrary: true,
       previewPolicy: PreviewPolicy.REGENERATE_ALL,
+      writeSignatureCache: false,
     },
   });
   mocks.scanRead.mockReturnValue(call({ request, unavailableReason: "" }));
@@ -310,6 +315,7 @@ it("recreates Scan selected roots and all options through the normal explicit St
   expect(mocks.scanCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
   expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   expect(mocks.scanCreate).toHaveBeenCalledExactlyOnceWith(request);
 });
@@ -353,7 +359,8 @@ it("retains Scan Media and verification options", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
   expect(mocks.scanCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-  expect(mocks.scanCreate).toHaveBeenCalledExactlyOnceWith(request);
+  // A Job without a recorded signature cache choice wrote the cache; the form submits that explicitly.
+  expect(mocks.scanCreate).toHaveBeenCalledExactlyOnceWith({ ...request, spec: { ...request.spec, writeSignatureCache: true } });
 });
 
 it("resolves at most twenty roots concurrently and stops before another page after cancellation", async () => {

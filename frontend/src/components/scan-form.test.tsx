@@ -35,7 +35,13 @@ const initial = (): InitialScan => ({
   explicit: true,
   error: "",
   saved: undefined,
-  options: { signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, resultPolicy: ScanResultPolicy.REPORT_ONLY, compare: false, previewPolicy: PreviewPolicy.NONE },
+  options: {
+    signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY,
+    resultPolicy: ScanResultPolicy.REPORT_ONLY,
+    compare: false,
+    previewPolicy: PreviewPolicy.NONE,
+    writeSignatureCache: true,
+  },
 });
 const Job = () => <p>Created Job {useParams().id}</p>;
 const show = (value = initial()) =>
@@ -130,6 +136,35 @@ it("keeps signature and comparison tuning folded with an effective summary", asy
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({ spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: false }) }),
   );
+});
+it("submits and remembers the signature cache choice for reading policies", async () => {
+  const input = initial();
+  input.options.signaturePolicy = ScanSignaturePolicy.FILL_MISSING;
+  show(input);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+  const cache = screen.getByRole("checkbox", { name: "Write signature cache" });
+  expect(cache).toBeChecked();
+  await userEvent.click(cache);
+  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Read new and changed files · No archived copy comparison · No signature cache");
+  await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
+  await screen.findByText("Created Job 43");
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: false }) }));
+  expect(JSON.parse(localStorage.getItem(scanPreferencesKey)!)).toMatchObject({ writeSignatureCache: false });
+});
+it("disables the signature cache choice where the Scan writes no cache", async () => {
+  const input = initial();
+  input.options.writeSignatureCache = false;
+  show(input);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
+  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
+  // Known-only reuse never reads, so the remembered choice is kept but not shown as active.
+  expect(screen.getByRole("checkbox", { name: "Write signature cache" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /Advanced/ })).not.toHaveTextContent("No signature cache");
+  await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
+  await userEvent.click(screen.getByRole("option", { name: "Read every file" }));
+  expect(screen.getByRole("checkbox", { name: "Write signature cache" })).toBeEnabled();
+  expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
 });
 it("explains known-only Preview skips and changes policy only on request", async () => {
   const input = initial();

@@ -68,7 +68,9 @@ func (s *service) Create(ctx context.Context, req *entity.CreateArchiveJobReques
 	config := &Config{ID: 1, Spec: req.Spec}
 	if policy != entity.PreviewPolicy_PREVIEW_POLICY_NONE {
 		config.Preview = &entity.ScanJobSpec{SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
-			ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, PreviewPolicy: policy}
+			ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, PreviewPolicy: policy,
+			// The companion Scan follows the Archive's signature cache choice.
+			WriteSignatureCache: req.Spec.WriteSignatureCache}
 		if req.ForceRehash {
 			config.Preview.SignaturePolicy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
 		}

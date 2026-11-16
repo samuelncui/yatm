@@ -28,6 +28,7 @@ import (
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -287,6 +288,59 @@ func TestArchivePreviewPoliciesPropagateToCompanionPreview(t *testing.T) {
 	require.NoError(t, db.First(&record, 1).Error)
 	require.Equal(t, entity.JobKind_JOB_KIND_SCAN, record.Kind)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, record.Status)
+}
+
+func TestArchiveSignatureCacheFollowsTheJobChoice(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		choice *bool
+		writes bool
+	}{
+		{"unset writes", nil, true},
+		{"explicit write", proto.Bool(true), true},
+		{"skip", proto.Bool(false), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A forced companion read would otherwise refresh the cache after the copy skipped it.
+			ctx := context.Background()
+			exe := setupTestExecutorWithPreviewer(t, executor.Scripts{}, archivePreviewer{})
+			_, file, filename := publishArchiveOriginal(t, exe, "cache", []byte("cache source"))
+			api := &service{exe: exe}
+			reply, err := api.Create(ctx, &entity.CreateArchiveJobRequest{
+				Spec:          &entity.ArchiveJobSpec{Selections: archiveSelections(file.ID), WriteSignatureCache: tc.choice},
+				PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
+				ForceRehash:   true,
+			})
+			require.NoError(t, err)
+			waitIndexed(t, exe, reply.Job.Id)
+			archiveToVolume(t, exe, reply.Job.Id)
+			progress, err := api.GetProgress(ctx, &entity.GetArchiveJobProgressRequest{Id: reply.Job.Id})
+			require.NoError(t, err)
+			require.Positive(t, progress.PreviewJobId)
+			require.Eventually(t, func() bool { return !exe.IsRunning(progress.PreviewJobId) }, 5*time.Second, time.Millisecond)
+
+			// The companion Scan freezes the same choice, and Recreate returns it unchanged.
+			db, err := exe.NewStateDB(ctx, progress.PreviewJobId)
+			require.NoError(t, err)
+			sqlDB, err := db.DB()
+			require.NoError(t, err)
+			defer sqlDB.Close()
+			config := new(scanjob.Config)
+			require.NoError(t, db.First(config, 1).Error)
+			require.Equal(t, tc.choice, config.Spec.WriteSignatureCache)
+			creation, err := api.GetCreation(ctx, &entity.GetArchiveJobCreationRequest{Id: reply.Job.Id})
+			require.NoError(t, err)
+			require.Equal(t, tc.choice, creation.Request.Spec.WriteSignatureCache)
+
+			// The original carries a cache entry only when the Job writes it.
+			signature, valid, err := acp.ReadCachedSignature(filename)
+			require.NoError(t, err)
+			require.Equal(t, tc.writes, valid)
+			if tc.writes {
+				require.Equal(t, sha256.Sum256([]byte("cache source")), signature.SHA256)
+			}
+		})
+	}
 }
 
 func TestArchiveCompanionFailurePreservesCompletedArchive(t *testing.T) {

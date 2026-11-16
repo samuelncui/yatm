@@ -10,6 +10,8 @@ export type ScanPreferences = {
   resultPolicy: ScanResultPolicy;
   compare: boolean;
   previewPolicy: PreviewPolicy;
+  // Absent in choices saved before this option existed; the form then writes the cache.
+  writeSignatureCache?: boolean;
 };
 
 const preferencesCodec: StorageCodec<ScanPreferences> = {
@@ -27,6 +29,7 @@ const preferencesCodec: StorageCodec<ScanPreferences> = {
       throw new Error("Invalid Scan result policy");
     if (![PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(value.previewPolicy))
       throw new Error("Invalid Scan Preview policy");
+    if (value.writeSignatureCache !== undefined && typeof value.writeSignatureCache !== "boolean") throw new Error("Invalid Scan signature cache choice");
     if (value.location && (typeof value.location.id !== "string" || !/^[1-9]\d*$/.test(value.location.id) || typeof value.location.rootPath !== "string"))
       throw new Error("Invalid Scan Location preference");
     if (

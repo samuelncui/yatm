@@ -68,6 +68,7 @@ export function scanRequest(target: ScanTarget, options: ScanOptions) {
     resultPolicy: options.resultPolicy,
     compareLibrary: options.compare,
     previewPolicy: previewAvailable(target) ? options.previewPolicy : PreviewPolicy.NONE,
+    writeSignatureCache: options.writeSignatureCache,
   });
 }
 
@@ -139,6 +140,8 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
   const canPreview = previewAvailable(target);
   const generation = usePreviewGeneration();
   const verifying = options.resultPolicy === ScanResultPolicy.VERIFY_COPIES;
+  // Verification and cache-only reuse never write the cache; the remembered choice stays for other policies.
+  const cacheApplies = !verifying && options.signaturePolicy !== ScanSignaturePolicy.KNOWN_ONLY;
   const ready =
     !loadingTarget &&
     !entries.some((entry) => entry.unavailableReason) &&
@@ -164,6 +167,7 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
         resultPolicy: spec.resultPolicy,
         compare: spec.compareLibrary,
         previewPolicy: spec.previewPolicy,
+        writeSignatureCache: options.writeSignatureCache,
       });
       if (active.current) navigate(`/jobs/${reply.job.id}`);
     } catch (failure) {
@@ -298,7 +302,7 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
             title="Advanced"
             collapsible
             hasError={!!error}
-            description={`${verifying || options.signaturePolicy === ScanSignaturePolicy.FORCE_READ ? "Read every file" : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING ? "Read new and changed files" : "Reuse known signatures only"} · ${options.compare ? "Count matching archived copies" : "No archived copy comparison"}`}
+            description={`${verifying || options.signaturePolicy === ScanSignaturePolicy.FORCE_READ ? "Read every file" : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING ? "Read new and changed files" : "Reuse known signatures only"} · ${options.compare ? "Count matching archived copies" : "No archived copy comparison"}${!cacheApplies || options.writeSignatureCache ? "" : " · No signature cache"}`}
           >
             <TextField
               select
@@ -317,6 +321,19 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
             />
             <Typography variant="body2" color="text.secondary">
               Counts recorded copies with the same signature; it does not check their current readability.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  disabled={busy || !cacheApplies}
+                  checked={cacheApplies && options.writeSignatureCache}
+                  onChange={(_, writeSignatureCache) => update({ writeSignatureCache })}
+                />
+              }
+              label="Write signature cache"
+            />
+            <Typography variant="body2" color="text.secondary">
+              Stores each read file&apos;s signature in an extended attribute so later reads can reuse it. File content is unchanged.
             </Typography>
           </SettingsSection>
           {!verifying && options.signaturePolicy === ScanSignaturePolicy.KNOWN_ONLY && options.previewPolicy !== PreviewPolicy.NONE && (

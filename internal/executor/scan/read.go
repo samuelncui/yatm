@@ -233,22 +233,26 @@ func (r *runner) readContent(
 }
 
 // contentHashPolicy maps Scan's signature and result policies onto ACP's single content
-// policy. KNOWN_ONLY never enters this phase.
+// policy. KNOWN_ONLY never enters this phase. The Job's signature cache choice selects the
+// refreshing or non-refreshing form of the same policy; an unset choice refreshes.
 func contentHashPolicy(config *Config, session mediapkg.ReadSession) acp.HashPolicy {
 	if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
 		// Verification compares real content against frozen prior facts, never a stored hash.
 		return acp.HashRead
 	}
-	if session == nil {
-		// A Location observes its own content and refreshes the disposable cache.
-		return acp.HashReadRefresh
-	}
-	if config.Spec.SignaturePolicy == entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ {
-		// A forced read cannot reuse a stored hash, so it reads and refreshes the cache.
-		return acp.HashReadRefresh
+	refresh := config.Spec.WriteSignatureCache == nil || *config.Spec.WriteSignatureCache
+	// A Location observes its own content, and a forced read cannot reuse a stored hash.
+	if session == nil || config.Spec.SignaturePolicy == entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ {
+		if refresh {
+			return acp.HashReadRefresh
+		}
+		return acp.HashRead
 	}
 	// Media use the cache like any other source, sequential Media included.
-	return acp.HashCachedOrReadRefresh
+	if refresh {
+		return acp.HashCachedOrReadRefresh
+	}
+	return acp.HashCachedOrRead
 }
 
 func (s *contentStream) consume(ctx context.Context, engine *acp.StreamCopyer) (rerr error) {

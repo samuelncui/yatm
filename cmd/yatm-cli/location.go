@@ -43,12 +43,13 @@ type locationDeleteCommand struct {
 }
 
 type analyzeCreateCommand struct {
-	runtime       *runtime
-	Priority      int64      `long:"priority" default:"1" description:"Job priority"`
-	Mode          string     `long:"mode" choice:"incremental" choice:"basic" choice:"force" default:"incremental" description:"Content analysis policy"`
-	Paths         []string   `long:"path" description:"Selected relative file or directory; repeat for multiple roots"`
-	PreviewPolicy string     `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
-	Args          fileIDArgs `positional-args:"yes"`
+	runtime          *runtime
+	Priority         int64      `long:"priority" default:"1" description:"Job priority"`
+	Mode             string     `long:"mode" choice:"incremental" choice:"basic" choice:"force" default:"incremental" description:"Content analysis policy"`
+	Paths            []string   `long:"path" description:"Selected relative file or directory; repeat for multiple roots"`
+	PreviewPolicy    string     `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
+	NoSignatureCache bool       `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
+	Args             fileIDArgs `positional-args:"yes"`
 }
 type analyzeProgressCommand struct {
 	runtime *runtime
@@ -183,7 +184,8 @@ func (c *analyzeCreateCommand) Execute(_ []string) error {
 	}
 	ctx, cancel := c.runtime.context()
 	defer cancel()
-	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName, &entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{Selections: locationSelections(c.Args.ID, c.Paths), SignaturePolicy: mode, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, PreviewPolicy: preview}})
+	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName, &entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{Selections: locationSelections(c.Args.ID, c.Paths), SignaturePolicy: mode, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, PreviewPolicy: preview,
+		WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache)}})
 	if err != nil {
 		return err
 	}

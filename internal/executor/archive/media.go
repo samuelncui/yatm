@@ -258,9 +258,20 @@ func (a *jobArchiveRunner) copyArchiveItems(ctx context.Context, session mediapk
 	// The writer is drained on every return path; Close is idempotent, so the run path below reads
 	// its terminal error again.
 	defer func() { _ = reporter.Close() }()
+	// The Job's frozen choice decides whether reading an original also writes its signature cache;
+	// an unset choice keeps writing it.
+	var config Config
+	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
+		return fmt.Errorf("read Archive config failed, %w", err)
+	}
+	hashPolicy := acp.HashRead
+	if choice := config.Spec.WriteSignatureCache; choice == nil || *choice {
+		hashPolicy = acp.HashReadRefresh
+	}
+
 	source := &copySource{runner: a, session: session, pageSize: int(settings.GetReadBatch())}
 	options := []acp.Option{
-		acp.WithHashPolicy(acp.HashReadRefresh),
+		acp.WithHashPolicy(hashPolicy),
 		acp.SetToDevice(mediapkg.DeviceOptions(session.Capabilities().Write)...),
 		acp.WithLogger(a.logger),
 		acp.WithEventHandler(a.archiveEventHandler(ctx)),

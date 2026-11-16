@@ -2,17 +2,20 @@ package scan
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -180,6 +183,46 @@ func TestAnalyzeForceRehashesMetadataStableContent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.EqualValues(t, 6, rows[0].Size)
+}
+
+func TestScanSignatureCacheFollowsTheJobChoice(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		choice *bool
+		writes bool
+	}{
+		{"unset writes", nil, true},
+		{"explicit write", proto.Bool(true), true},
+		{"skip", proto.Bool(false), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Both reading policies hash the original; only the Job's choice decides the cache write.
+			for _, policy := range []entity.ScanSignaturePolicy{
+				entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FILL_MISSING,
+				entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
+			} {
+				exe, source := setupAnalyze(t)
+				writeAnalyzeFile(t, source, "file", "content")
+				reply, err := (&service{exe: exe}).Create(context.Background(), &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{
+					ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID),
+					SignaturePolicy: policy, WriteSignatureCache: tc.choice,
+				}})
+				require.NoError(t, err)
+				require.Eventually(t, func() bool { return !exe.IsRunning(reply.Job.Id) }, 30*time.Second, 10*time.Millisecond)
+				rows, err := exe.Lib().LocationOriginalsPage(context.Background(), source.ID, "", 10)
+				require.NoError(t, err)
+				require.Len(t, rows, 1)
+				require.NotEmpty(t, rows[0].Hash, "the Scan read the original either way")
+
+				signature, valid, err := acp.ReadCachedSignature(filepath.Join(source.RootPath, "file"))
+				require.NoError(t, err)
+				require.Equal(t, tc.writes, valid, policy.String())
+				if tc.writes {
+					require.Equal(t, sha256.Sum256([]byte("content")), signature.SHA256)
+				}
+			}
+		})
+	}
 }
 
 func TestAnalyzeRejectsUnknownPreviewPolicy(t *testing.T) {

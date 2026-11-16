@@ -320,6 +320,33 @@ describe("Unified Archive selection", () => {
     expect(screen.getByText("Selected · 2")).toBeInTheDocument();
     expect(screen.getByText("Trips/notes.md")).toBeInTheDocument();
   });
+  it("writes the signature cache by default and remembers the last submitted choice", async () => {
+    localStorage.clear();
+    const page = show();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    const cache = screen.getByRole("checkbox", { name: "Write signature cache" });
+    expect(cache).toBeChecked();
+    await userEvent.click(cache);
+    expect(screen.getByRole("button", { name: /^Advanced/ })).toHaveTextContent("No signature cache");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Prepare archive" }));
+    await screen.findByText("Job 42");
+    expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: false }) }));
+    expect(localStorage.getItem("archive:last-options")).toBe(JSON.stringify({ writeSignatureCache: false }));
+
+    // The next Archive starts from the remembered choice.
+    page.unmount();
+    show();
+    await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
+    await screen.findByText("Selected · 2");
+    await configure();
+    await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
+    expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
+    localStorage.clear();
+  });
   it("uses one Preview policy and never rehashes when Preview is disabled", async () => {
     show();
     await userEvent.click(screen.getByRole("button", { name: "Add two files" }));
@@ -336,6 +363,7 @@ describe("Unified Archive selection", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Prepare archive" })).toBeEnabled());
     await userEvent.click(await screen.findByRole("button", { name: "Prepare archive" }));
     await waitFor(() => expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ previewPolicy: PreviewPolicy.NONE, forceRehash: false })));
+    expect(archiveCreate).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: true }) }));
   });
   it("only checks generation for an open dialog and preserves an unavailable requested policy", async () => {
     show();

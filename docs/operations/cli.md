@@ -169,6 +169,13 @@ because confirming the Tape barcode authorizes a write to a device rather than a
 and a report needs no follow-up command — the
 same command without `--dryrun` performs the resolved work.
 
+## Job creation options
+
+`archive create`, `scan create`, `scan media`, `analyze create` and `preview create` write the
+signature cache onto files they read unless `--no-signature-cache` records the Job's choice not to.
+Omitting the flag sends no choice, and the server writes the cache. The
+[Jobs guide](jobs.md#scan-signatures-and-previews) explains the cache.
+
 ## Tape Commands
 
 - `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the user-owned

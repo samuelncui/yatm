@@ -47,7 +47,23 @@ describe("initialScan", () => {
       resultPolicy: Result.PUBLISH_ORIGINALS,
       compare: false,
       previewPolicy: PreviewPolicy.NONE,
+      writeSignatureCache: true,
     });
+  });
+
+  it("writes the signature cache unless the last submitted Scan chose otherwise", () => {
+    const saved = {
+      kind: "location",
+      location: { id: "1", rootPath: "/photos" },
+      signaturePolicy: Signature.FILL_MISSING,
+      resultPolicy: Result.PUBLISH_ORIGINALS,
+      compare: true,
+      previewPolicy: PreviewPolicy.NONE,
+    };
+    localStorage.setItem(scanPreferencesKey, JSON.stringify(saved));
+    expect(initialScan(new URLSearchParams(), null).options.writeSignatureCache).toBe(true);
+    localStorage.setItem(scanPreferencesKey, JSON.stringify({ ...saved, writeSignatureCache: false }));
+    expect(initialScan(new URLSearchParams(), null).options.writeSignatureCache).toBe(false);
   });
 
   it("lets an explicit unified shortcut override saved and legacy collection options", () => {

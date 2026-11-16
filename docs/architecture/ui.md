@@ -178,7 +178,7 @@ Generic workflow explanations belong in documentation, not persistent Job cards,
 
 When an original's content signature becomes unknown, its Preview clears the preceding error and offers no retry for that unknown content.
 
-All Scan entry points open the same [controlled form](../../frontend/src/components/scan-form.tsx) at `/scan`: source/range, Results and Previews, then **Start scan**. Advanced holds signature acquisition and archived-copy counting. A compact summary keeps the effective reading/publication choices visible, including remembered non-default choices. Location and Media use required server-search selectors. Location supports the whole root or selected entries within that Location; Files supports Library/Location roots accumulated across directories; Media remains whole-resource. The read-only Chonky range dialog edits a temporary selection: Choose commits it, Cancel discards it. Roots retain their source, path and scope; an empty Location path selects its whole root, and directories expand only on the server. Browsing does not collect files, organize entries or start Jobs.
+All Scan entry points open the same [controlled form](../../frontend/src/components/scan-form.tsx) at `/scan`: source/range, Results and Previews, then **Start scan**. Advanced holds signature acquisition, archived-copy counting and the signature cache choice. A compact summary keeps the effective reading/publication choices visible, including remembered non-default choices. Location and Media use required server-search selectors. Location supports the whole root or selected entries within that Location; Files supports Library/Location roots accumulated across directories; Media remains whole-resource. The read-only Chonky range dialog edits a temporary selection: Choose commits it, Cancel discards it. Roots retain their source, path and scope; an empty Location path selects its whole root, and directories expand only on the server. Browsing does not collect files, organize entries or start Jobs.
 
 The route initializes defaults, applicable last-used settings, then explicit [prefill](../../frontend/src/components/scan-input.ts) once per navigation. Files context actions supply editable selections; both file and directory Add to Library supply known-only/original-publication/no-comparison/no-Preview defaults. Location/Media URL shortcuts and `collect=1` resolve into the same prefill, not separate form modes. Only actual capabilities constrain options: copy verification forces real reads and Tape disables Preview. Target changes discard incompatible ranges; late lookups cannot overwrite a newer choice. Invalid or stale targets require correction rather than falling back to a whole Location. Successful creation alone saves final options and valid Location/Media identity; individual file selections are never stored as long-term preferences. All submissions use the existing ScanJobSpec/Create contract. Known-only with Preview skips files
 whose content signature is unknown and offers a choice to read missing facts; known signatures can
@@ -229,6 +229,13 @@ Presentation cleanup includes tracing response fields and server calculations to
 Archive's **Recheck source hashes for previews** remains an advanced preparation option. It
 changes hashing before the companion Preview Scan, not the integrity check performed while
 copying Archive content. Disabling Preview keeps its draft value without making it active.
+
+Archive's collapsed **Advanced** section and Scan's Advanced section hold **Write signature cache**.
+Each starts from the browser's last successfully submitted choice for that Job type, or on when
+nothing is stored; Recreate uses the original Job's recorded choice, treating an unrecorded one as
+on. The form always submits an explicit value, and a collapsed section's summary names the
+non-default **No signature cache**. Scan disables the control for verification and known-only
+reuse, which write no cache, without discarding the remembered choice.
 
 Archive and Restore waitlists use Chonky's optional `footer` slot for their creation-dialog entry action. One browser frame owns the outline, divider and outer corners; there is no separately rounded list inside another card. The list scrolls independently of its footer. Configuration scrolls inside the modal, with Cancel and final preparation in its action bar. The [shared component integration](../../frontend/README.md) documents the published dependency and consumer regression coverage.
 

@@ -41,6 +41,7 @@ import { libraryDirectoryReference } from "@/components/files-browser";
 
 import { useSelections } from "@/state/react";
 import { SelectionJobRecreate, type SelectionCreation } from "./selection-job-recreate";
+import { loadArchivePreferences, saveArchivePreferences } from "./archive-preferences";
 
 const AddSelection = defineFileAction({ id: "add_job_selection", requiresSelection: true, button: { name: "Add to list", toolbar: true, contextMenu: true } });
 const labels = { archive: "Archive", restore: "Restore" };
@@ -80,6 +81,10 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
   const validPreview = [PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(previewPolicy);
   const generation = usePreviewGeneration(kind === "archive" && configuring);
   const [force, setForce] = useState(initial?.kind === "archive" && initial.request.forceRehash);
+  // Recreate keeps the original Job's choice; a new Archive starts from the last submitted one.
+  const [writeSignatureCache, setWriteSignatureCache] = useState(() =>
+    initial?.kind === "archive" ? (initial.request.spec?.writeSignatureCache ?? true) : (loadArchivePreferences()?.writeSignatureCache ?? true),
+  );
   const [destination, setDestination] = useState<RestoreTarget | undefined>(initial?.destination);
   const [destinationError, setDestinationError] = useState(initial?.destinationError ?? "");
   const chooseDestination = useCallback((target: RestoreTarget) => {
@@ -193,7 +198,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
         kind === "archive"
           ? await archiveJobCli.create({
               priority,
-              spec: ArchiveJobSpec.create({ selections }),
+              spec: ArchiveJobSpec.create({ selections, writeSignatureCache }),
               previewPolicy,
               forceRehash: previewPolicy !== PreviewPolicy.NONE && force,
             }).response
@@ -209,6 +214,7 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
               }),
             }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
+      if (kind === "archive") saveArchivePreferences({ writeSignatureCache });
       submitted(revision);
       navigate(`/jobs/${reply.job.id}`);
     } catch (error) {
@@ -392,6 +398,13 @@ const SelectionJobForm = ({ kind, initial }: { kind: keyof typeof labels; initia
                     <span>Reads source files again to identify previews before copying. The Archive copy hashes content independently.</span>
                   </SettingsSection>
                 )}
+                <SettingsSection title="Advanced" collapsible description={writeSignatureCache ? undefined : "No signature cache"}>
+                  <FormControlLabel
+                    control={<Checkbox checked={writeSignatureCache} disabled={busy} onChange={(_, checked) => setWriteSignatureCache(checked)} />}
+                    label="Write signature cache"
+                  />
+                  <span>Stores each read original&apos;s signature in an extended attribute so later reads can reuse it. File content is unchanged.</span>
+                </SettingsSection>
               </Stack>
             )}
             {error && <Feedback severity="error">{error}</Feedback>}

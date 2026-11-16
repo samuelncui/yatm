@@ -66,6 +66,8 @@ message ScanJobSpec {
     ScanResultPolicy result_policy = 8;
     bool compare_library = 9;
     PreviewPolicy preview_policy = 12;
+    // Unset writes the signature cache onto read files.
+    optional bool write_signature_cache = 13;
 }
 
 message ScanEntry {

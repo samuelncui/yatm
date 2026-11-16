@@ -15,25 +15,27 @@ import (
 type previewCreateCommand struct {
 	runtime *runtime
 	selectionOptions
-	Priority      int64  `long:"priority" default:"1" description:"Job priority"`
-	ForceRehash   bool   `long:"force-rehash" description:"Hash source content without using cached signatures"`
-	PreviewPolicy string `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"missing-only" description:"Preview generation policy"`
+	Priority         int64  `long:"priority" default:"1" description:"Job priority"`
+	ForceRehash      bool   `long:"force-rehash" description:"Hash source content without using cached signatures"`
+	PreviewPolicy    string `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"missing-only" description:"Preview generation policy"`
+	NoSignatureCache bool   `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
 }
 
 type scanCreateCommand struct {
 	runtime       *runtime
 	defaultResult entity.ScanResultPolicy
 	selectionOptions
-	Priority       int64    `long:"priority" default:"1" description:"Job priority"`
-	MediaID        int64    `long:"media-id" description:"Media to scan; exclusive with Location or Library selections"`
-	LocationID     int64    `long:"location-id" description:"Location to scan; exclusive with Media or selected entries"`
-	Paths          []string `long:"path" description:"Relative root within --location-id; repeatable"`
-	Signature      string   `long:"signature" choice:"known-only" choice:"fill-missing" choice:"force-read" default:"fill-missing" description:"Content fact policy"`
-	Result         string   `long:"result" choice:"report" choice:"originals" choice:"inventory" choice:"verify" description:"Result publication policy (default: report; scan media: inventory)"`
-	CompareLibrary bool     `long:"compare-library" description:"Find matching archived content"`
-	PreviewPolicy  string   `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
-	ForceRehash    bool     `long:"force-rehash" description:"Use force-read signature policy"`
-	Args           struct {
+	Priority         int64    `long:"priority" default:"1" description:"Job priority"`
+	MediaID          int64    `long:"media-id" description:"Media to scan; exclusive with Location or Library selections"`
+	LocationID       int64    `long:"location-id" description:"Location to scan; exclusive with Media or selected entries"`
+	Paths            []string `long:"path" description:"Relative root within --location-id; repeatable"`
+	Signature        string   `long:"signature" choice:"known-only" choice:"fill-missing" choice:"force-read" default:"fill-missing" description:"Content fact policy"`
+	Result           string   `long:"result" choice:"report" choice:"originals" choice:"inventory" choice:"verify" description:"Result publication policy (default: report; scan media: inventory)"`
+	CompareLibrary   bool     `long:"compare-library" description:"Find matching archived content"`
+	PreviewPolicy    string   `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
+	ForceRehash      bool     `long:"force-rehash" description:"Use force-read signature policy"`
+	NoSignatureCache bool     `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
+	Args             struct {
 		MediaID int64 `positional-arg-name:"MEDIA_ID"`
 	} `positional-args:"yes"`
 }
@@ -132,10 +134,11 @@ func (c *previewCreateCommand) Execute(_ []string) error {
 		&entity.CreateScanJobRequest{
 			Priority: c.Priority,
 			Spec: &entity.ScanJobSpec{
-				Selections:      selections,
-				SignaturePolicy: policy,
-				ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
-				PreviewPolicy:   preview,
+				Selections:          selections,
+				SignaturePolicy:     policy,
+				ResultPolicy:        entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
+				PreviewPolicy:       preview,
+				WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache),
 			},
 		},
 	)
@@ -201,7 +204,8 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName,
-		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, CompareLibrary: c.CompareLibrary, PreviewPolicy: preview}})
+		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, CompareLibrary: c.CompareLibrary, PreviewPolicy: preview,
+			WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache)}})
 	if err != nil {
 		return err
 	}
@@ -210,6 +214,15 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 
 func (c *scanProgressCommand) Execute(args []string) error {
 	return (&jobProgressCommand{runtime: c.runtime, Args: c.Args}).Execute(args)
+}
+
+// signatureCacheChoice maps --no-signature-cache; omission keeps the server default, which writes.
+func signatureCacheChoice(skip bool) *bool {
+	if !skip {
+		return nil
+	}
+	skipped := false
+	return &skipped
 }
 
 // previewPolicy maps --preview-policy, which the flag parser restricts to its three choices.

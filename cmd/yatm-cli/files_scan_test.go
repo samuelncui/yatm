@@ -91,6 +91,7 @@ func TestFilesAndScanCommandsThroughCLIProcess(t *testing.T) {
 	require.Equal(t, "photos", scan.create.Load().Spec.Selections[0].GetLocation().Path)
 	require.Equal(t, entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, scan.create.Load().Spec.PreviewPolicy)
 	require.True(t, scan.create.Load().Spec.CompareLibrary)
+	require.Nil(t, scan.create.Load().Spec.WriteSignatureCache, "omission keeps the server default, which writes")
 	for _, test := range []struct {
 		flag   string
 		policy entity.PreviewPolicy
@@ -104,6 +105,19 @@ func TestFilesAndScanCommandsThroughCLIProcess(t *testing.T) {
 	}
 	run("preview", "create", "--file-id", "17")
 	require.Equal(t, entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, scan.create.Load().Spec.PreviewPolicy)
+	require.Nil(t, scan.create.Load().Spec.WriteSignatureCache)
+
+	// Every Scan preset that reads originals can skip writing the signature cache.
+	for _, args := range [][]string{
+		{"scan", "create", "--location-id", "4", "--no-signature-cache"},
+		{"scan", "media", "7", "--no-signature-cache"},
+		{"preview", "create", "--file-id", "17", "--no-signature-cache"},
+		{"analyze", "create", "4", "--no-signature-cache"},
+	} {
+		run(args...)
+		require.NotNil(t, scan.create.Load().Spec.WriteSignatureCache, args)
+		require.False(t, *scan.create.Load().Spec.WriteSignatureCache, args)
+	}
 
 	// Verification forces uncached reads without enabling Preview implicitly.
 	run("scan", "create", "--media-id", "7", "--signature", "known-only", "--result", "verify")

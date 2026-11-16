@@ -26,7 +26,14 @@ const loadCreation = async (id: bigint, signal: AbortSignal): Promise<InitialSca
               unavailableReason: entry.unavailableReason,
             })),
           },
-    options: { signaturePolicy: spec.signaturePolicy, resultPolicy: spec.resultPolicy, compare: spec.compareLibrary, previewPolicy: spec.previewPolicy },
+    options: {
+      signaturePolicy: spec.signaturePolicy,
+      resultPolicy: spec.resultPolicy,
+      compare: spec.compareLibrary,
+      previewPolicy: spec.previewPolicy,
+      // A Job created before this choice existed wrote the cache.
+      writeSignatureCache: spec.writeSignatureCache ?? true,
+    },
     explicit: true,
     saved: undefined,
     error: "",

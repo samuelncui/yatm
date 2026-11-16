@@ -20,6 +20,12 @@ export interface ArchiveJobSpec {
      * @generated from protobuf field: repeated yatm.v1.FileSelection selections = 3
      */
     selections: FileSelection[];
+    /**
+     * Unset writes the signature cache onto originals after reading them.
+     *
+     * @generated from protobuf field: optional bool write_signature_cache = 4
+     */
+    writeSignatureCache?: boolean;
 }
 /**
  * @generated from protobuf message yatm.v1.RestoreJobSpec
@@ -202,7 +208,8 @@ export enum PreviewPolicy {
 class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
     constructor() {
         super("yatm.v1.ArchiveJobSpec", [
-            { no: 3, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection }
+            { no: 3, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection },
+            { no: 4, name: "write_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<ArchiveJobSpec>): ArchiveJobSpec {
@@ -220,6 +227,9 @@ class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
                 case /* repeated yatm.v1.FileSelection selections */ 3:
                     message.selections.push(FileSelection.internalBinaryRead(reader, reader.uint32(), options));
                     break;
+                case /* optional bool write_signature_cache */ 4:
+                    message.writeSignatureCache = reader.bool();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -235,6 +245,9 @@ class ArchiveJobSpec$Type extends MessageType<ArchiveJobSpec> {
         /* repeated yatm.v1.FileSelection selections = 3; */
         for (let i = 0; i < message.selections.length; i++)
             FileSelection.internalBinaryWrite(message.selections[i], writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+        /* optional bool write_signature_cache = 4; */
+        if (message.writeSignatureCache !== undefined)
+            writer.tag(4, WireType.Varint).bool(message.writeSignatureCache);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

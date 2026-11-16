@@ -137,7 +137,7 @@ func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
 		server.URL,
 		"",
 		"archive", "create", "--file-id", "12", "--location", "4:clip.mov", "--scope", "saved",
-		"--priority", "7", "--preview-policy", "missing-only", "--force-rehash",
+		"--priority", "7", "--preview-policy", "missing-only", "--force-rehash", "--no-signature-cache",
 	)
 
 	// Verify source scope, flags, and string-encoded 64-bit JSON fields.
@@ -148,6 +148,8 @@ func TestArchiveCreatePreservesSelectionsAndUsesProtoJSON(t *testing.T) {
 	require.Equal(t, int64(7), created.Priority)
 	require.Equal(t, entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, created.PreviewPolicy)
 	require.True(t, created.ForceRehash)
+	require.NotNil(t, created.Spec.WriteSignatureCache)
+	require.False(t, *created.Spec.WriteSignatureCache)
 	require.Len(t, created.Spec.Selections, 2)
 	require.EqualValues(t, 12, created.Spec.Selections[0].GetLibrary().FileId)
 	require.Equal(t, entity.FileScope_FILE_SCOPE_SAVED, created.Spec.Selections[0].Scope)

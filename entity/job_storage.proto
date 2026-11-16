@@ -16,6 +16,8 @@ enum PreviewPolicy {
 
 message ArchiveJobSpec {
   repeated FileSelection selections = 3;
+  // Unset writes the signature cache onto originals after reading them.
+  optional bool write_signature_cache = 4;
 }
 
 message RestoreJobSpec {

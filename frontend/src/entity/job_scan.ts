@@ -47,6 +47,12 @@ export interface ScanJobSpec {
      * @generated from protobuf field: yatm.v1.PreviewPolicy preview_policy = 12
      */
     previewPolicy: PreviewPolicy;
+    /**
+     * Unset writes the signature cache onto read files.
+     *
+     * @generated from protobuf field: optional bool write_signature_cache = 13
+     */
+    writeSignatureCache?: boolean;
 }
 /**
  * @generated from protobuf message yatm.v1.ScanEntry
@@ -455,7 +461,8 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
             { no: 7, name: "signature_policy", kind: "enum", T: () => ["yatm.v1.ScanSignaturePolicy", ScanSignaturePolicy, "SCAN_SIGNATURE_POLICY_"] },
             { no: 8, name: "result_policy", kind: "enum", T: () => ["yatm.v1.ScanResultPolicy", ScanResultPolicy, "SCAN_RESULT_POLICY_"] },
             { no: 9, name: "compare_library", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 12, name: "preview_policy", kind: "enum", T: () => ["yatm.v1.PreviewPolicy", PreviewPolicy, "PREVIEW_POLICY_"] }
+            { no: 12, name: "preview_policy", kind: "enum", T: () => ["yatm.v1.PreviewPolicy", PreviewPolicy, "PREVIEW_POLICY_"] },
+            { no: 13, name: "write_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<ScanJobSpec>): ScanJobSpec {
@@ -493,6 +500,9 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
                 case /* yatm.v1.PreviewPolicy preview_policy */ 12:
                     message.previewPolicy = reader.int32();
                     break;
+                case /* optional bool write_signature_cache */ 13:
+                    message.writeSignatureCache = reader.bool();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -523,6 +533,9 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
         /* yatm.v1.PreviewPolicy preview_policy = 12; */
         if (message.previewPolicy !== 0)
             writer.tag(12, WireType.Varint).int32(message.previewPolicy);
+        /* optional bool write_signature_cache = 13; */
+        if (message.writeSignatureCache !== undefined)
+            writer.tag(13, WireType.Varint).bool(message.writeSignatureCache);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
