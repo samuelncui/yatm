@@ -21,8 +21,8 @@ func init() {
 	executor.RegisterJobType(entity.JobKind_JOB_KIND_CALIBRATION, newRunner, registerService)
 }
 
-// minimumMoveSeconds separates a LOCATE that moved the tape from one the drive answered from its
-// position or buffer; the sequence never revisits a target, so a faster move is unexpected.
+// minimumMoveSeconds separates a LOCATE that moved the tape from one the drive answered without
+// moving it; the sequence never revisits a target, so a faster move is unexpected.
 const minimumMoveSeconds = 0.3
 
 // Config is the bundle's frozen request and its result.
@@ -56,22 +56,27 @@ func prepareSchema(db *gorm.DB) error {
 	return db.AutoMigrate(&Config{}, &MoveRow{})
 }
 
-// drive is the native session the calibration moves: LOCATE, READ POSITION and release.
+// drive is the native session the calibration moves: LOCATE, READ POSITION and the unloading release.
+// Every failure tells the operator what to do next.
+const (
+	adviceRetry       = "; run the Calibration again, and if it fails the same way keep the current read parameters or edit them in Device settings"
+	adviceUnsupported = "; this drive or cartridge cannot be calibrated: try another cartridge, or keep the current read parameters or edit them in Device settings"
+)
+
 type drive interface {
 	Locate(ctx context.Context, object uint64) error
 	Position(ctx context.Context) (uint64, error)
 	Finish(ctx context.Context) error
-	Cleanup(ctx context.Context) error
 }
 
 // session is an opened drive with the facts its calibration needs.
 type session struct {
 	drive
-	serial      string
-	density     *uint32
-	endpoints   []tape.WrapEndpoint
-	recordBytes uint32
-	builtin     *entity.TapeReadParameters
+	serial    string
+	density   *uint32
+	endpoints []tape.WrapEndpoint
+	wrapBytes float64
+	builtin   *entity.TapeReadParameters
 }
 
 // openSession and now are replaced by tests: the drive by a simulated one and the clock by its
@@ -79,22 +84,17 @@ type session struct {
 var (
 	openSession = func(ctx context.Context, exe *executor.Executor, jobID int64, spec *entity.CalibrationJobSpec, logger *logrus.Logger) (*session, error) {
 		var opened *executor.CalibrationDrive
+		var err error
 		if spec.WriteTestData {
-			var err error
-			if opened, err = exe.OpenCalibrationTestDrive(ctx, jobID, spec.Device, logger); err != nil {
-				return nil, err
-			}
+			opened, err = exe.OpenCalibrationTestDrive(ctx, jobID, spec.Device, logger)
 		} else {
-			media, err := exe.Lib().GetMedia(ctx, spec.GetMediaId())
-			if err != nil {
-				return nil, err
-			}
-			if opened, err = exe.OpenCalibrationDrive(ctx, jobID, spec.Device, media); err != nil {
-				return nil, err
-			}
+			opened, err = exe.OpenCalibrationDrive(ctx, jobID, spec.Device)
+		}
+		if err != nil {
+			return nil, err
 		}
 		return &session{drive: opened, serial: opened.Serial(), density: opened.Report.GetTape().DensityCode,
-			endpoints: opened.Endpoints, recordBytes: opened.RecordBytes, builtin: opened.Builtin}, nil
+			endpoints: opened.Endpoints, wrapBytes: opened.WrapBytes, builtin: opened.Builtin}, nil
 	}
 	now = time.Now
 )
@@ -142,10 +142,15 @@ func (r *runner) Index(ctx context.Context) (returnErr error) {
 	if err != nil {
 		return err
 	}
+	// A failed or cancelled Calibration unloads the cartridge too, untimed.
 	released := false
 	defer func() {
 		if !released {
-			returnErr = errors.Join(returnErr, opened.Cleanup(ctx))
+			finishErr := opened.Finish(ctx)
+			if finishErr == nil {
+				r.logger.WithField("job_id", r.job.ID).Info("Calibration stopped and unloaded the cartridge")
+			}
+			returnErr = errors.Join(returnErr, finishErr)
 		}
 	}()
 	layout, err := newPlan(opened)
@@ -162,7 +167,7 @@ func (r *runner) Index(ctx context.Context) (returnErr error) {
 	low, high := sequence.Threshold()
 	result, err := Fit(sequence.Moves(), low, high)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w%s", err, adviceRetry)
 	}
 	r.logger.WithFields(logrus.Fields{
 		"job_id": r.job.ID, "base_seconds": result.BaseSeconds, "seek_seconds_per_wrap": result.SeekSecondsPerWrap,
@@ -180,13 +185,20 @@ func (r *runner) Index(ctx context.Context) (returnErr error) {
 	parameters := layout.parameters(r.job.ID, result, unloadSeconds, sequence.at.U)
 	r.logger.WithFields(logrus.Fields{"job_id": r.job.ID, "unload_seconds": unloadSeconds}).Info("Calibration unloaded the cartridge")
 
-	if err := r.db.WithContext(ctx).Model(&Config{}).Where("id = ?", 1).Update("parameters", parameters).Error; err != nil {
+	// A cancellation that arrived during the unload ends the Job before anything is stored. From
+	// here the stored set, the Job's copy of it and COMPLETED settle together, in that order, so
+	// a failed or cancelled Calibration records no parameters.
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := storeParameters(ctx, r.exe.Lib().Settings(), spec.Device, parameters); err != nil {
+	settle := context.WithoutCancel(ctx)
+	if err := storeParameters(settle, r.exe.Lib().Settings(), spec.Device, parameters); err != nil {
 		return err
 	}
-	if err := r.exe.UpdateJobStatus(ctx, r.job.ID, entity.JobStatus_JOB_STATUS_PREPARING, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
+	if err := r.db.WithContext(settle).Model(&Config{}).Where("id = ?", 1).Update("parameters", parameters).Error; err != nil {
+		return err
+	}
+	if err := r.exe.UpdateJobStatus(settle, r.job.ID, entity.JobStatus_JOB_STATUS_PREPARING, entity.JobStatus_JOB_STATUS_COMPLETED); err != nil {
 		return err
 	}
 	r.setPhase(entity.JobPhase_JOB_PHASE_COMPLETED)
@@ -207,7 +219,7 @@ func (r *runner) measure(ctx context.Context, d drive, layout *plan) (*Sequence,
 		object := layout.object(target)
 		started := now()
 		if err := d.Locate(ctx, object); err != nil {
-			return nil, fmt.Errorf("LOCATE to wrap %d at span %.3f failed, %w", target.Wrap, target.U, err)
+			return nil, fmt.Errorf("LOCATE to wrap %d at span %.3f failed, %w%s", target.Wrap, target.U, err, adviceRetry)
 		}
 		seconds := now().Sub(started).Seconds()
 
@@ -215,14 +227,14 @@ func (r *runner) measure(ctx context.Context, d drive, layout *plan) (*Sequence,
 		settle := context.WithoutCancel(ctx)
 		position, err := d.Position(settle)
 		if err != nil {
-			return nil, fmt.Errorf("READ POSITION after LOCATE failed, %w", err)
+			return nil, fmt.Errorf("READ POSITION after LOCATE failed, %w%s", err, adviceRetry)
 		}
 		if position != object {
-			return nil, fmt.Errorf("Tape position after LOCATE is logical object %d, not the target %d", position, object)
+			return nil, fmt.Errorf("Tape position after LOCATE is logical object %d, not the target %d%s", position, object, adviceRetry)
 		}
 		if seconds < minimumMoveSeconds {
-			return nil, fmt.Errorf("LOCATE to wrap %d at span %.3f took %.2f s and did not move the tape; this drive does not position as the calibration expects",
-				target.Wrap, target.U, seconds)
+			return nil, fmt.Errorf("LOCATE to wrap %d at span %.3f took %.2f s and did not move the tape; this drive does not position as the calibration expects%s",
+				target.Wrap, target.U, seconds, adviceUnsupported)
 		}
 
 		// The first LOCATE only leaves the load point and is not fitted.
@@ -267,35 +279,32 @@ func (s *Sequence) total() int {
 // parameters.
 type plan struct {
 	// low and high bound the logical objects of wraps 0 and 1.
-	low, high   [2]uint64
-	recordBytes uint32
-	density     uint32
-	serial      string
-	builtin     *entity.TapeReadParameters
+	low, high [2]uint64
+	wrapBytes float64
+	density   uint32
+	serial    string
+	builtin   *entity.TapeReadParameters
 }
 
 func newPlan(s *session) (*plan, error) {
 	if s.density == nil {
-		return nil, errors.New("Calibration needs the cartridge's recorded density, which the drive does not report")
+		return nil, errors.New("Calibration needs the cartridge's recorded density, which the drive does not report" + adviceUnsupported)
 	}
-	if s.builtin.GetGeometry().GetNominalWraps() == 0 {
-		return nil, fmt.Errorf("Calibration has no built-in layout for density code %d", *s.density)
+	if s.builtin.GetGeometry().GetNominalWraps() == 0 || s.wrapBytes <= 0 {
+		return nil, fmt.Errorf("Calibration has no built-in layout for density code %d%s", *s.density, adviceUnsupported)
 	}
 	if len(s.endpoints) == 0 {
-		return nil, errors.New("Calibration needs the drive's current wrap endpoint map, which is unavailable")
+		return nil, errors.New("Calibration needs the drive's current wrap endpoint map, which is unavailable" + adviceUnsupported)
 	}
 
 	// The last endpoint is EOD inside a partial wrap, so wraps 0 and 1 are complete only before a third.
 	if len(s.endpoints) < 3 {
-		message := "Calibration needs the first two wraps written"
-		if len(s.endpoints) == 2 {
-			message += fmt.Sprintf(" (about %.0f GB on this cartridge)", 2*float64(s.endpoints[0].Object)*float64(s.recordBytes)/1e9)
-		}
-		return nil, errors.New(message)
+		return nil, fmt.Errorf("Calibration needs two full wraps of data, about %.0f GB on this cartridge, and it holds less; "+
+			"load a cartridge holding that much, or calibrate a spare cartridge by writing test data", 2*s.wrapBytes/1e9)
 	}
 	return &plan{
 		low: [2]uint64{0, s.endpoints[0].Object}, high: [2]uint64{s.endpoints[0].Object, s.endpoints[1].Object},
-		recordBytes: s.recordBytes, density: *s.density, serial: s.serial, builtin: s.builtin,
+		wrapBytes: s.wrapBytes, density: *s.density, serial: s.serial, builtin: s.builtin,
 	}, nil
 }
 
@@ -314,7 +323,7 @@ func (p *plan) object(target Point) uint64 {
 // parameters builds a complete read parameter set: measured terms, the geometry and LTFS unmount
 // time of the built-in values for this density, and completion from the timed unload.
 func (p *plan) parameters(jobID int64, result *Result, unloadSeconds, finalSpan float64) *entity.TapeReadParameters {
-	wrapBytes := float64(p.high[0]-p.low[0]) * float64(p.recordBytes)
+	wrapBytes := p.wrapBytes
 	applies := &entity.TapeReadApplicability{DensityCode: proto.Uint32(p.density)}
 	if p.serial != "" {
 		applies.DriveSerial = proto.String(p.serial)
@@ -332,7 +341,7 @@ func (p *plan) parameters(jobID int64, result *Result, unloadSeconds, finalSpan 
 		Positioning: &entity.TapeReadPositioning{
 			BaseSeconds: seconds(result.BaseSeconds), SeekSecondsPerWrap: seconds(result.SeekSecondsPerWrap),
 			ApproachReversalSeconds: seconds(result.ApproachReversalSeconds),
-			BufferBytes:             proto.Uint64(uint64(math.Round(result.StreamSpans * wrapBytes))),
+			StreamingBytes:          proto.Uint64(uint64(math.Round(result.StreamSpans * wrapBytes))),
 		},
 		Reading:         &entity.TapeReadTiming{BytesPerSecond: proto.Float64(math.Round(wrapBytes / result.ReadSecondsPerWrap))},
 		Completion:      completion,
@@ -342,9 +351,15 @@ func (p *plan) parameters(jobID int64, result *Result, unloadSeconds, finalSpan 
 
 func seconds(value float64) *float64 { return proto.Float64(math.Round(value*100) / 100) }
 
+// storeLock serializes storeParameters: every device's set lives in one settings group that a save
+// replaces whole, and Calibrations of different drives may finish together.
+var storeLock sync.Mutex
+
 // storeParameters replaces this device's set for the same density code, or adds it, through the
 // Device settings group's ordinary validated save.
 func storeParameters(ctx context.Context, settings *settingspkg.Module, device string, parameters *entity.TapeReadParameters) error {
+	storeLock.Lock()
+	defer storeLock.Unlock()
 	value, err := settings.Device.Current(ctx)
 	if err != nil {
 		return err

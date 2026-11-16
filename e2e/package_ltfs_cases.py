@@ -65,7 +65,8 @@ class TapeWorkflows:
 
     def format(self, job, barcode):
         self.test.cli("archive", "write", "tape", "format", job["id"], "--device", self.device(barcode),
-                      "--barcode", barcode, "--name", "Acceptance " + barcode, "--confirm-format", barcode)
+                      "--barcode", barcode, "--name", "Acceptance " + barcode, "--confirm-format", barcode,
+                      "--format", "ltfs_v1")
 
     def items(self, job):
         page = self.test.one("archive", "files", job["id"], "--limit", "100")

@@ -411,24 +411,18 @@ func TestCalibrationCreateSendsDeviceAndMedia(t *testing.T) {
 			return &entity.CreateCalibrationJobResponse{Job: &entity.Job{Id: 9, Kind: entity.JobKind_JOB_KIND_CALIBRATION}}, nil
 		}})
 	}, nil, nil)
-	exit, _, stderr := executeTestCLI(server.URL, "", "calibration", "create", "--device", " /dev/nst0 ", "--media-id", "4")
+	exit, _, stderr := executeTestCLI(server.URL, "", "calibration", "create", "--device", " /dev/nst0 ")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Equal(t, 1, recorder.count(entity.CalibrationJobService_Create_FullMethodName))
 	require.Equal(t, "/dev/nst0", received.Device)
-	require.Equal(t, int64(4), received.GetMediaId())
 	require.False(t, received.WriteTestData)
 
 	exit, _, stderr = executeTestCLI(server.URL, "", "calibration", "create", "--device", "/dev/nst0", "--write-test-data")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.True(t, received.WriteTestData)
-	require.Nil(t, received.MediaId)
 
-	for _, args := range [][]string{
-		{"--media-id", "0"}, {}, {"--media-id", "4", "--write-test-data"},
-	} {
-		exit, _, _ = executeTestCLI(server.URL, "", append([]string{"calibration", "create", "--device", "/dev/nst0"}, args...)...)
-		require.Equal(t, exitUsage, exit, args)
-	}
+	exit, _, _ = executeTestCLI(server.URL, "", "calibration", "create", "--device", " ")
+	require.Equal(t, exitUsage, exit)
 }
 
 func TestUnexpectedArgumentsAreUsageErrors(t *testing.T) {

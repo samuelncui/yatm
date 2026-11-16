@@ -473,7 +473,7 @@ func TestArchiveTapeBackendCommitsVerifiedFiles(t *testing.T) {
 
 	request := &entity.WriteArchiveMediaRequest{Id: job.ID, Target: (&entity.ArchiveTapeTarget{
 		Device: "/dev/nst0", Barcode: "ABC001", Name: "fixture",
-		Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+		Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 	}).Pack()}
 	_, err = (&service{exe: exe}).WriteMedia(ctx, request)
 	require.NoError(t, err)

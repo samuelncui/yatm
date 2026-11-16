@@ -1,7 +1,7 @@
 import { MenuItem, TextField } from "@mui/material";
 import { TarWriteOptions, TapeRecordMode } from "@/entity";
 
-/** Preserve absent fields and explicit false when editing a tar FORMAT preference. */
+/** Preserve absent fields when editing a tar FORMAT preference. */
 export const TarWriteOptionsFields = ({
   value,
   disabled,
@@ -56,29 +56,6 @@ export const TarWriteOptionsFields = ({
       }
       onChange={(event) => onChange({ ...value, recordBytes: event.target.value === "" ? undefined : Number(event.target.value) })}
     />
-    <TextField
-      select
-      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-      fullWidth
-      label="Tar hardware compression"
-      helperText={
-        <>
-          {value.hardwareCompression === undefined && effective
-            ? effective.hardwareCompression === undefined
-              ? "No device default or reported recommendation. Choose On or Off."
-              : `Inherited: ${effective.hardwareCompression ? "On" : "Off"}.`
-            : "Archive checks the selected drive's compression support before writing."}
-          {" Hardware compression keeps reads in LOGICAL order."}
-        </>
-      }
-      value={value.hardwareCompression === undefined ? "" : String(value.hardwareCompression)}
-      disabled={disabled}
-      onChange={(event) => onChange({ ...value, hardwareCompression: event.target.value === "" ? undefined : event.target.value === "true" })}
-    >
-      <MenuItem value="">{effective ? "Use device default or recommendation" : "Default (use recommendation)"}</MenuItem>
-      <MenuItem value="false">Off</MenuItem>
-      <MenuItem value="true">On</MenuItem>
-    </TextField>
   </>
 );
 

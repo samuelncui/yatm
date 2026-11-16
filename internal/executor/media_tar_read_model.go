@@ -58,11 +58,11 @@ func tapeReadParametersReason(parameters *entity.TapeReadParameters, report *ent
 func compileTarPositionMap(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
 	value *tapePositionMap, valid func() bool,
 ) (*mediapkg.ReadCostModel, string) {
-	// Linear interpolation needs the Media's uncompressed written records of a known size; incomplete
-	// optional inputs never deny ordinary reads.
-	if parameters == nil || profile == nil || profile.HardwareCompression ||
+	// Linear interpolation needs the Media's written records of a known size; incomplete optional
+	// inputs never deny ordinary reads.
+	if parameters == nil || profile == nil ||
 		profile.RecordMode == entity.TapeRecordMode_TAPE_RECORD_MODE_UNSPECIFIED || profile.RecordBytes == 0 {
-		return nil, "Uncompressed written conditions with a known record size are required for linear interpolation"
+		return nil, "A known written record size is required for linear interpolation"
 	}
 	return compileTapePositionMap(parameters, profile.RecordBytes, value, valid)
 }
@@ -94,7 +94,7 @@ func compileTapePositionMap(parameters *entity.TapeReadParameters, recordBytes u
 	model, err := mediapkg.NewReadCostModel(mediapkg.ReadModelProfile{
 		ID: "tape:" + value.source, SnapshotValid: valid,
 		BOT: bot, Wraps: value.wraps, ReadObjectSeconds: readObjectSeconds,
-		BufferObjects: tapeBufferObjects(parameters, recordBytes),
+		StreamingObjects: tapeStreamingObjects(parameters, recordBytes),
 		// The built-in base time floors the minimum gain: a configured base of zero keeps it.
 		MinimumGainSeconds: tarSeedBaseSeconds,
 		Coefficients: mediapkg.ReadModelCoefficients{Base: positioning.GetBaseSeconds(),
@@ -109,13 +109,13 @@ func compileTapePositionMap(parameters *entity.TapeReadParameters, recordBytes u
 	return model, "Uncompressed four-band linear interpolation"
 }
 
-// tapeBufferObjects converts the read-ahead buffer to whole logical objects of the Session's record
-// size; an absent buffer or record size never applies.
-func tapeBufferObjects(parameters *entity.TapeReadParameters, recordBytes uint32) uint64 {
+// tapeStreamingObjects converts the streaming distance to whole logical objects of the Session's
+// record size; an absent streaming distance or record size never applies.
+func tapeStreamingObjects(parameters *entity.TapeReadParameters, recordBytes uint32) uint64 {
 	if recordBytes == 0 {
 		return 0
 	}
-	return parameters.GetPositioning().GetBufferBytes() / uint64(recordBytes)
+	return parameters.GetPositioning().GetStreamingBytes() / uint64(recordBytes)
 }
 
 // tapeReadObjectSeconds is the time to pass one logical object at reading speed: the Session's

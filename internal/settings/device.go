@@ -159,10 +159,10 @@ func TapeDefaults(value *entity.DeviceSettings, device string) *entity.TapeDevic
 	return &entity.TapeDeviceSettings{}
 }
 
-// TapeDefaultFormat resolves the original LTFS default for an unset preference.
+// TapeDefaultFormat resolves the tar default for an unset preference.
 func TapeDefaultFormat(value *entity.TapeDeviceSettings) string {
 	if value.GetDefaultFormat() == "" {
-		return "ltfs_v1"
+		return "tar_pax_v1"
 	}
 	return value.GetDefaultFormat()
 }

@@ -45,7 +45,7 @@ export interface TapeMediaProfile {
     tar?: TarMediaProfile;
 }
 /**
- * FORMAT freezes the record policy and hardware choices for one tar cartridge initialization.
+ * FORMAT freezes the record policy for one tar cartridge initialization.
  *
  * @generated from protobuf message yatm.v1.TarMediaProfile
  */
@@ -63,10 +63,6 @@ export interface TarMediaProfile {
      */
     recordBytes: number;
     /**
-     * @generated from protobuf field: bool hardware_compression = 4
-     */
-    hardwareCompression: boolean;
-    /**
      * Optional observed public algorithm; the separately retained key controls script preparation.
      *
      * @generated from protobuf field: optional string encryption_algorithm = 5
@@ -74,7 +70,7 @@ export interface TarMediaProfile {
     encryptionAlgorithm?: string;
 }
 /**
- * Presence distinguishes an omitted default from an explicit false hardware choice.
+ * Presence distinguishes an omitted default from an explicit choice.
  *
  * @generated from protobuf message yatm.v1.TarWriteOptions
  */
@@ -87,10 +83,6 @@ export interface TarWriteOptions {
      * @generated from protobuf field: optional uint32 record_bytes = 2
      */
     recordBytes?: number;
-    /**
-     * @generated from protobuf field: optional bool hardware_compression = 3
-     */
-    hardwareCompression?: boolean;
 }
 /**
  * @generated from protobuf message yatm.v1.VolumeMediaProfile
@@ -555,7 +547,6 @@ class TarMediaProfile$Type extends MessageType<TarMediaProfile> {
             { no: 1, name: "initialization_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "record_mode", kind: "enum", T: () => ["yatm.v1.TapeRecordMode", TapeRecordMode, "TAPE_RECORD_MODE_"] },
             { no: 3, name: "record_bytes", kind: "scalar", T: 13 /*ScalarType.UINT32*/ },
-            { no: 4, name: "hardware_compression", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 5, name: "encryption_algorithm", kind: "scalar", opt: true, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
@@ -564,7 +555,6 @@ class TarMediaProfile$Type extends MessageType<TarMediaProfile> {
         message.initializationId = "";
         message.recordMode = 0;
         message.recordBytes = 0;
-        message.hardwareCompression = false;
         if (value !== undefined)
             reflectionMergePartial<TarMediaProfile>(this, message, value);
         return message;
@@ -582,9 +572,6 @@ class TarMediaProfile$Type extends MessageType<TarMediaProfile> {
                     break;
                 case /* uint32 record_bytes */ 3:
                     message.recordBytes = reader.uint32();
-                    break;
-                case /* bool hardware_compression */ 4:
-                    message.hardwareCompression = reader.bool();
                     break;
                 case /* optional string encryption_algorithm */ 5:
                     message.encryptionAlgorithm = reader.string();
@@ -610,9 +597,6 @@ class TarMediaProfile$Type extends MessageType<TarMediaProfile> {
         /* uint32 record_bytes = 3; */
         if (message.recordBytes !== 0)
             writer.tag(3, WireType.Varint).uint32(message.recordBytes);
-        /* bool hardware_compression = 4; */
-        if (message.hardwareCompression !== false)
-            writer.tag(4, WireType.Varint).bool(message.hardwareCompression);
         /* optional string encryption_algorithm = 5; */
         if (message.encryptionAlgorithm !== undefined)
             writer.tag(5, WireType.LengthDelimited).string(message.encryptionAlgorithm);
@@ -631,8 +615,7 @@ class TarWriteOptions$Type extends MessageType<TarWriteOptions> {
     constructor() {
         super("yatm.v1.TarWriteOptions", [
             { no: 1, name: "record_mode", kind: "enum", opt: true, T: () => ["yatm.v1.TapeRecordMode", TapeRecordMode, "TAPE_RECORD_MODE_"] },
-            { no: 2, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 3, name: "hardware_compression", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
+            { no: 2, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<TarWriteOptions>): TarWriteOptions {
@@ -652,9 +635,6 @@ class TarWriteOptions$Type extends MessageType<TarWriteOptions> {
                 case /* optional uint32 record_bytes */ 2:
                     message.recordBytes = reader.uint32();
                     break;
-                case /* optional bool hardware_compression */ 3:
-                    message.hardwareCompression = reader.bool();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -673,9 +653,6 @@ class TarWriteOptions$Type extends MessageType<TarWriteOptions> {
         /* optional uint32 record_bytes = 2; */
         if (message.recordBytes !== undefined)
             writer.tag(2, WireType.Varint).uint32(message.recordBytes);
-        /* optional bool hardware_compression = 3; */
-        if (message.hardwareCompression !== undefined)
-            writer.tag(3, WireType.Varint).bool(message.hardwareCompression);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

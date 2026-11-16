@@ -304,7 +304,11 @@ func (s *tarWriteSession) writeRecord() error {
 		return s.stop
 	}
 	if err != nil {
-		s.stop, s.unusable = err, err
+		// A cancellation settled before or after one whole command leaves the accepted boundary known.
+		s.stop = err
+		if !settledCancellation(err) {
+			s.unusable = err
+		}
 		return err
 	}
 	if result.Bytes == 0 {
@@ -382,22 +386,23 @@ func (s *tarWriteSession) Finalize(ctx context.Context, cause error) (*WriteResu
 	if s.active != nil {
 		s.stop = errors.Join(s.stop, io.ErrUnexpectedEOF)
 	}
-	if cause != nil && !tarCapacityStop(cause, s.options.Mode) {
+	if errors.Is(cause, tape.ErrUncertain) {
 		s.unusable = errors.Join(s.unusable, cause)
 	}
-	if s.stop != nil && !tarCapacityStop(s.stop, s.options.Mode) {
-		s.unusable = errors.Join(s.unusable, s.stop)
-	}
 
-	// Interrupted streams have no publishable result; cleanup must not append a rescue boundary.
+	// Device evidence the drive cannot confirm leaves no publishable result and adds no boundary.
 	if s.unusable != nil {
 		s.buffer = nil
 		return nil, errors.Join(ErrFinalizeUnusable, s.unusable, s.options.Cleanup(ctx))
 	}
 
-	// Per-file source-open failures never enter this cause; only a healthy stream flushes its suffix.
+	// Cancellation or an independent failure interrupts the stream like a capacity stop: no further
+	// payload or trailer, only the synchronized filemark over the fully accepted records. Per-file
+	// source-open failures never enter this cause; only an uninterrupted stream flushes its suffix.
+	interrupted := cause != nil && !tarCapacityStop(cause, s.options.Mode) ||
+		s.stop != nil && !tarCapacityStop(s.stop, s.options.Mode)
 	terminated := false
-	if s.stop == nil {
+	if s.stop == nil && !interrupted {
 		if err := s.beginPosition(ctx); err != nil {
 			s.stop, s.unusable = err, err
 		}
@@ -479,6 +484,24 @@ func (s *tarWriteSession) Finalize(ctx context.Context, cause error) (*WriteResu
 			}
 			return final, nil
 		}}, nil
+}
+
+// settledCancellation reports an error made only of context ends: the transport returns those alone
+// when it never issued the command or the command completed in full.
+func settledCancellation(err error) bool {
+	if err == context.Canceled || err == context.DeadlineExceeded {
+		return true
+	}
+	joined, ok := err.(interface{ Unwrap() []error })
+	if !ok || len(joined.Unwrap()) == 0 {
+		return false
+	}
+	for _, part := range joined.Unwrap() {
+		if !settledCancellation(part) {
+			return false
+		}
+	}
+	return true
 }
 
 func tarCapacityStop(err error, mode tape.RecordMode) bool {

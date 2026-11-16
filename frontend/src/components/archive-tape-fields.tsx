@@ -10,13 +10,15 @@ import { MediaInspectResult } from "@/components/media-inspect";
 import { tapeEncryption } from "@/components/media-inspector";
 import { SettingsSection } from "@/components/settings-page";
 import { DeviceInspectionResult, TapeDeviceChoice } from "@/components/tape-device-choice";
-import { isWritableTapeFormat, tapeFormatOf } from "@/components/tape-format";
+import { isWritableTapeFormat, ltfsUnsupported, ltfsUnsupportedReason, tapeFormatOf } from "@/components/tape-format";
 import { TarWriteOptionsFields } from "@/components/tar-write-options";
 import type { ArchiveTape } from "@/components/use-archive-tape";
 
 /** The Tape choice of the Archive Media dialog; `useArchiveTape` owns its state and checks. */
 export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boolean }) => {
   const { form, existing, tar, inspection } = tape;
+  // A drive known to lack an LTO-5 or later density offers only Tar.
+  const noLtfs = ltfsUnsupported(tape.deviceReport);
   return (
     <>
       <DialogContentText>Load the Tape and select its drive.</DialogContentText>
@@ -41,9 +43,10 @@ export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; sub
             label="Tape format"
             value={form.format}
             disabled={submitting || form.mode === ArchiveTapeWriteMode.APPEND}
+            helperText={noLtfs ? ltfsUnsupportedReason : undefined}
             onChange={(event) => tape.changeFormat(event.target.value)}
           >
-            <MenuItem value="ltfs_v1">LTFS</MenuItem>
+            {(!noLtfs || form.format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? "LTFS · unsupported" : "LTFS"}</MenuItem>}
             <MenuItem value="tar_pax_v1">Tar</MenuItem>
             {!isWritableTapeFormat(form.format) && <MenuItem value={form.format}>{form.format} · unsupported</MenuItem>}
           </TextField>
@@ -122,7 +125,7 @@ const TapeProfileNotes = ({ tape }: { tape: ArchiveTape }) => {
       {tape.form.mode === ArchiveTapeWriteMode.APPEND && existing && (
         <Alert severity="info">
           APPEND uses {tapeFormatOf(existing)} and its immutable cartridge profile.
-          {existingTar && ` Records ${existingTar.recordBytes} bytes · hardware compression ${existingTar.hardwareCompression ? "on" : "off"}.`}
+          {existingTar && ` Records ${existingTar.recordBytes} bytes.`}
           {` Encryption: ${tapeEncryption(existing)}.`}
         </Alert>
       )}
@@ -131,13 +134,12 @@ const TapeProfileNotes = ({ tape }: { tape: ArchiveTape }) => {
   );
 };
 
-/** FORMAT confirmation, name and, for Tar, the record and compression options. */
+/** FORMAT confirmation, name and, for Tar, the record options. */
 const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boolean }) => {
-  const { effectiveOptions, optionError, resolved } = tape;
+  const { effectiveOptions, optionError } = tape;
   const recordMode =
     effectiveOptions.recordMode === TapeRecordMode.FIXED ? "fixed" : effectiveOptions.recordMode === TapeRecordMode.VARIABLE ? "variable" : "unresolved";
   const recordSize = effectiveOptions.recordBytes === undefined ? "size unresolved" : `${effectiveOptions.recordBytes} bytes`;
-  const compression = effectiveOptions.hardwareCompression === undefined ? "unresolved" : effectiveOptions.hardwareCompression ? "on" : "off";
   return (
     <>
       {!tape.tar && tape.existing && (
@@ -163,16 +165,8 @@ const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boo
         onChange={(event) => tape.setConfirmation(event.target.value)}
       />
       {tape.tar && (
-        <SettingsSection
-          title="Advanced"
-          collapsible
-          hasError={!!optionError || !resolved}
-          description={`Tar records ${recordMode} · ${recordSize} · compression ${compression}`}
-        >
+        <SettingsSection title="Advanced" collapsible hasError={!!optionError} description={`Tar records ${recordMode} · ${recordSize}`}>
           <TarWriteOptionsFields value={tape.form.options} effective={effectiveOptions} disabled={submitting} onChange={tape.changeOptions} />
-          {tape.inherited && !resolved && (
-            <Alert severity="info">Choose compression before writing; no device default or reported recommendation is available.</Alert>
-          )}
         </SettingsSection>
       )}
     </>

@@ -272,11 +272,11 @@ class TarCases(PhysicalEvidence):
         require(profile.get("format") == "tar_pax_v1" and tar.get("record_mode") ==
                 "TAPE_RECORD_MODE_" + self.test.args.record_mode.upper()
                 and int(tar.get("record_bytes", 0)) == self.test.args.record_bytes
-                and not tar.get("hardware_compression", False) and media.get("encryption_key_saved")
+                and media.get("encryption_key_saved")
                 and tar.get("initialization_id"), "Frozen tar profile/options differ")
         public = {key: profile[key] for key in ("serial_number", "format") if key in profile}
         public["tar"] = {key: tar[key] for key in ("initialization_id", "record_mode", "record_bytes",
-                        "hardware_compression", "encryption_algorithm") if key in tar}
+                        "encryption_algorithm") if key in tar}
         return str(media["id"]), public
 
     def completed_archive(self, group):
@@ -372,7 +372,7 @@ class TarCases(PhysicalEvidence):
         args = ["archive", "write", "tape", mode, job["id"], "--device", self.test.args.physical_device, "--barcode", wrong]
         if mode == "format":
             args += ["--name", "Tar mismatch " + wrong, "--confirm-format", wrong, "--format", "tar_pax_v1",
-                     "--hardware-compression", "false", "--record-mode", self.test.args.record_mode,
+                     "--record-mode", self.test.args.record_mode,
                      "--record-bytes", str(self.test.args.record_bytes)]
         result = self.test.remote([self.test.install + "/yatm-cli", "--server", self.test.url, "--timeout", "160s", *args],
                                   expected=None)
@@ -427,7 +427,7 @@ class TarCases(PhysicalEvidence):
                     "--barcode", self.barcode]
             if group == "format":
                 args += ["--name", "Tar baseline " + self.barcode, "--confirm-format", self.barcode,
-                         "--format", "tar_pax_v1", "--hardware-compression", "false",
+                         "--format", "tar_pax_v1",
                          "--record-mode", self.test.args.record_mode, "--record-bytes", str(self.test.args.record_bytes)]
             self.test.cli(*args)
             self.settled(job)

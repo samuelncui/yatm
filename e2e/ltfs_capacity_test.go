@@ -24,6 +24,7 @@ import (
 	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
@@ -97,7 +98,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 		Id: archiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: firstDevice, Barcode: "FUL001", Name: "Full Tape 1",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)
@@ -180,7 +181,7 @@ func TestLTFSFullTapeSpansMediaAndRestores(t *testing.T) {
 		Id: archiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: secondDevice, Barcode: "FUL002", Name: "Full Tape 2",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)

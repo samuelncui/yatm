@@ -57,7 +57,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	backend.logger.SetOutput(&diagnostics)
 	write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
-	require.Equal(t, 1, countTarScriptEvents(fixture))
+	require.Equal(t, 1, countTarEvents(fixture, "script"))
 	events := strings.Join(fixture.securityEvents, ",")
 	require.Contains(t, events, "rewind")
 	require.Less(t, strings.Index(events, "rewind"), strings.Index(events, "script"))
@@ -89,7 +89,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	stored, err := exe.Lib().CreateMedia(ctx, &library.Media{Kind: result.Media.Kind, Identity: result.Media.Identity, Profile: result.Media.Profile})
 	require.NoError(t, err)
 
-	// APPEND runs the script once before the label and tail, then writes without a second LOAD.
+	// APPEND loads once, runs the script once before the label and tail, then writes without another LOAD.
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 	fixture.securityEvents = nil
@@ -97,8 +97,9 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 		Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 	}).Pack()))
 	require.NoError(t, err)
-	require.Equal(t, 1, countTarScriptEvents(fixture))
-	require.Equal(t, "script", fixture.securityEvents[0])
+	require.Equal(t, 1, countTarEvents(fixture, "script"))
+	require.Equal(t, []string{"load", "script"}, fixture.securityEvents[:2])
+	require.Equal(t, 1, countTarEvents(fixture, "load"))
 	tarWriteFixtureMember(t, appendSession, "later.txt", []byte("later encrypted member"))
 	appended, err := appendSession.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -110,7 +111,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	fixture.securityEvents = nil
 	read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 	require.NoError(t, err)
-	require.Equal(t, 1, countTarScriptEvents(fixture))
+	require.Equal(t, 1, countTarEvents(fixture, "script"))
 	source, err := read.Source(mediapkg.ReadRequest{Path: member.Path, Storage: member.Storage})
 	require.NoError(t, err)
 	destination := filepath.Join(t.TempDir(), "restored")
@@ -124,10 +125,10 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	require.NotContains(t, diagnostics.String(), hex.EncodeToString(key))
 }
 
-func countTarScriptEvents(fixture *tarDeviceFixture) int {
+func countTarEvents(fixture *tarDeviceFixture, name string) int {
 	count := 0
 	for _, event := range fixture.securityEvents {
-		if event == "script" {
+		if event == name {
 			count++
 		}
 	}
@@ -166,7 +167,7 @@ func TestTarScriptFailureAndWrongKeyDoNotWrite(t *testing.T) {
 				if failure == "script exit" {
 					exe.scripts.Encrypt = writeExecutorTestScript(t, "fail", "#!/bin/sh\nexit 23\n")
 				}
-				before := fixture.writes
+				before, unloads := fixture.writes, fixture.unloads
 
 				// A failed script or label check has no plaintext fallback, rekey retry or data WRITE.
 				var err error
@@ -184,6 +185,12 @@ func TestTarScriptFailureAndWrongKeyDoNotWrite(t *testing.T) {
 				}
 				require.Equal(t, before, fixture.writes)
 				require.Equal(t, fixture.opens, fixture.closes)
+
+				// The matching cartridge ends unloaded, including after a script that held the drive without a
+				// descriptor; an invalid saved key is refused before device access.
+				require.Equal(t, unloads+map[bool]int{true: 1}[failure != "invalid key"], fixture.unloads)
+				exe.endAttempt(jobID)
+				require.Len(t, exe.ListAvailableDevices(), 1)
 			})
 		}
 	}
@@ -248,7 +255,7 @@ func TestTarMismatchedBarcodeNeverRunsEncryptScript(t *testing.T) {
 			require.Equal(t, before, fixture.writes)
 			require.Zero(t, fixture.barcodeWrites)
 			require.Equal(t, "OTHER1L5", fixture.barcode)
-			require.Zero(t, countTarScriptEvents(fixture))
+			require.Zero(t, countTarEvents(fixture, "script"))
 			require.NotContains(t, fixture.securityEvents, "mode")
 			require.NotContains(t, fixture.securityEvents, "rewind")
 			require.Equal(t, fixture.opens, fixture.closes)

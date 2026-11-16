@@ -5,7 +5,7 @@ import { ArchiveTapeWriteMode, DeviceSettings, Media, MediaKind, SettingsGroup, 
 import { useMediaInspect } from "@/components/media-inspect";
 import { getSettingsGroup } from "@/components/settings-editor";
 import { soleAvailableDevice } from "@/components/tape-device-choice";
-import { tapeFormatOf } from "@/components/tape-format";
+import { defaultTapeFormat, tapeFormatOf } from "@/components/tape-format";
 import { validateTarWriteOptions } from "@/components/tar-write-options";
 import { useTapeDevices } from "@/components/use-tape-devices";
 import { errorMessage } from "@/tools";
@@ -23,7 +23,7 @@ const emptyTapeForm = (): TapeForm => ({
   barcode: "",
   name: "",
   mode: ArchiveTapeWriteMode.UNSPECIFIED,
-  format: "ltfs_v1",
+  format: defaultTapeFormat,
   options: TarWriteOptions.create(),
 });
 const devicesFailure = "Could not load Tape devices or defaults";
@@ -171,7 +171,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     setConfirmation("");
     const config = defaults?.devices.find((value) => value.device === device)?.options;
     const saved = config?.oneofKind === "tape" ? config.tape : undefined;
-    const format = formatEdited.current ? form.format : (saved?.defaultFormat ?? "ltfs_v1");
+    const format = formatEdited.current ? form.format : (saved?.defaultFormat ?? defaultTapeFormat);
     setForm((current) => ({
       ...current,
       device,
@@ -239,7 +239,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
   const changeName = (name: string) => setForm((value) => ({ ...value, name }));
   const changeOptions = (options: TarWriteOptions) => {
     const changed = { ...editedOptions.current };
-    for (const key of ["recordMode", "recordBytes", "hardwareCompression"] as const) {
+    for (const key of ["recordMode", "recordBytes"] as const) {
       if (options[key] !== form.options[key]) Object.assign(changed, { [key]: options[key] });
     }
     editedOptions.current = changed;
@@ -260,10 +260,8 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
   const effectiveOptions: TarWriteOptions = {
     recordMode: form.options.recordMode ?? inherited?.recordMode,
     recordBytes: form.options.recordBytes ?? inherited?.recordBytes,
-    hardwareCompression: form.options.hardwareCompression ?? inherited?.hardwareCompression,
   };
   const optionError = validateTarWriteOptions(effectiveOptions);
-  const resolved = effectiveOptions.hardwareCompression !== undefined;
   const writeDetail = verdict && !verdict.writable ? verdict.writeDetail : "";
   const canSubmit =
     !devicesLoading &&
@@ -271,7 +269,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     devices?.some((value) => value.device === form.device && !value.busy) &&
     /^[A-Z0-9]{6}$/.test(barcode) &&
     (tar
-      ? !!verdict?.writable && (!formatMode || (!optionError && resolved))
+      ? !!verdict?.writable && (!formatMode || !optionError)
       : form.format === "ltfs_v1" &&
         !inspecting &&
         inspected !== null &&
@@ -284,9 +282,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     name: form.name.trim(),
     mode: form.mode,
     format: form.format,
-    ...(tar && formatMode
-      ? { tarOptions: { ...form.options, recordMode: effectiveOptions.recordMode, hardwareCompression: effectiveOptions.hardwareCompression } }
-      : {}),
+    ...(tar && formatMode ? { tarOptions: { ...form.options, recordMode: effectiveOptions.recordMode } } : {}),
   });
 
   return {
@@ -303,9 +299,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     checking,
     confirmation,
     effectiveOptions,
-    inherited: !!inherited,
     optionError,
-    resolved,
     writeDetail,
     canSubmit: !!canSubmit,
     target,

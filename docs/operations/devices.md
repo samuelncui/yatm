@@ -24,8 +24,9 @@ the configured [Tape scripts](tape-scripts.md) and compatible LTFS software.
 
 Open **Settings → Devices**, select a device, and explicitly request its **Device details**. Refreshing
 the device list reports configured entries and busy reasons without sending SCSI commands.
-Device details report observed identity, readiness, record limits, current compression/encryption
-state when known, and feature support, availability and validation separately. Missing values
+Device details report observed identity, readiness, record limits, the densities the drive
+supports, current encryption state when known, and feature support, availability and validation
+separately. Missing values
 remain unknown. A passive report neither positions the Tape nor proves that writing, seeking or
 independent recovery works on that hardware.
 
@@ -47,11 +48,13 @@ passive diagnostics do not replace it for LTFS.
 ## Save Device Settings
 
 In **Settings → Devices**, choose **Default Tape format** and **Read order**. Expand **Advanced**
-for tar records, hardware compression, capacity polling and the planning budget.
+for tar records, capacity polling and the planning budget.
 **Default Tape format** offers LTFS and Tar, and **Record mode** offers Fixed and Variable; an unset
-value shows as the one used when unset (LTFS, Variable), and choosing an entry stores it.
-**Read parameters** has its own collapsed section: a table with one set per density code, edited
-in a form, and, for a device in service, **Calibrate…**, which starts a [Calibration](read-order.md#calibration). Save, Cancel and **Refresh devices**
+value shows as the one used when unset (Tar, Variable), and choosing an entry stores it. After
+**Device details** report that the drive supports no LTO-5 or later density, the format select offers
+only Tar, and a saved LTFS default shows as unsupported.
+**Read parameters** has its own collapsed section: a table with one set per density code, plus the
+built-in values for the reported densities without a set, edited in a form, and, for a device in service, **Calibrate…**, which starts a [Calibration](read-order.md#calibration). Save, Cancel and **Refresh devices**
 are below the fields; Refresh devices updates device availability without changing the saved
 Device settings or draft. **Device details** follows in a separate collapsed section. Saving changes
 only persisted Device settings; it performs no hardware operation. Entries removed from service configuration remain editable as inactive Device settings and do not authorize
@@ -72,18 +75,21 @@ yatm-cli settings devices --device-json device-settings.json
 For example, a saved tar preference for one configured entry is:
 
 ```json
-{"devices":[{"device":"/dev/nst0","tape":{"defaultFormat":"tar_pax_v1","tarWriteOptions":{"recordMode":"TAPE_RECORD_MODE_VARIABLE","recordBytes":524288,"hardwareCompression":false},"readOrder":"TAPE_READ_ORDER_LOGICAL"}}]}
+{"devices":[{"device":"/dev/nst0","tape":{"defaultFormat":"tar_pax_v1","tarWriteOptions":{"recordMode":"TAPE_RECORD_MODE_VARIABLE","recordBytes":524288},"readOrder":"TAPE_READ_ORDER_LOGICAL"}}]}
 ```
 
 The example size is an explicit preference. Omitted options remain
-absent; explicit `false` remains an explicit choice. `readOrder` accepts `TAPE_READ_ORDER_LOGICAL`
+absent. `readOrder` accepts `TAPE_READ_ORDER_LOGICAL`
 or `TAPE_READ_ORDER_AUTO`; omission/unspecified uses Logical when the attempt is admitted.
 The optional `capacityPollIntervalSeconds` uses Auto when omitted, preserves explicit `0` as Off,
 and accepts custom unsigned 32-bit values of at least `5` seconds.
 
 ## Tar Write Options
 
-The available formats are `ltfs_v1` and `tar_pax_v1`. Without a saved format, FORMAT uses LTFS.
+The available formats are `ltfs_v1` and `tar_pax_v1`. Without a saved format, FORMAT uses Tar.
+LTFS needs a drive of LTO-5 or later. When the drive reports its supported densities and none is
+LTO-5 or later, the FORMAT dialog offers only Tar and an LTFS FORMAT is refused before any script
+runs or the Tape moves. A drive that does not report its densities keeps both formats.
 Tar accepts fixed or variable records. FORMAT uses 512 KiB (524288 bytes) unless a saved device size
 or explicit FORMAT override is supplied; APPEND and reads keep the cartridge's recorded size.
 Record bytes must be positive, fit an unsigned 32-bit integer,
@@ -92,12 +98,9 @@ driver and transfer limits before allocating buffers or writing. An incompatible
 than being silently reduced. For variable records, record bytes is the maximum physical record size;
 for fixed records, it is the size of every physical record.
 
-Tar hardware compression can be explicitly On or Off. The leased operation checks current hardware
-support, required control changes and readback; a saved preference alone cannot establish support.
-APPEND uses the cartridge's saved choice after verifying its label and recorded tail. Reads require
-compatible hardware decoding for compressed content and preserve the drive's write-compression
-controls. Diagnostics show observed algorithm identifiers and known or unknown control changeability,
-separately from physical validation. Expected compression savings are not a space guarantee.
+Tar always writes with drive compression off: FORMAT and APPEND turn the drive's compression off
+for the attempt, verify it, and restore the previous setting afterwards. There is no compression
+setting. Reads leave the drive's compression controls untouched.
 
 ## Encryption
 
@@ -117,7 +120,7 @@ algorithm is not evidence of plaintext and a key counter is not key presence.
 Tar capacity polling defaults to **Auto (5 seconds)** unless the device reports that the
 required query is unsupported. Leave the interval empty for Auto, enter `0` for Off, or enter a whole
 number of at least `5` seconds for a custom cadence. FORMAT and APPEND freeze this preference
-when admitted; it is independent of the stored record/compression profile. File admission uses cached results, and writing
+when admitted; it is independent of the stored record profile. File admission uses cached results, and writing
 does not wait for the query to return.
 Unsupported counters use EW/error handling and any available preparation estimate. A missing counter value
 remains unknown, and neither periodic estimates nor the selected interval guarantee that a file fits.
@@ -128,7 +131,7 @@ Failed capacity samples appear as warnings in the Job log, including the error a
 count; the first successful value after failures logs recovery. Investigate repeated warnings using
 the device and host logs. Skipped busy polls and ordinary shutdown do not generate failure warnings.
 Actual write errors, medium loss, device resets or unknown native command outcomes stop the
-attempt and withhold its Archive results. A write already admitted before a terminal failure may
+attempt and withhold all of its Archive results. A write already admitted before a terminal failure may
 finish; a failed optional capacity sample alone does not establish such a failure.
 LTFS and Volume retain their existing capacity paths.
 
@@ -147,7 +150,10 @@ different barcode or an existing Library registration stops FORMAT. To reinitial
 Media, explicitly delete its metadata first; metadata deletion alone never erases Tape contents.
 Raw tar FORMAT uses passive diagnostics and does not require the LTFS cartridge inspection script.
 Like `mkltfs`, it writes the confirmed barcode into an empty cartridge memory barcode and verifies it
-before writing data. A failed write or readback stops FORMAT; it is not retried.
+before writing data. A failed write or readback stops FORMAT; it is not retried. A FORMAT that
+ends without publishing any file, for example when it is canceled or reaches early warning before
+the first file completes, registers no Media for tar or LTFS; FORMAT the cartridge again, with the
+same barcode, for the remaining files.
 LTFS retains its cartridge checks, initialization, mount and normal unmount flow.
 
 ```shell
@@ -156,7 +162,7 @@ yatm-cli archive write tape format JOB_ID --device /dev/nst0 \
   --format tar_pax_v1 --record-mode variable --record-bytes 524288
 ```
 
-Omit `--format` to use the selected device's saved format, or supply `--format ltfs_v1` for an
+Omit `--format` to use the selected device's saved format (Tar when none is saved), or supply `--format ltfs_v1` for an
 explicit LTFS override. Tar-only record options are invalid for LTFS. An edited operation choice
 is retained while reviewing the form; selecting another device does not erase explicit overrides.
 
@@ -171,12 +177,22 @@ yatm-cli archive write tape append JOB_ID --device /dev/nst0 --barcode ABC123
 ```
 
 Successful raw Archive completion writes a standard tar terminator and a confirmed Tape filemark
-before publishing completed copies. Normal tar Archive, Restore and Scan completion restores owned
-controls and unloads the cartridge, including its rewind and eject. Reinsert the Tape for another
-operation. Failed or canceled raw operations use their existing cleanup path instead. LTFS follows
-the configured unmount adapter; the bundled adapter ejects. Early warning is handled as a normal capacity boundary only
-when the provider supplies validated accepted-count evidence. Completion errors remain visible;
-accepted bytes alone do not establish a completed copy.
+before publishing completed copies. Every tar Archive, Restore, Scan and Calibration step first
+loads the cartridge, so one an earlier step ejected but left in the drive is used without
+reinserting it, and an empty drive fails with a missing-medium reason. Each step ends by restoring
+owned controls and unloading the cartridge, including its rewind and eject, whether it succeeded,
+failed, including an encryption script failure, or was canceled. A cartridge with a different
+barcode stays loaded, and a drive whose command outcome became unknown is left untouched and
+unavailable. LTFS follows the configured unmount adapter; the bundled adapter ejects. An LTFS operation that
+fails or is canceled after its cartridge check but before mounting, such as an encryption or
+format script failure, unloads the cartridge through the same raw access tar uses; without that
+access the cartridge stays loaded and the Job log says why. Early warning is handled as a normal capacity boundary only
+when the provider supplies validated accepted-count evidence. A canceled tar Archive, or one that
+fails for a reason outside the drive such as an unreadable source file, also closes its Tape file
+with a filemark, unloads and publishes the files written completely before it stopped; the
+interrupted file and any still buffered stay pending for the next Media choice. A write, hardware
+or unknown command error, or a failed filemark or unload, publishes nothing. Completion errors remain
+visible; accepted bytes alone do not establish a completed copy.
 
 Tar can use a cached preparation estimate to refuse the next complete file before its header and
 close a normal archive. File admission does not wait for a space query or pause to synchronize each
@@ -186,7 +202,10 @@ an incomplete final member. That member stays pending for another explicitly sel
 ## Load Tape for Restore or Scan
 
 Restore and Media Scan offer automatic identification and a manual Media selection from the Job's
-prepared candidates. Start with automatic identification. If the server requires a hint, retain the
+prepared candidates. Start with automatic identification. For tar it loads the cartridge, as LTFS
+identification does, so one an earlier step ejected but left in the drive is identified without
+reinserting it, then reads the cartridge memory barcode; an empty drive fails with a missing-medium
+reason. If the server requires a hint, retain the
 form, select the expected Media, review it, and submit again. A manual selection supplies expected
 identity and the stored profile; the server still verifies the physical cartridge. It does not
 permit reading an unrelated Tape or bypass a label mismatch.

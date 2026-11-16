@@ -166,7 +166,7 @@ message InspectDeviceResponse {
   oneof report { TapeDeviceReport tape = 17; }
   // Last prepared read in this process, not a claim about the currently loaded cartridge.
   optional TapePreparedRead prepared_read = 18;
-  // Present only with write_target: the tar options it would use; absent compression is unresolved.
+  // Present only with write_target: the tar options it would use.
   optional TarWriteOptions resolved_tar_options = 19;
   // Whether write_target can start; its attempt repeats the checks under the device lease.
   bool writable = 20;
@@ -191,6 +191,8 @@ message TapePreparedRead {
 }
 
 enum DeviceFeatureKind {
+  reserved 9, 10;
+  reserved "DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION", "DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION";
   DEVICE_FEATURE_KIND_UNSPECIFIED = 0;
   DEVICE_FEATURE_KIND_INITIALIZE = 1;
   DEVICE_FEATURE_KIND_SEQUENTIAL_READ = 2;
@@ -198,8 +200,6 @@ enum DeviceFeatureKind {
   DEVICE_FEATURE_KIND_LOCATE = 6;
   DEVICE_FEATURE_KIND_READ_POSITION = 7;
   DEVICE_FEATURE_KIND_EARLY_WARNING = 8;
-  DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION = 9;
-  DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION = 10;
   DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION = 11;
   DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION = 12;
   DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING = 13;
@@ -253,8 +253,8 @@ message DeviceFeature {
   DeviceFeatureKind feature = 1;
   DeviceFeatureSupport support = 2;
   DeviceFeatureAvailability availability = 3;
-  reserved 4;
-  reserved "validation";
+  reserved 4, 20;
+  reserved "validation", "compression";
   DeviceReason reason = 5;
   string detail = 6;
   DeviceFeatureEvidence evidence = 7;
@@ -263,7 +263,6 @@ message DeviceFeature {
     TapeRecordLimits records = 17;
     TapeNavigationLimits navigation = 18;
     TapeCapacityLimits capacity = 19;
-    TapeCompressionLimits compression = 20;
     TapeEncryptionLimits encryption = 21;
     TapeGeometryLimits geometry = 22;
   }
@@ -281,13 +280,6 @@ message TapeNavigationLimits {
   optional bool read_position_short = 1;
   optional bool read_position_long = 2;
   optional uint32 address_bits = 3;
-}
-
-// Current hardware algorithm observation and changeability of DCE or DDE, respectively.
-// An algorithm identifier is not a supported-algorithm list or physical qualification.
-message TapeCompressionLimits {
-  optional uint32 current_algorithm = 1;
-  optional bool enable_changeable = 2;
 }
 
 // Public algorithm identity and the current reader's device-local binding, never key material.
@@ -338,11 +330,12 @@ message TapeDeviceReport {
   optional uint32 record_bytes = 5;
   optional bool fixed_records = 6;
   optional bool buffered_writes = 7;
-  optional bool compression_enabled = 8;
-  optional bool decompression_enabled = 9;
   // Current write encryption state; absent means it was not established.
   optional bool encryption_enabled = 10;
   repeated DeviceFeature features = 17;
-  reserved 18, 19;
-  reserved "recommended_write_options", "recommendation_detail";
+  // Primary density codes the drive reports supporting (REPORT DENSITY SUPPORT, MEDIA 0),
+  // deduplicated and ascending; empty means unknown.
+  repeated uint32 supported_density_codes = 20;
+  reserved 8, 9, 18, 19;
+  reserved "compression_enabled", "decompression_enabled", "recommended_write_options", "recommendation_detail";
 }

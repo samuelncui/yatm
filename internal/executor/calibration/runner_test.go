@@ -33,10 +33,10 @@ type simulatedDrive struct {
 	at        uint64
 	locates   int
 	// extra adds seconds to the LOCATE with this index; offset shifts the reported position.
-	extra             map[int]float64
-	offset            map[int]uint64
-	onLocate          func(index int)
-	finished, cleaned int
+	extra    map[int]float64
+	offset   map[int]uint64
+	onLocate func(index int)
+	finished int
 	// testData counts sessions opened by writing test data.
 	testData int
 }
@@ -103,13 +103,6 @@ func (d *simulatedDrive) Finish(context.Context) error {
 	return nil
 }
 
-func (d *simulatedDrive) Cleanup(context.Context) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	d.cleaned++
-	return nil
-}
-
 // LTO-5 holds about 18.4 GB per wrap in 512 KiB records.
 var testEndpoints = []tape.WrapEndpoint{{Wrap: 0, Object: 35000}, {Wrap: 1, Object: 70010}, {Wrap: 2, Object: 71000}}
 
@@ -150,12 +143,10 @@ func setupCalibration(t *testing.T, drive *simulatedDrive) (*executor.Executor, 
 			return nil, errors.New("unexpected calibration device")
 		case spec.WriteTestData:
 			drive.testData++
-		case spec.GetMediaId() != media.ID:
-			return nil, errors.New("unexpected calibration Media")
 		}
 		builtin := &entity.TapeReadParameters{Geometry: &entity.TapeReadGeometry{NominalWraps: proto.Uint32(80)},
 			Completion: &entity.TapeReadCompletion{LtfsUnmountSeconds: proto.Float64(12.61)}}
-		return &session{drive: drive, serial: "SN1", density: proto.Uint32(0x58), endpoints: drive.endpoints, recordBytes: 524288, builtin: builtin}, nil
+		return &session{drive: drive, serial: "SN1", density: proto.Uint32(0x58), endpoints: drive.endpoints, wrapBytes: float64(testEndpoints[0].Object) * 524288, builtin: builtin}, nil
 	}
 	return exe, media
 }
@@ -163,7 +154,7 @@ func setupCalibration(t *testing.T, drive *simulatedDrive) (*executor.Executor, 
 func createCalibration(t *testing.T, exe *executor.Executor, media *library.Media) *entity.Job {
 	t.Helper()
 	reply, err := (&service{exe: exe}).Create(context.Background(), &entity.CreateCalibrationJobRequest{
-		Spec: &entity.CalibrationJobSpec{Device: " " + testDevice + " ", MediaId: proto.Int64(media.ID)},
+		Spec: &entity.CalibrationJobSpec{Device: " " + testDevice + " "},
 	})
 	require.NoError(t, err)
 	return reply.Job
@@ -203,14 +194,13 @@ func TestCalibrationStoresFittedParameters(t *testing.T) {
 	job := createCalibration(t, exe, media)
 	require.Equal(t, entity.JobKind_JOB_KIND_CALIBRATION, job.Kind)
 	require.Equal(t, testDevice, job.GetTargetName())
-	require.Equal(t, media.ID, job.GetMediaId())
+	require.Nil(t, job.MediaId)
 	reply := waitSettled(t, exe, job.Id)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, reply.Job.Status, reply.Job.Error)
 	require.Equal(t, testDevice, reply.Spec.Device)
 	require.Len(t, reply.Moves, int(reply.TotalMoves))
 	require.Len(t, reply.Moves, 21)
 	require.Equal(t, 1, drive.finished)
-	require.Zero(t, drive.cleaned)
 	require.NotNil(t, reply.ElapsedMs)
 
 	// The fit recovers the simulated terms and derives bytes and completion from the wrap length.
@@ -221,7 +211,7 @@ func TestCalibrationStoresFittedParameters(t *testing.T) {
 	require.InDelta(t, 93.5, positioning.GetSeekSecondsPerWrap(), 1)
 	require.InDelta(t, 4.6, positioning.GetApproachReversalSeconds(), 0.5)
 	wrapBytes := 35000.0 * 524288
-	require.InDelta(t, 0.046*wrapBytes, float64(positioning.GetBufferBytes()), 0.004*wrapBytes)
+	require.InDelta(t, 0.046*wrapBytes, float64(positioning.GetStreamingBytes()), 0.004*wrapBytes)
 	require.InDelta(t, wrapBytes/131, parameters.Reading.GetBytesPerSecond(), wrapBytes/131*0.02)
 	require.Equal(t, math.Round(parameters.Reading.GetBytesPerSecond()), parameters.Reading.GetBytesPerSecond())
 	require.Equal(t, positioning.GetSeekSecondsPerWrap(), parameters.Completion.GetFullSpanSeconds())
@@ -256,7 +246,7 @@ func TestCalibrationFailures(t *testing.T) {
 		"irregular moves": {drive: &simulatedDrive{extra: map[int]float64{18: 8}}, reason: ErrIrregular.Error()},
 		"too little data": {
 			drive:  &simulatedDrive{endpoints: []tape.WrapEndpoint{{Wrap: 0, Object: 35000}, {Wrap: 1, Object: 40000}}},
-			reason: "Calibration needs the first two wraps written (about 37 GB on this cartridge)",
+			reason: "Calibration needs two full wraps of data, about 37 GB on this cartridge, and it holds less; load a cartridge holding that much",
 		},
 		"position mismatch": {drive: &simulatedDrive{offset: map[int]uint64{3: 1}}, reason: "not the target"},
 		"unmoved tape":      {drive: &simulatedDrive{extra: map[int]float64{4: -100}}, reason: "did not move the tape"},
@@ -281,8 +271,7 @@ func TestCalibrationFailures(t *testing.T) {
 			require.Contains(t, reply.Job.Error, test.reason)
 			require.Nil(t, reply.Parameters)
 			require.Empty(t, storedParameters(t, exe))
-			require.Zero(t, test.drive.finished)
-			require.Equal(t, 1, test.drive.cleaned)
+			require.Equal(t, 1, test.drive.finished, "a failed or cancelled Calibration unloads the cartridge")
 			if test.cancel {
 				require.Len(t, reply.Moves, 5)
 			}
@@ -307,21 +296,16 @@ func TestCalibrationOnTestDataNeedsNoMedia(t *testing.T) {
 }
 
 func TestCalibrationRejectsInvalidSpecs(t *testing.T) {
-	exe, media := setupCalibration(t, &simulatedDrive{})
+	exe, _ := setupCalibration(t, &simulatedDrive{})
 	s := &service{exe: exe}
-	for _, spec := range []*entity.CalibrationJobSpec{
-		{Device: testDevice, MediaId: proto.Int64(media.ID), WriteTestData: true},
-		{Device: testDevice},
-		{WriteTestData: true},
-		{Device: testDevice, MediaId: proto.Int64(media.ID + 100)},
-	} {
+	for _, spec := range []*entity.CalibrationJobSpec{nil, {}, {WriteTestData: true}, {Device: "  "}} {
 		_, err := s.Create(context.Background(), &entity.CreateCalibrationJobRequest{Spec: spec})
 		require.Error(t, err)
 	}
 }
 
 func TestPlanInterpolatesWrapsZeroAndOne(t *testing.T) {
-	layout, err := newPlan(&session{density: proto.Uint32(0x58), endpoints: testEndpoints, recordBytes: 524288,
+	layout, err := newPlan(&session{density: proto.Uint32(0x58), endpoints: testEndpoints, wrapBytes: float64(testEndpoints[0].Object) * 524288,
 		builtin: &entity.TapeReadParameters{Geometry: &entity.TapeReadGeometry{NominalWraps: proto.Uint32(80)}}})
 	require.NoError(t, err)
 	for _, test := range []struct {

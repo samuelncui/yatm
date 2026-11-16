@@ -63,12 +63,12 @@ _Avoid_: cartridge position table, index, physical guarantee
 The Device setting that orders a Tape read. Logical keeps recorded order; Auto adopts a planned order only when its inputs apply and it is predicted to save at least one positioning base time over Logical, otherwise it keeps Logical.
 _Avoid_: route (outside planner internals), read plan, speedup guarantee
 
-**Read-ahead buffer**:
-How far logically ahead a Tape drive reaches by continuing to read instead of positioning. A target within it costs the skipped data at reading speed plus one approach reversal for each wrap turn crossed; its size is a read parameter.
-_Avoid_: drive cache, prefetch window
+**Streaming distance**:
+How far logically ahead a Tape drive reaches by continuing to read instead of positioning. A target within it costs the skipped data at reading speed plus one approach reversal for each wrap turn crossed; it is a read parameter.
+_Avoid_: read-ahead buffer, drive buffer, drive cache, prefetch window
 
 **Read-speed locate**:
-A move beyond the read-ahead buffer to a target ahead in the same wrap and half that the drive covers at reading speed: the shared positioning base time plus the skipped records at the read rate.
+A move beyond the streaming distance to a target ahead in the same wrap and half that the drive covers at reading speed: the shared positioning base time plus the skipped records at the read rate.
 _Avoid_: short seek, reading through a gap
 
 **Prepared read**:

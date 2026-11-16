@@ -14,30 +14,29 @@ func deviceTestValue() *entity.DeviceSettings {
 	return &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/inactive",
 		Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1"),
 			TarWriteOptions: &entity.TarWriteOptions{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(),
-				RecordBytes: proto.Uint32(262144), HardwareCompression: proto.Bool(false)}}}}}}
+				RecordBytes: proto.Uint32(262144)}}}}}}
 }
 
-func TestDeviceSettingsRetainOptionalFalseAndInactiveEntries(t *testing.T) {
-	// Missing Settings remain an LTFS chooser preference without creating a registry.
+func TestDeviceSettingsRetainOptionsAndInactiveEntries(t *testing.T) {
+	// Missing Settings resolve to the tar chooser preference without creating a registry.
 	module := testModule(t)
 	ctx := context.Background()
 	absent, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, absent.Present)
-	require.Equal(t, "ltfs_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
+	require.Equal(t, "tar_pax_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
 	value := deviceTestValue()
 	saved, err := module.Device.Save(ctx, value)
 	require.NoError(t, err)
-	saved.Devices[0].GetTape().TarWriteOptions.HardwareCompression = nil
+	saved.Devices[0].GetTape().TarWriteOptions.RecordBytes = nil
 
-	// Saving inactive entries needs no hardware and preserves explicit false through protobuf JSON.
+	// Saving inactive entries needs no hardware and preserves explicit options through protobuf JSON.
 	stored, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.True(t, stored.Present)
 	require.True(t, proto.Equal(value, stored.Value))
 	defaults := TapeDefaults(stored.Value, "/dev/inactive")
-	require.NotNil(t, defaults.TarWriteOptions.HardwareCompression)
-	require.False(t, defaults.TarWriteOptions.GetHardwareCompression())
+	require.EqualValues(t, 262144, defaults.TarWriteOptions.GetRecordBytes())
 	defaults.TarWriteOptions.RecordBytes = proto.Uint32(512)
 	require.EqualValues(t, 262144, stored.Value.Devices[0].GetTape().TarWriteOptions.GetRecordBytes())
 }
@@ -120,7 +119,7 @@ func TestDeviceCapacityPollIntervalOfflinePersistenceAndIsolation(t *testing.T) 
 	absent, err := module.Device.Read(ctx)
 	require.NoError(t, err)
 	require.False(t, absent.Present)
-	require.Equal(t, "ltfs_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
+	require.Equal(t, "tar_pax_v1", TapeDefaultFormat(TapeDefaults(absent.Value, "/dev/inactive")))
 	require.Equal(t, 5*time.Second, TapeCapacityPollInterval(TapeDefaults(absent.Value, "/dev/inactive")))
 
 	// Saving an inactive device preserves an explicit zero in the existing protobuf JSON group.

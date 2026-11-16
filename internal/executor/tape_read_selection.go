@@ -9,17 +9,19 @@ import (
 )
 
 // ResolveTapeReadMedia identifies an unresolved Tape by its cartridge memory barcode under the existing attempt lease.
-// The runner callback alone selects frozen pending Media; this operation owns no Job database.
+// It loads the cartridge first, where LTFS identification runs the readinfo adapter's load, so a cartridge an
+// earlier step ejected is identified without the operator. The runner callback alone selects frozen pending
+// Media; this operation owns no Job database.
 func (e *Executor) ResolveTapeReadMedia(
 	ctx context.Context, jobID int64, target *entity.ReadTapeTarget,
 	selectMedia func(context.Context, string) (*entity.ReadMediaTarget, error),
 ) (selected *entity.ReadMediaTarget, returnErr error) {
-	// Reuse the attempt's drive hold and validate access before passive identification.
+	// Reuse the attempt's drive hold and validate access before loading for identification.
 	device := target.Device
 	if err := e.AcquireTapeDevice(ctx, jobID, device, nil); err != nil {
 		return nil, err
 	}
-	prepared, err := e.openRawTape(ctx, jobID, device)
+	prepared, err := e.loadRawTape(ctx, jobID, device)
 	if err != nil {
 		return nil, err
 	}

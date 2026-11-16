@@ -117,7 +117,7 @@ const FittedParameters = ({ parameters, device }: { parameters: TapeReadParamete
     ["Seek time for one span", "seek_seconds_per_wrap", seconds(positioning?.seekSecondsPerWrap)],
     ["Added time when arriving against the wrap direction", "approach_reversal_seconds", seconds(positioning?.approachReversalSeconds)],
     ["Read rate", "bytes_per_second", megabytesPerSecond(reading?.bytesPerSecond)],
-    ["Read-ahead buffer", "buffer_bytes", decimalBytes(positioning?.bufferBytes)],
+    ["Streaming distance", "streaming_bytes", decimalBytes(positioning?.streamingBytes)],
   ];
   return (
     <Stack spacing={0.5} sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>

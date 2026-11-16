@@ -96,12 +96,12 @@ func TestReadCostModelPositioningTerms(t *testing.T) {
 	}
 }
 
-func TestReadCostModelBuffer(t *testing.T) {
+func TestReadCostModelStreaming(t *testing.T) {
 	// Wrap 3 ends at object 100 where reverse wrap 8 starts, so 90 and 110 share one longitudinal place.
 	{
 		profile, _ := readModelFixture()
 		profile.Coefficients.Seek = 96
-		profile.BufferObjects, profile.ReadObjectSeconds = 20, 1e-9
+		profile.StreamingObjects, profile.ReadObjectSeconds = 20, 1e-9
 		model, err := NewReadCostModel(profile)
 		require.NoError(t, err)
 		unit := .01
@@ -110,9 +110,9 @@ func TestReadCostModelBuffer(t *testing.T) {
 			from, to uint64
 			want     ReadAccess
 		}{
-			{name: "streaming at the buffer limit", from: 10, to: 30, want: ReadAccess{ReadObjects: 20}},
+			{name: "streaming at the streaming distance", from: 10, to: 30, want: ReadAccess{ReadObjects: 20}},
 			{name: "same position streams nothing", from: 20, to: 20, want: ReadAccess{}},
-			{name: "beyond the buffer is a read-speed locate", from: 10, to: 31, want: ReadAccess{Features: [3]float64{1}, ReadObjects: 21}},
+			{name: "beyond the streaming distance is a read-speed locate", from: 10, to: 31, want: ReadAccess{Features: [3]float64{1}, ReadObjects: 21}},
 			{name: "behind never streams", from: 20, to: 10, want: ReadAccess{Features: [3]float64{1, 10 * unit, 1}}},
 			{name: "short move along the target wrap", from: 20, to: 190, want: ReadAccess{Features: [3]float64{1, 10 * unit}}},
 			{name: "motionless wrap change", from: 89, to: 111, want: ReadAccess{Features: [3]float64{1}}},
@@ -121,18 +121,18 @@ func TestReadCostModelBuffer(t *testing.T) {
 			{name: "long move along the target wrap", from: 60, to: 190,
 				want: ReadAccess{Features: [3]float64{1, 50 * unit}}},
 		} {
-			access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+			access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ObjectsAhead(readModelPosition(test.from), readModelPosition(test.to)))
 			require.True(t, known, test.name)
 			require.Equal(t, test.want.ReadObjects, access.ReadObjects, test.name)
 			require.InDeltaSlice(t, test.want.Features[:], access.Features[:], 1e-12, test.name)
 		}
 
-		// Streaming costs the skipped objects at reading speed; the unbuffered quote seeks instead.
+		// Streaming costs the skipped objects at reading speed; the unstreamed quote seeks instead.
 		c := profile.Coefficients
 		score, known := model.AccessScore(readModelPosition(10), readModelPosition(30))
 		require.True(t, known)
 		require.InDelta(t, 20e-9, score, 1e-18)
-		cost, known := model.UnbufferedAccessCost(readModelPosition(90), readModelPosition(110))
+		cost, known := model.UnstreamedAccessCost(readModelPosition(90), readModelPosition(110))
 		require.True(t, known)
 		require.InDelta(t, c.Base, cost.Seconds(), 1e-9)
 		score, known = model.AccessScore(readModelPosition(10), readModelPosition(31))
@@ -143,23 +143,23 @@ func TestReadCostModelBuffer(t *testing.T) {
 		require.InDelta(t, c.Base+c.Seek*10*unit+c.ApproachReversal, score, 1e-12)
 	}
 
-	// An absent buffer never streams.
+	// An absent streaming distance never streams.
 	profile, _ := readModelFixture()
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
-	access, known := model.accessFeatures(readModelPosition(90), readModelPosition(110), ReadAhead(readModelPosition(90), readModelPosition(110)))
+	access, known := model.accessFeatures(readModelPosition(90), readModelPosition(110), ObjectsAhead(readModelPosition(90), readModelPosition(110)))
 	require.True(t, known)
 	require.False(t, access.Streamed())
-	require.Equal(t, int64(-1), ReadAhead(readModelPosition(2), readModelPosition(1)))
-	require.Equal(t, int64(-1), ReadAhead(readModelPosition(1), &entity.TapeBytePosition{Partition: 1, LogicalObject: 2}))
+	require.Equal(t, int64(-1), ObjectsAhead(readModelPosition(2), readModelPosition(1)))
+	require.Equal(t, int64(-1), ObjectsAhead(readModelPosition(1), &entity.TapeBytePosition{Partition: 1, LogicalObject: 2}))
 }
 
-// readTurnFixture declares three consecutive 100-object wraps with a 150-object buffer, 0.01 seconds
+// readTurnFixture declares three consecutive 100-object wraps with a 150-object streaming distance, 0.01 seconds
 // per object and a 4-second approach reversal.
 func readTurnFixture(t *testing.T) *ReadCostModel {
 	t.Helper()
 	model, err := NewReadCostModel(ReadModelProfile{ID: "software-only wrap turns", SnapshotValid: func() bool { return true },
-		BOT: map[uint32]uint64{0: 0}, ReadObjectSeconds: .01, BufferObjects: 150,
+		BOT: map[uint32]uint64{0: 0}, ReadObjectSeconds: .01, StreamingObjects: 150,
 		Coefficients: ReadModelCoefficients{Base: 5, Seek: 100, ApproachReversal: 4},
 		Wraps: []ReadModelWrap{
 			{Wrap: 0, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(100)},
@@ -178,7 +178,7 @@ func TestReadCostModelStreamingCrossesWrapTurns(t *testing.T) {
 		from, to uint64
 		turns    float64
 	}{{"within one wrap", 40, 90, 0}, {"across one turn", 90, 110, 1}, {"across two turns", 90, 210, 2}} {
-		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ObjectsAhead(readModelPosition(test.from), readModelPosition(test.to)))
 		require.True(t, known, test.name)
 		require.True(t, access.Streamed(), test.name)
 		require.Equal(t, ReadAccess{Features: [3]float64{2: test.turns}, ReadObjects: test.to - test.from}, access, test.name)
@@ -241,7 +241,7 @@ func TestReadCostFeaturesRetainPhysicalFactors(t *testing.T) {
 	model, err := NewReadCostModel(profile)
 	require.NoError(t, err)
 	for _, test := range readCostMoves {
-		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ReadAhead(readModelPosition(test.from), readModelPosition(test.to)))
+		access, known := model.accessFeatures(readModelPosition(test.from), readModelPosition(test.to), ObjectsAhead(readModelPosition(test.from), readModelPosition(test.to)))
 		require.True(t, known, test.name)
 		want := readCostAccess(test.reads, test.seek, test.reversal, test.read)
 		require.Equal(t, want.ReadObjects, access.ReadObjects, test.name)
@@ -250,7 +250,7 @@ func TestReadCostFeaturesRetainPhysicalFactors(t *testing.T) {
 
 	// A stale map authorizes no features.
 	valid.Store(false)
-	_, known := model.accessFeatures(readModelPosition(20), readModelPosition(270), ReadAhead(readModelPosition(20), readModelPosition(270)))
+	_, known := model.accessFeatures(readModelPosition(20), readModelPosition(270), ObjectsAhead(readModelPosition(20), readModelPosition(270)))
 	require.False(t, known)
 }
 

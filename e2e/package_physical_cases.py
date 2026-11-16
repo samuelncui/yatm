@@ -476,7 +476,7 @@ class PhysicalCases(PhysicalEvidence, TapeWorkflows):
         device = ["--device", self.device(self.barcode), "--barcode", wrong]
         # FORMAT compares the request with the loaded cartridge's identity.
         result = self.test.remote(cli + ["format", job["id"], *device, "--name", "Mismatch " + wrong,
-                                         "--confirm-format", wrong], expected=2)
+                                         "--confirm-format", wrong, "--format", "ltfs_v1"], expected=2)
         error = json.loads(result.stderr)
         message = error.get("error", "")
         require(error.get("code") == "safety" and "does not match the inspected identity" in message

@@ -21,6 +21,7 @@ import {
   GetScanJobProgressResponse,
   GetSettingsRequest,
   GetSettingsResponse,
+  InspectDeviceRequest,
   InspectDeviceResponse,
   InspectMediaRequest,
   InspectMediaResponse,
@@ -52,7 +53,7 @@ import {
 
 // Rendered consumer acceptance uses the existing browser runner and generated API messages.
 // It exercises forms and submissions; it does not qualify physical I/O or a release package.
-const baseline = TarWriteOptions.create({ recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144, hardwareCompression: false });
+const baseline = TarWriteOptions.create({ recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144 });
 const devices = [DeviceSummary.create({ device: "drive-a", kind: DeviceKind.TAPE }), DeviceSummary.create({ device: "drive-b", kind: DeviceKind.TAPE })];
 const rawTape = Media.create({
   id: 7n,
@@ -64,7 +65,7 @@ const rawTape = Media.create({
       oneofKind: "tape",
       tape: TapeMediaProfile.create({
         format: "tar_pax_v1",
-        tar: { initializationId: "4af327b4-4449-4080-9b6e-c11bf836c6f7", recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144, hardwareCompression: false },
+        tar: { initializationId: "4af327b4-4449-4080-9b6e-c11bf836c6f7", recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144 },
       }),
     },
   },
@@ -133,6 +134,7 @@ const fixture = async (page: Page) => {
     reads: [] as ReadMediaTarget[],
     settingsUpdates: 0,
     requireHint: false,
+    supportedDensityCodes: [] as number[],
     scanResultPolicy: ScanResultPolicy.VERIFY_COPIES,
     unexpected: [] as string[],
   };
@@ -159,14 +161,18 @@ const fixture = async (page: Page) => {
         return fulfill(route, ListDevicesResponse.toBinary(ListDevicesResponse.create({ devices })));
       case "yatm.v1.MediaService/InspectDevice": {
         state.inspections.push(method);
+        // A requested tar write is answered as writable with the saved defaults it would inherit.
+        const writeTarget = InspectDeviceRequest.fromBinary(requestBytes(route)).writeTarget;
         return fulfill(
           route,
           InspectDeviceResponse.toBinary(
             InspectDeviceResponse.create({
               device: devices[0],
+              ...(writeTarget ? { writable: true, resolvedTarOptions: baseline } : {}),
               report: {
                 oneofKind: "tape",
                 tape: {
+                  supportedDensityCodes: state.supportedDensityCodes,
                   encryptionEnabled: false,
                   features: [
                     DeviceFeature.create({
@@ -418,6 +424,43 @@ for (const viewport of [
     expect(state.unexpected).toEqual([]);
   });
 }
+
+test("an unset default format uses Tar, and a drive without LTO-5 or later offers only Tar", async ({ page }) => {
+  const state = await fixture(page);
+  const unset = state.settings.devices[0].options;
+  if (unset.oneofKind !== "tape") throw new Error("Tape settings required");
+  unset.tape.defaultFormat = undefined;
+  state.supportedDensityCodes = [0x44, 0x46];
+  const reason = "This drive does not support LTFS (needs LTO-5 or later).";
+
+  // Device settings show the unset default as Tar and, after device details, offer only Tar.
+  await page.goto("/settings/devices");
+  const format = page.getByRole("combobox", { name: "Default Tape format", exact: true });
+  await expect(format).toContainText("Tar");
+  await expect(page.getByText(reason)).toHaveCount(0);
+  await page.getByRole("button", { name: /^Device details/ }).click();
+  await page.getByRole("button", { name: "Refresh device details", exact: true }).click();
+  await expect(page.getByText("Supported densities: 0x44 LTO-3, 0x46 LTO-4")).toBeVisible();
+  await expect(page.getByText(reason)).toBeVisible();
+  await format.click();
+  await expect(page.getByRole("option")).toHaveText(["Tar"]);
+  await page.keyboard.press("Escape");
+
+  // The FORMAT flow resolves Tar for the unset default and offers only Tar for this drive.
+  await page.goto("/jobs/20");
+  await page.getByRole("button", { name: "Choose archive storage", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose archive storage", exact: true });
+  await select(page, dialog, "Storage type", "Tape");
+  await select(page, dialog, "Tape device", "drive-a");
+  const tapeFormat = dialog.getByRole("combobox", { name: "Tape format", exact: true });
+  await expect(tapeFormat).toContainText("Tar");
+  await expect(dialog.getByText(reason)).toBeVisible();
+  await tapeFormat.click();
+  await expect(page.getByRole("option")).toHaveText(["Tar"]);
+  await page.keyboard.press("Escape");
+  expect(state.cartridgeInspections).toBe(0);
+  expect(state.unexpected).toEqual([]);
+});
 
 for (const viewport of [
   { name: "desktop", width: 1440, height: 1000 },

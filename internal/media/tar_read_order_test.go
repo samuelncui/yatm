@@ -160,7 +160,7 @@ func TestTarReadOrderShortRecordBoundaryAndIneligibleLocators(t *testing.T) {
 	request.Storage.Metadata.GetTar().End.LogicalObject = math.MaxUint32
 	request.Storage.Metadata.GetTar().End.OffsetBytes = 1
 	if _, ok := provider.Ranges(request); ok {
-		t.Fatal("read-ahead address overflow accepted")
+		t.Fatal("32-bit range address overflow accepted")
 	}
 }
 

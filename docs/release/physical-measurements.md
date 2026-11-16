@@ -18,8 +18,7 @@ outside the corpus. Archive placement is established by actual recorded locators
 Index, not by manifest order; an incomplete population does not satisfy this benchmark.
 
 Use the same corpus, frozen selection, recorded layout, source build, parameters and completion
-policy for paired LOGICAL/AUTO/AUTO/LOGICAL arms with fresh Restore destinations. Keep hardware
-compression off for this smart-ordering comparison. Measure admission through normal publication
+policy for paired LOGICAL/AUTO/AUTO/LOGICAL arms with fresh Restore destinations. Measure admission through normal publication
 and unload, including preparation, first-file access, planning, all reads and the final return.
 Report content verification separately, actual executed order, LOGICAL fallbacks, read/discard and
 positioning observations where available, first-file latency, elapsed time and resource curves.

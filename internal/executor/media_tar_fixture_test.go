@@ -15,46 +15,54 @@ import (
 )
 
 type tarFixtureRecord struct {
-	data       []byte
-	mark       bool
-	compressed bool
-	key        []byte
+	data []byte
+	mark bool
+	key  []byte
 }
 
 // tarDeviceFixture supplies synthetic SSC observations and physical records, never host hardware.
 type tarDeviceFixture struct {
-	lock                                                   sync.Mutex
-	mode                                                   []byte
-	records                                                []tarFixtureRecord
-	cursor, opens, closes                                  int
-	writes, filemarks, failMark, unloads                   int
-	synchronizations                                       int
-	warningMark                                            int
-	barcode                                                string
-	barcodeWrites                                          int
-	barcodeStored                                          *string
-	cleanupError, poison                                   error
-	capacityEOD, capacityEW                                *uint32
-	capacityQueries                                        []int
-	readCompression, writeCompression, selectedCompression []bool
-	decodeAlgorithmOnRead                                  *uint32
-	cipherScope, cipherNexus, encrypt, decrypt             byte
-	cipherAlgorithm                                        byte
-	algorithmIndex                                         byte
-	cipherCounter                                          uint32
-	cipherKey                                              []byte
-	scriptKey, scriptGuard                                 string
-	hideAlgorithm                                          bool
-	securityEvents                                         []string
-	locate10, shortPosition                                bool
-	navigationSupport                                      *byte
-	positionUnknown, positionUnknownUntilMotion            bool
-	positionUnsupported                                    bool
-	positionBadBOP                                         bool
-	positionDelta                                          uint64
-	positionError, locateError                             error
-	locateCommands                                         [][]byte
-	positionCommands                                       []byte
+	lock                                        sync.Mutex
+	mode                                        []byte
+	records                                     []tarFixtureRecord
+	cursor, opens, closes                       int
+	writes, filemarks, failMark, unloads, loads int
+	synchronizations                            int
+	warningMark                                 int
+	barcode                                     string
+	barcodeWrites                               int
+	barcodeStored                               *string
+	cleanupError, poison                        error
+	capacityEOD, capacityEW                     *uint32
+	capacityQueries                             []int
+	reads                                       int
+	writeCompression, selectedCompression       []bool
+	cipherScope, cipherNexus, encrypt, decrypt  byte
+	cipherAlgorithm                             byte
+	algorithmIndex                              byte
+	cipherCounter                               uint32
+	cipherKey                                   []byte
+	scriptKey, scriptGuard                      string
+	hideAlgorithm                               bool
+	securityEvents                              []string
+	locate10, shortPosition                     bool
+	navigationSupport                           *byte
+	positionUnknown, positionUnknownUntilMotion bool
+	positionUnsupported                         bool
+	positionBadBOP                              bool
+	positionDelta                               uint64
+	positionError, locateError                  error
+	locateCommands                              [][]byte
+	positionCommands                            []byte
+	// supportedDensities answers REPORT DENSITY SUPPORT when set; otherwise it is rejected.
+	supportedDensities []byte
+	// ejectOnUnload leaves an unloaded cartridge ejected in the drive until the next LOAD; empty
+	// models a drive without a cartridge. Medium commands then report NOT READY.
+	ejectOnUnload, ejected, empty bool
+	// loadAttention makes the first TEST UNIT READY after a LOAD report a medium change.
+	loadAttention, attention bool
+	// failWrite rejects that WRITE with a medium error.
+	failWrite int
 }
 
 func (f *tarDeviceFixture) securityPage(page uint16) ([]byte, error) {
@@ -184,14 +192,42 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 		return tape.Response{}, f.poison
 	}
 
+	// Without a threaded cartridge only drive commands and LOAD complete.
+	if (f.empty || f.ejected) && command.CDB[0] != 0x12 && command.CDB[0] != 0x44 && command.CDB[0] != 0x1b {
+		sense := tarFixtureSense(2, 0, 2, 0)
+		sense[12] = 4
+		if f.empty {
+			sense[12], sense[13] = 0x3a, 0
+		}
+		return tape.Response{Completed: true, Status: 2, Residual: int32(len(command.Data)), Sense: sense}, nil
+	}
+
 	// Decode only the bounded commands consumed by the real prepared factory path.
 	var data []byte
 	switch command.CDB[0] {
 	case 0:
+		if f.attention {
+			f.attention = false
+			sense := tarFixtureSense(6, 0, 0, 0)
+			sense[12] = 0x28
+			return tape.Response{Completed: true, Status: 2, Sense: sense}, nil
+		}
 	case 0x1b:
-		if !bytes.Equal(command.CDB, []byte{0x1b, 0, 0, 0, 0, 0}) || command.Direction != tape.NoData {
+		if bytes.Equal(command.CDB, []byte{0x1b, 0, 0, 0, 1, 0}) && command.Direction == tape.NoData {
+			f.loads++
+			f.securityEvents = append(f.securityEvents, "load")
+			if f.empty {
+				sense := tarFixtureSense(2, 0, 0, 0)
+				sense[12] = 0x3a
+				return tape.Response{Completed: true, Status: 2, Sense: sense}, nil
+			}
+			f.ejected, f.attention, f.cursor = false, f.loadAttention, 0
+			break
+		}
+		if !bytes.Equal(command.CDB, []byte{0x1b, 0, 0, 0, 0, 0}) || command.Direction != tape.NoData || f.ejected || f.empty {
 			return tape.Response{}, fmt.Errorf("invalid fixture unload command")
 		}
+		f.ejected = f.ejectOnUnload
 		f.unloads++
 		f.cursor = 0
 		clear(f.cipherKey)
@@ -210,6 +246,15 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 		}
 	case 5:
 		data = []byte{0, 0, 0x20, 0, 0, 0}
+	case 0x44:
+		if f.supportedDensities == nil {
+			return tape.Response{}, fmt.Errorf("unexpected fixture command %02x", command.CDB[0])
+		}
+		data = make([]byte, 4+52*len(f.supportedDensities))
+		binary.BigEndian.PutUint16(data, uint16(len(data)-2))
+		for i, code := range f.supportedDensities {
+			data[4+52*i] = code
+		}
 	case 0x5a:
 		data = append([]byte(nil), f.mode...)
 		if command.CDB[2] == 0x7f || command.CDB[2] == 0x4f {
@@ -399,9 +444,13 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 	case 0x0a:
 		f.securityEvents = append(f.securityEvents, "write")
 		f.writes++
-		compressed := f.mode[18]&0x80 != 0
-		f.writeCompression = append(f.writeCompression, compressed)
-		record := tarFixtureRecord{data: append([]byte(nil), command.Data...), compressed: compressed}
+		if f.writes == f.failWrite {
+			sense := tarFixtureSense(3, 0, 0, 0)
+			sense[12] = 0x0c
+			return tape.Response{Completed: true, Status: 2, Residual: int32(len(command.Data)), Sense: sense}, nil
+		}
+		f.writeCompression = append(f.writeCompression, f.mode[18]&0x80 != 0 || f.mode[46] != 0)
+		record := tarFixtureRecord{data: append([]byte(nil), command.Data...)}
 		if f.encrypt == 2 {
 			record.key = append([]byte(nil), f.cipherKey...)
 		}
@@ -428,7 +477,7 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 		}
 	case 8:
 		f.securityEvents = append(f.securityEvents, "read")
-		f.readCompression = append(f.readCompression, f.mode[18]&0x80 != 0)
+		f.reads++
 		remaining := int32(len(command.Data))
 		if command.CDB[1]&1 != 0 {
 			remaining = 1
@@ -443,16 +492,8 @@ func (h *tarFixtureHandle) Execute(ctx context.Context, command tape.Command) (t
 			sense[12] = 0x74
 			return tape.Response{Completed: true, Status: 2, Residual: int32(len(command.Data)), Sense: sense}, nil
 		}
-		if record.compressed && f.mode[19]&0x80 == 0 {
-			sense := tarFixtureSense(3, 0, 0, 0)
-			sense[12] = 0x11
-			return tape.Response{Completed: true, Status: 2, Residual: int32(len(command.Data)), Sense: sense}, nil
-		}
 		if record.mark {
 			return tape.Response{Completed: true, Status: 2, Residual: int32(len(command.Data)), Sense: tarFixtureSense(0, 0x80, 1, remaining)}, nil
-		}
-		if record.compressed && f.decodeAlgorithmOnRead != nil {
-			binary.BigEndian.PutUint32(f.mode[24:28], *f.decodeAlgorithmOnRead)
 		}
 		if len(record.data) > len(command.Data) {
 			copy(command.Data, record.data)

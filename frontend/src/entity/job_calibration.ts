@@ -14,8 +14,8 @@ import { MessageType } from "@protobuf-ts/runtime";
 import { TapeReadParameters } from "./settings";
 import { Job } from "./job";
 /**
- * CalibrationJobSpec names the configured Tape device and what to calibrate on. Exactly one of
- * media_id and write_test_data is given.
+ * CalibrationJobSpec names the configured Tape device. The Job calibrates on what the loaded
+ * cartridge holds, or on test data it writes first.
  *
  * @generated from protobuf message yatm.v1.CalibrationJobSpec
  */
@@ -25,13 +25,8 @@ export interface CalibrationJobSpec {
      */
     device: string;
     /**
-     * The tar Tape Media expected in the drive.
-     *
-     * @generated from protobuf field: optional int64 media_id = 2
-     */
-    mediaId?: bigint;
-    /**
-     * Overwrites the loaded cartridge from the beginning of tape with test data and calibrates on it.
+     * Overwrites the loaded cartridge from the beginning of tape with test data and calibrates on
+     * it. A cartridge registered as Media is refused.
      *
      * @generated from protobuf field: bool write_test_data = 3
      */
@@ -132,7 +127,6 @@ class CalibrationJobSpec$Type extends MessageType<CalibrationJobSpec> {
     constructor() {
         super("yatm.v1.CalibrationJobSpec", [
             { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "media_id", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 3, name: "write_test_data", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
@@ -152,9 +146,6 @@ class CalibrationJobSpec$Type extends MessageType<CalibrationJobSpec> {
                 case /* string device */ 1:
                     message.device = reader.string();
                     break;
-                case /* optional int64 media_id */ 2:
-                    message.mediaId = reader.int64().toBigInt();
-                    break;
                 case /* bool write_test_data */ 3:
                     message.writeTestData = reader.bool();
                     break;
@@ -173,9 +164,6 @@ class CalibrationJobSpec$Type extends MessageType<CalibrationJobSpec> {
         /* string device = 1; */
         if (message.device !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.device);
-        /* optional int64 media_id = 2; */
-        if (message.mediaId !== undefined)
-            writer.tag(2, WireType.Varint).int64(message.mediaId);
         /* bool write_test_data = 3; */
         if (message.writeTestData !== false)
             writer.tag(3, WireType.Varint).bool(message.writeTestData);

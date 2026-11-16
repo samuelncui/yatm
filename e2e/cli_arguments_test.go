@@ -208,6 +208,9 @@ func (c *cliConnection) arguments(method string, request any) ([]string, error) 
 			args[3] = "format"
 			args = append(args, "--name", target.Name, "--confirm-format", target.Barcode)
 		}
+		if target.Format != nil {
+			args = append(args, "--format", target.GetFormat())
+		}
 		return args, nil
 	case *entity.ListArchiveJobFilesRequest:
 		return jobResultPageArguments([]string{"archive", "files", decimal(r.Id)}, r.Limit, r.Cursor, r.Order, r.Offset, r.IncludeTotal, r.FilterStatus), nil

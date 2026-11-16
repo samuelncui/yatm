@@ -1,30 +1,13 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControlLabel,
-  MenuItem,
-  TextField,
-} from "@mui/material";
+import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, TextField } from "@mui/material";
 
 import { calibrationJobCli } from "@/api";
-import { CalibrationJobSpec, MediaKind, type Media } from "@/entity";
+import { CalibrationJobSpec } from "@/entity";
 import { ActionRow } from "@/components/action-row";
-import { MediaSearchSelect } from "@/components/catalog-search-select";
 import { Feedback } from "@/components/feedback";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
-import { tapeFormatLabel, tapeFormatOf } from "@/components/tape-format";
 import { errorMessage } from "@/tools";
-
-const tapeKinds = [MediaKind.TAPE];
-const isTarTape = (media: Media) => media.kind === MediaKind.TAPE && tapeFormatOf(media) === "tar_pax_v1";
 
 /** Opens the Calibration form for one configured Tape device; only its explicit submission creates the Job. */
 export const CalibrationButton = ({ device, disabled }: { device: string; disabled: boolean }) => {
@@ -44,8 +27,7 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
   const navigate = useNavigate();
   const inspection = useMediaInspect();
   const { inspect } = inspection;
-  const [choice, setChoice] = useState<"" | "media" | "test">("");
-  const [picked, setPicked] = useState<Media | null>(null);
+  const [writeTestData, setWriteTestData] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -70,16 +52,11 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
 
   const identity = inspection.reply?.identity ?? "";
   const registered = inspection.reply?.media;
-  const inspected = !inspection.loading && !!inspection.reply;
-  const settled = inspected || (!inspection.loading && !!inspection.error);
-  // The cartridge's registered Media is the only one the Job can match; otherwise the operator picks it.
-  const media = registered ?? picked;
+  const settled = !inspection.loading && (!!inspection.reply || !!inspection.error);
+  // Only overwriting consults the Library: a cartridge it holds is never written.
   const mediaError =
-    media && !isTarTape(media) ? `Calibration needs tar Tape Media; ${media.name || media.identity} uses ${tapeFormatLabel(tapeFormatOf(media))}.` : "";
-  const ready =
-    !busy &&
-    !inspection.loading &&
-    (choice === "media" ? !!media && !mediaError : choice === "test" && settled && !registered && (identity ? confirmation === identity : acknowledged));
+    writeTestData && registered ? "This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge." : "";
+  const ready = !busy && !inspection.loading && !mediaError && (!writeTestData || (settled && (identity ? confirmation === identity : acknowledged)));
 
   const close = () => {
     if (!submitting.current) onClose();
@@ -90,7 +67,7 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
     setBusy(true);
     setError("");
     try {
-      const spec = CalibrationJobSpec.create(choice === "media" ? { device, mediaId: media!.id } : { device, writeTestData: true });
+      const spec = CalibrationJobSpec.create({ device, writeTestData });
       const reply = await calibrationJobCli.create({ spec }).response;
       if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
       if (active.current) navigate(`/jobs/${reply.job.id}`);
@@ -133,44 +110,32 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
             Check Tape
           </Button>
         </ActionRow>
-        <TextField
-          select
-          required
-          fullWidth
-          margin="normal"
-          label="Calibrate on"
-          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-          value={choice}
-          disabled={busy}
-          onChange={(event) => {
-            setChoice(event.target.value as "media" | "test");
-            setConfirmation("");
-            setAcknowledged(false);
-          }}
-        >
-          <MenuItem value="" disabled>
-            Choose how to calibrate
-          </MenuItem>
-          <MenuItem value="media">Tar Media in the drive</MenuItem>
-          <MenuItem value="test">Write test data</MenuItem>
-        </TextField>
-        {choice === "media" && (
-          <>
-            <Alert severity="info">
-              Calibration only positions the tape: it reads no files and changes nothing. The Media&apos;s first two wraps must be written.
-            </Alert>
-            {/* The inspection result above names registered Media; only an unidentified cartridge needs a choice. */}
-            {!registered && settled && <MediaSearchSelect kinds={tapeKinds} value={picked} disabled={busy} onChange={setPicked} />}
-            {mediaError && <Feedback severity="error">{mediaError}</Feedback>}
-          </>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={writeTestData}
+              disabled={busy}
+              onChange={(_, checked) => {
+                setWriteTestData(checked);
+                setConfirmation("");
+                setAcknowledged(false);
+              }}
+            />
+          }
+          label="Write test data"
+        />
+        {!writeTestData && (
+          <Alert severity="info">
+            Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier
+            cartridge, write test data.
+          </Alert>
         )}
-        {choice === "test" && (
+        {writeTestData && (
           <>
             <Alert severity="warning">
               Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the
               cartridge again afterwards, initialize it with FORMAT. Confirm before starting.
             </Alert>
-            {registered && <Feedback severity="error">This barcode is registered as Media. Choose Tar Media in the drive, or load a spare cartridge.</Feedback>}
             {/* A spare cartridge has no barcode until FORMAT writes one, so it is confirmed by naming the drive instead. */}
             {settled && !registered && !identity && (
               <FormControlLabel
@@ -191,10 +156,11 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
             )}
           </>
         )}
+        {mediaError && <Feedback severity="error">{mediaError}</Feedback>}
         {error && <Feedback severity="error">{error}</Feedback>}
       </DialogContent>
       <DialogActions>
-        <Button type="submit" variant="contained" color={choice === "test" ? "error" : "primary"} disabled={!ready}>
+        <Button type="submit" variant="contained" color={writeTestData ? "error" : "primary"} disabled={!ready}>
           {busy ? "Working…" : "Start calibration"}
         </Button>
         <Button type="button" disabled={busy} onClick={close}>

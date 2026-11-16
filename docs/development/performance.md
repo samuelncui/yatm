@@ -120,10 +120,11 @@ remaining search gap. It is a reported quantity, not a pass threshold; larger se
 The all-model count includes nominal and variant scoring calls; an older source without that
 diagnostic reports it as unavailable, and the pair comparison does not compare it. Process
 high-water RSS includes native SQLite allocations and is cumulative across the test binary;
-it is not an isolated per-case peak. The explicit `read-resources` tier streams large inputs,
-checks complete consumption or authoritative-manifest fallback, exercises cancellation during
-ingestion and after optimization state allocation, and verifies temporary-directory cleanup.
-On cancellation, `plan-ns/op` includes cleanup performed before `PlanReadSequence` returns;
+it is not an isolated per-case peak. The explicit `read-resources` tier streams large inputs
+to the production tar evaluator, checks complete consumption or authoritative-manifest fallback,
+exercises cancellation during ingestion and after the complete index and LOGICAL route are scored,
+and verifies temporary-directory cleanup.
+On cancellation, `plan-ns/op` includes cleanup performed before `readplan.Plan` returns;
 `consume-cleanup-ns/op` then measures post-return settling and checks. For successful plans,
 the latter also includes execution-index traversal and `Close`.
 Its disk sampling includes SQLite journals and may miss peaks between samples. Resource and

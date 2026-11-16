@@ -17,7 +17,7 @@ methods, and [Interface contracts](contracts.md) owns the rules shared across su
 | [RestoreJobService](../../entity/job_restore.proto) | Estimate, Create, GetCreation, RestoreMedia, progress, Media/candidate pages |
 | [FilesService](../../entity/files.proto) | Projected List, explicit Measure, basic Get, annotations, Mkdir/Move/Remove, versions, copies, single-signature duplicates, retained identical Find results with bounded rows, [Library-defined sorting](library.md#identical-file-tools) and group/member pages, Keep/Merge, inventory admission and original relocation |
 | [ScanJobService](../../entity/job_scan.proto) | Configurable source/content/result policies, GetCreation, ReadMedia, progress and paged entries |
-| [CalibrationJobService](../../entity/job_calibration.proto) | Create and run a Calibration on a tar Media loaded in the device or on test data written over the loaded cartridge, progress with measured moves and fitted parameters |
+| [CalibrationJobService](../../entity/job_calibration.proto) | Create and run a Calibration on the cartridge loaded in the device: the data it holds, or test data written over it, progress with measured moves and fitted parameters |
 | [LocationService](../../entity/location.proto) | Register/list/get/update/delete, access summary and administrator discovery of unregistered paths |
 | [SettingsService](../../entity/settings.proto) | Typed Get/Update for Library visibility/removal confirmation, Preview generation, Job pipeline limits and Device settings |
 
@@ -34,7 +34,7 @@ JobService exposes no Job retry/restart operation. Job listings filter by kind, 
 `JobFilter` has no status filter. Typed Media operations require an idle `READY` Job; the
 [shared lifecycle](jobs.md#shared-lifecycle) owns their admission and settlement.
 
-Calibration has no `GetCreation`: its specification is only a device and a Media, so a new
+Calibration has no `GetCreation`: its specification is only a device and one option, so a new
 Calibration is simply created again. Each other kind's `GetCreation` reads the existing Job configuration and priority under the Job deletion
 guard, through a read-only bundle connection. It returns that kind's typed Create request and an
 `unavailable_reason` when original inputs cannot be recovered completely. Imported Jobs and indexed
@@ -102,13 +102,12 @@ process, including Job/Media, requested/prepared order, parameter and position s
 and coverage. It can accompany a busy response; it never identifies the
 currently loaded cartridge or claims the final execution route. It adds no hardware query. Optional identity/mode/limit facts
 remain absent when unknown; feature support and current availability are separate.
+`supported_density_codes` lists the drive's reported primary density codes, deduplicated and
+ascending; an empty list means unknown.
 Capacity limits report optional native bytes before EW, partition and observation timestamps, with
 estimate quality. Existing feature fields distinguish
 support and availability.
 They are transient diagnostics, not a per-file fit guarantee or persisted FORMAT preference.
-Compression/decompression limits expose an optional current numeric algorithm and enable-bit
-changeability. Current-enabled observations remain in TapeDeviceReport. Missing changeability
-stays unknown, and an algorithm observation is not a supported-algorithm list or physical validation.
 Encryption limits expose public algorithm names, device-local indexes and key sizes, plus optional
 current mode, scope, parameter-control and key-instance observations. Indexes are resolved on each
 reader and are not FORMAT preferences. Encryption setup belongs to the configured Tape script;
@@ -127,8 +126,8 @@ then answers with `resolved_tar_options`, the options the attempt would use afte
 [Tape option resolution](contracts.md#tape-options-and-selection), and with `writable` and, when false, `write_detail`. The answer comes from the
 attempt's own resolution and Media checks (FORMAT needs an unregistered barcode, APPEND an
 available registered tar profile that explicit options match) plus known physical blockers: busy,
-missing medium, write protection, or a device reason other than an optional diagnostic
-(unsupported, malformed or unimplemented). Absent compression remains unresolved. The answer is
+write protection, or a device reason other than an optional diagnostic (unsupported, malformed or
+unimplemented) or an unloaded cartridge (no medium, not ready), which the attempt loads. The answer is
 advisory; the attempt repeats its checks under the device lease. An LTFS target is not writable
 through this answer.
 Settings Get/Update stores typed Device settings without issuing hardware commands or granting
@@ -152,6 +151,11 @@ Explicit zero positioning terms are valid; omitted measurements stay unknown. Sa
 accuracy; read preparation selects the set by the loaded cartridge's density and checks map coverage.
 `TapePreparedRead.parameters_source` is `configured` for a Device settings set, `builtin` for the
 built-in values and `unavailable` without a Tape report.
+The read-only `DeviceSettings.builtin_read_parameters` lists the built-in set for every recorded
+density code with a known layout, ordered by code, each with its `applies_to.density_code`, no drive
+serial and its built-in source reference; they are the values read preparation uses for a cartridge
+of that density without an applicable configured set. Get and Update return them; Update ignores
+and never stores a supplied copy, so replacing the group with an earlier reply is accepted.
 There is no measurement RPC, registry, cartridge-position table or new tar metadata.
 The same Device group carries optional `read_planning_seconds` (omitted means 300; explicit values must be
 positive). Settings Update replaces the stored Device settings.

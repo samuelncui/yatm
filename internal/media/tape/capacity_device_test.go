@@ -2,6 +2,7 @@ package tape
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
@@ -26,6 +27,7 @@ func TestCapacityReadinessLossPreventsDirectDevicePreparation(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = device.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Format)
+		err = errors.Join(err, device.Cleanup(context.Background())) // The caller owns release.
 		if err == nil || fixture.selects != 0 || fixture.formats != 0 || fixture.motions != 0 || fixture.writes != 0 || fixture.closed != 1 {
 			t.Fatalf("readiness loss admitted mutation: err=%v fixture=%+v", err, fixture)
 		}

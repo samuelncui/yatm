@@ -158,7 +158,6 @@ it.each([
             initializationId: "initialized-cartridge",
             recordMode: TapeRecordMode.VARIABLE,
             recordBytes: 262144,
-            hardwareCompression: false,
             encryptionAlgorithm,
           },
         },
@@ -170,7 +169,7 @@ it.each([
   expect(screen.getByText("Format ID").nextElementSibling).toHaveTextContent("tar_pax_v1");
   expect(screen.getByText("Variable")).toBeVisible();
   expect(screen.getByText("262144 bytes")).toBeVisible();
-  expect(screen.getAllByText("Off")).toHaveLength(saved ? 1 : 2);
+  expect(screen.queryAllByText("Off")).toHaveLength(saved ? 0 : 1);
   expect(screen.getByText("Encryption").nextElementSibling).toHaveTextContent(label);
   expect(screen.getByRole("link", { name: "Device settings" })).toHaveAttribute("href", "/settings/devices");
   expect(screen.getByRole("link", { name: "Tar recovery guide" })).toHaveAttribute(

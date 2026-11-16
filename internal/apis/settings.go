@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type settingsService struct {
@@ -42,6 +44,7 @@ func (s *settingsService) Get(ctx context.Context, req *entity.GetSettingsReques
 		if err != nil {
 			return nil, err
 		}
+		value.BuiltinReadParameters = executor.BuiltinTapeReadParameters()
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}}, nil
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Settings group is missing")
@@ -73,10 +76,14 @@ func (s *settingsService) Update(ctx context.Context, req *entity.UpdateSettings
 		}
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Job{Job: saved}}}, nil
 	case *entity.SettingsValue_Device:
-		saved, err := s.api.lib.Settings().Device.Save(ctx, value.Device)
+		// Built-in read parameters are server-owned output; an echoed copy is never stored.
+		device := proto.Clone(value.Device).(*entity.DeviceSettings)
+		device.BuiltinReadParameters = nil
+		saved, err := s.api.lib.Settings().Device.Save(ctx, device)
 		if err != nil {
 			return nil, err
 		}
+		saved.BuiltinReadParameters = executor.BuiltinTapeReadParameters()
 		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: saved}}}, nil
 	default:
 		return nil, status.Error(codes.InvalidArgument, "Settings value is missing")

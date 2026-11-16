@@ -70,22 +70,23 @@ func TestTarSpecialPermissionMetadataRoundTrip(t *testing.T) {
 	}
 }
 
-func TestTarSettledCancellationNeverPublishesAcceptedPrefix(t *testing.T) {
+func TestTarInterruptedWritePublishesOnlySettledPrefix(t *testing.T) {
 	for _, fixed := range []bool{false, true} {
 		for _, tc := range []struct {
-			name string
-			err  error
-			zero bool
+			name    string
+			err     error
+			zero    bool
+			settled bool
 		}{
-			{"accepted cancel", errors.Join(context.Canceled), false},
-			{"accepted deadline", errors.Join(context.DeadlineExceeded), false},
-			{"unissued cancel", context.Canceled, true},
-			{"unissued deadline", context.DeadlineExceeded, true},
-			{"uncertain cancel", errors.Join(context.Canceled, tape.ErrUncertain), false},
-			{"hardware cancel", errors.Join(context.Canceled, errors.New("hardware failure")), false},
+			{"accepted cancel", errors.Join(context.Canceled), false, true},
+			{"accepted deadline", errors.Join(context.DeadlineExceeded), false, true},
+			{"unissued cancel", context.Canceled, true, true},
+			{"unissued deadline", context.DeadlineExceeded, true, true},
+			{"uncertain cancel", errors.Join(context.Canceled, tape.ErrUncertain), false, false},
+			{"hardware cancel", errors.Join(context.Canceled, errors.New("hardware failure")), false, false},
 		} {
 			t.Run(map[bool]string{false: "variable", true: "fixed"}[fixed]+"/"+tc.name, func(t *testing.T) {
-				// A complete earlier member does not authorize rescue commands after interrupted WRITE.
+				// Only a WRITE that ended by cancellation alone leaves a boundary the filemark can close.
 				d := &tarTestDevice{writeErrorAt: 2, writeErr: tc.err, rejectWrite: tc.zero}
 				options := tarTestOptions(t, fixed, 4096)
 				cleanups := 0
@@ -103,15 +104,24 @@ func TestTarSettledCancellationNeverPublishesAcceptedPrefix(t *testing.T) {
 				require.ErrorIs(t, cause, tc.err)
 				require.Error(t, w.Finish(cause))
 				result, err := s.Finalize(context.Background(), cause)
-				require.Nil(t, result)
-				require.ErrorIs(t, err, ErrFinalizeUnusable)
-				require.ErrorIs(t, err, tc.err)
 				require.Equal(t, 2, d.writes)
-				require.Zero(t, d.marks)
 				require.Equal(t, 1, cleanups)
+				if tc.settled {
+					require.NoError(t, err)
+					require.ErrorIs(t, result.Stop, tc.err)
+					require.Equal(t, 1, d.marks)
+				} else {
+					require.Nil(t, result)
+					require.ErrorIs(t, err, ErrFinalizeUnusable)
+					require.ErrorIs(t, err, tc.err)
+					require.Zero(t, d.marks)
+				}
 				records := 2
 				if tc.zero {
 					records--
+				}
+				if tc.settled {
+					records++ // the closing filemark
 				}
 				require.Len(t, d.records, records)
 			})
@@ -302,7 +312,7 @@ func TestTarEmptyCompletionAndPreHeaderFailure(t *testing.T) {
 }
 
 func TestTarCancelStopsAndCloseValidatesPadding(t *testing.T) {
-	// Cancellation after a header admits neither the payload nor buffered suffix/trailer.
+	// Cancellation after a header admits neither the payload nor the buffered suffix/trailer.
 	d := &tarTestDevice{}
 	s, err := newTarTestWriteSession(d, tarTestOptions(t, false, 4096))
 	if err != nil {
@@ -318,13 +328,13 @@ func TestTarCancelStopsAndCloseValidatesPadding(t *testing.T) {
 	_, cause := w.Write([]byte("x"))
 	_ = w.Finish(cause)
 
-	// Abort retains the original cause without manufacturing a physical completion boundary.
+	// Cancellation writes only the closing filemark; the interrupted member is never confirmed.
 	result, err := s.Finalize(context.Background(), cause)
-	require.Nil(t, result)
-	require.ErrorIs(t, err, ErrFinalizeUnusable)
-	require.ErrorIs(t, err, context.Canceled)
+	require.NoError(t, err)
+	require.ErrorIs(t, result.Stop, context.Canceled)
+	require.Empty(t, tarTestCompleted(t, s, result))
 	require.Zero(t, d.writes)
-	require.Zero(t, d.marks)
+	require.Equal(t, 1, d.marks)
 
 	// Padding failure remains a content-source Close error even when all expected payload bytes read.
 	d = &tarTestDevice{records: []tarTestRecord{{mark: true}}}

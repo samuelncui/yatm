@@ -6,8 +6,6 @@ type OneofDeviceFeature interface {
 
 func (x *TapeCapacityLimits) isOneofDeviceFeature() {}
 
-func (x *TapeCompressionLimits) isOneofDeviceFeature() {}
-
 func (x *TapeEncryptionLimits) isOneofDeviceFeature() {}
 
 func (x *TapeGeometryLimits) isOneofDeviceFeature() {}
@@ -20,8 +18,6 @@ func (x *DeviceFeature) Unpack() OneofDeviceFeature {
 	switch param := x.Limits.(type) {
 	case *DeviceFeature_Capacity:
 		return param.Capacity
-	case *DeviceFeature_Compression:
-		return param.Compression
 	case *DeviceFeature_Encryption:
 		return param.Encryption
 	case *DeviceFeature_Geometry:
@@ -44,18 +40,6 @@ func (p *TapeCapacityLimits) Pack() *DeviceFeature {
 }
 
 func (p *TapeCapacityLimits) ToOneof() OneofDeviceFeature {
-	return p
-}
-
-func (p *TapeCompressionLimits) Pack() *DeviceFeature {
-	return &DeviceFeature{
-		Limits: &DeviceFeature_Compression{
-			Compression: p,
-		},
-	}
-}
-
-func (p *TapeCompressionLimits) ToOneof() OneofDeviceFeature {
 	return p
 }
 

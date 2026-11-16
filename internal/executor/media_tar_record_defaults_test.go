@@ -94,7 +94,6 @@ func TestTarFactoryFormatRecordDefaultsAndOverrides(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.mode, result.Media.Profile.GetTape().Tar.RecordMode)
 			require.Equal(t, test.bytes, result.Media.Profile.GetTape().Tar.RecordBytes)
-			require.False(t, result.Media.Profile.GetTape().Tar.HardwareCompression)
 
 			// Native WRITE frames use the chosen record envelope and cleanup restores original controls.
 			require.Contains(t, provider.writes, int(test.bytes))

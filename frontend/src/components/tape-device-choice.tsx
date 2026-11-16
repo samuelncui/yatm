@@ -16,6 +16,7 @@ import {
   type InspectDeviceResponse,
 } from "@/entity";
 import { Feedback } from "@/components/feedback";
+import { densityLabel } from "@/components/tape-density";
 import { ActionRow } from "@/components/action-row";
 import { contentTime } from "@/components/content-status";
 import { errorMessage } from "@/tools";
@@ -44,11 +45,8 @@ const fieldLabels: Record<string, string> = {
   recordBytes: "Record size (bytes)",
   fixedRecords: "Fixed records",
   bufferedWrites: "Buffered writes",
-  compressionEnabled: "Compression enabled",
-  decompressionEnabled: "Decompression enabled",
   encryptionEnabled: "Encryption enabled",
   recordMode: "Record mode",
-  hardwareCompression: "Hardware compression",
   minimumBytes: "Minimum bytes",
   maximumBytes: "Maximum bytes",
   alignmentBytes: "Alignment bytes",
@@ -166,23 +164,16 @@ export const DeviceInspectionResult = ({ reply }: { reply: InspectDeviceResponse
       <>
         <strong>Tape device</strong>
         {(
-          [
-            "mediumPresent",
-            "writeProtected",
-            "densityCode",
-            "partitionCount",
-            "recordBytes",
-            "fixedRecords",
-            "bufferedWrites",
-            "compressionEnabled",
-            "decompressionEnabled",
-            "encryptionEnabled",
-          ] as const
+          ["mediumPresent", "writeProtected", "densityCode", "partitionCount", "recordBytes", "fixedRecords", "bufferedWrites", "encryptionEnabled"] as const
         ).map((name) => (
           <span key={name}>
             {fieldLabel(name)}: {reply.report.oneofKind === "tape" && reply.report.tape[name] !== undefined ? String(reply.report.tape[name]) : "Unknown"}
           </span>
         ))}
+        <span>
+          Supported densities:{" "}
+          {reply.report.tape.supportedDensityCodes.length ? reply.report.tape.supportedDensityCodes.map((code) => densityLabel(code)).join(", ") : "Unknown"}
+        </span>
         {reply.report.tape.features.map((feature, index) => (
           <Stack key={`${feature.feature}-${index}`} spacing={0.5} sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
             <strong>{enumLabel(DeviceFeatureKind, feature.feature)}</strong>
@@ -212,20 +203,6 @@ export const DeviceInspectionResult = ({ reply }: { reply: InspectDeviceResponse
             {feature.limits.oneofKind === "geometry" && <GeometryDetails geometry={feature.limits.geometry} />}
             {feature.limits.oneofKind === "capacity" && <CapacityDetails capacity={feature.limits.capacity} />}
             {feature.limits.oneofKind === "encryption" && <EncryptionDetails encryption={feature.limits.encryption} />}
-            {feature.limits.oneofKind === "compression" && (
-              <>
-                <span>
-                  Current algorithm:{" "}
-                  {feature.limits.compression.currentAlgorithm === undefined
-                    ? "Unknown"
-                    : `0x${feature.limits.compression.currentAlgorithm.toString(16).padStart(8, "0")} (${feature.limits.compression.currentAlgorithm})`}
-                </span>
-                <span>
-                  Enable changeable:{" "}
-                  {feature.limits.compression.enableChangeable === undefined ? "Unknown" : String(feature.limits.compression.enableChangeable)}
-                </span>
-              </>
-            )}
           </Stack>
         ))}
       </>

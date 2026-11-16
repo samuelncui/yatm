@@ -11,7 +11,6 @@ import (
 type calibrationCreateCommand struct {
 	runtime       *runtime
 	Device        string `long:"device" required:"yes" description:"Configured server-side Tape device holding the cartridge"`
-	MediaID       *int64 `long:"media-id" description:"tar Tape Media loaded in the device; reads and changes no data"`
 	WriteTestData bool   `long:"write-test-data" description:"OVERWRITE the loaded cartridge from the beginning of tape with test data; never use it on a cartridge holding data. Use the cartridge again only through FORMAT"`
 }
 
@@ -21,7 +20,7 @@ func registerCalibrationCommands(root *flags.Command, rt *runtime) error {
 		return err
 	}
 	return addCommands(group,
-		commandSpec{name: "create", description: "Create and start a Calibration on the loaded tar Media or on written test data", handler: &calibrationCreateCommand{runtime: rt}},
+		commandSpec{name: "create", description: "Create and start a Calibration on the loaded cartridge: the data it holds, or written test data", handler: &calibrationCreateCommand{runtime: rt}},
 	)
 }
 
@@ -31,21 +30,12 @@ func (c *calibrationCreateCommand) Execute(_ []string) error {
 	if device == "" {
 		return usageError(fmt.Errorf("device must not be empty"))
 	}
-	if (c.MediaID != nil) == c.WriteTestData {
-		return usageError(fmt.Errorf("provide exactly one of --media-id and --write-test-data"))
-	}
-	if c.MediaID != nil {
-		if err := positiveID("Media ID", *c.MediaID); err != nil {
-			return err
-		}
-	}
-
 	// Creation runs the Job immediately; job wait and job progress follow it.
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	reply, err := callRPC[entity.CreateCalibrationJobRequest, entity.CreateCalibrationJobResponse](ctx, c.runtime,
 		entity.CalibrationJobService_Create_FullMethodName,
-		&entity.CreateCalibrationJobRequest{Spec: &entity.CalibrationJobSpec{Device: device, MediaId: c.MediaID, WriteTestData: c.WriteTestData}})
+		&entity.CreateCalibrationJobRequest{Spec: &entity.CalibrationJobSpec{Device: device, WriteTestData: c.WriteTestData}})
 	if err != nil {
 		return err
 	}

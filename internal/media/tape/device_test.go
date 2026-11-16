@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"strings"
 	"syscall"
 	"testing"
 	"unsafe"
@@ -327,11 +328,12 @@ func TestDeviceReadSkipsWriteOnlyPrerequisitesAndKnownAbsentControls(t *testing.
 
 func TestDevicePreparationFailureRestoresFirstAttemptedMutation(t *testing.T) {
 	for _, cleanupFails := range []bool{false, true} {
-		// A failed mode readback still owns restoration, even though no Session reached its caller.
+		// The caller's release still restores a failed preparation's first mutation.
 		f := newDeviceFixture()
 		f.failedReadback, f.failureCleanup = true, cleanupFails
 		d := fixtureDevice(t, f)
 		_, err := d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Format)
+		err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
 		if err == nil || errors.Is(err, ErrUncertain) != cleanupFails || f.selects != 2 || f.closed != 1 || f.writes != 0 {
 			t.Fatalf("failure=%v selects=%d closed=%d writes=%d", err, f.selects, f.closed, f.writes)
 		}
@@ -500,6 +502,26 @@ func TestWritesRefuseUnknownEODAndBufferModesBeforeMutation(t *testing.T) {
 		_, err := d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512}, Format)
 		if err == nil || f.selects != 0 || f.writes != 0 || f.motions != 0 {
 			t.Fatalf("unknown mode accepted: %v", err)
+		}
+	}
+}
+
+func TestDeviceNavigatesMultipartitionCartridgeWithoutRecordAccess(t *testing.T) {
+	// An LTFS cartridge has two partitions: record access refuses it, positioning alone is prepared.
+	profile := &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}
+	for _, operation := range []Operation{Read, Navigate} {
+		f := newDeviceFixture()
+		f.mode[51], f.actualPartitions = 1, 2
+		d := fixtureDevice(t, f)
+		_, err := d.Configure(context.Background(), profile, operation)
+		if operation == Read {
+			if err == nil || !strings.Contains(err.Error(), "single partition") {
+				t.Fatalf("record access to two partitions=%v", err)
+			}
+			continue
+		}
+		if err != nil || d.operation != Read || f.writes != 0 || f.formats != 0 || f.motions != 0 {
+			t.Fatalf("navigation preparation=%v operation=%d writes=%d formats=%d motions=%d", err, d.operation, f.writes, f.formats, f.motions)
 		}
 	}
 }

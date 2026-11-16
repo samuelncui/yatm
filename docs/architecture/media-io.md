@@ -38,9 +38,11 @@ and resolves the Media record once per attempt:
   returns them in the Session's descriptor, which Archive publishes. A read Session keeps its Tape
   position map to itself; nothing writes it back to the Media.
 
-Read Finalize also receives the caller's read/stop error. A successful raw tar read uses normal
-physical release; failed or canceled work only restores owned controls and closes the descriptor.
-LTFS still delegates release to its configured unmount adapter; Volume has no Tape release action.
+Read Finalize also receives the caller's read/stop error. A raw tar read restores owned controls and
+unloads the cartridge whether it succeeded, failed or was canceled, unless a command outcome is
+unknown; a cartridge that fails the identity check stays loaded. LTFS delegates release to its
+configured unmount adapter; a failure after its identity check and before its mount script unloads
+through the raw path, as [Tape](tape.md#tape-lifecycle) describes. Volume has no Tape release action.
 
 `Media` is a zero-I/O boundary descriptor on a prepared Session, not a Library persistence row.
 Read resolution receives the frozen Media path and available storage facts. A source or target
@@ -51,7 +53,10 @@ frozen path and size, so Volume capacity planning does not query that row. Final
 copy/stop error and returns a `WriteResult`: the selected Media descriptor, physical path prefix and,
 for Tape, bounded completed path/size/storage facts after physical finalization. LTFS supplies its
 captured Index after unmount; tar validates positions already retained in Archive item results. LTFS derives its
-target-full behavior from the copy error. The returned finalization error describes physical completion;
+target-full behavior from the copy error. Both return a usable result after a cancellation or an
+independent copy failure when the device confirms its contents: LTFS through normal unmount and its
+final Index, tar through its closing filemark, position check and unload, admitting only complete
+members covered by accepted records. The returned finalization error describes physical completion;
 the result separately retains a stop first discovered while settling buffered data or the trailer.
 The runner combines that stop with the copy error before reconciliation, preserving a usable
 physical result and its actual termination reason. The Archive runner reconciles that result with its

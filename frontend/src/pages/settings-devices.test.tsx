@@ -20,7 +20,7 @@ const value = () =>
               tape: {
                 readOrder: TapeReadOrder.UNSPECIFIED,
                 defaultFormat: "ltfs_v1",
-                tarWriteOptions: { recordBytes: 262144, hardwareCompression: false },
+                tarWriteOptions: { recordBytes: 262144 },
                 readParameters: [],
               },
             },
@@ -82,7 +82,7 @@ it("retains inactive tar settings and explicit false without hardware access on 
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const saved = update.mock.calls[0][0].value.value.device;
-  expect(saved.devices[0].options.tape.tarWriteOptions).toEqual({ recordBytes: 524288, hardwareCompression: false });
+  expect(saved.devices[0].options.tape.tarWriteOptions).toEqual({ recordBytes: 524288 });
   expect(saved.devices[1].device).toBe("removed");
   expect(inspectDevice).not.toHaveBeenCalled();
 });
@@ -98,22 +98,6 @@ it("expands Advanced for an invalid retained size and keeps the draft", async ()
   expect(advanced).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("spinbutton", { name: "Record size (bytes)" })).toHaveValue(513);
   expect(update).not.toHaveBeenCalled();
-});
-
-it.each([undefined, false, true])("saves compression setting %s with presence intact and no hardware access", async (hardwareCompression) => {
-  renderPage(<DeviceSettingsBrowser />);
-  await screen.findByText(/Tar settings are inactive for LTFS/);
-  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
-  await userEvent.click(screen.getByRole("combobox", { name: "Tar hardware compression" }));
-  await userEvent.click(
-    screen.getByRole("option", { name: hardwareCompression === undefined ? "Default (use recommendation)" : hardwareCompression ? "On" : "Off" }),
-  );
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Record size (bytes)" }), { target: { value: "524288" } });
-  await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
-  const options = update.mock.calls[0][0].value.value.device.devices[0].options.tape.tarWriteOptions;
-  expect(options.hardwareCompression).toBe(hardwareCompression);
-  expect(inspectDevice).not.toHaveBeenCalled();
 });
 
 it("keeps read order visible and page actions together while encryption belongs to scripts", async () => {
@@ -209,7 +193,7 @@ it.each([undefined, 0, 5, 30, 4294967295])("saves capacity polling %s with optio
   expect(settings.devices[0].options.tape).toMatchObject({
     readOrder: TapeReadOrder.UNSPECIFIED,
     defaultFormat: "ltfs_v1",
-    tarWriteOptions: { recordBytes: 524288, hardwareCompression: false },
+    tarWriteOptions: { recordBytes: 524288 },
   });
   expect(settings.devices[1].options.tape.capacityPollIntervalSeconds).toBeUndefined();
   expect(settings.devices[1].options.tape.defaultFormat).toBe("tar_pax_v1");
@@ -301,7 +285,7 @@ it("adds a set through the form only to the page draft, lists it, and Save persi
   await chooseDensity(dialog, "0x58 LTO-5");
   fireEvent.change(dialog.getByRole("textbox", { name: "Nominal wraps" }), { target: { value: "80" } });
   fireEvent.change(dialog.getByRole("textbox", { name: "Added time when arriving against the wrap direction (s)" }), { target: { value: "4.3" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Read-ahead buffer (MB)" }), { target: { value: "18446744073709.551615" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Streaming distance (MB)" }), { target: { value: "18446744073709.551615" } });
   fireEvent.change(dialog.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
   fireEvent.change(dialog.getByRole("textbox", { name: "Source reference" }), { target: { value: "Measured stream only" } });
   await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
@@ -318,7 +302,7 @@ it("adds a set through the form only to the page draft, lists it, and Save persi
   const [parameters] = savedParameters();
   expect(parameters.appliesTo).toEqual({ densityCode: 88 });
   expect(parameters.geometry).toEqual({ nominalWraps: 80 });
-  expect(parameters.positioning).toEqual({ approachReversalSeconds: 4.3, bufferBytes: 18446744073709551615n });
+  expect(parameters.positioning).toEqual({ approachReversalSeconds: 4.3, streamingBytes: 18446744073709551615n });
   expect(parameters.reading).toEqual({ bytesPerSecond: 93000000 });
   expect(parameters.completion).toBeUndefined();
   expect(parameters.sourceReference).toBe("Measured stream only");
@@ -343,7 +327,7 @@ it("adds a set through the form only to the page draft, lists it, and Save persi
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   const restored = await editParameters("0x58 LTO-5");
   expect(restored.getByRole("textbox", { name: "Source reference" })).toHaveValue("Measured stream only");
-  expect(restored.getByRole("textbox", { name: "Read-ahead buffer (MB)" })).toHaveValue("18446744073709.551615");
+  expect(restored.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("18446744073709.551615");
   expect(restored.getByRole("textbox", { name: "Density code" })).toBeDisabled();
   await userEvent.click(restored.getByRole("button", { name: "Cancel" }));
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
@@ -359,7 +343,7 @@ it("edits only the changed values of a stored set and keeps the others exactly",
   const stored = TapeReadParameters.create({
     appliesTo: { driveSerial: "HU1", densityCode: 0x99 },
     geometry: { nominalWraps: 80 },
-    positioning: { baseSeconds: 4.291234, approachReversalSeconds: 2.5, seekSecondsPerWrap: 96.12, bufferBytes: 1234567n },
+    positioning: { baseSeconds: 4.291234, approachReversalSeconds: 2.5, seekSecondsPerWrap: 96.12, streamingBytes: 1234567n },
     reading: { bytesPerSecond: 93123456.7, filemarkOverheadSeconds: 0.01 },
     completion: { fullSpanSeconds: 107, fixedSeconds: 3, ltfsUnmountSeconds: 12 },
     sourceReference: "Calibration Job 12",
@@ -372,7 +356,7 @@ it("edits only the changed values of a stored set and keeps the others exactly",
   expect(screen.getAllByRole("row")[1]).toHaveTextContent("0x99HU1Calibration Job 124.29 s96.12 s93.1 MB/s");
   const dialog = await editParameters("0x99");
   expect(dialog.getByRole("textbox", { name: "Density code" })).toHaveValue("0x99");
-  expect(dialog.getByRole("textbox", { name: "Read-ahead buffer (MB)" })).toHaveValue("1.234567");
+  expect(dialog.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("1.234567");
   expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93.1234567");
   fireEvent.change(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "4.5" } });
   fireEvent.change(dialog.getByRole("textbox", { name: "LTFS unmount time (s)" }), { target: { value: "" } });
@@ -442,7 +426,6 @@ it("fills the form from the existing report without activating it or retargeting
             densityCode: 88,
             fixedRecords: false,
             recordBytes: 0,
-            compressionEnabled: false,
             encryptionEnabled: false,
           }),
         },
@@ -566,27 +549,58 @@ it("offers Calibration beside the read parameters of an active device and shows 
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 
-it("offers exactly LTFS and Tar, shows an unset format as LTFS and stores the chosen format explicitly", async () => {
+it("offers exactly LTFS and Tar, shows an unset format as Tar and stores the chosen format explicitly", async () => {
   const saved = value();
   if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
   saved.value.device.devices[0].options.tape.defaultFormat = undefined;
   get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
   renderPage(<DeviceSettingsBrowser />);
-  await screen.findByText(/Tar settings are inactive for LTFS/);
-  const format = screen.getByRole("combobox", { name: "Default Tape format" });
-  expect(format).toHaveTextContent("LTFS");
+  const format = await screen.findByRole("combobox", { name: "Default Tape format" });
+  expect(format).toHaveTextContent("Tar");
+  expect(screen.queryByText(/Tar settings are inactive for LTFS/)).not.toBeInTheDocument();
   await userEvent.click(format);
   expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["LTFS", "Tar"]);
-  await userEvent.click(screen.getByRole("option", { name: "Tar" }));
-  await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
-  expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("tar_pax_v1");
-  await userEvent.click(format);
   await userEvent.click(screen.getByRole("option", { name: "LTFS" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
-  expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("ltfs_v1");
+  expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("ltfs_v1");
+  await userEvent.click(format);
+  await userEvent.click(screen.getByRole("option", { name: "Tar" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("tar_pax_v1");
   expect(inspectDevice).not.toHaveBeenCalled();
+});
+
+it.each([
+  { name: "pre-LTO-5 densities", codes: [0x44, 0x46], options: ["LTFS · unsupported", "Tar"], unsupported: true },
+  { name: "an LTO-5 density", codes: [0x46, 0x58], options: ["LTFS", "Tar"], unsupported: false },
+  { name: "unknown densities", codes: [], options: ["LTFS", "Tar"], unsupported: false },
+])("offers LTFS as the default only on a drive that can write it: $name", async ({ codes, options, unsupported }) => {
+  // The saved LTFS default stays visible; a drive known to lack LTO-5 or later marks it unsupported.
+  inspectDevice.mockReturnValue({
+    response: Promise.resolve(InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: TapeDeviceReport.create({ supportedDensityCodes: codes }) } })),
+  });
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  await userEvent.click(screen.getByRole("button", { name: /Device details/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
+  await screen.findByText(/^Supported densities:/);
+  const reason = "This drive does not support LTFS (needs LTO-5 or later).";
+  if (unsupported) {
+    expect(screen.getByText(reason)).toBeVisible();
+    expect(screen.getByText("Choose Tar before using this default.")).toBeVisible();
+  } else {
+    expect(screen.queryByText(reason)).not.toBeInTheDocument();
+  }
+  const format = screen.getByRole("combobox", { name: "Default Tape format" });
+  await userEvent.click(format);
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(options);
+  await userEvent.click(screen.getByRole("option", { name: "Tar" }));
+  if (!unsupported) return;
+  // Once Tar is chosen, the drive offers only Tar.
+  await userEvent.click(format);
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Tar"]);
 });
 
 it("keeps an unsupported stored format visible with its warning", async () => {
@@ -613,6 +627,126 @@ it("offers exactly Fixed and Variable record modes, shows unset as Variable and 
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.tarWriteOptions).toEqual({
     recordMode: TapeRecordMode.FIXED,
     recordBytes: 262144,
-    hardwareCompression: false,
   });
+});
+
+const builtinLTO5 = TapeReadParameters.create({
+  appliesTo: { densityCode: 0x58 },
+  geometry: { nominalWraps: 80 },
+  positioning: { baseSeconds: 6.15, approachReversalSeconds: 4.78, seekSecondsPerWrap: 93.3, streamingBytes: 888800000n },
+  reading: { bytesPerSecond: 140e6 },
+  completion: { fullSpanSeconds: 96, fixedSeconds: 19, ltfsUnmountSeconds: 12.61 },
+  sourceReference: "built-in (HP LTO-5 calibration sequence)",
+});
+const builtinLTO6 = TapeReadParameters.create({
+  ...TapeReadParameters.clone(builtinLTO5),
+  appliesTo: { densityCode: 0x5a },
+  geometry: { nominalWraps: 136 },
+  reading: { bytesPerSecond: 160e6 },
+});
+
+// withBuiltin returns Device settings carrying the server's built-in sets, and reports the given tape facts on inspection.
+const withBuiltin = (tape: Partial<TapeDeviceReport>) => {
+  const saved = value();
+  if (saved.value.oneofKind !== "device") throw new Error("Device settings required");
+  saved.value.device.builtinReadParameters = [builtinLTO5, builtinLTO6];
+  get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
+  inspectDevice.mockReturnValue({
+    response: Promise.resolve(InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: TapeDeviceReport.create(tape) } })),
+  });
+};
+
+const refreshDetails = async () => {
+  await userEvent.click(screen.getByRole("button", { name: /Device details/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
+  await screen.findByText(/Last device details/);
+};
+
+const rowTexts = () =>
+  within(screen.getByRole("table", { name: "Read parameter sets" }))
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) =>
+      within(row)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent),
+    );
+
+it("lists built-in values for the reported density, or the supported densities, only after Device details", async () => {
+  withBuiltin({ supportedDensityCodes: [0x58, 0x5a, 0x46], encryptionEnabled: false });
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
+  expect(screen.queryByRole("table", { name: "Read parameter sets" })).not.toBeInTheDocument();
+  await refreshDetails();
+  // A supported density without built-in values adds no row.
+  expect(rowTexts()).toEqual([
+    ["0x58 LTO-5", "Any drive", "Built-in", "6.15 s", "93.30 s", "140.0 MB/s", "Edit"],
+    ["0x5A LTO-6", "Any drive", "Built-in", "6.15 s", "93.30 s", "160.0 MB/s", "Edit"],
+  ]);
+
+  // The loaded cartridge's density narrows the listing to that density.
+  withBuiltin({ densityCode: 0x5a, supportedDensityCodes: [0x58, 0x5a], encryptionEnabled: false });
+  await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
+  await vi.waitFor(() => expect(rowTexts()).toEqual([["0x5A LTO-6", "Any drive", "Built-in", "6.15 s", "93.30 s", "160.0 MB/s", "Edit"]]));
+  expect(update).not.toHaveBeenCalled();
+});
+
+it("prefills a new set from the built-in values of the chosen density without claiming their source", async () => {
+  withBuiltin({});
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  const dialog = await editParameters();
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+  await chooseDensity(dialog, "0x58 LTO-5");
+  expect(dialog.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("80");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("140");
+  expect(dialog.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("888.8");
+  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
+
+  // Another density refills untouched values; one without built-in values leaves them empty.
+  await chooseDensity(dialog, "0x5A LTO-6");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("160");
+  await chooseDensity(dialog, "0x46 LTO-4");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+  await chooseDensity(dialog, "0x58 LTO-5");
+
+  // An edited value survives a later density choice; the others keep the exact built-in values.
+  fireEvent.change(dialog.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
+  await chooseDensity(dialog, "0x5A LTO-6");
+  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93");
+  await chooseDensity(dialog, "0x58 LTO-5");
+  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "None", "6.15 s", "93.30 s", "93.0 MB/s", "EditReset to built-in"]]);
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  const [parameters] = savedParameters();
+  expect(parameters).toEqual({ ...builtinLTO5, reading: { bytesPerSecond: 93e6 }, sourceReference: "" });
+});
+
+it("edits a built-in row into a configured set and Reset returns the built-in row", async () => {
+  withBuiltin({ densityCode: 0x58, encryptionEnabled: false });
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
+  await refreshDetails();
+  await userEvent.click(screen.getByRole("button", { name: "Edit read parameters for 0x58 LTO-5" }));
+  const dialog = within(screen.getByRole("dialog", { name: "Add read parameters" }));
+  expect(dialog.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("0x58 LTO-5");
+  expect(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("6.15");
+  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
+  fireEvent.change(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "5.2" } });
+  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "None", "5.20 s", "93.30 s", "140.0 MB/s", "EditReset to built-in"]]);
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  const [parameters] = savedParameters();
+  expect(parameters).toEqual({ ...builtinLTO5, positioning: { ...builtinLTO5.positioning, baseSeconds: 5.2 }, sourceReference: "" });
+
+  // Reset to built-in removes the configured set, and the built-in row is listed again.
+  await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
+  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "Built-in", "6.15 s", "93.30 s", "140.0 MB/s", "Edit"]]);
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  expect(savedParameters(1)).toEqual([]);
 });

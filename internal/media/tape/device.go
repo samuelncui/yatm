@@ -20,29 +20,32 @@ const (
 	Read Operation = iota + 1
 	Append
 	Format
+	// Navigate prepares like Read for LOCATE and READ POSITION alone: no record is transferred, so a
+	// multipartition cartridge is accepted.
+	Navigate
 )
 
 // Device owns one opened transport and captured session controls under its caller's attempt lease.
 // SSC command/page semantics establish applicability; model names never authorize an operation.
 type Device struct {
-	transport          Transport
-	report             *entity.InspectDeviceResponse
-	navigation         *Navigation
-	records            Records
-	operation          Operation
-	original           []byte
-	prepared           []byte
-	partition          []byte
-	partitionOriginal  []byte
-	partitionChanged   bool
-	changed            bool
-	compressionChanged uint16 // Low byte tracks DCE changes; high byte tracks DDE/RED changes.
-	selectorChanged    bool
-	cleanup            sync.Once
-	cleanupErr         error
-	geometry           *WrapMap
-	cmPending          bool
-	actualPartitions   uint32
+	transport         Transport
+	report            *entity.InspectDeviceResponse
+	navigation        *Navigation
+	records           Records
+	operation         Operation
+	original          []byte
+	prepared          []byte
+	partition         []byte
+	partitionOriginal []byte
+	partitionChanged  bool
+	changed           bool
+	dceChanged        bool // The write compression enable bit was changed and needs restoration.
+	selectorChanged   bool
+	cleanup           sync.Once
+	cleanupErr        error
+	geometry          *WrapMap
+	cmPending         bool
+	actualPartitions  uint32
 }
 
 // NewDevice consumes an opened transport and performs the same passive inspection as the RPC.
@@ -62,6 +65,65 @@ func NewDevice(ctx context.Context, identity Identity, transport Transport) (*De
 	return device, nil
 }
 
+// loadReadyTimeout bounds LOAD retries after unit attention and the readiness wait that follows,
+// as the bundled readinfo adapter bounds its wait after `mt load`.
+const loadReadyTimeout = time.Minute
+
+// LoadDevice loads the cartridge on an opened transport, waits until the drive reports it ready and
+// then inspects it as NewDevice does. An empty drive returns its NOT READY rejection; an uncertain
+// LOAD leaves the transport refusing every later command. Failure closes the transport.
+func LoadDevice(ctx context.Context, identity Identity, transport Transport) (*Device, error) {
+	if transport == nil {
+		return nil, fmt.Errorf("Tape transport is missing")
+	}
+	if err := loadReady(ctx, transport); err != nil {
+		if closeErr := transport.Close(); closeErr != nil {
+			return nil, errors.Join(err, &UncertainError{Cause: fmt.Errorf("close Tape transport after load failed, %w", closeErr)})
+		}
+		return nil, err
+	}
+	return NewDevice(ctx, identity, transport)
+}
+
+func loadReady(ctx context.Context, transport Transport) error {
+	// A unit attention, such as a medium change, is reported once instead of performing the command.
+	deadline := time.Now().Add(loadReadyTimeout)
+	var err error
+	for {
+		err = (Records{Transport: transport, Timeout: 10 * time.Minute}).load(ctx)
+		var failure *CommandError
+		if !errors.As(err, &failure) || errors.Is(err, ErrUncertain) || !unitAttention(failure) || time.Now().After(deadline) {
+			break
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("load Tape failed, %w", err)
+	}
+
+	// The synchronous LOAD completes after threading; TEST UNIT READY consumes any remaining unit
+	// attention and waits while the drive reports it is becoming ready.
+	for {
+		_, err = query(ctx, transport, []byte{0, 0, 0, 0, 0, 0}, 0)
+		var failure *CommandError
+		if err == nil || !errors.As(err, &failure) || errors.Is(err, ErrUncertain) || time.Now().After(deadline) {
+			return err
+		}
+		switch {
+		case unitAttention(failure):
+		case currentCommand(failure) && failure.Sense.Key == 2 && failure.Sense.ASC == 4 && failure.Sense.ASCQ == 1:
+			timer := time.NewTimer(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return errors.Join(err, ctx.Err())
+			case <-timer.C:
+			}
+		default:
+			return err
+		}
+	}
+}
+
 // Report returns a request-owned observation snapshot, never a durable write authorization.
 func (d *Device) Report() *entity.InspectDeviceResponse {
 	return proto.Clone(d.report).(*entity.InspectDeviceResponse)
@@ -69,20 +131,17 @@ func (d *Device) Report() *entity.InspectDeviceResponse {
 
 // Configure establishes SSC record access and captures controls before mutation.
 // FORMAT configures layout before the Tape script and writes no data; later access relies on that script's preparation.
-func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile, operation Operation) (records Records, err error) {
-	// Every failed preparation owns cancellation-independent cleanup, including failed mode readback.
-	defer func() {
-		if err != nil {
-			cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			defer cancel()
-			err = errors.Join(err, d.Cleanup(cleanup))
-		}
-	}()
+// A failed preparation keeps the Device open: its caller's Cleanup or Finish restores what it changed.
+func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile, operation Operation) (Records, error) {
 	if profile == nil {
 		return Records{}, fmt.Errorf("Tape record policy is missing")
 	}
 	if err := entity.ValidateTarRecordPolicy(profile.RecordMode, profile.RecordBytes); err != nil {
 		return Records{}, err
+	}
+	anyLayout := operation == Navigate
+	if anyLayout {
+		operation = Read
 	}
 	if operation < Read || operation > Format || profile.RecordBytes > MaxTransferBytes {
 		return Records{}, fmt.Errorf("Tape operation or record size is unsupported")
@@ -183,7 +242,7 @@ func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile,
 				return Records{}, err
 			}
 		}
-	} else if count != 1 {
+	} else if count != 1 && !anyLayout {
 		return Records{}, fmt.Errorf("tar access requires a known single partition")
 	}
 
@@ -212,10 +271,13 @@ func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile,
 		configuration = pages[0x10]
 	}
 
-	// Resolve independent read decoding or the explicit write policy without replacing algorithm IDs.
-	selectedCompression, selectedConfiguration, err := compressionPolicy(pages, profile.HardwareCompression, operation)
-	if err != nil {
-		return Records{}, err
+	// FORMAT/APPEND force drive compression off without replacing algorithm IDs; READ leaves it untouched.
+	var selectedCompression, selectedConfiguration []byte
+	if operation != Read {
+		selectedCompression, selectedConfiguration, err = compressionOff(pages)
+		if err != nil {
+			return Records{}, err
+		}
 	}
 	if d.original == nil {
 		d.original = sessionMode(current, compression, configuration, blockLength(current))
@@ -245,15 +307,9 @@ func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile,
 			}
 		}
 		d.changed = true
-		if len(selectedCompression) != 0 {
-			d.compressionChanged |= uint16((compression[2]^selectedCompression[2])&0x80) | uint16((compression[3]^selectedCompression[3])&0xe0)<<8
-		}
+		d.dceChanged = d.dceChanged || len(selectedCompression) != 0 && (compression[2]^selectedCompression[2])&0x80 != 0
 		d.selectorChanged = d.selectorChanged || len(selectedConfiguration) != 0 && configuration[14] != selectedConfiguration[14]
-		var writePolicy *bool
-		if operation != Read {
-			writePolicy = proto.Bool(profile.HardwareCompression)
-		}
-		if err := d.selectMode(ctx, desired, operation == Read && profile.HardwareCompression, writePolicy); err != nil {
+		if err := d.selectMode(ctx, desired, operation != Read); err != nil {
 			return Records{}, err
 		}
 	}
@@ -283,7 +339,7 @@ func (d *Device) Initialize(ctx context.Context) error {
 
 	// POFM keeps the partition page pending until a non-immediate FORMAT commits the transition.
 	d.partitionChanged = true
-	if err := d.selectMode(ctx, d.partition, false, nil); err != nil {
+	if err := d.selectMode(ctx, d.partition, false); err != nil {
 		return err
 	}
 	response, err := d.transport.Execute(ctx, Command{CDB: []byte{4, 0, 1, 0, 0, 0}, Direction: NoData, Timeout: 24 * time.Hour, validate: controlResponse})
@@ -301,12 +357,7 @@ func (d *Device) Initialize(ctx context.Context) error {
 	d.actualPartitions = 1
 	d.partitionChanged = false
 	d.changed = true
-	pages, err := selectionPages(d.prepared)
-	if err != nil {
-		return err
-	}
-	enabled := len(pages[0x0f]) >= 16 && pages[0x0f][2]&0x80 != 0
-	if err := d.selectMode(ctx, d.prepared, false, &enabled); err != nil {
+	if err := d.selectMode(ctx, d.prepared, true); err != nil {
 		return err
 	}
 	if err := d.records.Rewind(ctx); err != nil {
@@ -320,7 +371,8 @@ func (d *Device) Cleanup(ctx context.Context) error {
 	return d.release(ctx, false)
 }
 
-// Finish restores owned controls and unloads a normally completed Session before closing it.
+// Finish restores owned controls and unloads the cartridge before closing, whether or not the
+// caller's work succeeded. A Transport that lost trust in a command outcome refuses the unload.
 func (d *Device) Finish(ctx context.Context) error {
 	return d.release(ctx, true)
 }
@@ -332,7 +384,7 @@ func (d *Device) release(ctx context.Context, unload bool) error {
 
 		// Restoration failure is physical unavailability even if its command had a known rejection.
 		if d.partitionChanged {
-			if err := d.selectMode(ctx, d.partitionOriginal, false, nil); err != nil {
+			if err := d.selectMode(ctx, d.partitionOriginal, false); err != nil {
 				d.cleanupErr = errors.Join(d.cleanupErr, &UncertainError{Cause: fmt.Errorf("restore pending partition controls failed, %w", err)})
 			}
 		}
@@ -342,8 +394,8 @@ func (d *Device) release(ctx context.Context, unload bool) error {
 			}
 		}
 		if unload && d.cleanupErr == nil {
-			if err := d.records.Unload(ctx); err != nil {
-				d.cleanupErr = &UncertainError{Cause: fmt.Errorf("unload completed Tape session failed, %w", err)}
+			if err := (Records{Transport: d.transport, Timeout: 10 * time.Minute}).Unload(ctx); err != nil {
+				d.cleanupErr = &UncertainError{Cause: fmt.Errorf("unload Tape failed, %w", err)}
 			}
 		}
 		d.cleanupErr = errors.Join(d.cleanupErr, d.transport.Close())

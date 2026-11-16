@@ -9,25 +9,38 @@ import (
 	"github.com/samuelncui/yatm/entity"
 )
 
-func TestCompressionWritesApplyCoherentPolicyAndRestore(t *testing.T) {
+func TestTarWritesForceCompressionOffAndRestore(t *testing.T) {
 	for _, algorithm := range []uint32{1, 0xff} {
 		for _, enabled := range []bool{false, true} {
-			// Actual standard IDs remain opaque; MP10 cannot override an explicit off request.
+			// Actual standard IDs remain opaque; DCE and the legacy selector are off for every tar write.
 			f := newDeviceFixture()
 			binary.BigEndian.PutUint32(f.mode[20:24], algorithm)
 			binary.BigEndian.PutUint32(f.mode[24:28], algorithm)
-			if enabled {
+			if !enabled {
 				f.mode[18], f.mode[46] = 0x40, 0
 			}
-			d := fixtureDevice(t, f)
-			_, err := d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512, HardwareCompression: enabled}, Append)
-			if err != nil || (f.mode[18]&0x80 != 0) != enabled || (f.mode[46] == 1) != enabled || binary.BigEndian.Uint32(f.mode[20:24]) != algorithm || f.writes != 0 || f.motions != 0 {
+			var writing []bool
+			transport := newSerializedTransport(func(command Command) (Response, error) {
+				if command.CDB[0] == 0x0a {
+					writing = append(writing, f.mode[18]&0x80 != 0 || f.mode[46] != 0)
+				}
+				return f.execute(command)
+			}, func() error { f.closed++; return nil })
+			d, err := NewDevice(context.Background(), Identity{}, transport)
+			if err != nil {
+				t.Fatal(err)
+			}
+			records, err := d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Append)
+			if err != nil || f.mode[18]&0x80 != 0 || f.mode[46] != 0 || binary.BigEndian.Uint32(f.mode[20:24]) != algorithm || f.writes != 0 || f.motions != 0 {
 				t.Fatalf("algorithm=%x enabled=%t err=%v mode=%x", algorithm, enabled, err, f.mode)
 			}
+			if _, err := records.Write(context.Background(), make([]byte, 512)); err != nil || len(writing) != 1 || writing[0] {
+				t.Fatalf("write=%v compression during write=%v", err, writing)
+			}
 
-			// Cleanup restores the captured write policy and preserves fresh unrelated device configuration.
+			// Cleanup restores the captured compression controls and preserves fresh unrelated device configuration.
 			f.mode[35], f.mode[38], f.mode[42] = 7, 0x12, 0x18
-			if err := d.Cleanup(context.Background()); err != nil || (f.mode[18]&0x80 != 0) == enabled || (f.mode[46] == 1) == enabled || f.mode[35] != 7 || f.mode[38] != 0x12 || f.mode[42] != 0x18 || f.selects != 2 || f.closed != 1 {
+			if err := d.Cleanup(context.Background()); err != nil || (f.mode[18]&0x80 != 0) != enabled || (f.mode[46] == 1) != enabled || f.mode[35] != 7 || f.mode[38] != 0x12 || f.mode[42] != 0x18 || f.selects != 2 || f.closed != 1 {
 				t.Fatalf("cleanup=%v mode=%x selects=%d", err, f.mode, f.selects)
 			}
 		}
@@ -107,41 +120,16 @@ func TestUntouchedCompressionDriftRetainsCleanupUncertainty(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512, HardwareCompression: true}, Read)
+		_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Read)
+		err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
 		if !errors.Is(err, ErrUncertain) || f.selects != 1 || f.writes != 0 || f.closed != 1 {
 			t.Fatalf("selector=%t failure=%v selects=%d writes=%d closed=%d", selector, err, f.selects, f.writes, f.closed)
 		}
 	}
 }
 
-func TestReadDecoderRejectsReservedOrUnchangeableControls(t *testing.T) {
-	for _, reserved := range []bool{false, true} {
-		// Required decoding cannot normalize a reserved original or enable a nonchangeable disabled decoder.
-		f := newDeviceFixture()
-		f.mode[19] = 0
-		if reserved {
-			f.mode[19] = 0x60
-		}
-		transport := newSerializedTransport(func(command Command) (Response, error) {
-			response, err := f.execute(command)
-			if command.CDB[0] == 0x5a && command.CDB[2] == 0x7f {
-				command.Data[19] = 0
-			}
-			return response, err
-		}, func() error { f.closed++; return nil })
-		d, err := NewDevice(context.Background(), Identity{}, transport)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512, HardwareCompression: true}, Read)
-		if err == nil || f.selects != 0 || f.writes != 0 || f.closed != 1 {
-			t.Fatalf("reserved=%t read=%v selects=%d writes=%d", reserved, err, f.selects, f.writes)
-		}
-	}
-}
-
 func TestReadRecordModeChangeDoesNotSelectWriteControls(t *testing.T) {
-	// Established decoding permits record-only preparation even when unrelated write controls contradict.
+	// READ prepares records only and leaves write controls alone, even when they contradict.
 	f := newDeviceFixture()
 	f.mode[18], f.mode[46] = 0x80, 0x80
 	selections := 0
@@ -159,71 +147,12 @@ func TestReadRecordModeChangeDoesNotSelectWriteControls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512, HardwareCompression: true}, Read)
+	_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Read)
 	if err != nil || f.mode[18] != 0x80 || f.mode[46] != 0x80 {
 		t.Fatalf("read=%v mode=%x", err, f.mode)
 	}
 	if err := d.Cleanup(context.Background()); err != nil || selections != 2 || f.mode[18] != 0x80 || f.mode[46] != 0x80 {
 		t.Fatalf("cleanup=%v selections=%d mode=%x", err, selections, f.mode)
-	}
-}
-
-func TestReadRecordOnlySelectionStillVerifiesRequiredDecoder(t *testing.T) {
-	// Required decoding is checked in existing readback even when the selection sends only a record descriptor.
-	f := newDeviceFixture()
-	corrupted := false
-	transport := newSerializedTransport(func(command Command) (Response, error) {
-		response, err := f.execute(command)
-		if command.CDB[0] == 0x5a && command.CDB[2] == 0x3f && f.selects == 1 && !corrupted {
-			command.Data[19] = 0
-			corrupted = true
-		}
-		return response, err
-	}, func() error { f.closed++; return nil })
-	d, err := NewDevice(context.Background(), Identity{}, transport)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512, HardwareCompression: true}, Read)
-	if err == nil || f.selects != 2 || f.writes != 0 || f.closed != 1 {
-		t.Fatalf("read=%v selects=%d writes=%d closed=%d", err, f.selects, f.writes, f.closed)
-	}
-}
-
-func TestCompressedReadChangesOnlyRequiredDecoderControls(t *testing.T) {
-	// A decoder is independent of DCC/write readiness, and RED exceptions cannot reach the tar parser.
-	f := newDeviceFixture()
-	f.mode[18], f.mode[19], f.mode[46] = 0, 0x40, 0
-	f.mode[3], f.mode[42], f.mode[58] = 0x90, 0, 1
-	binary.BigEndian.PutUint32(f.mode[20:24], 0)
-	binary.BigEndian.PutUint32(f.mode[24:28], 0)
-	var selections []map[byte][]byte
-	transport := newSerializedTransport(func(command Command) (Response, error) {
-		if command.CDB[0] == 0x55 {
-			pages, err := selectionPages(command.Data)
-			if err != nil {
-				t.Fatal(err)
-			}
-			selections = append(selections, pages)
-		}
-		return f.execute(command)
-	}, func() error { f.closed++; return nil })
-	d, err := NewDevice(context.Background(), Identity{}, transport)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512, HardwareCompression: true}, Read)
-	if err != nil || f.mode[18] != 0 || f.mode[19]&0xe0 != 0x80 || f.mode[46] != 0 || len(selections) != 1 || len(selections[0][0x10]) != 0 {
-		t.Fatalf("read=%v mode=%x selections=%v", err, f.mode, selections)
-	}
-
-	// Last-read algorithm detection may update the ID; cleanup restores DDE/RED without replacing that ID.
-	binary.BigEndian.PutUint32(f.mode[24:28], 0xff)
-	if err := d.Cleanup(context.Background()); err != nil || f.mode[18] != 0 || f.mode[19]&0xe0 != 0x40 || binary.BigEndian.Uint32(f.mode[24:28]) != 0xff || f.writes != 0 || len(selections) != 2 || len(selections[1][0x10]) != 0 {
-		t.Fatalf("cleanup=%v mode=%x selections=%v", err, f.mode, selections)
-	}
-	if limits := feature(d.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION).GetCompression(); limits.GetCurrentAlgorithm() != 0xff || limits.EnableChangeable == nil {
-		t.Fatalf("fresh last-read algorithm observation missing: %v", limits)
 	}
 }
 
@@ -254,6 +183,7 @@ func TestCompressionRefusesUnknownOrUnchangeableBeforeMutation(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Format)
+			err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
 			if err == nil || f.selects != 0 || f.writes != 0 || f.motions != 0 || f.closed != 1 {
 				t.Fatalf("preparation=%v selects=%d writes=%d motions=%d closed=%d", err, f.selects, f.writes, f.motions, f.closed)
 			}
@@ -262,19 +192,17 @@ func TestCompressionRefusesUnknownOrUnchangeableBeforeMutation(t *testing.T) {
 }
 
 func TestCompressionReadThenAppendRetainsFirstCapturedControls(t *testing.T) {
-	// Label/tail reads can enable DDE before the immutable append policy changes DCE and the selector.
+	// Label/tail reads prepare records before the APPEND write turns DCE and the selector off.
 	f := newDeviceFixture()
-	f.mode[19] = 0
 	d := fixtureDevice(t, f)
-	read := &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512, HardwareCompression: true}
-	if _, err := d.Configure(context.Background(), read, Read); err != nil {
-		t.Fatal(err)
+	read := &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512}
+	if _, err := d.Configure(context.Background(), read, Read); err != nil || f.mode[18]&0x80 == 0 || f.mode[46] != 1 {
+		t.Fatalf("read=%v mode=%x", err, f.mode)
 	}
-	appendProfile := &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512}
-	if _, err := d.Configure(context.Background(), appendProfile, Append); err != nil || f.mode[18]&0x80 != 0 || f.mode[19]&0x80 == 0 || f.mode[46] != 0 {
+	if _, err := d.Configure(context.Background(), read, Append); err != nil || f.mode[18]&0x80 != 0 || f.mode[19]&0x80 == 0 || f.mode[46] != 0 {
 		t.Fatalf("append=%v mode=%x", err, f.mode)
 	}
-	if err := d.Cleanup(context.Background()); err != nil || f.mode[18]&0x80 == 0 || f.mode[19]&0x80 != 0 || f.mode[46] != 1 || f.selects != 3 {
+	if err := d.Cleanup(context.Background()); err != nil || f.mode[18]&0x80 == 0 || f.mode[19]&0x80 == 0 || f.mode[46] != 1 {
 		t.Fatalf("cleanup=%v mode=%x selects=%d", err, f.mode, f.selects)
 	}
 }
@@ -296,6 +224,7 @@ func TestCompressionReadbackFailureRestoresAndNeverWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Format)
+	err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
 	if err == nil || errors.Is(err, ErrUncertain) || f.selects != 2 || f.writes != 0 || f.closed != 1 || f.mode[18]&0x80 == 0 || f.mode[46] != 1 || binary.BigEndian.Uint32(f.mode[20:24]) != 1 {
 		t.Fatalf("failure=%v selects=%d writes=%d mode=%x", err, f.selects, f.writes, f.mode)
 	}
@@ -303,20 +232,15 @@ func TestCompressionReadbackFailureRestoresAndNeverWrites(t *testing.T) {
 
 func TestCompressionAlgorithmDriftCannotClaimVerifiedCleanup(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		operation         Operation
-		fixed, decoderOff bool
+		name      string
+		operation Operation
 	}{
-		{"write policy", Format, false, false},
-		{"record-only read", Read, false, false},
-		{"decoder-only read", Read, true, true},
+		{"write policy", Format},
+		{"record-only read", Read},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Persistently changed CA is unavailable for cleanup regardless of which controls were selected.
 			f := newDeviceFixture()
-			if tc.decoderOff {
-				f.mode[19] = 0
-			}
 			transport := newSerializedTransport(func(command Command) (Response, error) {
 				response, err := f.execute(command)
 				if command.CDB[0] == 0x5a && command.CDB[2] == 0x3f && f.selects == 1 {
@@ -328,14 +252,37 @@ func TestCompressionAlgorithmDriftCannotClaimVerifiedCleanup(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			mode := entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE
-			if tc.fixed {
-				mode = entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED
-			}
-			_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: mode, RecordBytes: 512, HardwareCompression: tc.operation == Read}, tc.operation)
+			_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, tc.operation)
+			err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
 			if !errors.Is(err, ErrUncertain) || f.selects != 1 || f.writes != 0 || f.closed != 1 || !errors.Is(d.Cleanup(context.Background()), ErrUncertain) {
 				t.Fatalf("failure=%v selects=%d writes=%d closed=%d", err, f.selects, f.writes, f.closed)
 			}
 		})
+	}
+}
+
+func TestCompressionReadinessLossBlocksWritePreparation(t *testing.T) {
+	for _, noMedium := range []bool{false, true} {
+		// A readiness rejection of the changeability query stops preparation before any mode selection.
+		f := newDeviceFixture()
+		transport := newSerializedTransport(func(command Command) (Response, error) {
+			if command.CDB[0] == 0x5a && command.CDB[2] == 0x7f {
+				asc := byte(4)
+				if noMedium {
+					asc = 0x3a
+				}
+				return Response{Completed: true, Status: 2, Sense: fixedSense(0x70, 2, asc, 0, false, 0, 0)}, nil
+			}
+			return f.execute(command)
+		}, func() error { f.closed++; return nil })
+		d, err := NewDevice(context.Background(), Identity{}, transport)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = d.Configure(context.Background(), &entity.TarMediaProfile{RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 512}, Format)
+		err = errors.Join(err, d.Cleanup(context.Background())) // The caller owns release.
+		if err == nil || f.selects != 0 || f.writes != 0 || f.closed != 1 {
+			t.Fatalf("noMedium=%t preparation=%v selects=%d writes=%d", noMedium, err, f.selects, f.writes)
+		}
 	}
 }

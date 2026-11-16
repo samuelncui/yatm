@@ -120,6 +120,7 @@ func TestLTFSReadOrderObservationClosesRawAccessBeforeMount(t *testing.T) {
 			require.Empty(t, fixture.locateCommands)
 			require.Zero(t, fixture.cursor)
 			require.Zero(t, fixture.writes)
+			require.Zero(t, fixture.unloads, "the pre-mount geometry observation never unloads")
 
 			// Native ownership begins only after the optional descriptor has closed; later use consumes copied facts.
 			exe.scripts.Mount = writeExecutorTestScript(t, "mounted", ":")

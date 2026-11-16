@@ -39,8 +39,7 @@ unchanged until it finishes. Independent Jobs and internal copying may still run
   ordinary files with public tools, including the required physical reader qualification.
 
 LTFS and raw tar use the configured encryption adapter and the existing saved Media key. Raw tar
-requires Linux; writes establish the selected hardware compression policy and reads retain the
-recorded decoding policy. Independent encrypted recovery uses an explicitly retained protected
+requires Linux; writes turn drive compression off and reads use the recorded record policy. Independent encrypted recovery uses an explicitly retained protected
 Library export and a compatible public unlock procedure. The
 [recovery guide](tar-tape-recovery.md#tested-reader-and-required-parameters) lists physically checked
 reader combinations and remaining limits. Consult the

@@ -51,7 +51,7 @@ func (d *Device) VerifyAppendTail(ctx context.Context) (_ uint64, err error) {
 		return 0, fmt.Errorf("verify APPEND terminating filemark position failed, %w", err)
 	}
 	if !appendPositionMatches(before, end.Object-1, end.File-1) {
-		return 0, fmt.Errorf("APPEND terminating filemark position contradicts EOD: %w", ErrMalformed)
+		return 0, fmt.Errorf("the Tape has no terminating filemark at its end: its last write did not finish, so APPEND cannot continue it; restore what it holds and FORMAT it again")
 	}
 	buffer := make([]byte, d.records.Mode.MaximumBytes)
 	mark, err := d.records.Read(ctx, buffer)

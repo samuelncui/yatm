@@ -13,6 +13,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"github.com/samuelncui/yatm/internal/media/tape"
 	"github.com/samuelncui/yatm/internal/tools"
 )
 
@@ -55,6 +56,14 @@ func (b *mediaBackend) newTapeReadSession(
 		return nil, fmt.Errorf("restore Tape identity differs from selected Media, requested=%q device=%q", media.Identity, barcode)
 	}
 
+	// A failure before the mount script runs unloads the matching cartridge, as failed tar work does.
+	mounting := false
+	defer func() {
+		if result == nil && !mounting {
+			returnErr = errors.Join(returnErr, b.unloadAfterFailure(ctx, device, returnErr))
+		}
+	}()
+
 	// Validate the durable storage profile without depending on any runner's manifest schema.
 	capabilities, err := mediapkg.CapabilitiesForProfile(media.Profile)
 	if err != nil {
@@ -92,6 +101,7 @@ func (b *mediaBackend) newTapeReadSession(
 	if err != nil {
 		return nil, err
 	}
+	mounting = true
 	mountPoint, err := b.mountTape(ctx, device, tapeDir)
 	if err != nil {
 		return nil, err
@@ -214,6 +224,14 @@ func (b *mediaBackend) newTapeWriteSession(
 		return nil, fmt.Errorf("archive Tape changed, requested=%q device=%q", barcode, deviceBarcode)
 	}
 
+	// A failure before the mount script runs unloads the matching cartridge, as failed tar work does.
+	mounting := false
+	defer func() {
+		if result == nil && !mounting {
+			returnErr = errors.Join(returnErr, b.unloadAfterFailure(ctx, device, returnErr))
+		}
+	}()
+
 	// Create the FORMAT Media or restore the admitted APPEND Media's encryption key.
 	pendingMedia, keyPath, recycleKey, format, err := b.prepareTapeMedia(target, media, barcode)
 	if err != nil {
@@ -242,6 +260,7 @@ func (b *mediaBackend) newTapeWriteSession(
 			return nil, err
 		}
 	}
+	mounting = true
 	mountPoint, err := b.mountTape(ctx, device, tapeDir)
 	if err != nil {
 		return nil, err
@@ -387,6 +406,29 @@ func waitForTapeIndex(ctx context.Context, filename string) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// unloadAfterFailure ends failed work that holds no raw descriptor, as failed tar work ends: a briefly
+// opened raw descriptor unloads the cartridge. It serves an LTFS Session that failed after its identity
+// check but before its mount script ran, and tar work whose Encrypt script failed while it held the
+// drive. The scripts have exited (RunCmd waits for every holder of their output), and the raw open
+// requires a clean holder check, so no script or LTFS process can own the drive. An LTFS mount failure
+// instead runs the unmount adapter, because the script may have mounted LTFS. An uncertain outcome
+// issues no motion. Without raw access the cartridge stays loaded, as the adapters alone leave it.
+func (b *mediaBackend) unloadAfterFailure(ctx context.Context, device string, cause error) error {
+	if errors.Is(cause, tape.ErrUncertain) {
+		return nil
+	}
+	ctx = context.WithoutCancel(ctx)
+	prepared, err := b.executor.openRawTape(ctx, b.jobID, device)
+	if err != nil {
+		if errors.Is(err, tape.ErrUncertain) {
+			return err
+		}
+		b.logger.WithContext(ctx).WithError(err).Warnf("failure leaves the cartridge loaded; native unload is unavailable, device=%q", device)
+		return nil
+	}
+	return b.executor.releaseRawTape(ctx, b.jobID, device, prepared, true)
 }
 
 func (b *mediaBackend) configureTape(ctx context.Context, device, keyPath, barcode, name, tapeDir string) error {

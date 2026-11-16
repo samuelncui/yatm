@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
@@ -69,6 +70,8 @@ func inspectionFixture(command Command) (Response, error) {
 		}
 	case 0x4d:
 		data = []byte{0x0c, 0, 0, 16, 0, 4, 0x60, 4, 0, 0, 0, 100, 0, 5, 0x60, 4, 0, 0, 0, 200}
+	case 0x44:
+		data = densitySupportReply(0x5e, 0x5c, 0x5d, 0x5e)
 	default:
 		return Response{}, errors.New("unexpected query")
 	}
@@ -114,7 +117,7 @@ func TestInspectionUsesOnlyPassiveBoundedQueriesAndUnvalidatedFacts(t *testing.T
 		t.Fatalf("report=%v err=%v calls=%d", report, err, calls)
 	}
 	tape := report.GetTape()
-	if !tape.GetMediumPresent() || !tape.GetWriteProtected() || tape.GetPartitionCount() != 2 || !tape.GetCompressionEnabled() || !tape.GetDecompressionEnabled() {
+	if !tape.GetMediumPresent() || !tape.GetWriteProtected() || tape.GetPartitionCount() != 2 {
 		t.Fatalf("mode facts=%v", tape)
 	}
 	for _, f := range tape.Features {
@@ -184,5 +187,73 @@ func TestPassiveAllowlistRejectsMotionMutationAndKeys(t *testing.T) {
 	}
 	if passiveCommand(Command{}) {
 		t.Fatal("empty query accepted")
+	}
+}
+
+// densitySupportReply builds a REPORT DENSITY SUPPORT reply with one descriptor per primary code.
+func densitySupportReply(codes ...byte) []byte {
+	data := make([]byte, 4+52*len(codes))
+	binary.BigEndian.PutUint16(data[:2], uint16(len(data)-2))
+	for i, code := range codes {
+		descriptor := data[4+52*i:]
+		descriptor[0], descriptor[1], descriptor[4] = code, code, 0x31
+	}
+	return data
+}
+
+func TestInspectionReportsSupportedDensitiesOrLeavesThemUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		reply func(Command) (Response, error)
+		want  []uint32
+	}{
+		{"reported", inspectionFixture, []uint32{0x5c, 0x5d, 0x5e}},
+		{"unsupported", func(Command) (Response, error) {
+			return Response{Completed: true, Status: 2, Sense: fixedSense(0x70, 5, 0x20, 0, false, 0, 0)}, nil
+		}, nil},
+		{"truncated", func(command Command) (Response, error) {
+			data := densitySupportReply(0x58, 0x46)[:60]
+			copy(command.Data, data)
+			return Response{Completed: true, Residual: int32(len(command.Data) - len(data))}, nil
+		}, nil},
+		{"partial descriptor", func(command Command) (Response, error) {
+			data := densitySupportReply(0x58)
+			binary.BigEndian.PutUint16(data[:2], 40)
+			copy(command.Data, data)
+			return Response{Completed: true, Residual: int32(len(command.Data) - len(data))}, nil
+		}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// An unsupported or malformed density report never fails inspection or changes its reason.
+			transport := newSerializedTransport(func(command Command) (Response, error) {
+				if command.CDB[0] == 0x44 {
+					if command.CDB[1] != 0 || !passiveCommand(command) {
+						t.Fatalf("density query CDB=%x", command.CDB)
+					}
+					return tc.reply(command)
+				}
+				return inspectionFixture(command)
+			}, func() error { return nil })
+			defer transport.Close()
+			report, err := inspectTransport(context.Background(), Identity{Configured: "drive"}, transport)
+			if err != nil || report.Reason != entity.DeviceReason_DEVICE_REASON_UNSPECIFIED || !report.GetTape().GetMediumPresent() {
+				t.Fatalf("report=%v err=%v", report, err)
+			}
+			if !slices.Equal(report.GetTape().GetSupportedDensityCodes(), tc.want) {
+				t.Fatalf("supported densities=%v want=%v", report.GetTape().GetSupportedDensityCodes(), tc.want)
+			}
+		})
+	}
+}
+
+func TestLTFSUnsupportedNeedsKnownDensitiesBelowLTO5(t *testing.T) {
+	// Only a known list without LTO-5 (0x58) or a later code excludes LTFS.
+	for _, tc := range []struct {
+		codes []uint32
+		want  bool
+	}{{nil, false}, {[]uint32{0x44, 0x46}, true}, {[]uint32{0x46, 0x58}, false}, {[]uint32{0x5a, 0x5c}, false}, {[]uint32{0x60}, false}} {
+		if got := LTFSUnsupported(tc.codes); got != tc.want {
+			t.Fatalf("LTFSUnsupported(%#x)=%t want %t", tc.codes, got, tc.want)
+		}
 	}
 }

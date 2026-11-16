@@ -10,13 +10,12 @@ service CalibrationJobService {
     rpc GetProgress(GetCalibrationJobProgressRequest) returns (GetCalibrationJobProgressResponse) {}
 }
 
-// CalibrationJobSpec names the configured Tape device and what to calibrate on. Exactly one of
-// media_id and write_test_data is given.
+// CalibrationJobSpec names the configured Tape device. The Job calibrates on what the loaded
+// cartridge holds, or on test data it writes first.
 message CalibrationJobSpec {
     string device = 1;
-    // The tar Tape Media expected in the drive.
-    optional int64 media_id = 2;
-    // Overwrites the loaded cartridge from the beginning of tape with test data and calibrates on it.
+    // Overwrites the loaded cartridge from the beginning of tape with test data and calibrates on
+    // it. A cartridge registered as Media is refused.
     bool write_test_data = 3;
 }
 

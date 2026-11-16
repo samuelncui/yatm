@@ -243,7 +243,7 @@ func TestTarWritePositionWidthAndPreparedStop(t *testing.T) {
 	require.Zero(t, device.marks)
 }
 
-func TestTarWritePositionsPublishOnlySettledWarning(t *testing.T) {
+func TestTarWritePositionsPublishSettledStop(t *testing.T) {
 	for _, zero := range []bool{false, true} {
 		for _, warning := range []bool{false, true} {
 			t.Run(map[bool]string{false: "accepted", true: "unissued"}[zero]+map[bool]string{false: " cancel", true: " EW"}[warning], func(t *testing.T) {
@@ -270,16 +270,8 @@ func TestTarWritePositionsPublishOnlySettledWarning(t *testing.T) {
 				_, cause := ref.Content.Open(context.Background(), acp.ContentMetadata{Info: tarWritePositionInfo{tarTestInfo{name: "later", size: 1024}}})
 				require.Error(t, cause)
 
-				// Only capacity settlement may validate accepted members and query its final position.
+				// Both settlements validate the accepted members and query the final position.
 				result, err := session.Finalize(context.Background(), cause)
-				if !warning {
-					require.Nil(t, result)
-					require.ErrorIs(t, err, ErrFinalizeUnusable)
-					require.ErrorIs(t, err, context.Canceled)
-					require.Zero(t, device.marks)
-					require.Equal(t, 1, device.queries)
-					return
-				}
 				require.NoError(t, err)
 				files := tarTestCompleted(t, session, result)
 				require.Len(t, files, 1)
@@ -686,7 +678,7 @@ func TestTarWriteEmptyFinalizeRetainsObservedWarning(t *testing.T) {
 	}
 }
 
-func TestTarWriteFinalizeRejectsCancellationWithBufferedSuffix(t *testing.T) {
+func TestTarWriteFinalizeCancellationKeepsOnlyAcceptedMembers(t *testing.T) {
 	for _, cancellation := range []error{context.Canceled, context.DeadlineExceeded} {
 		for _, acceptedPrefix := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/accepted-prefix=%t", cancellation, acceptedPrefix), func(t *testing.T) {
@@ -702,15 +694,18 @@ func TestTarWriteFinalizeRejectsCancellationWithBufferedSuffix(t *testing.T) {
 				writeTarPositionMember(t, session, "buffered", 1)
 				writes := device.writes
 
-				// Neither a complete earlier record nor a buffered member can survive aborted finalization.
+				// Only the member covered by an accepted record survives; the buffered one is never written.
 				cause := fmt.Errorf("caller stopped: %w", cancellation)
 				result, err := session.Finalize(context.Background(), cause)
-				require.Nil(t, result)
-				require.ErrorIs(t, err, ErrFinalizeUnusable)
-				require.ErrorIs(t, err, cancellation)
+				require.NoError(t, err)
+				completed := tarTestCompleted(t, session, result)
+				require.Len(t, completed, map[bool]int{true: 1}[acceptedPrefix])
+				if acceptedPrefix {
+					require.Equal(t, result.PathPrefix+"/first", completed[0].Path)
+				}
 				require.Equal(t, writes, device.writes)
-				require.Zero(t, device.marks)
-				require.Equal(t, 1, device.queries)
+				require.Equal(t, 1, device.marks)
+				require.Equal(t, 2, device.queries, "the start and the completed position are both checked")
 			})
 		}
 	}

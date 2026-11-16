@@ -77,8 +77,8 @@ func TestNavigationSelectsReportedPairBeforeMotion(t *testing.T) {
 				t.Fatal("32-bit overflow was issued or narrowed")
 			}
 		}
-		for _, partition := range []uint32{1, 256, math.MaxUint32} {
-			if err := navigator.Locate(context.Background(), partition, 1); !errors.Is(err, ErrUnsupported) || calls != before {
+		for _, partition := range []uint32{256, math.MaxUint32} {
+			if err := navigator.Locate(context.Background(), partition, 1); err == nil || calls != before {
 				t.Fatalf("partition=%d err=%v calls=%d", partition, err, calls)
 			}
 		}
@@ -87,6 +87,15 @@ func TestNavigationSelectsReportedPairBeforeMotion(t *testing.T) {
 		}
 		if short && binary.BigEndian.Uint32(located[3:7]) != math.MaxUint32 || !short && binary.BigEndian.Uint64(located[4:12]) != math.MaxUint64 {
 			t.Fatalf("address narrowed: %x", located)
+		}
+
+		// Another partition is addressed through the same form's partition field with CP set.
+		field := 3
+		if opcode == 0x2b {
+			field = 8
+		}
+		if err := navigator.Locate(context.Background(), 1, 1); err != nil || motions != 2 || located[1] != 2 || located[field] != 1 {
+			t.Fatalf("partition locate=%x err=%v motions=%d", located, err, motions)
 		}
 	}
 }

@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -57,7 +56,7 @@ func (t *stoppedTarTransport) Close() error {
 	return nil
 }
 
-func TestSuccessfulEmptyTarFormatRegistersMedia(t *testing.T) {
+func TestEmptyTarFormatRegistersNoMedia(t *testing.T) {
 	for _, tc := range []struct {
 		name                     string
 		finalWarning, budgetStop bool
@@ -134,42 +133,26 @@ func TestSuccessfulEmptyTarFormatRegistersMedia(t *testing.T) {
 				require.ErrorIs(t, attemptErr, tape.ErrEarlyWarning)
 			}
 
-			// The initialized Media and its searchable Job property survive without any Position or copied item.
+			// As for LTFS, a FORMAT that publishes no file registers no Media, Job property or report.
 			media, err := exe.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, descriptor.Identity)
 			require.NoError(t, err)
-			require.Positive(t, media.ID)
-			positions, err := exe.Lib().ListMediaFilePositions(ctx, media.ID, "", 100)
-			require.NoError(t, err)
-			require.Empty(t, positions)
-			jobs, err := exe.ListJob(ctx, &entity.JobFilter{MediaId: proto.Int64(media.ID)})
-			require.NoError(t, err)
-			require.Len(t, jobs.Jobs, 1)
-			require.Equal(t, job.ID, jobs.Jobs[0].ID)
+			require.Nil(t, media)
 			var item Item
 			require.NoError(t, runner.db.First(&item).Error)
 			require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 			require.Empty(t, item.MediaPath)
 			require.Nil(t, item.Result)
+			require.NoFileExists(t, filepath.Join(directory, "yatm-report.json"))
 
-			// The zero-file report and READY checkpoint retain the stop cause without advancing content progress.
-			data, err := os.ReadFile(filepath.Join(directory, "yatm-report.json"))
-			require.NoError(t, err)
-			var report mediaArchiveReport
-			require.NoError(t, json.Unmarshal(data, &report))
-			require.Equal(t, media.ID, report.MediaID)
-			require.Zero(t, report.FileCount)
-			require.Zero(t, report.Bytes)
-			require.Contains(t, report.TerminationError, mediapkg.ErrTargetNoSpace.Error())
+			// The READY checkpoint retains the stop cause without advancing content progress.
 			state, err := exe.GetJob(ctx, job.ID)
 			require.NoError(t, err)
 			require.Equal(t, entity.JobStatus_JOB_STATUS_READY, state.Status)
 			require.Equal(t, entity.JobStatus_JOB_STATUS_READY, state.Checkpoint)
 			require.Contains(t, state.Error, mediapkg.ErrTargetNoSpace.Error())
 			if tc.budgetStop {
-				require.Contains(t, report.TerminationError, "capacity admission stopped")
 				require.Contains(t, state.Error, "capacity admission stopped")
 			} else {
-				require.Contains(t, report.TerminationError, tape.ErrEarlyWarning.Error())
 				require.Contains(t, state.Error, tape.ErrEarlyWarning.Error())
 			}
 			after := runner.progressSnapshot()
@@ -180,7 +163,7 @@ func TestSuccessfulEmptyTarFormatRegistersMedia(t *testing.T) {
 			require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, after.GetStage().GetPhase())
 			if tc.finalWarning || tc.budgetStop {
 				require.EqualValues(t, 2, transport.commands.Load(), "one final WRITE and one completing filemark")
-				require.NotContains(t, report.TerminationError, "missing staged files")
+				require.NotContains(t, state.Error, "missing staged files")
 			} else {
 				require.Zero(t, transport.commands.Load())
 			}

@@ -82,11 +82,11 @@ func TestLTFSReadOrderCurrentAssumesDataPartitionStart(t *testing.T) {
 	require.Nil(t, current.Position)
 }
 
-func TestLTFSReadOrderOriginIsNeverBuffered(t *testing.T) {
-	// With a 50-block buffer, block 10 streams after a completed read but needs a locate after mount.
+func TestLTFSReadOrderOriginIsNeverStreamed(t *testing.T) {
+	// With a 50-block streaming distance, block 10 streams after a completed read but needs a locate after mount.
 	provider := ltfsOrderFixture(t)
 	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-test", SnapshotValid: func() bool { return true },
-		BOT: map[uint32]uint64{1: 0}, ReadObjectSeconds: 1, BufferObjects: 50,
+		BOT: map[uint32]uint64{1: 0}, ReadObjectSeconds: 1, StreamingObjects: 50,
 		Coefficients: ReadModelCoefficients{Base: 5, Seek: 1000},
 		Wraps: []ReadModelWrap{
 			{Partition: 1, Wrap: 4, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},

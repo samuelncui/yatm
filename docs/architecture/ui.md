@@ -85,8 +85,10 @@ Settings Get/Update group and shared committed cache/editor. Configured devices 
 entries remain distinct; inactive Device settings grant no access. FORMAT defaults are resolved for the
 selected drive in an existing Archive Job's **Choose archive storage** dialog after selecting
 **Storage type → Tape**, following manifest preparation. The absent
-format means LTFS, so the Device editor's format select offers only LTFS and Tar and shows an unset
-value as LTFS; its Record mode select likewise offers only Fixed and Variable and shows unset as
+format means Tar, so the Device editor's format select offers only LTFS and Tar and shows an unset
+value as Tar. When the displayed device details report supported densities without LTO-5 or later,
+that select and the FORMAT dialog's format choice offer only Tar with one line saying why, and a saved
+LTFS default stays visible as unsupported with a warning; unknown densities keep both formats. Its Record mode select likewise offers only Fixed and Variable and shows unset as
 Variable, while the FORMAT dialog keeps its distinct inherit-the-device-default entry; explicit operation edits override saved defaults and remain when the drive changes.
 APPEND and reads use the cartridge's immutable stored profile. **Read order** is an ordinary field beside FORMAT defaults and edits the selected device's
 LOGICAL/AUTO preference; unspecified resolves to LOGICAL and remains unspecified
@@ -103,26 +105,30 @@ actual admission checks current device/driver bounds without clamping. The
 The separate collapsed **Read parameters** section lists the device's sets in a compact table, one
 row per density code: the code with its LTO generation name from a local table of the standard
 codes, the optional drive serial, the source reference, fixed positioning time, seek time for one
-span and read rate, with **Edit** and **Reset to built-in**; **Add read parameters** and
+span and read rate, with **Edit** and **Reset to built-in**. When the displayed device details
+report the loaded cartridge's density, or otherwise the densities the drive supports, each such
+density with built-in values and no configured set adds a read-only row from the server's
+built-in sets, with source **Built-in** and one **Edit** action that opens the Add form prefilled
+with those values for that density. Without device details there are no built-in rows.
+**Add read parameters** and
 **Calibrate…** follow. Edit and Add open a form copied from the page draft, with one labelled field
 per stored value, its unit and one line of helper text. The density code is a select of the named
 codes plus another code, refuses a code another set of the device uses, and is fixed when editing.
-Rates and the read-ahead buffer are entered in decimal MB/s and MB and stored in bytes. Field
+Rates and the streaming distance are entered in decimal MB/s and MB and stored in bytes. Field
 errors mirror the server's validation and show inline. Apply rebuilds the set from the original
 message, replacing only fields whose text changed, and updates only that draft; the page Save
 persists it. Cancel leaves the page unchanged, using the existing discard confirmation for edits.
-A new set starts empty: the page has no source for built-in values. Starting from device details
+Choosing a new set's density code fills the fields the operator has not edited with the built-in
+values for that code, or leaves them empty when there are none; its source reference stays empty
+rather than claiming the built-in source. Starting from device details
 uses only the displayed report and performs no new query; it fills only the drive serial and, for
-a new set, the density code, and clears the other values instead of relabeling previous timings. Reset to built-in removes the set from the draft, so that density code uses the built-in
-values only after Save. A partial set retains priority for its density code and may leave
+a new set, the density code, and clears the other values instead of relabeling previous timings. Reset to built-in removes the set from the draft, which lists the built-in row again when that
+density is shown, so that density code uses the built-in values only after Save. A partial set retains priority for its density code and may leave
 insufficient costs for AUTO; absence stays unknown rather than zero.
 
 **Calibrate…** in that section's action row opens the [Calibration](jobs.md#calibration) form for a
 device in service; it is disabled for an inactive entry. Opening it inspects the loaded cartridge
-passively, as the Media read dialog does, and **Check Tape** repeats that. **Calibrate on** is an
-explicit choice with no default. **Tar Media in the drive** uses the cartridge's registered Media
-and refuses one that is not tar; an unidentified or unregistered cartridge instead offers the Media
-search restricted to Tape, which accepts only tar Media. **Write test data** shows FORMAT's warning
+passively, as the Media read dialog does, and **Check Tape** repeats that. The form has one option, **Write test data**, off by default. Without it the Job calibrates on whatever the cartridge holds and the form blocks nothing. **Write test data** shows FORMAT's warning
 style and is blocked for a registered barcode. Like FORMAT, an unregistered barcode must be typed;
 a cartridge without a readable barcode, including a failed or empty inspection, instead requires the
 **Overwrite the cartridge in** *device* checkbox. Successful creation navigates to the Job's detail; failures stay in the dialog, and its
@@ -142,12 +148,10 @@ normal Save/Cancel actions. Devices places Save, Cancel and **Refresh devices** 
 the fields. Refresh devices reloads availability only and retains the settings draft; refreshing
 saved Settings through the editor is a separate action that replaces the page draft after a
 successful read, without a discard prompt. A failed reload retains the draft and reports the error.
-Read-only Device details are collapsed after the editable sections. Raw tar hardware compression offers On/Off with leased validation.
+Read-only Device details are collapsed after the editable sections. Tar offers no compression control.
 Encryption setup belongs to the configured adapter for both tar and LTFS; there are no native
 key, encryption-On or algorithm-choice controls.
-Settings retains unavailable saved Device settings for explicit correction. Compression diagnostics show the current numeric
-algorithm and optional control changeability without inferring an algorithm list or physical
-validation. Encryption diagnostics expose public algorithm/index/key-size and optional non-secret
+Settings retains unavailable saved Device settings for explicit correction. Encryption diagnostics expose public algorithm/index/key-size and optional non-secret
 mode/scope/counter facts; a counter is never labeled key presence. No key input or download surface
 is added. An optional observed algorithm does not establish whether a key is present or the
 cartridge is plaintext. Every stored Tape shows one **Encryption** value in Media details, the
@@ -228,9 +232,9 @@ Job cards offer no Job-level retry or restart, and offer a Media choice only for
 Tape Archive uses format-aware preflight. **Check Tape** for raw tar inspects the configured device
 passively with the chosen barcode and action as its [write target](api.md#device-discovery), and
 displays the exact Library registration. The server's answer decides whether the write can start
-and supplies the inherited record and compression values; the form shows its `write_detail` and
+and supplies the inherited record values; the form shows its `write_detail` and
 overlays only the operator's explicit choices. FORMAT also requires explicit barcode confirmation
-and a resolved compression choice before destructive submission. Resetting a choice to inherit
+before destructive submission. Resetting a choice to inherit
 reuses that answer; it does not perform another inspection. Changing FORMAT/APPEND for a checked
 barcode requests the answer for the new action, retaining the selected device and barcode.
 Tar uses the encryption adapter without the LTFS formatting/mounting/readinfo workflow.
@@ -309,7 +313,9 @@ drives with busy reasons, disables busy operation choices and selects a drive au
 when exactly one available entry remains. Pending or failed device discovery is distinct from a
 confirmed empty list. **Refresh devices** refreshes list facts; **Device details** and **Refresh
 device details** explicitly request passive diagnostics, including for a busy entry. Reports keep
-unknown facts visible and separate support, availability, validation and evidence. These actions
+unknown facts visible and separate support, availability, validation and evidence. Supported
+densities show each code with its LTO generation name from the same local table as read
+parameters, or Unknown. These actions
 do not replace cartridge inspection or authorize an operation. In Restore/Scan, changing Tape Media
 preserves a pending device-list refresh, which clears its loading state when it settles. Selection
 changes invalidate earlier cartridge inspection and device diagnostics; closing or reopening a

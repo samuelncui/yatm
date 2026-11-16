@@ -1,4 +1,5 @@
 import { TapeReadParameters, type InspectDeviceResponse } from "@/entity";
+import { densityLabel } from "@/components/tape-density";
 
 const maxDurationSeconds = 9223372036.854776;
 
@@ -30,8 +31,8 @@ export const validateTapeReadParameters = (value: TapeReadParameters): string =>
     if (!Number.isFinite(number) || Math.abs(number) >= maxDurationSeconds) return `Read parameters ${name} must be finite and representable as a duration.`;
     if (number < 0) return `Read parameters ${name} must be nonnegative.`;
   }
-  if (positioning?.bufferBytes !== undefined && (positioning.bufferBytes < 0n || positioning.bufferBytes > 0xffffffffffffffffn))
-    return "Read parameters buffer bytes must be a uint64 value.";
+  if (positioning?.streamingBytes !== undefined && (positioning.streamingBytes < 0n || positioning.streamingBytes > 0xffffffffffffffffn))
+    return "Read parameters streaming bytes must be a uint64 value.";
   if (reading?.bytesPerSecond !== undefined && (!Number.isFinite(reading.bytesPerSecond) || reading.bytesPerSecond <= 0))
     return "Read parameters bytes per second must be finite and positive.";
   return "";
@@ -58,27 +59,6 @@ export const captureTapeReadConditions = (report: InspectDeviceResponse): TapeRe
       densityCode: tape?.densityCode,
     },
   });
-};
-
-/** The standard LTO density codes the page can name; any other code shows as the code alone. */
-export const tapeDensityNames: ReadonlyMap<number, string> = new Map([
-  [0x40, "LTO-1"],
-  [0x42, "LTO-2"],
-  [0x44, "LTO-3"],
-  [0x46, "LTO-4"],
-  [0x58, "LTO-5"],
-  [0x5a, "LTO-6"],
-  [0x5c, "LTO-7"],
-  [0x5d, "LTO-M8"],
-  [0x5e, "LTO-8"],
-  [0x60, "LTO-9"],
-]);
-
-export const densityLabel = (code?: number): string => {
-  if (code === undefined) return "Unknown density";
-  const hex = `0x${code.toString(16).toUpperCase().padStart(2, "0")}`;
-  const name = tapeDensityNames.get(code);
-  return name ? `${hex} ${name}` : hex;
 };
 
 /** Parses a density code typed as decimal or 0x-prefixed hexadecimal; NaN when it is not one. */
@@ -132,11 +112,11 @@ export const readParameterGroups: { title: string; fields: ReadParameterField[] 
         helper: "Also added once for each wrap turn crossed while reading.",
       },
       {
-        key: "bufferBytes",
+        key: "streamingBytes",
         section: "positioning",
-        field: "bufferBytes",
+        field: "streamingBytes",
         kind: "megabytes",
-        label: "Read-ahead buffer (MB)",
+        label: "Streaming distance (MB)",
         helper: "How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies.",
       },
     ],

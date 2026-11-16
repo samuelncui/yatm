@@ -33,6 +33,25 @@ func TestBuiltinTarReadParametersUseLoadedMediaDensity(t *testing.T) {
 	}
 }
 
+func TestBuiltinTapeReadParametersListPlanningValuesForEveryLayout(t *testing.T) {
+	// The listed sets are exactly what read planning selects for a cartridge of each density without a configured set.
+	_, report, _ := tarReadParametersFixture()
+	listed := BuiltinTapeReadParameters()
+	require.Len(t, listed, len(tarDensities))
+	previous := -1
+	for _, parameters := range listed {
+		density := parameters.GetAppliesTo().GetDensityCode()
+		require.Greater(t, int(density), previous, "ordered by density code")
+		previous = int(density)
+		require.Nil(t, parameters.GetAppliesTo().DriveSerial)
+		require.Equal(t, tarBuiltinSourceReference, parameters.SourceReference)
+		report.GetTape().DensityCode = proto.Uint32(density)
+		planned, source, _ := selectTapeReadParameters(&entity.DeviceSettings{}, "/dev/nst0", report)
+		require.Equal(t, "builtin", source)
+		require.True(t, proto.Equal(planned, parameters), "density 0x%x", density)
+	}
+}
+
 func TestBuiltinTarReadParametersPreserveUnknownFactsAndInputs(t *testing.T) {
 	// A known media density still permits a generic empirical prior when the vendor/model is unknown.
 	_, report, _ := tarReadParametersFixture()
@@ -54,14 +73,13 @@ func TestBuiltinTarReadParametersPreserveUnknownFactsAndInputs(t *testing.T) {
 	require.Equal(t, tarBuiltinSourceReference, parameters.SourceReference)
 }
 
-func TestTarReadModelRequiresUncompressedKnownRecords(t *testing.T) {
-	// The written Media profile, not current DCE observations, withholds linear interpolation.
+func TestTarReadModelRequiresKnownRecords(t *testing.T) {
+	// The written Media profile withholds linear interpolation when its record policy is unknown.
 	_, report, profile := tarReadParametersFixture()
 	report.GetTape().DensityCode = proto.Uint32(0x58)
 	parameters := builtinTapeReadParameters(report)
 	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Wrap: 0, Object: 99}, {Wrap: 1, Object: 189}, {Wrap: 2, Object: 240}})
 	for name, change := range map[string]func(*entity.TarMediaProfile){
-		"compressed":          func(p *entity.TarMediaProfile) { p.HardwareCompression = true },
 		"unknown record mode": func(p *entity.TarMediaProfile) { p.RecordMode = entity.TapeRecordMode_TAPE_RECORD_MODE_UNSPECIFIED },
 		"unknown record size": func(p *entity.TarMediaProfile) { p.RecordBytes = 0 },
 	} {
@@ -69,7 +87,7 @@ func TestTarReadModelRequiresUncompressedKnownRecords(t *testing.T) {
 		change(changed)
 		model, reason := tarTestReadModel(parameters, changed, geometry)
 		require.Nil(t, model, name)
-		require.Contains(t, reason, "Uncompressed written conditions", name)
+		require.Contains(t, reason, "known written record size", name)
 	}
 	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
@@ -85,7 +103,7 @@ func TestBuiltinTarReadParametersCompileUsefulObservedPositioning(t *testing.T) 
 	})
 	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
-	// A move behind the head is never a read-ahead buffer hit.
+	// A move behind the head is never within the streaming distance.
 	score, known := model.AccessScore(&entity.TapeBytePosition{LogicalObject: 170}, &entity.TapeBytePosition{LogicalObject: 1})
 	require.True(t, known)
 	require.Positive(t, score)

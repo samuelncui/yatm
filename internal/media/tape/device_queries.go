@@ -27,7 +27,6 @@ func (d *Device) readMode(ctx context.Context, changeable bool) ([]byte, map[byt
 			return nil, nil, ErrMalformed
 		}
 		observeMode(data, pages, d.report.GetTape())
-		d.refreshCompressionAlgorithms(pages)
 	}
 	return data, pages, err
 }

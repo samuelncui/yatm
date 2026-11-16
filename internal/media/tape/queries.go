@@ -37,6 +37,10 @@ func passiveCommand(command Command) bool {
 			(cdb[1] == 0 && cdb[2] == 0 || cdb[1] == 1 && (cdb[2] == 0x80 || cdb[2] == 0x83))
 	case 5:
 		return len(cdb) == 6 && cdb[1] == 0 && cdb[2] == 0 && cdb[3] == 0 && cdb[4] == 0 && cdb[5] == 0 && len(command.Data) == 6
+	case 0x44:
+		// REPORT DENSITY SUPPORT for the drive (MEDIA and MEDIUM TYPE clear).
+		return len(cdb) == 10 && cdb[1] == 0 && cdb[2] == 0 && cdb[3] == 0 && cdb[4] == 0 && cdb[5] == 0 && cdb[6] == 0 &&
+			int(binary.BigEndian.Uint16(cdb[7:9])) == len(command.Data) && cdb[9] == 0
 	case 0x5a:
 		return len(cdb) == 10 && cdb[1] == 0 && (cdb[2] == 0x3f || cdb[2] == 0x7f) && cdb[3] == 0 &&
 			cdb[4] == 0 && cdb[5] == 0 && cdb[6] == 0 && int(binary.BigEndian.Uint16(cdb[7:9])) == len(command.Data) && cdb[9] == 0

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -80,7 +81,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	defer func() {
 		for _, f := range report.GetTape().Features {
 			f.Scope = &entity.DeviceFeatureScope{Model: report.Model, Firmware: report.Firmware, Transport: report.Transport, DensityCode: report.GetTape().DensityCode}
-			mediumDependent := f.Feature <= entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_EARLY_WARNING || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER
+			mediumDependent := f.Feature <= entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_EARLY_WARNING || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER
 			if report.GetTape().MediumPresent != nil && !report.GetTape().GetMediumPresent() && mediumDependent {
 				f.Availability, f.Reason = entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNAVAILABLE, entity.DeviceReason_DEVICE_REASON_NO_MEDIUM
 				f.Detail = "No cartridge is loaded; operation prerequisites remain unqualified"
@@ -142,6 +143,16 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		return report, err
 	}
 
+	// Supported densities are a drive fact; an unsupported or malformed report leaves them unknown.
+	data, err = query(ctx, transport, []byte{0x44, 0, 0, 0, 0, 0, 0, MaxQueryBytes >> 8, MaxQueryBytes & 0xff, 0}, MaxQueryBytes)
+	if err == nil {
+		report.GetTape().SupportedDensityCodes, _ = decodeDensitySupport(data)
+	}
+	if errors.Is(err, ErrUncertain) || ctx.Err() != nil {
+		observe(err)
+		return report, err
+	}
+
 	// Readiness does not prove writable media, a tar format, or physical operation qualification.
 	_, err = query(ctx, transport, []byte{0, 0, 0, 0, 0, 0}, 0)
 	if err == nil {
@@ -161,26 +172,11 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	}
 	data, err = query(ctx, transport, []byte{0x5a, 0, 0x3f, 0, 0, 0, 0, 0x10, 0, 0}, MaxQueryBytes)
 	var modePartition *uint32
-	var currentPages map[byte][]byte
 	if err == nil {
-		modePartition, currentPages, err = decodeMode(data, report.GetTape())
+		modePartition, err = decodeMode(data, report.GetTape())
 	}
 	if !observe(err) {
 		return report, err
-	}
-
-	// Optional writable-mask discovery retains current controls while clean query failures remain feature-local.
-	if len(currentPages[0x0f]) >= 16 {
-		_, changes, changeErr := d.readMode(ctx, true)
-		changeErr = errors.Join(changeErr, ctx.Err())
-		d.reportCompression(currentPages, changes, changeErr)
-		if errors.Is(changeErr, ErrUncertain) || ctx.Err() != nil || Reason(changeErr) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(changeErr) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(changeErr) {
-				return report, changeErr
-			}
-		}
-	} else {
-		d.reportCompression(currentPages, nil, nil)
 	}
 
 	// A non-secret encryption status query reports current hardware mode without changing keys.
@@ -315,6 +311,34 @@ func decodeInquiry(data []byte, report *entity.InspectDeviceResponse) error {
 	return nil
 }
 
+// ltfsMinimumDensity is the LTO-5 density code. LTFS needs the partitions LTO-5 introduced, and
+// every later LTO generation reports a higher code.
+const ltfsMinimumDensity = 0x58
+
+// LTFSUnsupported reports whether a drive's known supported densities exclude LTFS: none is LTO-5
+// or later. An empty, unknown list does not exclude it.
+func LTFSUnsupported(supported []uint32) bool {
+	return len(supported) > 0 && slices.Max(supported) < ltfsMinimumDensity
+}
+
+// decodeDensitySupport returns the ascending, deduplicated primary density codes of an SSC REPORT
+// DENSITY SUPPORT reply: a 4-byte header and 52-byte density support data block descriptors.
+func decodeDensitySupport(data []byte) ([]uint32, error) {
+	if len(data) < 4 {
+		return nil, ErrMalformed
+	}
+	length := int(binary.BigEndian.Uint16(data[:2])) + 2
+	if length < 4 || length > len(data) || (length-4)%52 != 0 {
+		return nil, ErrMalformed
+	}
+	var codes []uint32
+	for offset := 4; offset < length; offset += 52 {
+		codes = append(codes, uint32(data[offset]))
+	}
+	slices.Sort(codes)
+	return slices.Compact(codes), nil
+}
+
 func decodeBlockLimits(data []byte, report *entity.InspectDeviceResponse, transport Transport) error {
 	// SSC-3 §7.4 uses a zero maximum to mean unspecified, not a zero-size transfer envelope.
 	if len(data) != 6 || data[0]&0xe0 != 0 {
@@ -386,15 +410,15 @@ func modeData(data []byte) ([]byte, map[byte][]byte, error) {
 	return data, pages, nil
 }
 
-func decodeMode(data []byte, report *entity.TapeDeviceReport) (*uint32, map[byte][]byte, error) {
+func decodeMode(data []byte, report *entity.TapeDeviceReport) (*uint32, error) {
 	data, pages, err := modeData(data)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if page, ok := pages[0x11]; ok && page[3] > page[2] {
-		return nil, nil, ErrMalformed
+		return nil, ErrMalformed
 	}
-	return observeMode(data, pages, report), pages, nil
+	return observeMode(data, pages, report), nil
 }
 
 func observeMode(data []byte, pages map[byte][]byte, report *entity.TapeDeviceReport) *uint32 {
@@ -419,6 +443,5 @@ func observeMode(data []byte, pages map[byte][]byte, report *entity.TapeDeviceRe
 		block := uint32(data[13])<<16 | uint32(data[14])<<8 | uint32(data[15])
 		report.RecordBytes, report.FixedRecords = proto.Uint32(block), proto.Bool(block != 0)
 	}
-	report.CompressionEnabled, report.DecompressionEnabled = compressionState(pages)
 	return partition
 }

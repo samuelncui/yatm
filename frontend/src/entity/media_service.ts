@@ -429,7 +429,7 @@ export interface InspectDeviceResponse {
      */
     preparedRead?: TapePreparedRead;
     /**
-     * Present only with write_target: the tar options it would use; absent compression is unresolved.
+     * Present only with write_target: the tar options it would use.
      *
      * @generated from protobuf field: optional yatm.v1.TarWriteOptions resolved_tar_options = 19
      */
@@ -571,12 +571,6 @@ export interface DeviceFeature {
          */
         capacity: TapeCapacityLimits;
     } | {
-        oneofKind: "compression";
-        /**
-         * @generated from protobuf field: yatm.v1.TapeCompressionLimits compression = 20
-         */
-        compression: TapeCompressionLimits;
-    } | {
         oneofKind: "encryption";
         /**
          * @generated from protobuf field: yatm.v1.TapeEncryptionLimits encryption = 21
@@ -633,22 +627,6 @@ export interface TapeNavigationLimits {
      * @generated from protobuf field: optional uint32 address_bits = 3
      */
     addressBits?: number;
-}
-/**
- * Current hardware algorithm observation and changeability of DCE or DDE, respectively.
- * An algorithm identifier is not a supported-algorithm list or physical qualification.
- *
- * @generated from protobuf message yatm.v1.TapeCompressionLimits
- */
-export interface TapeCompressionLimits {
-    /**
-     * @generated from protobuf field: optional uint32 current_algorithm = 1
-     */
-    currentAlgorithm?: number;
-    /**
-     * @generated from protobuf field: optional bool enable_changeable = 2
-     */
-    enableChangeable?: boolean;
 }
 /**
  * Public algorithm identity and the current reader's device-local binding, never key material.
@@ -787,14 +765,6 @@ export interface TapeDeviceReport {
      */
     bufferedWrites?: boolean;
     /**
-     * @generated from protobuf field: optional bool compression_enabled = 8
-     */
-    compressionEnabled?: boolean;
-    /**
-     * @generated from protobuf field: optional bool decompression_enabled = 9
-     */
-    decompressionEnabled?: boolean;
-    /**
      * Current write encryption state; absent means it was not established.
      *
      * @generated from protobuf field: optional bool encryption_enabled = 10
@@ -804,6 +774,13 @@ export interface TapeDeviceReport {
      * @generated from protobuf field: repeated yatm.v1.DeviceFeature features = 17
      */
     features: DeviceFeature[];
+    /**
+     * Primary density codes the drive reports supporting (REPORT DENSITY SUPPORT, MEDIA 0),
+     * deduplicated and ascending; empty means unknown.
+     *
+     * @generated from protobuf field: repeated uint32 supported_density_codes = 20
+     */
+    supportedDensityCodes: number[];
 }
 /**
  * Volume candidate states select the applicable mounted-Volume operation.
@@ -889,14 +866,6 @@ export enum DeviceFeatureKind {
      * @generated from protobuf enum value: DEVICE_FEATURE_KIND_EARLY_WARNING = 8;
      */
     EARLY_WARNING = 8,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION = 9;
-     */
-    HARDWARE_COMPRESSION = 9,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION = 10;
-     */
-    HARDWARE_DECOMPRESSION = 10,
     /**
      * @generated from protobuf enum value: DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION = 11;
      */
@@ -2657,7 +2626,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
             { no: 17, name: "records", kind: "message", oneof: "limits", T: () => TapeRecordLimits },
             { no: 18, name: "navigation", kind: "message", oneof: "limits", T: () => TapeNavigationLimits },
             { no: 19, name: "capacity", kind: "message", oneof: "limits", T: () => TapeCapacityLimits },
-            { no: 20, name: "compression", kind: "message", oneof: "limits", T: () => TapeCompressionLimits },
             { no: 21, name: "encryption", kind: "message", oneof: "limits", T: () => TapeEncryptionLimits },
             { no: 22, name: "geometry", kind: "message", oneof: "limits", T: () => TapeGeometryLimits }
         ]);
@@ -2719,12 +2687,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
                         capacity: TapeCapacityLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).capacity)
                     };
                     break;
-                case /* yatm.v1.TapeCompressionLimits compression */ 20:
-                    message.limits = {
-                        oneofKind: "compression",
-                        compression: TapeCompressionLimits.internalBinaryRead(reader, reader.uint32(), options, (message.limits as any).compression)
-                    };
-                    break;
                 case /* yatm.v1.TapeEncryptionLimits encryption */ 21:
                     message.limits = {
                         oneofKind: "encryption",
@@ -2779,9 +2741,6 @@ class DeviceFeature$Type extends MessageType<DeviceFeature> {
         /* yatm.v1.TapeCapacityLimits capacity = 19; */
         if (message.limits.oneofKind === "capacity")
             TapeCapacityLimits.internalBinaryWrite(message.limits.capacity, writer.tag(19, WireType.LengthDelimited).fork(), options).join();
-        /* yatm.v1.TapeCompressionLimits compression = 20; */
-        if (message.limits.oneofKind === "compression")
-            TapeCompressionLimits.internalBinaryWrite(message.limits.compression, writer.tag(20, WireType.LengthDelimited).fork(), options).join();
         /* yatm.v1.TapeEncryptionLimits encryption = 21; */
         if (message.limits.oneofKind === "encryption")
             TapeEncryptionLimits.internalBinaryWrite(message.limits.encryption, writer.tag(21, WireType.LengthDelimited).fork(), options).join();
@@ -2932,59 +2891,6 @@ class TapeNavigationLimits$Type extends MessageType<TapeNavigationLimits> {
  * @generated MessageType for protobuf message yatm.v1.TapeNavigationLimits
  */
 export const TapeNavigationLimits = new TapeNavigationLimits$Type();
-// @generated message type with reflection information, may provide speed optimized methods
-class TapeCompressionLimits$Type extends MessageType<TapeCompressionLimits> {
-    constructor() {
-        super("yatm.v1.TapeCompressionLimits", [
-            { no: 1, name: "current_algorithm", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
-            { no: 2, name: "enable_changeable", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
-        ]);
-    }
-    create(value?: PartialMessage<TapeCompressionLimits>): TapeCompressionLimits {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        if (value !== undefined)
-            reflectionMergePartial<TapeCompressionLimits>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TapeCompressionLimits): TapeCompressionLimits {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* optional uint32 current_algorithm */ 1:
-                    message.currentAlgorithm = reader.uint32();
-                    break;
-                case /* optional bool enable_changeable */ 2:
-                    message.enableChangeable = reader.bool();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: TapeCompressionLimits, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* optional uint32 current_algorithm = 1; */
-        if (message.currentAlgorithm !== undefined)
-            writer.tag(1, WireType.Varint).uint32(message.currentAlgorithm);
-        /* optional bool enable_changeable = 2; */
-        if (message.enableChangeable !== undefined)
-            writer.tag(2, WireType.Varint).bool(message.enableChangeable);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message yatm.v1.TapeCompressionLimits
- */
-export const TapeCompressionLimits = new TapeCompressionLimits$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class TapeEncryptionAlgorithm$Type extends MessageType<TapeEncryptionAlgorithm> {
     constructor() {
@@ -3290,15 +3196,15 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
             { no: 5, name: "record_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
             { no: 6, name: "fixed_records", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 7, name: "buffered_writes", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 8, name: "compression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 9, name: "decompression_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
             { no: 10, name: "encryption_enabled", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 17, name: "features", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceFeature }
+            { no: 17, name: "features", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceFeature },
+            { no: 20, name: "supported_density_codes", kind: "scalar", repeat: 1 /*RepeatType.PACKED*/, T: 13 /*ScalarType.UINT32*/ }
         ]);
     }
     create(value?: PartialMessage<TapeDeviceReport>): TapeDeviceReport {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.features = [];
+        message.supportedDensityCodes = [];
         if (value !== undefined)
             reflectionMergePartial<TapeDeviceReport>(this, message, value);
         return message;
@@ -3329,17 +3235,18 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
                 case /* optional bool buffered_writes */ 7:
                     message.bufferedWrites = reader.bool();
                     break;
-                case /* optional bool compression_enabled */ 8:
-                    message.compressionEnabled = reader.bool();
-                    break;
-                case /* optional bool decompression_enabled */ 9:
-                    message.decompressionEnabled = reader.bool();
-                    break;
                 case /* optional bool encryption_enabled */ 10:
                     message.encryptionEnabled = reader.bool();
                     break;
                 case /* repeated yatm.v1.DeviceFeature features */ 17:
                     message.features.push(DeviceFeature.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* repeated uint32 supported_density_codes */ 20:
+                    if (wireType === WireType.LengthDelimited)
+                        for (let e = reader.int32() + reader.pos; reader.pos < e;)
+                            message.supportedDensityCodes.push(reader.uint32());
+                    else
+                        message.supportedDensityCodes.push(reader.uint32());
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -3374,18 +3281,19 @@ class TapeDeviceReport$Type extends MessageType<TapeDeviceReport> {
         /* optional bool buffered_writes = 7; */
         if (message.bufferedWrites !== undefined)
             writer.tag(7, WireType.Varint).bool(message.bufferedWrites);
-        /* optional bool compression_enabled = 8; */
-        if (message.compressionEnabled !== undefined)
-            writer.tag(8, WireType.Varint).bool(message.compressionEnabled);
-        /* optional bool decompression_enabled = 9; */
-        if (message.decompressionEnabled !== undefined)
-            writer.tag(9, WireType.Varint).bool(message.decompressionEnabled);
         /* optional bool encryption_enabled = 10; */
         if (message.encryptionEnabled !== undefined)
             writer.tag(10, WireType.Varint).bool(message.encryptionEnabled);
         /* repeated yatm.v1.DeviceFeature features = 17; */
         for (let i = 0; i < message.features.length; i++)
             DeviceFeature.internalBinaryWrite(message.features[i], writer.tag(17, WireType.LengthDelimited).fork(), options).join();
+        /* repeated uint32 supported_density_codes = 20; */
+        if (message.supportedDensityCodes.length) {
+            writer.tag(20, WireType.LengthDelimited).fork();
+            for (let i = 0; i < message.supportedDensityCodes.length; i++)
+                writer.uint32(message.supportedDensityCodes[i]);
+            writer.join();
+        }
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

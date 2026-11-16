@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
 )
 
@@ -170,5 +171,107 @@ func TestDeviceFinishWaitsForUnloadBeforeClosing(t *testing.T) {
 	case <-closes:
 		t.Fatal("transport closed twice")
 	default:
+	}
+}
+
+func TestDeviceFinishUnloadsWithoutPreparationButNeverAfterUnknownOutcome(t *testing.T) {
+	for _, uncertain := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unprepared", true: "unknown-outcome"}[uncertain], func(t *testing.T) {
+			// Failed work may end before Configure; an unknown outcome withdraws trust in the transport.
+			fixture := newDeviceFixture()
+			unloads := 0
+			transport := newSerializedTransport(func(command Command) (Response, error) {
+				switch command.CDB[0] {
+				case 0x1b:
+					unloads++
+					return Response{Completed: true}, nil
+				case 1:
+					return Response{}, nil
+				}
+				return fixture.execute(command)
+			}, func() error { return nil })
+			device, err := NewDevice(context.Background(), Identity{}, transport)
+			require.NoError(t, err)
+			if uncertain {
+				require.ErrorIs(t, (Records{Transport: transport, Timeout: time.Minute}).Rewind(context.Background()), ErrUncertain)
+			}
+			err = device.Finish(context.Background())
+			if uncertain {
+				require.ErrorIs(t, err, ErrUncertain)
+				require.Zero(t, unloads)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, 1, unloads)
+		})
+	}
+}
+
+func TestLoadDeviceWaitsForReadinessBeforeInspection(t *testing.T) {
+	sense := func(key, asc, ascq byte) []byte {
+		data := make([]byte, 18)
+		data[0], data[2], data[7], data[12], data[13] = 0x70, key, 10, asc, ascq
+		return data
+	}
+	for _, tc := range []struct {
+		name      string
+		load, tur [][]byte // Sense answered by successive commands before GOOD; nil is GOOD.
+		loads     int
+		reason    entity.DeviceReason
+		uncertain bool
+	}{
+		{name: "loaded cartridge", loads: 1},
+		{name: "unit attention before load", load: [][]byte{sense(6, 0x28, 0)}, loads: 2},
+		{name: "unit attention and becoming ready", tur: [][]byte{sense(6, 0x28, 0), sense(2, 4, 1)}, loads: 1},
+		{name: "empty drive", load: [][]byte{sense(2, 0x3a, 0)}, loads: 1, reason: entity.DeviceReason_DEVICE_REASON_NO_MEDIUM},
+		{name: "reset", load: [][]byte{sense(6, 0x29, 0)}, loads: 1, uncertain: true},
+		{name: "hardware failure", load: [][]byte{sense(4, 0x44, 0)}, loads: 1, uncertain: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// LOAD is the first command; inspection follows only once TEST UNIT READY reports ready.
+			fixture := newDeviceFixture()
+			var commands []byte
+			loads, closes := 0, 0
+			transport := newSerializedTransport(func(command Command) (Response, error) {
+				commands = append(commands, command.CDB[0])
+				answers := &tc.tur
+				switch command.CDB[0] {
+				case 0x1b:
+					require.Equal(t, []byte{0x1b, 0, 0, 0, 1, 0}, command.CDB)
+					loads++
+					answers = &tc.load
+				case 0:
+					if bytes.IndexByte(commands, 0x12) >= 0 {
+						return Response{Completed: true}, nil
+					}
+				default:
+					require.Equal(t, loads, tc.loads, "no command precedes LOAD and its readiness wait")
+					return fixture.execute(command)
+				}
+				if len(*answers) == 0 {
+					return Response{Completed: true}, nil
+				}
+				answer := (*answers)[0]
+				*answers = (*answers)[1:]
+				return Response{Completed: true, Status: 2, Sense: answer}, nil
+			}, func() error { closes++; return nil })
+			device, err := LoadDevice(context.Background(), Identity{}, transport)
+			require.Equal(t, tc.loads, loads)
+			require.Equal(t, byte(0x1b), commands[0])
+			if tc.reason == 0 && !tc.uncertain {
+				require.NoError(t, err)
+				require.True(t, device.Report().GetTape().GetMediumPresent())
+				require.Zero(t, closes)
+				return
+			}
+			require.Error(t, err)
+			require.Nil(t, device)
+			require.Equal(t, 1, closes)
+			require.Equal(t, tc.uncertain, errors.Is(err, ErrUncertain))
+			if tc.reason != 0 {
+				require.Equal(t, tc.reason, Reason(err))
+			}
+			require.NotContains(t, commands, byte(0x12), "a failed LOAD issues no further command")
+		})
 	}
 }

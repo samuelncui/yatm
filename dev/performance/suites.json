@@ -192,19 +192,13 @@
     },
     "read-resources": {
       "harness": [
-        "internal/media/read_cost_test.go",
-        "internal/media/read_greedy_reference_test.go",
-        "internal/media/read_order_test.go",
-        "internal/media/read_sequence_benchmark_test.go",
-        "internal/media/read_sequence_fallback_test.go",
+        "internal/media/read_sequence_scenarios_fixture_test.go",
+        "internal/media/read_sequence_scenarios_oracle_test.go",
+        "internal/media/read_sequence_scenarios_test.go",
+        "internal/media/read_sequence_workload_benchmark_test.go",
         "internal/media/read_sequence_resource_benchmark_test.go",
-        "internal/media/read_sequence_rss_other_test.go",
         "internal/media/read_sequence_rss_unix_test.go",
-        "internal/media/read_sequence_test.go",
-        "internal/media/tar_read_cost_test.go",
-        "internal/media/tar_read_order_test.go",
-        "internal/media/tar_read_position_test.go",
-        "internal/media/tar_test.go"
+        "internal/media/read_sequence_rss_other_test.go"
       ],
       "suites": [
         {

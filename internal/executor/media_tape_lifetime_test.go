@@ -3,17 +3,21 @@ package executor
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/media/tape"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
@@ -42,6 +46,8 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			exe := setupTestExecutor(t)
 			t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
 			require.NoError(t, exe.lib.AutoMigrate())
+			fixture := newTarDeviceFixture()
+			exe.tapeProvider = fixture
 			exit := func(stage string) int {
 				if test.failure == stage {
 					return 1
@@ -112,7 +118,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			} else {
 				session, err := openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 					Device: "/dev/nst0", Barcode: "ABC001", Name: "Test Tape",
-					Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+					Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 				}).Pack())
 				createErr = err
 				if err == nil {
@@ -147,6 +153,12 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			}
 			require.NoFileExists(t, string(key))
 
+			// A failure before the mount script unloads natively; a mount failure and later ones use the unmount adapter.
+			nativeUnloads := map[bool]int{true: 1}[test.failure == "encrypt" || test.failure == "format"]
+			require.Equal(t, nativeUnloads, fixture.unloads)
+			require.Zero(t, fixture.loads)
+			require.Equal(t, fixture.opens, fixture.closes)
+
 			// Session cleanup never releases the attempt lease or hides physical uncertainty.
 			if pointErr == nil {
 				require.FileExists(t, filepath.Join(tapeDir, "released"))
@@ -163,6 +175,67 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			} else {
 				require.Equal(t, []string{"/dev/nst0"}, exe.ListAvailableDevices())
 			}
+		})
+	}
+}
+
+func TestLTFSFailureBeforeMountUnloadsOnlyAMatchingSettledCartridge(t *testing.T) {
+	for _, test := range []struct {
+		name, barcode, encrypt string
+		cancel, rawMissing     bool
+		poison                 bool
+		unloads                int
+		available              bool
+	}{
+		{name: "different cartridge", barcode: "XYZ999", encrypt: "exit 0", available: true},
+		{name: "cancelled script", barcode: "ABC001", encrypt: "exec sleep 5", cancel: true, unloads: 1, available: true},
+		{name: "raw access unavailable", barcode: "ABC001", encrypt: "exit 1", rawMissing: true, available: true},
+		{name: "uncertain observation", barcode: "ABC001", encrypt: "exit 0", poison: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// The read factory checks identity with readinfo, then fails before the mount script runs.
+			exe := setupTestExecutor(t)
+			t.Cleanup(func() { require.NoError(t, resource.CloseDB(exe.db)) })
+			require.NoError(t, exe.lib.AutoMigrate())
+			fixture := newTarDeviceFixture()
+			if !test.rawMissing {
+				exe.tapeProvider = fixture
+			}
+			exe.scripts.ReadInfo = writeExecutorTestScript(t, "identity", fmt.Sprintf(`printf '{"barcode":"%s"}' > "$OUT"`, test.barcode))
+			exe.scripts.Encrypt = writeExecutorTestScript(t, "encrypt", test.encrypt)
+			exe.scripts.Mount = writeExecutorTestScript(t, "mount", "exit 1")
+			exe.scripts.Umount = writeExecutorTestScript(t, "unmount", "exit 0")
+			require.NoError(t, exe.beginAttempt(1, func(error) {}))
+			backend := exe.newMediaBackend(1, logrus.New(), nil)
+			ctx := context.Background()
+			if test.poison {
+				// AUTO observes the drive before mounting; its unknown outcome forbids the unload.
+				ctx = context.WithValue(ctx, deviceSettingsKey{}, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
+					Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}},
+				}}})
+				fixture.poison = &tape.UncertainError{Cause: errors.New("fixture outcome unknown")}
+			}
+			if test.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+				defer cancel()
+			}
+			stored, err := exe.lib.CreateMedia(context.Background(), &library.Media{
+				Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "ABC001",
+				Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack(),
+			})
+			require.NoError(t, err)
+			target := (&entity.ReadTapeTarget{Device: "/dev/nst0"}).Pack()
+			target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
+			_, err = openRead(ctx, backend, target)
+			require.Error(t, err)
+			require.Equal(t, test.unloads, fixture.unloads)
+			if test.poison {
+				require.Equal(t, 1, fixture.opens, "no descriptor opens after an unknown outcome")
+			}
+			require.Equal(t, fixture.opens, fixture.closes)
+			exe.endAttempt(1)
+			require.Equal(t, test.available, len(exe.ListAvailableDevices()) == 1)
 		})
 	}
 }

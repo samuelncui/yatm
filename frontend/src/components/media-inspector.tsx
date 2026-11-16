@@ -81,8 +81,6 @@ const MediaContent = ({ media }: { media: Media }) => {
               <dd>{tape.tar.recordMode === TapeRecordMode.FIXED ? "Fixed" : tape.tar.recordMode === TapeRecordMode.VARIABLE ? "Variable" : "Unknown"}</dd>
               <dt>Record size</dt>
               <dd>{tape.tar.recordBytes} bytes</dd>
-              <dt>Hardware compression</dt>
-              <dd>{tape.tar.hardwareCompression ? "On" : "Off"}</dd>
             </>
           )}
           <dt>Capacity</dt>

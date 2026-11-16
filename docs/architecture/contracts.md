@@ -74,11 +74,11 @@ No surface offers Job-level retry or restart; the [Job lifecycle](jobs.md#shared
 FORMAT resolves explicit fields before saved Device defaults. Unset tar record policy defaults to
 variable records with a 512 KiB (524288-byte) maximum. Native record and transport limits remain mandatory: an incompatible
 choice fails preparation rather than silently changing the mode or size.
-With no explicit or saved format, FORMAT defaults to LTFS. Optional false remains distinct from omission. Unsupported record
-choices and controls are field errors. Tar FORMAT can select hardware compression
-On or Off; APPEND enforces the immutable cartridge choice after validating its label and physical
-tail. Read preparation preserves write compression controls and independently requires hardware
-decoding for a compressed profile. The existing `Scripts.Encrypt` adapter owns encryption setup
+With no explicit or saved format, FORMAT defaults to tar; LTFS FORMAT requires a drive not known to
+lack LTO-5 or later densities ([Tape](tape.md#tape)). Unsupported record
+choices and controls are field errors. Tar writes always turn
+[drive compression off](tape.md#drive-compression); APPEND enforces the immutable record policy after
+validating its label and physical tail. Read preparation leaves compression controls untouched. The existing `Scripts.Encrypt` adapter owns encryption setup
 for tar and LTFS. FORMAT generates the existing key representation; APPEND/read uses the saved
 Media key through a temporary 0600 file. Native encryption modes and any observed public algorithm
 are diagnostics, not new write options or key-presence evidence. No extra persistent key copy is made.

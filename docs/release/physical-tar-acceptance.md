@@ -81,8 +81,8 @@ members.
 
 Before an operation the controller requires an idle device in `tape device list` and observes
 `mt status`; when it reports `DR_OPEN`, it issues one synchronous `mt load`, then verifies `ONLINE`.
-No timeout wraps that load or the public reader, and a failure stops without retry. Normal Archive,
-Restore and Scan unload the cartridge. `tar-fill` waits for each Job within an explicit budget of
+No timeout wraps that load or the public reader, and a failure stops without retry. Archive,
+Restore and Scan unload the cartridge, also when they fail after the identity check. `tar-fill` waits for each Job within an explicit budget of
 one hour plus the payload at a conservative 35 MB/s, about 13 hours per Job for 1.5 TB (LTO-5
 nominally streams about 140 MB/s);
 exceeding it stops observation and retains the active owner. Failed or interrupted operations stop
@@ -124,7 +124,7 @@ killing the child and preserves the unsettled failure. Retain and investigate th
 device access.
 
 Encryption adapter inputs are optional as one complete set: `--encrypt-script`, `--key-file`,
-`--barcode`, `--tape-name` and `--script-directory`. They do not enable a hardware compression decoder.
+`--barcode`, `--tape-name` and `--script-directory`.
 
 These boundary assertions are scoped to Linux st's observed mt-st 1.8 status syntax and the
 recorded kernel/GNU tool versions. They cover normal recorded end only, not empty physical Tape

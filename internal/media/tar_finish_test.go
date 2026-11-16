@@ -89,7 +89,7 @@ func TestTarReadFinishRequiresSettledSuccessfulContent(t *testing.T) {
 	}
 }
 
-func TestTarWriteFinishDistinguishesSafeWarningFromJoinedFailure(t *testing.T) {
+func TestTarWriteFinishSettlesWarningJoinedWithIndependentFailure(t *testing.T) {
 	for _, extra := range []error{nil, context.Canceled, errors.New("independent failure")} {
 		name := "safe-prefix"
 		if extra != nil {
@@ -117,21 +117,12 @@ func TestTarWriteFinishDistinguishesSafeWarningFromJoinedFailure(t *testing.T) {
 				Errors: []error{cause, errors.Join(ErrCapacityBoundary, extra)},
 			})
 
-			// Only an exclusively capacity/EW error tree qualifies for normal completion.
+			// A cancellation or independent failure joined to the stop settles the same accepted member.
 			result, err := session.Finalize(context.Background(), cause)
-			if extra == nil {
-				require.NoError(t, err)
-				require.Len(t, tarTestCompleted(t, session, result), 1)
-				require.Equal(t, 1, finishes)
-				require.Zero(t, cleanups)
-			} else {
-				require.Nil(t, result)
-				require.ErrorIs(t, err, ErrFinalizeUnusable)
-				require.ErrorIs(t, err, extra)
-				require.Zero(t, device.marks)
-				require.Zero(t, finishes)
-				require.Equal(t, 1, cleanups)
-			}
+			require.NoError(t, err)
+			require.Len(t, tarTestCompleted(t, session, result), 1)
+			require.Equal(t, 1, finishes)
+			require.Zero(t, cleanups)
 			_, err = session.Finalize(context.Background(), nil)
 			require.ErrorIs(t, err, ErrFinalizeUnusable)
 			require.Equal(t, 1, finishes+cleanups)
@@ -253,11 +244,12 @@ func TestTarStorageCutoffTracksOnlyCompletedMembers(t *testing.T) {
 			require.ErrorIs(t, active.Finish(failure), failure)
 			require.Nil(t, later.Storage())
 
-			// Earlier accepted offsets remain provisional when the following member is interrupted.
+			// The interrupted member is never confirmed; the accepted earlier member survives.
 			result, err := session.Finalize(context.Background(), failure)
-			require.Nil(t, result)
-			require.ErrorIs(t, err, ErrFinalizeUnusable)
-			require.ErrorIs(t, err, failure)
+			require.NoError(t, err)
+			completed := tarTestCompleted(t, session, result)
+			require.Len(t, completed, 1)
+			require.Equal(t, result.PathPrefix+"/first", completed[0].Path)
 		})
 	}
 }

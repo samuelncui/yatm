@@ -49,9 +49,9 @@ type ReadModelProfile struct {
 	// ReadObjectSeconds is the time to pass one logical object at reading speed: record bytes divided
 	// by the read rate. It is derived from the read timing, never fitted as a positioning term.
 	ReadObjectSeconds float64
-	// BufferObjects is how far ahead, in logical objects, the drive reaches by continuing to read;
-	// zero never applies.
-	BufferObjects uint64
+	// StreamingObjects is the streaming distance in logical objects: how far ahead the drive reaches
+	// by continuing to read instead of positioning; zero never applies.
+	StreamingObjects uint64
 	// MinimumGainSeconds is a floor under the minimum gain, which is otherwise Coefficients.Base, so
 	// that a zero configured intercept cannot remove it.
 	MinimumGainSeconds float64
@@ -71,7 +71,7 @@ type ReadCostModel struct {
 	snapshotValid     func() bool
 	coefficients      ReadModelCoefficients
 	readObjectSeconds float64
-	bufferObjects     uint64
+	streamingObjects  uint64
 	minimumGain       float64
 	intervals         map[uint32][]readModelInterval
 }
@@ -95,7 +95,7 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 		}
 	}
 	model := &ReadCostModel{snapshotValid: profile.SnapshotValid, coefficients: profile.Coefficients,
-		readObjectSeconds: profile.ReadObjectSeconds, bufferObjects: profile.BufferObjects,
+		readObjectSeconds: profile.ReadObjectSeconds, streamingObjects: profile.StreamingObjects,
 		minimumGain: max(profile.Coefficients.Base, profile.MinimumGainSeconds),
 		intervals:   make(map[uint32][]readModelInterval)}
 
@@ -235,7 +235,7 @@ func (m *ReadCostModel) covers(partition uint32, start, end uint64) bool {
 
 // AccessScore is the nonnegative positioning prediction in seconds for candidate ranking.
 func (m *ReadCostModel) AccessScore(from, to *entity.TapeBytePosition) (float64, bool) {
-	return m.accessScore(from, to, ReadAhead(from, to))
+	return m.accessScore(from, to, ObjectsAhead(from, to))
 }
 
 func (m *ReadCostModel) accessScore(from, to *entity.TapeBytePosition, ahead int64) (float64, bool) {
@@ -281,12 +281,12 @@ func (m *ReadCostModel) accessFeatures(from, to *entity.TapeBytePosition, ahead 
 	if !known {
 		return ReadAccess{}, false
 	}
-	return ReadAccessFeatures(a, b, ahead, m.bufferObjects)
+	return ReadAccessFeatures(a, b, ahead, m.streamingObjects)
 }
 
-// ReadAhead returns how many logical objects b lies ahead of a in one partition, or -1 when b is
+// ObjectsAhead returns how many logical objects b lies ahead of a in one partition, or -1 when b is
 // behind a, in another partition or unknown.
-func ReadAhead(a, b *entity.TapeBytePosition) int64 {
+func ObjectsAhead(a, b *entity.TapeBytePosition) int64 {
 	if a == nil || b == nil || a.Partition != b.Partition || b.LogicalObject < a.LogicalObject ||
 		b.LogicalObject-a.LogicalObject > math.MaxInt64 {
 		return -1
@@ -319,16 +319,16 @@ func (a ReadAccess) Seconds(c ReadModelCoefficients, readObjectSeconds float64) 
 // ReadAccessFeatures computes the positioning features of a move from a to b, two resolved physical
 // points that lie ahead logical objects apart (-1 when b is not logically ahead).
 //
-// A target at most bufferObjects ahead, in any wrap, is reached by continuing to read: it costs the
+// A target at most streamingObjects ahead, in any wrap, is reached by continuing to read: it costs the
 // skipped objects at reading speed plus one approach reversal for each wrap turn crossed, and no
-// other positioning term; a zero buffer never applies. A move in the same wrap interval that stays
+// other positioning term; a zero streaming distance never applies. A move in the same wrap interval that stays
 // within one half and does not go behind (b is at or after a in the wrap's read direction) is a
 // read-speed locate: the positioning intercept plus |Δobjects| at reading speed. Halves split the span
 // at its physical midpoint; the midpoint itself belongs to the second half. Every other move travels
 // the physical longitudinal distance |Δx| at seek speed and adds the positioning intercept, plus a
 // full approach reversal when the signed distance along b's wrap read direction is negative (forward
 // wraps read toward increasing x, reverse wraps toward decreasing x).
-func ReadAccessFeatures(a, b ReadPoint, ahead int64, bufferObjects uint64) (ReadAccess, bool) {
+func ReadAccessFeatures(a, b ReadPoint, ahead int64, streamingObjects uint64) (ReadAccess, bool) {
 	// Points must share a partition and lie within their wraps.
 	if a.Partition != b.Partition || a.Span == 0 || b.Span == 0 || a.Offset > a.Span || b.Offset > b.Span ||
 		!readDirection(a.Direction) || !readDirection(b.Direction) {
@@ -336,7 +336,7 @@ func ReadAccessFeatures(a, b ReadPoint, ahead int64, bufferObjects uint64) (Read
 	}
 
 	// The drive keeps streaming toward a target close enough ahead, turning at each wrap end on the way.
-	if bufferObjects != 0 && ahead >= 0 && uint64(ahead) <= bufferObjects {
+	if streamingObjects != 0 && ahead >= 0 && uint64(ahead) <= streamingObjects {
 		return ReadAccess{Features: [3]float64{2: readTurns(a, b)}, ReadObjects: uint64(ahead)}, true
 	}
 
@@ -419,9 +419,9 @@ func (m *ReadCostModel) AccessCost(from, to *entity.TapeBytePosition) (time.Dura
 	return readSeconds(score)
 }
 
-// UnbufferedAccessCost quotes a move from a position the drive has not read up to, so it cannot reach
+// UnstreamedAccessCost quotes a move from a position the drive has not read up to, so it cannot reach
 // any target by continuing to read.
-func (m *ReadCostModel) UnbufferedAccessCost(from, to *entity.TapeBytePosition) (time.Duration, bool) {
+func (m *ReadCostModel) UnstreamedAccessCost(from, to *entity.TapeBytePosition) (time.Duration, bool) {
 	score, known := m.accessScore(from, to, -1)
 	if !known {
 		return 0, false

@@ -56,11 +56,6 @@ func (n *Navigation) Position(ctx context.Context) (Position, error) {
 // Locate chooses one observed form before motion and never retries another form after issuance.
 // The consumer owns source-lane failure; Transport owns serialization and uncertain outcomes.
 func (n *Navigation) Locate(ctx context.Context, partition uint32, object uint64) error {
-	// The consumed tar pairing is scoped to partition zero, not every representable partition field.
-	if partition != 0 {
-		return fmt.Errorf("Tape navigation pairing is scoped to partition zero: %w", ErrUnsupported)
-	}
-
 	// Select and range-check the established form before entering the transport lane.
 	if n.bits == 32 && object > math.MaxUint32 {
 		return fmt.Errorf("Tape object exceeds navigation address width")

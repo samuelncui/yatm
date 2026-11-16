@@ -61,6 +61,7 @@ test("Media device details preserve passive diagnostics and usable desktop/narro
               report: {
                 oneofKind: "tape",
                 tape: {
+                  supportedDensityCodes: [],
                   writeProtected: false,
                   encryptionEnabled: false,
                   features: [

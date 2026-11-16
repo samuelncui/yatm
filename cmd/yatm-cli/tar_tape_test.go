@@ -29,36 +29,16 @@ func (s *stubDeviceSettingsService) Update(_ context.Context, request *entity.Up
 }
 
 func TestTarFormatUsesDeviceDefaultWithoutLTFSInspection(t *testing.T) {
-	// A selected device resolves tar from Settings before selecting any physical adapter.
-	settings := &stubDeviceSettingsService{value: &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1")}}}}}}
-	var target *entity.ArchiveTapeTarget
-	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterSettingsServiceServer(server, settings)
-		registerTestServices(server, &stubService{})
-		entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{writeMedia: func(_ context.Context, request *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaResponse, error) {
-			target = proto.Clone(request.Target.GetTape()).(*entity.ArchiveTapeTarget)
-			return &entity.WriteArchiveMediaResponse{}, nil
-		}})
-	}, nil, nil)
-
-	// Explicit false remains present and optional omitted fields stay for server resolution.
-	exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "31", "--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tar Tape", "--confirm-format", "ABC123", "--hardware-compression=false")
-	require.Equal(t, exitSuccess, exit, stderr)
-	require.Equal(t, "tar_pax_v1", target.GetFormat())
-	require.NotNil(t, target.TarOptions.HardwareCompression)
-	require.False(t, target.TarOptions.GetHardwareCompression())
-	require.Nil(t, target.TarOptions.RecordBytes)
-	require.Equal(t, 1, recorder.count(entity.SettingsService_Get_FullMethodName))
-	require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
-	require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
-}
-
-func TestTarFormatCompressionChoicesPreservePresence(t *testing.T) {
-	for _, choice := range []string{"", "false", "true"} {
-		t.Run("compression="+choice, func(t *testing.T) {
-			// The client preserves explicit choices; actual compression eligibility belongs to the leased server attempt.
+	for name, saved := range map[string]*entity.DeviceSettings{
+		"saved tar": {Devices: []*entity.DeviceConfig{{Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1")}}}}},
+		"unset":     {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// A selected device resolves tar from Settings, also when none is saved, before selecting any physical adapter.
+			settings := &stubDeviceSettingsService{value: saved}
 			var target *entity.ArchiveTapeTarget
 			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
+				entity.RegisterSettingsServiceServer(server, settings)
 				registerTestServices(server, &stubService{})
 				entity.RegisterArchiveJobServiceServer(server, &stubArchiveJobService{writeMedia: func(_ context.Context, request *entity.WriteArchiveMediaRequest) (*entity.WriteArchiveMediaResponse, error) {
 					target = proto.Clone(request.Target.GetTape()).(*entity.ArchiveTapeTarget)
@@ -66,22 +46,15 @@ func TestTarFormatCompressionChoicesPreservePresence(t *testing.T) {
 				}})
 			}, nil, nil)
 
-			// An omitted choice stays for saved-default/recommendation resolution; On and Off arrive unchanged.
-			args := []string{"archive", "write", "tape", "format", "31", "--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tar Tape", "--confirm-format", "ABC123", "--format", "tar_pax_v1"}
-			if choice != "" {
-				args = append(args, "--hardware-compression="+choice)
-			}
-			exit, _, stderr := executeTestCLI(server.URL, "", args...)
+			// An explicit option remains present and optional omitted fields stay for server resolution.
+			exit, _, stderr := executeTestCLI(server.URL, "", "archive", "write", "tape", "format", "31", "--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tar Tape", "--confirm-format", "ABC123", "--record-bytes=262144")
 			require.Equal(t, exitSuccess, exit, stderr)
-			if choice == "" {
-				require.Nil(t, target.TarOptions)
-			} else {
-				require.NotNil(t, target.TarOptions.HardwareCompression)
-				require.Equal(t, choice == "true", target.TarOptions.GetHardwareCompression())
-			}
+			require.Equal(t, "tar_pax_v1", target.GetFormat())
+			require.EqualValues(t, 262144, target.TarOptions.GetRecordBytes())
+			require.Nil(t, target.TarOptions.RecordMode)
+			require.Equal(t, 1, recorder.count(entity.SettingsService_Get_FullMethodName))
 			require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 			require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
-			require.Zero(t, recorder.count(entity.SettingsService_Get_FullMethodName))
 		})
 	}
 }
@@ -91,17 +64,17 @@ func TestTarControlHelpNamesEncryptionRequirements(t *testing.T) {
 	var stdout bytes.Buffer
 	exit := run([]string{"archive", "write", "tape", "format", "--help"}, nil, &stdout, new(bytes.Buffer))
 
-	// Compression remains configurable; encryption belongs to the configured Tape script.
+	// Tar writes always leave drive compression off; encryption belongs to the configured Tape script.
 	require.Equal(t, exitSuccess, exit)
 	help := strings.Join(strings.Fields(stdout.String()), " ")
-	require.Contains(t, help, "Tar write compression; the selected drive is rechecked before writing")
+	require.NotContains(t, help, "--hardware-compression")
 	require.NotContains(t, help, "--hardware-encryption")
 	require.NotContains(t, help, "--encryption-algorithm")
 }
 
-func TestRemovedTarEncryptionFlagsFailBeforeDeviceAccess(t *testing.T) {
+func TestRemovedTarFlagsFailBeforeDeviceAccess(t *testing.T) {
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) { registerTestServices(server, &stubService{}) }, nil, nil)
-	for _, flag := range []string{"--hardware-encryption=true", "--hardware-encryption=false", "--encryption-algorithm=AES-256-GCM-128"} {
+	for _, flag := range []string{"--hardware-encryption=true", "--hardware-encryption=false", "--encryption-algorithm=AES-256-GCM-128", "--hardware-compression=false"} {
 		args := []string{"archive", "write", "tape", "format", "31", "--device", "/dev/nst0", "--barcode", "ABC123", "--name", "Tar Tape", "--confirm-format", "ABC123", "--format", "tar_pax_v1", flag}
 		exit, _, stderr := executeTestCLI(server.URL, "", args...)
 		require.Equal(t, exitUsage, exit, stderr)
@@ -142,17 +115,33 @@ func TestDeviceSettingsReplacementNeverInspectsHardware(t *testing.T) {
 	settings := &stubDeviceSettingsService{value: &entity.DeviceSettings{}}
 	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) { entity.RegisterSettingsServiceServer(server, settings) }, nil, nil)
 	filename := filepath.Join(t.TempDir(), "device.json")
-	require.NoError(t, os.WriteFile(filename, []byte(`{"devices":[{"device":"inactive","tape":{"defaultFormat":"ltfs_v1","tarWriteOptions":{"hardwareCompression":false},"readOrder":"TAPE_READ_ORDER_AUTO"}}]}`), 0o600))
+	require.NoError(t, os.WriteFile(filename, []byte(`{"devices":[{"device":"inactive","tape":{"defaultFormat":"ltfs_v1","tarWriteOptions":{"recordBytes":262144},"readOrder":"TAPE_READ_ORDER_AUTO"}}]}`), 0o600))
 
-	// Inactive tar settings retain explicit false without any device RPC.
+	// Inactive tar settings retain explicit options without any device RPC.
 	exit, stdout, stderr := executeTestCLI(server.URL, "", "settings", "devices", "--device-json", filename)
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.Contains(t, stdout, `"hardware_compression":false`)
-	require.NotNil(t, settings.updated.GetDevice().Devices[0].GetTape().TarWriteOptions.HardwareCompression)
+	require.Contains(t, stdout, `"record_bytes":262144`)
+	require.EqualValues(t, 262144, settings.updated.GetDevice().Devices[0].GetTape().TarWriteOptions.GetRecordBytes())
 	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, settings.updated.GetDevice().Devices[0].GetTape().ReadOrder)
 	require.Zero(t, recorder.count(entity.SettingsService_Get_FullMethodName))
 	require.Equal(t, 1, recorder.count(entity.SettingsService_Update_FullMethodName))
 	require.Len(t, recorder.calls, 1)
+}
+
+func TestDeviceSettingsReplacementAcceptsEchoedBuiltinReadParameters(t *testing.T) {
+	// The read output carries the server's built-in sets; replacing with that output is accepted, and the server drops them.
+	builtin := []*entity.TapeReadParameters{{AppliesTo: &entity.TapeReadApplicability{DensityCode: proto.Uint32(0x58)},
+		Geometry: &entity.TapeReadGeometry{NominalWraps: proto.Uint32(80)}, SourceReference: "built-in"}}
+	settings := &stubDeviceSettingsService{value: &entity.DeviceSettings{BuiltinReadParameters: builtin}}
+	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) { entity.RegisterSettingsServiceServer(server, settings) }, nil, nil)
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "settings", "devices")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.Contains(t, stdout, `"builtin_read_parameters"`)
+	filename := filepath.Join(t.TempDir(), "device.json")
+	require.NoError(t, os.WriteFile(filename, []byte(stdout), 0o600))
+	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "devices", "--device-json", filename)
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.True(t, proto.Equal(builtin[0], settings.updated.GetDevice().BuiltinReadParameters[0]))
 }
 
 type stubHintRestoreService struct {

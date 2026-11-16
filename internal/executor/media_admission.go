@@ -2,12 +2,14 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"github.com/samuelncui/yatm/internal/media/tape"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -69,6 +71,11 @@ func (e *Executor) OpenWriteSession(
 		if err := checkTapeWriteMedia(stored, resolved); err != nil {
 			return nil, err
 		}
+		if resolved.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT && resolved.GetFormat() == library.TapeFormatLTFSV1 {
+			if err := e.checkLTFSDrive(ctx, jobID, device); err != nil {
+				return nil, err
+			}
+		}
 		return backend.NewWriteSession(ctx, resolved.Pack(), describeMedia(stored))
 	case target.GetVolume() != nil:
 		uuid, err := mediapkg.NormalizeVolumeUUID(target.GetVolume().GetUuid())
@@ -91,6 +98,26 @@ func (e *Executor) OpenWriteSession(
 	default:
 		return nil, fmt.Errorf("create Media write session failed, request is incomplete")
 	}
+}
+
+// checkLTFSDrive refuses LTFS FORMAT before any script or motion when the leased drive's passive
+// report knows it supports no LTO-5 or later density. Unavailable raw facts leave support unknown.
+func (e *Executor) checkLTFSDrive(ctx context.Context, jobID int64, device string) error {
+	prepared, err := e.openRawTape(ctx, jobID, device)
+	if err != nil {
+		if ctx.Err() != nil || errors.Is(err, tape.ErrUncertain) {
+			return err
+		}
+		return nil
+	}
+	report := prepared.Report()
+	if err := e.cleanupRawTape(ctx, jobID, device, prepared); err != nil {
+		return err
+	}
+	if tape.LTFSUnsupported(report.GetTape().GetSupportedDensityCodes()) {
+		return fmt.Errorf("Tape drive does not support LTFS (needs LTO-5 or later); use Tar, device=%q", device)
+	}
+	return nil
 }
 
 // checkTapeWriteMedia admits FORMAT only for an unregistered identity and APPEND only for usable registered Media.

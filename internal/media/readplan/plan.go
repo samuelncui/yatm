@@ -191,7 +191,10 @@ func plan(ctx context.Context, root string, provider Provider, input iter.Seq2[S
 			rerr = errors.Join(rerr, s.Close())
 		}
 	}()
-	for _, statement := range []string{"PRAGMA cache_size = -2048", "PRAGMA temp_store = FILE"} {
+	// The index is disposable, so no write waits for the disk. Ingestion commits many small batches;
+	// keeping their rollback journal in memory halves its time and stays bounded by one batch.
+	for _, statement := range []string{"PRAGMA cache_size = -2048", "PRAGMA temp_store = FILE",
+		"PRAGMA synchronous = OFF", "PRAGMA journal_mode = MEMORY"} {
 		if err := stage.DB.WithContext(ctx).Exec(statement).Error; err != nil {
 			return nil, err
 		}
@@ -203,6 +206,10 @@ func plan(ctx context.Context, root string, provider Provider, input iter.Seq2[S
 	// Partial materialization cannot stand in for the caller's complete manifest.
 	count, missing, err := s.collect(ctx, input)
 	if err != nil {
+		return nil, err
+	}
+	// Later transactions rewrite the whole index at once; their journal goes back to the disk.
+	if err := stage.DB.WithContext(ctx).Exec("PRAGMA journal_mode = DELETE").Error; err != nil {
 		return nil, err
 	}
 	if s.reason != "" {

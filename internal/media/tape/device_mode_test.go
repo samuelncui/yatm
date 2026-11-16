@@ -26,12 +26,13 @@ func TestDevicePreservesBufferedModeAndSpeed(t *testing.T) {
 }
 
 func TestDeviceFailedFormatPreservesHeaderWithoutOtherModeChanges(t *testing.T) {
-	// Matching record/compression controls leave partition restoration as the only cleanup mutation.
+	// Matching record controls and compression already off leave partition restoration as the only cleanup mutation.
 	f := newDeviceFixture()
 	f.mode[3], f.mode[51], f.actualPartitions, f.failedFormat = 0x13, 1, 2, true
+	f.mode[18], f.mode[46] = 0x40, 0
 	d := fixtureDevice(t, f)
 	_, err := d.Configure(context.Background(), &entity.TarMediaProfile{
-		RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512, HardwareCompression: true,
+		RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_FIXED, RecordBytes: 512,
 	}, Format)
 	if err != nil || d.changed || f.selects != 0 {
 		t.Fatalf("preparation error=%v, changed=%t, selects=%d", err, d.changed, f.selects)

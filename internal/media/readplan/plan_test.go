@@ -412,11 +412,13 @@ func TestPlanStopsWhenPlanningCannotPayBack(t *testing.T) {
 		})
 		return sequence, ids, calls
 	}
-	_, _, complete := run(time.Nanosecond)
+	_, full, complete := run(time.Nanosecond)
 	sequence, ids, stopped := run(time.Hour)
 
-	// Planning that already cost more than it saved stops after its first round with a complete route.
+	// Planning that already cost more than it saved stops after its first round with a complete route,
+	// which the search it gave up would have improved.
 	require.Less(t, stopped, complete)
+	require.Less(t, routeCost(t, newLineProvider(0), spans, full), routeCost(t, newLineProvider(0), spans, ids))
 	require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO, sequence.Order(), sequence.Reason())
 	require.ElementsMatch(t, logicalIDs(spans), ids)
 	provider := newLineProvider(0)

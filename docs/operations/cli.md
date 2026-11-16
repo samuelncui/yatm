@@ -189,9 +189,9 @@ skipped.
   settings without device access. [Device settings](devices.md#save-device-settings) and
   [Auto read order](read-order.md) explain the fields and give JSON examples.
 - `archive write tape format` resolves the selected device's defaults at this Media operation.
-  `--format ltfs_v1|tar_pax_v1`, `--record-mode`, `--record-bytes` and
-  `--hardware-compression true|false` override them as [Tar write options](devices.md#tar-write-options)
-  describe; LTFS rejects tar options. `--barcode` is normalized to six uppercase letters or digits
+  `--format ltfs_v1|tar_pax_v1`, `--record-mode` and `--record-bytes` override them as
+  [Tar write options](devices.md#tar-write-options) describe; tar always writes with drive
+  compression off; LTFS rejects tar options. `--barcode` is normalized to six uppercase letters or digits
   and requires an exact `--confirm-format`. Registered Media and identity conflicts stop before
   writing, and FORMAT erases the cartridge even when its cartridge memory barcode is empty.
 - `archive write tape append` uses the registered profile and rejects conflicting explicit options.
@@ -202,11 +202,12 @@ skipped.
   hint. Without a hint, the server identifies the Tape by its
   cartridge memory barcode; a hint never bypasses physical verification.
   [Load Tape for Restore or Scan](devices.md#load-tape-for-restore-or-scan) describes both options.
-- `calibration create --device DEVICE --media-id ID` creates and immediately runs a
-  [Calibration](read-order.md#calibration) on the loaded tar Media without changing its data.
-  `--write-test-data` instead of `--media-id` overwrites the loaded cartridge from the beginning of
+- `calibration create --device DEVICE` creates and immediately runs a
+  [Calibration](read-order.md#calibration) on the loaded cartridge, which needs its first two wraps written,
+  without changing its data. Adding `--write-test-data` overwrites the loaded cartridge from the beginning of
   tape with test data and calibrates on it; never use it on a cartridge holding data, and initialize
-  the cartridge with FORMAT before using it for anything else. Follow either with `job wait` and
+  the cartridge with FORMAT before using it for anything else; a cartridge registered as Media is
+  refused. Follow either with `job wait` and
   `job progress`, which lists the measured moves and, once fitted, the stored read parameters.
 - No command sets encryption: the configured `encrypt` script owns it, and Media output carries
   `encryption_key_saved`, never the key. The Device's read order applies to each read attempt, and

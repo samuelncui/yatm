@@ -331,7 +331,7 @@ func TestTarWarningStopsDataAndFiltersBufferedMembers(t *testing.T) {
 }
 
 func TestTarSourceFailureDiscardsSuffix(t *testing.T) {
-	// A complete member entirely buffered in a fixed-record suffix cannot publish after source failure.
+	// A complete member entirely buffered in a fixed-record suffix is not published after a source failure.
 	d := &tarTestDevice{}
 	s, err := newTarTestWriteSession(d, tarTestOptions(t, true, 16<<10))
 	if err != nil {
@@ -349,10 +349,10 @@ func TestTarSourceFailureDiscardsSuffix(t *testing.T) {
 	cause := errors.New("source failed")
 	_ = w.Finish(cause)
 
-	// Failed content ends the attempt without flushing records or manufacturing a filemark.
+	// Failed content flushes no record; the closing filemark confirms no buffered member.
 	result, err := s.Finalize(context.Background(), cause)
-	if !errors.Is(err, ErrFinalizeUnusable) || !errors.Is(err, cause) || result != nil || d.writes != 0 || d.marks != 0 {
-		t.Fatalf("interrupted stream produced completion, result=%v err=%v writes=%d marks=%d", result, err, d.writes, d.marks)
+	if err != nil || !errors.Is(result.Stop, cause) || len(tarTestCompleted(t, s, result)) != 0 || d.writes != 0 || d.marks != 1 {
+		t.Fatalf("interrupted stream flushed or confirmed its suffix, err=%v writes=%d marks=%d", err, d.writes, d.marks)
 	}
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
-import { isWritableTapeFormat } from "@/components/tape-format";
+import { defaultTapeFormat, isWritableTapeFormat, ltfsUnsupported, ltfsUnsupportedReason } from "@/components/tape-format";
 import {
   Alert,
   Button,
@@ -33,6 +33,7 @@ import {
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { DeviceInspectionResult } from "@/components/tape-device-choice";
+import { densityLabel, tapeDensityNames } from "@/components/tape-density";
 import { TarWriteOptionsFields, validateTarWriteOptions } from "@/components/tar-write-options";
 import { useTapeDevices } from "@/components/use-tape-devices";
 import { Feedback } from "@/components/feedback";
@@ -43,13 +44,12 @@ import { CalibrationButton } from "./settings-device-calibration";
 import {
   applyReadParametersForm,
   captureTapeReadConditions,
-  densityLabel,
   formatRate,
   formatSeconds,
+  parseDensityCode,
   readParameterGroups,
   readParametersForm,
   readParametersFormErrors,
-  tapeDensityNames,
   validateTapeReadParameterSets,
   type ReadParametersForm,
 } from "./settings-device-read-parameters";
@@ -79,6 +79,9 @@ export const DeviceSettingsBrowser = () => {
   const config = editor.draft?.devices.find((value) => value.device === device);
   const tape = config?.options.oneofKind === "tape" ? config.options.tape : TapeDeviceSettings.create();
   const options = tape.tarWriteOptions ?? TarWriteOptions.create();
+  const format = tape.defaultFormat ?? defaultTapeFormat;
+  // A drive known to lack an LTO-5 or later density offers only Tar; a saved LTFS default stays visible as unsupported.
+  const noLtfs = ltfsUnsupported(report);
   const change = (next: TapeDeviceSettings) => {
     if (!editor.draft || !device) return;
     const value = DeviceConfig.create({ device, options: { oneofKind: "tape", tape: next } });
@@ -191,21 +194,21 @@ export const DeviceSettingsBrowser = () => {
                     select
                     fullWidth
                     label="Default Tape format"
-                    // An unset format means LTFS, so it shows as LTFS rather than as a separate entry.
-                    value={tape.defaultFormat ?? "ltfs_v1"}
+                    // An unset format means Tar, so it shows as Tar rather than as a separate entry.
+                    value={format}
                     disabled={disabled}
+                    helperText={noLtfs ? ltfsUnsupportedReason : undefined}
                     onChange={(event) => change({ ...tape, defaultFormat: event.target.value })}
                   >
-                    <MenuItem value="ltfs_v1">LTFS</MenuItem>
+                    {(!noLtfs || format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? "LTFS · unsupported" : "LTFS"}</MenuItem>}
                     <MenuItem value="tar_pax_v1">Tar</MenuItem>
-                    {tape.defaultFormat && !isWritableTapeFormat(tape.defaultFormat) && (
-                      <MenuItem value={tape.defaultFormat}>{tape.defaultFormat} · unsupported</MenuItem>
-                    )}
+                    {!isWritableTapeFormat(format) && <MenuItem value={format}>{format} · unsupported</MenuItem>}
                   </TextField>
-                  {tape.defaultFormat && !isWritableTapeFormat(tape.defaultFormat) && (
-                    <Alert severity="warning">Choose LTFS or Tar before using this default.</Alert>
+                  {!isWritableTapeFormat(format) && (
+                    <Alert severity="warning">{noLtfs ? "Choose Tar before using this default." : "Choose LTFS or Tar before using this default."}</Alert>
                   )}
-                  {(tape.defaultFormat ?? "ltfs_v1") === "ltfs_v1" && <Alert severity="info">Tar settings are inactive for LTFS.</Alert>}
+                  {noLtfs && format === "ltfs_v1" && <Alert severity="warning">Choose Tar before using this default.</Alert>}
+                  {format === "ltfs_v1" && <Alert severity="info">Tar settings are inactive for LTFS.</Alert>}
                   <Alert severity="info">
                     The configured Encrypt script handles encryption; FORMAT generates a key.
                     {report?.report.oneofKind === "tape" &&
@@ -238,7 +241,7 @@ export const DeviceSettingsBrowser = () => {
                 hasError={
                   !!(validateTarWriteOptions(options) || capacityPollError(tape.capacityPollIntervalSeconds) || readPlanningError(tape.readPlanningSeconds))
                 }
-                description={`Tar records ${options.recordBytes === undefined ? "512 KiB (default)" : `${options.recordBytes} bytes`} · compression ${options.hardwareCompression === undefined ? "use recommendation" : options.hardwareCompression ? "on" : "off"} · capacity polling ${tape.capacityPollIntervalSeconds === undefined ? "Auto (5 seconds)" : tape.capacityPollIntervalSeconds === 0 ? "Off" : `${tape.capacityPollIntervalSeconds} seconds`}`}
+                description={`Tar records ${options.recordBytes === undefined ? "512 KiB (default)" : `${options.recordBytes} bytes`} · capacity polling ${tape.capacityPollIntervalSeconds === undefined ? "Auto (5 seconds)" : tape.capacityPollIntervalSeconds === 0 ? "Off" : `${tape.capacityPollIntervalSeconds} seconds`}`}
               >
                 <TarWriteOptionsFields value={options} disabled={disabled} onChange={(tarWriteOptions) => change({ ...tape, tarWriteOptions })} />
                 <TextField
@@ -273,6 +276,7 @@ export const DeviceSettingsBrowser = () => {
                   <ReadParametersEditor
                     key={device}
                     value={tape.readParameters}
+                    builtin={editor.draft.builtinReadParameters}
                     report={report}
                     disabled={disabled}
                     onDirtyChange={setParametersDirty}
@@ -309,9 +313,11 @@ export const DeviceSettingsBrowser = () => {
   );
 };
 
-// ReadParametersEditor edits one device's read parameters, at most one set per density code.
+// ReadParametersEditor edits one device's read parameters, at most one set per density code. Built-in
+// values for the reported densities without a configured set are listed read-only and prefill new sets.
 const ReadParametersEditor = ({
   value,
+  builtin,
   report,
   disabled,
   onChange,
@@ -319,6 +325,8 @@ const ReadParametersEditor = ({
   children,
 }: {
   value: TapeReadParameters[];
+  /** The server's built-in set for every density it has a layout for. */
+  builtin: TapeReadParameters[];
   report: InspectDeviceResponse | null;
   disabled: boolean;
   onChange: (value: TapeReadParameters[]) => void;
@@ -330,6 +338,9 @@ const ReadParametersEditor = ({
   const [index, setIndex] = useState<number | null>(null);
   const [initial, setInitial] = useState<ReadParametersForm>(() => readParametersForm(TapeReadParameters.create()));
   const [form, setForm] = useState<ReadParametersForm>(initial);
+  // Apply changes base.original by the fields that differ from base.form: the edited set, or a new set's
+  // built-in starting values.
+  const [base, setBase] = useState(() => ({ original: TapeReadParameters.create(), form: initial }));
   const [otherDensity, setOtherDensity] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState("");
@@ -344,14 +355,32 @@ const ReadParametersEditor = ({
   const used = value.flatMap((entry, at) => (at === index || entry.appliesTo?.densityCode === undefined ? [] : [entry.appliesTo.densityCode]));
   const errors = index === null ? {} : readParametersFormErrors(form, used);
   const shownErrors = attempted ? errors : Object.fromEntries(Object.entries(errors).filter(([key]) => key !== "density" || form.density.trim()));
-  const open = (next: number) => {
-    const start = readParametersForm(next >= 0 ? value[next] : TapeReadParameters.create());
+  // A new set starts from the built-in values for its density code, without their source reference.
+  const builtinStart = (density: number) => {
+    const values = builtin.find((entry) => entry.appliesTo?.densityCode === density);
+    return values ? TapeReadParameters.create({ ...TapeReadParameters.clone(values), appliesTo: { densityCode: density }, sourceReference: "" }) : undefined;
+  };
+  const open = (next: number, density?: number) => {
+    const original = next >= 0 ? value[next] : (density !== undefined && builtinStart(density)) || TapeReadParameters.create();
+    const start = readParametersForm(original);
     setInitial(start);
     setForm(start);
+    setBase({ original, form: start });
     setOtherDensity(start.density !== "" && !tapeDensityNames.has(Number(start.density)));
     setAttempted(false);
     setError("");
     setIndex(next);
+  };
+  // Choosing a new set's density code fills the values the operator has not edited yet.
+  const chooseDensity = (density: string) => {
+    if (JSON.stringify(form.values) !== JSON.stringify(base.form.values)) {
+      edit({ density });
+      return;
+    }
+    const original = builtinStart(parseDensityCode(density)) ?? TapeReadParameters.create();
+    const start = readParametersForm(original);
+    setBase({ original, form: start });
+    edit({ density, values: start.values });
   };
   const close = () => {
     if (dirty) setDiscard(true);
@@ -378,7 +407,7 @@ const ReadParametersEditor = ({
     if (index === null) return;
     setAttempted(true);
     if (Object.keys(errors).length > 0) return;
-    const parameters = applyReadParametersForm(editing ? value[index] : TapeReadParameters.create(), initial, form);
+    const parameters = applyReadParametersForm(base.original, base.form, form);
     const next = editing ? value.map((entry, at) => (at === index ? parameters : entry)) : [...value, parameters];
     const invalid = validateTapeReadParameterSets(next);
     if (invalid) {
@@ -389,13 +418,19 @@ const ReadParametersEditor = ({
     setIndex(null);
   };
   const setsError = validateTapeReadParameterSets(value);
+  // The reported cartridge's density, otherwise the densities the drive supports.
+  const tapeReport = report?.report.oneofKind === "tape" ? report.report.tape : undefined;
+  const listed = reportDensity !== undefined ? [reportDensity] : (tapeReport?.supportedDensityCodes ?? []);
+  const builtinRows = listed.flatMap((density) =>
+    value.some((entry) => entry.appliesTo?.densityCode === density) ? [] : builtin.filter((entry) => entry.appliesTo?.densityCode === density),
+  );
   return (
     <Stack spacing={1}>
       <Feedback severity="info">
         A read uses the set for the loaded cartridge&apos;s density code, otherwise built-in values. Missing values stay unknown.
       </Feedback>
       {setsError && <Feedback severity="error">{setsError}</Feedback>}
-      {value.length > 0 && (
+      {value.length + builtinRows.length > 0 && (
         <TableContainer>
           <Table aria-label="Read parameter sets" size="small">
             <TableHead>
@@ -443,6 +478,31 @@ const ReadParametersEditor = ({
                   </TableRow>
                 );
               })}
+              {builtinRows.map((parameters) => {
+                const density = parameters.appliesTo!.densityCode!;
+                const label = densityLabel(density);
+                return (
+                  <TableRow key={`builtin-${density}`}>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>{label}</TableCell>
+                    <TableCell>Any drive</TableCell>
+                    <TableCell>Built-in</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatSeconds(parameters.positioning?.baseSeconds)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatSeconds(parameters.positioning?.seekSecondsPerWrap)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {formatRate(parameters.reading?.bytesPerSecond)}
+                    </TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <Button type="button" size="small" disabled={disabled} aria-label={`Edit read parameters for ${label}`} onClick={() => open(-1, density)}>
+                        Edit
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
@@ -462,7 +522,10 @@ const ReadParametersEditor = ({
                 Read parameters override built-in values for their density code. Incomplete parameters may keep Logical order. Apply changes only the page
                 draft; use Save on the Settings page to keep them.
               </Alert>
-              <p>Empty fields stay unknown; do not enter 0 for a value you have not measured.</p>
+              <p>
+                A new set starts from the built-in values for its density code, when there are any; replace what you measured. Empty fields stay unknown; do not
+                enter 0 for a value you have not measured.
+              </p>
               {editing ? (
                 <TextField
                   fullWidth
@@ -486,7 +549,7 @@ const ReadParametersEditor = ({
                     onChange={(event) => {
                       const other = event.target.value === "other";
                       setOtherDensity(other);
-                      edit({ density: other ? "" : event.target.value });
+                      chooseDensity(other ? "" : event.target.value);
                     }}
                   >
                     <MenuItem value="" disabled>
@@ -509,7 +572,7 @@ const ReadParametersEditor = ({
                       disabled={disabled}
                       error={!!shownErrors.density}
                       helperText={shownErrors.density || "Decimal, or hexadecimal with 0x, from 0 to 255."}
-                      onChange={(event) => edit({ density: event.target.value })}
+                      onChange={(event) => chooseDensity(event.target.value)}
                     />
                   )}
                 </>

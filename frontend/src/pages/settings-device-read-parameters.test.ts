@@ -3,13 +3,13 @@ import { InspectDeviceResponse, TapeDeviceReport, TapeReadParameters } from "@/e
 import {
   applyReadParametersForm,
   captureTapeReadConditions,
-  densityLabel,
   parseDensityCode,
   readParametersForm,
   readParametersFormErrors,
   validateTapeReadParameters,
   validateTapeReadParameterSets,
 } from "./settings-device-read-parameters";
+import { densityLabel } from "@/components/tape-density";
 
 const density = { appliesTo: { densityCode: 88 } };
 
@@ -30,7 +30,7 @@ describe("read parameter validation", () => {
     { positioning: { baseSeconds: 1e20 } },
     { positioning: { approachReversalSeconds: -1 } },
     { positioning: { seekSecondsPerWrap: Infinity } },
-    { positioning: { bufferBytes: -1n } },
+    { positioning: { streamingBytes: -1n } },
     { reading: { bytesPerSecond: 0 } },
     { reading: { filemarkOverheadSeconds: -1 } },
     { completion: { fullSpanSeconds: 0 } },
@@ -56,22 +56,22 @@ describe("read parameter form", () => {
     const original = TapeReadParameters.create({
       appliesTo: { densityCode: 88, driveSerial: "SN1" },
       geometry: { nominalWraps: 80 },
-      positioning: { baseSeconds: 4.291234, bufferBytes: 18446744073709551615n },
+      positioning: { baseSeconds: 4.291234, streamingBytes: 18446744073709551615n },
       reading: { bytesPerSecond: 93123456.7 },
       completion: { fullSpanSeconds: 107 },
       sourceReference: "Calibration Job 12",
     });
     const initial = readParametersForm(original);
-    expect(initial.values.bufferBytes).toBe("18446744073709.551615");
+    expect(initial.values.streamingBytes).toBe("18446744073709.551615");
     expect(initial.values.bytesPerSecond).toBe("93.1234567");
     expect(initial.density).toBe("88");
     // Unchanged text keeps every stored value exactly.
     expect(applyReadParametersForm(original, initial, initial)).toEqual(original);
     const edited = applyReadParametersForm(original, initial, {
       ...initial,
-      values: { ...initial.values, bufferBytes: "32.5", bytesPerSecond: "140", baseSeconds: "", filemarkOverheadSeconds: "0" },
+      values: { ...initial.values, streamingBytes: "32.5", bytesPerSecond: "140", baseSeconds: "", filemarkOverheadSeconds: "0" },
     });
-    expect(edited.positioning).toEqual({ bufferBytes: 32500000n });
+    expect(edited.positioning).toEqual({ streamingBytes: 32500000n });
     expect(edited.reading).toEqual({ bytesPerSecond: 140000000, filemarkOverheadSeconds: 0 });
     expect(edited.geometry).toEqual({ nominalWraps: 80 });
     expect(edited.completion).toEqual({ fullSpanSeconds: 107 });
@@ -111,8 +111,8 @@ describe("read parameter form", () => {
     ["fullSpanSeconds", "0", "Must be above 0."],
     ["bytesPerSecond", "0", "Must be finite and above 0."],
     ["bytesPerSecond", "-5", "Enter a nonnegative decimal number."],
-    ["bufferBytes", "1.0000001", "Use at most six decimal places"],
-    ["bufferBytes", "18446744073710", "Must be at most"],
+    ["streamingBytes", "1.0000001", "Use at most six decimal places"],
+    ["streamingBytes", "18446744073710", "Must be at most"],
     ["nominalWraps", "80.5", "Must be a whole number"],
     ["nominalWraps", "0", "Must be a whole number"],
   ])("rejects %s %j inline", (key, text, message) => {
@@ -126,7 +126,7 @@ describe("read parameter form", () => {
   it("accepts zero where the server does and an empty form apart from the density code", () => {
     const form = readParametersForm(TapeReadParameters.create(density));
     expect(readParametersFormErrors(form, [])).toEqual({});
-    expect(readParametersFormErrors({ ...form, values: { ...form.values, baseSeconds: "0", bufferBytes: "0", fixedSeconds: "0" } }, [])).toEqual({});
+    expect(readParametersFormErrors({ ...form, values: { ...form.values, baseSeconds: "0", streamingBytes: "0", fixedSeconds: "0" } }, [])).toEqual({});
   });
 
   it("starts new parameters from the observed drive serial and density without supplying measurements", () => {
@@ -139,7 +139,6 @@ describe("read parameter form", () => {
           densityCode: 0,
           fixedRecords: false,
           recordBytes: 0,
-          compressionEnabled: true,
           encryptionEnabled: false,
         }),
       },

@@ -328,6 +328,34 @@ func (r Records) Unload(ctx context.Context) (err error) {
 	return controlResponse(response)
 }
 
+// load uses the synchronous SSC LOAD UNLOAD form with LOAD set: an ejected cartridge is threaded
+// and a loaded one is positioned at the beginning of partition zero. A current unit attention other
+// than a reset reports that the command was not performed; other completion failures without a
+// proven rejection leave the cartridge state unknown.
+func (r Records) load(ctx context.Context) error {
+	validate := func(response Response) error {
+		err := CheckResponse(response)
+		var failure *CommandError
+		if err == nil || rejectedCommand(err) || errors.As(err, &failure) && !errors.Is(err, ErrUncertain) && unitAttention(failure) {
+			return err
+		}
+		return &UncertainError{Cause: err}
+	}
+	response, err := r.Transport.Execute(ctx, Command{
+		CDB: []byte{0x1b, 0, 0, 0, 1, 0}, Direction: NoData, Timeout: r.Timeout, validate: validate,
+	})
+	if err != nil {
+		return err
+	}
+	return validate(response)
+}
+
+// unitAttention reports a current UNIT ATTENTION, which the device server reports instead of
+// performing the command.
+func unitAttention(failure *CommandError) bool {
+	return currentCommand(failure) && failure.Sense.Key == 6
+}
+
 func (r Records) Rewind(ctx context.Context) (err error) {
 	defer func() { r.geometryError(err) }()
 	response, err := r.Transport.Execute(ctx, Command{CDB: []byte{1, 0, 0, 0, 0, 0}, Direction: NoData, Timeout: r.Timeout, validate: controlResponse})

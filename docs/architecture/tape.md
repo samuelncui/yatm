@@ -20,7 +20,9 @@ Raw access requires visible host process descriptor tables and a clean negative 
 incomplete visibility is unknown ownership, not evidence that the drive is free. This observation
 uses the supported same-host namespace and does not coordinate another operator's device access.
 Inspection reports identity, readiness, block limits, current mode facts, non-secret encryption state
-and available READ POSITION/LOCATE form observations. It sends no positioning, write, mode-setting, key-loading
+and available READ POSITION/LOCATE form observations. REPORT DENSITY SUPPORT with MEDIA clear
+reports the primary density codes the drive supports, independent of the loaded cartridge; an
+unsupported or malformed reply leaves them unknown without failing inspection. It sends no positioning, write, mode-setting, key-loading
 or measurement command.
 Cartridge Inspect remains the distinct LTFS adapter action and can load the cartridge.
 
@@ -102,12 +104,15 @@ need manual adaptation for Archive. This required incompatibility is described i
 
 The immutable Tape profile selects LTFS or `tar_pax_v1`. FORMAT resolves explicit choices and the
 selected device's frozen defaults; APPEND and reads use the stored profile. Unset format defaults to
-LTFS. Tar defaults to variable records with a 512 KiB (524288-byte) maximum, overridden by saved
+tar. LTFS needs the partitions of LTO-5 or later: an LTFS FORMAT on a drive whose reported supported
+densities are known and contain no LTO-5 (0x58) or later code is refused under the attempt lease,
+from a passive report taken before any script or motion. Unknown densities, including unavailable
+raw access, leave LTFS allowed. The loaded cartridge's generation is not checked. Tar defaults to variable records with a 512 KiB (524288-byte) maximum, overridden by saved
 Device settings and then explicit FORMAT values; device/transport limits remain mandatory.
 APPEND and reads retain the recorded policy. Tar options cannot be supplied to LTFS, and conflicting
 APPEND options fail before access.
-Compression omission survives admission under the
-[shared precedence](contracts.md#tape-options-and-selection); its final profile defaults off. [Encryption](#encryption) has no per-device or per-write switch.
+Tar data is always written with [drive compression off](#drive-compression); there is no compression
+option or profile fact. [Encryption](#encryption) has no per-device or per-write switch.
 
 The Device capacity-polling interval is an execution preference for tar FORMAT and APPEND,
 independent of the cartridge profile. Its admitted snapshot resolves omission to five seconds,
@@ -173,6 +178,19 @@ through normal unmount. Finalize does not run `readinfo` again: that script load
 which must not occur while LTFS owns it. Successful reads become publishable only after normal
 unmount succeeds; a failed unmount still withholds publication and keeps the device unavailable.
 
+An LTFS read or write Session that fails or is cancelled after its identity check but before its
+mount script runs (Media and key preparation, the Encrypt script, the pre-mount geometry observation
+or the format script) ends like failed tar work: the cartridge is unloaded. Every script has exited
+by then, because the Executor waits for all holders of a script's output. The Executor then opens a
+raw descriptor under the attempt lease, which requires a clean holder check, and issues the same
+synchronous UNLOAD tar uses; no Tape script changes. A mount script failure instead runs the unmount
+adapter, because the script may have mounted LTFS, and later failures release through it as before.
+A barcode that differs from or is missing for the requested identity leaves the cartridge loaded.
+A preserved unknown native outcome issues no unload. When raw access is unavailable (for example no
+SG mapping, permission or holder visibility, or a visible holder), the cartridge stays loaded and
+the reason is logged. A failed unload is reported with the work's error and keeps the device
+unavailable.
+
 ### Sequential tar Tape
 
 [Tar Sessions](../../internal/executor/media_tar.go) use a known single data partition and fixed or
@@ -184,12 +202,11 @@ separate saved versions during independent extraction. The label is identity/rec
 content index. The [recovery guide](../operations/tar-tape-recovery.md) owns the public-tool procedure.
 
 Every tar FORMAT, APPEND and read runs the configured encryption adapter; there is no plaintext tar
-path. Writes establish the selected hardware compression policy; the immutable profile records that choice.
+path. Writes turn drive compression off for the attempt.
 Writes also require known rewritable, unprotected media and applicable buffering/EOD generation;
 the baseline does not offer WORM writes.
-Known-absent features need no unsupported control command. Reads require the record/decoding policy
-without writable-media or write-compression prerequisites. Compressed reads independently establish
-hardware decompression. New tar FORMAT generates a key and invokes the configured Encrypt script;
+Known-absent features need no unsupported control command. Reads require the record policy
+without writable-media or compression prerequisites and leave compression controls untouched. New tar FORMAT generates a key and invokes the configured Encrypt script;
 APPEND and reads restore the stored key, and a tar Media without one is refused before device access.
 Software read ordering uses the qualified
 provider boundary below and otherwise retains logical order.
@@ -213,8 +230,7 @@ FORMAT. A required transition from multipartition media or a nonzero active part
 applicable supported form before mutation. Initialization establishes partition zero/BOT and a known single partition;
 the new label's synchronized terminating filemark establishes the fresh recorded boundary. This
 replaces the recorded archive layout rather than claiming to erase every physical byte. A proven EW
-on the label's filemark closes content admission while permitting zero-member Media settlement,
-without another data WRITE or filemark.
+on the label's filemark closes content admission without another data WRITE or filemark.
 
 APPEND checks the registered label/initialization/profile before proving the physical tail. It
 requires the long READ POSITION/LOCATE pair, issues SPACE to EOD (mandatory in SSC) without a
@@ -224,7 +240,8 @@ post-filemark position before enabling write controls. This needs two boundary R
 of the written prefix. A missing long position form, a rejected command, an EOD position without
 object or file counters, failed motion or a contradictory tail fails APPEND without retry or a
 record/filemark walk from BOT. The proof never uses CM or catalog counts as write authority or
-rewrites the previous tar terminator. A capacity/EW-terminated archive ending at a proven filemark can precede another archive. Unterminated trailing records, unreadable required
+rewrites the previous tar terminator. An archive closed by a capacity/EW stop, cancellation or
+independent failure ends at a proven filemark and can precede another archive. Unterminated trailing records, unreadable required
 boundary data and unresolved final position refuse APPEND. Existing Media and Positions are preserved.
 
 The [codec](../../internal/media/tar_write.go) packs members across records without per-member device
@@ -238,8 +255,8 @@ label warning can reject references immediately. Global PAX state, sparse extens
 contain the actual Tape file ordinal and header-chain byte offset. Optional paired header/exclusive-end
 anchors use partition zero, a logical object and an offset within its actual record. Their containing
 record's tar offset cannot underflow. The Tape provider owns eligibility for the positively reported
-standard READ POSITION/LOCATE pairing, partition-zero scope and address width. Its logical-object
-contract counts records and filemarks independently of compression or record byte lengths. Missing
+standard READ POSITION/LOCATE pairing and address width; tar addresses partition zero only and its record access requires a single partition; Calibration, which transfers no record, alone is prepared on a multipartition cartridge and addresses another partition. Its logical-object
+contract counts records and filemarks independently of record byte lengths. Missing
 pairing or applicable failed evidence withdraws optional navigation. Physical validation remains
 outside passive reports until its own acceptance; it is not another protocol-eligibility switch.
 
@@ -258,25 +275,29 @@ Successful member Finish proves complete header/payload/zero padding, separately
 Archive's existing item results retain provisional positioning after ACP and member framing succeed.
 Two optional scalar header offsets track the last successful member still buffered and the last successful
 member covered by fully accepted records. Byte zero remains valid; an active unfinished member cannot
-advance confirmation. Finalize requires synchronized count-one filemark completion and verified cleanup
-before its frozen validator admits staged positions on normal completion or an exclusively
-capacity/EW stop. Archive applies it in the existing path-update pass,
+advance confirmation. Finalize requires synchronized count-one filemark completion, the completed
+position check, verified cleanup and synchronous unload before its frozen validator admits staged
+positions, whether the stream completed normally, stopped at capacity/EW, or was interrupted by
+cancellation or an independent failure. Archive applies it in the existing path-update pass,
 including optional-anchor withdrawal and final short-record normalization. Staged rows cannot authorize
-restart publication; a new attempt resets them.
-Successful normal completion or an exclusively capacity/EW stop also requires synchronous unload
-before publication. An independent failure or cancellation uses control cleanup without unload;
-the runner still retains its original content/stop result.
+restart publication; a new attempt resets them. The runner retains its original content/stop result.
 Archive joins those path/size/storage facts with successful STAGED content results. Complete members
-can survive source-open gaps; they need not form a continuous manifest prefix. Successful physical
-finalization makes a newly initialized Media publishable even when no content member survives.
+can survive source-open gaps; they need not form a continuous manifest prefix. A FORMAT attempt that
+publishes no member registers no Media, as an LTFS FORMAT that publishes no file does: the cartridge
+keeps the label and cartridge memory barcode FORMAT wrote, its generated key is discarded with the
+attempt, and a later FORMAT initializes it again.
 
-An exclusively capacity/EW stop closes admission and discards the unsubmitted suffix without
-adding payload or a tar trailer. Its completed filemark and unload can admit only fully accepted,
-complete members. Cancellation, a source failure after a member starts, or another independent
-failure stops the attempt, runs ordinary cleanup and returns no usable result from that Archive.
-It does not add a filemark to salvage a prefix, repair a tail or resume the interrupted stream.
+A capacity/EW stop, a cancellation, or an independent failure the drive did not cause (a source
+failure after a member starts, a result-persistence failure or another error outside the drive)
+closes admission and discards the unsubmitted suffix, including complete members still in the
+unwritten final record, without adding payload or a tar trailer. Its completed filemark, position
+check and unload admit only fully accepted, complete members; the interrupted member is never
+published. The Tape file then ends with the accepted bytes, possibly a truncated member, no
+end-of-archive blocks and the proven filemark, which a later APPEND accepts as its tail.
 Completed command observations remain diagnostic facts; they do not authorize publication. Unknown
-or partial acceptance, deferred/hardware errors and failed completion or cleanup also withhold publication. Qualified non-immediate count-zero synchronization or
+or partial acceptance, WRITE and deferred/hardware errors, an unknown command outcome, contradictory
+position evidence and failed filemark, position check, cleanup or unload withhold all publication;
+no filemark is added after a device failure, and a new attempt never resumes the interrupted stream. Qualified non-immediate count-zero synchronization or
 count-one filemark EW can establish completion from current NO SENSE/EOM command semantics;
 absent sense information does not contradict that success, while a valid remainder must be zero.
 Data WRITE acceptance still requires qualified valid transferred-unit evidence. Contradictory native
@@ -361,46 +382,59 @@ publication gate for previously successful reads.
 Fresh inventory traverses every content Tape file and excludes only a readable incomplete tail at a
 clean filemark. Actual I/O faults or an unterminated recorded tail fail enumeration; complete inventory
 and successful read Finalize are both required before replacement publication. Reads emit no filemark.
-Automatic tar selection reads the cartridge memory barcode under the lease and resolves it against frozen
-candidates; a Tape without one fails identification. Known LTFS selections retain
+Automatic tar selection loads the cartridge as described below, where LTFS identification runs the
+`readinfo` adapter and its `mt load`, then reads the cartridge memory barcode under the lease and
+resolves it against frozen candidates; a Tape without one fails identification. It leaves the
+cartridge loaded for the read Session, which loads again and checks the identity, and an empty drive
+fails with its missing-medium rejection. Known LTFS selections retain
 their configured adapter flow without requiring SG permissions.
+
+Every tar Archive, Restore, Scan and Calibration Media step, and automatic tar identification, first issues one synchronous LOAD
+(LOAD UNLOAD with LOAD set and IMMED clear) on its first descriptor under the attempt lease, before
+passive inspection and the identity check, as the LTFS `readinfo` adapter's `mt load` does. It
+threads a cartridge an earlier step ejected and positions a loaded one at the beginning of
+partition zero, which every step reaches anyway. A current unit attention reports that LOAD was not
+performed, so it is reissued; TEST UNIT READY then consumes any remaining unit attention and polls
+every two seconds while the drive reports that it is becoming ready, within one minute in total.
+An empty drive returns its NOT READY medium-not-present rejection without an unload. A reset or
+another unexplained completion is an unknown outcome: the transport refuses every later command
+and the device stays unavailable. Descriptors reopened after the Encrypt script or between
+Calibration test-data chunks do not load again.
 
 Preparation captures touched non-secret session controls before the first mutation, uses MODE SELECT
 with SP clear and verifies readback. Both session and partition selection preserve buffering and speed.
 Cleanup restores captured record/compression controls and uncommitted pending partition controls after
-commands settle; it never saves defaults or resets. Normal tar Archive, Restore, Scan and Calibration completion
-then issues one synchronous UNLOAD, which owns rewind/unthread/eject; no extra REWIND is added.
-Failed or canceled work and transport Close do not issue that motion. Restoration failure prevents
-unload. Required release failure or preserved command uncertainty retains device unavailability.
+commands settle; it never saves defaults or resets. Every tar Archive, Restore, Scan and Calibration
+Media step then issues one synchronous UNLOAD, which owns rewind/unthread/eject; no extra REWIND is
+added. It unloads whether the step succeeded, failed or was canceled, as the LTFS unmount adapter
+does. A cartridge that fails the identity check (a different or missing cartridge memory barcode,
+or a registered barcode for Calibration test data) stays loaded, as it does for LTFS. A failure
+while the Encrypt script holds the drive, with no descriptor open, unloads through a new raw
+descriptor under the attempt lease once the script has exited, as an LTFS failure before mounting
+does; when raw access is unavailable the cartridge stays loaded and the reason is logged. Passive inspection, the LTFS FORMAT
+density check, the pre-mount LTFS geometry observation, each handoff to the Encrypt script and
+transport Close never load or unload. After an unknown command outcome the transport refuses every later
+command, so no unload follows; restoration failure also prevents it. A failed unload is reported
+with the work's own error. Required release failure or preserved command uncertainty retains
+device unavailability.
 Synthetic record/SG tests and GNU tar disk interoperability establish software behavior. Physical
 acceptance separately covers initialization, EW/count/completion, reload-stable seek, cleanup and
 Linux public-reader recovery for each tested record policy and device path. Discovery, a local
 commit or disk extraction does not establish those gates.
 
-### Hardware Compression
+### Drive Compression
 
-Hardware compression uses the SSC data-compression page's DCC capability and DCE write setting,
-independently of its DDE read setting. The legacy device-configuration compression selector is
-resolved consistently with DCE for writes; APPEND first validates the label and recorded tail under
-read controls, then applies the cartridge's write policy. READ preserves write DCE and does not
-require writable media or a changeable write-compression setting. A compressed profile requires
-enabled hardware decoding with supported exception handling before reading its label. Plain reads
-remain usable on devices without that optional capability.
-
-The inspection report exposes the observed numeric algorithm identifier and optional enable-bit
-changeability through `TapeCompressionLimits`, reusing the existing current-enabled observations.
-An observed algorithm is neither a supported-algorithm list nor a compatibility guarantee for another
-cartridge. Algorithms are preserved rather than selected by name or LTO generation. Required
-controls need known changeability when changed and exact readback. Cleanup restores only touched
-controls and preserves actual partition state and any last-read decompression algorithm. It never
-saves power-on defaults. Unknown active write settings fail preparation; a known absent compressor
-with explicit Off needs no unsupported compression control. No software compression is introduced,
-and the capacity estimate grants no expected compression savings. Physical compression, cleanup
-and compatible Linux-reader recovery qualification remains pending.
-Job diagnostics distinguish the immutable write choice from effective write compression and read
-decompression in FORMAT, READ and both APPEND preparation phases. Algorithm observations are
-refreshed from existing current-mode queries; missing values remain unknown. Unexpected write-algorithm
-drift cannot count as verified cleanup, while normal last-read decoder algorithm changes are retained.
+Tar FORMAT and APPEND force the drive's compression off through the same checked MODE SELECT as the
+record controls: the SSC data-compression page's DCE write setting and the legacy
+device-configuration compression selector are both cleared. APPEND first validates the label and
+recorded tail under read controls, then turns compression off for its writes. Algorithm identifiers
+are preserved, never selected. Changing a control requires known changeability and exact readback,
+and the write readback must show compression off. Unknown active compression settings fail
+preparation; a drive with no compressor, or one already off, needs no compression control. READ
+never changes compression controls; uncompressed records need no decoder setup. Cleanup restores
+only touched controls, preserving actual partition state and any last-read decompression algorithm,
+and never saves power-on defaults. Unexpected write-algorithm drift cannot count as verified cleanup.
+No software compression is introduced, and the capacity estimate grants no compression savings.
 
 ### Encryption
 
@@ -425,7 +459,8 @@ its partition initialization and barcode assignment on the raw descriptor, close
 then opens a fresh descriptor, requires the matching barcode and reapplies record controls before
 writing the label. APPEND/read first opens the raw device and cross-checks its
 barcode, closes it, runs Encrypt with the saved key, then
-reopens a fresh raw session and cross-checks the barcode again. Script failure stops preparation. The cartridge memory
+reopens a fresh raw session and cross-checks the barcode again. Script failure stops preparation
+and unloads the cartridge. The cartridge memory
 barcode selects one saved Media and therefore one key; selection never tries candidate keys. The label contains no key.
 Normal independent recovery uses the existing protected Library export and a compatible reader,
 as described in the [public-tool guide](../operations/tar-tape-recovery.md). Media deletion removes

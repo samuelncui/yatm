@@ -46,21 +46,23 @@ enum TapeRecordMode {
     TAPE_RECORD_MODE_VARIABLE = 2;
 }
 
-// FORMAT freezes the record policy and hardware choices for one tar cartridge initialization.
+// FORMAT freezes the record policy for one tar cartridge initialization.
 message TarMediaProfile {
+    reserved 4;
+    reserved "hardware_compression";
     string initialization_id = 1;
     TapeRecordMode record_mode = 2;
     uint32 record_bytes = 3;
-    bool hardware_compression = 4;
     // Optional observed public algorithm; the separately retained key controls script preparation.
     optional string encryption_algorithm = 5;
 }
 
-// Presence distinguishes an omitted default from an explicit false hardware choice.
+// Presence distinguishes an omitted default from an explicit choice.
 message TarWriteOptions {
+    reserved 3;
+    reserved "hardware_compression";
     optional TapeRecordMode record_mode = 1;
     optional uint32 record_bytes = 2;
-    optional bool hardware_compression = 3;
 }
 
 message VolumeMediaProfile {

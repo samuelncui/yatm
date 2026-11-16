@@ -164,10 +164,12 @@ func TestArchiveTarStagedStorageWaitsForPhysicalCompletion(t *testing.T) {
 			require.NoError(t, runner.db.Order("target_path").Find(&items).Error)
 			media, _, queryErr := exe.Lib().ListMediaPage(ctx, nil)
 			require.NoError(t, queryErr)
-			if failure != "none" {
+			// A WRITE accepted in full before its cancellation settles like an ordinary completion.
+			settled := failure == "none" || failure == "accepted cancellation"
+			if !settled {
 				require.ErrorIs(t, err, cause)
-				if failure == "unknown WRITE" || failure == "accepted cancellation" {
-					require.Zero(t, device.marks.Load(), "an interrupted WRITE must not trigger a rescue filemark")
+				if failure == "unknown WRITE" {
+					require.Zero(t, device.marks.Load(), "an unknown WRITE must not trigger a rescue filemark")
 				}
 				stored, queryErr := exe.GetJob(ctx, job.ID)
 				require.NoError(t, queryErr)
@@ -180,7 +182,11 @@ func TestArchiveTarStagedStorageWaitsForPhysicalCompletion(t *testing.T) {
 				}
 				return
 			}
-			require.NoError(t, err)
+			if failure == "none" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, cause)
+			}
 			require.Len(t, media, 1)
 			positions, err := exe.Lib().ListMediaFilePositions(ctx, media[0].ID, "", 100)
 			require.NoError(t, err)
@@ -347,7 +353,8 @@ func TestArchiveCopyPreservesPageAndStagingFailures(t *testing.T) {
 				}
 				tx.AddError(writeErr)
 			}))
-			session, err := mediapkg.NewTarWriteSession(&archiveStorageDevice{}, mediapkg.TarSessionOptions{
+			device := &archiveStorageDevice{}
+			session, err := mediapkg.NewTarWriteSession(device, mediapkg.TarSessionOptions{
 				Media: archiveStorageDescriptor(), Mode: tape.RecordMode{MaximumBytes: 512 << 10}, TapeFile: 1,
 				Cleanup: func(context.Context) error { return nil },
 			})
@@ -360,11 +367,18 @@ func TestArchiveCopyPreservesPageAndStagingFailures(t *testing.T) {
 			require.ErrorIs(t, err, writeErr)
 			require.EqualValues(t, 1, writes.Load())
 
-			// A stopped feeder or failed result writer cannot turn staged bytes into an archive.
+			// A stopped feeder or failed result writer interrupts the stream: its buffered member is
+			// never written, and the closing filemark confirms no member.
 			result, finalizeErr := session.Finalize(context.Background(), err)
-			require.Nil(t, result)
-			require.ErrorIs(t, finalizeErr, mediapkg.ErrFinalizeUnusable)
-			require.ErrorIs(t, finalizeErr, writeErr)
+			require.NoError(t, finalizeErr)
+			require.NotNil(t, result)
+			require.Zero(t, device.writes.Load())
+			require.EqualValues(t, 1, device.marks.Load())
+			staged := &entity.StoragePosition{Metadata: (&entity.TarMetadata{TapeFile: 1}).Pack()}
+			staged.Order = entity.TarStorageOrder(staged.Metadata.GetTar())
+			storage, err := result.FinalizeStorage(staged)
+			require.NoError(t, err)
+			require.Nil(t, storage)
 		})
 	}
 }

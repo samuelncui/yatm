@@ -121,7 +121,7 @@ func (e *Executor) resolveTapeWrite(ctx context.Context, target *entity.ArchiveT
 }
 
 func mergeTarOptions(levels ...*entity.TarWriteOptions) *entity.TarWriteOptions {
-	// Default to variable 512 KiB records; an omitted compression stays absent.
+	// Default to variable 512 KiB records.
 	resolved := &entity.TarWriteOptions{
 		RecordMode:  entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE.Enum(),
 		RecordBytes: proto.Uint32(512 << 10),
@@ -137,9 +137,6 @@ func mergeTarOptions(levels ...*entity.TarWriteOptions) *entity.TarWriteOptions 
 		if value.RecordBytes != nil {
 			resolved.RecordBytes = value.RecordBytes
 		}
-		if value.HardwareCompression != nil {
-			resolved.HardwareCompression = value.HardwareCompression
-		}
 	}
 	return resolved
 }
@@ -148,7 +145,6 @@ func tarProfileOptions(profile *entity.TarMediaProfile) *entity.TarWriteOptions 
 	profile = proto.Clone(profile).(*entity.TarMediaProfile)
 	return &entity.TarWriteOptions{
 		RecordMode: profile.RecordMode.Enum(), RecordBytes: proto.Uint32(profile.RecordBytes),
-		HardwareCompression: proto.Bool(profile.HardwareCompression),
 	}
 }
 
@@ -159,12 +155,13 @@ func formatTarOptions(options *entity.TarWriteOptions) (*entity.TarWriteOptions,
 }
 
 // tarWriteDeviceDetail names a known physical blocker; optional diagnostic failures do not block a write.
+// An unloaded cartridge does not either: inspection never loads one and the attempt does.
 func tarWriteDeviceDetail(report *entity.InspectDeviceResponse) string {
-	tape := report.GetTape()
-	blocked := report.GetDevice().GetBusy() || tape != nil && (tape.MediumPresent != nil && !tape.GetMediumPresent() || tape.GetWriteProtected())
+	blocked := report.GetDevice().GetBusy() || report.GetTape().GetWriteProtected()
 	switch report.GetReason() {
 	case entity.DeviceReason_DEVICE_REASON_UNSPECIFIED, entity.DeviceReason_DEVICE_REASON_UNSUPPORTED,
-		entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED:
+		entity.DeviceReason_DEVICE_REASON_MALFORMED_RESPONSE, entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED,
+		entity.DeviceReason_DEVICE_REASON_NO_MEDIUM, entity.DeviceReason_DEVICE_REASON_NOT_READY:
 	default:
 		blocked = true
 	}

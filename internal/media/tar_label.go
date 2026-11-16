@@ -61,8 +61,7 @@ func WriteTarLabel(ctx context.Context, device TarRecordDevice, mode tape.Record
 	readme := []byte(fmt.Sprintf("YATM %s Tape\nBarcode: %s\nName: %q\n"+
 		"Physical Tape file 0 contains this identity. Each later Tape file is an independent PAX tar.\n"+
 		"Recovery requires the recorded record policy and any required hardware encryption key.\n"+
-		"Record mode: %s; record bytes: %d; hardware compression: %t.\n"+
-		"Hardware-compressed records require a compatible drive decoder; read DDE is independent of write DCE.\n"+
+		"Record mode: %s; record bytes: %d. Records are written with drive compression off.\n"+
 		"Observed encryption algorithm: %s (empty means not recorded). Any key is retained outside this label.\n"+
 		"For encrypted recovery, obtain the key from the saved Media profile and use a temporary protected key file.\n"+
 		"With stenc 2.0.1, resolve this reader's public algorithm index; after positioning, use "+
@@ -85,7 +84,7 @@ func WriteTarLabel(ctx context.Context, device TarRecordDevice, mode tape.Record
 		"Other xattr namespaces require explicit compatible-system GNU tar selection. "+
 		"No YATM database or index is needed for content extraction.\n",
 		label.Format, label.Barcode, label.Name, label.Profile.RecordMode.String(),
-		label.Profile.RecordBytes, label.Profile.HardwareCompression, label.Profile.GetEncryptionAlgorithm()))
+		label.Profile.RecordBytes, label.Profile.GetEncryptionAlgorithm()))
 	if len(readme) > tarLabelLimit {
 		return errors.New("tar identity README exceeds supported envelope")
 	}

@@ -106,7 +106,7 @@ func TestTarAutoFallsBackAndRefreshRejectsBeforeControls(t *testing.T) {
 	require.Contains(t, diagnostics.String(), "requested_read_order=TAPE_READ_ORDER_AUTO")
 	require.Contains(t, diagnostics.String(), "effective_read_order=TAPE_READ_ORDER_LOGICAL")
 
-	// Automatic selection without a cartridge memory barcode fails before any candidate, key or motion.
+	// Automatic selection without a cartridge memory barcode fails after its LOAD, before any candidate, key or other command.
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 	fixture.barcode, fixture.securityEvents = "", nil
@@ -115,5 +115,5 @@ func TestTarAutoFallsBackAndRefreshRejectsBeforeControls(t *testing.T) {
 		return nil, nil
 	})
 	require.ErrorContains(t, err, "Tape identity is unavailable")
-	require.Empty(t, fixture.securityEvents)
+	require.Equal(t, []string{"load"}, fixture.securityEvents)
 }

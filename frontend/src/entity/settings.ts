@@ -22,6 +22,14 @@ export interface DeviceSettings {
      * @generated from protobuf field: repeated yatm.v1.DeviceConfig devices = 1
      */
     devices: DeviceConfig[];
+    /**
+     * Read-only built-in read parameters: one set for each recorded density code the product has a
+     * layout for, with its density code, no drive serial and its built-in source reference. Get and
+     * Update return them; Update ignores client-supplied values and never stores them.
+     *
+     * @generated from protobuf field: repeated yatm.v1.TapeReadParameters builtin_read_parameters = 4
+     */
+    builtinReadParameters: TapeReadParameters[];
 }
 /**
  * @generated from protobuf message yatm.v1.DeviceConfig
@@ -161,7 +169,7 @@ export interface TapeReadGeometry {
     nominalWraps?: number;
 }
 /**
- * Nonnegative LOCATE terms in seconds. A target within buffer_bytes ahead costs the skipped objects
+ * Nonnegative LOCATE terms in seconds. A target within streaming_bytes ahead costs the skipped objects
  * at reading speed plus approach_reversal_seconds per wrap turn crossed. A same-wrap forward move that
  * stays in one half costs base_seconds plus that reading-speed time, priced from record bytes and
  * TapeReadTiming.bytes_per_second rather than a field here. Every other move, including a same-wrap
@@ -191,13 +199,14 @@ export interface TapeReadPositioning {
      */
     seekSecondsPerWrap?: number;
     /**
-     * How far logically ahead the drive reaches by continuing to read instead of positioning: such a
-     * target costs the skipped objects at reading speed plus approach_reversal_seconds per wrap turn
-     * crossed, and no other positioning term. Absent or zero never applies.
+     * Streaming distance: how far logically ahead the drive reaches by continuing to read instead of
+     * positioning. Such a target costs the skipped objects at reading speed plus
+     * approach_reversal_seconds per wrap turn crossed, and no other positioning term. Absent or zero
+     * never applies.
      *
-     * @generated from protobuf field: optional uint64 buffer_bytes = 14
+     * @generated from protobuf field: optional uint64 streaming_bytes = 14
      */
-    bufferBytes?: bigint;
+    streamingBytes?: bigint;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeReadTiming
@@ -534,12 +543,14 @@ export enum TapeReadOrder {
 class DeviceSettings$Type extends MessageType<DeviceSettings> {
     constructor() {
         super("yatm.v1.DeviceSettings", [
-            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceConfig }
+            { no: 1, name: "devices", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => DeviceConfig },
+            { no: 4, name: "builtin_read_parameters", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapeReadParameters }
         ]);
     }
     create(value?: PartialMessage<DeviceSettings>): DeviceSettings {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.devices = [];
+        message.builtinReadParameters = [];
         if (value !== undefined)
             reflectionMergePartial<DeviceSettings>(this, message, value);
         return message;
@@ -551,6 +562,9 @@ class DeviceSettings$Type extends MessageType<DeviceSettings> {
             switch (fieldNo) {
                 case /* repeated yatm.v1.DeviceConfig devices */ 1:
                     message.devices.push(DeviceConfig.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* repeated yatm.v1.TapeReadParameters builtin_read_parameters */ 4:
+                    message.builtinReadParameters.push(TapeReadParameters.internalBinaryRead(reader, reader.uint32(), options));
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -567,6 +581,9 @@ class DeviceSettings$Type extends MessageType<DeviceSettings> {
         /* repeated yatm.v1.DeviceConfig devices = 1; */
         for (let i = 0; i < message.devices.length; i++)
             DeviceConfig.internalBinaryWrite(message.devices[i], writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* repeated yatm.v1.TapeReadParameters builtin_read_parameters = 4; */
+        for (let i = 0; i < message.builtinReadParameters.length; i++)
+            TapeReadParameters.internalBinaryWrite(message.builtinReadParameters[i], writer.tag(4, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -966,7 +983,7 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
             { no: 1, name: "base_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
             { no: 10, name: "approach_reversal_seconds", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
             { no: 12, name: "seek_seconds_per_wrap", kind: "scalar", opt: true, T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 14, name: "buffer_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
+            { no: 14, name: "streaming_bytes", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<TapeReadPositioning>): TapeReadPositioning {
@@ -989,8 +1006,8 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
                 case /* optional double seek_seconds_per_wrap */ 12:
                     message.seekSecondsPerWrap = reader.double();
                     break;
-                case /* optional uint64 buffer_bytes */ 14:
-                    message.bufferBytes = reader.uint64().toBigInt();
+                case /* optional uint64 streaming_bytes */ 14:
+                    message.streamingBytes = reader.uint64().toBigInt();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1013,9 +1030,9 @@ class TapeReadPositioning$Type extends MessageType<TapeReadPositioning> {
         /* optional double seek_seconds_per_wrap = 12; */
         if (message.seekSecondsPerWrap !== undefined)
             writer.tag(12, WireType.Bit64).double(message.seekSecondsPerWrap);
-        /* optional uint64 buffer_bytes = 14; */
-        if (message.bufferBytes !== undefined)
-            writer.tag(14, WireType.Varint).uint64(message.bufferBytes);
+        /* optional uint64 streaming_bytes = 14; */
+        if (message.streamingBytes !== undefined)
+            writer.tag(14, WireType.Varint).uint64(message.streamingBytes);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

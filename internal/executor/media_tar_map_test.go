@@ -84,14 +84,6 @@ func TestTarPositionMapRejectsUnusableCurrentReports(t *testing.T) {
 			require.NotEmpty(t, reason)
 		})
 	}
-
-	// A compressed written profile keeps the observed map but has no interpolation model.
-	stored := tarMapMediaFixture()
-	stored.Profile.GetTape().Tar.HardwareCompression = true
-	current, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
-	model, _, reason := compileTarMediaReadModel(tarNormalizedParameters(), describeMedia(stored), current, func() bool { return true })
-	require.Nil(t, model)
-	require.NotEmpty(t, reason)
 }
 
 func TestTarPositionMapNoReportPreservesFallback(t *testing.T) {

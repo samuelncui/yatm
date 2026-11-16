@@ -134,7 +134,7 @@ LTO-7 to 9 half-height rates from
 [Quantum TB00068A](https://cdn.allbound.com/iq-ab/2022/12/LTO-9-TB00068A.pdf) (full-height rates
 differ), and LTO-10 densities `62h` and `63h` (Premium) with 15,104 tracks over 32 channels and
 400 MB/s from
-[GA32-0928-08 tables 3, 114 and 318](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-08%20(EXTERNAL).pdf). Full-span rewind is 96 seconds except LTO-3 (78) and LTO-4 (93), per HP Volume 4 above.
+[GA32-0928-08 tables 3, 114 and 318](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-08%20(EXTERNAL).pdf). Native capacities are the LTO generation capacities; the same reference's table 11 gives 30 TB for `62h` and 40 TB for `63h`, and its cartridge type list gives 9,000 GB for Type M. Full-span rewind is 96 seconds except LTO-3 (78) and LTO-4 (93), per HP Volume 4 above.
 
 The existing HP5 LOCATE regression yields 92.690 seconds per longitudinal span; this is not a
 directly measured full-length REWIND duration. A post-hoc sensitivity
@@ -806,10 +806,10 @@ long, by 5.0 seconds on average, while 10 of 14 mirrored moves had near-zero err
 
 The current model prices reading-speed moves from record bytes and the read rate, fits a shared
 positioning base, a seek-speed slope, wrap change and approach reversal with nonnegative least
-squares, and adds a read-ahead buffer and a run-up distance found by a threshold search;
-the [next section](#read-ahead-buffer-run-up-and-ltfs-tail) gives their evidence. The built-in
+squares, and adds a streaming distance and a run-up distance found by a threshold search;
+the [next section](#streaming-distance-run-up-and-ltfs-tail) gives their evidence. The built-in
 priors are 5.299 seconds base, 96.20 seconds per seek span, 1.358 seconds wrap change, 4.146
-seconds approach reversal, a 902,905,650-byte (861 MiB) buffer and a run-up distance of 0.02 span;
+seconds approach reversal, a 902,905,650-byte (861 MiB) streaming distance and a run-up distance of 0.02 span;
 band change keeps CERN's 3.2 seconds because no sample changed band. Over the four sets above their
 mean absolute errors are 0.87, 1.93 (held out), 0.46 and 1.11 seconds. Refitting from the first tar
 set alone, shrunk toward the earlier full-cartridge fit, predicts the second tar set with 2.03
@@ -823,7 +823,7 @@ not part of this fit. One drive, one cartridge and band 0 do not establish band-
 other generations or a portable model; per-source residuals of further measurements remain the check
 for a systematic LTFS offset.
 
-## Read-Ahead Buffer, Run-Up and LTFS Tail
+## Streaming Distance, Run-Up and LTFS Tail
 
 Two further LTFS measurements on the same HP LTO-5/Z6ED drive and cartridge (512 KiB blocks,
 uncompressed, hardware-encrypted, band 0) were added to the replay fixture. The first restored
@@ -843,7 +843,7 @@ next longer same-wrap forward move, 1,842 blocks (966 MB), took 12.7–12.9 seco
 more than its bytes at reading speed, and longer ones keep that fixed cost. The data therefore bound
 the reach between 875 and 966 MB; the threshold search places it at 861 MiB. The fixed cost of
 these read-speed locates fits the same value as the seek base, so the model shares one base term.
-Streaming within the buffer is priced with a mean absolute residual of 0.06 seconds over 67
+Streaming within that distance is priced with a mean absolute residual of 0.06 seconds over 67
 samples, and read-speed locates beyond it with 0.33 seconds over 90 samples.
 
 Wrap changes along the target wrap's direction took 10–11.8 seconds when the move was under 0.0015

@@ -32,7 +32,7 @@ const moves = [
 ];
 const parameters = TapeReadParameters.create({
   appliesTo: { densityCode: 0x58, driveSerial: "HU1234" },
-  positioning: { baseSeconds: 4.25, seekSecondsPerWrap: 52.5, approachReversalSeconds: 2.75, bufferBytes: 1_500_000_000n },
+  positioning: { baseSeconds: 4.25, seekSecondsPerWrap: 52.5, approachReversalSeconds: 2.75, streamingBytes: 1_500_000_000n },
   reading: { bytesPerSecond: 140_000_000 },
 });
 const job = (value: Parameters<typeof Job.create>[0]) => Job.create({ id: 12n, kind: JobKind.CALIBRATION, targetName: "drive", ...value });
@@ -68,7 +68,7 @@ describe("Calibration Job", () => {
       "Seek time for one span (seek_seconds_per_wrap): 52.50 s",
       "Added time when arriving against the wrap direction (approach_reversal_seconds): 2.75 s",
       "Read rate (bytes_per_second): 140.0 MB/s",
-      "Read-ahead buffer (buffer_bytes): 1.50 GB",
+      "Streaming distance (streaming_bytes): 1.50 GB",
     ]) {
       expect(screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent === text)).toBeInTheDocument();
     }

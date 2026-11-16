@@ -187,7 +187,7 @@ func TestTarReadModelMapsBuffer(t *testing.T) {
 	_, _, profile := tarReadParametersFixture()
 	parameters := tarNormalizedParameters()
 	parameters.Positioning.BaseSeconds = proto.Float64(7)
-	parameters.Positioning.BufferBytes = proto.Uint64(2*262144 + 1)
+	parameters.Positioning.StreamingBytes = proto.Uint64(2*262144 + 1)
 	point := func(object uint64) *entity.TapeBytePosition { return &entity.TapeBytePosition{LogicalObject: object} }
 	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
@@ -218,9 +218,6 @@ func TestTarReadModelMapsBuffer(t *testing.T) {
 func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
 	for name, change := range map[string]func(*entity.TapeReadParameters, *entity.TarMediaProfile, *tape.WrapMap){
-		"compressed profile": func(_ *entity.TapeReadParameters, p *entity.TarMediaProfile, _ *tape.WrapMap) {
-			p.HardwareCompression = true
-		},
 		"missing coefficient": func(p *entity.TapeReadParameters, _ *entity.TarMediaProfile, _ *tape.WrapMap) {
 			p.Positioning.ApproachReversalSeconds = nil
 		},
@@ -360,7 +357,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 				require.Nil(t, provider)
 			}
 			// Read the committed order and check bytes; directory queries must not scale with member count.
-			before := len(fixture.readCompression)
+			before := fixture.reads
 			for index, id := range ids {
 				member := members[id-1]
 				source, err := read.Source(mediapkg.ReadRequest{Path: member.Path, Storage: member.Storage})
@@ -373,7 +370,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 				require.Equal(t, contents[id-1], data)
 				if order == entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL && index == 0 {
 					require.Len(t, fixture.locateCommands, 1, "LOGICAL also uses complete seek pricing rather than reading the gap")
-					require.Less(t, len(fixture.readCompression)-before, int(member.Storage.Metadata.GetTar().Header.LogicalObject), "only target records are read")
+					require.Less(t, fixture.reads-before, int(member.Storage.Metadata.GetTar().Header.LogicalObject), "only target records are read")
 				}
 			}
 			require.NoError(t, finalize())
@@ -393,7 +390,6 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 func TestTapeReadParametersSelectByDensityAndDriveSerial(t *testing.T) {
 	// The set for the loaded density applies; current write controls and the Media profile take no part.
 	parameters, report, _ := tarReadParametersFixture()
-	report.GetTape().CompressionEnabled = proto.Bool(true)
 	report.GetTape().FixedRecords = proto.Bool(true)
 	report.GetTape().RecordBytes = proto.Uint32(512)
 	other := proto.Clone(parameters).(*entity.TapeReadParameters)
@@ -566,7 +562,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 				require.Equal(t, "configured", prepared.ParametersSource)
 				require.Empty(t, prepared.ApplicabilityReason)
 			}
-			beforeReads, beforeLocates := len(fixture.readCompression), len(fixture.locateCommands)
+			beforeReads, beforeLocates := fixture.reads, len(fixture.locateCommands)
 			for _, index := range []int{0, 1, 0} {
 				member := members[index]
 				source, err := read.Source(mediapkg.ReadRequest{Path: member.Path, Storage: member.Storage})
@@ -577,7 +573,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 				require.NoError(t, err)
 				require.NoError(t, file.Close())
 				require.Equal(t, contents[index], data)
-				require.Len(t, fixture.readCompression, beforeReads+1, "later and repeated members reuse the actual retained record")
+				require.Equal(t, beforeReads+1, fixture.reads, "later and repeated members reuse the actual retained record")
 			}
 			require.Len(t, fixture.locateCommands, beforeLocates)
 			require.NoError(t, finalize())

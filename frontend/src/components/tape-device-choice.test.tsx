@@ -13,7 +13,6 @@ import {
   DeviceReason,
   TapeCapacityLimits,
   TapeCapacityQuality,
-  TapeCompressionLimits,
   TapeEncryptionLimits,
   TapeGeometryLimits,
   TapePreparedRead,
@@ -115,6 +114,7 @@ describe("Tape device choices", () => {
           report: {
             oneofKind: "tape",
             tape: {
+              supportedDensityCodes: [],
               writeProtected: false,
               features: [
                 DeviceFeature.create({
@@ -152,8 +152,20 @@ describe("Tape device choices", () => {
 });
 
 it.each([undefined, false, true])("keeps passive encryption state %s distinct from unknown", (encryptionEnabled) => {
-  render(<DeviceInspectionResult reply={InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { encryptionEnabled, features: [] } } })} />);
+  render(
+    <DeviceInspectionResult
+      reply={InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { supportedDensityCodes: [], encryptionEnabled, features: [] } } })}
+    />,
+  );
   expect(screen.getByText(`Encryption enabled: ${encryptionEnabled === undefined ? "Unknown" : String(encryptionEnabled)}`)).toBeVisible();
+});
+
+it.each([
+  [[], "Supported densities: Unknown"],
+  [[0x46, 0x58, 0x99], "Supported densities: 0x46 LTO-4, 0x58 LTO-5, 0x99"],
+])("shows supported densities %j by name or as unknown", (supportedDensityCodes, text) => {
+  render(<DeviceInspectionResult reply={InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { supportedDensityCodes, features: [] } } })} />);
+  expect(screen.getByText(text)).toBeVisible();
 });
 
 it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.UNSPECIFIED])("keeps capacity quality %s and exact bytes distinct", (quality) => {
@@ -166,6 +178,7 @@ it.each([TapeCapacityQuality.ESTIMATE, TapeCapacityQuality.UNSPECIFIED])("keeps 
         report: {
           oneofKind: "tape",
           tape: {
+            supportedDensityCodes: [],
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
@@ -204,6 +217,7 @@ it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct",
         report: {
           oneofKind: "tape",
           tape: {
+            supportedDensityCodes: [],
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.CAPACITY_TO_WARNING,
@@ -221,46 +235,6 @@ it.each([undefined, 0n])("keeps unknown capacity and observed zero %s distinct",
   expect(screen.getByText("Observation completed: Unknown")).toBeVisible();
 });
 
-it.each([
-  { currentAlgorithm: undefined, enableChangeable: undefined },
-  { currentAlgorithm: 0, enableChangeable: false },
-  { currentAlgorithm: 0xffffffff, enableChangeable: true },
-])("shows observed compression algorithm/changeability without inferring qualification: %o", ({ currentAlgorithm, enableChangeable }) => {
-  render(
-    <DeviceInspectionResult
-      reply={InspectDeviceResponse.create({
-        report: {
-          oneofKind: "tape",
-          tape: {
-            compressionEnabled: true,
-            decompressionEnabled: false,
-            features: [
-              DeviceFeature.create({
-                feature: DeviceFeatureKind.HARDWARE_COMPRESSION,
-                support: DeviceFeatureSupport.SUPPORTED,
-                availability: DeviceFeatureAvailability.READY,
-                evidence: DeviceFeatureEvidence.REPORTED,
-                limits: { oneofKind: "compression", compression: TapeCompressionLimits.create({ currentAlgorithm, enableChangeable }) },
-              }),
-            ],
-          },
-        },
-      })}
-    />,
-  );
-  expect(
-    screen.getByText(
-      currentAlgorithm === undefined
-        ? "Current algorithm: Unknown"
-        : `Current algorithm: 0x${currentAlgorithm.toString(16).padStart(8, "0")} (${currentAlgorithm})`,
-    ),
-  ).toBeVisible();
-  expect(screen.getByText(`Enable changeable: ${enableChangeable === undefined ? "Unknown" : String(enableChangeable)}`)).toBeVisible();
-  expect(screen.getByText("Compression enabled: true")).toBeVisible();
-  expect(screen.getByText("Decompression enabled: false")).toBeVisible();
-  expect(screen.getByText(/Support: supported · Availability: ready/)).toBeVisible();
-});
-
 it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero without key-presence claims", (keyInstanceCounter) => {
   render(
     <DeviceInspectionResult
@@ -268,6 +242,7 @@ it.each([undefined, 0])("keeps encryption protocol counter %s unknown/zero witho
         report: {
           oneofKind: "tape",
           tape: {
+            supportedDensityCodes: [],
             encryptionEnabled: false,
             features: [
               DeviceFeature.create({
@@ -312,6 +287,7 @@ it("shows the reported all-wrap command form without qualifying Auto", () => {
         report: {
           oneofKind: "tape",
           tape: {
+            supportedDensityCodes: [],
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.SOFTWARE_READ_ORDER,
@@ -341,6 +317,7 @@ it("keeps reported wraps unknown when only the command form is reported", () => 
         report: {
           oneofKind: "tape",
           tape: {
+            supportedDensityCodes: [],
             features: [
               DeviceFeature.create({
                 feature: DeviceFeatureKind.END_OF_WRAP_POSITION,

@@ -31,6 +31,7 @@ import (
 	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 type legacyLibraryBackup struct {
@@ -190,7 +191,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Id: archiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: failedDevice, Barcode: "ABC001", Name: "E2E virtual tape",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)
@@ -218,7 +219,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Id: archiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: device, Barcode: "ABC001", Name: "E2E virtual tape",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)
@@ -251,7 +252,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Id: archiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: device, Barcode: "ABC001", Name: "E2E virtual tape",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)
@@ -592,7 +593,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		Id: overwriteArchiveID,
 		Target: (&entity.ArchiveTapeTarget{
 			Device: device, Barcode: "ABC001", Name: "Replacement tape",
-			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
+			Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT, Format: proto.String(library.TapeFormatLTFSV1),
 		}).Pack(),
 	})
 	require.NoError(t, err)

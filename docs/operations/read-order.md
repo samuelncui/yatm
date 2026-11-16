@@ -70,10 +70,8 @@ extents, YATM can use the current Index captured by the mount adapter to fill th
 positions. The mounted UUID and Index generation must match. Missing or conflicting Index data
 keeps ordinary Logical reads; it does not alter the saved Job or Library content.
 
-Current **Auto** ordering requires a Tape written with hardware compression **Off**.
-Hardware-compressed tapes retain ordinary Logical reads and eligible exact seek. Changing the
-drive's current compression setting does not change the cartridge's written profile. Files already
-compressed before Archive are not excluded when Tape hardware compression is Off.
+Current **Auto** ordering requires a Tape written without hardware compression. Tar always writes
+with drive compression off; files already compressed before Archive are not excluded.
 For LTFS, the formatting script decides: the bundled [`mkfs`](../../scripts/mkfs) formats with
 `mkltfs --no-compression`. A customized script without that option writes compressed LTFS volumes,
 so Auto keeps Logical on them; reformatting is the only way to change an existing volume.
@@ -90,7 +88,7 @@ Changing these Device settings never changes the current attempt or a cartridge'
 
 **Read parameters** lists the device's parameter sets, at most one per density code (the
 cartridge's recorded density). A read uses the set for the loaded cartridge's density code and
-otherwise the built-in values; record size, compression and encryption take no part in that
+otherwise the built-in values; record size and encryption take no part in that
 choice. A set with `appliesTo.driveSerial` does not apply when the drive reports another serial
 number; the read then uses the built-in values and **Last prepared read** says why.
 The section lists the sets in a table: density code (with the LTO generation name for the
@@ -99,21 +97,28 @@ and read rate. **Edit** opens one set in a form and **Add read parameters** open
 the form has one field per stored value, grouped as Positioning, Reading, Completion and Geometry,
 each with its unit. A new set needs a **Density code**, chosen from the standard LTO codes or
 entered as another code, that no other set of the device uses; an existing set keeps its density
-code. Times are entered in seconds, **Read rate** in MB/s and **Read-ahead buffer** in MB (decimal
+code. Times are entered in seconds, **Read rate** in MB/s and **Streaming distance** in MB (decimal
 megabytes; stored as bytes per second and bytes). An empty field stays unknown. A field you do not
 change keeps its stored value exactly. Invalid values show their error beside the field. **Apply**
 changes the page draft; page **Save** persists it. Cancel leaves the page unchanged and confirms
 discarding edits. **Reset to built-in** removes that set from the draft, so after Save that
-density code uses the built-in values. The web interface does not show the built-in values, so a
-new set starts empty.
+density code uses the built-in values.
+After **Refresh device details**, the table also lists the built-in values, with source
+**Built-in**, for the loaded cartridge's density (or, without a cartridge, each density the drive
+supports) that has no set of its own. Their **Edit** opens **Add read parameters** filled with
+those values. Choosing a density code in **Add read parameters** likewise fills the fields you
+have not edited with that code's built-in values, when it has any, so you replace only what you
+measured; the source reference stays empty for you to describe your measurement. The CLI's
+`settings devices` output lists every built-in set as `builtin_read_parameters`; a replacement may
+include it unchanged, and the server ignores it.
 A set takes precedence even when incomplete, so a partial set can retain Logical order. Leave unknown
 values empty; do not fill them with zero to make a complete set. In the stored set (and the CLI's
-JSON), time values use seconds, rates use bytes per second, and `buffer_bytes` uses a decimal
+JSON), time values use seconds, rates use bytes per second, and `streaming_bytes` uses a decimal
 string to preserve unsigned 64-bit values. The source reference is free text that describes the
 measurement conditions.
 The form labels these values **Fixed positioning time** (`base_seconds`), **Seek time for one
 complete span** (`seek_seconds_per_wrap`), **Added time when arriving against the wrap direction**
-(`approach_reversal_seconds`), **Read-ahead buffer** (`buffer_bytes`), **Read rate**
+(`approach_reversal_seconds`), **Streaming distance** (`streaming_bytes`), **Read rate**
 (`bytes_per_second`), **Filemark overhead** (`filemark_overhead_seconds`), the Completion
 **Fixed time**, **Full-span time** and **LTFS unmount time** (`fixed_seconds`,
 `full_span_seconds`, `ltfs_unmount_seconds`) and **Nominal wraps** (`nominal_wraps`).
@@ -122,7 +127,7 @@ Positioning uses `base_seconds` (the fixed time of every LOCATE the drive does n
 turns at a wrap end while reading) and
 a seek-speed slope; every value is nonnegative. For uncompressed linear interpolation,
 `seek_seconds_per_wrap` means seconds to move one complete longitudinal tape span at seek speed,
-not seconds to read all data in a wrap. `buffer_bytes` is how far logically ahead the drive
+not seconds to read all data in a wrap. `streaming_bytes` is how far logically ahead the drive
 reaches by continuing to read instead of positioning: a target at most that many bytes ahead costs
 the skipped records at `bytes_per_second` plus one `approach_reversal_seconds` for each wrap turn
 crossed; omitted or zero never applies. Reading a file through a wrap turn also pays one
@@ -150,47 +155,55 @@ separately, or let a [Calibration](#calibration) measure and store a complete se
 ## Calibration
 
 A **Calibration** Job measures a drive's positioning times on one cartridge and stores them as
-that device's read parameters for the cartridge's recorded density. It runs on one of two
-cartridges:
+that device's read parameters for the cartridge's recorded density. It names only the device; the
+Job loads the cartridge. It runs on one of two cartridges:
 
-- A tar Media whose first two wraps are written (about 37 GB on LTO-5 with the default 512 KiB
-  records; a failed run states the amount for the loaded cartridge), written with hardware
-  compression Off: `yatm-cli calibration create --device <configured device> --media-id <Media ID>`.
-  The Job checks the cartridge memory barcode against the Media, reads no files, changes no data
-  and runs no Tape script, so the cartridge's encryption key is not needed.
+- Any cartridge with two full wraps of data (about 37 GB on LTO-5; a failed run states the amount
+  for the loaded cartridge), whether or not the Library knows it, tar or LTFS:
+  `yatm-cli calibration create --device <configured device>`.
+  The Job reads no files, changes no data and runs no Tape script, so the cartridge's encryption
+  key is not needed. It converts wraps to bytes with the nominal native capacity of the
+  cartridge's recorded density (1.5 TB over 80 wraps on LTO-5), which was 2.7% below the measured
+  wrap on the LTO-5 test cartridge; the times themselves are measured. It works in the partition
+  that holds the most wraps: the only partition of a tar cartridge, the data partition of an LTFS
+  one, which it positions in without mounting LTFS. On the LTO-5 test drive an LTFS cartridge gave the
+  same terms as a tar one, within 0.15 s per span.
 - A spare cartridge: `yatm-cli calibration create --device <configured device> --write-test-data`.
   **This overwrites the cartridge from the beginning of tape. Never use it on a cartridge that holds
   data you need.** The Job does not look at what the cartridge holds; it only refuses a cartridge
-  whose barcode is registered as Media in the Library, as FORMAT does. It writes zero records with
-  hardware compression Off and 512 KiB records until the drive reports wraps 0 and 1 complete,
+  whose barcode is registered as Media in the Library, as FORMAT does; turn the option off to
+  calibrate on that Media instead. The refusal comes after the
+  Job has loaded the cartridge, because only a loaded cartridge reports its barcode; nothing is
+  written and the cartridge stays loaded. It writes zero records with
+  drive compression off and 512 KiB records until the drive reports wraps 0 and 1 complete,
   then calibrates on them. Afterwards the cartridge holds that test data and is no longer blank.
   To use it again, initialize it with FORMAT as described in
   [Load Tape for Archive](devices.md#load-tape-for-archive).
 
 In the web interface, open **Settings → Devices**, choose the device, expand **Read parameters** and
-select **Calibrate…**. The dialog identifies the loaded cartridge as **Check Tape** does and asks
-how to calibrate: **Tar Media in the drive** uses the cartridge's registered Media, or a tar Tape
-Media you choose when the cartridge is not identified; **Write test data** shows the overwrite
-warning and is unavailable for a registered cartridge. It requires typing the cartridge's barcode, as
+select **Calibrate…**. The dialog identifies the loaded cartridge as **Check Tape** does. Without
+**Write test data** it calibrates on whatever the cartridge holds. **Write test data** shows the overwrite warning and is unavailable for a registered cartridge. It requires typing the cartridge's barcode, as
 FORMAT does, or, for a cartridge without a readable barcode such as a new one, ticking **Overwrite
 the cartridge in** followed by the device name. **Start calibration** creates the Job and opens its
 page, which shows the measured moves, the elapsed time and, once fitted, the parameters with a link
 back to **Read parameters**; opening or cancelling the dialog creates nothing.
 
 From the CLI, follow either with `yatm-cli job wait` and `yatm-cli job progress`. The Job waits for the drive like
-any other Media step and then moves the tape through a fixed sequence of about 22 LOCATEs in wraps
+any other Media step, loads the cartridge, so one an earlier step ejected need not be reinserted, and then moves the tape through a fixed sequence of about 22 LOCATEs in wraps
 0 and 1. It takes about nine minutes on LTO-5, including the final unload, plus the time to write
 the test data when requested.
 Progress lists each measured move as it completes. At the end it fits the positioning and reading
 terms, unloads the cartridge, timing the unload for the completion terms, and replaces the device's
 set for that density code (or adds one) in **Read parameters**, with source reference
-`Calibration Job <id>` and the drive's serial. The geometry and LTFS unmount time come from the
+`Calibration Job <id>` and the drive's serial. Times are stored rounded to a hundredth of a second,
+the read rate to a whole byte per second and the streaming distance to a whole byte. The geometry and LTFS unmount time come from the
 built-in values for that density, so the stored set is complete on its own.
 
 The result applies to that drive and density code only. Edit it or use **Reset to built-in** like
 any other set. Deleting the Job keeps the stored set. If the moves do not fit the positioning model
 the read planner assumes, the Job fails and leaves Device settings unchanged; so does any other
-failure or cancellation, which also leaves the cartridge loaded. There is no retry: create a new
+failure or cancellation, which also unloads the cartridge unless it was the wrong cartridge (a
+different barcode, or a registered one for test data). There is no retry: create a new
 Calibration.
 
 ## Last Prepared Read

@@ -93,7 +93,7 @@ One [Media operation](../../internal/executor/archive/media.go) proceeds in this
    Each item uses the current original Location's read mode; Archive does not regroup files by Location because that would change Media order and the prefix that fits on a full target.
 3. Persist each successful ACP result as STAGED immediately, including the actual Media path, hash, size, mode, times and any target-provided provisional storage position. The Archive records the bytes ACP transferred instead of running a second source-stability policy.
 4. Call Write Finalize exactly once after ACP returns, passing the copy/stop error and using a cleanup context without the original deadline. Combine any newly returned write stop with the copy cause; keep physical-finalization errors independently observable.
-5. Reconcile staged positions against the completed Media result in the existing path-update pass. On normal completion or an exclusively capacity/EW stop, tar excludes members beyond its accepted complete-member cutoff and normalizes optional anchors; LTFS retains its captured Index reconciliation. Publish only backend-verified STAGED items with `CommitMedia`. Create or reuse the selected File's version from the actual transferred facts in that same transaction; when those facts match the earlier observation, preserve its opaque signature. Raw inputs already have per-Job File associations; no later signature-based File merge or binding occurs.
+5. Reconcile staged positions against the completed Media result in the existing path-update pass. On normal completion, a capacity/EW stop, cancellation or an independent failure, tar excludes members beyond its accepted complete-member cutoff and normalizes optional anchors; LTFS retains its captured Index reconciliation. Publish only backend-verified STAGED items with `CommitMedia`. Create or reuse the selected File's version from the actual transferred facts in that same transaction; when those facts match the earlier observation, preserve its opaque signature. Raw inputs already have per-Job File associations; no later signature-based File merge or binding occurs.
 6. Mark published items SUBMITTED with their Media ID; complete the Job when nothing remains pending. Return copy/finalization/publication errors after retaining eligible successes.
 
 The [result stream](../../internal/executor/archive/stream.go) validates completed copy facts and hands them to the shared [result writer](../../internal/executor/result_writer.go): the results callback only starts a write of the outcomes a durable row can express, which ACP hands over in batches of up to `write_batch_size` items, and the writer stages them outside the feed. A staging failure is the writer's terminal error and fails the phase; a result no durable row can express, such as a target that refused its file, is a per-item outcome the attempt reports while it keeps the item PENDING. STAGED is a candidate result, not durable archive success. Initialization resets leftover unsubmitted STAGED items to PENDING; resetting also clears Media path and result. Only submitted files count toward durable progress, historical speed, ETA, and reports; verified zero-byte files count too.
@@ -109,12 +109,15 @@ space with later files would spread such a group over more Tapes than necessary 
 An Archive Media operation ending in an error or operator cancellation settles the runner and returns the Job to its pre-Media `READY` state with its reason and timing. The prepared manifest and successfully submitted items remain; another explicit load-Media operation processes the remaining items.
 
 Tar keeps each provisional locator in the existing item result, with no separate member report.
-A successful member Finish alone cannot authorize publication while bytes remain buffered. On normal completion or an exclusively capacity/EW stop, the accepted-member cutoff and mandatory
-physical gates determine which staged rows survive. Cancellation or an in-progress member failure
-returns no publishable tar result; cleanup does not seal or salvage that Archive.
+A successful member Finish alone cannot authorize publication while bytes remain buffered. On normal
+completion, a capacity/EW stop, cancellation or an independent failure, the accepted-member cutoff and
+mandatory physical gates determine which staged rows survive: a cancelled or failed tar attempt
+publishes its members confirmed written, the interrupted and still-buffered members stay pending, and
+the Job returns to READY with the reason, as LTFS does with the files in its final Index. A device
+failure the drive cannot confirm publishes nothing.
 A source-open failure can leave a gap before later complete files. Incomplete members remain
-pending. A successfully finalized zero-member tar FORMAT registers the initialized Media, its
-Job property and zero-file report while retaining the stop reason and remaining work in READY.
+pending. A tar or LTFS FORMAT that publishes no file registers no Media, Job property or report;
+the stop reason and remaining work stay in READY.
 The Job log records each tar Tape file completion with whether the end-of-archive blocks were
 written (`end_of_archive`) and the closing filemark result; a stopped stream writes no end-of-archive
 blocks, and readers end the archive at the filemark.
@@ -159,8 +162,9 @@ waits for source closure to choose its next order. LOGICAL keeps the existing ma
 random-read Media uses ordinary path order.
 
 [Copy completion](../../internal/executor/restore/stream.go) compares ACP's real hash and size with the expected content and restores the version's own mode/mtime before recording the output as ready. The output retains read-source and ready facts, but Library association and item/alternative completion wait for successful Session Finalize. A later attempt on the same Media trusts a ready, undamaged output whose fresh `Lstat` still shows a regular file with the recorded size and the version's mode/mtime, without reading its content again; any difference, and every damaged output, falls back to a full content verification that rejects changed bytes. Outputs this Job did not stage keep the content-read adoption rule. Failed physical finalization retains complete bytes without claiming success; a later attempt cannot adopt its own unfinalized output as an unrelated preexisting file. Completion is per item/version, not every version of its File. Metadata restoration may invalidate disposable ACP caches; completed targets are not reread to rebuild caches. Restore does not share Archive's STAGED/submit state machine.
-Finalize receives the read/stop cause so native tar can distinguish normal unload from failed or
-canceled cleanup. The original read error and physical-release error remain independently visible.
+Finalize receives the read/stop cause; native tar unloads in every case, as the
+[sequential tar Tape](tape.md#sequential-tar-tape) release rule states. The original read error and physical-release error remain
+independently visible.
 
 Read preparation selects exclusively from pending frozen candidates. An explicit Tape Media hint
 outside those candidates is rejected before device access; expected identity/profile always come
@@ -287,37 +291,43 @@ Preview is optional and off by default. Its policy selects missing-only generati
 
 [CalibrationJobService](../../entity/job_calibration.proto) owns the CALIBRATION kind and its
 [runner](../../internal/executor/calibration/runner.go). The specification names the device and
-exactly one of a tar Tape Media expected in it or `write_test_data`. Create validates it, builds the
+whether to write test data first (`write_test_data`). Create validates it, builds the
 bundle (the frozen specification, the measured `moves` and the fitted parameters) and runs the
 Job's only attempt at once, like a Volume Scan: `PREPARING` to `COMPLETED`, or `FAILED` with its
 reason. There is no `READY` state, Media step, GetCreation or retry. The Job's target name is the
-device; its Media property indexes the Media when one is given.
+device.
 
 1. `PREPARING_MEDIA`: take the drive's attempt lease through the Executor (`QUEUED` while waiting)
-   and open the native SG path tar uses; LTFS is never mounted and no Tape script runs.
-   - With a Media, require a ready cartridge whose cartridge memory barcode matches it. The label is
-     not read, because the Encrypt script that would supply its key is not run. The Media must be
-     written with hardware compression Off.
+   and open the native SG path tar uses, loading the cartridge first as tar work does; LTFS is never
+   mounted and no Tape script runs.
+   - Without `write_test_data`, consult neither the Library nor the cartridge's contents. For
+     another partition than zero the Job first locates its beginning, where the sequence starts.
    - With `write_test_data`, refuse a cartridge whose cartridge memory barcode is registered Media,
      FORMAT's check, and examine nothing else. FORMAT's preparation and initialization establish a
-     single partition at the beginning of tape, then zero records with hardware compression Off and
+     single partition at the beginning of tape, then zero records with drive compression off and
      the default tar record policy overwrite it. After each 4 GiB the stream is synchronized, the
      descriptor is reopened and the drive's wrap report is read; writing continues at the reported
      end of data until it shows wraps 0 and 1 complete. No Media is created, no barcode is
      written, and nothing erases or reformats the cartridge afterwards.
 
    The position source is the wrap endpoint map read planning uses; the recorded density must be
-   reported and have built-in geometry, and partition zero must hold wraps 0 and 1 complete, or the
-   Job fails stating the bytes two wraps need on this cartridge.
+   reported and have built-in geometry. The Job works in the partition holding the most wraps
+   (partition zero of a tar cartridge, the data partition of an LTFS one), whose wraps must be
+   contiguous and begin on a forward wrap; its first two wraps must be complete, or the Job fails
+   stating the bytes two wraps need on this cartridge.
 2. `CALIBRATING`: run the fixed [sequence](../../internal/executor/calibration/sequence.go). Each
    target wrap and span fraction becomes a logical object by linear interpolation inside that
    wrap's endpoint interval (wrap 0 forward, wrap 1 reverse); one LOCATE is timed on a monotonic
    clock and READ POSITION must then equal the target. A move under 0.3 seconds did not move the
    tape, which the sequence never expects, and fails the Job. Each move except the first, which
    leaves the load point, is persisted as it completes; cancellation is honoured between moves.
-3. Fit the terms; moves that do not fit the model fail the Job.
-4. Unload through the tar finish path and time the unload. Every failure instead releases the
-   drive without unloading, as failed tar work does.
+3. Fit the terms; moves that do not fit the model fail the Job. The streaming distance and read
+   rate are measured in spans and converted to bytes with the recorded density's nominal native
+   capacity per wrap from the [built-in density table](../../internal/executor/media_tar_defaults.go).
+   Every failure message says what the operator can do next.
+4. Unload through the tar finish path and time the unload. A failure or cancellation after the
+   load also unloads, untimed, as failed tar work does; a registered cartridge refused for test
+   data stays loaded.
 5. Replace the Device settings set with the same density code for this device, or add one, through
    the settings group's validated save, then complete the Job. The Job log records each move, the
    fitted terms and the largest residual.

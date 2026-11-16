@@ -52,15 +52,14 @@ type archiveWriteTapeFormatCommand struct {
 }
 
 type tapeWriteOptions struct {
-	Format              *string `long:"format" choice:"ltfs_v1" choice:"tar_pax_v1" description:"FORMAT override; APPEND must match the registered profile"`
-	RecordMode          *string `long:"record-mode" choice:"fixed" choice:"variable" description:"Tar record policy; immutable on APPEND"`
-	RecordBytes         *uint32 `long:"record-bytes" description:"Tar record size in bytes, aligned to 512; FORMAT omission uses the device default or 524288 (512 KiB)"`
-	HardwareCompression *string `long:"hardware-compression" choice:"true" choice:"false" description:"Tar write compression; the selected drive is rechecked before writing"`
+	Format      *string `long:"format" choice:"ltfs_v1" choice:"tar_pax_v1" description:"FORMAT override; APPEND must match the registered profile"`
+	RecordMode  *string `long:"record-mode" choice:"fixed" choice:"variable" description:"Tar record policy; immutable on APPEND"`
+	RecordBytes *uint32 `long:"record-bytes" description:"Tar record size in bytes, aligned to 512; FORMAT omission uses the device default or 524288 (512 KiB)"`
 }
 
 func (c tapeWriteOptions) options() (*entity.TarWriteOptions, error) {
-	// An omitted option must remain absent, including optional false values.
-	if c.RecordMode == nil && c.RecordBytes == nil && c.HardwareCompression == nil {
+	// An omitted option must remain absent.
+	if c.RecordMode == nil && c.RecordBytes == nil {
 		return nil, nil
 	}
 	options := &entity.TarWriteOptions{RecordBytes: c.RecordBytes}
@@ -70,10 +69,6 @@ func (c tapeWriteOptions) options() (*entity.TarWriteOptions, error) {
 			mode = entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE
 		}
 		options.RecordMode = &mode
-	}
-	if c.HardwareCompression != nil {
-		value := *c.HardwareCompression == "true"
-		options.HardwareCompression = &value
 	}
 
 	// Reject malformed relationships before device access without changing explicit choices.

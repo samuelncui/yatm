@@ -267,11 +267,29 @@ func TestSettingsDeviceUsesExistingTypedReplacement(t *testing.T) {
 	before, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_DEVICE})
 	require.NoError(t, err)
 	require.Empty(t, before.GetValue().GetDevice().Devices)
-	tape := &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1"), TarWriteOptions: &entity.TarWriteOptions{HardwareCompression: proto.Bool(false)}}
-	value := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/removed", Options: &entity.DeviceConfig_Tape{Tape: tape}}}}
+	builtin := executor.BuiltinTapeReadParameters()
+	require.NotEmpty(t, builtin)
+	requireBuiltin := func(value *entity.DeviceSettings) {
+		t.Helper()
+		require.Len(t, value.BuiltinReadParameters, len(builtin))
+		for at := range builtin {
+			require.True(t, proto.Equal(builtin[at], value.BuiltinReadParameters[at]))
+		}
+	}
+	requireBuiltin(before.GetValue().GetDevice())
+
+	// An echoed or edited built-in list is accepted, dropped and never stored; replies carry the server's list.
+	tape := &entity.TapeDeviceSettings{DefaultFormat: proto.String("tar_pax_v1"), TarWriteOptions: &entity.TarWriteOptions{RecordBytes: proto.Uint32(262144)}}
+	value := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/removed", Options: &entity.DeviceConfig_Tape{Tape: tape}}},
+		BuiltinReadParameters: []*entity.TapeReadParameters{{AppliesTo: &entity.TapeReadApplicability{DensityCode: proto.Uint32(0x58)}, SourceReference: "edited"}}}
 	saved, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Device{Device: value}}})
 	require.NoError(t, err)
-	require.True(t, proto.Equal(value, saved.GetValue().GetDevice()))
+	requireBuiltin(saved.GetValue().GetDevice())
+	stored, err := api.lib.Settings().Device.Current(ctx)
+	require.NoError(t, err)
+	require.Empty(t, stored.BuiltinReadParameters)
+	value.BuiltinReadParameters = nil
+	require.True(t, proto.Equal(value, stored))
 
 	// Saving a preference cannot authorize a removed device and malformed edits cannot replace it.
 	value.Devices[0].Device = ""
@@ -280,5 +298,5 @@ func TestSettingsDeviceUsesExistingTypedReplacement(t *testing.T) {
 	after, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_DEVICE})
 	require.NoError(t, err)
 	require.True(t, proto.Equal(saved.GetValue().GetDevice(), after.GetValue().GetDevice()))
-	require.NotNil(t, after.GetValue().GetDevice().Devices[0].GetTape().TarWriteOptions.HardwareCompression)
+	require.EqualValues(t, 262144, after.GetValue().GetDevice().Devices[0].GetTape().TarWriteOptions.GetRecordBytes())
 }

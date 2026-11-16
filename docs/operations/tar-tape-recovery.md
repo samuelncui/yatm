@@ -3,7 +3,7 @@
 This guide describes independent content extraction for `tar_pax_v1` Tape without a YATM executable,
 service, catalog, Job bundle, content index or saved file locators. Keep this guide and the cartridge's
 record parameters outside the YATM installation. The raw backend currently uses fixed or variable
-512-byte-aligned records, ordinary PAX tar metadata and xattrs, with optional hardware compression
+512-byte-aligned records written with drive compression off, ordinary PAX tar metadata and xattrs,
 and optional hardware encryption. Encrypted recovery requires its independently retained key and
 a compatible public device-tool unlock procedure. For normal
 Archive, Restore and Scan, use the [Device guide](devices.md).
@@ -11,8 +11,7 @@ Archive, Restore and Scan, use the [Device guide](devices.md).
 ## Tested Reader and Required Parameters
 
 Physical recovery has been checked with Linux st, mt-st 1.8, GNU dd and GNU tar 1.35 for variable
-and fixed records, hardware compression On and Off, and script-configured encryption on the writing
-drive. That does not establish another reader or qualify every encryption adapter. The
+and fixed records and script-configured encryption on the writing drive. That does not establish another reader or qualify every encryption adapter. The
 [recovery checks](../research/tar-tape.md#public-tool-recovery-checks) record what was tested and
 its limits.
 Other readers must establish their own record, close/reopen, positioning and EOF/EOD/EOT behavior
@@ -21,7 +20,8 @@ before using the Tape-copy procedure below. Passive diagnostics do not supply th
 Retain the barcode, initialization UUID, record mode and record bytes from the published Media
 profile. Keys use the existing Media/Job profile; runtime script key files are temporary, and
 FORMAT does not create a second persistent recovery descriptor or key copy. This guide covers
-completed Archive content and controlled EW results, not interrupted-FORMAT recovery.
+completed Archive content and the published members of Tape files closed at early warning, after a
+cancellation or after another failure outside the drive, not interrupted-FORMAT recovery.
 
 A retained Library JSONL export also contains the same Media profile. Before losing the installation,
 use `yatm-cli library export --output library.jsonl`, or the browser's Library export. Export backs
@@ -51,15 +51,6 @@ identity PAX archive containing `YATM/identity.json` and `YATM/README.txt`; it i
 when the profile requires it. It is useful
 for checking the recorded identity after copying, but does not replace the parameters needed to
 read it with the qualified reader.
-
-If `hardware_compression` is true, use a reader compatible with the cartridge's hardware compression
-format. Its hardware decoder must return the original PAX bytes through Linux `st`; no software
-decompression command is involved. Check the reader's documented decompression setting before
-copying. Typical LTO readers decode automatically; a disabled decoder requires a qualified public
-device-tool procedure to enable it, verify the effective state and restore any changed session
-control. The write compression setting DCE does not control read decompression DDE, so setting
-`mt compression` does not establish decoder readiness. A reported current algorithm identifier
-alone does not prove that another cartridge's compressed content is readable.
 
 ## Unlock an Encrypted Cartridge
 
@@ -181,7 +172,9 @@ printf 'dd=%s mt-status=%s\n' "$DD_STATUS" "$MT_STATUS" \
 ```
 
 A positioning failure stops before copying. A read or status error stops enumeration; retain the error and any partial disk copy for diagnosis.
-This procedure does not salvage an interrupted Archive or repair its Tape tail. Do not pipe Tape input into tar or hide
+A Tape file closed at early warning, after a cancellation or after another failure ends with its
+filemark but may end with a truncated member and no tar end-of-archive blocks. This procedure does
+not salvage that member or repair a Tape tail without a filemark. Do not pipe Tape input into tar or hide
 command exit statuses. `conv=excl` prevents overwriting a retained copy.
 
 Interpret the fresh post-read status only according to the qualified driver/drive mapping, including
@@ -234,8 +227,9 @@ terminator; it does not prove physical Tape finalization. Do not discard the las
 merely because a warning exists.
 
 A nonzero extraction result is not a successful whole-archive recovery. Preserve the disk copy and
-diagnostics. For a separately established normal EW boundary, check the published complete members
-against retained sizes and hashes; an unpublished partial member is not restored content. Other
+diagnostics. For a Tape file closed at early warning, after a cancellation or after another failure,
+check the published complete members against retained sizes and hashes; the truncated last member
+GNU tar reports is unpublished and is not restored content. Other
 truncated headers, payloads or padding remain errors outside this procedure. Tar header checksums
 do not verify payload contents.
 Independent extraction recovers ordinary files and represented metadata, not Library organization,

@@ -216,11 +216,11 @@ func (p *ltfsReadOrderProvider) Evaluate(from readplan.State, interval readplan.
 	case from.Position.LogicalObject == start:
 		method = readplan.MethodContinue
 	default:
-		// Only a completed read leaves a cached block and fills the read-ahead buffer; the post-mount
+		// Only a completed read leaves a cached block and lets the drive keep streaming; the post-mount
 		// origin has neither, because mount leaves the head on the Index partition.
 		access := p.options.Model.AccessCost
 		if from.Cache == nil {
-			access = p.options.Model.UnbufferedAccessCost
+			access = p.options.Model.UnstreamedAccessCost
 		}
 		setup, known := access(from.Position, ltfsContainingBlock(interval.Start))
 		if !known {

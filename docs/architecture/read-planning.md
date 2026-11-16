@@ -72,18 +72,21 @@ LOGICAL and selected route costs (`estimated_logical_ms`, `estimated_planned_ms`
 of such an attempt settles without error, a second log line repeats both estimates with
 `realized_ms`, the time from the end of planning until the last read settled, so a run can be
 compared with its prediction; the estimates also include the terminal action, which follows later.
+The order is chosen from the difference between two routes over the same files, so a cost every
+order pays alike, such as the drive regaining speed after each positioning, cancels and is not
+modelled; it makes both absolute estimates slightly low without changing the choice.
 
-The cost model applies only to content written with hardware compression Off and has no
-compression term; its read rate is the density's native rate (or the configured one), because gap reads are discarded on the host and member reads cost the same in every order.
+The cost model applies only to uncompressed content (every tar Media, and LTFS volumes whose label
+records compression off) and has no compression term; its read rate is the density's native rate (or the configured one), because gap reads are discarded on the host and member reads cost the same in every order.
 
 The [cost model](../../internal/media/read_cost.go) prices a LOCATE from a to b in one partition with
 nonnegative terms, choosing the first of three ways the drive can arrive:
 
 - Streaming: b is logically ahead of a (its logical object at or after a's) by at most
-  `buffer_bytes` divided by the applicable record bytes, in any wrap, because the drive keeps
+  `streaming_bytes` (the streaming distance) divided by the applicable record bytes, in any wrap, because the drive keeps
   reading instead of positioning. It costs the skipped objects at reading speed (their record bytes
   divided by `bytes_per_second`) plus one `approach_reversal_seconds` for each wrap turn crossed,
-  and no other positioning term. Absent or zero `buffer_bytes`, or an unknown record size, never
+  and no other positioning term. Absent or zero `streaming_bytes`, or an unknown record size, never
   streams.
 - A read-speed locate: b is in the same wrap interval and half as a and does not lie behind it (b
   at or after a in the wrap's read direction). It costs `base_seconds` plus the objects between
@@ -118,13 +121,15 @@ the Prepared read's applicability reason says so. Otherwise the read uses the
 [built-in initial values](../../internal/executor/media_tar_defaults.go): positioning and reading
 terms from a fixed calibration sequence on one HP LTO-5 drive, completion timing measured on HP
 LTO-5 and per-density wraps, native rate and rewind. The Prepared read reports the source as
-`configured` or `builtin`. Missing values in a configured set stay unknown and are never filled from
-the built-in values, so the affected estimates are unknown and the read keeps LOGICAL. Record size,
-compression and encryption take no part in selection: the time to pass one object at reading speed
-and the read-ahead buffer use the Session's actual record size (the tar Media profile's record
-bytes, or the LTFS volume block size). Hardware-compressed or unknown-record
-written content retains ordinary reading and exact seek but is excluded from linear smart ordering.
-Changing current drive compression does not change the cartridge's written policy.
+`configured` or `builtin`; Settings Get returns the built-in set for every density with a known
+layout, built by the same function. Missing values in a configured set stay unknown and are never filled from
+the built-in values, so the affected estimates are unknown and the read keeps LOGICAL. Record size
+and encryption take no part in selection: the time to pass one object at reading speed
+and the streaming distance use the Session's actual record size (the tar Media profile's record
+bytes, or the LTFS volume block size). Tar content with an unknown record policy, and LTFS volumes
+whose label records compression on or unknown, retain ordinary reading and exact seek but are
+excluded from linear smart ordering. Changing current drive compression does not change an LTFS
+volume's written policy.
 The optional `completion` parameters keep full-span rewind, fixed unload work and the additional
 LTFS unmount time separate.
 
@@ -141,7 +146,7 @@ the streaming reading speed by more than 10%, when a term is negative or unident
 move misses the fit by more than 3 seconds.
 
 The stored set applies to the drive's reported serial and the cartridge's recorded density. Its
-positioning terms come from the fit; `buffer_bytes` is the streaming distance times the bytes in
+positioning terms come from the fit; `streaming_bytes` is the streaming distance times the bytes in
 wrap 0 (its logical objects times the Media's record bytes) and `bytes_per_second` is those bytes
 over the reading time of one span. `completion.full_span_seconds` is the fitted seek time of one
 span, and `completion.fixed_seconds` is the timed unload minus that seek time times the final span

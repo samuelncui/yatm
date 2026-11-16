@@ -40,7 +40,7 @@ func selectionPages(data []byte) (map[byte][]byte, error) {
 	return pages, err
 }
 
-func (d *Device) selectMode(ctx context.Context, data []byte, verifyDecoder bool, writePolicy *bool) error {
+func (d *Device) selectMode(ctx context.Context, data []byte, writing bool) error {
 	// Session MODE SELECT never saves defaults and owns its response before a readback can follow.
 	desired, err := selectionPages(data)
 	if err != nil {
@@ -80,7 +80,7 @@ func (d *Device) selectMode(ctx context.Context, data []byte, verifyDecoder bool
 		if err := checkCapturedWriteAlgorithm(pages, original); err != nil {
 			return err
 		}
-		if err := checkUntouchedCompression(pages, original, d.compressionChanged, d.selectorChanged); err != nil {
+		if err := checkUntouchedCompression(pages, original, d.dceChanged, d.selectorChanged); err != nil {
 			return err
 		}
 	}
@@ -94,12 +94,8 @@ func (d *Device) selectMode(ctx context.Context, data []byte, verifyDecoder bool
 	if len(current) < 16 || binary.BigEndian.Uint16(current[6:8]) != 8 || blockLength(current) != blockLength(data) || current[3]&0x7f != data[3]&0x7f {
 		return fmt.Errorf("Tape session mode readback differs")
 	}
-	if verifyDecoder && (len(pages[0x0f]) < 16 || pages[0x0f][3]&0xe0 != 0x80) {
-		return fmt.Errorf("required Tape decoder mode readback differs")
-	}
-	if writePolicy != nil {
-		active, _ := compressionState(pages)
-		if active == nil || *active != *writePolicy {
+	if writing {
+		if active := compressionState(pages); active == nil || *active {
 			return fmt.Errorf("required Tape write compression readback differs")
 		}
 	}
@@ -122,20 +118,18 @@ func (d *Device) restoreMode(ctx context.Context) error {
 	if err := checkCapturedWriteAlgorithm(pages, original); err != nil {
 		return err
 	}
-	if err := checkUntouchedCompression(pages, original, d.compressionChanged, d.selectorChanged); err != nil {
+	if err := checkUntouchedCompression(pages, original, d.dceChanged, d.selectorChanged); err != nil {
 		return err
 	}
 
 	// Rebuild only owned mutable fields on the current pages, retaining unrelated reported facts.
 	var compression, configuration []byte
-	if d.compressionChanged != 0 {
+	if d.dceChanged {
 		compression = append([]byte(nil), pages[0x0f]...)
 		if len(compression) < 16 || len(original[0x0f]) < 16 {
 			return fmt.Errorf("captured compression controls are unavailable")
 		}
-		writeMask, readMask := byte(d.compressionChanged), byte(d.compressionChanged>>8)
-		compression[2] = compression[2]&^writeMask | original[0x0f][2]&writeMask
-		compression[3] = compression[3]&^readMask | original[0x0f][3]&readMask
+		compression[2] = compression[2]&^0x80 | original[0x0f][2]&0x80
 	}
 	if d.selectorChanged {
 		configuration = append([]byte(nil), pages[0x10]...)
@@ -157,7 +151,7 @@ func (d *Device) restoreMode(ctx context.Context) error {
 	// Restore the captured settings through the existing checked mode-selection boundary.
 	data := sessionMode(current, compression, configuration, blockLength(d.original))
 	data[3] = d.original[3]
-	return d.selectMode(ctx, data, false, nil)
+	return d.selectMode(ctx, data, false)
 }
 
 func (d *Device) preparePartition(ctx context.Context, partition []byte, header byte) error {

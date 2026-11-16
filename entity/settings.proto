@@ -23,6 +23,10 @@ message DeviceSettings {
   reserved 2, 3;
   reserved "learned_read_parameters", "clear_learned_read_parameters";
   repeated DeviceConfig devices = 1;
+  // Read-only built-in read parameters: one set for each recorded density code the product has a
+  // layout for, with its density code, no drive serial and its built-in source reference. Get and
+  // Update return them; Update ignores client-supplied values and never stores them.
+  repeated TapeReadParameters builtin_read_parameters = 4;
 }
 message DeviceConfig {
   string device = 1;
@@ -74,7 +78,7 @@ message TapeReadGeometry {
   reserved "min_lpos", "max_lpos";
   optional uint32 nominal_wraps = 1;
 }
-// Nonnegative LOCATE terms in seconds. A target within buffer_bytes ahead costs the skipped objects
+// Nonnegative LOCATE terms in seconds. A target within streaming_bytes ahead costs the skipped objects
 // at reading speed plus approach_reversal_seconds per wrap turn crossed. A same-wrap forward move that
 // stays in one half costs base_seconds plus that reading-speed time, priced from record bytes and
 // TapeReadTiming.bytes_per_second rather than a field here. Every other move, including a same-wrap
@@ -93,10 +97,11 @@ message TapeReadPositioning {
   optional double approach_reversal_seconds = 10;
   // Seek-speed seconds for one complete longitudinal span, not transfer time.
   optional double seek_seconds_per_wrap = 12;
-  // How far logically ahead the drive reaches by continuing to read instead of positioning: such a
-  // target costs the skipped objects at reading speed plus approach_reversal_seconds per wrap turn
-  // crossed, and no other positioning term. Absent or zero never applies.
-  optional uint64 buffer_bytes = 14;
+  // Streaming distance: how far logically ahead the drive reaches by continuing to read instead of
+  // positioning. Such a target costs the skipped objects at reading speed plus
+  // approach_reversal_seconds per wrap turn crossed, and no other positioning term. Absent or zero
+  // never applies.
+  optional uint64 streaming_bytes = 14;
 }
 message TapeReadTiming {
   reserved 2;

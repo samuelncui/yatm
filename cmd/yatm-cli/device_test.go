@@ -97,6 +97,20 @@ func TestTapeDeviceInspectKeepsReportedSupportUnvalidated(t *testing.T) {
 	}`, stdout)
 }
 
+func TestTapeDeviceInspectReportsSupportedDensities(t *testing.T) {
+	// The drive's supported density codes pass through the inspect JSON beside its other facts.
+	server, _ := newGRPCWebTestServer(t, func(server *grpc.Server) {
+		registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
+			return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{
+				DensityCode: proto.Uint32(0x58), SupportedDensityCodes: []uint32{0x44, 0x46, 0x58},
+			}}}, nil
+		}})
+	}, nil, nil)
+	exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.JSONEq(t, `{"tape":{"density_code":88,"supported_density_codes":[68,70,88]}}`, stdout)
+}
+
 func TestTapeDeviceInspectPreservesTransientCapacity(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -125,38 +139,6 @@ func TestTapeDeviceInspectPreservesTransientCapacity(t *testing.T) {
 			exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
 			require.Equal(t, exitSuccess, exit, stderr)
 			require.JSONEq(t, `{"tape":{"features":[{"feature":"DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING","capacity":`+tc.json+`}]}}`, stdout)
-			require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
-			require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
-		})
-	}
-}
-
-func TestTapeDeviceInspectPreservesCompressionFacts(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		limits *entity.TapeCompressionLimits
-		json   string
-	}{
-		{"unknown", &entity.TapeCompressionLimits{}, `{}`},
-		{"known zero and false", &entity.TapeCompressionLimits{CurrentAlgorithm: proto.Uint32(0), EnableChangeable: proto.Bool(false)}, `{"current_algorithm":0,"enable_changeable":false}`},
-		{"known maximum and true", &entity.TapeCompressionLimits{CurrentAlgorithm: proto.Uint32(math.MaxUint32), EnableChangeable: proto.Bool(true)}, `{"current_algorithm":4294967295,"enable_changeable":true}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			// Algorithm identifiers and changeability are observations, not a supported list or qualification.
-			server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-				registerTestServices(server, &stubService{deviceInspect: func(context.Context, *entity.InspectDeviceRequest) (*entity.InspectDeviceResponse, error) {
-					return &entity.InspectDeviceResponse{Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{
-						CompressionEnabled: proto.Bool(true), DecompressionEnabled: proto.Bool(false),
-						Features: []*entity.DeviceFeature{{Feature: entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION,
-							Support: entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED, Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_READY, Limits: &entity.DeviceFeature_Compression{Compression: tc.limits}}},
-					}}}, nil
-				}})
-			}, nil, nil)
-
-			// ProtoJSON retains known false/zero and absent facts independently of support and current state.
-			exit, stdout, stderr := executeTestCLI(server.URL, "", "tape", "device", "inspect", "--device", "/dev/nst0")
-			require.Equal(t, exitSuccess, exit, stderr)
-			require.JSONEq(t, `{"tape":{"compression_enabled":true,"decompression_enabled":false,"features":[{"feature":"DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION","support":"DEVICE_FEATURE_SUPPORT_SUPPORTED","availability":"DEVICE_FEATURE_AVAILABILITY_READY","compression":`+tc.json+`}]}}`, stdout)
 			require.Equal(t, 1, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
 			require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
 		})

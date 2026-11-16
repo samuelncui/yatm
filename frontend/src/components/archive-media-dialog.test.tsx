@@ -73,8 +73,22 @@ const job = Job.create({
   phase: JobPhase.UNSPECIFIED,
 });
 
+/** Device settings saving one default format for /dev/nst0, or none. */
+const deviceDefaults = (defaultFormat?: string) =>
+  call({
+    value: SettingsValue.create({
+      value: {
+        oneofKind: "device",
+        device: DeviceSettings.create(
+          defaultFormat ? { devices: [{ device: "/dev/nst0", options: { oneofKind: "tape", tape: TapeDeviceSettings.create({ defaultFormat }) } }] } : {},
+        ),
+      },
+    }),
+  });
+
 beforeEach(() => {
-  settingsGet.mockReset().mockReturnValue(call({ value: SettingsValue.create({ value: { oneofKind: "device", device: DeviceSettings.create() } }) }));
+  // Most cases exercise the LTFS cartridge flow, so the drive saves LTFS; unset defaults use Tar.
+  settingsGet.mockReset().mockReturnValue(deviceDefaults("ltfs_v1"));
   deviceInspect.mockReset();
   deviceList.mockReset();
   mediaInspect.mockReset();
@@ -377,70 +391,65 @@ describe("WriteMediaDialog", () => {
 });
 
 it.each(
-  [
-    { hardwareCompression: false, writeDetail: "" },
-    { hardwareCompression: false, writeDetail: "", recordBytes: undefined },
-    { hardwareCompression: true, writeDetail: "" },
-    { hardwareCompression: false, writeDetail: "Tape device is unavailable: Tape device is in use" },
-  ].map((test) => ({ recordBytes: 262144, ...test })),
-)(
-  "submits the device tar default with size $recordBytes, compression $hardwareCompression only when the server allows it: '$writeDetail'",
-  async ({ hardwareCompression, writeDetail, recordBytes }) => {
-    const options = { recordMode: TapeRecordMode.VARIABLE, recordBytes, hardwareCompression };
-    settingsGet.mockReturnValue(
-      call({
-        value: SettingsValue.create({
-          value: {
-            oneofKind: "device",
-            device: DeviceSettings.create({
-              devices: [
-                {
-                  device: "/dev/nst0",
-                  options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1", tarWriteOptions: options, readParameters: [] } },
-                },
-              ],
-            }),
-          },
-        }),
+  [{ writeDetail: "" }, { writeDetail: "", recordBytes: undefined }, { writeDetail: "Tape device is unavailable: Tape device is in use" }].map((test) => ({
+    recordBytes: 262144,
+    ...test,
+  })),
+)("submits the device tar default with size $recordBytes only when the server allows it: '$writeDetail'", async ({ writeDetail, recordBytes }) => {
+  const options = { recordMode: TapeRecordMode.VARIABLE, recordBytes };
+  settingsGet.mockReturnValue(
+    call({
+      value: SettingsValue.create({
+        value: {
+          oneofKind: "device",
+          device: DeviceSettings.create({
+            devices: [
+              {
+                device: "/dev/nst0",
+                options: { oneofKind: "tape", tape: { readOrder: 0, defaultFormat: "tar_pax_v1", tarWriteOptions: options, readParameters: [] } },
+              },
+            ],
+          }),
+        },
       }),
-    );
-    deviceInspect.mockImplementation(serverVerdict({ inherited: { ...options, recordBytes: recordBytes ?? 524288 }, writeDetail }));
-    render(<WriteMediaDialog job={job} />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
-    await userEvent.click(screen.getByRole("option", { name: "Tape" }));
-    const barcode = await screen.findByRole("textbox", { name: "Tape barcode" });
-    await userEvent.type(barcode, "ABC123");
-    await userEvent.click(screen.getByRole("button", { name: "Check Tape" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Tape Name" }), "Tar Tape");
+    }),
+  );
+  deviceInspect.mockImplementation(serverVerdict({ inherited: { ...options, recordBytes: recordBytes ?? 524288 }, writeDetail }));
+  render(<WriteMediaDialog job={job} />);
+  await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+  await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+  const barcode = await screen.findByRole("textbox", { name: "Tape barcode" });
+  await userEvent.type(barcode, "ABC123");
+  await userEvent.click(screen.getByRole("button", { name: "Check Tape" }));
+  await userEvent.type(screen.getByRole("textbox", { name: "Tape Name" }), "Tar Tape");
+  expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
+  await userEvent.type(screen.getByRole("textbox", { name: "Confirm FORMAT barcode" }), "ABC123");
+  // The check names the exact action and leaves every inherited option to the server.
+  expect(deviceInspect).toHaveBeenLastCalledWith({
+    device: "/dev/nst0",
+    writeTarget: { device: "/dev/nst0", barcode: "ABC123", name: "", mode: ArchiveTapeWriteMode.FORMAT, format: "tar_pax_v1" },
+  });
+  if (writeDetail) {
+    expect(screen.getByText(writeDetail)).toBeVisible();
     expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
-    await userEvent.type(screen.getByRole("textbox", { name: "Confirm FORMAT barcode" }), "ABC123");
-    // The check names the exact action and leaves every inherited option to the server.
-    expect(deviceInspect).toHaveBeenLastCalledWith({
-      device: "/dev/nst0",
-      writeTarget: { device: "/dev/nst0", barcode: "ABC123", name: "", mode: ArchiveTapeWriteMode.FORMAT, format: "tar_pax_v1" },
-    });
-    if (writeDetail) {
-      expect(screen.getByText(writeDetail)).toBeVisible();
-      expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
-      expect(writeMedia).not.toHaveBeenCalled();
-      return;
-    }
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start archive" })).toBeEnabled());
-    expect(screen.getByText(`Tar records variable · ${recordBytes ?? 524288} bytes · compression ${hardwareCompression ? "on" : "off"}`)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
-    await waitFor(() => expect(writeMedia).toHaveBeenCalledOnce());
-    expect(writeMedia.mock.calls[0][0].target.backend.tape).toEqual({
-      device: "/dev/nst0",
-      barcode: "ABC123",
-      name: "Tar Tape",
-      mode: ArchiveTapeWriteMode.FORMAT,
-      format: "tar_pax_v1",
-      tarOptions: options,
-    });
-    expect(mediaInspect).not.toHaveBeenCalled();
-  },
-);
+    expect(writeMedia).not.toHaveBeenCalled();
+    return;
+  }
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start archive" })).toBeEnabled());
+  expect(screen.getByText(`Tar records variable · ${recordBytes ?? 524288} bytes`)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
+  await waitFor(() => expect(writeMedia).toHaveBeenCalledOnce());
+  expect(writeMedia.mock.calls[0][0].target.backend.tape).toEqual({
+    device: "/dev/nst0",
+    barcode: "ABC123",
+    name: "Tar Tape",
+    mode: ArchiveTapeWriteMode.FORMAT,
+    format: "tar_pax_v1",
+    tarOptions: options,
+  });
+  expect(mediaInspect).not.toHaveBeenCalled();
+});
 
 it("refreshes untouched device defaults while retaining edited record values", async () => {
   deviceList.mockReturnValue(
@@ -466,7 +475,7 @@ it("refreshes untouched device defaults while retaining edited record values", a
                     readOrder: 0,
                     readParameters: [],
                     defaultFormat: "tar_pax_v1",
-                    tarWriteOptions: { recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144, hardwareCompression: false },
+                    tarWriteOptions: { recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144 },
                   },
                 },
               },
@@ -478,7 +487,7 @@ it("refreshes untouched device defaults while retaining edited record values", a
                     readOrder: 0,
                     readParameters: [],
                     defaultFormat: "tar_pax_v1",
-                    tarWriteOptions: { recordMode: TapeRecordMode.FIXED, recordBytes: 131072, hardwareCompression: false },
+                    tarWriteOptions: { recordMode: TapeRecordMode.FIXED, recordBytes: 131072 },
                   },
                 },
               },
@@ -499,13 +508,10 @@ it("refreshes untouched device defaults while retaining edited record values", a
   const size = screen.getByRole("spinbutton", { name: "Record size (bytes)" });
   await userEvent.clear(size);
   await userEvent.type(size, "524288");
-  await userEvent.click(screen.getByRole("combobox", { name: "Tar hardware compression" }));
-  await userEvent.click(screen.getByRole("option", { name: "On" }));
   await userEvent.click(screen.getByRole("combobox", { name: "Tape device" }));
   await userEvent.click(screen.getByRole("option", { name: "drive-b" }));
   expect(screen.getByRole("spinbutton", { name: "Record size (bytes)" })).toHaveValue(524288);
   expect(screen.getByRole("combobox", { name: "Record mode" })).toHaveTextContent("Fixed");
-  expect(screen.getByRole("combobox", { name: "Tar hardware compression" })).toHaveTextContent("On");
   expect(mediaInspect).not.toHaveBeenCalled();
 });
 
@@ -550,7 +556,7 @@ it("requires an explicit action when LTFS cartridge inspection discovers a regis
           serialNumber: "",
           encryption: "",
           format: "tar_pax_v1",
-          tar: { initializationId: "initialized", recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144, hardwareCompression: true },
+          tar: { initializationId: "initialized", recordMode: TapeRecordMode.VARIABLE, recordBytes: 262144 },
         },
       },
     },
@@ -610,7 +616,7 @@ const confirmTar = async () => {
 };
 
 it("uses script encryption without a per-FORMAT toggle or algorithm admission gate", async () => {
-  tarDefaults({ recordMode: TapeRecordMode.VARIABLE, hardwareCompression: false });
+  tarDefaults({ recordMode: TapeRecordMode.VARIABLE });
   deviceInspect.mockImplementation(serverVerdict());
   await openTar();
   await confirmTar();
@@ -619,32 +625,23 @@ it("uses script encryption without a per-FORMAT toggle or algorithm admission ga
   expect(screen.queryByRole("combobox", { name: "Encryption algorithm" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
   await waitFor(() => expect(writeMedia).toHaveBeenCalledOnce());
-  expect(writeMedia.mock.calls[0][0].target.backend.tape.tarOptions).toEqual({ recordMode: TapeRecordMode.VARIABLE, hardwareCompression: false });
+  expect(writeMedia.mock.calls[0][0].target.backend.tape.tarOptions).toEqual({ recordMode: TapeRecordMode.VARIABLE });
 });
 
 it.each([
   {
     source: "device defaults",
-    saved: { recordMode: TapeRecordMode.FIXED, hardwareCompression: false },
-    inherited: { recordMode: TapeRecordMode.FIXED, recordBytes: 524288, hardwareCompression: false },
+    saved: { recordMode: TapeRecordMode.FIXED },
+    inherited: { recordMode: TapeRecordMode.FIXED, recordBytes: 524288 },
     expectedMode: TapeRecordMode.FIXED,
-    expectedCompression: false,
   },
   {
     source: "loaded report",
     saved: {},
-    inherited: { recordMode: TapeRecordMode.VARIABLE, recordBytes: 524288, hardwareCompression: true },
-    expectedMode: TapeRecordMode.VARIABLE,
-    expectedCompression: true,
-  },
-  {
-    source: "unavailable recommendation",
-    saved: {},
     inherited: { recordMode: TapeRecordMode.VARIABLE, recordBytes: 524288 },
     expectedMode: TapeRecordMode.VARIABLE,
-    expectedCompression: undefined,
   },
-])("clears FORMAT overrides into server-inherited $source without another Check Tape", async ({ saved, inherited, expectedMode, expectedCompression }) => {
+])("clears FORMAT overrides into server-inherited $source without another Check Tape", async ({ saved, inherited, expectedMode }) => {
   tarDefaults(saved);
   deviceInspect.mockImplementation(serverVerdict({ inherited }));
   await openTar();
@@ -652,25 +649,15 @@ it.each([
   const advanced = screen.getByRole("button", { name: /^Advanced/ });
   await userEvent.click(advanced);
   await userEvent.click(screen.getByRole("combobox", { name: "Record mode" }));
-  await userEvent.click(screen.getByRole("option", { name: "Fixed" }));
-  await userEvent.click(screen.getByRole("combobox", { name: "Tar hardware compression" }));
-  await userEvent.click(screen.getByRole("option", { name: "On" }));
-  for (const name of ["Record mode", "Tar hardware compression"]) {
-    await userEvent.click(screen.getByRole("combobox", { name }));
-    await userEvent.click(screen.getByRole("option", { name: name === "Record mode" ? /^Use device default$/ : /^Use device default or recommendation$/ }));
-  }
+  await userEvent.click(screen.getByRole("option", { name: expectedMode === TapeRecordMode.FIXED ? "Variable" : "Fixed" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Record mode" }));
+  await userEvent.click(screen.getByRole("option", { name: /^Use device default$/ }));
   expect(deviceInspect).toHaveBeenCalledTimes(2);
-  expect(screen.getByText(/Hardware compression keeps reads in LOGICAL order/)).toBeVisible();
   expect(screen.getByText(expectedMode === TapeRecordMode.FIXED ? "Inherited: Fixed." : "Inherited: Variable.")).toBeVisible();
-  if (expectedCompression === undefined) {
-    expect(screen.getByText(/No device default or reported recommendation. Choose/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
-    return;
-  }
   expect(screen.getByRole("button", { name: "Start archive" })).toBeEnabled();
   await userEvent.click(screen.getByRole("button", { name: "Start archive" }));
   await waitFor(() => expect(writeMedia).toHaveBeenCalledOnce());
-  expect(writeMedia.mock.calls[0][0].target.backend.tape.tarOptions).toEqual({ recordMode: expectedMode, hardwareCompression: expectedCompression });
+  expect(writeMedia.mock.calls[0][0].target.backend.tape.tarOptions).toEqual({ recordMode: expectedMode });
 });
 
 const registeredTar = Media.create({
@@ -691,7 +678,7 @@ const registeredTar = Media.create({
 });
 
 it("checks a registered barcode again when APPEND switches to FORMAT and back", async () => {
-  tarDefaults({ hardwareCompression: false });
+  tarDefaults();
   deviceInspect.mockImplementation(serverVerdict({ registered: registeredTar }));
   mediaList.mockImplementation(({ param }: { param: { list?: { kinds: MediaKind[] } } }) =>
     call({ media: param.list?.kinds.includes(MediaKind.TAPE) ? [registeredTar] : [] }),
@@ -715,7 +702,7 @@ it("checks a registered barcode again when APPEND switches to FORMAT and back", 
 });
 
 it("rejects a late registration result after the barcode changes", async () => {
-  tarDefaults({ hardwareCompression: false });
+  tarDefaults();
   deviceInspect.mockImplementation(serverVerdict({ registered: registeredTar }));
   let finish!: (value: { media: Media[] }) => void;
   mediaList.mockImplementation(({ param }: { param: { list?: { kinds: MediaKind[]; query: string } } }) =>
@@ -743,7 +730,7 @@ it("rejects a late registration result after the barcode changes", async () => {
 });
 
 it("checks a pending APPEND barcode again after switching to FORMAT", async () => {
-  tarDefaults({ hardwareCompression: false });
+  tarDefaults();
   deviceInspect.mockImplementation(serverVerdict({ registered: registeredTar }));
   let finish!: (value: { media: Media[] }) => void;
   mediaList.mockImplementation(({ param }: { param: { list?: { kinds: MediaKind[] } } }) =>
@@ -769,4 +756,36 @@ it("checks a pending APPEND barcode again after switching to FORMAT", async () =
   expect(screen.getByRole("textbox", { name: "Tape Name" })).toHaveValue("Requested FORMAT");
   expect(screen.getByText(registeredDetail)).toBeVisible();
   expect(screen.getByRole("button", { name: "Start archive" })).toBeDisabled();
+});
+
+it("uses Tar for a drive without a saved default format", async () => {
+  // An unset default resolves to Tar and inspects the drive passively instead of the LTFS cartridge.
+  settingsGet.mockReturnValue(deviceDefaults());
+  deviceInspect.mockImplementation(serverVerdict());
+  render(<WriteMediaDialog job={job} />);
+  await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+  await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+  await waitFor(() => expect(deviceInspect).toHaveBeenCalledWith({ device: "/dev/nst0", writeTarget: undefined }));
+  expect(screen.getByRole("combobox", { name: "Tape format" })).toHaveTextContent("Tar");
+  expect(screen.getByRole("combobox", { name: "Tape action" })).toHaveTextContent("FORMAT");
+  expect(mediaInspect).not.toHaveBeenCalled();
+});
+
+it.each([
+  { name: "pre-LTO-5 densities", codes: [0x44, 0x46], ltfs: false },
+  { name: "an LTO-5 density", codes: [0x46, 0x58], ltfs: true },
+  { name: "unknown densities", codes: [], ltfs: true },
+])("offers LTFS for a drive reporting $name only when it can write it", async ({ codes, ltfs }) => {
+  settingsGet.mockReturnValue(deviceDefaults());
+  deviceInspect.mockReturnValue(call(InspectDeviceResponse.create({ report: { oneofKind: "tape", tape: { supportedDensityCodes: codes, features: [] } } })));
+  render(<WriteMediaDialog job={job} />);
+  await userEvent.click(screen.getByRole("button", { name: "Choose archive storage" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Storage type" }));
+  await userEvent.click(screen.getByRole("option", { name: "Tape" }));
+  await waitFor(() => expect(deviceInspect).toHaveBeenCalled());
+  await userEvent.click(screen.getByRole("combobox", { name: "Tape format" }));
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(ltfs ? ["LTFS", "Tar"] : ["Tar"]);
+  if (ltfs) expect(screen.queryByText("This drive does not support LTFS (needs LTO-5 or later).")).not.toBeInTheDocument();
+  else expect(screen.getByText("This drive does not support LTFS (needs LTO-5 or later).")).toBeVisible();
 });
