@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
-	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/tape"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
@@ -45,8 +44,7 @@ func TestBuiltinTarReadParametersUseLoadedMediaDensity(t *testing.T) {
 		require.Nil(t, parameters.Geometry.MinLpos)
 		require.Nil(t, parameters.Geometry.MaxLpos)
 		require.Nil(t, parameters.Reading.FilemarkOverheadSeconds)
-		require.Contains(t, parameters.SourceReference, "unmeasured")
-		require.Contains(t, parameters.SourceReference, "reference")
+		require.Equal(t, tarBuiltinSourceReference, parameters.SourceReference)
 	}
 }
 
@@ -75,7 +73,7 @@ func TestBuiltinTarReadParametersPreserveUnknownFactsAndInputs(t *testing.T) {
 	report.GetTape().DensityCode = proto.Uint32(0xee)
 	parameters = tarTestReadParameters(report, profile)
 	require.Nil(t, parameters.Geometry, "unrecognized density cannot silently reuse an LTO layout")
-	require.Contains(t, parameters.SourceReference, "no sourced layout")
+	require.Equal(t, tarBuiltinSourceReference, parameters.SourceReference)
 
 	// The compressed-profile limit belongs to stored write semantics, not current DCE observations.
 	profile.HardwareCompression = true
@@ -98,7 +96,7 @@ func TestBuiltinTarReadParametersCompileUsefulObservedPositioning(t *testing.T) 
 	geometry, cleanup := tarReadModelMap(t, []tape.WrapEndpoint{
 		{Wrap: 0, Object: 99}, {Wrap: 1, Object: 189}, {Wrap: 2, Object: 240},
 	})
-	model, reason := tarTestReadModel(parameters, profile, geometry, mediapkg.ReadEndpointInclusive)
+	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
 	score, known := model.AccessScore(&entity.TapeBytePosition{LogicalObject: 1}, &entity.TapeBytePosition{LogicalObject: 170})
 	require.True(t, known)

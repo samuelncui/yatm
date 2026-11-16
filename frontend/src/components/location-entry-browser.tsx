@@ -12,12 +12,12 @@ import {
   type ChonkyFileActionData,
 } from "@samuelncui/chonky";
 import { FileScope, Location, type LocationEntryRef } from "@/entity";
-import { LoadMoreAction, ViewFileDetailsAction, RefreshListAction } from "@/actions";
+import { ViewFileDetailsAction, RefreshListAction } from "@/actions";
 import { DirectoryReadError } from "@/components/directory-read-error";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { chonkyI18n, errorMessage } from "@/tools";
 import { fileLocationReference } from "@/components/location-files";
-import { filesPage, locationDirectoryReference } from "@/components/files-browser";
+import { listDirectory, locationDirectoryReference } from "@/components/files-browser";
 import { fileOperationReference } from "@/components/file-operations";
 import { DetailModal } from "@/pages/file-detail";
 
@@ -39,43 +39,30 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
   const [directory, setDirectory] = useState({ sourceID: source.id, path: "" });
   const parent = directory.sourceID === source.id ? directory.path : "";
   const [positions, setPositions] = useState<FileData[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [cursor, setCursor] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(true);
   const [revision, setRevision] = useState(0);
   const request = useRef(0);
-  const loading = useRef(false);
   const [detail, setDetail] = useState<FileData>();
-  const load = useCallback(
-    async (cursor = "") => {
-      const sequence = ++request.current;
-      loading.current = true;
-      setPending(true);
-      try {
-        const reply = await filesPage(locationDirectoryReference(String(source.id), parent.replace(/\/$/, "")), FileScope.ALL, cursor);
-        if (sequence !== request.current) return;
-        setPositions((current) => (cursor ? [...current, ...reply.files] : reply.files));
-        setHasMore(!!reply.nextCursor);
-        setCursor(reply.nextCursor);
-        setError("");
-        setRevision((value) => value + 1);
-      } catch (error) {
-        if (sequence === request.current) {
-          setHasMore(false);
-          setPositions([]);
-          setCursor("");
-          setError(errorMessage(error, "Could not read this directory"));
-        }
-      } finally {
-        if (sequence === request.current) {
-          loading.current = false;
-          setPending(false);
-        }
+  // One listing returns the whole directory.
+  const load = useCallback(async () => {
+    const sequence = ++request.current;
+    setPending(true);
+    try {
+      const reply = await listDirectory(locationDirectoryReference(String(source.id), parent.replace(/\/$/, "")), FileScope.ALL);
+      if (sequence !== request.current) return;
+      setPositions(reply.files);
+      setError("");
+      setRevision((value) => value + 1);
+    } catch (error) {
+      if (sequence === request.current) {
+        setPositions([]);
+        setError(errorMessage(error, "Could not read this directory"));
       }
-    },
-    [source.id, parent],
-  );
+    } finally {
+      if (sequence === request.current) setPending(false);
+    }
+  }, [source.id, parent]);
   useEffect(() => {
     const pending = request;
     setPositions([]);
@@ -99,10 +86,6 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
     if (data.id === ChooseFileAction.id) {
       const file = data.state.selectedFilesForAction[0];
       if (file) onChoose?.(fileLocationReference(file));
-      return;
-    }
-    if (data.id === LoadMoreAction.id) {
-      if (!loading.current && hasMore) void load(cursor);
       return;
     }
     if (data.id === ViewFileDetailsAction.id) {
@@ -141,14 +124,8 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
           onFileAction={action}
           disableDragAndDrop
           hideToolbarInfo={!!error || (pending && !files.length)}
-          disableDefaultFileActions={hasMore || pending || !!error ? incompleteListActions : undefined}
-          fileActions={[
-            ChonkyActions.ToggleHiddenFiles,
-            ViewFileDetailsAction,
-            RefreshListAction,
-            ...(onChoose ? [ChooseFileAction] : []),
-            ...(hasMore ? [LoadMoreAction] : []),
-          ]}
+          disableDefaultFileActions={pending || !!error ? incompleteListActions : undefined}
+          fileActions={[ChonkyActions.ToggleHiddenFiles, ViewFileDetailsAction, RefreshListAction, ...(onChoose ? [ChooseFileAction] : [])]}
           i18n={chonkyI18n}
         >
           <FileNavbar />

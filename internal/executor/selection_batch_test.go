@@ -77,23 +77,24 @@ func TestSelectionStageAndCaptureReuseBatchFacts(t *testing.T) {
 	var ids []int64
 	var items []*observation.Item
 	hash := sha256.Sum256([]byte("content"))
+	tracker := NewTracker()
 	for i := 0; i < 201; i++ {
 		file := &library.File{Name: fmt.Sprintf("file-%03d", i)}
 		require.NoError(t, exe.lib.SaveFile(ctx, file))
 		name := filepath.Join(root, file.Name)
 		require.NoError(t, os.WriteFile(name, []byte("content"), 0644))
-		info, err := os.Stat(name)
+		info, err := Lstat(name)
 		require.NoError(t, err)
 		original := &library.FileLocation{FileID: file.ID, LocationID: location.ID, Path: file.Name, Mode: uint32(info.Mode()), Size: info.Size(), MtimeNS: info.ModTime().UnixNano(), Hash: hash[:], Signature: []byte("opaque")}
 		require.NoError(t, exe.db.Create(original).Error)
-		keys := ObserveTracking(location, info)
+		keys := tracker.Observe(name, info)
 		for _, key := range keys {
 			key.FileID, key.LocationID = file.ID, location.ID
 			require.NoError(t, exe.db.Create(key).Error)
 		}
 		entry, err := locationEntry(location.ID, file.Name, info)
 		require.NoError(t, err)
-		item, err := selectedFileObservation(location, entry.Reference, info)
+		item, err := selectedFileObservation(tracker, location, entry.Reference, info)
 		require.NoError(t, err)
 		items, ids = append(items, item), append(ids, file.ID)
 	}
@@ -155,11 +156,11 @@ func TestSelectionStageAndCaptureReuseBatchFacts(t *testing.T) {
 	require.Equal(t, len(ids)+1, observed, "one observation per File plus the root directory")
 
 	// Changed admissions also share transaction-local validation facts; actual row writes remain atomic.
-	matches := make([]*library.ObservationAdmission, 0, len(items))
+	matches := make([]*library.ObservedEntry, 0, len(items))
 	for i, item := range items {
 		position := item.Position()
 		position.FileID, position.Size = ids[i], position.Size+1
-		matches = append(matches, &library.ObservationAdmission{Observation: position})
+		matches = append(matches, position)
 	}
 	queries = 0
 	admitted, err := exe.lib.AdmitObservations(ctx, location.ID, matches)

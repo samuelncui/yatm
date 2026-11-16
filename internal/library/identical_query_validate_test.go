@@ -227,3 +227,23 @@ func TestOpenIdenticalComponentLargeFrontierAndDetachedContext(t *testing.T) {
 	}))
 	require.Equal(t, 550, count)
 }
+
+func TestOpenIdenticalComponentExcludesOnlyExactTrashPaths(t *testing.T) {
+	// Trash is the exact .trash directory; a differently cased name is ordinary content.
+	db, lib := newTestLibrary(t)
+	ctx := context.Background()
+	location := locationTestSource(t, lib)
+	files := []*File{{Name: "a", Kind: entity.FileKind_FILE_KIND_REGULAR}, {Name: "b", Kind: entity.FileKind_FILE_KIND_REGULAR}, {Name: "c", Kind: entity.FileKind_FILE_KIND_REGULAR}}
+	createFileRows(t, db, files...)
+	for i, path := range []string{"a", ".TRASH/b", ".trash/c"} {
+		require.NoError(t, db.Create(&FileLocation{FileID: files[i].ID, LocationID: location.ID, Path: path, Signature: []byte("same")}).Error)
+	}
+	scope := IdenticalScope{Source: IdenticalLocations, Roots: []IdenticalRoot{{LocationID: location.ID}}}
+	component, err := lib.OpenIdenticalComponent(ctx, scope, files[0].ID)
+	require.NoError(t, err)
+	defer component.Close()
+	groups, err := component.Groups("", 20)
+	require.NoError(t, err)
+	require.Len(t, groups.Groups, 1)
+	require.Equal(t, int64(2), groups.Groups[0].Count)
+}

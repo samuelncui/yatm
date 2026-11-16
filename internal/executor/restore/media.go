@@ -28,15 +28,7 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	if _, err := a.exe.RestoreOutputPath(ctx, a.destination, ""); err != nil {
 		return err
 	}
-	names, err := newOutputNames(ctx, a)
-	if err != nil {
-		return err
-	}
-	defer func() { returnErr = errors.Join(returnErr, names.close()) }()
-	if err := names.rebuild(ctx); err != nil {
-		return err
-	}
-	target, err = a.frozenReadTarget(ctx, target)
+	target, err := a.frozenReadTarget(ctx, target)
 	if err != nil {
 		return err
 	}
@@ -82,6 +74,8 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	a.lock.Lock()
 	a.stageKey = progress.StagePrefix()
 	a.lock.Unlock()
+	// Native identity of restored outputs resolves each filesystem once per attempt.
+	a.tracker = executor.NewTracker()
 
 	// Run the shared transfer stream with capabilities owned by the read Session. The runner
 	// owns the items, the callback only hands finished ones to the writer, and the shared writer
@@ -101,8 +95,8 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 
 	options := []acp.Option{
 		acp.WithHashPolicy(acp.HashReadRefresh),
-		// A Restore never replaces an existing output, which stays a run-level option.
-		acp.Overwrite(false),
+		// ACP replaces only the empty output this Job created exclusively before submitting the item.
+		acp.Overwrite(true),
 		acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...),
 		acp.WithLogger(a.logger),
 		acp.WithEventHandler(a.restoreEventHandler(ctx)),
@@ -183,9 +177,6 @@ func (a *jobRestoreRunner) frozenReadTarget(ctx context.Context, target *entity.
 			if err != nil {
 				return nil, err
 			}
-		}
-		if tape.RefreshPositionMap && !raw && copy.MediaProfile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 {
-			return nil, fmt.Errorf("position-map refresh requires tar Restore Media")
 		}
 
 		// Resolve physical identity only while owning the drive; raw tar hints bypass LTFS scripts.
@@ -302,9 +293,6 @@ func (a *jobRestoreRunner) selectFrozenTapeMedia(
 	}
 	if selected == nil {
 		return nil, fmt.Errorf("Media %q has no frozen pending Restore candidate", identity)
-	}
-	if requested.RefreshPositionMap && selected.MediaProfile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 {
-		return nil, fmt.Errorf("position-map refresh requires tar Restore Media")
 	}
 
 	// Keep the operator's device/action choices while rebuilding every trusted expectation.

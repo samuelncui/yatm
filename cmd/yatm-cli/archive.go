@@ -133,9 +133,6 @@ func registerArchiveCommands(root *flags.Command, commandRuntime *runtime) error
 
 func (c *archiveCreateCommand) Execute(_ []string) error {
 	// Validate Preview policy combinations before resolving any server paths.
-	if c.Priority < 0 {
-		return usageError(fmt.Errorf("Job priority must not be negative, value=%d", c.Priority))
-	}
 	preview, err := parsePreviewPolicy(c.PreviewPolicy)
 	if err != nil {
 		return err

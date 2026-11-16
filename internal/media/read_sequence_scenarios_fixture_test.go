@@ -50,16 +50,15 @@ func readScenarioInput(spans []readplan.Span) iter.Seq2[readplan.Span, error] {
 }
 
 type readScenarioModel struct {
-	Boundary          ReadEndpointConvention `json:"boundary"`
-	BOT               map[uint32]uint64      `json:"bot"`
-	Wraps             []ReadModelWrap        `json:"wraps"`
-	FullWrapSeconds   float64                `json:"fullWrapSeconds"`
-	UncertaintyNS     int64                  `json:"uncertaintyNS"`
-	Coefficients      ReadModelCoefficients  `json:"coefficients"`
-	BytesPerSecond    float64                `json:"bytesPerSecond"`
-	PostLocateSeconds float64                `json:"postLocateSeconds"`
-	Completion        ReadCompletion         `json:"completion"`
-	DataEnd           uint64                 `json:"dataEnd"`
+	BOT               map[uint32]uint64     `json:"bot"`
+	Wraps             []ReadModelWrap       `json:"wraps"`
+	FullWrapSeconds   float64               `json:"fullWrapSeconds"`
+	UncertaintyNS     int64                 `json:"uncertaintyNS"`
+	Coefficients      ReadModelCoefficients `json:"coefficients"`
+	BytesPerSecond    float64               `json:"bytesPerSecond"`
+	PostLocateSeconds float64               `json:"postLocateSeconds"`
+	Completion        ReadCompletion        `json:"completion"`
+	DataEnd           uint64                `json:"dataEnd"`
 }
 
 type readScenario struct {
@@ -251,7 +250,7 @@ func makeReadScenario(recipe readScenarioRecipe, backend, split string, seed uin
 	if strings.HasPrefix(recipe.Name, "threshold-") {
 		end = 80_000_000
 	}
-	scenario.Model = readScenarioModel{Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{partition: 0},
+	scenario.Model = readScenarioModel{BOT: map[uint32]uint64{partition: 0},
 		FullWrapSeconds: 92.69041838827268, UncertaintyNS: 9_121_917_392,
 		Coefficients: ReadModelCoefficients{Base: 3.223942631933043, Wrap: 6.252332019046645, Band: -.8279789490339896,
 			LandingZone: .6469527733076674, Direction: 1.2685235350999264, StepBack: 5.965091877336342},
@@ -303,7 +302,7 @@ func (s readScenario) provider(tb testing.TB) ReadOrderProvider {
 	// Production evaluators receive the same immutable metadata on both source revisions.
 	m, budget := s.Model, time.Duration(s.PlanningBudgetNS)
 	model, err := NewReadCostModel(ReadModelProfile{ID: readScenarioVersion, SnapshotValid: func() bool { return true },
-		Boundary: m.Boundary, BOT: m.BOT, Wraps: m.Wraps, FullWrapSeconds: proto.Float64(m.FullWrapSeconds),
+		BOT: m.BOT, Wraps: m.Wraps, FullWrapSeconds: proto.Float64(m.FullWrapSeconds),
 		Coefficients: m.Coefficients})
 	if err != nil {
 		tb.Fatal(err)

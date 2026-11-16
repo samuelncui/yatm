@@ -3,7 +3,6 @@ package restore
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math"
 
@@ -16,7 +15,7 @@ import (
 )
 
 // applySpec freezes explicit archived versions; current originals never choose restore content.
-func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJobSpec) (returnErr error) {
+func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJobSpec) error {
 	// Exclude Library replacement for the complete manifest-building attempt.
 	if spec == nil || (len(spec.FileVersionIds) == 0 && len(spec.Selections) == 0) {
 		return fmt.Errorf("Restore requires FileVersions or file selections")
@@ -26,14 +25,6 @@ func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJo
 	}
 
 	// Select all versions before deciding which one may reconnect the source File.
-	names, err := newOutputNames(ctx, a)
-	if err != nil {
-		return err
-	}
-	defer func() { returnErr = errors.Join(returnErr, names.close()) }()
-	if err := names.rebuild(ctx); err != nil {
-		return err
-	}
 	var config Config
 	if err := a.db.WithContext(ctx).First(&config, 1).Error; err != nil {
 		return err
@@ -49,7 +40,7 @@ func (a *jobRestoreRunner) applySpec(ctx context.Context, spec *entity.RestoreJo
 	if err := a.recountSummary(ctx); err != nil {
 		return err
 	}
-	if err := a.prepareOutputs(ctx, names); err != nil {
+	if err := a.prepareOutputs(ctx); err != nil {
 		return err
 	}
 	a.dropProgress()
@@ -90,7 +81,7 @@ func (a *jobRestoreRunner) buildManifest(ctx context.Context, spec *entity.Resto
 			return fmt.Errorf("FileVersion %d has no supported restore integrity facts", id)
 		}
 
-		// Freeze logical output names and reserve a collision-safe destination for this version.
+		// Freeze the logical output name; preparation assigns its output path from it.
 		target := item.Path
 		if err := entity.ValidateRelativePath(target); err != nil {
 			return err

@@ -42,7 +42,7 @@ func TestCLIJobExecutionSettings(t *testing.T) {
 	require.Equal(t, 1, recorder.count(entity.SettingsService_Update_FullMethodName))
 	require.True(t, proto.Equal(&entity.JobExecutionSettings{ReadBatch: 8, ReadBufferMax: 64, WriteBufferMax: 32, WriteBatchSize: 16, FlushIntervalMs: 250}, settings.updated.GetJob().Execution))
 
-	// Malformed JSON is a usage error, and a value the service rejects keeps its Connect code.
+	// Malformed JSON and a value the service rejects are usage errors; the rejection keeps its Connect code.
 	require.NoError(t, os.WriteFile(filename, []byte(`{"readBatch":`), 0o600))
 	exit, stdout, stderr = executeTestCLI(server.URL, "", "settings", "job", "--execution-json", filename)
 	require.Equal(t, exitUsage, exit)
@@ -53,7 +53,7 @@ func TestCLIJobExecutionSettings(t *testing.T) {
 	rejected := filepath.Join(t.TempDir(), "rejected.json")
 	require.NoError(t, os.WriteFile(rejected, []byte(`{"readBatch":0,"readBufferMax":64,"writeBufferMax":32,"writeBatchSize":16,"flushIntervalMs":250}`), 0o600))
 	exit, stdout, stderr = executeTestCLI(server.URL, "", "settings", "job", "--execution-json", rejected)
-	require.Equal(t, exitFailure, exit)
+	require.Equal(t, exitUsage, exit)
 	require.Empty(t, stdout)
 	var invalid errorOutput
 	require.NoError(t, json.Unmarshal([]byte(stderr), &invalid))

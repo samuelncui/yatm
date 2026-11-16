@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/ignore"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/preview"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/samuelncui/yatm/internal/tools"
 	"github.com/sirupsen/logrus"
@@ -104,7 +104,7 @@ type Previewer interface {
 	Exists(signature []byte) (bool, error)
 	Generate(ctx context.Context, sourcePath string, sha256 []byte, size, mtimeNS int64, force bool, settings *entity.PreviewJobSettings) ([]byte, error)
 	Manifest(signature []byte) (*entity.PreviewManifest, error)
-	Open(signature []byte, role string) (io.ReadCloser, error)
+	Open(signature []byte, role string) (*preview.OpenedAsset, error)
 }
 
 type Executor struct {
@@ -271,6 +271,9 @@ func (e *Executor) CreateTargetJob(ctx context.Context, kind entity.JobKind, pri
 }
 
 func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error, prepare func(Runner) error) (_ *Job, rerr error) {
+	if priority < 0 {
+		return nil, fmt.Errorf("%w: Job priority must not be negative, value=%d", ErrInvalidRequest, priority)
+	}
 	// Validate the type before creating any durable data.
 	if initialize == nil {
 		return nil, fmt.Errorf("create job failed, initializer is nil")

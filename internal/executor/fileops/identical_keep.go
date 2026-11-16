@@ -49,8 +49,11 @@ func keepAdmitted(exe *executor.Executor, req *entity.KeepIdenticalRequest, scop
 		}
 	}()
 	group, err := snapshot.Group(req.GroupId)
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return library.ErrLocationConflict
+	}
+	if err != nil {
+		return err
 	}
 	if group.Fingerprint != req.Fingerprint {
 		return library.ErrLocationConflict

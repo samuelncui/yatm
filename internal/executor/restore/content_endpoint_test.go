@@ -100,7 +100,7 @@ func TestRestoreEndpointFailureCannotPublishOrAdoptOutput(t *testing.T) {
 				buffer := startTestBuffer(t, runner)
 				items := &copyItems{runner: runner, mediaID: candidate.MediaID, session: session, batch: 1}
 				engine, err := acp.NewStream(ctx, buffer.onResults, acp.WithHashPolicy(acp.HashReadRefresh),
-					acp.Overwrite(false), acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...))
+					acp.Overwrite(true), acp.SetFromDevice(mediapkg.DeviceOptions(session.Capabilities().Read)...))
 				require.NoError(t, err)
 				return errors.Join(items.consume(ctx, engine), buffer.Close())
 			}

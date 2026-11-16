@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// WrapEndpoint is a directory endpoint in the convention declared by its WrapMap.
+// WrapEndpoint is a directory endpoint: the first logical object after the wrap, or EOD.
 type WrapEndpoint struct {
 	Partition uint32
 	Wrap      uint32
@@ -21,29 +21,21 @@ type WrapEndpoint struct {
 }
 
 // WrapMap retains the documented response order and gaps. AllWraps describes the reporting form,
-// not H6 coverage; absent Fresh is unknown. Endpoint normalization and costs need separate evidence.
+// not H6 coverage; absent Fresh is unknown. Costs need separate evidence.
 type WrapMap struct {
-	Endpoints          []WrapEndpoint
-	AllWraps           bool
-	ObservedAt         time.Time
-	Fresh              *bool
-	Source             string
-	EndpointConvention entity.TapePositionEndpointConvention
-	valid              *atomic.Bool
+	Endpoints  []WrapEndpoint
+	AllWraps   bool
+	ObservedAt time.Time
+	Fresh      *bool
+	Source     string
+	valid      *atomic.Bool
 }
 
 // Valid tracks this opened session's snapshot lifetime independently of freshness or qualification.
 func (m *WrapMap) Valid() bool { return m != nil && m.valid != nil && m.valid.Load() }
 
-// REOWPEndpointConvention retains vendor semantics except the qualified HP5 count-based response.
-func REOWPEndpointConvention(report *entity.InspectDeviceResponse) entity.TapePositionEndpointConvention {
-	if (strings.TrimSpace(report.GetVendor()) == "HP" || strings.TrimSpace(report.GetVendor()) == "HPE") &&
-		strings.TrimSpace(report.GetModel()) == "Ultrium 5-SCSI" && strings.TrimSpace(report.GetFirmware()) == "Z6ED" &&
-		report.GetTape().GetDensityCode() == 0x58 {
-		return entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE
-	}
-	return entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE
-}
+// Complete reports a live all-wraps observation with at least one endpoint.
+func (m *WrapMap) Complete() bool { return m.Valid() && m.AllWraps && len(m.Endpoints) != 0 }
 
 // Geometry returns a request-owned observation, trying CM once when REOWP has no complete directory.
 func (d *Device) Geometry(ctx context.Context) (*WrapMap, error) {
@@ -51,7 +43,7 @@ func (d *Device) Geometry(ctx context.Context) (*WrapMap, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if d.cmPending && (!d.geometry.Valid() || !d.geometry.AllWraps || len(d.geometry.Endpoints) == 0) {
+	if d.cmPending && !d.geometry.Complete() {
 		d.cmPending = false
 		if err := d.observeCartridgeDirectory(ctx); err != nil {
 			return nil, err
@@ -106,8 +98,7 @@ func decodeWrapMap(data []byte, all bool) (*WrapMap, bool, error) {
 		}
 		return nil, false, ErrMalformed
 	}
-	observed := &WrapMap{AllWraps: all, ObservedAt: time.Now(), valid: new(atomic.Bool),
-		EndpointConvention: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE}
+	observed := &WrapMap{AllWraps: all, ObservedAt: time.Now(), valid: new(atomic.Bool)}
 	observed.valid.Store(true)
 	if !all {
 		// First-wrap reporting has no partition/wrap identifiers; do not fabricate wrap zero or an association.
@@ -229,7 +220,7 @@ func (d *Device) inspectGeometry(ctx context.Context) error {
 		f.Detail = "REOWP response exceeds the bounded observation; complete coverage and freshness remain unknown"
 		return nil
 	}
-	observed.Source, observed.EndpointConvention, d.geometry = "A3/1F/45", REOWPEndpointConvention(d.report), observed
+	observed.Source, d.geometry = "A3/1F/45", observed
 	count := len(observed.Endpoints)
 	if !all {
 		count = 1
@@ -259,10 +250,8 @@ func (d *Device) geometryReportError(err error) error {
 }
 
 func (d *Device) observeCartridgeDirectory(ctx context.Context) error {
-	// This vendor READ BUFFER ID is documented for HP Ultrium; the decoder separately qualifies CM format.
-	vendor, model := strings.TrimSpace(d.report.GetVendor()), strings.TrimSpace(d.report.GetModel())
-	if vendor != "HP" && vendor != "HPE" || model != "Ultrium 5-SCSI" ||
-		!d.report.GetTape().GetMediumPresent() || d.report.Reason == entity.DeviceReason_DEVICE_REASON_NOT_READY {
+	// The directory format follows the cartridge generation; the decoder qualifies it for any drive.
+	if !d.report.GetTape().GetMediumPresent() || d.report.Reason == entity.DeviceReason_DEVICE_REASON_NOT_READY {
 		return nil
 	}
 	// Configure already confirms actual partitions for tar. Pre-mount LTFS needs one MAM observation;
@@ -272,34 +261,28 @@ func (d *Device) observeCartridgeDirectory(ctx context.Context) error {
 	if partitions == 0 {
 		partitions, err = d.partitionCount(ctx)
 	}
-	var data []byte
-	if err == nil {
-		if partitions != 1 && partitions != 2 {
-			err = fmt.Errorf("actual cartridge partition count %d is unsupported: %w", partitions, ErrUnsupported)
-		} else {
-			d.actualPartitions = partitions
-			data, err = readCartridgeMemory(ctx, d.transport)
-		}
+	if err == nil && (partitions < 1 || partitions > uint32(len(eodPages))) {
+		err = fmt.Errorf("actual cartridge partition count %d is unsupported: %w", partitions, ErrUnsupported)
 	}
-	if err == nil && len(data) != 0 {
-		var observed *WrapMap
-		observed, err = decodeCartridgeDirectory(data, partitions)
-		if err == nil {
-			d.invalidateGeometry()
-			d.geometry = observed
-			d.actualPartitions = partitions
-			feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER).Detail =
-				"Cartridge memory directory v4/EOD v2 observed; interpolation and timing require separate qualification"
-			return nil
+	if err == nil {
+		d.actualPartitions = partitions
+		for _, buffer := range cartridgeMemoryBuffers {
+			var observed *WrapMap
+			if observed, err = readCartridgeDirectory(ctx, d.transport, buffer, partitions); err == nil {
+				d.invalidateGeometry()
+				d.geometry, d.actualPartitions = observed, partitions
+				feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER).Detail =
+					observed.Source + " observed; interpolation and timing require separate qualification"
+				return nil
+			}
+			if !cartridgeMemoryBufferMiss(err) {
+				break
+			}
 		}
 	}
 
 	// CM never grants REOWP command support. Only uncertain completion or lost ownership aborts preparation.
 	optimization := feature(d.report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER)
-	if err == nil {
-		optimization.Detail = "Cartridge memory directory is unavailable"
-		return nil
-	}
 	optimization.Detail = "Cartridge memory directory is unavailable: " + err.Error()
 	reason := Reason(err)
 	var failure *CommandError
@@ -310,4 +293,27 @@ func (d *Device) observeCartridgeDirectory(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func readCartridgeDirectory(ctx context.Context, transport Transport, buffer byte, partitions uint32) (*WrapMap, error) {
+	data, err := readCartridgeMemory(ctx, transport, buffer)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("cartridge memory buffer %#02x is empty: %w", buffer, ErrUnsupported)
+	}
+	return decodeCartridgeDirectory(data, partitions)
+}
+
+// cartridgeMemoryBufferMiss reports a buffer that holds no decodable image, so the next documented
+// buffer may hold it; uncertainty, cancellation and medium changes end the observation instead.
+func cartridgeMemoryBufferMiss(err error) bool {
+	var failure *CommandError
+	if errors.Is(err, ErrUncertain) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.As(err, &failure) && failure.Sense.Key == 6 {
+		return false
+	}
+	reason := Reason(err)
+	return reason != entity.DeviceReason_DEVICE_REASON_NO_MEDIUM && reason != entity.DeviceReason_DEVICE_REASON_NOT_READY
 }

@@ -630,10 +630,6 @@ export interface TapeRecordLimits {
      * @generated from protobuf field: optional bool variable = 5
      */
     variable?: boolean;
-    /**
-     * @generated from protobuf field: optional uint32 transport_maximum_bytes = 6
-     */
-    transportMaximumBytes?: number;
 }
 /**
  * @generated from protobuf message yatm.v1.TapeNavigationLimits
@@ -920,14 +916,6 @@ export enum DeviceFeatureKind {
      */
     SEQUENTIAL_WRITE = 3,
     /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_FILEMARKS = 4;
-     */
-    FILEMARKS = 4,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_NAVIGATION = 5;
-     */
-    NAVIGATION = 5,
-    /**
      * @generated from protobuf enum value: DEVICE_FEATURE_KIND_LOCATE = 6;
      */
     LOCATE = 6,
@@ -959,10 +947,6 @@ export enum DeviceFeatureKind {
      * @generated from protobuf enum value: DEVICE_FEATURE_KIND_CAPACITY_TO_WARNING = 13;
      */
     CAPACITY_TO_WARNING = 13,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_KIND_NON_EJECTING_RELOAD = 14;
-     */
-    NON_EJECTING_RELOAD = 14,
     /**
      * @generated from protobuf enum value: DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER = 15;
      */
@@ -1099,21 +1083,13 @@ export enum DeviceFeatureEvidence {
      */
     UNSPECIFIED = 0,
     /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_PROTOCOL = 1;
-     */
-    PROTOCOL = 1,
-    /**
      * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_REPORTED = 2;
      */
     REPORTED = 2,
     /**
      * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_OBSERVED = 3;
      */
-    OBSERVED = 3,
-    /**
-     * @generated from protobuf enum value: DEVICE_FEATURE_EVIDENCE_TESTED_PROVIDER = 4;
-     */
-    TESTED_PROVIDER = 4
+    OBSERVED = 3
 }
 /**
  * @generated from protobuf enum yatm.v1.TapeCapacityQuality
@@ -2917,8 +2893,7 @@ class TapeRecordLimits$Type extends MessageType<TapeRecordLimits> {
             { no: 2, name: "maximum_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
             { no: 3, name: "alignment_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ },
             { no: 4, name: "fixed", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 5, name: "variable", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ },
-            { no: 6, name: "transport_maximum_bytes", kind: "scalar", opt: true, T: 13 /*ScalarType.UINT32*/ }
+            { no: 5, name: "variable", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<TapeRecordLimits>): TapeRecordLimits {
@@ -2947,9 +2922,6 @@ class TapeRecordLimits$Type extends MessageType<TapeRecordLimits> {
                 case /* optional bool variable */ 5:
                     message.variable = reader.bool();
                     break;
-                case /* optional uint32 transport_maximum_bytes */ 6:
-                    message.transportMaximumBytes = reader.uint32();
-                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2977,9 +2949,6 @@ class TapeRecordLimits$Type extends MessageType<TapeRecordLimits> {
         /* optional bool variable = 5; */
         if (message.variable !== undefined)
             writer.tag(5, WireType.Varint).bool(message.variable);
-        /* optional uint32 transport_maximum_bytes = 6; */
-        if (message.transportMaximumBytes !== undefined)
-            writer.tag(6, WireType.Varint).uint32(message.transportMaximumBytes);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

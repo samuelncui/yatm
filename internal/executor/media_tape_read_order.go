@@ -23,7 +23,6 @@ type ltfsReadSnapshot struct {
 	labels      *mediapkg.LTFSLabelFacts
 	labelReason string
 	endpoints   []tape.WrapEndpoint
-	boundary    entity.TapePositionEndpointConvention
 	source      string
 	observedAt  time.Time
 	reason      string
@@ -76,10 +75,9 @@ func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 			break
 		}
 	}
-	if observeErr == nil && geometry.Valid() && geometry.AllWraps {
+	if observeErr == nil && geometry.Complete() {
 		snapshot.endpoints = append([]tape.WrapEndpoint(nil), geometry.Endpoints...)
 		snapshot.source, snapshot.observedAt = geometry.Source, geometry.ObservedAt
-		snapshot.boundary = geometry.EndpointConvention
 	}
 	if observeErr == nil {
 		// Reading both Labels establishes physical-to-symbolic partition identities without an adapter change.

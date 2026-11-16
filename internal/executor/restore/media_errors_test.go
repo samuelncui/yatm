@@ -30,9 +30,11 @@ func TestRestoreMediaPreservesItemAndLateCheckpointFailures(t *testing.T) {
 	}
 	require.NotNil(t, changed)
 	require.NotNil(t, readable)
+	// A path this Job already claimed now holds other bytes.
 	filename := runner.restoreTarget(changed.TargetPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(filename), 0755))
 	require.NoError(t, os.WriteFile(filename, []byte("different bytes"), 0600))
+	require.NoError(t, runner.db.Model(&File{}).Where("item_id = ?", changed.ItemID).Update("read_media_id", changed.MediaID).Error)
 
 	// Delay the last checkpoint until ACP has returned from its asynchronous result handoff.
 	checkpointErr := errors.New("late Restore checkpoint failure")

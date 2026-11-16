@@ -56,7 +56,6 @@ const fieldLabels: Record<string, string> = {
   alignmentBytes: "Alignment bytes",
   fixed: "Fixed",
   variable: "Variable",
-  transportMaximumBytes: "Transport maximum bytes",
   readPositionShort: "READ POSITION short form",
   readPositionLong: "READ POSITION long form",
   addressBits: "Address bits",

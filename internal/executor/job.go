@@ -26,6 +26,9 @@ var ModelJob = &jobCatalogRow{}
 
 var ErrJobNotFound = errors.New("job not found")
 
+// ErrInvalidRequest marks a request the caller must correct; every service reports it as invalid input.
+var ErrInvalidRequest = errors.New("invalid request")
+
 // jobCatalogRow is the Executor catalog's query projection. Authoritative lifecycle state remains
 // in JobRecord and is copied into a Job snapshot when the catalog row is read.
 type jobCatalogRow struct {

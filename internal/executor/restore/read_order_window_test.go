@@ -190,7 +190,7 @@ func runOrderedRestore(t *testing.T, ctx context.Context, runner *jobRestoreRunn
 	t.Helper()
 	buffer := startTestBuffer(t, runner)
 	items := &copyItems{runner: runner, mediaID: copies[0].MediaID, session: session, batch: batch}
-	engine, err := acp.NewStream(ctx, buffer.onResults, acp.WithHashPolicy(acp.HashReadRefresh), acp.Overwrite(false), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...), acp.WithResultBatch(100), acp.WithResultBuffer(100), acp.WithResultFlushInterval(time.Hour))
+	engine, err := acp.NewStream(ctx, buffer.onResults, acp.WithHashPolicy(acp.HashReadRefresh), acp.Overwrite(true), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...), acp.WithResultBatch(100), acp.WithResultBuffer(100), acp.WithResultFlushInterval(time.Hour))
 	require.NoError(t, err)
 	return errors.Join(items.consume(ctx, engine), buffer.Close())
 }
@@ -222,7 +222,9 @@ func TestRestoreReadSequenceKeepsLocalSkipsWithoutReplanning(t *testing.T) {
 		if copy.MediaPath == "a" || copy.MediaPath == "b" {
 			content := []byte(copy.MediaPath)
 			if copy.MediaPath == "b" {
+				// A path this Job already claimed now holds other bytes.
 				content = []byte("changed")
+				require.NoError(t, runner.db.Model(&File{}).Where("item_id = ?", copy.ItemID).Update("read_media_id", copy.MediaID).Error)
 			}
 			path := runner.restoreTarget(copy.TargetPath)
 			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))

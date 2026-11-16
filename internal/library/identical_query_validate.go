@@ -113,7 +113,7 @@ func (s *IdenticalSnapshot) expandComponentSignature(tx *gorm.DB, scope Identica
 				roots = append(roots, root.LocationID)
 			}
 			request = request.Where("location_id IN ?", roots).
-				Where("path <> ? AND path NOT LIKE ?", LocationTrashDirectory, LocationTrashDirectory+"/%")
+				Where("path <> ? AND substr(path, 1, length(?)) <> ?", LocationTrashDirectory, LocationTrashDirectory+"/", LocationTrashDirectory+"/")
 		}
 		if err := request.Order("file_id").Limit(identicalBatch).Pluck("file_id", &ids).Error; err != nil {
 			return fmt.Errorf("find identical original peers failed, %w", err)

@@ -43,15 +43,6 @@ func CheckCatalog(db *gorm.DB) (bool, error) {
 		if db.Migrator().HasColumn("settings", "revision") {
 			return false, fmt.Errorf("%w: incompatible pre-stable Settings layout", ErrUnsupportedCatalog)
 		}
-		if db.Migrator().HasTable("file_tracking_keys") {
-			var found int
-			if err := db.Table("file_tracking_keys").Select("1").Where("kind = ?", "yatm_uuid").Limit(1).Scan(&found).Error; err != nil {
-				return false, fmt.Errorf("inspect obsolete tracking evidence failed, %w", err)
-			}
-			if found != 0 {
-				return false, fmt.Errorf("%w: obsolete tracking UUID evidence requires explicit conversion or a fresh Catalog", ErrUnsupportedCatalog)
-			}
-		}
 		return false, checkCatalogTimes(db)
 	}
 

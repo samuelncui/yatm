@@ -5,11 +5,17 @@ import (
 	"fmt"
 )
 
-const cartridgeMemoryMaxBytes = 8192
+// cartridgeMemoryMaxBytes covers the largest current image, Ultrium-9's 32,736 bytes.
+const cartridgeMemoryMaxBytes = 32768
 
-func readCartridgeMemory(ctx context.Context, transport Transport) ([]byte, error) {
+// cartridgeMemoryBuffers are the READ BUFFER IDs that return the raw cartridge memory image, tried in
+// order: HP Ultrium 2 to 6 document 10h ("CM EEPROM"), while IBM LTO and HPE Ultrium 7 and later
+// document 05h. IBM lists no 10h, and HP's 20h-3Fh are main-buffer segments, so 20h is never used.
+var cartridgeMemoryBuffers = [...]byte{0x10, 0x05}
+
+func readCartridgeMemory(ctx context.Context, transport Transport, buffer byte) ([]byte, error) {
 	// Read the descriptor before allocating cartridge-supplied capacity; zero means unavailable.
-	descriptor, err := query(ctx, transport, []byte{0x3c, 3, 0x10, 0, 0, 0, 0, 0, 4, 0}, 4)
+	descriptor, err := query(ctx, transport, []byte{0x3c, 3, buffer, 0, 0, 0, 0, 0, 4, 0}, 4)
 	if err != nil {
 		return nil, fmt.Errorf("read cartridge memory descriptor failed, %w", err)
 	}
@@ -27,7 +33,7 @@ func readCartridgeMemory(ctx context.Context, transport Transport) ([]byte, erro
 
 	// Keep every transfer within the existing query limit and publish only a complete image.
 	data := make([]byte, size)
-	cdb := []byte{0x3c, 2, 0x10, 0, 0, 0, 0, 0, 0, 0}
+	cdb := []byte{0x3c, 2, buffer, 0, 0, 0, 0, 0, 0, 0}
 	for offset := 0; offset < size; {
 		length := min(size-offset, MaxQueryBytes)
 		cdb[3], cdb[4], cdb[5] = byte(offset>>16), byte(offset>>8), byte(offset)

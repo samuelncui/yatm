@@ -2,9 +2,6 @@ package apis
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
@@ -70,7 +67,7 @@ func (s *locationService) Create(ctx context.Context, req *entity.CreateLocation
 		return nil, err
 	}
 	reply := s.reply(ctx, source)
-	return &entity.CreateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility, Warnings: reply.Warnings}, nil
+	return &entity.CreateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility}, nil
 }
 
 func (s *locationService) List(ctx context.Context, req *entity.ListLocationsRequest) (*entity.ListLocationsResponse, error) {
@@ -139,7 +136,7 @@ func (s *locationService) Update(ctx context.Context, req *entity.UpdateLocation
 		return nil, err
 	}
 	reply := s.reply(ctx, updated)
-	return &entity.UpdateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility, Warnings: reply.Warnings}, nil
+	return &entity.UpdateLocationResponse{Location: reply.Location, Accessibility: reply.Accessibility}, nil
 }
 
 func (s *locationService) Delete(ctx context.Context, req *entity.DeleteLocationRequest) (*entity.DeleteLocationResponse, error) {
@@ -172,28 +169,5 @@ func (s *locationService) reply(ctx context.Context, source *library.Location) *
 		reply.Accessibility.Error = err.Error()
 	}
 
-	// Warn about overlap without materializing all sources or treating duplicate paths as archive copies.
-	var after int64
-	for {
-		rows, more, err := s.api.lib.ListLocations(ctx, library.LocationListFilter{AfterID: after, Limit: 100})
-		if err != nil {
-			reply.Warnings = append(reply.Warnings, fmt.Sprintf("Cannot check nested Locations: %s", err))
-			break
-		}
-		for _, other := range rows {
-			if other.ID == source.ID {
-				continue
-			}
-			separator := string(filepath.Separator)
-			if strings.HasPrefix(source.RootPath, strings.TrimSuffix(other.RootPath, separator)+separator) || strings.HasPrefix(other.RootPath, strings.TrimSuffix(source.RootPath, separator)+separator) {
-				reply.Warnings = append(reply.Warnings, "Overlapping Locations may index the same files; originals in a Location are not independent archive copies.")
-				return reply
-			}
-		}
-		if !more {
-			break
-		}
-		after = rows[len(rows)-1].ID
-	}
 	return reply
 }

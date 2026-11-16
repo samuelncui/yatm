@@ -20,7 +20,7 @@ func readModelFixture() (ReadModelProfile, *atomic.Bool) {
 	valid := new(atomic.Bool)
 	valid.Store(true)
 	return ReadModelProfile{ID: "software-only geometry and timing", SnapshotValid: valid.Load,
-		Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{0: 0}, MinLPOS: 0, MaxLPOS: 100,
+		BOT: map[uint32]uint64{0: 0}, MinLPOS: 0, MaxLPOS: 100,
 		Wraps: []ReadModelWrap{
 			{Wrap: 3, Band: 0, Direction: ReadWrapForward, Full: true, Endpoint: readModelEndpoint(100)},
 			{Wrap: 8, Band: 0, Direction: ReadWrapReverse, Full: true, Endpoint: readModelEndpoint(200)},
@@ -111,27 +111,19 @@ func TestReadCostFeaturesRetainPhysicalFactorsAndUnits(t *testing.T) {
 	require.False(t, known)
 }
 
-func TestReadCostModelEndpointConventionsAndCoverage(t *testing.T) {
-	for _, convention := range []ReadEndpointConvention{ReadEndpointExclusive, ReadEndpointInclusive} {
-		// Equivalent conventions retain BOT, interior boundaries and the final full endpoint.
-		profile, _ := readModelFixture()
-		profile.Boundary = convention
-		if convention == ReadEndpointInclusive {
-			for _, wrap := range profile.Wraps {
-				*wrap.Endpoint--
-			}
-		}
-		model, err := NewReadCostModel(profile)
-		require.NoError(t, err)
-		for _, object := range []uint64{0, 25, 100, 200, 300} {
-			_, known := model.AccessScore(readModelPosition(25), readModelPosition(object))
-			require.True(t, known, "object %d", object)
-		}
-		for _, position := range []*entity.TapeBytePosition{nil, {LogicalObject: 301},
-			{LogicalObject: 25, OffsetBytes: 1}, {Partition: 7, LogicalObject: 25}} {
-			_, known := model.AccessScore(readModelPosition(25), position)
-			require.False(t, known)
-		}
+func TestReadCostModelCoverage(t *testing.T) {
+	// Exclusive endpoints retain BOT, interior boundaries and the final full endpoint.
+	profile, _ := readModelFixture()
+	model, err := NewReadCostModel(profile)
+	require.NoError(t, err)
+	for _, object := range []uint64{0, 25, 100, 200, 300} {
+		_, known := model.AccessScore(readModelPosition(25), readModelPosition(object))
+		require.True(t, known, "object %d", object)
+	}
+	for _, position := range []*entity.TapeBytePosition{nil, {LogicalObject: 301},
+		{LogicalObject: 25, OffsetBytes: 1}, {Partition: 7, LogicalObject: 25}} {
+		_, known := model.AccessScore(readModelPosition(25), position)
+		require.False(t, known)
 	}
 }
 
@@ -197,7 +189,7 @@ func TestReadCostModelCopiesFactsAndSnapshotLifetime(t *testing.T) {
 func TestReadCostModelRejectsMalformedProfiles(t *testing.T) {
 	for _, change := range []func(*ReadModelProfile){
 		func(p *ReadModelProfile) { p.ID = " " }, func(p *ReadModelProfile) { p.SnapshotValid = nil },
-		func(p *ReadModelProfile) { p.Boundary = 0 }, func(p *ReadModelProfile) { p.Wraps = nil },
+		func(p *ReadModelProfile) { p.Wraps = nil },
 		func(p *ReadModelProfile) { p.Coefficients.Base = math.NaN() },
 		func(p *ReadModelProfile) { p.Coefficients.StepBack = math.Inf(1) },
 		func(p *ReadModelProfile) { p.Coefficients.Longitudinal = -1 },
@@ -264,23 +256,16 @@ func TestReadCostModelConcurrentReaders(t *testing.T) {
 }
 
 func TestReadCostModelUnavailableGeometryDoesNotObserveSnapshot(t *testing.T) {
-	// No full interval means no interpolation; even MaxUint64 inclusive endpoints cannot wrap to zero.
-	for _, inclusive := range []bool{false, true} {
-		profile, _ := readModelFixture()
-		profile.Wraps = profile.Wraps[:1]
-		profile.SnapshotValid = func() bool { t.Fatal("unavailable geometry observed snapshot"); return true }
-		if inclusive {
-			profile.Boundary = ReadEndpointInclusive
-			profile.Wraps[0].Endpoint = readModelEndpoint(math.MaxUint64)
-		} else {
-			profile.Wraps[0].Full = false
-		}
-		model, err := NewReadCostModel(profile)
-		require.NoError(t, err)
-		require.False(t, model.Valid())
-		_, known := model.AccessScore(readModelPosition(0), readModelPosition(25))
-		require.False(t, known)
-	}
+	// No full interval means no interpolation.
+	profile, _ := readModelFixture()
+	profile.Wraps = profile.Wraps[:1]
+	profile.SnapshotValid = func() bool { t.Fatal("unavailable geometry observed snapshot"); return true }
+	profile.Wraps[0].Full = false
+	model, err := NewReadCostModel(profile)
+	require.NoError(t, err)
+	require.False(t, model.Valid())
+	_, known := model.AccessScore(readModelPosition(0), readModelPosition(25))
+	require.False(t, known)
 }
 
 func normalizedReadModelFixture(seconds float64) ReadModelProfile {
@@ -418,11 +403,11 @@ func TestReadCostModelNormalizedDistanceRetainsTinyDifferences(t *testing.T) {
 	}
 }
 
-func TestReadCostModelNormalizedInclusiveFullEndpointAndExclusiveEOD(t *testing.T) {
-	// Complete wrap endpoint100 owns object100; the final EOD150 denotes the next unwritten object.
+func TestReadCostModelNormalizedFullEndpointAndEOD(t *testing.T) {
+	// Complete wrap endpoint101 starts the next wrap; the final EOD150 denotes the next unwritten object.
 	profile := normalizedReadModelFixture(100)
-	profile.Boundary = ReadEndpointInclusive
 	profile.Wraps = profile.Wraps[:2]
+	profile.Wraps[0].Endpoint = readModelEndpoint(101)
 	profile.Wraps[1].Full = false
 	profile.Wraps[1].Endpoint = readModelEndpoint(150)
 	profile.Wraps[1].EstimatedSpanObjects = readModelEndpoint(101)

@@ -20,10 +20,10 @@ import (
 )
 
 func tarTestReadModel(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
-	geometry *tape.WrapMap, boundary mediapkg.ReadEndpointConvention,
+	geometry *tape.WrapMap,
 ) (*mediapkg.ReadCostModel, string) {
 	// Both live observations and retained geometry use the same derived traversal and cost compiler.
-	value, reason := deriveTarPositionMap(parameters, profile, geometry, boundary)
+	value, reason := deriveTarPositionMap(parameters, profile, geometry)
 	if value == nil {
 		return nil, reason
 	}
@@ -44,7 +44,7 @@ func tarReadParametersFixture() (*entity.TapeReadParameters, *entity.InspectDevi
 }
 
 type tarReadMapProvider struct {
-	*tarReloadFixture
+	*tarReportingFixture
 	endpoints  []tape.WrapEndpoint
 	cm         []byte
 	cmCalls    int
@@ -52,7 +52,7 @@ type tarReadMapProvider struct {
 }
 
 func (p *tarReadMapProvider) Open(identity tape.Identity) (tape.Transport, error) {
-	transport, err := p.tarReloadFixture.Open(identity)
+	transport, err := p.tarReportingFixture.Open(identity)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func tarNormalizedParameters() *entity.TapeReadParameters {
 
 func tarReadModelMap(t *testing.T, endpoints []tape.WrapEndpoint) (*tape.WrapMap, func() error) {
 	t.Helper()
-	provider := &tarReadMapProvider{tarReloadFixture: &tarReloadFixture{tarDeviceFixture: newTarDeviceFixture()}, endpoints: endpoints}
+	provider := &tarReadMapProvider{tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()}, endpoints: endpoints}
 	identity, err := provider.Resolve("/dev/nst0")
 	require.NoError(t, err)
 	transport, err := provider.Open(identity)
@@ -149,10 +149,10 @@ func TestTarReadModelCompilesObservedCoverageAndPartialMedian(t *testing.T) {
 		from, to  uint64
 		seconds   float64
 	}{
-		{"inclusive full record", []uint64{9, 19, 24}, 0, 9, 9},
-		{"short final coverage", []uint64{9, 19, 24}, 20, 24, 4},
-		{"even median", []uint64{9, 29, 33}, 30, 33, 2},
-		{"long final constrained denominator", []uint64{9, 19, 45}, 20, 45, 10},
+		{"full record", []uint64{10, 20, 24}, 0, 9, 9},
+		{"short final coverage", []uint64{10, 20, 24}, 20, 24, 4},
+		{"even median", []uint64{10, 30, 33}, 30, 33, 2},
+		{"long final constrained denominator", []uint64{10, 20, 45}, 20, 45, 10},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			endpoints := make([]tape.WrapEndpoint, len(test.endpoints))
@@ -162,7 +162,7 @@ func TestTarReadModelCompilesObservedCoverageAndPartialMedian(t *testing.T) {
 			geometry, cleanup := tarReadModelMap(t, endpoints)
 			parameters, _, profile := tarReadParametersFixture()
 			parameters = tarNormalizedParameters()
-			model, reason := tarTestReadModel(parameters, profile, geometry, mediapkg.ReadEndpointInclusive)
+			model, reason := tarTestReadModel(parameters, profile, geometry)
 			require.NotNil(t, model, reason)
 			point := func(object uint64) *entity.TapeBytePosition { return &entity.TapeBytePosition{LogicalObject: object} }
 			score, known := model.AccessScore(point(test.from), point(test.to))
@@ -181,7 +181,7 @@ func TestTarReadModelCompilesObservedCoverageAndPartialMedian(t *testing.T) {
 }
 
 func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
-	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 9}, {Wrap: 1, Object: 19}, {Wrap: 2, Object: 24}})
+	geometry, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
 	for name, change := range map[string]func(*entity.TapeReadParameters, *entity.TarMediaProfile, *tape.WrapMap){
 		"compressed profile": func(_ *entity.TapeReadParameters, p *entity.TarMediaProfile, _ *tape.WrapMap) {
 			p.HardwareCompression = true
@@ -224,7 +224,7 @@ func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 			copied := *geometry
 			copied.Endpoints = append([]tape.WrapEndpoint(nil), geometry.Endpoints...)
 			change(parameters, profile, &copied)
-			model, reason := tarTestReadModel(parameters, profile, &copied, mediapkg.ReadEndpointInclusive)
+			model, reason := tarTestReadModel(parameters, profile, &copied)
 			require.Nil(t, model)
 			require.NotEmpty(t, reason)
 		})
@@ -235,7 +235,7 @@ func TestTarReadModelIncompleteInputsPreserveFallback(t *testing.T) {
 	parameters.Positioning.LongitudinalSecondsPerWrap, parameters.Positioning.LongitudinalSecondsPerLpos = nil, proto.Float64(.5)
 	parameters.Geometry.MinLpos, parameters.Geometry.MaxLpos = proto.Uint64(100), proto.Uint64(200)
 	_, _, profile := tarReadParametersFixture()
-	model, reason := tarTestReadModel(parameters, profile, geometry, mediapkg.ReadEndpointInclusive)
+	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
 	score, known := model.AccessScore(&entity.TapeBytePosition{}, &entity.TapeBytePosition{LogicalObject: 9})
 	require.True(t, known)
@@ -294,7 +294,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 			settings.Devices[0].GetTape().ReadParameters = nil
 			_, err = exe.settings.Device.Save(ctx, settings)
 			require.NoError(t, err)
-			deviceProvider := &tarReadMapProvider{tarReloadFixture: &tarReloadFixture{tarDeviceFixture: fixture}, endpoints: []tape.WrapEndpoint{
+			deviceProvider := &tarReadMapProvider{tarReportingFixture: &tarReportingFixture{tarDeviceFixture: fixture}, endpoints: []tape.WrapEndpoint{
 				{Object: 5}, {Wrap: 1, Object: 9}, {Wrap: 2, Object: uint64(len(fixture.records))},
 			}}
 			if test.cm {
@@ -366,8 +366,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 				require.Contains(t, exe.lastPreparedRead("/dev/nst0").PositionSource, "LTO-CM")
 				updated, err := exe.Lib().GetMedia(ctx, stored.ID)
 				require.NoError(t, err)
-				require.Equal(t, entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE,
-					updated.TapePositionMap.EndpointConvention)
+				require.NotNil(t, updated.TapePositionMap)
 			}
 		})
 	}

@@ -55,8 +55,6 @@ func TestCartridgeDirectoryPreparationFallback(t *testing.T) {
 			if mode != "REOWP" {
 				wantCalls = 3
 				require.Len(t, observed.Endpoints, 23)
-				require.Equal(t, entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE,
-					observed.EndpointConvention)
 				require.Contains(t, observed.Source, "LTO-CM")
 			}
 			require.Equal(t, wantCalls, calls)
@@ -144,7 +142,7 @@ func TestCartridgeDirectoryPartitionQueryFailure(t *testing.T) {
 	}{
 		{name: "unsupported", response: Response{Completed: true, Status: 2, Sense: fixedSense(0x70, 5, 0x24, 0, false, 0, 0)}},
 		{name: "unknown count", response: Response{Completed: true}, data: []byte{0, 2, 0, 0}},
-		{name: "too many partitions", response: Response{Completed: true}, data: []byte{0, 2, 0, 3}},
+		{name: "too many partitions", response: Response{Completed: true}, data: []byte{0, 2, 0, 5}},
 		{name: "short response", response: Response{Completed: true, Residual: 1}, data: []byte{0, 2, 0, 1}},
 		{name: "unknown completion", fatal: true},
 		{name: "medium changed", response: Response{Completed: true, Status: 2, Sense: fixedSense(0x70, 6, 0x28, 0, false, 0, 0)}, fatal: true},
@@ -217,33 +215,21 @@ func TestCartridgeDirectoryFailureBoundary(t *testing.T) {
 			observed, err := device.Geometry(t.Context())
 			require.Nil(t, observed)
 			require.Equal(t, test.fatal, err != nil)
-			require.Equal(t, 1, calls)
+			// A buffer without an image falls back once to the next documented buffer; fatal outcomes stop.
+			wantCalls := len(cartridgeMemoryBuffers)
+			if test.fatal {
+				wantCalls = 1
+			}
+			require.Equal(t, wantCalls, calls)
 			require.Contains(t, feature(device.Report(), entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER).Detail,
 				"Cartridge memory directory is unavailable")
 
 			// Uncertain completion is retained by the real transport through cleanup; optional absence is not.
 			uncertain := errors.Is(err, ErrUncertain)
 			_, _ = device.Geometry(t.Context())
-			require.Equal(t, 1, calls)
+			require.Equal(t, wantCalls, calls)
 			cleanup := device.Cleanup(t.Context())
 			require.Equal(t, uncertain, errors.Is(cleanup, ErrUncertain))
 		})
-	}
-}
-
-func TestREOWPEndpointConventionUsesOnlyQualifiedHP5Counts(t *testing.T) {
-	// Count semantics are qualified for this observed response, not all HP or IBM generations.
-	report := &entity.InspectDeviceResponse{Vendor: proto.String("HP"), Model: proto.String("Ultrium 5-SCSI"),
-		Firmware: proto.String("Z6ED"), Report: &entity.InspectDeviceResponse_Tape{Tape: &entity.TapeDeviceReport{DensityCode: proto.Uint32(0x58)}}}
-	require.Equal(t, entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE, REOWPEndpointConvention(report))
-	for _, change := range []func(*entity.InspectDeviceResponse){
-		func(r *entity.InspectDeviceResponse) { r.Vendor = proto.String("IBM") },
-		func(r *entity.InspectDeviceResponse) { r.Model = proto.String("Ultrium 6-SCSI") },
-		func(r *entity.InspectDeviceResponse) { r.Firmware = proto.String("J38W") },
-		func(r *entity.InspectDeviceResponse) { r.GetTape().DensityCode = nil },
-	} {
-		other := proto.Clone(report).(*entity.InspectDeviceResponse)
-		change(other)
-		require.Equal(t, entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE, REOWPEndpointConvention(other))
 	}
 }

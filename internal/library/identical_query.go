@@ -458,7 +458,7 @@ func (s *IdenticalSnapshot) Group(groupID string) (*IdenticalGroup, error) {
 	}
 	if s.componentOnly {
 		if s.componentGroup == nil || s.componentGroup.ID != groupID {
-			return nil, fmt.Errorf("identical group no longer exists")
+			return nil, fmt.Errorf("identical group no longer exists, %w", gorm.ErrRecordNotFound)
 		}
 		group := *s.componentGroup
 		return &group, nil

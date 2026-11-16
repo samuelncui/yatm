@@ -69,8 +69,8 @@ func TestRestoreConsumesLTFSProviderSequenceAsNativePaths(t *testing.T) {
 				}
 				index += `</contents></directory></ltfsindex>`
 				model, err := media.NewReadCostModel(media.ReadModelProfile{ID: "LTFS Restore fixture",
-					SnapshotValid: func() bool { return true }, Boundary: media.ReadEndpointExclusive,
-					BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+					SnapshotValid: func() bool { return true },
+					BOT:           map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
 					Wraps: []media.ReadModelWrap{
 						{Partition: 1, Wrap: 0, Full: true, Endpoint: proto.Uint64(100), Direction: media.ReadWrapForward},
 						{Partition: 1, Wrap: 1, Full: true, Endpoint: proto.Uint64(200), Direction: media.ReadWrapReverse},
@@ -94,7 +94,7 @@ func TestRestoreConsumesLTFSProviderSequenceAsNativePaths(t *testing.T) {
 				buffer := startTestBuffer(t, runner)
 				items := &copyItems{runner: runner, mediaID: copies[0].MediaID, session: session, batch: batch}
 				engine, err := acp.NewStream(t.Context(), buffer.onResults, acp.WithHashPolicy(acp.HashReadRefresh),
-					acp.Overwrite(false), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...),
+					acp.Overwrite(true), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...),
 					acp.WithResultBatch(100), acp.WithResultBuffer(100), acp.WithResultFlushInterval(time.Hour))
 				require.NoError(t, err)
 				require.NoError(t, errors.Join(items.consume(t.Context(), engine), buffer.Close()))

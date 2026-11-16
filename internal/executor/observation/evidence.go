@@ -33,3 +33,9 @@ func (e Evidence) Keys() []*library.FileTrackingKey {
 	}
 	return keys
 }
+
+// SameObject applies the Library's native-identity rule to staged evidence.
+func (e Evidence) SameObject(other Evidence) bool {
+	left, right := e.Keys(), other.Keys()
+	return len(left) == 1 && len(right) == 1 && left[0].SameObject(right[0])
+}

@@ -191,6 +191,14 @@ func (m *Manager) Generate(
 		return signature, ctx.Err()
 	}
 	defer func() { m.finishGeneration(bundlePath, pending, true, resultErr) }()
+	// A missing-only request that waited behind another generation reuses what it published.
+	reused, err = m.reuse(ctx, bundlePath, force)
+	if err != nil {
+		return nil, err
+	}
+	if reused {
+		return signature, nil
+	}
 	current, err := m.currentSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -251,7 +259,17 @@ func (m *Manager) Manifest(signature []byte) (*entity.PreviewManifest, error) {
 	return readManifest(archive.File, signature)
 }
 
-func (m *Manager) Open(signature []byte, role string) (io.ReadCloser, error) {
+// OpenedAsset is one opened Preview asset; Close releases its bundle.
+type OpenedAsset struct {
+	io.ReadCloser
+	MediaType string
+	Size      int64
+	// ETag names the stored bytes, which change only when the bundle is regenerated.
+	ETag string
+}
+
+// Open reads the bundle once and opens the asset its manifest assigns to role.
+func (m *Manager) Open(signature []byte, role string) (*OpenedAsset, error) {
 	bundlePath, err := m.bundlePath(signature)
 	if err != nil {
 		return nil, err
@@ -267,19 +285,19 @@ func (m *Manager) Open(signature []byte, role string) (io.ReadCloser, error) {
 		_ = archive.Close()
 		return nil, err
 	}
-	var assetName string
-	for _, asset := range manifest.Assets {
-		if asset.Role == role {
-			assetName = asset.Name
+	var asset *entity.PreviewAsset
+	for _, candidate := range manifest.Assets {
+		if candidate.Role == role {
+			asset = candidate
 			break
 		}
 	}
-	if assetName == "" {
+	if asset == nil {
 		_ = archive.Close()
 		return nil, fmt.Errorf("Preview asset role is missing, role=%q", role)
 	}
 	for _, file := range archive.File {
-		if file.Name != assetName {
+		if file.Name != asset.Name {
 			continue
 		}
 		reader, err := file.Open()
@@ -287,11 +305,16 @@ func (m *Manager) Open(signature []byte, role string) (io.ReadCloser, error) {
 			_ = archive.Close()
 			return nil, fmt.Errorf("open Preview asset failed, role=%q, %w", role, err)
 		}
-		return &assetReader{ReadCloser: reader, archive: archive}, nil
+		return &OpenedAsset{
+			ReadCloser: &assetReader{ReadCloser: reader, archive: archive},
+			MediaType:  asset.MediaType,
+			Size:       int64(file.UncompressedSize64),
+			ETag:       fmt.Sprintf(`"%08x-%x"`, file.CRC32, file.UncompressedSize64),
+		}, nil
 	}
 
 	_ = archive.Close()
-	return nil, fmt.Errorf("Preview asset entry is missing, role=%q name=%q", role, assetName)
+	return nil, fmt.Errorf("Preview asset entry is missing, role=%q name=%q", role, asset.Name)
 }
 
 func (m *Manager) bundlePath(signature []byte) (string, error) {

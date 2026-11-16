@@ -39,10 +39,10 @@ func seedImageVersions(
 		if err != nil {
 			return fmt.Errorf("convert Demo original mtime failed, %w", err)
 		}
-		_, err = lib.AdmitObservation(ctx, location.ID, &library.ObservedEntry{
+		_, err = lib.AdmitObservations(ctx, location.ID, []*library.ObservedEntry{{
 			FileID: fileID, Path: original.Path, Size: original.Size, Mode: uint32(original.Mode),
 			MtimeNS: mtimeNS, Hash: original.Hash, Signature: signature,
-		})
+		}})
 		if err != nil {
 			return err
 		}

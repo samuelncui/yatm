@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"math"
 	"sort"
 
 	"github.com/samuelncui/yatm/entity"
@@ -15,7 +14,7 @@ import (
 // compileTarMediaReadModel uses a current report first, or retained coverage owned by this initialization.
 // The returned observation is independently publishable even when elapsed-time inputs are incomplete.
 func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *library.Media,
-	geometry *tape.WrapMap, boundary mediapkg.ReadEndpointConvention, valid func() bool,
+	geometry *tape.WrapMap, valid func() bool,
 ) (*mediapkg.ReadCostModel, *entity.TapePositionMap, string) {
 	// The caller proves the label and frozen profile before accepting geometry into this session.
 	if stored == nil || stored.Profile.GetTape().GetTar() == nil || valid == nil || !valid() {
@@ -25,10 +24,10 @@ func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *lib
 		return nil, nil, err.Error()
 	}
 	profile := stored.Profile.GetTape().Tar
-	current := geometry != nil && geometry.Valid() && geometry.AllWraps && len(geometry.Endpoints) != 0
+	current := geometry.Complete()
 	layout := parameters.GetGeometry()
 	if current && layout != nil && layout.NominalWraps != nil {
-		observed, reason := deriveTarPositionMap(parameters, profile, geometry, boundary)
+		observed, reason := deriveTarPositionMap(parameters, profile, geometry)
 		if observed == nil {
 			return nil, nil, reason
 		}
@@ -45,14 +44,13 @@ func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *lib
 	if value == nil {
 		return nil, nil, "No current or retained Tape position map is available"
 	}
-	// Retained maps declare their own endpoint interpretation; boundary describes only this live report protocol.
 	if err := library.ValidateTapePositionMap(stored, value); err != nil {
 		return nil, nil, err.Error()
 	}
 	modelValid := valid
 	if current {
 		// Missing drive layout cannot discard a self-described map or override contradictory current coverage.
-		if reason := tarPositionMapReportReason(value, geometry, boundary); reason != "" {
+		if reason := tarPositionMapReportReason(value, geometry); reason != "" {
 			return nil, nil, reason
 		}
 		modelValid = func() bool { return valid() && geometry.Valid() }
@@ -61,13 +59,8 @@ func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *lib
 	return model, nil, reason
 }
 
-func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.WrapMap,
-	boundary mediapkg.ReadEndpointConvention,
-) string {
+func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.WrapMap) string {
 	// Compare coverage only; the validated retained map continues to own its orientation and coordinate scale.
-	if boundary != mediapkg.ReadEndpointExclusive && boundary != mediapkg.ReadEndpointInclusive {
-		return "Reported wrap endpoint interpretation is not established"
-	}
 	if len(value.Wraps) > len(geometry.Endpoints) ||
 		value.Partitions[0].Eod != nil && *value.Partitions[0].Eod > geometry.Endpoints[len(geometry.Endpoints)-1].Object {
 		return "Current reported EOD does not cover the retained Tape position map"
@@ -77,14 +70,7 @@ func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.Wr
 		if endpoint.Partition != 0 || endpoint.Wrap != uint32(index) {
 			return "Linear interpolation requires contiguous partition-zero wraps beginning at zero"
 		}
-		last := index == len(geometry.Endpoints)-1
-		high := endpoint.Object
-		if !last && boundary == mediapkg.ReadEndpointInclusive {
-			if high == math.MaxUint64 {
-				return "A reported wrap endpoint exceeds the address domain"
-			}
-			high++
-		}
+		last, high := index == len(geometry.Endpoints)-1, endpoint.Object
 		if high <= low {
 			return "Reported wrap boundaries are empty or reversed"
 		}
@@ -101,11 +87,7 @@ func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.Wr
 		if wrap.Endpoint == nil {
 			continue
 		}
-		retained := *wrap.Endpoint
-		if wrap.Full && value.EndpointConvention == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE {
-			retained++ // The retained map validator has already rejected inclusive overflow.
-		}
-		if retained > high || wrap.Full && (last || retained != high) {
+		if retained := *wrap.Endpoint; retained > high || wrap.Full && (last || retained != high) {
 			return "Current reported wrap boundaries contradict the retained Tape position map"
 		}
 	}
@@ -113,7 +95,7 @@ func tarPositionMapReportReason(value *entity.TapePositionMap, geometry *tape.Wr
 }
 
 func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity.TarMediaProfile,
-	geometry *tape.WrapMap, boundary mediapkg.ReadEndpointConvention,
+	geometry *tape.WrapMap,
 ) (*entity.TapePositionMap, string) {
 	// Assigning bands requires the explicit four-band layout rather than the number of populated wraps.
 	layout := parameters.GetGeometry()
@@ -121,12 +103,9 @@ func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity
 		layout.GetNominalWraps()%4 != 0 {
 		return nil, "The four-band interpolation layout requires an explicit nominal wrap count"
 	}
-	if geometry == nil || !geometry.Valid() || !geometry.AllWraps || len(geometry.Endpoints) < 2 ||
+	if !geometry.Complete() || len(geometry.Endpoints) < 2 ||
 		uint64(len(geometry.Endpoints)) > uint64(layout.GetNominalWraps()) {
 		return nil, "A current complete reported-wrap map with a full interval is unavailable"
-	}
-	if boundary != mediapkg.ReadEndpointExclusive && boundary != mediapkg.ReadEndpointInclusive {
-		return nil, "Reported wrap endpoint interpretation is not established"
 	}
 
 	// Reported logical addresses remain exact; the layout hypothesis supplies only orientation and bands.
@@ -137,14 +116,7 @@ func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity
 		if endpoint.Partition != 0 || endpoint.Wrap != uint32(index) {
 			return nil, "Linear interpolation requires contiguous partition-zero wraps beginning at zero"
 		}
-		last := index == len(wraps)-1
-		high := endpoint.Object
-		if !last && boundary == mediapkg.ReadEndpointInclusive {
-			if high == math.MaxUint64 {
-				return nil, "A reported wrap endpoint exceeds the address domain"
-			}
-			high++
-		}
+		last, high := index == len(wraps)-1, endpoint.Object
 		if high <= low {
 			return nil, "Reported wrap boundaries are empty or reversed"
 		}
@@ -173,8 +145,7 @@ func deriveTarPositionMap(parameters *entity.TapeReadParameters, profile *entity
 	}
 	value := &entity.TapePositionMap{InitializationId: profile.InitializationId,
 		Partitions: []*entity.TapePositionPartition{{Eod: proto.Uint64(eod)}}, Wraps: wraps,
-		EndpointConvention: entity.TapePositionEndpointConvention(boundary), Source: geometry.Source,
-		ObservedAtNs: observedAtNS}
+		Source: geometry.Source, ObservedAtNs: observedAtNS}
 	if layout.MinLpos != nil {
 		value.MinLpos = proto.Uint64(*layout.MinLpos)
 	}

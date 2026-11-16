@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samuelncui/yatm/entity"
@@ -81,30 +83,37 @@ func (api *API) servePreview(ctx *gin.Context) {
 		ctx.Status(http.StatusNotFound)
 		return
 	}
-	manifest, err := api.exe.Previews().Manifest(signature)
+	asset, err := api.exe.Previews().Open(signature, ctx.Query("role"))
 	if err != nil {
 		ctx.Status(http.StatusNotFound)
 		return
 	}
-	for _, asset := range manifest.Assets {
-		if asset.Role != ctx.Query("role") {
-			continue
-		}
-		reader, err := api.exe.Previews().Open(signature, asset.Role)
-		if err != nil {
-			ctx.Status(http.StatusNotFound)
-			return
-		}
-		defer reader.Close()
-		ctx.Header("Content-Type", safeMediaType(asset.MediaType))
-		ctx.Header("X-Content-Type-Options", "nosniff")
-		ctx.Header("Cache-Control", "no-cache")
-		if _, err := io.Copy(ctx.Writer, reader); err != nil {
-			ctx.Abort()
-		}
+	defer asset.Close()
+
+	// Stored bytes are immutable until regeneration, so browsers revalidate instead of downloading again.
+	ctx.Header("ETag", asset.ETag)
+	ctx.Header("Cache-Control", "no-cache")
+	if etagMatches(ctx.GetHeader("If-None-Match"), asset.ETag) {
+		ctx.Status(http.StatusNotModified)
 		return
 	}
-	ctx.Status(http.StatusNotFound)
+	ctx.Header("Content-Type", safeMediaType(asset.MediaType))
+	ctx.Header("Content-Length", strconv.FormatInt(asset.Size, 10))
+	ctx.Header("X-Content-Type-Options", "nosniff")
+	ctx.Status(http.StatusOK)
+	if _, err := io.Copy(ctx.Writer, asset); err != nil {
+		ctx.Abort()
+	}
+}
+
+func etagMatches(header, etag string) bool {
+	for candidate := range strings.SplitSeq(header, ",") {
+		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "W/")
+		if candidate == etag || candidate == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func safeMediaType(value string) string {

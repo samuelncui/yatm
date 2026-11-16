@@ -58,7 +58,7 @@ func TestListParentsRetainsDeepRootAndRejectsInvalidAncestry(t *testing.T) {
 	cycle := &File{ID: 1000, ParentID: 1000, Name: "cycle", Kind: entity.FileKind_FILE_KIND_DIRECTORY}
 	require.NoError(t, lib.SaveFile(ctx, cycle))
 	_, err = lib.ReadFileAncestors(ctx, cycle.ID)
-	require.ErrorContains(t, err, "cycle")
+	require.ErrorContains(t, err, "exceeds 256 levels")
 	var parentID int64
 	for index := 0; index <= maxFilePathDepth; index++ {
 		file := &File{ID: int64(2000 + index), ParentID: parentID, Name: fmt.Sprintf("deep-%d", index), Kind: entity.FileKind_FILE_KIND_DIRECTORY}
@@ -191,9 +191,9 @@ func TestLogicalMutationRejectsExistingAncestorCycle(t *testing.T) {
 	file := &File{Name: "kept.txt"}
 	require.NoError(t, lib.SaveFile(ctx, file))
 
-	// Both move and mkdir report the cycle without attaching new nodes to it.
+	// Both move and mkdir stop at the depth bound without attaching new nodes to the cycle.
 	file.ParentID = cycle.ID
-	require.ErrorContains(t, lib.MoveFile(ctx, file), "cycle")
+	require.ErrorContains(t, lib.MoveFile(ctx, file), "exceeds 256 levels")
 	_, err := lib.MkdirAll(ctx, cycle.ID, "new", 0o755)
 	require.ErrorContains(t, err, "cycle")
 	stored, err := lib.GetFile(ctx, file.ID)

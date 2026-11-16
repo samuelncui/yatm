@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"math"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
@@ -22,8 +21,7 @@ func testTapePositionMap() *entity.TapePositionMap {
 			{Wrap: 1, Direction: entity.TapePositionDirection_TAPE_POSITION_DIRECTION_REVERSE,
 				Endpoint: proto.Uint64(150), EstimatedSpanObjects: proto.Uint64(100)},
 		},
-		EndpointConvention: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE,
-		Source:             "derived wrap observations", ObservedAtNs: 1792560000123456789,
+		Source: "derived wrap observations", ObservedAtNs: 1792560000123456789,
 	}
 }
 
@@ -131,7 +129,6 @@ func TestTapePositionMapRejectsInvalidCoverageAndBinding(t *testing.T) {
 		"different initialization": func(_ *Media, value *entity.TapePositionMap) { value.InitializationId = "other" },
 		"mixed initialization":     func(_ *Media, value *entity.TapePositionMap) { value.LtfsUuid = "11111111-1111-4111-8111-111111111111" },
 		"missing source":           func(_ *Media, value *entity.TapePositionMap) { value.Source = "" },
-		"missing convention":       func(_ *Media, value *entity.TapePositionMap) { value.EndpointConvention = 0 },
 		"duplicate partition": func(_ *Media, value *entity.TapePositionMap) {
 			value.Partitions = append(value.Partitions, value.Partitions[0])
 		},
@@ -146,10 +143,6 @@ func TestTapePositionMapRejectsInvalidCoverageAndBinding(t *testing.T) {
 		"full wrap scale":       func(_ *Media, value *entity.TapePositionMap) { value.Wraps[0].EstimatedSpanObjects = proto.Uint64(100) },
 		"unknown EOD":           func(_ *Media, value *entity.TapePositionMap) { value.Partitions[0].Eod = nil },
 		"incomplete LPOS scale": func(_ *Media, value *entity.TapePositionMap) { value.MinLpos = proto.Uint64(1) },
-		"inclusive overflow": func(_ *Media, value *entity.TapePositionMap) {
-			value.EndpointConvention = entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE
-			value.Wraps[0].Endpoint = proto.Uint64(math.MaxUint64)
-		},
 		"Volume map": func(media *Media, _ *entity.TapePositionMap) {
 			media.Kind = entity.MediaKind_MEDIA_KIND_VOLUME
 			media.Profile = (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()

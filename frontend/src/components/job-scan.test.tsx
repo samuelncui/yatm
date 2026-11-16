@@ -2,23 +2,7 @@ import type { ReactNode } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ScanResultPolicy,
-  Media,
-  MediaKind,
-  TapeMediaProfile,
-  InspectDeviceResponse,
-  Job,
-  JobKind,
-  JobPhase,
-  JobResultOrder,
-  JobStatus,
-  Progress,
-  ScanChange,
-  ScanEntry,
-  ScanFinding,
-  ScanPreviewOutcome,
-} from "@/entity";
+import { Job, JobKind, JobPhase, JobResultOrder, JobStatus, Progress, ScanChange, ScanEntry, ScanFinding, ScanPreviewOutcome } from "@/entity";
 const { getProgress, listEntries, cancel, getCreation, mediaList, deviceList, deviceInspect } = vi.hoisted(() => ({
   getProgress: vi.fn(),
   listEntries: vi.fn(),
@@ -214,30 +198,6 @@ describe("Automatic Media Scan", () => {
     expect(cancel).toHaveBeenCalledWith({ id: 31n });
   });
 });
-
-it.each([ScanResultPolicy.VERIFY_COPIES, ScanResultPolicy.PUBLISH_INVENTORY])(
-  "uses the frozen Scan creation policy %s once per chooser admission",
-  async (policy) => {
-    getCreation.mockReturnValue(call({ request: { spec: { resultPolicy: policy } } }));
-    mediaList.mockReturnValue(
-      call({
-        media: [
-          Media.create({ id: 9n, kind: MediaKind.TAPE, profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create({ format: "tar_pax_v1" }) } } }),
-        ],
-      }),
-    );
-    deviceList.mockReturnValue(call({ devices: [{ device: "drive", kind: 1, busy: false }] }));
-    deviceInspect.mockReturnValue(call(InspectDeviceResponse.create()));
-    render(<ScanCard job={Job.create({ id: 30n, mediaId: 9n, kind: JobKind.SCAN, status: JobStatus.READY })} />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose Media to read" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start reading" })).toBeEnabled());
-    expect(getCreation).toHaveBeenCalledExactlyOnceWith({ id: 30n });
-    if (policy === ScanResultPolicy.VERIFY_COPIES) await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
-    const refresh = screen.queryByRole("checkbox", { name: "Refresh position map before reading" });
-    if (policy === ScanResultPolicy.VERIFY_COPIES) expect(refresh).toBeDisabled();
-    else expect(refresh).not.toBeInTheDocument();
-  },
-);
 
 it.each([
   [JobStatus.COMPLETED, true, new Uint8Array([1]), 0n, "Matching archived copies: 0"],

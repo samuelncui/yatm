@@ -29,10 +29,7 @@ Archive selection preparation uses a disposable SQLite workset under `work/tempo
 
 Request-bound file operations use a temporary SQLite `items` manifest for bounded traversal and outcomes. It is protected from Location access and removed when the request ends; it is neither a retained Job bundle nor another persistent database category.
 
-[Temporary database ownership](../../internal/resource/temporary.go) closes the database before removing its uniquely allocated directory, including failed construction. Disposable runtime worksets, execution indexes, request results, script output and transient key files share `work/temporary/`. Each allocation has a UTC creation-time prefix and a unique suffix. Normal completion deletes it immediately; startup and hourly cleanup scan bounded directory batches and delete abandoned allocations older than seven days, and every unheld transient key directory regardless of age. Process-local ownership protects live operations without leases or heartbeat files. Failed deletion retains the path for retry and produces a warning; it does not prevent other leftovers from being removed. Each caller still owns its schema and semantics. Restore name-probe allocations also retain exact
-external directory paths and native parent identities. Cleanup removes those probes before their
-records; unavailable targets retain the records without blocking other allocations. These disposable
-records are independent of Job deletion and do not change Library or Job schemas.
+[Temporary database ownership](../../internal/resource/temporary.go) closes the database before removing its uniquely allocated directory, including failed construction. Disposable runtime worksets, execution indexes, request results, script output and transient key files share `work/temporary/`. Each allocation has a UTC creation-time prefix and a unique suffix. Normal completion deletes it immediately; startup and hourly cleanup scan bounded directory batches and delete abandoned allocations older than seven days, and every unheld transient key directory regardless of age. Process-local ownership protects live operations without leases or heartbeat files. Failed deletion retains the path for retry and produces a warning; it does not prevent other leftovers from being removed. Each caller still owns its schema and semantics.
 The HTTP service and Demo preparation configure Library's Work directory before admitting operations.
 
 Durable Job bundles, recovery material and retained verification evidence are outside this expiry rule.
@@ -100,8 +97,8 @@ of a `jobs` table alone does not make a database empty. The supported offline le
 migration establishes the same Catalog and bundle identities and revision 1 as fresh creation.
 Job bundles share one format definition across runners and the migrator.
 
-An older Alpha Catalog with the same revision but obsolete Settings, file-operation tables,
-tracking UUID evidence or pre-nanosecond timestamp columns is rejected before writes. Bundle,
+An older Alpha Catalog with the same revision but obsolete Settings, file-operation tables
+or pre-nanosecond timestamp columns is rejected before writes. Bundle,
 backup and Volume marker readers likewise require their current timestamp shape. Restore bundles
 without the current nullable `copies.storage_metadata` column are rejected on opening, without
 adding it or changing the bundle. Migrated v0.1.x candidates have that column with absent locators.

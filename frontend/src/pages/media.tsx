@@ -23,7 +23,6 @@ import {
   DeleteMediaAction,
   InitializeVolumeAction,
   InspectMediaAction,
-  LoadMoreAction,
   ScanMediaAction,
   TrimLibraryAction,
   ImportPositionsAction,
@@ -48,6 +47,22 @@ const isArchiveInventoryEntry = (file: FileData | null | undefined): file is Med
 type BrowserPage = { kind: "media"; offset: bigint } | { kind: "positions"; mediaID: string; directory: string; afterPath?: string };
 
 const mediaPageSize = 100n;
+
+// readBrowserPage reads one page of Media or of one Media's Positions and names the page after it.
+const readBrowserPage = async (page: BrowserPage): Promise<{ converted: FileArray; next: BrowserPage | null }> => {
+  if (page.kind === "media") {
+    const reply = await mediaCli.list({
+      param: { oneofKind: "list", list: { kinds: [], offset: page.offset, limit: mediaPageSize, query: "" } },
+    }).response;
+    return { converted: convertMedia(reply.media), next: reply.hasMore ? { kind: "media", offset: page.offset + BigInt(reply.media.length) } : null };
+  }
+  const reply = await mediaCli.listPositions({ id: BigInt(page.mediaID), directory: page.directory, limit: positionPageSize, afterPath: page.afterPath })
+    .response;
+  return {
+    converted: convertPositions(reply.positions),
+    next: reply.hasMore ? { kind: "positions", mediaID: page.mediaID, directory: page.directory, afterPath: reply.positions.at(-1)?.path } : null,
+  };
+};
 const positionPageSize = 200n;
 const mediaSortActionIds = [ChonkyActions.SortFilesByName.id, ChonkyActions.SortFilesBySize.id, ChonkyActions.SortFilesByDate.id];
 
@@ -71,7 +86,6 @@ export const useMediaBrowser = (
 ) => {
   const [files, setFiles] = useState<FileArray>([]);
   const [folderChain, setFolderChain] = useState<FileArray>([MediaRoot]);
-  const [nextPage, setNextPage] = useState<BrowserPage | null>(null);
   const [panelLoading, setPanelLoading] = useState<"initial" | "refreshing" | "more" | undefined>("initial");
   const [loadError, setLoadError] = useState("");
   const loading = useRef(false);
@@ -79,44 +93,31 @@ export const useMediaBrowser = (
   const retryPage = useRef<BrowserPage>({ kind: "media", offset: 0n });
   const { ask, dialog } = useActionDialog();
 
-  const loadPage = useCallback(async (page: BrowserPage, append: boolean, initial: boolean = false) => {
+  // Each open reads every page in order, publishing rows as they arrive, so a listing is complete
+  // without a manual continuation; a newer request abandons the remaining pages.
+  const loadPage = useCallback(async (first: BrowserPage, initial: boolean = false) => {
     const sequence = ++request.current;
     loading.current = true;
-    retryPage.current = page;
+    retryPage.current = first;
     setLoadError("");
-    setPanelLoading(append ? "more" : initial ? "initial" : "refreshing");
+    setPanelLoading(initial ? "initial" : "refreshing");
+    let page: BrowserPage | null = first;
+    let append = false;
     try {
-      if (page.kind === "media") {
-        const reply = await mediaCli.list({
-          param: { oneofKind: "list", list: { kinds: [], offset: page.offset, limit: mediaPageSize, query: "" } },
-        }).response;
+      while (page) {
+        const { converted, next } = await readBrowserPage(page);
         if (sequence !== request.current) return;
-        const converted = convertMedia(reply.media);
-        setFiles((current) => (append ? [...current.filter(Boolean), ...converted] : converted));
-        setNextPage(reply.hasMore ? { kind: "media", offset: page.offset + BigInt(reply.media.length) } : null);
-        return;
+        const appended = append;
+        setFiles((current) => (appended ? [...current.filter(Boolean), ...converted] : converted));
+        if (next) setPanelLoading("more");
+        page = next;
+        append = true;
       }
-
-      const reply = await mediaCli.listPositions({
-        id: BigInt(page.mediaID),
-        directory: page.directory,
-        limit: positionPageSize,
-        afterPath: page.afterPath,
-      }).response;
-      if (sequence !== request.current) return;
-      const converted = convertPositions(reply.positions);
-      setFiles((current) => (append ? [...current.filter(Boolean), ...converted] : converted));
-      setNextPage(reply.hasMore ? { kind: "positions", mediaID: page.mediaID, directory: page.directory, afterPath: reply.positions.at(-1)?.path } : null);
     } catch (error) {
       if (sequence !== request.current) return;
       const message = errorMessage(error, "Could not read Media");
-      if (append) {
-        toast.error(`Could not load more Media: ${message}`);
-      } else {
-        setFiles([]);
-        setNextPage(null);
-        setLoadError(message);
-      }
+      setFiles([]);
+      setLoadError(message);
     } finally {
       if (sequence === request.current) {
         loading.current = false;
@@ -130,7 +131,7 @@ export const useMediaBrowser = (
       if (target.id === MediaRoot.id) {
         setFolderChain([MediaRoot]);
         setFiles([]);
-        await loadPage({ kind: "media", offset: 0n }, false, true);
+        await loadPage({ kind: "media", offset: 0n }, true);
         return;
       }
 
@@ -146,7 +147,7 @@ export const useMediaBrowser = (
         return index >= 0 ? current.slice(0, index + 1) : [...current, target];
       });
       setFiles([]);
-      await loadPage({ kind: "positions", mediaID, directory }, false, true);
+      await loadPage({ kind: "positions", mediaID, directory }, true);
     },
     [loadPage],
   );
@@ -201,9 +202,6 @@ export const useMediaBrowser = (
         }
         case InitializeVolumeAction.id:
           addVolume();
-          return;
-        case LoadMoreAction.id:
-          if (nextPage && !loading.current) void loadPage(nextPage, true);
           return;
         case InspectMediaAction.id:
         case ScanMediaAction.id:
@@ -261,7 +259,7 @@ export const useMediaBrowser = (
         }
       }
     },
-    [addVolume, inspectMedia, loadPage, nextPage, openFolder, scanMedia, selectFile, verifyMedia, relatedJobs, ask],
+    [addVolume, inspectMedia, openFolder, scanMedia, selectFile, verifyMedia, relatedJobs, ask],
   );
 
   // The Media whose rows the list currently shows: the row under the Media root, which stays the
@@ -269,7 +267,7 @@ export const useMediaBrowser = (
   const media = folderChain.length > 1 ? (folderChain[1] as MediaFileData | undefined) : undefined;
   // Chonky sorts only the rows supplied to it, so sorting an incomplete page misstates the order
   // of the directory. All converted rows are visible; only Position folders mix files and dirs.
-  const incompleteListing = !!nextPage || !!panelLoading || !!loadError;
+  const incompleteListing = !!panelLoading || !!loadError;
   const disableDefaultFileActions = [
     ChonkyActions.ToggleHiddenFiles.id,
     ...(folderChain.length === 1 || incompleteListing ? [ChonkyActions.ToggleShowFoldersFirst.id] : []),
@@ -291,7 +289,6 @@ export const useMediaBrowser = (
         MediaJobsAction,
         DeleteMediaAction,
         TrimLibraryAction,
-        ...(nextPage ? [LoadMoreAction] : []),
       ],
       disableDefaultFileActions,
       doubleClickDelay: 300,
@@ -303,7 +300,7 @@ export const useMediaBrowser = (
       loading: panelLoading === "initial" ? undefined : panelLoading,
       loadingLabel: panelLoading === "more" ? "Loading more Media…" : "Loading Media…",
       emptyPlaceholder: loadError ? (
-        <DirectoryReadError error={loadError} onRetry={() => loadPage(retryPage.current, false, true)} />
+        <DirectoryReadError error={loadError} onRetry={() => loadPage(retryPage.current, true)} />
       ) : panelLoading ? (
         <ListPlaceholder loading label={folderChain.length > 1 ? "Reading this folder…" : "Reading Media…"} />
       ) : folderChain.length > 1 ? (

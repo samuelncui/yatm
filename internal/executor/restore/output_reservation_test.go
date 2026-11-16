@@ -2,7 +2,6 @@ package restore
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestReserveOutputUsesFrozenPathIndexAndPreservesCollisions(t *testing.T) {
+func TestChooseOutputUsesPathIndexAndPreservesCollisions(t *testing.T) {
 	// Start from a normal prepared Restore, then retain one frozen path among unchosen rows.
 	ctx := context.Background()
 	exe, lib := setupTestExecutor(t)
@@ -32,9 +31,6 @@ func TestReserveOutputUsesFrozenPathIndexAndPreservesCollisions(t *testing.T) {
 		pending[index] = File{ItemID: frozen.ItemID + int64(index) + 1}
 	}
 	require.NoError(t, runner.db.Create(&pending).Error)
-	names, err := newOutputNames(ctx, runner)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, names.close()) })
 
 	// Capture the executed GORM queries so the actual Go SQLite driver owns the plan assertion.
 	var queries []struct {
@@ -52,22 +48,17 @@ func TestReserveOutputUsesFrozenPathIndexAndPreservesCollisions(t *testing.T) {
 	}))
 	t.Cleanup(func() { require.NoError(t, runner.db.Callback().Query().Remove(callback)) })
 
-	// Empty pending paths do not collide; a frozen nonempty path still chooses the existing suffix policy.
-	digest := sha256.Sum256([]byte("saved"))
+	// Empty pending paths do not collide; another item's nonempty path chooses the existing suffix policy.
 	for index, desired := range []string{"available.txt", "collision.txt"} {
-		version := &library.FileVersion{ID: pending[index].ItemID, FileID: file.ID, Hash: digest[:], Size: 5}
+		id := pending[index].ItemID
 		want := desired
 		if index == 1 {
-			want = library.RestoredName(desired, version.ID)
+			want = library.RestoredName(desired, id)
 		}
-		target, satisfied, err := runner.reserveOutput(ctx, names, version, desired)
+		target, err := runner.chooseOutput(ctx, id, desired, nil)
 		require.NoError(t, err)
 		require.Equal(t, want, target)
-		require.False(t, satisfied)
-		require.NoFileExists(t, filepath.Join(exe.Paths().Target, target))
-		again, _, err := runner.reserveOutput(ctx, names, version, desired)
-		require.NoError(t, err)
-		require.Equal(t, target, again, "a frozen reservation must not acquire another suffix")
+		require.NoFileExists(t, filepath.Join(exe.Paths().Target, target), "preparation never touches the destination")
 	}
 	require.Len(t, queries, 3)
 

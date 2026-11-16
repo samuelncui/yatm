@@ -130,7 +130,7 @@ func TestLocationTimestampErrorsRetainRowsAndFailWorkflows(t *testing.T) {
 			_, _, err = reader.Observe(context.Background(), []os.DirEntry{child})
 			require.ErrorContains(t, err, "outside the signed Unix nanosecond range")
 			require.Equal(t, 1, calls)
-			_, err = selectedFileObservation(reader.Location, &entity.LocationEntryRef{Path: "file"}, info)
+			_, err = selectedFileObservation(NewTracker(), reader.Location, &entity.LocationEntryRef{Path: "file"}, info)
 			require.ErrorContains(t, err, "outside the signed Unix nanosecond range")
 			hash := &observedHash{filename: "file"}
 			hash.complete(acp.Result{Size: 7, Mode: 0644, ModTime: info.stamp, SHA256: make([]byte, 32)})

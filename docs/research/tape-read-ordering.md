@@ -1,6 +1,6 @@
 # Tape Read Ordering
 
-Status: Research reviewed on 2026-10-29 for [Issue #14](https://github.com/samuelncui/yatm/issues/14).
+Status: Research reviewed on 2026-11-06 for [Issue #14](https://github.com/samuelncui/yatm/issues/14).
 The [read planning contract](../architecture/read-planning.md) owns current behavior; this study
 supplies evidence, method and remaining questions, not a hardware-support guarantee. Physical
 measurements apply only to their stated device, firmware, format and workload.
@@ -121,6 +121,16 @@ reader lists 93 seconds for LTO-4 and 78 for LTO-3, also TBC, and unload excludi
 19 seconds for standard cartridges. These
 give useful nominal geometry and mechanical timing priors, not actual per-cartridge block boundaries.
 [HP Volume 4, June 2010, pages 31–32 and 40–41](https://docs.oracle.com/cd/E21419_04/en/LTO5_Vol4_E4/LTO5_Vol4_E4.pdf).
+
+The [built-in density table](../../internal/executor/media_tar_defaults.go) takes LTO-1 to 3
+wraps and native rates from
+[HP Gen 3 Volume 4, pages 20 and 25](https://docs.oracle.com/cd/E21407_01/en/CRCM2158/CRCM2158.pdf),
+LTO-4 to 6 rates from [HP LTO-6 Volume 4](https://docs.oracle.com/cd/E38452_01/en/LTO6_Vol4_E1/LTO6_Vol4_E1.pdf),
+LTO-7 and Type M wraps from IBM's recorded tracks divided by 32 channels (3,584 and 5,376,
+[GA32-0928-06 table 113](https://www.ibm.com/support/pages/system/files/inline-files/%5BAPPROVED%5D%20LTO%20SCSI%20Reference%20GA32-0928-06.pdf)),
+and LTO-7 to 9 half-height rates from
+[Quantum TB00068A](https://cdn.allbound.com/iq-ab/2022/12/LTO-9-TB00068A.pdf); full-height rates
+differ. Full-span rewind is 96 seconds except LTO-3 (78) and LTO-4 (93), per HP Volume 4 above.
 
 The existing HP5 LOCATE regression yields 92.690 seconds per longitudinal span; this is not a
 directly measured full-length REWIND duration. A post-hoc sensitivity
@@ -282,6 +292,47 @@ EOD. Standard long READ POSITION was unchanged afterward; ownership, production-
 guards passed. This establishes acceptance and response shape for that tested firmware, not an
 LTO-5 portability guarantee, full-map coverage or freshness qualification.
 Unknown vendor families also need their own applicable command/response evidence.
+
+### REOWP Endpoint Definition
+
+No T10 standard defines A3h/1Fh/45h; each vendor reference defines its own response, and the
+reviewed references differ by exactly one logical object at a completed wrap's end:
+
+| Source | Completed wrap | Wrap containing EOD |
+| --- | --- | --- |
+| IBM GA32-0928-08, eighth edition (16 February 2026), §5.2.20 | Identifier of the logical object at the end of the wrap: read literally, its last object | The logical position of EOD, the identifier the next written object would receive |
+| HPE 20-STG-L7-TRMV3-ED5, LTO-7 edition 5 (August 2026), REOWP response topics | Cumulative record and filemark count within the partition through and including the wrap | The same count, which ends at EOD |
+| HPE LTO-6 firmware J38W release notes | Described as the last block of the first wrap | Not stated |
+
+Logical objects are numbered from zero, so a cumulative count `N` ends before identifier `N`: the
+HPE value is the identifier of the first object after the wrap, an exclusive end, for every entry.
+IBM's literal completed-wrap value is that number minus one, while its EOD entry is already
+exclusive. The HPE guide is script-rendered; its wording is taken from the edition cited in
+[Position Sources and Coverage](#position-sources-and-coverage).
+[IBM §5.2.20](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-08%20(EXTERNAL).pdf),
+[HPE short response](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00006909en_us&page=GUID-D7147C7F-2016-0901-0922-00000000067B.html),
+[HPE LTO6 J38W release notes](https://support.hpe.com/connect/s/softwaredetails?language=en_US&softwareId=MTX_7b228de1989a4b66ac419acd74).
+
+Open-source implementations settle no definition. The LTFS reference only lists the opcode in its
+IBM command table and never issues it. CTA interpolates between reported values without adjusting
+completed wraps; its helper comment says the last entry is the last block written rather than a
+full-wrap end. Remanence (commit `bd440b33`) follows the literal IBM reading: inclusive completed
+wraps and an exclusive EOD position.
+[LTFS command table](https://github.com/LinearTapeFileSystem/ltfs/blob/4c0e6faae661e0bfd50bc9707f59ecd88c90b7eb/src/tape_drivers/ibm_tape.h#L284-L286),
+[CTA helper comment](https://github.com/cern-cta/CTA/blob/7949198909ffa0d0817aee26215f28aec79c9319/taped/rao/RAOHelpers.hpp#L17-L24),
+[Remanence wrap map](https://github.com/archivetechie/remanence/blob/bd440b33e197989426cc5c8b891bdeae4effab00/crates/remanence-order/src/wrap_map.rs#L1-L17).
+
+**Observed HP5 behavior:** the HP Ultrium 5-SCSI/Z6ED density-`0x58` responses in
+[Direct Physical Coordinates](#direct-physical-coordinates) match the HPE count on every compared
+full wrap and at EOD, cross-checked by independent CM counts. They do not match the J38W wording or
+a literal IBM reading. No IBM drive response was compared in this study.
+
+**Inference for read ordering:** the exclusive count is the one reading consistent with the HPE
+definition, IBM's EOD rule, CM cumulative counts and the observed HP5 hardware. A drive that reports
+a completed wrap's last object instead moves that boundary one object earlier. A wrap holds tens of
+thousands of objects (36,765 records in the first full HP5 data wrap above), so this error is far
+below the interpolation, compression and buffering uncertainty already accepted. It affects only
+cost estimates, never a logical seek address.
 
 ### Passive Write Timing
 
@@ -552,8 +603,8 @@ crossings; compression differences and other devices remain unqualified. Applica
 transfer and seek/startup intervals supply the crossover; a guessed threshold is not acceptance
 evidence.
 
-Logical addresses remain authoritative seek inputs. Wrap direction, band membership, endpoint
-conventions, full-wrap coverage and motion costs need separate evidence. A non-ejecting reload and
+Logical addresses remain authoritative seek inputs. Wrap direction, band membership, full-wrap
+coverage and motion costs need separate evidence. A non-ejecting reload and
 new reported-map observation do not establish physical freshness. A performance estimate must
 preserve that limitation without substituting estimated coordinates for authoritative logical
 addresses. Session ownership and invalidation must preserve the distinction between an observed
@@ -867,8 +918,8 @@ are not validated for HP5. Establish the versioned layout, partition mapping, va
 rules before treating CM bytes as coordinates. Stored EOD can locate the recorded tail; it is not
 automatically live head telemetry or evidence that all submitted writes have reached that tail.
 
-The production fallback is restricted to the studied LTO-5 directory version below; it does not
-implement every generation's raw CM format. ECMA-319 Annex D.2.7.5 defines the
+The production fallback implements the per-generation layouts described at the end of this
+section; only the LTO-5 version below and one LTO-6 image are checked against hardware data. ECMA-319 Annex D.2.7.5 defines the
 **Ultrium-1** directory: page `0x0103`, 96 half-wrap entries, record/filemark counts and explicit
 invalidation/update rules. Its four-byte integrity check is the Reed-Solomon code defined in
 section 13.2, not ordinary CRC32. The reviewed HP5 guide documents retrieval without specifying
@@ -923,13 +974,12 @@ therefore establishes zero extension contribution. It does not decode or name th
 bits, and an unexplained wider total is rejected. Sums may exceed 2^32; no file-count threshold
 substitutes for this check. Cumulative counts define exclusive object boundaries from object zero,
 and the partial last wrap stops at recorded EOD. The paired HP5/Z6ED density-0x58 REOWP response
-uses the same convention: the first full data-partition wrap contains 36,765 records plus filemarks,
+uses the same definition: the first full data-partition wrap contains 36,765 records plus filemarks,
 which occupy zero-based identifiers 0 through 36,764. Its next boundary is 36,765, matching REOWP;
 all 21 full-wrap endpoints and both EOD totals agree. Adding one would count an extra object.
 This conclusion combines the accepted independent CM counts with HP5 logical-object numbering,
-not raw equality alone. Other REOWP families retain their prior convention: HPE's
-[LTO6 J38W release notes](https://support.hpe.com/connect/s/softwaredetails?language=en_US&softwareId=MTX_7b228de1989a4b66ac419acd74)
-explicitly describe the last block of the first wrap. That statement is not a definition of HP5/Z6ED.
+not raw equality alone. CM counts therefore need no conversion to the
+[REOWP endpoint definition](#reowp-endpoint-definition).
 
 These rules combine the earlier public field definitions, community decoder and observed version-4/
 version-2 correspondence. They were developed after inspecting the initial LTFS sample, so its 23
@@ -959,6 +1009,43 @@ READ BUFFER is still mediated by the drive; it does not bypass a drive lacking t
 guarantee that every firmware exposes its raw CM. Other validity, partition and extended-counter
 forms need their own evidence. Hardware-compressed interpolation and live head telemetry remain
 separate questions.
+
+Both vendor references document host retrieval of cartridge memory through READ BUFFER, with
+different buffer IDs. HP's LTO-6 reference lists buffer `10h` as "CM EEPROM", as its LTO-5 guide
+does; its `20h`–`3Fh` are main-buffer segments.
+[HP LTO-6 SCSI Interface, READ BUFFER, page 150](https://docs.oracle.com/cd/E38452_01/en/LTO6_Vol3_E1_D20/LTO6_Vol3_E1_D20.pdf).
+IBM's LTO-5-and-later reference lists buffer `05h` "Cartridge Memory", `20h` as the same buffer,
+and `21h` as the copy stored in the EOD dataset, which requires positioning at EOD and is described
+as debug and recovery only.
+[IBM GA32-0928-08, table 378 and section 6.7.2.6](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-08%20(EXTERNAL).pdf).
+Neither reference specifies the returned layout, and this study has no IBM capture. Because a
+cartridge written by one vendor's drive must be readable by another's, the directory format is
+expected to follow the LTO generation rather than the drive vendor, but that is an inference: the
+IBM buffer has not been shown to return the same raw image. IBM LTO-5/6 drives lack REOWP, so a
+qualified IBM CM read would be their only position-map source.
+
+HPE's LTO-7, LTO-8 and LTO-9 references list buffer `05h` "Cartridge Memory (LTO-CM)" and no `10h`
+([sd00006909en_us](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00006909en_us),
+[sd00006916en_us](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00006916en_us),
+[sd00001234en_us](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00001234en_us)). IBM's
+GA32-0928-09 Annex A marks REOWP supported on generations 7 to 10 only
+([GA32-0928-09](https://www.ibm.com/support/pages/system/files/inline-files/LTO%20SCSI%20Reference%20GA32-0928-09.pdf#page=510)).
+A drive therefore reads CM through `10h` (HP Ultrium 2 to 6) or `05h` (IBM, HPE Ultrium 7 and later).
+
+The unlicensed
+[LTFSCopyGUI parser](https://github.com/LCG-Dev-Group/LTFSCopyGUI/blob/8132d430bdbff01ae2cb0dbbb11f90fc50f4890e/LTFSCopyGUI/Core/TapeUtils.vb)
+is a layout reference only, not copied code. It reads `10h` and then `05h`, and selects the
+directory layout from the cartridge generation: 16-byte half-wrap entries for Ultrium-1, 28-byte
+entries for Ultrium-2, a 16-byte header with 32-byte entries for Ultrium-3 to 5, and a 48-byte
+header with 32-byte entries for Ultrium-6 to 9, with 44, 56, 80, 136, 112, 168 (Type M), 208 and
+280 wraps. Its entry fields match the HP5 interpretation above, and it reads EOD pages `0x104`,
+`0x10e`, `0x10f` and `0x110`. An HP LTO-6 LTFS image published as a test input of
+[LtfsCapybara](https://github.com/InariAimu/LtfsCapybara/tree/39d796beae7af100b8496ba16ba235adda9b6c96/tests/LtfsServer.Tests)
+(16,352 bytes) has a version-5, 4,400-byte directory. Applying this study's table, checksum and
+summation rules unchanged, its header, all 136 entries and all four EOD pages pass the ECMA-319
+check, and the cumulative partition-1 endpoint 105,312 equals that EOD page's 105,304 records
+plus 8 filemarks; pages `0x10f` and `0x110` have validity zero. This is one image without paired
+REOWP. No public Ultrium-1 to 4 or 7 to 9 image was found, and no IBM capture.
 
 For capacity control, relate the data partition's written tail to its writable EW boundary. Head
 position by itself can change during reads, Index work and repositioning. Verified coordinates

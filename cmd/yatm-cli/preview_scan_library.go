@@ -24,7 +24,7 @@ type scanCreateCommand struct {
 	runtime       *runtime
 	defaultResult entity.ScanResultPolicy
 	selectionOptions
-	Priority       int64    `long:"priority" default:"0" description:"Job priority"`
+	Priority       int64    `long:"priority" default:"1" description:"Job priority"`
 	MediaID        int64    `long:"media-id" description:"Media to scan; exclusive with Location or Library selections"`
 	LocationID     int64    `long:"location-id" description:"Location to scan; exclusive with Media or selected entries"`
 	Paths          []string `long:"path" description:"Relative root within --location-id; repeatable"`
@@ -109,10 +109,6 @@ func registerLibraryCommands(root *flags.Command, commandRuntime *runtime) error
 }
 
 func (c *previewCreateCommand) Execute(_ []string) error {
-	// Validate priority before resolving registered file selections.
-	if c.Priority < 0 {
-		return usageError(fmt.Errorf("Job priority must not be negative, value=%d", c.Priority))
-	}
 	preview, err := parsePreviewPolicy(c.PreviewPolicy)
 	if err != nil {
 		return err
@@ -177,9 +173,6 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 	}
 	if sources != 1 || mediaID < 0 || c.LocationID < 0 {
 		return usageError(fmt.Errorf("choose one Media, Location, or set of file selections"))
-	}
-	if c.Priority < 0 {
-		return usageError(fmt.Errorf("Job priority must not be negative"))
 	}
 	if len(c.Paths) > 0 && c.LocationID == 0 {
 		return usageError(fmt.Errorf("path requires location-id"))

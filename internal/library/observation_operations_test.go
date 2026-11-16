@@ -24,7 +24,7 @@ func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing
 					hash := sha256.Sum256([]byte("different content"))
 					before.Hash = hash[:]
 				}
-				original, err := lib.AdmitObservation(ctx, location.ID, before)
+				original, err := admitOne(ctx, lib, location.ID, before)
 				require.NoError(t, err)
 
 				// Metadata/native contradictions and explicitly different opaque signatures still change content.
@@ -54,9 +54,9 @@ func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing
 				// All mutation entry points use the same content decision and retain the learned hash.
 				switch publisher {
 				case "single":
-					_, err = lib.AdmitObservation(ctx, location.ID, after)
+					_, err = admitOne(ctx, lib, location.ID, after)
 				case "batch":
-					_, err = lib.AdmitObservations(ctx, location.ID, []*ObservationAdmission{{Observation: after}})
+					_, err = lib.AdmitObservations(ctx, location.ID, []*ObservedEntry{after})
 				case "selected":
 					_, err = lib.PublishSelectedObservations(ctx, location.ID, observedTestManifest(after))
 				}
@@ -100,9 +100,9 @@ func TestSingleAndBatchObservationPreserveTrackingDecisions(t *testing.T) {
 			entry.TrackingKeys = []*FileTrackingKey{key}
 			admit := func() (*FileLocation, error) {
 				if single {
-					return lib.AdmitObservation(ctx, location.ID, entry)
+					return admitOne(ctx, lib, location.ID, entry)
 				}
-				rows, err := lib.AdmitObservations(ctx, location.ID, []*ObservationAdmission{{Observation: entry}})
+				rows, err := lib.AdmitObservations(ctx, location.ID, []*ObservedEntry{entry})
 				if err != nil {
 					return nil, err
 				}
@@ -139,4 +139,12 @@ func TestSingleAndBatchObservationPreserveTrackingDecisions(t *testing.T) {
 			require.Empty(t, keys)
 		})
 	}
+}
+
+func admitOne(ctx context.Context, lib *Library, locationID int64, p *ObservedEntry) (*FileLocation, error) {
+	originals, err := lib.AdmitObservations(ctx, locationID, []*ObservedEntry{p})
+	if err != nil {
+		return nil, err
+	}
+	return originals[0], nil
 }

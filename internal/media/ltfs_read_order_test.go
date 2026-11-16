@@ -16,7 +16,7 @@ func ltfsOrderFixture(t testing.TB) *ltfsReadOrderProvider {
 	t.Helper()
 	// Two full wraps expose opposite longitudinal directions in an explicitly mapped physical partition.
 	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-test", SnapshotValid: func() bool { return true },
-		Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+		BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
 		Wraps: []ReadModelWrap{
 			{Partition: 1, Wrap: 4, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
 			{Partition: 1, Wrap: 5, Full: true, Endpoint: proto.Uint64(200), Direction: ReadWrapReverse},

@@ -286,7 +286,7 @@ func TestRestoreReadSequenceFeedsAcrossBlockedSourceClose(t *testing.T) {
 			closeTestReadSequence(t, source)
 			buffer := startTestBuffer(t, runner)
 			engine, err := acp.NewStream(ctx, buffer.onResults, acp.WithHashPolicy(acp.HashReadRefresh),
-				acp.Overwrite(false), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...),
+				acp.Overwrite(true), acp.SetFromDevice(media.DeviceOptions(media.AccessSequential)...),
 				acp.WithResultBatch(100), acp.WithResultBuffer(100), acp.WithResultFlushInterval(time.Hour))
 			require.NoError(t, err)
 			t.Cleanup(func() { release(); _ = engine.Close() })

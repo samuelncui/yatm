@@ -101,7 +101,7 @@ func (r *locationStage) recordPublished(ctx context.Context, sourceID int64) err
 			if old == nil {
 				return fmt.Errorf("published original is missing: Location %d path %q", sourceID, row.Path)
 			}
-			row.FileID, row.PositionID, row.Signature = old.FileID, old.FileID, old.Signature
+			row.FileID, row.Signature = old.FileID, old.Signature
 			row.After, row.Published = old.Observation(), true
 		}
 		if err := r.saveEntries(ctx, rows); err != nil {

@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -33,12 +32,13 @@ type FileRowReader struct {
 	sources  map[int64]fileReadSource
 	guards   map[fileParentGuardKey]pathGuard
 	allowed  map[fileParentGuardKey]func(string, bool) bool
+	tracker  *Tracker
 }
 
 // NewFileRowReader starts an operation-local authorization cache; it retains no row observations.
 func (e *Executor) NewFileRowReader() *FileRowReader {
 	return &FileRowReader{executor: e, sources: make(map[int64]fileReadSource),
-		guards: make(map[fileParentGuardKey]pathGuard), allowed: make(map[fileParentGuardKey]func(string, bool) bool)}
+		guards: make(map[fileParentGuardKey]pathGuard), allowed: make(map[fileParentGuardKey]func(string, bool) bool), tracker: NewTracker()}
 }
 
 // Read observes one batch while reusing the operation's source and parent checks.
@@ -143,7 +143,7 @@ func (r *FileRowReader) read(ctx context.Context, facts map[int64]*library.FileR
 			if listed == nil || listed.ID != row.Original.LocationID {
 				rowInfos = nil
 			}
-			observation, err := e.observeFileRow(ctx, row, source, guards, leaves[id], rowInfos)
+			observation, err := e.observeFileRow(ctx, r.tracker, row, source, guards, leaves[id], rowInfos)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -190,6 +190,7 @@ type fileParentGuardKey struct {
 // the answer; native tracking evidence is derived from the same metadata observation.
 func (e *Executor) observeFileRow(
 	ctx context.Context,
+	tracker *Tracker,
 	row *library.FileReadFacts,
 	source fileReadSource,
 	guards map[fileParentGuardKey]pathGuard,
@@ -229,7 +230,7 @@ func (e *Executor) observeFileRow(
 	info := infos[original.Path]
 	var err error
 	if info == nil {
-		info, err = os.Lstat(full)
+		info, err = Lstat(full)
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		observation.Availability = entity.OriginalAvailability_ORIGINAL_AVAILABILITY_MISSING
@@ -256,8 +257,7 @@ func (e *Executor) observeFileRow(
 	}
 
 	// Native identity shares the metadata observation without opening the file.
-	keys := ObserveTracking(source.location, info)
-	if !sameReadTracking(row.Tracking, keys) {
+	if !library.TrackingConfirmed(row.Tracking, tracker.Observe(full, info)) {
 		return observation, nil
 	}
 	observation.Valid = true
@@ -286,23 +286,4 @@ func (e *Executor) parentGuard(location *library.Location, root, relative string
 		guards[key] = guard
 	}
 	return guard.err
-}
-
-func sameReadTracking(stored, observed []*library.FileTrackingKey) bool {
-	if len(stored) != len(observed) {
-		return false
-	}
-	for _, key := range observed {
-		matched := false
-		for _, previous := range stored {
-			if key.Kind == previous.Kind && key.Scope == previous.Scope && bytes.Equal(key.KeyValue, previous.KeyValue) && key.Details == previous.Details {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
 }

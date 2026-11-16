@@ -271,11 +271,6 @@ func TestDeviceConfigurationDoesNotAdvertiseGrownReservationAsMaximum(t *testing
 		if (err == nil) != (actual == 512<<10) || transport.TransferLimit() != actual {
 			t.Fatalf("actual=%d reservation=%d preparation=%v", actual, transport.TransferLimit(), err)
 		}
-		for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_WRITE} {
-			if limits := feature(d.Report(), kind).GetRecords(); limits.TransportMaximumBytes != nil {
-				t.Fatalf("current allocation advertised as maximum: %v", limits)
-			}
-		}
 		if actual < 512<<10 && (f.selects != 0 || f.motions != 0 || f.writes != 0) {
 			t.Fatal("insufficient reservation admitted device mutation")
 		}

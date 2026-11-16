@@ -2,11 +2,11 @@
 
 package executor
 
-import (
-	"github.com/samuelncui/yatm/internal/library"
-	"os"
-)
+import "os"
 
-func ObserveTracking(*library.Location, os.FileInfo) []*library.FileTrackingKey {
-	return nil
-}
+func nativeStat(os.FileInfo) (nativeObject, bool) { return nativeObject{}, false }
+
+func filesystemScope(string) string { return "" }
+
+// Lstat observes one entry; this platform supplies no native identity.
+func Lstat(path string) (os.FileInfo, error) { return os.Lstat(path) }

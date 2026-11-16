@@ -11,8 +11,6 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -202,51 +200,6 @@ func TestTapeReadHintsUseExistingOperationWithoutCartridgePreflight(t *testing.T
 	require.Zero(t, scan.target.ExpectedMediaId)
 	require.Len(t, recorder.calls, 2)
 	require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
-}
-
-func TestTapeRefreshUsesExistingReadRPCWithoutDuplicatePreflight(t *testing.T) {
-	// The server owns frozen policy/profile and qualified reload validation; clients only forward this explicit action.
-	restore, scan := &stubHintRestoreService{}, &stubHintScanService{}
-	server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) {
-		entity.RegisterRestoreJobServiceServer(server, restore)
-		entity.RegisterScanJobServiceServer(server, scan)
-	}, nil, nil)
-	for _, args := range [][]string{
-		{"restore", "run", "tape", "31", "--device", "drive", "--refresh-position-map"},
-		{"verify", "run", "31", "--device", "drive", "--media-id", "8", "--refresh-position-map"},
-		{"scan", "run", "31", "--device", "drive", "--refresh-position-map"},
-	} {
-		exit, _, stderr := executeTestCLI(server.URL, "", args...)
-		require.Equal(t, exitSuccess, exit, stderr)
-		target := scan.target
-		if args[0] == "restore" {
-			target = restore.target
-		}
-		require.True(t, target.GetTape().RefreshPositionMap)
-		require.Empty(t, target.ExpectedIdentity)
-		require.Zero(t, target.ExpectedMediaId)
-	}
-	require.Equal(t, 1, recorder.count(entity.RestoreJobService_RestoreMedia_FullMethodName))
-	require.Equal(t, 2, recorder.count(entity.ScanJobService_ReadMedia_FullMethodName))
-	require.Zero(t, recorder.count(entity.ScanJobService_GetCreation_FullMethodName))
-	require.Zero(t, recorder.count(entity.SettingsService_Get_FullMethodName))
-	require.Zero(t, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
-	require.Zero(t, recorder.count(entity.MediaService_Inspect_FullMethodName))
-}
-
-func TestTapeRefreshReportsAuthoritativeScanAdmissionRejection(t *testing.T) {
-	for _, reason := range []string{"position map refresh requires tar VERIFY_COPIES", "position map refresh is unavailable for LTFS", "non-ejecting reload is unqualified"} {
-		// A spelling of verify run cannot establish the frozen Job's policy or hardware applicability.
-		service := &stubHintScanService{readErr: status.Error(codes.FailedPrecondition, reason)}
-		server, recorder := newGRPCWebTestServer(t, func(server *grpc.Server) { entity.RegisterScanJobServiceServer(server, service) }, nil, nil)
-		exit, _, stderr := executeTestCLI(server.URL, "", "verify", "run", "31", "--device", "drive", "--refresh-position-map")
-		require.NotEqual(t, exitSuccess, exit)
-		require.Contains(t, stderr, reason)
-		require.True(t, service.target.GetTape().RefreshPositionMap)
-		require.Equal(t, 1, recorder.count(entity.ScanJobService_ReadMedia_FullMethodName))
-		require.Zero(t, recorder.count(entity.MediaService_InspectDevice_FullMethodName))
-		require.Zero(t, recorder.count(entity.ScanJobService_GetCreation_FullMethodName))
-	}
 }
 
 func TestTarWritePreflightFollowsServerVerdict(t *testing.T) {

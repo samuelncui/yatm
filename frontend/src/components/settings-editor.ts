@@ -1,4 +1,5 @@
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { RpcError } from "@protobuf-ts/runtime-rpc";
 
 import { settingsCli } from "@/api";
 import { type DeviceSettings, type JobSettings, type LibrarySettings, type PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
@@ -183,7 +184,12 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
       setSaved(true);
       return true;
     } catch (failure) {
-      setError(errorMessage(failure, `Could not save ${label} settings`));
+      // A rejected draft keeps its edits; only other failures offer a reload.
+      const message = errorMessage(failure, `Could not save ${label} settings`);
+      if (failure instanceof RpcError && failure.code === "INVALID_ARGUMENT") {
+        setError("");
+        setInvalid(message);
+      } else setError(message);
       return false;
     } finally {
       setSaving(false);

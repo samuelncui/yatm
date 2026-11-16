@@ -18,10 +18,6 @@ export function useFilesMeasure(files: FileArray) {
   const [state, setState] = useState<MeasurementState>({ running: false });
   const [sizes, setSizes] = useState<Record<string, FilesMeasurement>>({});
   const active = useRef<AbortController | undefined>(undefined);
-  const visible = useRef(new Set<string>());
-  useEffect(() => {
-    visible.current = new Set(files.map((file) => measurementKey(file?.operationReference as FileOperationRef | undefined)).filter(Boolean));
-  }, [files]);
 
   const invalidate = useCallback(() => {
     active.current?.abort();
@@ -53,7 +49,8 @@ export function useFilesMeasure(files: FileArray) {
         } else if (update.result.oneofKind === "item") {
           const item = update.result.item;
           const key = measurementKey(item.reference);
-          if (visible.current.has(key)) setSizes((current) => ({ ...current, [key]: item }));
+          // Keep every directory child: rows paged in later reuse this measurement.
+          if (key) setSizes((current) => ({ ...current, [key]: item }));
         }
       }
       if (active.current !== controller || controller.signal.aborted) return;

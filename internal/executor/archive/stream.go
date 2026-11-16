@@ -133,7 +133,7 @@ func (s *copySource) prepareItems(ctx context.Context) ([]*copyItem, error) {
 				)
 			}
 			s.prepared = append(s.prepared, item)
-			return s.prepared, nil
+			break
 		}
 		item.mediaTarget = target
 		s.prepared = append(s.prepared, item)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -97,6 +99,8 @@ func TestGenerateStoresAndReusesContentAddressedBundle(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, reader.Close())
 	require.Equal(t, []byte("preview fixture"), asset)
+	require.Equal(t, int64(len(asset)), reader.Size)
+	require.Equal(t, fmt.Sprintf(`"%08x-%x"`, crc32.ChecksumIEEE(asset), len(asset)), reader.ETag)
 	_, err = manager.Generate(
 		ctx, sourcePath, hash[:], info.Size(), info.ModTime().UnixNano(), false, nil,
 	)

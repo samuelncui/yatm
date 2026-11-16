@@ -98,7 +98,7 @@ func TestInspectionDoesNotAdvertiseGrowableReservationAsMaximum(t *testing.T) {
 		}
 		for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_WRITE} {
 			limits := feature(report, kind).GetRecords()
-			if limits.GetMaximumBytes() != 512<<10 || (limits.TransportMaximumBytes == nil) != growable || !growable && limits.GetTransportMaximumBytes() != 32<<10 {
+			if limits.GetMaximumBytes() != 512<<10 {
 				t.Fatalf("growable=%t limits=%v", growable, limits)
 			}
 		}
@@ -117,7 +117,7 @@ func TestInspectionUsesOnlyPassiveBoundedQueriesAndUnvalidatedFacts(t *testing.T
 	}, func() error { return nil })
 	defer transport.Close()
 	report, err := inspectTransport(context.Background(), Identity{Configured: "/dev/nst0", Key: "/sys/device"}, transport)
-	if err != nil || calls != 15 || report.GetVendor() != "IBM" || report.GetSerialNumber() != "SN1" {
+	if err != nil || calls != 14 || report.GetVendor() != "IBM" || report.GetSerialNumber() != "SN1" {
 		t.Fatalf("report=%v err=%v calls=%d", report, err, calls)
 	}
 	tape := report.GetTape()

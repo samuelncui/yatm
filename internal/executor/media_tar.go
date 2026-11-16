@@ -149,16 +149,6 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		return nil, err
 	}
 
-	// Reject a changed cartridge before invoking its adapter, including after an explicit reload.
-	if access.GetRefreshPositionMap() {
-		if err := prepared.RefreshPositionMap(ctx); err != nil {
-			return nil, err
-		}
-		if err := crossCheckTarBarcode(ctx, prepared, stored.Identity, false); err != nil {
-			return nil, err
-		}
-	}
-
 	// Give the adapter exclusive device access, then observe a fresh descriptor after its LOAD.
 	err = b.executor.cleanupRawTape(ctx, b.jobID, device, prepared)
 	prepared = nil
@@ -246,21 +236,8 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 			}
 		}
 
-		// The observation owns endpoint interpretation; retained maps keep their own convention.
-		var boundary mediapkg.ReadEndpointConvention
-		if geometry != nil {
-			boundary = mediapkg.ReadEndpointConvention(geometry.EndpointConvention)
-		}
 		var observed *entity.TapePositionMap
-		if (!geometry.Valid() || !geometry.AllWraps || len(geometry.Endpoints) == 0) &&
-			stored.TapePositionMap.GetSource() == "A3/1F/45" &&
-			stored.TapePositionMap.GetEndpointConvention() == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE &&
-			tape.REOWPEndpointConvention(prepared.Report()) == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE {
-			copy := *stored
-			copy.TapePositionMap = nil
-			stored = &copy
-		}
-		readModel, observed, readReason = compileTarMediaReadModel(parameters, stored, geometry, boundary, valid.Load)
+		readModel, observed, readReason = compileTarMediaReadModel(parameters, stored, geometry, valid.Load)
 		learningMap = stored.TapePositionMap
 		positionSource = stored.TapePositionMap.GetSource()
 		if observed != nil {
@@ -359,22 +336,12 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	if err != nil {
 		return nil, err
 	}
-	finishGeometry := func() (*entity.TapePositionMap, string) { return nil, "" }
 	var descriptor *mediapkg.Descriptor
 	release := func(ctx context.Context, complete bool) error {
-		// Release the active descriptor before retaining any successfully observed position map.
 		if prepared == nil {
 			return nil
 		}
-		positionMap, reason := finishGeometry()
-		err := b.executor.releaseRawTape(ctx, b.jobID, target.Device, prepared, complete)
-		if err == nil {
-			b.retainTarWriteGeometry(ctx, stored, descriptor, positionMap)
-		}
-		if reason != "" {
-			b.logger.WithContext(ctx).WithField("reason", reason).Info("Tape WRITE geometry was not updated")
-		}
-		return err
+		return b.executor.releaseRawTape(ctx, b.jobID, target.Device, prepared, complete)
 	}
 	cleanup := func(ctx context.Context) error { return release(ctx, false) }
 	defer func() {
@@ -535,9 +502,6 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	})
 	if err != nil {
 		return nil, err
-	}
-	if initialStop == nil && navigator != nil {
-		finishGeometry = b.startTarWriteGeometry(prepared, stored)
 	}
 	return session, nil
 }

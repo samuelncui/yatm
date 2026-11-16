@@ -85,10 +85,6 @@ export const ScanCard = ({ job }: { job: Job }) => {
             <ReadMediaDialog
               mediaIDs={[job.mediaId]}
               operation="scan"
-              loadScanResultPolicy={async () => {
-                const { request } = await loadCreation();
-                return request?.spec?.resultPolicy;
-              }}
               onRead={async (target) => {
                 await scanJobCli.readMedia({ id: job.id, target }).response;
               }}

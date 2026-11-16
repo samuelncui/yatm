@@ -127,8 +127,7 @@ func compileTapePositionMap(parameters *entity.TapeReadParameters, value *entity
 	}
 	model, err := mediapkg.NewReadCostModel(mediapkg.ReadModelProfile{
 		ID: "tape:" + value.Source, SnapshotValid: valid,
-		Boundary: mediapkg.ReadEndpointConvention(value.EndpointConvention),
-		BOT:      bot, Wraps: wraps, MinLPOS: value.GetMinLpos(), MaxLPOS: value.GetMaxLpos(),
+		BOT: bot, Wraps: wraps, MinLPOS: value.GetMinLpos(), MaxLPOS: value.GetMaxLpos(),
 		FullWrapSeconds: positioning.LongitudinalSecondsPerWrap,
 		Coefficients: mediapkg.ReadModelCoefficients{Base: positioning.GetBaseSeconds(), Wrap: positioning.GetWrapChangeSeconds(),
 			Band: positioning.GetBandChangeSeconds(), LandingZone: positioning.GetLandingZoneChangeSeconds(),

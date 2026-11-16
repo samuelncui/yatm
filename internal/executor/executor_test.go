@@ -636,3 +636,16 @@ func TestReconcileStorageKeepsScanJobWithEmptyDiff(t *testing.T) {
 	require.Equal(t, entity.JobKind_JOB_KIND_SCAN, stored.Kind)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_READY, stored.Status)
 }
+
+func TestCreateJobRejectsNegativePriorityBeforeAnyData(t *testing.T) {
+	// The server owns priority validation for every client.
+	exe := setupTestExecutor(t)
+	_, err := exe.CreateJob(context.Background(), entity.JobKind_JOB_KIND_ARCHIVE, -1, func(*gorm.DB) error {
+		t.Fatal("a rejected priority cannot initialize a bundle")
+		return nil
+	})
+	require.ErrorIs(t, err, ErrInvalidRequest)
+	var jobs int64
+	require.NoError(t, exe.db.Model(&Job{}).Count(&jobs).Error)
+	require.Zero(t, jobs)
+}

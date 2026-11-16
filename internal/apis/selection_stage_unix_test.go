@@ -101,8 +101,8 @@ func TestLiveSelectionCachedHashPreservesOpaqueSignature(t *testing.T) {
 	recorded, err := api.lib.GetFileLocation(ctx, first.Entry.GetAssociatedFileId())
 	require.NoError(t, err)
 	opaque := []byte{0, 255, 7, 1, 9}
-	_, err = api.lib.AdmitObservation(ctx, id, &library.ObservedEntry{FileID: recorded.FileID, Path: "opaque.txt",
-		Size: recorded.Size, Mode: recorded.Mode, MtimeNS: recorded.MtimeNS, Signature: opaque, Hash: recorded.Hash})
+	_, err = api.lib.AdmitObservations(ctx, id, []*library.ObservedEntry{{FileID: recorded.FileID, Path: "opaque.txt",
+		Size: recorded.Size, Mode: recorded.Mode, MtimeNS: recorded.MtimeNS, Signature: opaque, Hash: recorded.Hash}})
 	require.NoError(t, err)
 	for _, name := range []string{"opaque.txt", "moved.txt"} {
 		if name != "opaque.txt" {

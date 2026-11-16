@@ -188,3 +188,52 @@ func TestLibraryArchivePublishesActualTransferredContent(t *testing.T) {
 	require.Equal(t, actual[:], versions[0].Hash)
 	require.Equal(t, int64(len("after!")), versions[0].Size)
 }
+
+func TestArchiveCapacityRefusalStillRecordsRelocatedLocation(t *testing.T) {
+	// A page that ends at a refused target still links the Job to the Location it read from.
+	exe := setupTestExecutor(t, executor.Scripts{})
+	ctx := context.Background()
+	content := []byte("relocated before refusal")
+	source, file, first := publishArchiveOriginal(t, exe, "first", content)
+	created, err := (&service{exe: exe}).Create(ctx, &entity.CreateArchiveJobRequest{Spec: &entity.ArchiveJobSpec{Selections: archiveSelections(file.ParentID, file.ID)}})
+	require.NoError(t, err)
+	waitIndexed(t, exe, created.Job.Id)
+
+	// Move the original to another Location before the Media attempt.
+	movedRoot := filepath.Join(exe.Paths().Source, "relocated")
+	require.NoError(t, os.Mkdir(movedRoot, 0755))
+	movedRoot, err = exe.LocationRoot(movedRoot)
+	require.NoError(t, err)
+	require.NoError(t, os.Rename(first, filepath.Join(movedRoot, "relocated.txt")))
+	retired, err := exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 100)
+	require.NoError(t, err)
+	_, err = exe.Lib().PublishAnalyzed(ctx, source.ID, 2,
+		func(context.Context, func(*library.ObservedEntry) error) error { return nil },
+		func(_ context.Context, yield func(*library.ObservedEntry) error) error {
+			for _, row := range retired {
+				if err := yield(&library.ObservedEntry{FileID: row.FileID, Path: row.Path}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	relocated := &library.Location{Name: "Relocated", RootPath: movedRoot, ExecutorID: "local"}
+	require.NoError(t, exe.Lib().CreateLocation(ctx, relocated))
+	moved, err := os.Stat(filepath.Join(movedRoot, "relocated.txt"))
+	require.NoError(t, err)
+	_, err = exe.Lib().PublishAnalyzed(ctx, relocated.ID, 1, func(_ context.Context, yield func(*library.ObservedEntry) error) error {
+		return yield(&library.ObservedEntry{FileID: file.ID, Path: "relocated.txt", Size: moved.Size(), Mode: uint32(moved.Mode()), MtimeNS: moved.ModTime().UnixNano(), Hash: file.Hash, Signature: file.Signature})
+	}, nil)
+	require.NoError(t, err)
+
+	value, err := exe.GetJobRunner(ctx, created.Job.Id)
+	require.NoError(t, err)
+	items, err := (&copySource{runner: value.(*jobArchiveRunner), session: capacityBoundarySession{}, pageSize: batchSize}).nextPage(ctx)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	jobs, err := exe.ListJob(ctx, &entity.JobFilter{LocationId: &relocated.ID})
+	require.NoError(t, err)
+	require.Len(t, jobs.Jobs, 1)
+	require.Equal(t, created.Job.Id, jobs.Jobs[0].ID)
+}

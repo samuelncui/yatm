@@ -8,22 +8,20 @@ import (
 )
 
 type Item struct {
-	Directory  bool
-	ID         int64             `gorm:"primaryKey"`
-	Path       string            `gorm:"type:varchar(4096);not null;uniqueIndex"`
-	ScopePath  string            `gorm:"type:varchar(4096);index"`
-	Change     entity.ScanChange `gorm:"not null;index"`
-	NeedsHash  bool              `gorm:"not null;index:idx_observations_hash"`
-	Size       int64
-	Mode       uint32
-	MtimeNS    int64  `json:"mtime_ns,string"`
-	Hash       []byte `gorm:"column:sha256;type:varbinary(32)"`
-	Signature  []byte `gorm:"type:varbinary(256);index"`
-	FileID     int64  `gorm:"index"`
-	PositionID int64
-	Before     *entity.ObservedEntry    `gorm:"type:blob"`
-	Reference  *entity.LocationEntryRef `gorm:"serializer:json;type:blob"`
-	Evidence   Evidence                 `gorm:"embedded"`
+	Directory bool
+	ID        int64             `gorm:"primaryKey"`
+	Path      string            `gorm:"type:varchar(4096);not null;uniqueIndex"`
+	Change    entity.ScanChange `gorm:"not null;index"`
+	NeedsHash bool              `gorm:"not null;index:idx_observations_hash"`
+	Size      int64
+	Mode      uint32
+	MtimeNS   int64                    `json:"mtime_ns,string"`
+	Hash      []byte                   `gorm:"column:sha256;type:varbinary(32)"`
+	Signature []byte                   `gorm:"type:varbinary(256);index"`
+	FileID    int64                    `gorm:"index"`
+	Before    *entity.ObservedEntry    `gorm:"type:blob"`
+	Reference *entity.LocationEntryRef `gorm:"serializer:json;type:blob"`
+	Evidence  Evidence                 `gorm:"embedded"`
 }
 
 func (Item) TableName() string { return "observations" }

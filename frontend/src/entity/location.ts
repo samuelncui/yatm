@@ -342,10 +342,6 @@ export interface CreateLocationResponse {
      * @generated from protobuf field: yatm.v1.LocationAccessibility accessibility = 2
      */
     accessibility?: LocationAccessibility;
-    /**
-     * @generated from protobuf field: repeated string warnings = 4
-     */
-    warnings: string[];
 }
 /**
  * @generated from protobuf message yatm.v1.GetLocationResponse
@@ -359,10 +355,6 @@ export interface GetLocationResponse {
      * @generated from protobuf field: yatm.v1.LocationAccessibility accessibility = 2
      */
     accessibility?: LocationAccessibility;
-    /**
-     * @generated from protobuf field: repeated string warnings = 4
-     */
-    warnings: string[];
 }
 /**
  * @generated from protobuf message yatm.v1.UpdateLocationResponse
@@ -376,10 +368,6 @@ export interface UpdateLocationResponse {
      * @generated from protobuf field: yatm.v1.LocationAccessibility accessibility = 2
      */
     accessibility?: LocationAccessibility;
-    /**
-     * @generated from protobuf field: repeated string warnings = 4
-     */
-    warnings: string[];
 }
 /**
  * @generated from protobuf message yatm.v1.ListLocationsRequest
@@ -1717,13 +1705,11 @@ class CreateLocationResponse$Type extends MessageType<CreateLocationResponse> {
     constructor() {
         super("yatm.v1.CreateLocationResponse", [
             { no: 1, name: "location", kind: "message", T: () => Location },
-            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility },
-            { no: 4, name: "warnings", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility }
         ]);
     }
     create(value?: PartialMessage<CreateLocationResponse>): CreateLocationResponse {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.warnings = [];
         if (value !== undefined)
             reflectionMergePartial<CreateLocationResponse>(this, message, value);
         return message;
@@ -1738,9 +1724,6 @@ class CreateLocationResponse$Type extends MessageType<CreateLocationResponse> {
                     break;
                 case /* yatm.v1.LocationAccessibility accessibility */ 2:
                     message.accessibility = LocationAccessibility.internalBinaryRead(reader, reader.uint32(), options, message.accessibility);
-                    break;
-                case /* repeated string warnings */ 4:
-                    message.warnings.push(reader.string());
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1760,9 +1743,6 @@ class CreateLocationResponse$Type extends MessageType<CreateLocationResponse> {
         /* yatm.v1.LocationAccessibility accessibility = 2; */
         if (message.accessibility)
             LocationAccessibility.internalBinaryWrite(message.accessibility, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* repeated string warnings = 4; */
-        for (let i = 0; i < message.warnings.length; i++)
-            writer.tag(4, WireType.LengthDelimited).string(message.warnings[i]);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1778,13 +1758,11 @@ class GetLocationResponse$Type extends MessageType<GetLocationResponse> {
     constructor() {
         super("yatm.v1.GetLocationResponse", [
             { no: 1, name: "location", kind: "message", T: () => Location },
-            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility },
-            { no: 4, name: "warnings", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility }
         ]);
     }
     create(value?: PartialMessage<GetLocationResponse>): GetLocationResponse {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.warnings = [];
         if (value !== undefined)
             reflectionMergePartial<GetLocationResponse>(this, message, value);
         return message;
@@ -1799,9 +1777,6 @@ class GetLocationResponse$Type extends MessageType<GetLocationResponse> {
                     break;
                 case /* yatm.v1.LocationAccessibility accessibility */ 2:
                     message.accessibility = LocationAccessibility.internalBinaryRead(reader, reader.uint32(), options, message.accessibility);
-                    break;
-                case /* repeated string warnings */ 4:
-                    message.warnings.push(reader.string());
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1821,9 +1796,6 @@ class GetLocationResponse$Type extends MessageType<GetLocationResponse> {
         /* yatm.v1.LocationAccessibility accessibility = 2; */
         if (message.accessibility)
             LocationAccessibility.internalBinaryWrite(message.accessibility, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* repeated string warnings = 4; */
-        for (let i = 0; i < message.warnings.length; i++)
-            writer.tag(4, WireType.LengthDelimited).string(message.warnings[i]);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1839,13 +1811,11 @@ class UpdateLocationResponse$Type extends MessageType<UpdateLocationResponse> {
     constructor() {
         super("yatm.v1.UpdateLocationResponse", [
             { no: 1, name: "location", kind: "message", T: () => Location },
-            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility },
-            { no: 4, name: "warnings", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
+            { no: 2, name: "accessibility", kind: "message", T: () => LocationAccessibility }
         ]);
     }
     create(value?: PartialMessage<UpdateLocationResponse>): UpdateLocationResponse {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.warnings = [];
         if (value !== undefined)
             reflectionMergePartial<UpdateLocationResponse>(this, message, value);
         return message;
@@ -1860,9 +1830,6 @@ class UpdateLocationResponse$Type extends MessageType<UpdateLocationResponse> {
                     break;
                 case /* yatm.v1.LocationAccessibility accessibility */ 2:
                     message.accessibility = LocationAccessibility.internalBinaryRead(reader, reader.uint32(), options, message.accessibility);
-                    break;
-                case /* repeated string warnings */ 4:
-                    message.warnings.push(reader.string());
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1882,9 +1849,6 @@ class UpdateLocationResponse$Type extends MessageType<UpdateLocationResponse> {
         /* yatm.v1.LocationAccessibility accessibility = 2; */
         if (message.accessibility)
             LocationAccessibility.internalBinaryWrite(message.accessibility, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
-        /* repeated string warnings = 4; */
-        for (let i = 0; i < message.warnings.length; i++)
-            writer.tag(4, WireType.LengthDelimited).string(message.warnings[i]);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

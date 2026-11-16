@@ -95,12 +95,6 @@ LOGICAL. AUTO requests a bounded permutation only with an eligible provider; unk
 freshness or costs preserve the complete logical selection. Eligible LTFS uses the same planner
 and retains native file paths; optional raw observations finish before its mount.
 
-Position-map refresh is an explicit read-preparation action for tar Restore and VERIFY_COPIES.
-Known LTFS, Volume and other Scan policies reject it before physical preparation.
-A missing qualified non-ejecting reload/freshness contract rejects the action before motion; AUTO
-never implicitly requests it. The [position-map refresh contract](read-planning.md#position-map-refresh) owns provider
-eligibility and source-boundary settlement.
-
 A read Media hint selects existing frozen work; it cannot supply expected identity/profile.
 Restore rejects hints outside pending candidates and Scan rejects a hint different from its
 configured Media before device access. Automatic identification and manual hints have the same

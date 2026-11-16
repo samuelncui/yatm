@@ -23,7 +23,6 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [opening, setOpening] = useState(false);
   const [volumes, setVolumes] = useState<Media[]>([]);
-  const [volumeHasMore, setVolumeHasMore] = useState(false);
   const [volumeLoading, setVolumeLoading] = useState(false);
   const [backend, setBackend] = useState<"tape" | "volume">("volume");
   const [volumeUUID, setVolumeUUID] = useState("");
@@ -39,18 +38,22 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
     };
   }, []);
 
-  const loadVolumes = async (reset: boolean, sequence = request.current) => {
-    if (!reset && loadingVolumes.current) return;
+  // The Volume choice lists every registered Volume, reading all pages before it settles.
+  const loadVolumes = async (sequence = request.current) => {
+    if (loadingVolumes.current) return;
     loadingVolumes.current = true;
     setVolumeLoading(true);
     try {
-      const current = reset ? [] : volumes;
-      const reply = await mediaCli.list({
-        param: { oneofKind: "list", list: { kinds: [MediaKind.VOLUME], offset: BigInt(current.length), limit: 100n, query: "" } },
-      }).response;
-      if (sequence !== request.current) return;
-      setVolumes(reset ? reply.media : [...current, ...reply.media]);
-      setVolumeHasMore(reply.hasMore);
+      const loaded: Media[] = [];
+      for (let more = true; more;) {
+        const reply = await mediaCli.list({
+          param: { oneofKind: "list", list: { kinds: [MediaKind.VOLUME], offset: BigInt(loaded.length), limit: 100n, query: "" } },
+        }).response;
+        if (sequence !== request.current) return;
+        loaded.push(...reply.media);
+        setVolumes(loaded.slice());
+        more = reply.hasMore && reply.media.length > 0;
+      }
     } catch (reason) {
       if (sequence === request.current) setSubmitError(errorMessage(reason, "Could not load archive volumes"));
     } finally {
@@ -60,12 +63,13 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
       }
     }
   };
+
   const open = async () => {
     const sequence = ++request.current;
     setDialogOpen(true);
     setOpening(true);
     setSubmitError("");
-    await Promise.allSettled([tape.load(), loadVolumes(true, sequence)]);
+    await Promise.allSettled([tape.load(), loadVolumes(sequence)]);
     if (sequence === request.current) setOpening(false);
   };
   const resetDialog = () => {
@@ -76,7 +80,6 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
     setDialogOpen(false);
     setOpening(false);
     setVolumes([]);
-    setVolumeHasMore(false);
     setBackend("volume");
     setVolumeUUID("");
     setSubmitting(false);
@@ -145,15 +148,7 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
               <MenuItem value="volume">Mounted Volume</MenuItem>
             </TextField>
             {backend === "volume" ? (
-              <VolumeChoice
-                volumes={volumes}
-                value={volumeUUID}
-                hasMore={volumeHasMore}
-                loading={volumeLoading}
-                disabled={submitting}
-                onChange={setVolumeUUID}
-                onLoadMore={() => void loadVolumes(false)}
-              />
+              <VolumeChoice volumes={volumes} value={volumeUUID} loading={volumeLoading} disabled={submitting} onChange={setVolumeUUID} />
             ) : (
               <ArchiveTapeFields tape={tape} submitting={submitting} />
             )}
@@ -176,19 +171,15 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
 const VolumeChoice = ({
   volumes,
   value,
-  hasMore,
   loading,
   disabled,
   onChange,
-  onLoadMore,
 }: {
   volumes: Media[];
   value: string;
-  hasMore: boolean;
   loading: boolean;
   disabled: boolean;
   onChange: (uuid: string) => void;
-  onLoadMore: () => void;
 }) => (
   <>
     <TextField select required margin="normal" label="Volume" fullWidth disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
@@ -198,11 +189,6 @@ const VolumeChoice = ({
         </MenuItem>
       ))}
     </TextField>
-    {hasMore && (
-      <Button disabled={loading} onClick={onLoadMore}>
-        Load More
-      </Button>
-    )}
-    {volumes.length === 0 && <Alert severity="info">Initialize a mounted Volume from Library → Media first.</Alert>}
+    {!loading && volumes.length === 0 && <Alert severity="info">Initialize a mounted Volume from Library → Media first.</Alert>}
   </>
 );

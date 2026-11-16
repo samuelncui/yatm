@@ -21,16 +21,9 @@ const (
 	ReadWrapReverse
 )
 
-// ReadEndpointConvention specifies whether a reported full-wrap endpoint includes its final object.
-type ReadEndpointConvention uint8
-
-const (
-	ReadEndpointInclusive ReadEndpointConvention = iota + 1
-	ReadEndpointExclusive
-)
-
 // ReadModelWrap occurs in the profile's complete, declared traversal order within its partition.
 // A missing descriptor remains an entry with Endpoint nil; Full declares a full-span model interval.
+// Endpoint is exclusive: the first logical object after the wrap, or actual EOD for a partial wrap.
 type ReadModelWrap struct {
 	Partition, Wrap, Band uint32
 	Direction             ReadWrapDirection
@@ -54,7 +47,6 @@ type ReadModelCoefficients struct {
 type ReadModelProfile struct {
 	ID               string
 	SnapshotValid    func() bool
-	Boundary         ReadEndpointConvention
 	BOT              map[uint32]uint64
 	Wraps            []ReadModelWrap
 	MinLPOS, MaxLPOS uint64
@@ -85,12 +77,9 @@ type ReadCostModel struct {
 
 // NewReadCostModel validates and copies a profile without certifying its physical evidence.
 func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
-	// Missing identity/lifetime or an unspecified interpretation cannot define even a structural model.
+	// Missing identity or lifetime cannot define even a structural model.
 	if strings.TrimSpace(profile.ID) == "" || profile.SnapshotValid == nil {
 		return nil, errors.New("read cost profile requires identity and snapshot lifetime")
-	}
-	if profile.Boundary != ReadEndpointInclusive && profile.Boundary != ReadEndpointExclusive {
-		return nil, errors.New("read cost profile requires an explicit endpoint convention")
 	}
 	if len(profile.Wraps) == 0 || uint64(len(profile.Wraps)) > math.MaxUint32 {
 		return nil, errors.New("read cost profile has no representable traversal")
@@ -155,9 +144,9 @@ func NewReadCostModel(profile ReadModelProfile) (*ReadCostModel, error) {
 		before, exists := previous[wrap.Partition]
 		low, known := profile.BOT[wrap.Partition]
 		if exists {
-			low, known = readWrapEnd(before, profile.Boundary)
+			low, known = readWrapEnd(before)
 		}
-		high, covered := readWrapEnd(wrap, profile.Boundary)
+		high, covered := readWrapEnd(wrap)
 		span := uint64(0)
 		if wrap.EstimatedSpanObjects != nil {
 			if !model.normalized || wrap.Full || wrap.Endpoint == nil || last[wrap.Partition] != i ||
@@ -223,15 +212,9 @@ func readDirection(value ReadWrapDirection) bool {
 	return value == ReadWrapForward || value == ReadWrapReverse
 }
 
-func readWrapEnd(wrap ReadModelWrap, convention ReadEndpointConvention) (uint64, bool) {
+func readWrapEnd(wrap ReadModelWrap) (uint64, bool) {
 	if !wrap.Full || wrap.Endpoint == nil {
 		return 0, false
-	}
-	if convention == ReadEndpointInclusive {
-		if *wrap.Endpoint == math.MaxUint64 {
-			return 0, false
-		}
-		return *wrap.Endpoint + 1, true
 	}
 	return *wrap.Endpoint, true
 }

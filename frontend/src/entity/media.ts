@@ -174,6 +174,8 @@ export interface TapePositionWrap {
      */
     full: boolean;
     /**
+     * Exclusive end: the first logical object after this wrap, or actual EOD for a partial wrap.
+     *
      * @generated from protobuf field: optional uint64 endpoint = 6
      */
     endpoint?: bigint;
@@ -215,10 +217,6 @@ export interface TapePositionMap {
      * @generated from protobuf field: repeated yatm.v1.TapePositionWrap wraps = 5
      */
     wraps: TapePositionWrap[];
-    /**
-     * @generated from protobuf field: yatm.v1.TapePositionEndpointConvention endpoint_convention = 6
-     */
-    endpointConvention: TapePositionEndpointConvention;
     /**
      * @generated from protobuf field: string source = 7
      */
@@ -402,13 +400,7 @@ export interface ReadTapeTarget {
      *
      * @generated from protobuf field: optional int64 media_id = 2
      */
-    mediaId?: bigint;
-    /**
-     * Explicit qualified preparation for tar Restore and VERIFY_COPIES only.
-     *
-     * @generated from protobuf field: bool refresh_position_map = 3
-     */
-    refreshPositionMap: boolean;
+    mediaId?: bigint; // Explicit qualified preparation for tar Restore and VERIFY_COPIES only.
 }
 /**
  * @generated from protobuf message yatm.v1.ReadVolumeTarget
@@ -561,23 +553,6 @@ export enum TapePositionDirection {
      * @generated from protobuf enum value: TAPE_POSITION_DIRECTION_REVERSE = 2;
      */
     REVERSE = 2
-}
-/**
- * @generated from protobuf enum yatm.v1.TapePositionEndpointConvention
- */
-export enum TapePositionEndpointConvention {
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_ENDPOINT_CONVENTION_UNSPECIFIED = 0;
-     */
-    UNSPECIFIED = 0,
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE = 1;
-     */
-    INCLUSIVE = 1,
-    /**
-     * @generated from protobuf enum value: TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE = 2;
-     */
-    EXCLUSIVE = 2
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class Capabilities$Type extends MessageType<Capabilities> {
@@ -1128,7 +1103,6 @@ class TapePositionMap$Type extends MessageType<TapePositionMap> {
             { no: 3, name: "ltfs_index_generation", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 4, name: "partitions", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapePositionPartition },
             { no: 5, name: "wraps", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => TapePositionWrap },
-            { no: 6, name: "endpoint_convention", kind: "enum", T: () => ["yatm.v1.TapePositionEndpointConvention", TapePositionEndpointConvention, "TAPE_POSITION_ENDPOINT_CONVENTION_"] },
             { no: 7, name: "source", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 8, name: "min_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 9, name: "max_lpos", kind: "scalar", opt: true, T: 4 /*ScalarType.UINT64*/, L: 0 /*LongType.BIGINT*/ },
@@ -1141,7 +1115,6 @@ class TapePositionMap$Type extends MessageType<TapePositionMap> {
         message.ltfsUuid = "";
         message.partitions = [];
         message.wraps = [];
-        message.endpointConvention = 0;
         message.source = "";
         message.observedAtNs = 0n;
         if (value !== undefined)
@@ -1167,9 +1140,6 @@ class TapePositionMap$Type extends MessageType<TapePositionMap> {
                     break;
                 case /* repeated yatm.v1.TapePositionWrap wraps */ 5:
                     message.wraps.push(TapePositionWrap.internalBinaryRead(reader, reader.uint32(), options));
-                    break;
-                case /* yatm.v1.TapePositionEndpointConvention endpoint_convention */ 6:
-                    message.endpointConvention = reader.int32();
                     break;
                 case /* string source */ 7:
                     message.source = reader.string();
@@ -1210,9 +1180,6 @@ class TapePositionMap$Type extends MessageType<TapePositionMap> {
         /* repeated yatm.v1.TapePositionWrap wraps = 5; */
         for (let i = 0; i < message.wraps.length; i++)
             TapePositionWrap.internalBinaryWrite(message.wraps[i], writer.tag(5, WireType.LengthDelimited).fork(), options).join();
-        /* yatm.v1.TapePositionEndpointConvention endpoint_convention = 6; */
-        if (message.endpointConvention !== 0)
-            writer.tag(6, WireType.Varint).int32(message.endpointConvention);
         /* string source = 7; */
         if (message.source !== "")
             writer.tag(7, WireType.LengthDelimited).string(message.source);
@@ -1661,14 +1628,12 @@ class ReadTapeTarget$Type extends MessageType<ReadTapeTarget> {
     constructor() {
         super("yatm.v1.ReadTapeTarget", [
             { no: 1, name: "device", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "media_id", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 3, name: "refresh_position_map", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+            { no: 2, name: "media_id", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ }
         ]);
     }
     create(value?: PartialMessage<ReadTapeTarget>): ReadTapeTarget {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.device = "";
-        message.refreshPositionMap = false;
         if (value !== undefined)
             reflectionMergePartial<ReadTapeTarget>(this, message, value);
         return message;
@@ -1683,9 +1648,6 @@ class ReadTapeTarget$Type extends MessageType<ReadTapeTarget> {
                     break;
                 case /* optional int64 media_id */ 2:
                     message.mediaId = reader.int64().toBigInt();
-                    break;
-                case /* bool refresh_position_map */ 3:
-                    message.refreshPositionMap = reader.bool();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1705,9 +1667,6 @@ class ReadTapeTarget$Type extends MessageType<ReadTapeTarget> {
         /* optional int64 media_id = 2; */
         if (message.mediaId !== undefined)
             writer.tag(2, WireType.Varint).int64(message.mediaId);
-        /* bool refresh_position_map = 3; */
-        if (message.refreshPositionMap !== false)
-            writer.tag(3, WireType.Varint).bool(message.refreshPositionMap);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

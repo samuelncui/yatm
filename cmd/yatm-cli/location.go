@@ -44,7 +44,7 @@ type locationDeleteCommand struct {
 
 type analyzeCreateCommand struct {
 	runtime       *runtime
-	Priority      int64      `long:"priority" default:"0" description:"Job priority"`
+	Priority      int64      `long:"priority" default:"1" description:"Job priority"`
 	Mode          string     `long:"mode" choice:"incremental" choice:"basic" choice:"force" default:"incremental" description:"Content analysis policy"`
 	Paths         []string   `long:"path" description:"Selected relative file or directory; repeat for multiple roots"`
 	PreviewPolicy string     `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
@@ -170,9 +170,6 @@ func (c *analyzeCreateCommand) Execute(_ []string) error {
 	// Validate optional policies locally before creating an asynchronous Job.
 	if err := positiveID("Location ID", c.Args.ID); err != nil {
 		return err
-	}
-	if c.Priority < 0 {
-		return usageError(fmt.Errorf("Job priority must not be negative"))
 	}
 	preview, err := parsePreviewPolicy(c.PreviewPolicy)
 	if err != nil {

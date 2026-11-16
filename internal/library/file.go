@@ -404,17 +404,13 @@ func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*Fil
 
 func listFileRowParents(tx *gorm.DB, id int64) ([]*File, error) {
 	// Return a complete bounded ancestry or an error, never a truncated apparent root.
+	// The depth bound also ends a corrupted cyclic ancestry.
 	result := make([]*File, 0, 3)
-	seen := make(map[int64]struct{})
 	currentID := id
 	for currentID != 0 {
-		if _, exists := seen[currentID]; exists {
-			return nil, fmt.Errorf("File ancestry contains a cycle, file_id=%d", currentID)
-		}
 		if len(result) >= maxFilePathDepth {
 			return nil, fmt.Errorf("File ancestry exceeds %d levels", maxFilePathDepth)
 		}
-		seen[currentID] = struct{}{}
 		files, err := readFileRows(tx, currentID)
 		if err != nil {
 			return nil, err

@@ -341,7 +341,10 @@ func (s *copyItems) reuseOutput(ctx context.Context, copy *copyCandidate) (bool,
 		}
 		return true, s.runner.stageOutput(ctx, copy, copy.Hash, copy.Size, false)
 	}
-	if exists {
+
+	// Other content at an unclaimed name is a conflict decided when the output is created; a
+	// claimed path holds only this Job's empty output until ACP replaces it.
+	if exists && output.ReadMediaID != 0 && !s.runner.emptyOutput(copy.TargetPath) {
 		return false, &restoreItemError{fmt.Errorf("reserved Restore output changed: %q", copy.TargetPath)}
 	}
 	return false, nil
@@ -369,7 +372,10 @@ func (s *copyItems) resolve(ctx context.Context, copy *copyCandidate) (acp.Item,
 		}
 		return nil, &restoreItemError{fmt.Errorf("resolve Restore Media source failed, path=%q, %w", copy.MediaPath, err)}
 	}
-	// Reserve the output before ACP enters its transfer lifecycle.
+	// Create and record the output before ACP enters its transfer lifecycle.
+	if err := s.runner.claimOutput(ctx, copy); err != nil {
+		return nil, err
+	}
 	if err := s.runner.beginOutput(ctx, copy); err != nil {
 		return nil, err
 	}
@@ -426,10 +432,12 @@ func (a *jobRestoreRunner) storeCompletion(
 		if err := a.observeReadFailure(ctx, job.copy, result.Err); err != nil {
 			return err
 		}
+		a.releaseOutput(ctx, job.copy)
 		return itemFailure(job, result.Err)
 	}
 	damaged, err := a.completeCopy(ctx, job, result)
 	if err != nil {
+		a.releaseOutput(ctx, job.copy)
 		return err
 	}
 	// Staged verified bytes carry the version's metadata, which a later attempt compares instead of rereading.

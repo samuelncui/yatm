@@ -60,12 +60,23 @@ type MatchCandidate struct {
 	Hash []byte
 }
 
+// Pending is an unassigned observation whose evidence selects relocation candidates.
+type Pending struct {
+	Path      string
+	Signature []byte
+	Evidence  Evidence
+}
+
 // MatchStore is the persistence seam between continuity policy and an owning manifest.
 // Implementations scope every operation to the same staged observation set.
 type MatchStore interface {
 	FileClaimed(context.Context, int64) (bool, error)
 	FindCandidate(context.Context, MatchCriteria) (*MatchCandidate, error)
 	Assign(context.Context, int64, int64, []byte) error
+	// Pending pages unassigned, present observations in path order after the given path.
+	Pending(context.Context, string, int) ([]Pending, error)
+	// Observed reports which of the paths the manifest holds, including positively absent ones.
+	Observed(context.Context, []string) (map[string]bool, error)
 }
 
 // Match assigns existing File identities only after the caller stages the complete eligible scope.

@@ -22,6 +22,7 @@ import (
 	scanjob "github.com/samuelncui/yatm/internal/executor/scan"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
+	"github.com/samuelncui/yatm/internal/preview"
 	previewpkg "github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
@@ -60,7 +61,9 @@ func (archivePreviewer) Generate(context.Context, string, []byte, int64, int64, 
 func (archivePreviewer) Manifest([]byte) (*entity.PreviewManifest, error) { return nil, os.ErrNotExist }
 func (archivePreviewer) Exists([]byte) (bool, error)                      { return false, nil }
 
-func (archivePreviewer) Open([]byte, string) (io.ReadCloser, error) { return nil, os.ErrNotExist }
+func (archivePreviewer) Open([]byte, string) (*preview.OpenedAsset, error) {
+	return nil, os.ErrNotExist
+}
 
 func (capacityBoundarySession) Capabilities() mediapkg.Capabilities { return mediapkg.Capabilities{} }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
@@ -20,7 +19,7 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	if library.IsLocationTrashPath(req.Reference.Path) {
 		return nil, status.Error(codes.FailedPrecondition, "move the file out of Trash before associating it")
 	}
-	location, _, info, err := s.api.exe.ResolveLocationEntry(ctx, req.Reference)
+	location, full, info, err := s.api.exe.ResolveLocationEntry(ctx, req.Reference)
 	if err != nil {
 		return nil, err
 	}
@@ -29,12 +28,12 @@ func (s *filesService) RelocateOriginal(ctx context.Context, req *entity.Relocat
 	}
 
 	// Publish the selected path's current facts without changing its bytes.
-	mtime, err := dataformat.Nanoseconds(info.ModTime())
+	facts, err := executor.InspectLocationFacts(info)
 	if err != nil {
-		return nil, fmt.Errorf("observe original mtime failed, path=%q, %w", req.Reference.Path, err)
+		return nil, fmt.Errorf("observe original failed, path=%q, %w", req.Reference.Path, err)
 	}
-	keys := executor.ObserveTracking(location, info)
-	observation := &library.ObservedEntry{Path: req.Reference.Path, Size: info.Size(), Mode: uint32(info.Mode()), MtimeNS: mtime, TrackingKeys: keys}
+	observation := &library.ObservedEntry{Path: req.Reference.Path, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs,
+		TrackingKeys: executor.NewTracker().Observe(full, info)}
 	if err := s.api.lib.RelocateOriginal(ctx, req.FileId, location.ID, observation); err != nil {
 		return nil, err
 	}

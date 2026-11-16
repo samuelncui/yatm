@@ -36,7 +36,7 @@ func TestRestoreTarHintUsesOnlyPendingFrozenCandidate(t *testing.T) {
 	require.NoError(t, runner.db.First(&frozen).Error)
 	profile := (&entity.TapeMediaProfile{Format: library.TapeFormatTarPAXV1, Tar: &entity.TarMediaProfile{InitializationId: "11111111-1111-4111-8111-111111111111", RecordMode: entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE, RecordBytes: 262144}}).Pack()
 	require.NoError(t, runner.db.Model(&Copy{}).Where("id = ?", frozen.ID).Update("media_profile", profile).Error)
-	request := (&entity.ReadTapeTarget{Device: " /dev/nst0 ", MediaId: proto.Int64(frozen.MediaID), RefreshPositionMap: true}).Pack()
+	request := (&entity.ReadTapeTarget{Device: " /dev/nst0 ", MediaId: proto.Int64(frozen.MediaID)}).Pack()
 	request.ExpectedIdentity = "CLIENT"
 	request.ExpectedMediaId = 99
 	request.ExpectedProfile = (&entity.TapeMediaProfile{Format: "ltfs_v1"}).Pack()
@@ -63,7 +63,6 @@ func TestRestoreTarHintUsesOnlyPendingFrozenCandidate(t *testing.T) {
 	require.Eventually(t, func() bool { return !exe.IsRunning(job.ID) }, 5*time.Second, time.Millisecond)
 	require.Equal(t, "/dev/nst0", selected.GetTape().Device)
 	require.EqualValues(t, frozen.MediaID, selected.GetTape().GetMediaId())
-	require.True(t, selected.GetTape().RefreshPositionMap)
 	require.EqualValues(t, frozen.MediaID, selected.ExpectedMediaId)
 	require.Equal(t, "TAR001", selected.ExpectedIdentity)
 	require.True(t, proto.Equal(profile, selected.ExpectedProfile))
@@ -78,24 +77,6 @@ func TestRestoreTarHintUsesOnlyPendingFrozenCandidate(t *testing.T) {
 	_, err = runner.frozenReadTarget(ctx, request)
 	require.ErrorContains(t, err, "no frozen pending")
 	require.NoFileExists(t, marker)
-}
-
-func TestRestoreRefreshRejectsKnownLTFSBeforeDeviceAccess(t *testing.T) {
-	// Only frozen tar selections authorize refresh; neither explicit nor all-LTFS selection needs an adapter probe.
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "copies.db"))
-	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Copy{}))
-	require.NoError(t, db.Create(&Copy{ID: 1, ItemID: 1, MediaID: 1, MediaIdentity: "LTFS01",
-		Status: entity.CopyStatus_COPY_STATUS_PENDING, MediaProfile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV0}).Pack()}).Error)
-	runner := &jobRestoreRunner{db: db}
-	for _, hint := range []*int64{nil, proto.Int64(1)} {
-		_, err := runner.frozenReadTarget(context.Background(), (&entity.ReadTapeTarget{
-			Device: "/dev/nst0", MediaId: hint, RefreshPositionMap: true,
-		}).Pack())
-		require.ErrorContains(t, err, "refresh requires tar")
-	}
-	_, err = runner.selectFrozenTapeMedia(context.Background(), &entity.ReadTapeTarget{RefreshPositionMap: true}, "LTFS01")
-	require.ErrorContains(t, err, "refresh requires tar")
 }
 
 func TestRestoreAutomaticSelectionUsesOnlyFrozenPendingFacts(t *testing.T) {

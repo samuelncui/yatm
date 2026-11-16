@@ -131,6 +131,11 @@ func callRPC[Request, Reply any](
 		connect.WithGRPCWeb(),
 	)
 	response, err := client.CallUnary(ctx, connect.NewRequest(request))
+	if connect.CodeOf(err) == connect.CodeInvalidArgument {
+		// The server owns request validation; its rejection is a usage error like a local one.
+		return nil, &commandError{code: connect.CodeInvalidArgument.String(), exit: exitUsage,
+			err: fmt.Errorf("call RPC failed, method=%q, %w", method, err)}
+	}
 	if err != nil {
 		return nil, runtimeError(
 			connect.CodeOf(err).String(),

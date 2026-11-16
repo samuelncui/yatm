@@ -99,9 +99,10 @@ describe("Jobs filters", () => {
   });
 });
 
-it("retains Media pages and retries a failed continuation at the same offset", async () => {
+it("reads every Media page and retries a failed listing from its start", async () => {
   media.mockReturnValueOnce({ response: Promise.resolve({ media: [volume], hasMore: true }) });
   media.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Next page unavailable")) }));
+  media.mockReturnValueOnce({ response: Promise.resolve({ media: [volume], hasMore: true }) });
   media.mockReturnValueOnce({ response: Promise.resolve({ media: [Media.create({ id: 8n, name: "Second" })], hasMore: false }) });
   render(
     <MemoryRouter>
@@ -110,17 +111,15 @@ it("retains Media pages and retries a failed continuation at the same offset", a
   );
   const input = screen.getByRole("combobox", { name: "Resource" });
   await userEvent.click(input);
-  await userEvent.click(await screen.findByRole("option", { name: "Load more resources…" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Next page unavailable");
-  await userEvent.click(input);
-  expect(screen.getByRole("option", { name: "Media · Archive" })).toBeVisible();
-  expect(media).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("option", { name: "Load more resources…" })).not.toBeInTheDocument();
   await userEvent.keyboard("{Escape}");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Next page unavailable");
+  expect(media).toHaveBeenCalledTimes(2);
   await userEvent.click(screen.getByRole("button", { name: "Retry" }));
   await userEvent.click(input);
   expect(await screen.findByRole("option", { name: "Media · Second" })).toBeVisible();
   expect(screen.getByRole("option", { name: "Media · Archive" })).toBeVisible();
-  expect(media).toHaveBeenCalledTimes(3);
-  for (const [request] of media.mock.calls.slice(1)) expect(request.param.list.offset).toBe(1n);
+  expect(media).toHaveBeenCalledTimes(4);
+  expect(media.mock.calls.map(([request]) => request.param.list.offset)).toEqual([0n, 1n, 0n, 1n]);
   expect(locations).toHaveBeenCalledOnce();
 });

@@ -132,9 +132,6 @@ const fixture = async (page: Page) => {
     settingsUpdates: 0,
     requireHint: false,
     scanResultPolicy: ScanResultPolicy.VERIFY_COPIES,
-    qualifiedReload: false,
-    reloadSupport: DeviceFeatureSupport.SUPPORTED,
-    reloadValidation: undefined as DeviceFeatureValidation | undefined,
     unexpected: [] as string[],
   };
   await page.route("**/services/**", async (route) => {
@@ -186,13 +183,6 @@ const fixture = async (page: Page) => {
                       validation: DeviceFeatureValidation.UNVALIDATED,
                       availability: DeviceFeatureAvailability.UNAVAILABLE,
                       detail: "No qualified geometry/timing model; Auto falls back to Logical",
-                    }),
-                    DeviceFeature.create({
-                      feature: DeviceFeatureKind.NON_EJECTING_RELOAD,
-                      support: state.reloadSupport,
-                      availability: state.qualifiedReload ? DeviceFeatureAvailability.READY : DeviceFeatureAvailability.UNAVAILABLE,
-                      validation: state.reloadValidation ?? (state.qualifiedReload ? DeviceFeatureValidation.VALIDATED : DeviceFeatureValidation.UNVALIDATED),
-                      detail: "Non-ejecting reload is not physically qualified",
                     }),
                   ],
                 },
@@ -513,7 +503,7 @@ for (const viewport of [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "narrow", width: 390, height: 844 },
 ]) {
-  test(`tar read preparation scopes refresh and reports unqualified Auto on ${viewport.name}`, async ({ page }, testInfo) => {
+  test(`tar read preparation reports unqualified Auto on ${viewport.name}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     const state = await fixture(page);
     for (const [id, openName, startName] of [
@@ -525,14 +515,9 @@ for (const viewport of [
       await page.getByRole("button", { name: openName, exact: true }).click();
       const dialog = page.getByRole("dialog");
       await select(page, dialog, "Tape device", "drive-a");
-      await dialog.getByRole("button", { name: /^Advanced/ }).click();
-      const refresh = dialog.getByRole("checkbox", { name: "Refresh position map before reading" });
-      await expect(refresh).toBeDisabled();
       await expect(dialog.getByRole("button", { name: startName, exact: true })).toBeEnabled();
       await expect(page.getByRole("listbox")).toHaveCount(0);
-      await refresh.scrollIntoViewIfNeeded();
       await expectFits(dialog);
-      await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`tar-read-refresh-${id}-${viewport.name}.png`) });
       await dialog.getByRole("button", { name: "Device details", exact: true, expanded: false }).click();
       const details = dialog;
       await expect(details.getByText("No qualified geometry/timing model; Auto falls back to Logical")).toBeVisible();
@@ -542,119 +527,7 @@ for (const viewport of [
       await details.getByRole("button", { name: "Device details", exact: true, expanded: true }).click();
       await dialog.getByRole("button", { name: startName, exact: true }).click();
       await expect.poll(() => state.reads.length).toBe(id === 21 ? 1 : 2);
-      const submitted = state.reads.at(-1)!;
-      expect(submitted.backend.oneofKind === "tape" && submitted.backend.tape.refreshPositionMap).toBe(false);
-    }
-    // A qualified synthetic protocol fixture exercises the request action without qualifying real H6/H7/reload hardware.
-    state.qualifiedReload = true;
-    await page.getByRole("button", { name: "Choose Media to read", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await select(page, dialog, "Tape device", "drive-a");
-    await dialog.getByRole("button", { name: /^Advanced/ }).click();
-    await dialog.getByRole("checkbox", { name: "Refresh position map before reading" }).check();
-    await dialog.getByRole("button", { name: "Start reading", exact: true }).click();
-    await expect.poll(() => state.reads.length).toBe(3);
-    const refreshed = state.reads.at(-1)!;
-    expect(refreshed.backend.oneofKind === "tape" && refreshed.backend.tape.refreshPositionMap).toBe(true);
-    state.scanResultPolicy = ScanResultPolicy.PUBLISH_INVENTORY;
-    await page.getByRole("button", { name: "Choose Media to read", exact: true }).click();
-    await select(page, dialog, "Tape device", "drive-a");
-    await expect(dialog.getByRole("button", { name: "Start reading", exact: true })).toBeEnabled();
-    await expect(dialog.getByRole("checkbox", { name: "Refresh position map before reading" })).toHaveCount(0);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    for (const format of ["ltfs_v0", "ltfs_v1"]) {
-      state.readTape = Media.create({ ...ltfsTape, profile: { kind: { oneofKind: "tape", tape: TapeMediaProfile.create({ format }) } } });
-      await page.goto("/jobs/21");
-      await expect(page.getByText("Tar cartridge: pending", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Choose archive storage to read", exact: true }).click();
-      await select(page, dialog, "Tape device", "drive-a");
-      await expect(dialog.getByRole("button", { name: "Start restore", exact: true })).toBeEnabled();
-      await expect(dialog.getByRole("checkbox", { name: "Refresh position map before reading" })).toHaveCount(0);
-      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     }
     expect(state.unexpected).toEqual([]);
   });
 }
-
-test("tar refresh accepts protocol eligibility independently of physical validation and read order", async ({ page }, testInfo) => {
-  const state = await fixture(page);
-  state.qualifiedReload = true;
-  const dialog = page.getByRole("dialog");
-  const refresh = dialog.getByRole("checkbox", { name: "Refresh position map before reading" });
-  const open = async (id: 21 | 22) => {
-    await page.goto(`/jobs/${id}`);
-    await page.getByRole("button", { name: id === 21 ? "Choose archive storage to read" : "Choose Media to read", exact: true }).click();
-    await select(page, dialog, "Tape device", "drive-a");
-    await expect(page.locator('[role="listbox"]')).toHaveCount(0);
-    const advanced = dialog.getByRole("button", { name: /^Advanced/ });
-    if (await advanced.count()) await advanced.click();
-  };
-  const submit = async (id: 21 | 22, expectedRefresh: boolean) => {
-    const previous = state.reads.length;
-    await dialog.getByRole("button", { name: id === 21 ? "Start restore" : "Start reading", exact: true }).click();
-    await expect.poll(() => state.reads.length).toBe(previous + 1);
-    const target = state.reads.at(-1)!;
-    expect(target.backend.oneofKind === "tape" && target.backend.tape.refreshPositionMap).toBe(expectedRefresh);
-    await expect(dialog).toHaveCount(0);
-  };
-
-  // Both non-FAILED observations allow an explicit action; opening either form still leaves it off.
-  for (const [id, validation] of [
-    [21, DeviceFeatureValidation.UNVALIDATED],
-    [22, DeviceFeatureValidation.UNSPECIFIED],
-  ] as const) {
-    state.reloadValidation = validation;
-    await open(id);
-    await expect(refresh).toBeEnabled();
-    await expect(refresh).not.toBeChecked();
-    await expect(dialog.getByText(/The map is not guaranteed to be fresh/)).toBeVisible();
-    await refresh.check();
-    await expectFits(dialog);
-    await page.screenshot({ animations: "disabled", path: testInfo.outputPath(`tar-refresh-explicit-${validation}.png`) });
-    await submit(id, true);
-  }
-
-  // Failed validation and unsupported protocol keep ordinary reading available without refresh.
-  for (const [support, validation] of [
-    [DeviceFeatureSupport.SUPPORTED, DeviceFeatureValidation.FAILED],
-    [DeviceFeatureSupport.UNSUPPORTED, DeviceFeatureValidation.UNVALIDATED],
-  ] as const) {
-    state.reloadSupport = support;
-    state.reloadValidation = validation;
-    await open(21);
-    await expect(refresh).toBeDisabled();
-    await expect(refresh).not.toBeChecked();
-    await expect(dialog.getByRole("button", { name: "Start restore", exact: true })).toBeEnabled();
-    await submit(21, false);
-  }
-
-  // Saving Auto through the rendered Settings form never selects the separate preparation action.
-  state.reloadSupport = DeviceFeatureSupport.SUPPORTED;
-  state.reloadValidation = DeviceFeatureValidation.UNVALIDATED;
-  await page.goto("/settings/devices");
-  await select(page, page, "Read order", "Auto");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Device settings saved.")).toBeVisible();
-  expect(state.settings.devices[0].options.oneofKind === "tape" && state.settings.devices[0].options.tape.readOrder).toBe(TapeReadOrder.AUTO);
-  await open(21);
-  await expect(refresh).toBeEnabled();
-  await expect(refresh).not.toBeChecked();
-  await submit(21, false);
-
-  // The same positive device report cannot expose refresh for inventory Scan or LTFS Restore.
-  state.scanResultPolicy = ScanResultPolicy.PUBLISH_INVENTORY;
-  await open(22);
-  await expect(refresh).toHaveCount(0);
-  await submit(22, false);
-  state.readTape = ltfsTape;
-  await open(21);
-  await expect(refresh).toHaveCount(0);
-  await submit(21, false);
-  expect(state.cartridgeInspections).toBe(1);
-  expect(state.writes).toEqual([]);
-  expect(state.unexpected).toEqual([]);
-  await testInfo.attach("refresh-submitted-targets.json", {
-    contentType: "application/json",
-    body: JSON.stringify({ targets: state.reads.map((target) => ReadMediaTarget.toJson(target)), settings: DeviceSettings.toJson(state.settings) }, null, 2),
-  });
-});

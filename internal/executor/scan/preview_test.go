@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,7 +62,7 @@ func (p *scanPreviewer) Exists(signature []byte) (bool, error) {
 	defer p.lock.Unlock()
 	return p.present[string(signature)], nil
 }
-func (*scanPreviewer) Open([]byte, string) (io.ReadCloser, error) { return nil, os.ErrNotExist }
+func (*scanPreviewer) Open([]byte, string) (*preview.OpenedAsset, error) { return nil, os.ErrNotExist }
 
 func TestScanKnownOnlyDoesNotHashUnknownPreviewSources(t *testing.T) {
 	for _, policy := range []entity.PreviewPolicy{entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, entity.PreviewPolicy_PREVIEW_POLICY_REGENERATE_ALL} {

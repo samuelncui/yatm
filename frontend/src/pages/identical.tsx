@@ -93,7 +93,6 @@ export const IdenticalFiles = () => {
   const [preferences, setPreferences] = useFileListPreferences("identical", initialPreferences);
   const sort = useMemo<IdenticalSort>(() => ({ key: IdenticalSortKey.SIZE, descending: preferences.descending }), [preferences.descending]);
   const [removed, setRemoved] = useState<Map<string, IdenticalPosition>>(new Map());
-  const [suppressedIds, setSuppressedIds] = useState<Set<string>>(new Set());
   const [removedGroups, setRemovedGroups] = useState<Set<string>>(new Set());
   const [removedGroupIntervals, setRemovedGroupIntervals] = useState<Map<string, ProjectionIntervals>>(new Map());
   const [changedGroups, setChangedGroups] = useState<Set<string>>(new Set());
@@ -120,12 +119,8 @@ export const IdenticalFiles = () => {
   const hiddenRequest = useRef(0);
   const sortRef = useRef(sort);
   const sorting = useRef(false);
-  const movedIds = useRef(new Set<bigint>());
   const resultSource = useRef<IdenticalSource | undefined>(undefined);
-  const reconciliation = useRef<{ result: IdenticalResult; ids: Set<bigint>; running: boolean } | undefined>(undefined);
   const mergeActive = useRef(0);
-  const activeStreams = useRef(new Map<string, number>());
-  const deferredClose = useRef(new Map<string, IdenticalResult>());
   const inFlightFiles = useRef(new Set<string>());
   const busyGroupRef = useRef(new Map<string, number>());
   const removeSlots = useRef(0);
@@ -172,7 +167,6 @@ export const IdenticalFiles = () => {
     sort.key,
     sort.descending,
     removed,
-    suppressedIds,
     removedGroups,
     removedGroupIntervals,
     changedGroups,
@@ -189,41 +183,18 @@ export const IdenticalFiles = () => {
   useEffect(() => {
     if (settingsError) toast.error(settingsError);
   }, [settingsError]);
+  // A superseded result closes at once; an operation still running on it updates only its own rows.
   const closeResult = useCallback((old?: IdenticalResult) => {
-    if (!old) return;
-    if (activeStreams.current.has(old.id)) {
-      deferredClose.current.set(old.id, old);
-      return;
-    }
-    void filesCli.closeIdenticalResult({ resultId: old.id }).response.catch(() => undefined);
+    if (old) void filesCli.closeIdenticalResult({ resultId: old.id }).response.catch(() => undefined);
   }, []);
-  const retainResult = useCallback(
-    (snapshot?: IdenticalResult) => {
-      if (!snapshot) return () => undefined;
-      activeStreams.current.set(snapshot.id, (activeStreams.current.get(snapshot.id) ?? 0) + 1);
-      return () => {
-        const count = (activeStreams.current.get(snapshot.id) ?? 1) - 1;
-        if (count) activeStreams.current.set(snapshot.id, count);
-        else {
-          activeStreams.current.delete(snapshot.id);
-          const old = deferredClose.current.get(snapshot.id);
-          deferredClose.current.delete(snapshot.id);
-          closeResult(old);
-        }
-      };
-    },
-    [closeResult],
-  );
   const clear = useCallback(() => {
     generation.current++;
     hiddenRequest.current++;
-    reconciliation.current = undefined;
     closeResult(resultRef.current);
     resultRef.current = undefined;
     resultSource.current = undefined;
     setResult(undefined);
     setRemoved(new Map());
-    setSuppressedIds(new Set());
     setRemovedGroups(new Set());
     setRemovedGroupIntervals(new Map());
     changedGroupRef.current = new Set();
@@ -299,61 +270,8 @@ export const IdenticalFiles = () => {
     [applyPositions, lookupPositions],
   );
 
-  const enqueueReconciliation = useCallback(
-    (current: IdenticalResult, ids: bigint[]) => {
-      if (!ids.length) return;
-      let queue = reconciliation.current;
-      if (!queue || queue.result.id !== current.id) {
-        queue = { result: current, ids: new Set<bigint>(), running: false };
-        reconciliation.current = queue;
-      }
-      for (const id of ids) queue.ids.add(id);
-      if (queue.running) return;
-      queue.running = true;
-      void (async () => {
-        try {
-          while (reconciliation.current === queue && queue.ids.size) {
-            const batch = [...queue.ids].slice(0, 100);
-            for (const id of batch) queue.ids.delete(id);
-            const reply = await lookupPositions({
-              resultId: current.id,
-              fileIds: batch,
-              sortKey: sortRef.current.key,
-              sortOrder: sortRef.current.descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
-            });
-            // A new Find may already reflect the physical operation, so missing IDs are expected.
-            if (resultRef.current?.id === current.id) applyPositions(reply.positions);
-          }
-        } catch (failure) {
-          if (resultRef.current?.id === current.id) {
-            invalidate();
-            toast.error(errorMessage(failure, "Could not update identical rows") + ". Find again.");
-          }
-        } finally {
-          queue.running = false;
-        }
-      })();
-    },
-    [applyPositions, invalidate, lookupPositions],
-  );
-  const noteMoved = useCallback(
-    (id: bigint, operationResult: IdenticalResult) => {
-      movedIds.current.add(id);
-      const current = resultRef.current;
-      if (!current || resultSource.current !== IdenticalSource.LOCATIONS) return;
-      setSuppressedIds((ids) => new Set(ids).add(String(id)));
-      if (current.id !== operationResult.id) enqueueReconciliation(current, [id]);
-    },
-    [enqueueReconciliation],
-  );
   const search = useCallback(async () => {
-    if (mergeActive.current) {
-      setError("Wait for Merge to finish before finding again.");
-      return;
-    }
     clear();
-    // The new Find supersedes earlier moves; track only moves reported from this point.
-    movedIds.current.clear();
     if (scope.source === IdenticalSource.LOCATIONS && !scope.roots.length) return;
     const request = generation.current;
     setLoading(true);
@@ -366,17 +284,13 @@ export const IdenticalFiles = () => {
       const found = { id: reply.resultId, allCount: Number(reply.allRowCount), visibleCount: Number(reply.visibleRowCount) };
       resultRef.current = found;
       resultSource.current = scope.source;
-      if (scope.source === IdenticalSource.LOCATIONS) {
-        setSuppressedIds(new Set([...movedIds.current].map(String)));
-        enqueueReconciliation(found, [...movedIds.current]);
-      }
       setResult(found);
     } catch (failure) {
       if (request === generation.current) setError(errorMessage(failure, "Could not find identical files"));
     } finally {
       if (request === generation.current) setLoading(false);
     }
-  }, [clear, closeResult, enqueueReconciliation, scope]);
+  }, [clear, closeResult, scope]);
 
   const switchHidden = useCallback(
     async (next: boolean) => {
@@ -404,7 +318,7 @@ export const IdenticalFiles = () => {
   const switchSort = useCallback(async () => {
     const snapshot = resultRef.current;
     if (!snapshot) return;
-    if (sorting.current || switchingHidden || mergeActive.current || busyGroupRef.current.size || reconciliation.current?.running) {
+    if (sorting.current || switchingHidden || mergeActive.current || busyGroupRef.current.size) {
       toast.error("Wait for the current operation to finish before sorting.");
       return;
     }
@@ -493,7 +407,6 @@ export const IdenticalFiles = () => {
         const groupId = row?.group?.id ?? "";
         const entry = row?.member?.entry;
         const selectedId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
-        const releaseResult = retainResult(snapshot);
         groupBusy(snapshot, groupId, 1);
         if (resultRef.current?.id === snapshot.id) {
           if (selectedId !== undefined)
@@ -519,7 +432,6 @@ export const IdenticalFiles = () => {
                 moved = true;
                 publicationPending ||= outcome.outcome === FileOperationOutcome.PUBLICATION_PENDING;
                 const id = outcome.fileId ?? selectedId;
-                if (id !== undefined) noteMoved(id, snapshot);
                 if (id === undefined || !row?.group) {
                   positionError = "Could not identify the removed row";
                   return;
@@ -574,7 +486,6 @@ export const IdenticalFiles = () => {
           })().finally(() => {
             inFlightFiles.current.delete(file.id);
             groupBusy(snapshot, groupId, -1);
-            releaseResult();
           }),
         );
       }
@@ -582,7 +493,7 @@ export const IdenticalFiles = () => {
       const failures = settled.flatMap((item) => (item.status === "rejected" ? [errorMessage(item.reason, "Delete failed")] : []));
       if (failures.length) throw new Error(failures.join("; "));
     },
-    [acquireRemoveSlot, applyPositions, fileRows, groupBusy, includeHidden, invalidate, lookupRemoved, noteMoved, retainResult, stream],
+    [acquireRemoveSlot, applyPositions, fileRows, groupBusy, includeHidden, invalidate, lookupRemoved, stream],
   );
 
   const keep = useCallback(
@@ -592,7 +503,6 @@ export const IdenticalFiles = () => {
       if (!snapshot || unavailableRef.current || changedGroupRef.current.has(group.id)) throw new Error("This group changed. Find again.");
       if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error("A file operation is already in progress for this group.");
       const findGeneration = generation.current;
-      const release = retainResult(snapshot);
       groupBusy(snapshot, group.id, 1);
       const ids: bigint[] = [];
       const lookups: Promise<void>[] = [];
@@ -625,7 +535,6 @@ export const IdenticalFiles = () => {
                 setKeepStatus((current) => new Map(current).set(String(entry.fileId), message));
             }
             if (entry.outcome === FileOperationOutcome.SUCCEEDED || entry.outcome === FileOperationOutcome.PUBLICATION_PENDING) {
-              noteMoved(entry.fileId, snapshot);
               ids.push(entry.fileId);
               if (ids.length >= 100) flush();
             }
@@ -653,10 +562,9 @@ export const IdenticalFiles = () => {
       if (resultRef.current?.id === snapshot?.id) setRevision((value) => value + 1);
       else if (!failure) toast.success("Keep completed");
       groupBusy(snapshot, group.id, -1);
-      release();
       if (failure) throw failure;
     },
-    [groupBusy, invalidate, lookupRemoved, markChanged, noteMoved, retainResult, scope, scopeKey, stream],
+    [groupBusy, invalidate, lookupRemoved, markChanged, scope, scopeKey, stream],
   );
 
   const actions = useMemo(() => {
@@ -796,7 +704,6 @@ export const IdenticalFiles = () => {
           if (!snapshot || resultRef.current?.id !== snapshot.id || unavailableRef.current || changedGroupRef.current.has(group.id))
             throw new Error("The result changed. Find again.");
           if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error("A file operation is already in progress for this group.");
-          const release = retainResult(snapshot);
           groupBusy(snapshot, group.id, 1);
           mergeActive.current++;
           setMergeBusy(true);
@@ -848,7 +755,6 @@ export const IdenticalFiles = () => {
             mergeActive.current--;
             setMergeBusy(mergeActive.current > 0);
             groupBusy(snapshot, group.id, -1);
-            release();
           }
         },
       });
@@ -891,7 +797,7 @@ export const IdenticalFiles = () => {
   return (
     <Box className="browser-box library-file-browser">
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-        <Button variant="contained" disabled={loading || mergeBusy || (source === IdenticalSource.LOCATIONS && !roots.length)} onClick={() => void search()}>
+        <Button variant="contained" disabled={loading || (source === IdenticalSource.LOCATIONS && !roots.length)} onClick={() => void search()}>
           Find
         </Button>
         <TextField

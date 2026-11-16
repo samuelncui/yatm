@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -214,8 +215,22 @@ func (d *LocationDirectoryReader) ReadEntries(ctx context.Context, visit func([]
 		return err
 	}
 	defer directory.Close()
-	return ReadLocationEntries(ctx, directory.ReadDir, visit)
+	return ReadLocationEntries(ctx, func(n int) ([]os.DirEntry, error) {
+		entries, err := directory.ReadDir(n)
+		for i, entry := range entries {
+			entries[i] = observedDirEntry{DirEntry: entry, full: filepath.Join(d.full, entry.Name())}
+		}
+		return entries, err
+	}, visit)
 }
+
+// observedDirEntry observes a child with the identity-bearing Lstat, at the same single stat.
+type observedDirEntry struct {
+	os.DirEntry
+	full string
+}
+
+func (e observedDirEntry) Info() (os.FileInfo, error) { return Lstat(e.full) }
 
 // ReadLocationEntries visits one opened directory in fixed 256-entry batches until its end,
 // stopping on cancellation, a read failure or the first visit failure.

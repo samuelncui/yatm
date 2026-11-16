@@ -3,7 +3,6 @@ package restore
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 
 	"github.com/samuelncui/yatm/entity"
@@ -33,7 +32,7 @@ func (a *jobRestoreRunner) completeOutput(ctx context.Context, copy *copyCandida
 			return err
 		}
 	}
-	info, err := os.Lstat(full)
+	info, err := executor.Lstat(full)
 	if err != nil {
 		return err
 	}
@@ -69,7 +68,7 @@ func (a *jobRestoreRunner) completeOutput(ctx context.Context, copy *copyCandida
 			Hash: copy.Hash, Size: copy.Size, Mode: copy.Mode, MtimeNS: copy.MtimeNS, LastArchivedAtNS: selected.LastArchivedAtNS},
 		Original: &library.FileLocation{Size: size, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Hash: hash}}
 	if !damaged && !location.Ignored(result.Path, false) {
-		publication.Tracking = executor.ObserveTracking(location, info)
+		publication.Tracking = a.tracker.Observe(full, info)
 	}
 	result, err = a.exe.Lib().PublishRestore(ctx, publication)
 	if err != nil {

@@ -193,11 +193,12 @@ func resolveArchiveImportRoots(tx *gorm.DB, ids []int64, mediaID *int64) ([]*Pos
 			}
 		}
 	}
+	// Order "/" before every other byte so each directory's descendants directly follow it.
 	sort.Slice(roots, func(i, j int) bool {
 		if roots[i].MediaID != roots[j].MediaID {
 			return roots[i].MediaID < roots[j].MediaID
 		}
-		return roots[i].Path < roots[j].Path
+		return strings.ReplaceAll(roots[i].Path, "/", "\x00") < strings.ReplaceAll(roots[j].Path, "/", "\x00")
 	})
 	return pruneArchiveImportRoots(roots), nil
 }
@@ -283,11 +284,11 @@ type importArchiveFile func(tx *gorm.DB, media *Media, copy *Position) error
 func importArchiveDirectory(ctx context.Context, tx *gorm.DB, media *Media, directory string, result *ArchiveImportResult, admit importArchiveFile) error {
 	after := ""
 	prefix := archiveDirectoryPrefix(directory)
-	pattern := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(prefix) + "%"
 	for {
+		// Match the prefix byte for byte; SQLite LIKE would ignore ASCII case.
 		var copies []*Position
-		if err := tx.WithContext(ctx).Where("media_id = ? AND is_dir = ? AND path > ? AND path LIKE ? ESCAPE '!'",
-			media.ID, false, after, pattern).Order("path").Limit(batchSize).Find(&copies).Error; err != nil {
+		if err := tx.WithContext(ctx).Where("media_id = ? AND is_dir = ? AND path > ? AND substr(path, 1, length(?)) = ?",
+			media.ID, false, after, prefix, prefix).Order("path").Limit(batchSize).Find(&copies).Error; err != nil {
 			return fmt.Errorf("list archive directory failed, media_id=%d path=%q, %w", media.ID, directory, err)
 		}
 		if len(copies) == 0 {

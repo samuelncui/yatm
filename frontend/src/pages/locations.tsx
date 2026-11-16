@@ -1,7 +1,7 @@
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router";
-import { Alert, Box, Button, Card, Chip, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import { Box, Button, Card, Chip, Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import { locationCli, jobCli } from "@/api";
 import { ActionRow } from "@/components/action-row";
 import { SettingsLoading, SettingsPage } from "@/components/settings-page";
@@ -228,11 +228,6 @@ const LocationDetail = () => {
         }
       />
       {failure}
-      {reply?.warnings.map((warning) => (
-        <Alert severity="warning" key={warning}>
-          {warning}
-        </Alert>
-      ))}
       <PageTabs value={tab} onChange={(_, value) => setParams({ tab: value })} aria-label="Location details">
         <Tab value="configuration" label="Configuration" />
         <Tab value="files" label="Files" />

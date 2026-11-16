@@ -26,7 +26,8 @@ item result per line and a final summary. A Files listing is the one stream with
 summary: it writes one message per batch as the server produces it, so a reader sees the
 first rows before the read finishes. Exit status distinguishes intent from
 execution: `0` succeeded, `1` failed at runtime, and `2` rejected the command as a
-usage or safety error. An executed stream that settles with failed, unprocessed or
+usage or safety error, including a request the server rejects as invalid input. Job creation
+commands default `--priority` to 1, as the Web does. An executed stream that settles with failed, unprocessed or
 publication-pending items exits nonzero even when the request itself completed.
 A completed `--dryrun` plan succeeds even though its proposed entries remain
 `UNPROCESSED`; planning failures and pending Library publication still exit nonzero.
@@ -72,7 +73,7 @@ result. An idle result expires after 30 minutes and does not survive a service r
 run Find again if it is unavailable. Row pages default to 100 and accept at most 200
 rows; group and member CLI pages default to 20. `identical rows` and `identical positions`
 accept the same `--sort-key file-id|name|size` and `--order asc|desc`. The default
-is File ID ascending; name starts ascending and size starts descending when selected.
+is size descending, as in the Web tool; File ID and name start ascending when selected.
 Row pages and position lookups use the same requested order under the
 [Library sorting contract](../architecture/library.md#identical-file-tools). These reads never scan or hash physical files.
 
@@ -182,8 +183,8 @@ same command without `--dryrun` performs the resolved work.
 - For tar, both commands first send the write as the passive device inspection's
   [write target](../architecture/api.md#device-discovery) and submit only when the server answers
   it as writable; otherwise they exit with the safety code and the server's `write_detail`.
-- `restore run tape`, Tape `verify run` and `scan run` take `--device`, an optional `--media-id` hint
-  and `--refresh-position-map` (default false). Without a hint, the server identifies the Tape by its
+- `restore run tape`, Tape `verify run` and `scan run` take `--device` and an optional `--media-id`
+  hint. Without a hint, the server identifies the Tape by its
   cartridge memory barcode; a hint never bypasses physical verification.
   [Load Tape for Restore or Scan](devices.md#load-tape-for-restore-or-scan) describes both options.
 - No command sets encryption: the configured `encrypt` script owns it, and Media output carries

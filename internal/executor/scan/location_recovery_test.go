@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -93,7 +93,9 @@ func (p analyzePreviewer) Generate(context.Context, string, []byte, int64, int64
 }
 func (analyzePreviewer) Manifest([]byte) (*entity.PreviewManifest, error) { return nil, os.ErrNotExist }
 func (analyzePreviewer) Exists([]byte) (bool, error)                      { return false, nil }
-func (analyzePreviewer) Open([]byte, string) (io.ReadCloser, error)       { return nil, os.ErrNotExist }
+func (analyzePreviewer) Open([]byte, string) (*preview.OpenedAsset, error) {
+	return nil, os.ErrNotExist
+}
 
 func TestAnalyzeOptionalPreviewUsesOnlyPublishedDeduplicatedManifest(t *testing.T) {
 	// Generate one Preview per content identity, excluding unsupported and excluded source paths.

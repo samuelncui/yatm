@@ -2,31 +2,9 @@ import { SettingsSection } from "@/components/settings-page";
 import { isLtfsFormat, tapeFormatOf } from "@/components/tape-format";
 import { Feedback } from "@/components/feedback";
 import { Fragment, useContext, useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  Alert,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  MenuItem,
-  TextField,
-  Checkbox,
-  FormControlLabel,
-} from "@mui/material";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, MenuItem, TextField } from "@mui/material";
 import { mediaCli, volumeSpaceLabel } from "@/api";
-import {
-  type Media,
-  MediaKind,
-  ReadMediaTarget,
-  ScanResultPolicy,
-  DeviceFeatureKind,
-  DeviceFeatureSupport,
-  DeviceFeatureAvailability,
-  DeviceFeatureValidation,
-  type InspectDeviceResponse,
-} from "@/entity";
+import { type Media, MediaKind, ReadMediaTarget, type InspectDeviceResponse } from "@/entity";
 import { MediaInspectResult, useMediaInspect } from "@/components/media-inspect";
 import { TapeDeviceChoice, soleAvailableDevice, DeviceInspectionResult } from "@/components/tape-device-choice";
 import { useTapeDevices } from "@/components/use-tape-devices";
@@ -37,12 +15,10 @@ import { errorMessage, runUIAction } from "@/tools";
 export const ReadMediaDialog = ({
   mediaIDs,
   operation,
-  loadScanResultPolicy,
   onRead,
 }: {
   mediaIDs: bigint[];
   operation: "restore" | "scan";
-  loadScanResultPolicy?: () => Promise<ScanResultPolicy | undefined>;
   onRead: (target: ReadMediaTarget) => Promise<void>;
 }) => {
   const refresh = useContext(RefreshContext);
@@ -58,18 +34,13 @@ export const ReadMediaDialog = ({
   const [error, setError] = useState("");
   const tapeDevices = useTapeDevices();
   const { devices } = tapeDevices;
-  const [scanResultPolicy, setScanResultPolicy] = useState<ScanResultPolicy>();
-  const [refreshPositionMap, setRefreshPositionMap] = useState(false);
   const inspection = useMediaInspect();
   const request = useRef(0);
   const deviceRequest = useRef(0);
-  const policyRequest = useRef(0);
   useEffect(() => {
     const pending = request;
-    const pendingPolicy = policyRequest;
     return () => {
       pending.current++;
-      pendingPolicy.current++;
     };
   }, []);
   const volumes = media.filter((value) => value.kind === MediaKind.VOLUME);
@@ -83,21 +54,17 @@ export const ReadMediaDialog = ({
     setDevice("");
     setVolumeUUID("");
     setTapeID("");
-    setRefreshPositionMap(false);
-    setScanResultPolicy(undefined);
     setDeviceReport(null);
     inspection.reset();
   };
   const dismiss = () => {
     request.current++;
-    policyRequest.current++;
     setOpen(false);
     setBackend("volume");
     resetChoices();
   };
   const show = async () => {
     const current = ++request.current;
-    const currentPolicy = ++policyRequest.current;
     setOpen(true);
     setLoading(true);
     setError("");
@@ -115,14 +82,6 @@ export const ReadMediaDialog = ({
       setBackend(pendingVolumes.length ? "volume" : "tape");
       if (pendingVolumes.length === 1) setVolumeUUID(pendingVolumes[0].identity);
       if (!hasTape) return;
-      if (operation === "scan" && loadScanResultPolicy && required.some(isTar)) {
-        void loadScanResultPolicy()
-          .then((policy) => {
-            if (currentPolicy === policyRequest.current) setScanResultPolicy(policy);
-          })
-          // An unavailable policy leaves the optional preparation action hidden instead of blocking the read.
-          .catch(() => undefined);
-      }
       const listed = await tapeDevices.load();
       if (!listed || current !== request.current) return;
       const available = soleAvailableDevice(listed);
@@ -149,7 +108,7 @@ export const ReadMediaDialog = ({
       const target =
         backend === "volume"
           ? { backend: { oneofKind: "volume" as const, volume: { uuid: volumeUUID } } }
-          : { backend: { oneofKind: "tape" as const, tape: { device, refreshPositionMap, ...(tapeID ? { mediaId: BigInt(tapeID) } : {}) } } };
+          : { backend: { oneofKind: "tape" as const, tape: { device, ...(tapeID ? { mediaId: BigInt(tapeID) } : {}) } } };
       const selected = backend === "volume" ? selectedVolume : useLTFS ? inspection.reply?.media : undefined;
       await onRead(ReadMediaTarget.create({ ...target, ...(selected ? { expectedMediaId: selected.id, expectedIdentity: selected.identity } : {}) }));
       dismiss();
@@ -167,19 +126,6 @@ export const ReadMediaDialog = ({
   const selectedTape = tapes.find((value) => value.id.toString() === tapeID);
   const isLTFS = (value: Media) => isLtfsFormat(tapeFormatOf(value));
   const useLTFS = selectedTape ? isLTFS(selectedTape) : tapes.length > 0 && tapes.every(isLTFS);
-  const isTar = (value: Media) => tapeFormatOf(value) === "tar_pax_v1";
-  const refreshApplicable =
-    backend === "tape" &&
-    (selectedTape ? isTar(selectedTape) : tapes.length > 0 && tapes.every(isTar)) &&
-    (operation === "restore" || scanResultPolicy === ScanResultPolicy.VERIFY_COPIES);
-  const reload =
-    deviceReport?.report.oneofKind === "tape"
-      ? deviceReport.report.tape.features.find((feature) => feature.feature === DeviceFeatureKind.NON_EJECTING_RELOAD)
-      : undefined;
-  const refreshAvailable =
-    reload?.support === DeviceFeatureSupport.SUPPORTED &&
-    reload.availability === DeviceFeatureAvailability.READY &&
-    reload.validation !== DeviceFeatureValidation.FAILED;
   const inspectTape = (nextDevice: string, choices = tapes, hint = tapeID) => {
     if (!nextDevice) return;
     const inspectionSequence = ++deviceRequest.current;
@@ -212,7 +158,6 @@ export const ReadMediaDialog = ({
   const canSubmit =
     !loading &&
     !submitting &&
-    (!refreshPositionMap || (refreshApplicable && refreshAvailable)) &&
     (backend === "volume"
       ? selectedVolume?.mounted === true
       : !tapeDevices.loading && devices?.some((value) => value.device === device && !value.busy) && (!useLTFS || (tapeMatches && !inspection.loading)));
@@ -262,7 +207,6 @@ export const ReadMediaDialog = ({
                 onChange={(event) => {
                   const selected = event.target.value as "tape" | "volume";
                   setBackend(selected);
-                  setRefreshPositionMap(false);
                   const available = soleAvailableDevice(devices ?? []);
                   if (selected === "tape" && available && !device) {
                     setDevice(available);
@@ -310,7 +254,6 @@ export const ReadMediaDialog = ({
                     onRefresh={refreshDevices}
                     onChange={(value) => {
                       setDevice(value);
-                      setRefreshPositionMap(false);
                       inspection.reset();
                       setDeviceReport(null);
                       inspectTape(value);
@@ -328,7 +271,6 @@ export const ReadMediaDialog = ({
                     onChange={(event) => {
                       const hint = event.target.value;
                       setTapeID(hint);
-                      setRefreshPositionMap(false);
                       inspection.reset();
                       setDeviceReport(null);
                       inspectTape(device, tapes, hint);
@@ -355,33 +297,6 @@ export const ReadMediaDialog = ({
                         multiple keys.
                       </Alert>
                     </>
-                  )}
-                  {refreshApplicable && (
-                    <SettingsSection
-                      title="Advanced"
-                      collapsible
-                      hasError={refreshPositionMap && !refreshAvailable}
-                      description={refreshPositionMap ? "Position map refresh enabled" : undefined}
-                    >
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={refreshPositionMap}
-                            disabled={submitting || (!refreshAvailable && !refreshPositionMap)}
-                            onChange={(event) => setRefreshPositionMap(event.target.checked)}
-                          />
-                        }
-                        label="Refresh position map before reading"
-                      />
-                      <Alert severity="info">
-                        {refreshAvailable
-                          ? "This explicitly unloads and reloads the cartridge without ejecting it to recollect the position map. Identity and read settings are rechecked before reading. The map is not guaranteed to be fresh. Auto read order alone never reloads."
-                          : reload?.detail || "Refresh requires an available non-ejecting reload. Ordinary reading remains available."}
-                      </Alert>
-                    </SettingsSection>
-                  )}
-                  {refreshPositionMap && (
-                    <Alert severity="warning">Position map refresh enabled: the cartridge will unload and reload without ejecting before reading.</Alert>
                   )}
                   {!useLTFS && deviceReport && (
                     <SettingsSection title="Device details" collapsible>

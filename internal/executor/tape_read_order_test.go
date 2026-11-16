@@ -100,22 +100,11 @@ func TestTarAutoFallsBackAndRefreshRejectsBeforeControls(t *testing.T) {
 	require.Contains(t, diagnostics.String(), "requested_read_order=TAPE_READ_ORDER_AUTO")
 	require.Contains(t, diagnostics.String(), "effective_read_order=TAPE_READ_ORDER_LOGICAL")
 
-	// The explicit unsupported action fails before settings, key load or physical positioning.
-	exe.endAttempt(jobID)
-	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
-	fixture.securityEvents = nil
-	target := tarEncryptedReadTarget(stored)
-	target.GetTape().RefreshPositionMap = true
-	_, err = backend.NewReadSession(ctx, target)
-	require.Error(t, err)
-	require.Empty(t, fixture.securityEvents)
-	require.Equal(t, fixture.opens, fixture.closes)
-
 	// Automatic selection without a cartridge memory barcode fails before any candidate, key or motion.
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
-	fixture.barcode = ""
-	_, err = exe.ResolveTapeReadMedia(ctx, jobID, target.GetTape(), func(context.Context, string) (*entity.ReadMediaTarget, error) {
+	fixture.barcode, fixture.securityEvents = "", nil
+	_, err = exe.ResolveTapeReadMedia(ctx, jobID, tarEncryptedReadTarget(stored).GetTape(), func(context.Context, string) (*entity.ReadMediaTarget, error) {
 		t.Fatal("a Tape without MAM identity cannot select a candidate")
 		return nil, nil
 	})

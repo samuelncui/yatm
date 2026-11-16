@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,11 +17,6 @@ func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.
 	// A retained map belongs to the exact mounted initialization and captured Index generation.
 	if len(snapshot.endpoints) == 0 {
 		value := stored.TapePositionMap
-		if strings.HasPrefix(value.GetSource(), "A3/1F/45; ") &&
-			value.GetEndpointConvention() == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE &&
-			tape.REOWPEndpointConvention(snapshot.report) == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE {
-			return nil, false, "Retained HP LTO-5 REOWP geometry needs count-based endpoint refresh"
-		}
 		if value == nil || value.LtfsUuid != facts.uuid || value.GetLtfsIndexGeneration() != facts.generation {
 			return nil, false, "No current or matching retained LTFS position map is available"
 		}
@@ -30,12 +24,6 @@ func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.
 			return nil, false, err.Error()
 		}
 		return value, false, ""
-	}
-
-	// Unknown endpoint interpretation cannot be repaired by assuming an extra logical object.
-	if snapshot.boundary != entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE &&
-		snapshot.boundary != entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE {
-		return nil, false, "LTFS reported endpoint interpretation is not established"
 	}
 
 	// The reported physical wrap numbers supply each partition's traversal under the same four-band model.
@@ -51,8 +39,7 @@ func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.
 		groups[endpoint.Partition] = append(groups[endpoint.Partition], endpoint)
 	}
 	value := &entity.TapePositionMap{LtfsUuid: facts.uuid, LtfsIndexGeneration: proto.Uint64(facts.generation),
-		EndpointConvention: snapshot.boundary,
-		Source:             snapshot.source + "; " + facts.partitionSource, ObservedAtNs: snapshot.observedAt.UnixNano(),
+		Source: snapshot.source + "; " + facts.partitionSource, ObservedAtNs: snapshot.observedAt.UnixNano(),
 		MinLpos: layout.MinLpos, MaxLpos: layout.MaxLpos}
 	for _, partition := range []uint32{0, 1} {
 		endpoints := groups[partition]
@@ -70,12 +57,6 @@ func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.
 				return nil, false, "LTFS reported partition traversal has missing or unordered wraps"
 			}
 			last, high := index == len(endpoints)-1, endpoint.Object
-			if !last && snapshot.boundary == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE {
-				if high == math.MaxUint64 {
-					return nil, false, "LTFS reported endpoint exceeds the logical address domain"
-				}
-				high++
-			}
 			if high <= low {
 				return nil, false, "LTFS reported boundaries are empty or reversed"
 			}

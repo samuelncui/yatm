@@ -128,7 +128,7 @@ func (l *Library) readSelectionRoots(ctx context.Context, selections []*entity.F
 	}
 	if excludeTrash {
 		for _, state := range states {
-			if _, trash := state.seen[TrashFileID]; trash {
+			if state.inTrash {
 				return nil, nil, fmt.Errorf("Library Trash cannot be scanned or archived")
 			}
 		}

@@ -43,11 +43,10 @@ type restoreRunVolumeCommand struct {
 }
 
 type restoreRunTapeCommand struct {
-	runtime            *runtime
-	RefreshPositionMap bool       `long:"refresh-position-map" description:"Request eligible non-ejecting reload and map capture for tar Restore or VERIFY_COPIES only"`
-	MediaID            *int64     `long:"media-id" description:"Optional pending Media hint; the server still verifies the loaded Tape label"`
-	Device             string     `long:"device" required:"yes" description:"Server-side Tape device"`
-	Args               fileIDArgs `positional-args:"yes"`
+	runtime *runtime
+	MediaID *int64     `long:"media-id" description:"Optional pending Media hint; the server still verifies the loaded Tape label"`
+	Device  string     `long:"device" required:"yes" description:"Server-side Tape device"`
+	Args    fileIDArgs `positional-args:"yes"`
 }
 
 func registerRestoreCommands(root *flags.Command, commandRuntime *runtime) error {
@@ -77,9 +76,6 @@ func registerRestoreCommands(root *flags.Command, commandRuntime *runtime) error
 
 func (c *restoreCreateCommand) Execute(_ []string) error {
 	// Validate and normalize the complete Restore manifest before creating a Job.
-	if c.Priority < 0 {
-		return usageError(fmt.Errorf("Job priority must not be negative, value=%d", c.Priority))
-	}
 	selections, err := c.selections()
 	if err != nil {
 		return err
@@ -241,7 +237,7 @@ func (c *restoreRunTapeCommand) Execute(_ []string) error {
 		c.runtime,
 		entity.RestoreJobService_RestoreMedia_FullMethodName,
 		&entity.RestoreMediaRequest{
-			Id: c.Args.ID, Target: (&entity.ReadTapeTarget{Device: device, MediaId: c.MediaID, RefreshPositionMap: c.RefreshPositionMap}).Pack(),
+			Id: c.Args.ID, Target: (&entity.ReadTapeTarget{Device: device, MediaId: c.MediaID}).Pack(),
 		},
 	)
 	if err != nil {

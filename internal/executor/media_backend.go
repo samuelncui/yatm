@@ -55,9 +55,6 @@ func (b *mediaBackend) NewReadSession(
 			case library.TapeFormatTarPAXV1:
 				session, err = b.newTarReadSession(ctx, access, target)
 			case "", library.TapeFormatLTFSV0, library.TapeFormatLTFSV1:
-				if access.GetRefreshPositionMap() {
-					return fmt.Errorf("position-map refresh is supported only for eligible tar reads")
-				}
 				// Existing legacy requests retain the native identity/preparation path.
 				session, err = b.newTapeReadSession(ctx, access, target)
 			default:

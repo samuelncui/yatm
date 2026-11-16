@@ -49,7 +49,7 @@ func (e *Executor) CheckPreparedLocationPath(location *library.Location, root, r
 			return "", nil, err
 		}
 	}
-	info, err := os.Lstat(full)
+	info, err := Lstat(full)
 	if err != nil {
 		return "", nil, err
 	}

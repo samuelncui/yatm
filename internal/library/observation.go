@@ -2,47 +2,17 @@ package library
 
 import (
 	"bytes"
-	"context"
 	"time"
 
 	"gorm.io/gorm"
 )
-
-// AdmitObservation publishes a checked ordinary file, never a physical directory cache.
-// The caller holds the Location gate and performs all filesystem I/O before this transaction.
-func (l *Library) AdmitObservation(ctx context.Context, locationID int64, p *ObservedEntry) (*FileLocation, error) {
-	// Single-file admission shares unchanged-observation and Location revision semantics with batches.
-	originals, err := l.AdmitObservations(ctx, locationID, []*ObservationAdmission{{Observation: p}})
-	if err != nil {
-		return nil, err
-	}
-	return originals[0], nil
-}
 
 // MatchesOriginalObservation applies the same content-basis rule to already batched facts.
 func MatchesOriginalObservation(previous *FileLocation, p *ObservedEntry, keys []*FileTrackingKey) bool {
 	if !matchesObservationContent(previous, p) {
 		return false
 	}
-	if p.TrackingKeys == nil {
-		return true
-	}
-	if len(keys) != len(p.TrackingKeys) {
-		return false
-	}
-	for _, observed := range p.TrackingKeys {
-		matches := false
-		for _, stored := range keys {
-			if observed.Kind == stored.Kind && observed.Scope == stored.Scope && bytes.Equal(observed.KeyValue, stored.KeyValue) && observed.Details == stored.Details {
-				matches = true
-				break
-			}
-		}
-		if !matches {
-			return false
-		}
-	}
-	return true
+	return p.TrackingKeys == nil || SameTrackingKeys(keys, p.TrackingKeys)
 }
 
 func matchesObservationContent(previous *FileLocation, p *ObservedEntry) bool {

@@ -28,6 +28,7 @@ var statusCodes = []struct {
 	{gorm.ErrRecordNotFound, codes.NotFound},
 	{library.ErrFileNotFound, codes.NotFound},
 	{executor.ErrJobNotFound, codes.NotFound},
+	{executor.ErrInvalidRequest, codes.InvalidArgument},
 	{fileops.ErrKeepNotMember, codes.InvalidArgument},
 }
 

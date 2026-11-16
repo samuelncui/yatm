@@ -61,7 +61,8 @@ func TestIdenticalResultCommandsUseOneFindResult(t *testing.T) {
 
 	exit, _, stderr = executeTestCLI(server.URL, "", "identical", "rows", "--result", "result", "--offset", "20", "--limit", "10", "--include-hidden")
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.True(t, proto.Equal(&entity.ListIdenticalRowsRequest{ResultId: "result", Offset: 20, Limit: 10, IncludeHidden: true}, service.rows))
+	require.True(t, proto.Equal(&entity.ListIdenticalRowsRequest{ResultId: "result", Offset: 20, Limit: 10, IncludeHidden: true,
+		SortKey: entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, SortOrder: entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_DESC}, service.rows))
 	exit, _, stderr = executeTestCLI(server.URL, "", "identical", "rows", "--result", "result", "--sort-key", "name", "--order", "desc")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Equal(t, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_NAME, service.rows.GetSortKey())
@@ -78,7 +79,8 @@ func TestIdenticalResultCommandsUseOneFindResult(t *testing.T) {
 
 	exit, _, stderr = executeTestCLI(server.URL, "", "identical", "positions", "--result", "result", "--file-id", "4", "--file-id", "6")
 	require.Equal(t, exitSuccess, exit, stderr)
-	require.True(t, proto.Equal(&entity.LookupIdenticalPositionsRequest{ResultId: "result", FileIds: []int64{4, 6}}, service.positions))
+	require.True(t, proto.Equal(&entity.LookupIdenticalPositionsRequest{ResultId: "result", FileIds: []int64{4, 6},
+		SortKey: entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, SortOrder: entity.IdenticalSortOrder_IDENTICAL_SORT_ORDER_DESC}, service.positions))
 	exit, _, stderr = executeTestCLI(server.URL, "", "identical", "positions", "--result", "result", "--file-id", "4", "--sort-key", "size")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.Equal(t, entity.IdenticalSortKey_IDENTICAL_SORT_KEY_SIZE, service.positions.GetSortKey())

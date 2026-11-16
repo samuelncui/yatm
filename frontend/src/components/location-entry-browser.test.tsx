@@ -13,7 +13,7 @@ vi.mock("@/components/files-browser", async (original) => {
   const actual = await original<typeof import("@/components/files-browser")>();
   return {
     ...actual,
-    filesPage: (...args: Parameters<typeof actual.filesPage>) => (fakePage.getMockImplementation() ? fakePage(...args) : actual.filesPage(...args)),
+    listDirectory: (...args: Parameters<typeof actual.listDirectory>) => (fakePage.getMockImplementation() ? fakePage(...args) : actual.listDirectory(...args)),
   };
 });
 vi.mock("@/api", async (original) => ({
@@ -69,14 +69,12 @@ it.each([false, true])("uses double-click for details, or explicit picker select
   expect(open).not.toHaveBeenCalled();
 });
 
-it("hides Sort and folders-first while the Location read is pending or incomplete, then restores them", async () => {
-  let finishFirst!: (value: { files: { id: string; name: string; size: number }[]; nextCursor: string }) => void;
-  const first = new Promise<{ files: { id: string; name: string; size: number }[]; nextCursor: string }>((resolve) => {
+it("hides Sort and folders-first while the Location read is pending, then restores them", async () => {
+  let finishFirst!: (value: { files: { id: string; name: string; size: number }[] }) => void;
+  const first = new Promise<{ files: { id: string; name: string; size: number }[] }>((resolve) => {
     finishFirst = resolve;
   });
-  fakePage.mockImplementation((_directory, _scope, cursor = "") =>
-    cursor ? Promise.resolve({ files: [{ id: "2", name: "alpha.txt", size: 10 }], nextCursor: "" }) : first,
-  );
+  fakePage.mockImplementation(() => first);
   render(<LocationEntryBrowser source={Location.create({ id: 4n, name: "Documents" })} />, { wrapper: MemoryRouter });
   const checkOptions = async (sortVisible: boolean) => {
     await userEvent.click(screen.getByRole("button", { name: "Options" }));
@@ -95,10 +93,14 @@ it("hides Sort and folders-first while the Location read is pending or incomplet
     await userEvent.keyboard("{Escape}");
   };
   await checkOptions(false);
-  await act(async () => finishFirst({ files: [{ id: "1", name: "zulu.txt", size: 20 }], nextCursor: "next" }));
-  await waitFor(() => expect(screen.getByTestId("location-viewport")).toHaveTextContent("zulu.txt"));
-  await checkOptions(false);
-  await userEvent.click(screen.getByRole("button", { name: "Load More" }));
+  await act(async () =>
+    finishFirst({
+      files: [
+        { id: "1", name: "zulu.txt", size: 20 },
+        { id: "2", name: "alpha.txt", size: 10 },
+      ],
+    }),
+  );
   await waitFor(() => expect(screen.getByTestId("location-viewport")).toHaveTextContent("alpha.txt"));
   await checkOptions(true);
   await userEvent.click(screen.getByRole("button", { name: "Options" }));
@@ -110,5 +112,5 @@ it("hides Sort and folders-first while the Location read is pending or incomplet
         .map((row) => row.textContent?.match(/(?:alpha|zulu)\.txt/)?.[0]),
     ).toEqual(["zulu.txt", "alpha.txt"]),
   );
-  expect(fakePage).toHaveBeenCalledTimes(2);
+  expect(fakePage).toHaveBeenCalledTimes(1);
 });

@@ -2,11 +2,15 @@ package restore
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
@@ -71,50 +75,6 @@ func TestRestoreExistingEqualContentCompletesWithoutCopyAndRestoresMetadata(t *t
 	require.NoFileExists(t, filepath.Join(filepath.Dir(target), "equal (2).txt"))
 }
 
-func TestRestoreConflictingBytesIgnoreStaleHashCacheAndReserveSuffix(t *testing.T) {
-	// Seed a cache for saved bytes, then replace them without changing cache-visible metadata.
-	ctx := context.Background()
-	exe, lib := setupTestExecutor(t)
-	_, file := createMediaFile(t, lib, newTapeMedia("CONFLICT"), ".", "name.txt", []byte("saved"), nil)
-	target := filepath.Join(exe.Paths().Target, "Unforged", "CONFLICT", "name.txt")
-	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
-	require.NoError(t, os.WriteFile(target, []byte("saved"), 0644))
-	before, err := os.Stat(target)
-	require.NoError(t, err)
-	// Seed a cache holding the same size and mtime but different content bytes.
-	saved, err := executor.VerifyObservedContent(ctx, target, before)
-	require.NoError(t, err)
-	require.Equal(t, before.Size(), saved.SizeBytes)
-	require.NoError(t, os.WriteFile(target, []byte("other"), 0644))
-	require.NoError(t, os.Chtimes(target, before.ModTime(), before.ModTime()))
-
-	// Restore verifies bytes rather than trusting the stale cache, preserving the conflicting file.
-	job := createRestoreJob(t, exe, file.ID)
-	waitIndexed(t, exe, job.ID)
-	value, err := exe.GetJobRunner(ctx, job.ID)
-	require.NoError(t, err)
-	runner := value.(*jobRestoreRunner)
-	var copy Copy
-	require.NoError(t, runner.db.First(&copy).Error)
-	candidate := loadTestCopyCandidate(t, runner, &copy)
-	require.Equal(t, "Unforged/CONFLICT/"+library.RestoredName("name.txt", candidate.FileVersionID), candidate.TargetPath)
-	actual, err := os.ReadFile(target)
-	require.NoError(t, err)
-	require.Equal(t, []byte("other"), actual)
-	config := new(Config)
-	require.NoError(t, runner.db.First(config, 1).Error)
-	require.NoError(t, runner.applySpec(ctx, config.Spec))
-	var outputs []File
-	require.NoError(t, runner.db.Find(&outputs).Error)
-	require.Len(t, outputs, 1)
-	require.Equal(t, candidate.TargetPath, outputs[0].Path)
-
-	// A later conflict at the reserved path stops the attempt rather than suffixing indefinitely.
-	require.NoError(t, os.WriteFile(runner.restoreTarget(candidate.TargetPath), []byte("taken"), 0644))
-	require.ErrorContains(t, runner.applySpec(ctx, config.Spec), "reserved Restore output changed")
-	require.NoFileExists(t, filepath.Join(filepath.Dir(target), "name (3).txt"))
-}
-
 func TestRestoreDestinationConfigurationCannotRedirectFrozenJob(t *testing.T) {
 	// Freeze a Location without requiring a complete directory scan.
 	ctx := context.Background()
@@ -166,13 +126,147 @@ func TestLegacyRestoreFrozenRootAllowsMissingAuthorizedOutputDirectory(t *testin
 	require.Equal(t, frozenRoot, legacy.destination.RootPath)
 	require.Zero(t, legacy.destination.LocationId)
 
-	// The frozen authorized path supplies the output without creating directories during validation.
+	// Validation creates nothing; the frozen authorized path receives the output once it is created.
+	_, err = exe.RestoreOutputPath(ctx, legacy.destination, "Unforged/LEGACY/file.txt")
+	require.NoError(t, err)
+	require.NoDirExists(t, frozenRoot)
 	source := newTestCopyItems(legacy, media.ID, mediapkg.Capabilities{Read: mediapkg.AccessRandom})
 	items, err := source.nextPage(ctx)
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, []string{filepath.Join(frozenRoot, "Unforged/LEGACY/file.txt")}, items[0].Targets())
-	require.NoDirExists(t, frozenRoot)
+	require.FileExists(t, filepath.Join(frozenRoot, "Unforged/LEGACY/file.txt"))
+}
+
+// claimTestOutputs resolves one random-access page, creating each item's output as an attempt does.
+func claimTestOutputs(t *testing.T, runner *jobRestoreRunner, mediaID int64) (*copyItems, []acp.Item) {
+	t.Helper()
+	source := newTestCopyItems(runner, mediaID, mediapkg.Capabilities{Read: mediapkg.AccessRandom})
+	items, err := source.nextPage(context.Background())
+	if errors.Is(err, io.EOF) {
+		return source, nil
+	}
+	require.NoError(t, err)
+	return source, items
+}
+
+func TestRestoreOutputCreationResolvesConflictsAtWriteTime(t *testing.T) {
+	// Seed a cache for saved bytes, then replace them without changing cache-visible metadata.
+	ctx := context.Background()
+	exe, lib := setupTestExecutor(t)
+	media, file := createMediaFile(t, lib, newTapeMedia("CONFLICT"), ".", "name.txt", []byte("saved"), nil)
+	target := filepath.Join(exe.Paths().Target, "Unforged", "CONFLICT", "name.txt")
+	require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
+	require.NoError(t, os.WriteFile(target, []byte("saved"), 0644))
+	before, err := os.Stat(target)
+	require.NoError(t, err)
+	saved, err := executor.VerifyObservedContent(ctx, target, before)
+	require.NoError(t, err)
+	require.Equal(t, before.Size(), saved.SizeBytes)
+	require.NoError(t, os.WriteFile(target, []byte("other"), 0644))
+	require.NoError(t, os.Chtimes(target, before.ModTime(), before.ModTime()))
+
+	// Preparation verifies bytes rather than trusting the stale cache and leaves the logical path.
+	job := createRestoreJob(t, exe, file.ID)
+	waitIndexed(t, exe, job.ID)
+	value, err := exe.GetJobRunner(ctx, job.ID)
+	require.NoError(t, err)
+	runner := value.(*jobRestoreRunner)
+	var copy Copy
+	require.NoError(t, runner.db.First(&copy).Error)
+	require.Equal(t, "Unforged/CONFLICT/name.txt", loadTestCopyCandidate(t, runner, &copy).TargetPath)
+
+	// Creation reports the existing name and persists the conflict name it actually created.
+	restored := "Unforged/CONFLICT/" + library.RestoredName("name.txt", copy.ItemID)
+	_, items := claimTestOutputs(t, runner, media.ID)
+	require.Len(t, items, 1)
+	require.Equal(t, []string{runner.restoreTarget(restored)}, items[0].Targets())
+	actual, err := os.ReadFile(target)
+	require.NoError(t, err)
+	require.Equal(t, []byte("other"), actual)
+	var output File
+	require.NoError(t, runner.db.First(&output, copy.ItemID).Error)
+	require.Equal(t, restored, output.Path)
+	require.Equal(t, media.ID, output.ReadMediaID)
+
+	// Another preparation and attempt keep the claimed path and its empty output.
+	config := new(Config)
+	require.NoError(t, runner.db.First(config, 1).Error)
+	require.NoError(t, runner.applySpec(ctx, config.Spec))
+	_, items = claimTestOutputs(t, runner, media.ID)
+	require.Len(t, items, 1)
+	require.Equal(t, []string{runner.restoreTarget(restored)}, items[0].Targets())
+
+	// Other content at the claimed path fails the item rather than suffixing indefinitely.
+	require.NoError(t, os.WriteFile(runner.restoreTarget(restored), []byte("taken"), 0644))
+	source, items := claimTestOutputs(t, runner, media.ID)
+	require.Empty(t, items)
+	require.ErrorContains(t, source.failure, "reserved Restore output changed")
+	entries, err := os.ReadDir(filepath.Dir(target))
+	require.NoError(t, err)
+	require.Len(t, entries, 2, "no further conflict name is created")
+	require.NoError(t, runner.db.First(&output, copy.ItemID).Error)
+	require.Equal(t, restored, output.Path)
+}
+
+func TestRestoreOutputCreationReusesDirectoriesAndRejectsKindConflicts(t *testing.T) {
+	for _, fixture := range []struct {
+		name     string
+		existing func(t *testing.T, directory string)
+		want     string
+	}{
+		{name: "existing directory", existing: func(t *testing.T, directory string) {
+			require.NoError(t, os.MkdirAll(directory, 0755))
+			require.NoError(t, os.WriteFile(filepath.Join(directory, "unrelated.txt"), []byte("kept"), 0644))
+		}, want: "file.txt"},
+		{name: "directory at file name", existing: func(t *testing.T, directory string) {
+			require.NoError(t, os.MkdirAll(filepath.Join(directory, "file.txt"), 0755))
+		}, want: "restored"},
+		{name: "file at directory name", existing: func(t *testing.T, directory string) {
+			require.NoError(t, os.MkdirAll(filepath.Dir(directory), 0755))
+			require.NoError(t, os.WriteFile(directory, []byte("kept"), 0644))
+		}},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			// Prepare first so the attempt, not preparation, meets the existing entries.
+			ctx := context.Background()
+			exe, lib := setupTestExecutor(t)
+			media, file := createMediaFile(t, lib, newTapeMedia("KIND"), ".", "file.txt", []byte("saved"), nil)
+			job := createRestoreJob(t, exe, file.ID)
+			waitIndexed(t, exe, job.ID)
+			value, err := exe.GetJobRunner(ctx, job.ID)
+			require.NoError(t, err)
+			runner := value.(*jobRestoreRunner)
+			var copy Copy
+			require.NoError(t, runner.db.First(&copy).Error)
+			directory := filepath.Join(exe.Paths().Target, "Unforged", "KIND")
+			fixture.existing(t, directory)
+
+			// A file where an output directory belongs is never replaced and stops the attempt.
+			if fixture.want == "" {
+				source := newTestCopyItems(runner, media.ID, mediapkg.Capabilities{Read: mediapkg.AccessRandom})
+				_, err := source.nextPage(ctx)
+				require.ErrorContains(t, err, "not a directory")
+				kept, err := os.ReadFile(directory)
+				require.NoError(t, err)
+				require.Equal(t, []byte("kept"), kept)
+				return
+			}
+
+			// Existing directories are reused; a directory at the file name is a conflict.
+			want := fixture.want
+			if want == "restored" {
+				want = library.RestoredName("file.txt", copy.ItemID)
+			}
+			_, items := claimTestOutputs(t, runner, media.ID)
+			require.Len(t, items, 1)
+			require.Equal(t, []string{runner.restoreTarget("Unforged/KIND/" + want)}, items[0].Targets())
+			require.FileExists(t, filepath.Join(directory, want))
+			if fixture.name == "existing directory" {
+				require.FileExists(t, filepath.Join(directory, "unrelated.txt"))
+			}
+		})
+	}
 }
 
 func TestRestoreReservationsRespectCaseInsensitiveDestination(t *testing.T) {
@@ -216,38 +310,45 @@ func TestRestoreReservationsRespectCaseInsensitiveDestination(t *testing.T) {
 			require.NoError(t, runner.db.Order("item_id").Find(&copies).Error)
 			candidates := loadTestCopyCandidates(t, runner, copies)
 			require.Len(t, candidates, 2)
+
+			// Preparation keeps both logical spellings; it never probes the destination.
 			require.Equal(t, filepath.ToSlash(fixture.firstPath), candidates[0].TargetPath)
+			require.Equal(t, filepath.ToSlash(fixture.secondPath), candidates[1].TargetPath)
 
-			// Completing one output cannot make the other reservation refer to those bytes.
+			// Creating the first output lets the filesystem decide whether the second name is taken.
+			_, items := claimTestOutputs(t, runner, candidates[0].MediaID)
+			require.Len(t, items, 1)
 			firstTarget := runner.restoreTarget(candidates[0].TargetPath)
-			require.NoError(t, os.MkdirAll(filepath.Dir(firstTarget), 0755))
-			require.NoError(t, os.WriteFile(firstTarget, []byte("first"), 0644))
-			_, desiredErr := os.Stat(filepath.Join(exe.Paths().Target, fixture.secondPath))
+			_, desiredErr := os.Lstat(runner.restoreTarget(candidates[1].TargetPath))
+			_, items = claimTestOutputs(t, runner, candidates[1].MediaID)
+			require.Len(t, items, 1)
+			var outputs []File
+			require.NoError(t, runner.db.Order("item_id").Find(&outputs).Error)
+			require.Len(t, outputs, 2)
+			require.Equal(t, candidates[0].TargetPath, outputs[0].Path)
 			if os.IsNotExist(desiredErr) {
-				require.Equal(t, filepath.ToSlash(fixture.secondPath), candidates[1].TargetPath, "case-sensitive destinations retain distinct original spellings")
+				require.Equal(t, candidates[1].TargetPath, outputs[1].Path, "case-sensitive destinations retain distinct original spellings")
 			} else {
+				// An equivalent existing name is reported as EEXIST and receives the conflict name.
 				require.NoError(t, desiredErr)
+				want := path.Join(path.Dir(candidates[1].TargetPath), library.RestoredName(path.Base(candidates[1].TargetPath), outputs[1].ItemID))
+				require.Equal(t, want, outputs[1].Path)
 			}
-			_, exists, err := runner.outputMatches(ctx, candidates[1].TargetPath, candidates[1].Hash, candidates[1].Size)
+			firstOutput, err := os.Stat(firstTarget)
 			require.NoError(t, err)
-			if exists {
-				firstOutput, err := os.Stat(firstTarget)
-				require.NoError(t, err)
-				secondOutput, err := os.Stat(runner.restoreTarget(candidates[1].TargetPath))
-				require.NoError(t, err)
-				require.False(t, os.SameFile(firstOutput, secondOutput), "the second reservation aliases the first on this filesystem")
-			}
+			secondOutput, err := os.Stat(runner.restoreTarget(outputs[1].Path))
+			require.NoError(t, err)
+			require.False(t, os.SameFile(firstOutput, secondOutput), "the second output aliases the first on this filesystem")
 
-			// Another Media attempt retains both actual chosen paths after the first item has become satisfied.
+			// Another preparation and attempt retain both actual chosen paths.
 			config := new(Config)
 			require.NoError(t, runner.db.First(config, 1).Error)
 			require.NoError(t, runner.applySpec(ctx, config.Spec))
-			var retried []Copy
-			require.NoError(t, runner.db.Order("item_id").Find(&retried).Error)
-			retriedCandidates := loadTestCopyCandidates(t, runner, retried)
-			require.Len(t, retriedCandidates, 2)
-			require.Equal(t, candidates[0].TargetPath, retriedCandidates[0].TargetPath)
-			require.Equal(t, candidates[1].TargetPath, retriedCandidates[1].TargetPath)
+			for index, output := range outputs {
+				_, items := claimTestOutputs(t, runner, candidates[index].MediaID)
+				require.Len(t, items, 1)
+				require.Equal(t, []string{runner.restoreTarget(output.Path)}, items[0].Targets())
+			}
 		})
 	}
 }

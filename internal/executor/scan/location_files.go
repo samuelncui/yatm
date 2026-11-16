@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/executor/observation"
 	"github.com/samuelncui/yatm/internal/library"
 	"gorm.io/gorm/clause"
 )
@@ -105,10 +107,10 @@ func (s *locationStage) observation(name, scope string, info os.FileInfo, policy
 	if err != nil {
 		return nil, fmt.Errorf("inspect Location entry %q failed, %w", name, err)
 	}
-	return &Entry{LocationID: s.source.ID, Path: name, ScopePath: scope,
-		SourcePath: filepath.Join(s.source.RootPath, filepath.FromSlash(name)),
-		Change:     entity.ScanChange_SCAN_CHANGE_ADDED, NeedsHash: policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
-		Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Evidence: observeEvidence(s.source, info)}, nil
+	full := filepath.Join(s.source.RootPath, filepath.FromSlash(name))
+	return &Entry{LocationID: s.source.ID, Path: name, ScopePath: scope, SourcePath: full,
+		Change: entity.ScanChange_SCAN_CHANGE_ADDED, NeedsHash: policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
+		Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Evidence: observation.FromKeys(s.tracker.Observe(full, info))}, nil
 }
 
 func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, originals map[string]*library.FileLocation, policy entity.ScanSignaturePolicy) error {
@@ -168,6 +170,12 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		}
 		if len(row.SHA256) == 32 {
 			applyHash(row, row.SHA256)
+		}
+	}
+
+	if policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ {
+		if err := s.reuseRelocatedContent(ctx, rows); err != nil {
+			return err
 		}
 	}
 
@@ -358,6 +366,59 @@ func analysisScopes(paths []string) []*Scope {
 		}
 	}
 	return result
+}
+
+// reuseRelocatedContent gives an unmatched observation the recorded hash of the original its native
+// identity names when size, mode and mtime agree, so a rename or move is not read again. Matching
+// later assigns the identity through the equal signature.
+func (s *locationStage) reuseRelocatedContent(ctx context.Context, rows []*Entry) error {
+	var pending []*Entry
+	var keys []*library.FileTrackingKey
+	for _, row := range rows {
+		if row.FileID == 0 && len(row.SHA256) == 0 && len(row.Evidence.NativeKey) != 0 {
+			pending = append(pending, row)
+			keys = append(keys, row.Evidence.Keys()...)
+		}
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+	var ids []int64
+	for cursor := int64(0); ; {
+		page, err := s.exe.Lib().NativeCandidates(ctx, s.source.ID, keys, cursor, batchSize)
+		if err != nil {
+			return err
+		}
+		for _, key := range page {
+			ids = append(ids, key.FileID)
+		}
+		if len(page) < batchSize {
+			break
+		}
+		cursor = page[len(page)-1].FileID
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	candidates, err := s.exe.Lib().MatchingCandidates(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, row := range pending {
+		observed := row.Evidence.Keys()[0]
+		for _, candidate := range candidates {
+			old := candidate.Original
+			if old == nil || len(old.Hash) != 32 || old.Size != row.Size || old.Mode != row.Mode || old.MtimeNS != row.MtimeNS {
+				continue
+			}
+			if !slices.ContainsFunc(candidate.Tracking, observed.SameObject) {
+				continue
+			}
+			row.SHA256, row.Signature, row.NeedsHash = old.Hash, old.Signature, false
+			break
+		}
+	}
+	return nil
 }
 
 func applyHash(item *Item, hash []byte) {

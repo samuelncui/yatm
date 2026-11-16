@@ -21,7 +21,7 @@ type identicalCommand struct {
 	Result        string  `long:"result" description:"Find result ID for paging without recomputing"`
 	Offset        int64   `long:"offset" description:"Zero-based row offset"`
 	IncludeHidden bool    `long:"include-hidden" description:"Include dot-name files in row listing"`
-	SortKey       string  `long:"sort-key" choice:"file-id" choice:"name" choice:"size" default:"file-id" description:"Member order within each group"`
+	SortKey       string  `long:"sort-key" choice:"file-id" choice:"name" choice:"size" default:"size" description:"Member order within each group"`
 	Order         string  `long:"order" choice:"asc" choice:"desc" description:"Member sort direction (size defaults to desc; other keys to asc)"`
 	FileIDs       []int64 `long:"file-id" description:"File ID to locate in a Find result (repeatable)"`
 	Group         string  `long:"group" description:"Group ID from list"`

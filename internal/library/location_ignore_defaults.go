@@ -12,7 +12,6 @@ import (
 const DefaultLocationIgnore = `# YATM-managed entries. Edit or remove these rules to index them.
 .yatm.json
 .yatm-trash
-.yatm-restore-*
 .yatm-fileops-*
 `
 

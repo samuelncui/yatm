@@ -8,55 +8,25 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"gorm.io/gorm"
 )
 
-func (a *jobRestoreRunner) reserveOutput(
-	ctx context.Context, names *outputNames, version *library.FileVersion, desired string,
-) (string, bool, error) {
-	// An already chosen output survives another attempt and never grows a second suffix.
-	var stored File
-	err := a.db.WithContext(ctx).First(&stored, "item_id = ?", version.ID).Error
-	if err == nil && stored.Path != "" {
-		if stored.ReadMediaID != 0 {
-			return stored.Path, false, nil
-		}
-		if a.destination.GetLocationId() != 0 {
-			owner, err := a.exe.Lib().GetFileLocationAtPath(
-				ctx, a.destination.LocationId, path.Join(a.destination.Path, stored.Path),
-			)
-			if err != nil {
-				return "", false, err
-			}
-			if owner != nil {
-				return "", false, fmt.Errorf("reserved Restore output is already linked to File %d", owner.FileID)
-			}
-		}
-		matched, exists, err := a.outputMatches(ctx, stored.Path, version.Hash, version.Size)
-		if err != nil {
-			return "", false, err
-		}
-		if exists && !matched {
-			return "", false, fmt.Errorf("reserved Restore output changed: %q", stored.Path)
-		}
-		return stored.Path, matched, nil
-	}
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", false, err
-	}
-
-	// Resolve both filesystem collisions and other selected versions without replacing existing bytes.
-	restored := path.Join(path.Dir(desired), library.RestoredName(path.Base(desired), version.ID))
+// chooseOutput returns the first conflict name for desired that no other selected version or Library
+// original owns and that accept admits; a nil accept admits the first such name.
+func (a *jobRestoreRunner) chooseOutput(
+	ctx context.Context, itemID int64, desired string, accept func(string) (bool, error),
+) (string, error) {
+	restored := path.Join(path.Dir(desired), library.RestoredName(path.Base(desired), itemID))
 	ext := path.Ext(restored)
 	stem := restored[:len(restored)-len(ext)]
 	for suffix := 0; ; suffix++ {
-		// Choose the next deterministic candidate without continuing canceled preparation.
+		// Choose the next deterministic candidate without continuing a canceled operation.
 		if err := ctx.Err(); err != nil {
-			return "", false, err
+			return "", err
 		}
 		candidate := desired
 		if suffix == 1 {
@@ -66,12 +36,12 @@ func (a *jobRestoreRunner) reserveOutput(
 			candidate = fmt.Sprintf("%s (%d)%s", stem, suffix, ext)
 		}
 
-		// Only nonempty frozen paths reserve outputs; pending empty rows must not enter this lookup.
+		// Only nonempty paths reserve outputs; pending empty rows must not enter this lookup.
 		// Match the existing partial index predicate so each candidate avoids a manifest-wide scan.
 		var count int64
 		if err := a.db.WithContext(ctx).Model(&File{}).
-			Where("path = ? AND path <> ''", candidate).Count(&count).Error; err != nil {
-			return "", false, err
+			Where("path = ? AND path <> '' AND item_id <> ?", candidate, itemID).Count(&count).Error; err != nil {
+			return "", err
 		}
 		if count > 0 {
 			continue
@@ -83,35 +53,89 @@ func (a *jobRestoreRunner) reserveOutput(
 				ctx, a.destination.LocationId, path.Join(a.destination.Path, candidate),
 			)
 			if err != nil {
-				return "", false, err
+				return "", err
 			}
 			if owner != nil {
 				continue
 			}
 		}
-
-		// Reuse matching bytes and preserve unrelated existing content.
-		matched, exists, err := a.outputMatches(ctx, candidate, version.Hash, version.Size)
+		if accept == nil {
+			return candidate, nil
+		}
+		accepted, err := accept(candidate)
 		if err != nil {
-			return "", false, err
+			return "", err
 		}
-		if exists && !matched {
-			continue
+		if accepted {
+			return candidate, nil
 		}
+	}
+}
 
-		// Claim the native filesystem name before freezing its output reservation.
-		claimed, err := names.claim(ctx, candidate)
-		if err != nil {
-			return "", false, err
+// claimOutput creates the item's output exclusively before ACP replaces it with transferred bytes.
+// The filesystem reports any existing entry, including a case- or normalization-equivalent name,
+// as EEXIST; the next conflict name is then tried. A path this Job already claimed is kept.
+func (a *jobRestoreRunner) claimOutput(ctx context.Context, copy *copyCandidate) error {
+	var output File
+	if err := a.db.WithContext(ctx).First(&output, "item_id = ?", copy.ItemID).Error; err != nil {
+		return err
+	}
+	if output.ReadMediaID != 0 {
+		created, err := a.createOutput(ctx, copy.TargetPath)
+		if err != nil || created {
+			return err
 		}
-		if !claimed {
-			continue
+		if !a.emptyOutput(copy.TargetPath) {
+			return &restoreItemError{fmt.Errorf("reserved Restore output changed: %q", copy.TargetPath)}
 		}
-		if err := a.db.WithContext(ctx).Model(&File{}).
-			Where("item_id = ?", version.ID).Update("path", candidate).Error; err != nil {
-			return "", false, err
-		}
-		return candidate, matched, nil
+		return nil
+	}
+	target, err := a.chooseOutput(ctx, copy.ItemID, output.DesiredPath, func(candidate string) (bool, error) {
+		return a.createOutput(ctx, candidate)
+	})
+	if err != nil {
+		return err
+	}
+	copy.TargetPath = target
+	return nil
+}
+
+// createOutput reuses existing directories and creates an empty output only when its name is free.
+func (a *jobRestoreRunner) createOutput(ctx context.Context, relative string) (bool, error) {
+	filename, err := a.exe.RestoreOutputPath(ctx, a.destination, relative)
+	if err != nil {
+		return false, err
+	}
+	parent := filepath.Dir(filename)
+	if err := os.MkdirAll(parent, os.ModePerm); err != nil {
+		return false, &restoreItemError{fmt.Errorf("create Restore output directory failed, path=%q, %w", relative, err)}
+	}
+	if info, err := os.Lstat(parent); err != nil || !info.IsDir() {
+		return false, &restoreItemError{fmt.Errorf("Restore output parent is not a real directory: %q", relative)}
+	}
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if errors.Is(err, fs.ErrExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, &restoreItemError{fmt.Errorf("create Restore output failed, path=%q, %w", relative, err)}
+	}
+	return true, file.Close()
+}
+
+// emptyOutput reports whether relative still holds only the empty output that claimOutput creates.
+func (a *jobRestoreRunner) emptyOutput(relative string) bool {
+	info, err := os.Lstat(a.restoreTarget(relative))
+	return err == nil && info.Mode().IsRegular() && info.Size() == 0
+}
+
+// releaseOutput removes a still-empty claim after a failed transfer; a retry creates it again.
+func (a *jobRestoreRunner) releaseOutput(ctx context.Context, copy *copyCandidate) {
+	if copy.Size == 0 || !a.emptyOutput(copy.TargetPath) {
+		return
+	}
+	if err := os.Remove(a.restoreTarget(copy.TargetPath)); err != nil && !os.IsNotExist(err) {
+		a.logger.WithContext(ctx).WithError(err).Warnf("remove empty Restore output failed, path=%q", copy.TargetPath)
 	}
 }
 

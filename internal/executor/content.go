@@ -141,15 +141,16 @@ func (e *Executor) CaptureOriginal(ctx context.Context, fileID int64) (string, *
 // CaptureOriginals prepares bounded batches in input order, omitting Files without originals.
 // All other observation and admission failures stop preparation.
 func (e *Executor) CaptureOriginals(ctx context.Context, ids []int64, yield func(int64, string, *entity.ExpectedFile) error) error {
+	tracker := NewTracker()
 	for start := 0; start < len(ids); start += 256 {
-		if err := e.captureOriginalBatch(ctx, ids[start:min(start+256, len(ids))], yield); err != nil {
+		if err := e.captureOriginalBatch(ctx, tracker, ids[start:min(start+256, len(ids))], yield); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield func(int64, string, *entity.ExpectedFile) error) error {
+func (e *Executor) captureOriginalBatch(ctx context.Context, tracker *Tracker, ids []int64, yield func(int64, string, *entity.ExpectedFile) error) error {
 	// Share catalog reads and source validation while preserving each leaf's physical observation.
 	facts, err := e.lib.ReadFileFacts(ctx, ids, false, false)
 	if err != nil {
@@ -158,7 +159,7 @@ func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield 
 	locations := make(map[int64]*library.Location)
 	parents := make(map[fileParentGuardKey]*LocationDirectoryReader)
 	var order []int64
-	groups := make(map[int64][]*library.ObservationAdmission)
+	groups := make(map[int64][]*library.ObservedEntry)
 	infos := make(map[int64]os.FileInfo)
 	filenames := make(map[int64]string)
 	for _, id := range ids {
@@ -203,7 +204,7 @@ func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield 
 			parents[key] = reader
 		}
 		full := filepath.Join(reader.full, path.Base(original.Path))
-		observed, err := os.Lstat(full)
+		observed, err := Lstat(full)
 		if err != nil {
 			return err
 		}
@@ -219,14 +220,14 @@ func (e *Executor) captureOriginalBatch(ctx context.Context, ids []int64, yield 
 		if err != nil {
 			return err
 		}
-		item, err := selectedFileObservation(location, entry.Reference, observed)
+		item, err := selectedFileObservation(tracker, location, entry.Reference, observed)
 		if err != nil {
 			return err
 		}
 		position := item.Position()
 		position.FileID = id
 		preserveObservedSignature(position, original)
-		groups[location.ID] = append(groups[location.ID], &library.ObservationAdmission{Observation: position})
+		groups[location.ID] = append(groups[location.ID], position)
 		infos[id], filenames[id] = observed, full
 	}
 

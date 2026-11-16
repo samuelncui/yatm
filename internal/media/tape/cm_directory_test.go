@@ -11,8 +11,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/samuelncui/yatm/entity"
 )
 
 // cmDirectoryTestSeal constructs the ECMA-319 generator rather than copying decoder coefficients.
@@ -187,7 +185,6 @@ func TestCartridgeDirectoryCapture(t *testing.T) {
 
 	// Exact exclusive endpoints include both filemark totals and the partial final wrap.
 	if len(want) != 23 || !reflect.DeepEqual(observed.Endpoints, want) || !observed.Valid() || !observed.AllWraps ||
-		observed.EndpointConvention != entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE ||
 		observed.Fresh != nil || observed.ObservedAt.IsZero() || !bytes.Equal(before, data) {
 		t.Fatalf("captured CM map=%+v", observed)
 	}
@@ -345,7 +342,7 @@ func TestCartridgeDirectoryMalformed(t *testing.T) {
 			binary.BigEndian.PutUint16(f.data[f.table+18:f.table+20], uint16(f.dir))
 			cmDirectoryTestSeal(f.data[f.table+4 : f.table+32])
 		}},
-		{name: "too many partitions", want: ErrUnsupported, edit: func(f *cmDirectoryTestLayout) {
+		{name: "malformed retained EOD page", edit: func(f *cmDirectoryTestLayout) {
 			binary.BigEndian.PutUint16(f.data[f.table+16:f.table+18], 0x210f)
 			binary.BigEndian.PutUint16(f.data[f.table+18:f.table+20], uint16(f.dir+2576))
 			cmDirectoryTestSeal(f.data[f.table+4 : f.table+32])
@@ -474,7 +471,7 @@ func TestCartridgeDirectoryTruncation(t *testing.T) {
 	// Every header/table/page boundary must stay within the actual received image.
 	fixture := cmDirectoryTestImage(t, 0, cmDirectoryTestRun{first: 0, counts: [][4]uint32{{10, 0, 3, 0}}})
 	for _, size := range []int{0, 35, 36, 40, 43, 63, 64, 92, 95, 127, 128, 143,
-		fixture.dir + 2575, fixture.eods[0] + 95, 8193} {
+		fixture.dir + 2575, fixture.eods[0] + 95, 32769} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			data := fixture.data
 			if size > len(data) {

@@ -8,10 +8,11 @@ import (
 )
 
 func (a *jobRestoreRunner) beginOutput(ctx context.Context, copy *copyCandidate) error {
-	// Record the source before ACP writes bytes, including attempts whose completion checkpoint fails.
+	// Record the created output and its source before ACP writes bytes, including attempts whose
+	// completion checkpoint fails; a recorded source makes this path the item's own.
 	value := &File{ItemID: copy.ItemID, Path: copy.TargetPath, ReadMediaID: copy.MediaID}
 	return a.db.WithContext(ctx).Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"read_media_id"}),
+		DoUpdates: clause.AssignmentColumns([]string{"path", "read_media_id"}),
 	}).Create(value).Error
 }
 

@@ -73,6 +73,7 @@ func TestImportArchivePositionRootsTreatsDirectoryPathsAsSegments(t *testing.T) 
 	require.NoError(t, db.Create(directory).Error)
 	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "foo/inside.txt", Signature: []byte("inside"), Mode: 0o644}).Error)
 	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "foobar/outside.txt", Signature: []byte("outside"), Mode: 0o644}).Error)
+	require.NoError(t, db.Create(&Position{MediaID: media.ID, Path: "FOO/other-case.txt", Signature: []byte("other-case"), Mode: 0o644}).Error)
 
 	result, err := lib.ImportArchivePositionRoots(ctx, []int64{directory.ID})
 	require.NoError(t, err)
@@ -337,4 +338,25 @@ func TestImportArchivePositionSelectionRollsBackLaterPageFailure(t *testing.T) {
 	var positions int64
 	require.NoError(t, db.Model(ModelPosition).Where("media_id = ?", media.ID).Count(&positions).Error)
 	require.EqualValues(t, batchSize+2, positions)
+}
+
+func TestImportArchivePositionRootsPrunesDescendantsAfterInterleavedSiblings(t *testing.T) {
+	// "a-b" sorts between "a" and "a/c"; the selected directory still covers its descendant.
+	ctx := context.Background()
+	db, lib := newTestLibrary(t)
+	media, err := lib.CreateMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
+		Identity: "0f8e3d52-1c56-4d0e-9a3b-6b1e2f0c9d11", Name: "Archive",
+		Profile: (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()})
+	require.NoError(t, err)
+	directory := &Position{MediaID: media.ID, Path: "a", IsDir: true}
+	sibling := &Position{MediaID: media.ID, Path: "a-b", Signature: []byte("sibling"), Mode: 0o644}
+	nested := &Position{MediaID: media.ID, Path: "a/c", Signature: []byte("nested"), Mode: 0o644}
+	for _, row := range []*Position{directory, sibling, nested} {
+		require.NoError(t, db.Create(row).Error)
+	}
+
+	result, err := lib.ImportArchivePositionRoots(ctx, []int64{directory.ID, sibling.ID, nested.ID})
+	require.NoError(t, err)
+	require.Equal(t, int64(2), result.Files)
+	require.Zero(t, result.ExistingFiles)
 }

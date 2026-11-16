@@ -19,7 +19,7 @@ func tarReadModelFixture(t *testing.T, valid func() bool) *ReadCostModel {
 		valid = func() bool { return true }
 	}
 	model, err := NewReadCostModel(ReadModelProfile{ID: "software-only tar fixture", SnapshotValid: valid,
-		Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{0: 0}, MinLPOS: 0, MaxLPOS: 10000,
+		BOT: map[uint32]uint64{0: 0}, MinLPOS: 0, MaxLPOS: 10000,
 		Wraps:        []ReadModelWrap{{Partition: 0, Wrap: 7, Band: 2, Direction: ReadWrapForward, Full: true, Endpoint: proto.Uint64(10000)}},
 		Coefficients: ReadModelCoefficients{Base: 10}})
 	if err != nil {

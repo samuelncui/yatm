@@ -135,6 +135,8 @@ func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
 	require.NoError(t, r.db.Order("location_id").Find(&rows).Error)
 	require.Len(t, rows, 3)
 	require.True(t, rows[0].Published)
+	require.Positive(t, rows[0].FileID)
+	require.Zero(t, rows[0].PositionID, "a published Location original has no Media Position")
 	require.Len(t, rows[0].SHA256, 32)
 	require.False(t, rows[1].Published)
 	require.False(t, rows[2].Published)
@@ -152,8 +154,8 @@ func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
 	require.Error(t, err, "a retained complete manifest cannot restart a failed Scan")
 }
 
-func TestScanLogicalMissingOriginalFailsBeforeAnyPublication(t *testing.T) {
-	// Leave a missing association after a complete input page, with an explicit physical selection too.
+func TestScanLogicalSelectionSkipsFilesWithoutOriginal(t *testing.T) {
+	// A selected File without an original association is skipped; the remaining selection is scanned.
 	f := newInputFixture(t, batchSize+1, 3)
 	ctx := context.Background()
 	var missing library.FileLocation
@@ -164,17 +166,15 @@ func TestScanLogicalMissingOriginalFailsBeforeAnyPublication(t *testing.T) {
 	spec.ResultPolicy = entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS
 	r, _ := runAnalysis(t, f.exe, spec)
 
-	// Even observations already written to the Job must not admit the missing association or publish content.
 	job, err := f.exe.GetJob(ctx, r.job.ID)
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, job.Status)
-	require.Contains(t, job.Error, "has no original")
+	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, job.Status, job.Error)
 	original, err := f.exe.Lib().GetFileLocation(ctx, missing.FileID)
 	require.NoError(t, err)
-	require.Nil(t, original)
+	require.Nil(t, original, "a skipped File is never associated by its former path")
 	var published int64
 	require.NoError(t, r.db.Model(&Entry{}).Where("published = ?", true).Count(&published).Error)
-	require.Zero(t, published)
+	require.Positive(t, published)
 }
 
 func TestScanPhysicalLogicalOverlapObservesEachEntryOnce(t *testing.T) {
@@ -389,7 +389,8 @@ func TestScanMatchingReadsOnlySelectedIdentitiesInGlobalOrder(t *testing.T) {
 	require.Len(t, matched, 2)
 	require.Equal(t, old[1].FileID, matched[0].FileID)
 	require.Equal(t, old[0].FileID, matched[1].FileID)
-	require.EqualValues(t, 6, originalRows.Load(), "three global rounds read only the two selected old identities")
+	// Signature candidate selection and three global rounds read only the two selected old identities.
+	require.EqualValues(t, 8, originalRows.Load())
 }
 
 func TestScanExactPathsWinBeforeRelocation(t *testing.T) {

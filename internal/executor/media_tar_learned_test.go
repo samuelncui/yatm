@@ -31,7 +31,7 @@ func TestTarLearnedParametersUseExactScopeAndPreserveManualInputs(t *testing.T) 
 	selected, source = selectTarReadParameters(value, "drive", report, &entity.TapeMediaProfile{Tar: profile})
 	require.Equal(t, "builtin", source)
 	require.Equal(t, uint32(262144), selected.AppliesTo.GetRecordBytes())
-	require.Contains(t, selected.SourceReference, "builtin")
+	require.Equal(t, tarBuiltinSourceReference, selected.SourceReference)
 	profile.RecordBytes = 524288
 	report.Firmware = nil
 	selected, _ = selectTarReadParameters(value, "drive", report, &entity.TapeMediaProfile{Tar: profile})
@@ -39,7 +39,7 @@ func TestTarLearnedParametersUseExactScopeAndPreserveManualInputs(t *testing.T) 
 	require.NotEmpty(t, tarReadParametersReason(selected, report, &entity.TapeMediaProfile{Tar: profile}))
 	report.Firmware = proto.String("firmware")
 	selected, _ = selectTarReadParameters(value, "other", report, &entity.TapeMediaProfile{Tar: profile})
-	require.Contains(t, selected.SourceReference, "builtin")
+	require.Equal(t, tarBuiltinSourceReference, selected.SourceReference)
 
 	// A deliberately partial manual draft remains partial and takes precedence over learned values.
 	manual := &entity.TapeReadParameters{SourceReference: "operator partial input"}

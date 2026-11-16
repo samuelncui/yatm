@@ -13,13 +13,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// selectionCandidate keeps only relevant IDs in the request-owned preparation database.
-type selectionCandidate struct {
-	FileID int64 `gorm:"primaryKey;autoIncrement:false"`
-}
-
-func (selectionCandidate) TableName() string { return "candidate_ids" }
-
 func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locationID int64, roots []*entity.LocationSelection) error {
 	// Preparing a Job manifest holds the shared read admission, not the Location itself.
 	location, err := e.lib.GetLocation(ctx, locationID)
@@ -29,14 +22,10 @@ func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locatio
 	if _, err := e.CheckLocation(location); err != nil {
 		return err
 	}
-	// These request-owned rows retain observations and relevant IDs, never a copy of Library facts.
-	if err := db.WithContext(ctx).AutoMigrate(&selectionCandidate{}); err != nil {
+	tracker := NewTracker()
+	// These request-owned rows retain observations, never a copy of Library facts.
+	if err := db.WithContext(ctx).Where("1 = 1").Delete(&observation.Item{}).Error; err != nil {
 		return err
-	}
-	for _, model := range []any{&observation.Item{}, &selectionCandidate{}} {
-		if err := db.WithContext(ctx).Where("1 = 1").Delete(model).Error; err != nil {
-			return err
-		}
 	}
 	// Persist directory and file observations in bounded writes; catalog facts are joined per batch.
 	batch := make([]*observation.Item, 0, observation.BatchSize)
@@ -67,7 +56,7 @@ func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locatio
 		ref := entry.Reference
 		err = e.walkLocationSelection(ctx, location, ref, info, false, 0, covered,
 			func(ref *entity.LocationEntryRef, info os.FileInfo) error {
-				item, err := selectedFileObservation(location, ref, info)
+				item, err := selectedFileObservation(tracker, location, ref, info)
 				if err != nil {
 					return err
 				}
@@ -84,54 +73,8 @@ func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locatio
 	if err := flush(); err != nil {
 		return err
 	}
-	if err := e.stageSelectionCandidateIDs(ctx, db, location); err != nil {
-		return err
-	}
-	candidates := func(ctx context.Context, after int64, limit int) ([]*observation.Original, error) {
-		var ids []int64
-		if err := db.WithContext(ctx).Model(&selectionCandidate{}).Where("file_id > ?", after).
-			Order("file_id").Limit(limit).Pluck("file_id", &ids).Error; err != nil {
-			return nil, err
-		}
-		rows, err := e.lib.MatchingCandidates(ctx, ids)
-		if err != nil {
-			return nil, err
-		}
-		paths := make([]string, 0, len(rows))
-		for _, row := range rows {
-			if row.Original != nil {
-				paths = append(paths, row.Original.Path)
-			}
-		}
-		var observedPaths []string
-		if len(paths) > 0 {
-			if err := db.WithContext(ctx).Model(&observation.Item{}).Where("path IN ? AND directory = ?", paths, false).Pluck("path", &observedPaths).Error; err != nil {
-				return nil, err
-			}
-		}
-		observed := make(map[string]bool, len(observedPaths))
-		for _, name := range observedPaths {
-			observed[name] = true
-		}
-		values := make([]*observation.Original, 0, len(rows))
-		for _, row := range rows {
-			value := &observation.Original{FileID: row.FileID}
-			values = append(values, value)
-			if old := row.Original; old != nil {
-				if !observed[old.Path] && !e.absentAdmissionPath(location, old) {
-					continue
-				}
-				value.Path = old.Path
-				if old.LocationID == location.ID {
-					value.Signature, value.Hash, value.Size = old.Signature, old.Hash, old.Size
-				}
-			}
-			value.Evidence = observation.FromKeys(row.Tracking)
-		}
-		return values, nil
-	}
 	store := observation.NewMatchStore(db.Model(&observation.Item{}).Where("directory = ?", false))
-	if err := observation.Match(ctx, store, candidates, nil); err != nil {
+	if err := e.MatchLocationObservations(ctx, location, store, nil); err != nil {
 		return err
 	}
 	_, err = e.lib.PublishSelectedObservations(ctx, location.ID, func(ctx context.Context, yield func(*library.ObservedEntry) error) error {
@@ -162,99 +105,14 @@ func (e *Executor) stageLiveSelections(ctx context.Context, db *gorm.DB, locatio
 	})
 }
 
-func (e *Executor) stageSelectionCandidateIDs(ctx context.Context, db *gorm.DB, location *library.Location) error {
-	// Keep matching work proportional to selected evidence, while ID order preserves global rule precedence.
-	store := func(ids []int64) error {
-		if len(ids) == 0 {
-			return nil
-		}
-		rows := make([]selectionCandidate, 0, len(ids))
-		for _, id := range ids {
-			rows = append(rows, selectionCandidate{FileID: id})
-		}
-		return db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
-	}
-	var after string
-	for {
-		var rows []*observation.Item
-		if err := db.WithContext(ctx).Where("directory = ? AND path > ?", false, after).
-			Order("path").Limit(observation.BatchSize).Find(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) == 0 {
-			return nil
-		}
-		var ids []int64
-		paths := make([]string, 0, len(rows))
-		positions := make([]*library.ObservedEntry, 0, len(rows))
-		var signatures [][]byte
-		for _, row := range rows {
-			positions = append(positions, row.Position())
-			if len(row.Signature) > 0 {
-				signatures = append(signatures, row.Signature)
-			}
-			paths = append(paths, row.Path)
-		}
-		originals, err := e.lib.ReadFileOriginalsAt(ctx, location.ID, paths)
-		if err != nil {
-			return err
-		}
-		for _, old := range originals {
-			ids = append(ids, old.FileID)
-		}
-		if err := store(ids); err != nil {
-			return err
-		}
-
-		// Only equal selected signatures and tracking evidence admit relocation candidates.
-		var cursor int64
-		for {
-			matches, err := e.lib.AdmissionSignatureCandidates(ctx, location, signatures, cursor, observation.BatchSize)
-			if err != nil {
-				return err
-			}
-			if len(matches) == 0 {
-				break
-			}
-			ids = ids[:0]
-			for _, match := range matches {
-				ids = append(ids, match.FileID)
-			}
-			if err := store(ids); err != nil {
-				return err
-			}
-			cursor = matches[len(matches)-1].FileID
-		}
-		cursor = 0
-		for {
-			keys, err := e.lib.AdmissionCandidates(ctx, location, library.TrackingNative, positions, cursor, observation.BatchSize)
-			if err != nil {
-				return err
-			}
-			if len(keys) == 0 {
-				break
-			}
-			ids = ids[:0]
-			for _, key := range keys {
-				ids = append(ids, key.FileID)
-			}
-			if err := store(ids); err != nil {
-				return err
-			}
-			cursor = keys[len(keys)-1].FileID
-		}
-		after = rows[len(rows)-1].Path
-	}
-}
-
-func selectedFileObservation(location *library.Location, ref *entity.LocationEntryRef, info os.FileInfo) (*observation.Item, error) {
+func selectedFileObservation(tracker *Tracker, location *library.Location, ref *entity.LocationEntryRef, info os.FileInfo) (*observation.Item, error) {
 	// Evidence consumes the metadata already observed during traversal.
 	facts, err := InspectLocationFacts(info)
 	if err != nil {
 		return nil, err
 	}
 	name := filepath.Join(location.RootPath, filepath.FromSlash(ref.Path))
-	keys := ObserveTracking(location, info)
+	keys := tracker.Observe(name, info)
 	item := &observation.Item{Path: ref.Path, Reference: ref, Size: facts.SizeBytes, Mode: facts.Mode, MtimeNS: facts.MtimeNs, Evidence: observation.FromKeys(keys)}
 
 	// Selection and direct admission share the same optional cache applicability rule.
@@ -269,6 +127,14 @@ func (e *Executor) stageSelectedFiles(ctx context.Context, db *gorm.DB, location
 	if len(rows) == 0 {
 		return nil
 	}
+	if err := e.enrichSelectedFiles(ctx, location, rows); err != nil {
+		return err
+	}
+	return db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
+}
+
+// enrichSelectedFiles keeps the recorded content facts of an original observed unchanged at its path.
+func (e *Executor) enrichSelectedFiles(ctx context.Context, location *library.Location, rows []*observation.Item) error {
 	paths := make([]string, 0, len(rows))
 	for _, item := range rows {
 		if !item.Directory {
@@ -299,7 +165,7 @@ func (e *Executor) stageSelectedFiles(ctx context.Context, db *gorm.DB, location
 			item.Hash, item.Signature = old.Hash, old.Signature
 		}
 	}
-	return db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&rows).Error
+	return nil
 }
 
 func eachSelectionObservation(ctx context.Context, db *gorm.DB, yield func(*observation.Item) error) error {

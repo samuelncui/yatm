@@ -68,8 +68,7 @@ func TestLTFSReadOrderPositionMapKeepsPartitionCoverageAndIndexOwner(t *testing.
 		Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack()}
 	facts := &ltfsReadFacts{uuid: "204d1c2f-c755-44cf-ac70-8541ded5f005", generation: 7}
 	snapshot := &ltfsReadSnapshot{source: "A3/1F/45", observedAt: time.Now(),
-		boundary: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE,
-		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180},
+		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 			{Partition: 1, Wrap: 4, Object: 8}}}
 	value, observed, reason := ltfsReadPositionMap(parameters, stored, facts, snapshot)
 	require.NotNil(t, value, reason)
@@ -106,7 +105,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 	// Acquire the captured CM through the actual Device fallback, with REOWP unavailable.
 	data, err := os.ReadFile("../media/tape/testdata/cm/hp-lto5-directory-v4.bin")
 	require.NoError(t, err)
-	provider := &tarReadMapProvider{tarReloadFixture: &tarReloadFixture{tarDeviceFixture: newTarDeviceFixture()}, cm: data, partitions: 2}
+	provider := &tarReadMapProvider{tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()}, cm: data, partitions: 2}
 	identity, err := provider.Resolve("/dev/nst0")
 	require.NoError(t, err)
 	transport, err := provider.Open(identity)
@@ -126,7 +125,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 		Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack()}
 	facts := &ltfsReadFacts{uuid: "204d1c2f-c755-44cf-ac70-8541ded5f005", generation: 7}
 	snapshot := &ltfsReadSnapshot{source: geometry.Source, observedAt: geometry.ObservedAt,
-		endpoints: geometry.Endpoints, boundary: geometry.EndpointConvention}
+		endpoints: geometry.Endpoints}
 	value, observed, reason := ltfsReadPositionMap(parameters, stored, facts, snapshot)
 	require.NotNil(t, value, reason)
 	require.True(t, observed)
@@ -142,7 +141,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 	require.NoError(t, json.Unmarshal(expectedData, &expectedEndpoints))
 	confirmed, _, reason := ltfsReadPositionMap(parameters, stored, facts, &ltfsReadSnapshot{
 		endpoints: expectedEndpoints, source: "Independently captured endpoints with explicit count semantics",
-		observedAt: geometry.ObservedAt, boundary: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE,
+		observedAt: geometry.ObservedAt,
 	})
 	require.NotNil(t, confirmed, reason)
 	reference, reason := compileTapePositionMap(parameters, confirmed, geometry.Valid)

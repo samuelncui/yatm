@@ -45,7 +45,6 @@ export function useIdenticalSparse(
   sortKey: IdenticalSortKey,
   descending: boolean,
   removed: Map<string, IdenticalPosition>,
-  suppressedIds: Set<string>,
   removedGroups: Set<string>,
   removedGroupIntervals: Map<string, ProjectionIntervals>,
   changedGroups: Set<string>,
@@ -407,7 +406,7 @@ export function useIdenticalSparse(
       if (!row.group || removedGroups.has(row.group.id)) continue;
       const entry = row.member?.entry;
       const fileId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
-      if (fileId !== undefined && (removed.has(String(fileId)) || suppressedIds.has(String(fileId)))) continue;
+      if (fileId !== undefined && removed.has(String(fileId))) continue;
       const index = toDisplayPosition(Number(row.position), exclusions);
       if (index === undefined) continue;
       const group: SparseGroup = {
@@ -427,7 +426,7 @@ export function useIdenticalSparse(
       else if (!row.member) rows.push({ index, kind: "group", group });
     }
     return rows.sort((a, b) => a.index - b.index);
-  }, [actionIds, allRows, busyGroups, changedGroups, collapsed, description, exclusions, memberFile, removed, removedCounts, removedGroups, suppressedIds]);
+  }, [actionIds, allRows, busyGroups, changedGroups, collapsed, description, exclusions, memberFile, removed, removedCounts, removedGroups]);
   const files = useMemo(() => {
     const next = new Map<string, FileData>();
     const visibleIds = new Set(sparseRows.flatMap((row) => (row.kind === "file" ? [row.fileId] : [])));
@@ -438,12 +437,11 @@ export function useIdenticalSparse(
     for (const [id, value] of pinned) {
       const entry = value.row.member?.entry;
       const fileId = entry?.associatedFileId ?? (entry?.reference?.target.oneofKind === "fileId" ? entry.reference.target.fileId : undefined);
-      if (removedGroups.has(value.row.group?.id ?? "") || (fileId !== undefined && (removed.has(String(fileId)) || suppressedIds.has(String(fileId)))))
-        continue;
+      if (removedGroups.has(value.row.group?.id ?? "") || (fileId !== undefined && removed.has(String(fileId)))) continue;
       next.set(id, memberFile(value.row) ?? value.file);
     }
     return [...next.values()];
-  }, [allRows, memberFile, pinned, removed, removedGroups, sparseRows, suppressedIds]);
+  }, [allRows, memberFile, pinned, removed, removedGroups, sparseRows]);
   return {
     files: unavailable ? [] : files,
     grouping: {

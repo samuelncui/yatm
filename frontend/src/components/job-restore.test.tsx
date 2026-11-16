@@ -190,7 +190,7 @@ describe("RestoreCard", () => {
     expect(mediaInspect).toHaveBeenCalledOnce();
     expect(restoreMedia).toHaveBeenCalledWith({
       id: 20n,
-      target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0", refreshPositionMap: false } }, expectedMediaId: 9n, expectedIdentity: "BPP875" },
+      target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0" } }, expectedMediaId: 9n, expectedIdentity: "BPP875" },
     });
   });
 
@@ -229,7 +229,7 @@ describe("RestoreCard", () => {
     });
     expect(restoreMedia).toHaveBeenCalledWith({
       id: 20n,
-      target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0", refreshPositionMap: false } }, expectedMediaId: 9n, expectedIdentity: "BPP875" },
+      target: { backend: { oneofKind: "tape", tape: { device: "/dev/nst0" } }, expectedMediaId: 9n, expectedIdentity: "BPP875" },
     });
   });
 });

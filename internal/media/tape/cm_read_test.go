@@ -36,7 +36,7 @@ func TestReadCartridgeMemoryChunks(t *testing.T) {
 	defer transport.Close()
 
 	// Real query validation and transport serialization produce one complete image, without motion.
-	got, err := readCartridgeMemory(t.Context(), transport)
+	got, err := readCartridgeMemory(t.Context(), transport, 0x10)
 	if err != nil || calls != 3 || !bytes.Equal(got, want) {
 		t.Fatalf("bytes=%d calls=%d err=%v", len(got), calls, err)
 	}
@@ -47,8 +47,8 @@ func TestReadCartridgeMemoryCapacity(t *testing.T) {
 		capacity, calls int
 		malformed       bool
 	}{
-		{0, 1, false}, {1, 2, false}, {4096, 2, false}, {4097, 3, false}, {8192, 3, false},
-		{8193, 1, true}, {65536, 1, true}, {0xffffff, 1, true},
+		{0, 1, false}, {1, 2, false}, {4096, 2, false}, {4097, 3, false}, {32768, 9, false},
+		{32769, 1, true}, {65536, 1, true}, {0xffffff, 1, true},
 	} {
 		t.Run(fmt.Sprint(test.capacity), func(t *testing.T) {
 			// Capacity occupies all three descriptor bytes; rejected sizes never request image data.
@@ -62,8 +62,8 @@ func TestReadCartridgeMemoryCapacity(t *testing.T) {
 			}, func() error { return nil })
 			defer transport.Close()
 
-			// Unavailable memory remains absent; supported sizes include the exact 8 KiB ceiling.
-			data, err := readCartridgeMemory(t.Context(), transport)
+			// Unavailable memory remains absent; supported sizes include the exact 32 KiB ceiling.
+			data, err := readCartridgeMemory(t.Context(), transport, 0x10)
 			if calls != test.calls || errors.Is(err, ErrMalformed) != test.malformed {
 				t.Fatalf("calls=%d err=%v", calls, err)
 			}
@@ -119,7 +119,7 @@ func TestReadCartridgeMemoryFailures(t *testing.T) {
 				return Response{Completed: true}, nil
 			}, func() error { return nil })
 			defer transport.Close()
-			data, err := readCartridgeMemory(t.Context(), transport)
+			data, err := readCartridgeMemory(t.Context(), transport, 0x10)
 			if data != nil || err == nil || calls != test.failAt ||
 				test.want != nil && !errors.Is(err, test.want) || !strings.Contains(err.Error(), test.message) ||
 				CleanUnsupported(err) != test.unsupported {
@@ -128,7 +128,7 @@ func TestReadCartridgeMemoryFailures(t *testing.T) {
 
 			// Unknown completion retains the transport's existing refusal of later device commands.
 			if errors.Is(err, ErrUncertain) {
-				_, nextErr := readCartridgeMemory(t.Context(), transport)
+				_, nextErr := readCartridgeMemory(t.Context(), transport, 0x10)
 				if !errors.Is(nextErr, ErrUncertain) || calls != test.failAt {
 					t.Fatalf("later read err=%v calls=%d", nextErr, calls)
 				}
@@ -158,7 +158,7 @@ func TestReadCartridgeMemoryCancellation(t *testing.T) {
 				return Response{Completed: true}, nil
 			}, func() error { return nil })
 			defer transport.Close()
-			data, err := readCartridgeMemory(ctx, transport)
+			data, err := readCartridgeMemory(ctx, transport, 0x10)
 			if data != nil || !errors.Is(err, context.Canceled) || calls != at {
 				t.Fatalf("bytes=%d calls=%d err=%v", len(data), calls, err)
 			}
@@ -176,7 +176,9 @@ func TestPassiveCartridgeMemoryCommands(t *testing.T) {
 		{[]byte{0x3c, 2, 0x10, 0, 0, 0, 0, 0x10, 0, 0}, 4096},
 		{[]byte{0x3c, 2, 0x10, 0, 0x10, 0, 0, 0x0f, 0xe0, 0}, 4064},
 		{[]byte{0x3c, 2, 0x10, 0, 0x10, 0, 0, 0x10, 0, 0}, 4096},
-		{[]byte{0x3c, 2, 0x10, 0, 0x1f, 0xff, 0, 0, 1, 0}, 1},
+		{[]byte{0x3c, 2, 0x10, 0, 0x7f, 0xff, 0, 0, 1, 0}, 1},
+		{[]byte{0x3c, 3, 0x05, 0, 0, 0, 0, 0, 4, 0}, 4},
+		{[]byte{0x3c, 2, 0x05, 0, 0, 0, 0, 0x10, 0, 0}, 4096},
 	} {
 		if !passiveCommand(Command{CDB: test.cdb, Data: make([]byte, test.bytes), Direction: FromDevice}) {
 			t.Fatalf("valid READ BUFFER rejected: %x", test.cdb)
@@ -208,8 +210,9 @@ func TestPassiveCartridgeMemoryCommands(t *testing.T) {
 		{"high allocation", []byte{0x3c, 2, 0x10, 0, 0, 0, 1, 0, 4, 0}, 4},
 		{"transfer limit", []byte{0x3c, 2, 0x10, 0, 0, 0, 0, 0x10, 1, 0}, 4097},
 		{"high offset", []byte{0x3c, 2, 0x10, 1, 0, 0, 0, 0, 4, 0}, 4},
-		{"offset at end", []byte{0x3c, 2, 0x10, 0, 0x20, 0, 0, 0, 1, 0}, 1},
-		{"range past end", []byte{0x3c, 2, 0x10, 0, 0x10, 1, 0, 0x10, 0, 0}, 4096},
+		{"offset at end", []byte{0x3c, 2, 0x10, 0, 0x80, 0, 0, 0, 1, 0}, 1},
+		{"range past end", []byte{0x3c, 2, 0x10, 0, 0x70, 1, 0, 0x10, 0, 0}, 4096},
+		{"main buffer segment", []byte{0x3c, 2, 0x20, 0, 0, 0, 0, 0, 4, 0}, 4},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if passiveCommand(Command{CDB: test.cdb, Data: make([]byte, test.bytes), Direction: FromDevice}) {

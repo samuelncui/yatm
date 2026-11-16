@@ -107,17 +107,14 @@ message DeleteLocationResponse {
 message CreateLocationResponse {
   Location location = 1;
   LocationAccessibility accessibility = 2;
-  repeated string warnings = 4;
 }
 message GetLocationResponse {
   Location location = 1;
   LocationAccessibility accessibility = 2;
-  repeated string warnings = 4;
 }
 message UpdateLocationResponse {
   Location location = 1;
   LocationAccessibility accessibility = 2;
-  repeated string warnings = 4;
 }
 message ListLocationsRequest {
   int64 after_id = 1;

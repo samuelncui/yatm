@@ -3,6 +3,7 @@ import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
+import { RpcError } from "@protobuf-ts/runtime-rpc";
 import { LibrarySettings, Location, SettingsValue } from "@/entity";
 import { createAppStore } from "@/state/store";
 import { loadLocations, selectLocations } from "@/state/locations";
@@ -80,6 +81,18 @@ describe("Library Settings", () => {
     expect(await screen.findByText("Still unavailable")).toBeVisible();
     expect(toggle).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("reports a server-rejected draft without a reload action", async () => {
+    update.mockImplementation(() => ({ response: Promise.reject(new RpcError("Library settings are invalid", "INVALID_ARGUMENT")) }));
+    open();
+    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Library settings are invalid")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Reload saved settings" })).not.toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
   });
 
   it("does not invent defaults while the server value is loading", () => {

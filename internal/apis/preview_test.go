@@ -16,6 +16,7 @@ import (
 	"github.com/samuelncui/yatm/internal/apis"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -49,8 +50,14 @@ func (p *previewFixture) Exists(signature []byte) (bool, error) {
 	return err == nil, nil
 }
 
-func (p *previewFixture) Open(_ []byte, _ string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader(p.data)), nil
+func (p *previewFixture) Open(_ []byte, role string) (*preview.OpenedAsset, error) {
+	for _, asset := range p.manifest.GetAssets() {
+		if asset.Role == role {
+			return &preview.OpenedAsset{ReadCloser: io.NopCloser(strings.NewReader(p.data)), MediaType: asset.MediaType,
+				Size: int64(len(p.data)), ETag: `"fixture"`}, nil
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 func TestPreviewReadsContentAddressedAssets(t *testing.T) {
@@ -89,6 +96,15 @@ func TestPreviewReadsContentAddressedAssets(t *testing.T) {
 	require.Equal(t, "nosniff", response.Header().Get("X-Content-Type-Options"))
 	require.Equal(t, "no-cache", response.Header().Get("Cache-Control"))
 	require.Equal(t, previews.data, response.Body.String())
+	require.Equal(t, `"fixture"`, response.Header().Get("ETag"))
+
+	// A matching validator revalidates without sending the asset again.
+	revalidate := httptest.NewRequest(http.MethodGet, assetURL, nil)
+	revalidate.Header.Set("If-None-Match", `W/"other", "fixture"`)
+	response = httptest.NewRecorder()
+	api.Uploader().ServeHTTP(response, revalidate)
+	require.Equal(t, http.StatusNotModified, response.Code)
+	require.Empty(t, response.Body.String())
 
 	// A stale content binding or an unknown role cannot retrieve a different resource.
 	for _, suffix := range []string{"&content=invalid", "&role=arbitrary"} {

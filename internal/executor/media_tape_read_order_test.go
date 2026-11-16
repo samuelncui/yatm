@@ -113,7 +113,7 @@ func TestLTFSReadOrderObservationClosesRawAccessBeforeMount(t *testing.T) {
 		t.Run(format, func(t *testing.T) {
 			// Reuse the public-protocol fixture to observe real inspection parsing without a physical device.
 			exe := setupTestExecutor(t)
-			fixture := &tarReadMapProvider{tarReloadFixture: &tarReloadFixture{tarDeviceFixture: newTarDeviceFixture()},
+			fixture := &tarReadMapProvider{tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()},
 				endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180}}}
 			exe.tapeProvider = fixture
 			require.NoError(t, exe.beginAttempt(1, func(error) {}))
@@ -171,10 +171,9 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			report.GetTape().DensityCode = proto.Uint32(0x58)
 			defaults := &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}
 			snapshot := &ltfsReadSnapshot{report: report, defaults: defaults,
-				boundary: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE,
 				settings: &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
 					Options: &entity.DeviceConfig_Tape{Tape: defaults}}}},
-				endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180},
+				endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 					{Partition: 1, Wrap: 4, Object: 8}}, source: "A3/1F/45", observedAt: time.Now()}
 			exe.scripts.Umount = writeExecutorTestScript(t, "unmounted", ":")
 			session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend), media: describeMedia(stored),
@@ -229,7 +228,7 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			require.Equal(t, uint64(7), updated.TapePositionMap.GetLtfsIndexGeneration())
 			require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO.String(), exe.lastPreparedRead("/dev/nst0").EffectiveOrder)
 			require.Equal(t, "builtin", exe.lastPreparedRead("/dev/nst0").ParametersSource)
-			require.Contains(t, exe.lastPreparedRead("/dev/nst0").ParametersReference, "unmeasured")
+			require.Equal(t, tarBuiltinSourceReference, exe.lastPreparedRead("/dev/nst0").ParametersReference)
 			require.NoError(t, session.Finalize(t.Context(), nil))
 			_, known = provider.Ranges(request)
 			require.False(t, known)

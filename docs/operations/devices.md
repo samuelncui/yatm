@@ -201,20 +201,6 @@ applicable standard READ POSITION/LOCATE pairing in the prepared record/partitio
 Missing anchors or optional command support retain sequential reads. Device details reports
 physical validation separately from protocol support. A real
 positioning or record-read failure stops that attempt rather than silently retrying by another path.
-For tar Restore and recorded-copy verification, **Refresh position map before reading** is an
-explicit preparation action, not a saved Device setting. Select it in the read dialog, or pass
-`--refresh-position-map` to `restore run tape`, Tape `verify run` or `scan run` for a frozen
-VERIFY_COPIES Job. The drive unloads without ejecting, loads once and captures a new position map
-before reading; **Device details** shows whether the drive is eligible. The
-[refresh contract](../architecture/read-planning.md#position-map-refresh) owns eligibility, identity
-checks and encryption handling. A refreshed map does not qualify Auto read order.
-
-Ordinary reads remain available with the action omitted. A failed or canceled cycle can leave the
-cartridge unthreaded: inspect the device and explicitly load it before another read if required.
-YATM does not retry the cycle or perform recovery motion automatically.
-Auto read order never triggers a reload. LTFS, Volume, inventory and other Media Scan policies do not
-accept this action. A missing Scan policy hides only refresh; it does not block normal reading.
-
 Use `yatm-cli job log-lines JOB_ID` or the Job's log to inspect requested/effective read order and its
 reason. Geometry diagnostics retain unknown freshness; a reported all-wrap command form is not
 proof of a fresh complete map or an ordering recommendation. A reported-wrap count requires a

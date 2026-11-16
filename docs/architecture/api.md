@@ -114,8 +114,8 @@ these observations do not add native key management. A key counter is not eviden
 neither keys nor key-associated data enter inspection responses.
 Geometry limits expose the reported all-wrap command form and source, with count only after an
 interpretable response and optional freshness. Command-form support is not proof of full coverage;
-passive queries leave freshness unknown. Software ordering and non-ejecting reload retain separate
-qualification and availability.
+passive queries leave freshness unknown. Software ordering retains separate qualification and
+availability.
 Permission, missing tools, no medium, clean unsupported forms, malformed responses and unknown
 ownership have distinct reasons. No capability report is saved in the Catalog. The
 [Tape device contract](tape.md#device-observation-and-raw-transport) defines physical access and cleanup.
@@ -165,7 +165,9 @@ API base as `<domain>/services`, and the frontend derives Library import/export 
 `<domain>/files`. An explicit value is the public URL, including scheme and external port,
 without a trailing slash. An empty or omitted value yields `/services` and `/files`, using
 the page's current origin. Preview resource URLs are always root-relative `/files/preview`
-URLs; CLI consumers select their own server address.
+URLs; CLI consumers select their own server address. Each response opens its bundle once and
+carries an ETag from the stored entry's CRC-32 and size, with `Cache-Control: no-cache`; a
+matching `If-None-Match` returns 304 without the body.
 
 The service does not infer this address from Host or forwarded headers. The
 [reverse-proxy guide](../operations/install.md#reverse-proxy) owns operator configuration and

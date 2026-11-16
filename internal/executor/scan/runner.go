@@ -45,6 +45,8 @@ type runner struct {
 	exe      *executor.Executor
 	job      *executor.Job
 	db       *gorm.DB
+	// tracker resolves each observed filesystem's identity once for this terminal attempt.
+	tracker  *executor.Tracker
 	progress *executor.Progress
 	// previewOutcomes is the current attempt's Preview classification; it survives the phase
 	// that produced it so the Job reports it after the phase ends.
@@ -77,7 +79,8 @@ func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (
 		phase = entity.JobPhase_JOB_PHASE_COMPLETED
 	}
 	return &runner{
-		phase: phase, exe: exe, job: job, db: files.DB, progress: executor.NewProgress(), logFile: files.Log, logger: files.Logger,
+		tracker: executor.NewTracker(),
+		phase:   phase, exe: exe, job: job, db: files.DB, progress: executor.NewProgress(), logFile: files.Log, logger: files.Logger,
 	}, nil
 }
 
@@ -178,10 +181,6 @@ func (r *runner) openSession(ctx context.Context, config *Config, requested *ent
 	}
 	if target == nil {
 		return nil, fmt.Errorf("select a Tape device to scan")
-	}
-	if target.GetTape().GetRefreshPositionMap() && (stored.Kind != entity.MediaKind_MEDIA_KIND_TAPE ||
-		config.MediaProfile.GetTape().GetFormat() != library.TapeFormatTarPAXV1 || config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES) {
-		return nil, fmt.Errorf("position-map refresh requires tar VERIFY_COPIES")
 	}
 	if stored.Kind == entity.MediaKind_MEDIA_KIND_TAPE && target.GetTape() == nil {
 		return nil, fmt.Errorf("Scan requires Tape Media")

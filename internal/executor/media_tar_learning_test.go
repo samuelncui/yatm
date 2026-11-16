@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/tape"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -58,7 +57,7 @@ func TestTapeReadObservationsResolveToAccessFeatures(t *testing.T) {
 	defer func() { require.NoError(t, cleanup()) }()
 	parameters := tarNormalizedParameters()
 	_, _, profile := tarReadParametersFixture()
-	model, reason := tarTestReadModel(parameters, profile, geometry, mediapkg.ReadEndpointInclusive)
+	model, reason := tarTestReadModel(parameters, profile, geometry)
 	require.NotNil(t, model, reason)
 
 	targets := []uint64{150, 120, 30, 60, 220, 180, 5}

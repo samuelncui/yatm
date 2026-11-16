@@ -3,7 +3,6 @@ package library
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/google/uuid"
@@ -91,11 +90,9 @@ func ValidateTapePositionMap(media *Media, value *entity.TapePositionMap) error 
 		return fmt.Errorf("Tape position map format is unsupported, format=%q", tape.Format)
 	}
 
-	// Unknown coordinate scale stays absent; an endpoint interpretation and source are always explicit.
-	if strings.TrimSpace(value.Source) == "" ||
-		(value.EndpointConvention != entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE &&
-			value.EndpointConvention != entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE) {
-		return fmt.Errorf("Tape position map requires source and endpoint convention")
+	// Unknown coordinate scale stays absent; a source is always explicit.
+	if strings.TrimSpace(value.Source) == "" {
+		return fmt.Errorf("Tape position map requires a source")
 	}
 	if (value.MinLpos == nil) != (value.MaxLpos == nil) ||
 		value.MinLpos != nil && *value.MaxLpos <= *value.MinLpos {
@@ -153,7 +150,10 @@ func validateTapePositionWraps(
 		seen[key] = true
 		low, known := partition.Bot, true
 		if before := previous[wrap.Partition]; before != nil {
-			low, known = tapePositionWrapEnd(value, before)
+			low, known = 0, false
+			if before.Full && before.Endpoint != nil {
+				low, known = *before.Endpoint, true
+			}
 		}
 		if wrap.Endpoint == nil {
 			if wrap.EstimatedSpanObjects != nil || wrap.EndpointUncertaintyObjects != nil {
@@ -162,14 +162,7 @@ func validateTapePositionWraps(
 			previous[wrap.Partition] = wrap
 			continue
 		}
-		high, _ := tapePositionWrapEnd(value, wrap)
-		if !wrap.Full {
-			high = *wrap.Endpoint
-		}
-		if wrap.Full && value.EndpointConvention == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE &&
-			*wrap.Endpoint == math.MaxUint64 {
-			return fmt.Errorf("Tape position map inclusive endpoint overflows")
-		}
+		high := *wrap.Endpoint
 		if high < partition.Bot || known && high <= low || partition.Eod != nil && high > *partition.Eod {
 			return fmt.Errorf("Tape position map endpoint is outside logical coverage")
 		}
@@ -186,17 +179,4 @@ func validateTapePositionWraps(
 		endpoints[wrap.Partition], previous[wrap.Partition] = high, wrap
 	}
 	return nil
-}
-
-func tapePositionWrapEnd(value *entity.TapePositionMap, wrap *entity.TapePositionWrap) (uint64, bool) {
-	if !wrap.Full || wrap.Endpoint == nil {
-		return 0, false
-	}
-	if value.EndpointConvention == entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE {
-		if *wrap.Endpoint == math.MaxUint64 {
-			return 0, false
-		}
-		return *wrap.Endpoint + 1, true
-	}
-	return *wrap.Endpoint, true
 }

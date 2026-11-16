@@ -101,9 +101,10 @@ func (r *runner) prepareLogicalInputs(ctx context.Context, selections []*entity.
 		originals := make(map[int64]map[string]*library.FileLocation)
 		var locations []int64
 		for _, file := range files {
+			// As in Archive, a selected File without an original association has nothing to read.
 			original := facts[file.ID].Original
 			if original == nil {
-				return fmt.Errorf("File %d has no original to scan", file.ID)
+				continue
 			}
 			local, err := r.openLocation(ctx, &Scope{LocationID: original.LocationID})
 			if err != nil {

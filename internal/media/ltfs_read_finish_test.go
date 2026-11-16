@@ -101,7 +101,7 @@ func TestLTFSReadFinishPartialEODDoesNotStretchCoverage(t *testing.T) {
 	provider := ltfsOrderFixture(t)
 	options := provider.options
 	model, err := NewReadCostModel(ReadModelProfile{ID: "ltfs-partial-test", SnapshotValid: func() bool { return true },
-		Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
+		BOT: map[uint32]uint64{1: 0}, FullWrapSeconds: proto.Float64(1000),
 		Wraps: []ReadModelWrap{
 			{Partition: 1, Full: true, Endpoint: proto.Uint64(100), Direction: ReadWrapForward},
 			{Partition: 1, Wrap: 1, Endpoint: proto.Uint64(125), EstimatedSpanObjects: proto.Uint64(100), Direction: ReadWrapReverse},

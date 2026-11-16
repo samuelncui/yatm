@@ -37,10 +37,9 @@ rejection and qualified WRITE warnings. Format backends consume that evidence an
 own stop, framing and publication decisions; an incompatible joined error cannot become a safe warning.
 
 A zero reported maximum block length leaves the maximum absent; it is not a zero-byte limit.
-The SG descriptor's reserved buffer can grow for a selected record, so its current allocation is
-not reported as a transport maximum. Preparation requests the selected size and checks the actual
-readback; an insufficient allocation fails before record I/O. An immutable transport limit can be
-reported, while an unknown adapter maximum remains absent.
+The SG descriptor's reserved buffer grows for a selected record, so no transport maximum is
+reported. Preparation requests the selected size and checks the actual readback; an insufficient
+allocation fails before record I/O.
 Position overflow/unknown flags prevent treating a returned object address as exact. Navigation
 selects a reported READ POSITION/LOCATE pair before motion, checks its address width and partition,
 and never retries another LOCATE form after a real command failure. These follow
@@ -429,7 +428,7 @@ The adapter runs under the attempt lease with raw descriptors closed. FORMAT fir
 its partition initialization and barcode assignment on the raw descriptor, closes it, invokes Encrypt,
 then opens a fresh descriptor, requires the matching barcode and reapplies record controls before
 writing the label. APPEND/read first opens the raw device and cross-checks its
-barcode (after any explicit position-map refresh), closes it, runs Encrypt with the saved key, then
+barcode, closes it, runs Encrypt with the saved key, then
 reopens a fresh raw session and cross-checks the barcode again. Script failure stops preparation. The cartridge memory
 barcode selects one saved Media and therefore one key; selection never tries candidate keys. The label contains no key.
 Normal independent recovery uses the existing protected Library export and a compatible reader,

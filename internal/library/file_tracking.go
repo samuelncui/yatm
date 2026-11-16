@@ -37,21 +37,74 @@ func (d *TrackingDetails) Scan(value any) error {
 
 func (d TrackingDetails) Value() (driver.Value, error) { return json.Marshal(d) }
 
-// NativeReplaced reports whether observed native evidence proves that the recorded object was replaced.
-// Native keys are comparable only within one scope: a different scope, such as a new device number after
-// a remount, proves neither continuity nor replacement, so metadata rules decide as without native evidence.
+// SameObject reports whether two keys name the same object: equal kind, scope and value, and equal
+// lifetime guards wherever both observations recorded one. Keys of different scopes prove nothing.
+func (k *FileTrackingKey) SameObject(other *FileTrackingKey) bool {
+	if k.Kind != other.Kind || k.Scope == "" || k.Scope != other.Scope || !bytes.Equal(k.KeyValue, other.KeyValue) {
+		return false
+	}
+	if k.Details.BirthNS != 0 && other.Details.BirthNS != 0 && k.Details.BirthNS != other.Details.BirthNS {
+		return false
+	}
+	return k.Details.Generation == 0 || other.Details.Generation == 0 || k.Details.Generation == other.Details.Generation
+}
+
+// NativeReplaced reports whether observed native evidence proves that the recorded object was replaced:
+// an observation in the same filesystem names another object. Another filesystem proves nothing.
 func NativeReplaced(recorded, observed []*FileTrackingKey) bool {
 	for _, old := range recorded {
 		if old.Kind != TrackingNative || old.Scope == "" || len(old.KeyValue) == 0 {
 			continue
 		}
 		for _, key := range observed {
-			if key.Kind == TrackingNative && key.Scope == old.Scope && (!bytes.Equal(key.KeyValue, old.KeyValue) || key.Details != old.Details) {
+			if key.Kind == TrackingNative && key.Scope == old.Scope && !key.SameObject(old) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// SameTrackingKeys reports whether an observation recorded exactly the stored evidence, so publishing
+// it would change nothing.
+func SameTrackingKeys(stored, observed []*FileTrackingKey) bool {
+	if len(stored) != len(observed) {
+		return false
+	}
+	for _, key := range observed {
+		matched := false
+		for _, previous := range stored {
+			if key.Kind == previous.Kind && key.Scope == previous.Scope && bytes.Equal(key.KeyValue, previous.KeyValue) && key.Details == previous.Details {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// TrackingConfirmed reports whether a fresh observation names the recorded objects, so the current
+// content is the recorded one. Absent evidence on both sides confirms nothing more than metadata.
+func TrackingConfirmed(stored, observed []*FileTrackingKey) bool {
+	if len(stored) != len(observed) {
+		return false
+	}
+	for _, key := range observed {
+		matched := false
+		for _, previous := range stored {
+			if key.SameObject(previous) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // FileTrackingKey supplies candidates, not unique ownership of an observed identifier.

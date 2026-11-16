@@ -20,7 +20,7 @@ import { useAppStore } from "@/state/react";
 
 export const SettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library");
-  const { cancel, dirty, draft, error, loading, reload, save, saved, saving, setDraft } = editor;
+  const { cancel, dirty, draft, error, invalid, loading, reload, save, saved, saving, setDraft } = editor;
   return (
     <>
       <SettingsEditorFeedback
@@ -28,6 +28,7 @@ export const SettingsBrowser = () => {
         loading={loading}
         saving={saving}
         error={error}
+        invalid={invalid}
         saved={saved}
         dirty={dirty}
         hasDraft={!!draft}

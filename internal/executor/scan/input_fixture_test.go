@@ -65,6 +65,7 @@ func newInputFixture(t testing.TB, count, locations int) *inputFixture {
 	}
 
 	// Fixture setup is bounded and remains outside every measured execution window.
+	tracker := executor.NewTracker()
 	for start := 0; start < count; start += batchSize {
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 			local := library.New(tx)
@@ -77,7 +78,7 @@ func newInputFixture(t testing.TB, count, locations int) *inputFixture {
 				if err := os.WriteFile(filename, []byte("content"), 0644); err != nil {
 					return err
 				}
-				info, err := os.Stat(filename)
+				info, err := executor.Lstat(filename)
 				if err != nil {
 					return err
 				}
@@ -87,19 +88,7 @@ func newInputFixture(t testing.TB, count, locations int) *inputFixture {
 				}
 				originals = append(originals, &library.FileLocation{FileID: file.ID, LocationID: source.ID,
 					Path: "selected/" + name, Mode: uint32(info.Mode()), Size: info.Size(), MtimeNS: info.ModTime().UnixNano()})
-				// The pre-repair reader accepted the filename too; both use the same real stat facts.
-				var observed []*library.FileTrackingKey
-				switch observe := any(executor.ObserveTracking).(type) {
-				case func(*library.Location, os.FileInfo) []*library.FileTrackingKey:
-					observed = observe(source, info)
-				case func(*library.Location, string, os.FileInfo) ([]*library.FileTrackingKey, error):
-					observed, err = observe(source, filename, info)
-					if err != nil {
-						return err
-					}
-				default:
-					return fmt.Errorf("unsupported tracking reader in performance fixture")
-				}
+				observed := tracker.Observe(filename, info)
 				for _, key := range observed {
 					key.FileID, key.LocationID = file.ID, source.ID
 					keys = append(keys, key)

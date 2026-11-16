@@ -41,7 +41,8 @@ type TagPage struct {
 type filePathState struct {
 	parentID int64
 	parts    []string
-	seen     map[int64]struct{}
+	// inTrash records whether the File or any ancestor is the Library Trash.
+	inTrash bool
 }
 
 func (l *Library) SearchFilesIn(ctx context.Context, query, cursor string, limit int64, scope entity.FileScope) (*FileSearchPage, error) {
@@ -209,11 +210,11 @@ func (l *Library) resolveFilePathStates(ctx context.Context, files []*File) (map
 		states[file.ID] = &filePathState{
 			parentID: file.ParentID,
 			parts:    []string{file.Name},
-			seen:     map[int64]struct{}{file.ID: {}},
+			inTrash:  file.ID == TrashFileID,
 		}
 	}
 
-	// Read each missing ancestor once in bounded batches; cycles remain per-path errors.
+	// Read each missing ancestor once in bounded batches; the depth bound also ends a corrupted cycle.
 	for depth := 0; depth < maxFilePathDepth; depth++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -246,10 +247,7 @@ func (l *Library) resolveFilePathStates(ctx context.Context, files []*File) (map
 			if parent == nil {
 				return nil, fmt.Errorf("resolve File %d path failed, parent_id=%d: %w", fileID, current.parentID, ErrFileNotFound)
 			}
-			if _, ok := current.seen[parent.ID]; ok {
-				return nil, fmt.Errorf("resolve File %d path failed, cycle at parent_id=%d", fileID, parent.ID)
-			}
-			current.seen[parent.ID] = struct{}{}
+			current.inTrash = current.inTrash || parent.ID == TrashFileID
 			current.parts = append(current.parts, parent.Name)
 			current.parentID = parent.ParentID
 		}

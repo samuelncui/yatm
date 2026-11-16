@@ -2,6 +2,7 @@ package apis
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 )
 
 func identicalScope(value *entity.IdenticalScope) (library.IdenticalScope, error) {
@@ -290,8 +292,11 @@ func (s *filesService) MergeIdentical(ctx context.Context, req *entity.MergeIden
 		return nil, err
 	}
 	group, err := snapshot.Group(req.GroupId)
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, library.ErrLocationConflict
+	}
+	if err != nil {
+		return nil, err
 	}
 	if group.Fingerprint != req.Fingerprint {
 		return nil, library.ErrLocationConflict

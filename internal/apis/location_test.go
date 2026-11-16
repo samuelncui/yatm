@@ -69,10 +69,9 @@ func TestLocationRegistrationBoundariesAndConfiguration(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	// Nested roots remain distinct registrations with an explicit duplicate-index warning.
+	// Nested roots remain distinct registrations.
 	sub := filepath.Join(root, "documents")
 	require.NoError(t, os.Mkdir(sub, 0755))
-	nested, err := service.Create(ctx, &entity.CreateLocationRequest{Location: &entity.Location{Name: "Documents", RootPath: sub}})
+	_, err = service.Create(ctx, &entity.CreateLocationRequest{Location: &entity.Location{Name: "Documents", RootPath: sub}})
 	require.NoError(t, err)
-	require.NotEmpty(t, nested.Warnings)
 }

@@ -2,7 +2,9 @@ package restore
 
 import (
 	"context"
-	"github.com/samuelncui/yatm/internal/library"
+	"errors"
+
+	"github.com/samuelncui/yatm/internal/executor"
 	"gorm.io/gorm"
 )
 
@@ -30,12 +32,15 @@ func freezeFileSelections(tx *gorm.DB) error {
 	}
 }
 
-func (a *jobRestoreRunner) prepareOutputs(ctx context.Context, names *outputNames) error {
-	// Freeze one collision-safe output path for each selected version.
+func (a *jobRestoreRunner) prepareOutputs(ctx context.Context) error {
+	a.tracker = executor.NewTracker()
+	// Assign each unclaimed version a logical output path; the filesystem decides other collisions
+	// when the output is created. A claimed path belongs to its item and is never chosen again.
 	var after int64
 	for {
 		var files []File
-		if err := a.db.WithContext(ctx).Where("item_id > ?", after).Order("item_id").Limit(batchSize).Find(&files).Error; err != nil {
+		if err := a.db.WithContext(ctx).Where("item_id > ? AND completed = ? AND read_media_id = 0", after, false).
+			Order("item_id").Limit(batchSize).Find(&files).Error; err != nil {
 			return err
 		}
 		if len(files) == 0 {
@@ -43,16 +48,25 @@ func (a *jobRestoreRunner) prepareOutputs(ctx context.Context, names *outputName
 		}
 		for _, file := range files {
 			after = file.ItemID
-			if file.Completed {
-				continue
-			}
-			version := &library.FileVersion{ID: file.ItemID, FileID: file.FileID, Hash: file.Hash, Size: file.Size}
-			target, satisfied, err := a.reserveOutput(ctx, names, version, file.DesiredPath)
+			target, err := a.chooseOutput(ctx, file.ItemID, file.DesiredPath, nil)
 			if err != nil {
 				return err
 			}
-			if !satisfied {
+			if target != file.Path {
+				if err := a.db.WithContext(ctx).Model(&File{}).Where("item_id = ?", file.ItemID).Update("path", target).Error; err != nil {
+					return err
+				}
+			}
+
+			// Adopt equal existing content only after reading it; other content is left in place, and
+			// an item-local inspection failure is reported by the Media attempt.
+			matched, _, err := a.outputMatches(ctx, target, file.Hash, file.Size)
+			var local *restoreItemError
+			if errors.As(err, &local) || (err == nil && !matched) {
 				continue
+			}
+			if err != nil {
+				return err
 			}
 			var copy Copy
 			if err := a.db.WithContext(ctx).Where("item_id = ?", file.ItemID).First(&copy).Error; err != nil {

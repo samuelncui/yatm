@@ -11,11 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/google/uuid"
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
-	"github.com/rifflock/lfshook"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/buildinfo"
 	"github.com/samuelncui/yatm/internal/config"
@@ -84,29 +81,6 @@ func exportLibrary(ctx context.Context, configPath, typeNames, outputPath string
 }
 
 func streamLibrary(ctx context.Context, configPath string, output io.Writer, types []entity.LibraryEntityType) (returnErr error) {
-	// Configure command logging before opening external resources.
-	logWriter, err := rotatelogs.New(
-		"./run.log.%Y%m%d%H%M",
-		rotatelogs.WithLinkName("./run.log"),
-		rotatelogs.WithMaxAge(time.Duration(86400)*time.Second),
-		rotatelogs.WithRotationTime(time.Duration(604800)*time.Second),
-	)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := logWriter.Close(); err != nil {
-			returnErr = errors.Join(returnErr, fmt.Errorf("close export log failed, %w", err))
-		}
-	}()
-	logrus.AddHook(lfshook.NewHook(
-		lfshook.WriterMap{
-			logrus.InfoLevel:  logWriter,
-			logrus.ErrorLevel: logWriter,
-		},
-		&logrus.TextFormatter{},
-	))
-
 	// Open the configured Library database.
 	conf, err := config.Load(configPath)
 	if err != nil {

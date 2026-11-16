@@ -109,7 +109,7 @@ func TestLTFSLabelObservationClosesBeforeNativeOwnership(t *testing.T) {
 			// The same admitted attempt owns inspection, Label I/O and final descriptor release.
 			exe := setupTestExecutor(t)
 			fixture := &ltfsLabelsProvider{tarReadMapProvider: &tarReadMapProvider{
-				tarReloadFixture: &tarReloadFixture{tarDeviceFixture: newTarDeviceFixture()},
+				tarReportingFixture: &tarReportingFixture{tarDeviceFixture: newTarDeviceFixture()},
 				endpoints:        []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180}},
 			}, readErr: test.readErr, reserveErr: test.reserveErr}
 			fixture.cleanupError = test.closeErr
@@ -235,10 +235,9 @@ func TestLTFSReadOrderPreparedSessionUsesSGLabels(t *testing.T) {
 	report.GetTape().DensityCode = proto.Uint32(0x58)
 	defaults := &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}
 	snapshot := &ltfsReadSnapshot{labels: ltfsSGLabelFacts(), report: report, defaults: defaults,
-		boundary: entity.TapePositionEndpointConvention_TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE,
 		settings: &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0",
 			Options: &entity.DeviceConfig_Tape{Tape: defaults}}}}, source: "A3/1F/45", observedAt: time.Now(),
-		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 99}, {Partition: 0, Wrap: 1, Object: 180},
+		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 			{Partition: 1, Wrap: 4, Object: 8}}}
 	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
 		media: describeMedia(stored), device: "/dev/nst0", mountPoint: point}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -40,7 +41,7 @@ func passiveCommand(command Command) bool {
 		return len(cdb) == 10 && cdb[1] == 0 && (cdb[2] == 0x3f || cdb[2] == 0x7f) && cdb[3] == 0 &&
 			cdb[4] == 0 && cdb[5] == 0 && cdb[6] == 0 && int(binary.BigEndian.Uint16(cdb[7:9])) == len(command.Data) && cdb[9] == 0
 	case 0x3c:
-		if len(cdb) != 10 || cdb[2] != 0x10 || cdb[9] != 0 {
+		if len(cdb) != 10 || !slices.Contains(cartridgeMemoryBuffers[:], cdb[2]) || cdb[9] != 0 {
 			return false
 		}
 		offset := int(cdb[3])<<16 | int(cdb[4])<<8 | int(cdb[5])

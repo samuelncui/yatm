@@ -873,14 +873,14 @@ it("allows another Find during an active Remove", async () => {
   await waitFor(() => expect(state.remove).toHaveBeenCalledTimes(1));
   expect(screen.getByRole("button", { name: "Find" })).toBeEnabled();
   expect(state.find).toHaveBeenCalledTimes(1);
-  expect(state.close).not.toHaveBeenCalledWith({ resultId: "old" });
+  // The superseded result closes at once; the running Remove still finishes on the server.
   await find();
   await screen.findByText("copy-2.txt");
+  expect(state.close).toHaveBeenCalledWith({ resultId: "old" });
   await act(async () => release());
-  await waitFor(() => expect(state.close).toHaveBeenCalledWith({ resultId: "old" }));
-  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [1n], sortKey: IdenticalSortKey.SIZE }));
-  expect(screen.queryByText("copy-1.txt")).not.toBeInTheDocument();
+  await waitFor(() => expect(state.remove).toHaveBeenCalledTimes(1));
   expect(state.find).toHaveBeenCalledTimes(2);
+  expect(state.error).not.toHaveBeenCalled();
 });
 it("shows a previously removed file returned by a later Find after it is moved out of Trash and scanned", async () => {
   state.find
@@ -899,38 +899,7 @@ it("shows a previously removed file returned by a later Find after it is moved o
   expect(state.lookup).not.toHaveBeenCalledWith({ resultId: "new", fileIds: [1n] });
   expect(state.find).toHaveBeenCalledTimes(2);
 });
-it("reconciles a removal completed while Find is pending, then accepts a later Find", async () => {
-  const nextFind = deferred<{ resultId: string; allRowCount: bigint; visibleRowCount: bigint }>();
-  const finishRemove = deferred<void>();
-  state.find
-    .mockReturnValueOnce(reply({ resultId: "old", allRowCount: 502n, visibleRowCount: 502n }))
-    .mockReturnValueOnce({ response: nextFind.promise })
-    .mockReturnValueOnce(reply({ resultId: "latest", allRowCount: 502n, visibleRowCount: 502n }));
-  state.rows.mockReturnValue(reply({ rows: [header(), fileRow(1n, 1n, true), fileRow(2n, 2n, true)], totalRowCount: 502n }));
-  state.remove.mockReturnValue({
-    responses: (async function* () {
-      await finishRemove.promise;
-      yield { result: { entry: { fileId: 1n, outcome: FileOperationOutcome.SUCCEEDED } } };
-      yield { result: { summary: summary() } };
-    })(),
-  });
-  mount("/tools/identical?source=locations&location=1");
-  await find();
-  await screen.findByText("copy-1.txt");
-  act(() => dispatch(ChonkyActions.DeleteFiles.id, [state.props!.files.find((item) => item?.name === "copy-1.txt")!]));
-  await waitFor(() => expect(state.remove).toHaveBeenCalledTimes(1));
-  await find();
-  await act(async () => finishRemove.resolve());
-  await act(async () => nextFind.resolve({ resultId: "new", allRowCount: 502n, visibleRowCount: 502n }));
-  await screen.findByText("copy-2.txt");
-  expect(screen.queryByText("copy-1.txt")).not.toBeInTheDocument();
-  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [1n], sortKey: IdenticalSortKey.SIZE })));
-  await find();
-  await screen.findByText("copy-1.txt");
-  expect(state.lookup).not.toHaveBeenCalledWith({ resultId: "latest", fileIds: [1n] });
-  expect(state.find).toHaveBeenCalledTimes(3);
-});
-it("keeps Find available during Keep and carries its completed members into the new result", async () => {
+it("keeps Find available during Keep without reconciling the new result", async () => {
   const finishKeep = deferred<void>();
   state.find
     .mockReturnValueOnce(reply({ resultId: "old", allRowCount: 502n, visibleRowCount: 502n }))
@@ -956,11 +925,12 @@ it("keeps Find available during Keep and carries its completed members into the 
     keepAction.customVisibility!({ group: { id: group.id }, selectedFiles: [state.props!.files[0]], selectedFilesForAction: [state.props!.files[0]] } as never),
   ).toBe(1);
   await act(async () => finishKeep.resolve());
-  await waitFor(() => expect(screen.queryByText("copy-2.txt")).not.toBeInTheDocument());
-  expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [2n], sortKey: IdenticalSortKey.SIZE }));
+  // An inconsistent view after another Find is accepted: the new result keeps its own rows.
+  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "old", fileIds: [2n] })));
+  expect(state.lookup).not.toHaveBeenCalledWith(expect.objectContaining({ resultId: "new" }));
   expect(state.find).toHaveBeenCalledTimes(2);
 });
-it("clears Keep diagnostics on Find and ignores old in-flight Keep diagnostics while reconciling success", async () => {
+it("clears Keep diagnostics on Find and ignores old in-flight Keep diagnostics", async () => {
   const finishKeep = deferred<void>();
   state.find
     .mockReturnValueOnce(reply({ resultId: "old", allRowCount: 502n, visibleRowCount: 502n }))
@@ -997,10 +967,7 @@ it("clears Keep diagnostics on Find and ignores old in-flight Keep diagnostics w
   await find();
   await screen.findByText("copy-4.txt");
   await act(async () => finishKeep.resolve());
-  await waitFor(() =>
-    expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "latest", fileIds: [2n], sortKey: IdenticalSortKey.SIZE })),
-  );
-  await waitFor(() => expect(state.props!.files.some((file) => file?.name === "copy-2.txt")).toBe(false));
+  await waitFor(() => expect(state.lookup).toHaveBeenCalledWith(expect.objectContaining({ resultId: "new", fileIds: [2n] })));
   expect(state.props!.files.find((file) => file?.name === "copy-3.txt")?.details).not.toContain("Keep failed: late old failure");
   expect(state.props!.files.find((file) => file?.name === "copy-4.txt")?.details).not.toContain("Not processed");
 });

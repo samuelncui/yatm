@@ -34,6 +34,10 @@ func newReport(identity Identity) *entity.InspectDeviceResponse {
 	// Query evidence and fake conformance tests never establish physical validation.
 	tape := new(entity.TapeDeviceReport)
 	for kind := entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_INITIALIZE; kind <= entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER; kind++ {
+		// Retired values leave gaps in the enumeration; only defined kinds are reported.
+		if _, defined := entity.DeviceFeatureKind_name[int32(kind)]; !defined {
+			continue
+		}
 		tape.Features = append(tape.Features, &entity.DeviceFeature{
 			Feature: kind, Support: entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_UNKNOWN,
 			Availability: entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNKNOWN,
@@ -46,11 +50,8 @@ func newReport(identity Identity) *entity.InspectDeviceResponse {
 		Device: &entity.DeviceSummary{Device: identity.Configured, Kind: entity.DeviceKind_DEVICE_KIND_TAPE},
 		Report: &entity.InspectDeviceResponse_Tape{Tape: tape},
 	}
-	for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_NON_EJECTING_RELOAD} {
-		feature(report, kind).Reason = entity.DeviceReason_DEVICE_REASON_NOT_READY
-	}
+	feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER).Reason = entity.DeviceReason_DEVICE_REASON_NOT_READY
 	feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER).Detail = "Software read ordering requires a prepared read session with eligible seek, applicable wrap geometry and matching measured costs; passive inspection does not determine AUTO availability"
-	feature(report, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_NON_EJECTING_RELOAD).Detail = "Non-ejecting reload and REOWP refresh lifecycle remain unvalidated"
 	if identity.Key != "" {
 		report.AccessIdentity = proto.String(identity.Key)
 	}
@@ -80,7 +81,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 	defer func() {
 		for _, f := range report.GetTape().Features {
 			f.Scope = &entity.DeviceFeatureScope{Model: report.Model, Firmware: report.Firmware, Transport: report.Transport, DensityCode: report.GetTape().DensityCode}
-			mediumDependent := f.Feature <= entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_EARLY_WARNING || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_NON_EJECTING_RELOAD || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER
+			mediumDependent := f.Feature <= entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_EARLY_WARNING || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_COMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_DECOMPRESSION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_HARDWARE_ENCRYPTION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_END_OF_WRAP_POSITION || f.Feature == entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SOFTWARE_READ_ORDER
 			if report.GetTape().MediumPresent != nil && !report.GetTape().GetMediumPresent() && mediumDependent {
 				f.Availability, f.Reason = entity.DeviceFeatureAvailability_DEVICE_FEATURE_AVAILABILITY_UNAVAILABLE, entity.DeviceReason_DEVICE_REASON_NO_MEDIUM
 				f.Detail = "No cartridge is loaded; operation prerequisites remain unqualified"
@@ -196,7 +197,6 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 
 	// A non-secret encryption status query reports current hardware mode without changing keys.
 	data, err = encryptionStatus(ctx, transport, report.GetTape())
-	cipherOff := err == nil && encryptionOff(data)
 	if !observe(0, err) {
 		return report, err
 	}
@@ -209,7 +209,7 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		}
 	}
 
-	// A clean optional long-form rejection can use short form; neither qualifies LOCATE or reload.
+	// A clean optional long-form rejection can use short form; neither qualifies LOCATE.
 	data, err = query(ctx, transport, []byte{0x34, 6, 0, 0, 0, 0, 0, 0, 0, 0}, 32)
 	long := true
 	if Reason(err) == entity.DeviceReason_DEVICE_REASON_UNSUPPORTED {
@@ -301,15 +301,6 @@ func (d *Device) inspect(ctx context.Context, identity Identity) (*entity.Inspec
 		d.reportCapacity(nil, false, nil)
 	}
 
-	// Reload admission uses exact command forms and current observations, without moving the cartridge.
-	if err := d.inspectReload(ctx, cipherOff); err != nil {
-		if errors.Is(err, ErrUncertain) || ctx.Err() != nil || Reason(err) == entity.DeviceReason_DEVICE_REASON_NO_MEDIUM || Reason(err) == entity.DeviceReason_DEVICE_REASON_NOT_READY {
-			if !observe(0, err) {
-				return report, err
-			}
-		}
-	}
-
 	return report, nil
 }
 
@@ -351,27 +342,11 @@ func decodeBlockLimits(data []byte, report *entity.InspectDeviceResponse, transp
 		limits.MaximumBytes = proto.Uint32(maximum)
 		limits.Fixed, limits.Variable = proto.Bool(true), proto.Bool(minimum != maximum)
 	}
-	limits.TransportMaximumBytes = transportMaximumBytes(transport)
 	for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_WRITE} {
 		f := feature(report, kind)
 		f.Support = entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_PARTIAL
 		f.Limits, f.Evidence = &entity.DeviceFeature_Records{Records: proto.Clone(limits).(*entity.TapeRecordLimits)}, entity.DeviceFeatureEvidence_DEVICE_FEATURE_EVIDENCE_REPORTED
 		f.Reason, f.Detail = entity.DeviceReason_DEVICE_REASON_NOT_IMPLEMENTED, "Record bounds reported; acceptance and completion prerequisites remain unqualified"
-	}
-	return nil
-}
-
-func transportMaximumBytes(transport Transport) *uint32 {
-	// A growable per-fd reservation is a current allocation, not an observed adapter maximum.
-	if _, growable := transport.(interface {
-		EnsureTransfer(context.Context, int) error
-	}); growable {
-		return nil
-	}
-	if bounded, ok := transport.(interface{ TransferLimit() int }); ok {
-		if limit := bounded.TransferLimit(); limit > 0 && limit <= MaxTransferBytes {
-			return proto.Uint32(uint32(limit))
-		}
 	}
 	return nil
 }

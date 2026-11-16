@@ -105,7 +105,7 @@ func restoreWorkloadProvider(tb testing.TB, objects uint64) *tarReadOrderProvide
 	// Nominal uncompressed 80-wrap geometry is an assumption, not a measured map for this new corpus.
 	// Timing inputs freeze the current HP5-derived prior; see the full-cartridge study in tar-tape.md.
 	profile := ReadModelProfile{ID: "restore-1p5tb-v1-nominal-lto5", SnapshotValid: func() bool { return true },
-		Boundary: ReadEndpointExclusive, BOT: map[uint32]uint64{0: 0}, FullWrapSeconds: proto.Float64(92.69041838827268),
+		BOT: map[uint32]uint64{0: 0}, FullWrapSeconds: proto.Float64(92.69041838827268),
 		Coefficients: ReadModelCoefficients{Base: 3.223942631933043, Wrap: 6.252332019046645,
 			Band: -.8279789490339896, LandingZone: .6469527733076674,
 			Direction: 1.2685235350999264, StepBack: 5.965091877336342}}

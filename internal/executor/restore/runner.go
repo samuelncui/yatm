@@ -34,6 +34,7 @@ type jobRestoreRunner struct {
 	stageKey string
 	logFile  *executor.JobLogWriter
 	logger   *logrus.Logger
+	tracker  *executor.Tracker
 }
 
 func newRunner(ctx context.Context, exe *executor.Executor, job *executor.Job) (executor.Runner, error) {

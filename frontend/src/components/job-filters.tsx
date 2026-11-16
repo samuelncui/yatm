@@ -26,18 +26,21 @@ export const JobFilters = () => {
   const choices = useLocationChoices({ enabled: open });
   const { locations } = choices;
   const [media, setMedia] = useState<Media[]>([]);
-  const [moreMedia, setMoreMedia] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const loadMedia = async (more = false) => {
+  // The resource choice lists every Media, reading all pages before it settles.
+  const loadMedia = async () => {
     if (loading) return;
     setLoading(true);
     try {
-      const page = await mediaCli.list({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: more ? BigInt(media.length) : 0n, query: "" } } })
-        .response;
-      setMedia((current) => (more ? [...current, ...page.media] : page.media));
-      setMoreMedia(page.hasMore);
+      const loaded: Media[] = [];
+      for (let more = true; more;) {
+        const page = await mediaCli.list({ param: { oneofKind: "list", list: { kinds: [], limit: 50n, offset: BigInt(loaded.length), query: "" } } }).response;
+        loaded.push(...page.media);
+        setMedia(loaded.slice());
+        more = page.hasMore && page.media.length > 0;
+      }
       setLoaded(true);
       setError("");
     } catch (error) {
@@ -46,6 +49,7 @@ export const JobFilters = () => {
       setLoading(false);
     }
   };
+
   const change = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     next.delete(key);
@@ -90,10 +94,6 @@ export const JobFilters = () => {
           },
         }}
         onChange={(event) => {
-          if (event.target.value === "more") {
-            void loadMedia(true);
-            return;
-          }
           const next = new URLSearchParams(params);
           next.delete("location");
           next.delete("media");
@@ -115,11 +115,6 @@ export const JobFilters = () => {
           </MenuItem>
         ))}
         {(loading || choices.loading) && <MenuItem disabled>Loading resources…</MenuItem>}
-        {moreMedia && (
-          <MenuItem value="more" disabled={loading}>
-            Load more resources…
-          </MenuItem>
-        )}
       </TextField>
       {(filter.kind !== undefined || resource) && <Button onClick={() => setParams({})}>Clear</Button>}
       {(error || choices.error) && (
@@ -130,7 +125,7 @@ export const JobFilters = () => {
               disabled={loading || choices.loading}
               onClick={() => {
                 if (choices.error) choices.retry();
-                if (error) void loadMedia(loaded);
+                if (error) void loadMedia();
               }}
             >
               Retry

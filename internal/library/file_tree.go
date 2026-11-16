@@ -113,16 +113,14 @@ func (s *fileTree) Stat(ctx context.Context, ref string) (treeops.Node, error) {
 	}
 
 	// Derive display paths using bounded ancestry; the stable reference remains the File ID.
+	// The depth bound also ends a corrupted cyclic ancestry.
 	names := []string{row.Name}
-	seen := map[int64]struct{}{row.ID: {}}
+	inTrash := false
 	for parentID := row.ParentID; parentID != 0; {
-		if _, found := seen[parentID]; found {
-			return treeops.Node{}, fmt.Errorf("Library ancestry contains a cycle")
+		if len(names) >= maxFilePathDepth {
+			return treeops.Node{}, fmt.Errorf("Library ancestry exceeds %d levels", maxFilePathDepth)
 		}
-		if len(seen) >= 256 {
-			return treeops.Node{}, fmt.Errorf("Library ancestry exceeds 256 levels")
-		}
-		seen[parentID] = struct{}{}
+		inTrash = inTrash || parentID == TrashFileID
 		var parent fileRow
 		if err := s.db.WithContext(ctx).First(&parent, parentID).Error; err != nil {
 			return treeops.Node{}, err
@@ -134,7 +132,7 @@ func (s *fileTree) Stat(ctx context.Context, ref string) (treeops.Node, error) {
 		names[left], names[right] = names[right], names[left]
 	}
 	node := logicalNode(row.file(), strings.Join(names, "/"))
-	if _, inTrash := seen[TrashFileID]; inTrash {
+	if inTrash {
 		node.Deletion = treeops.Retain
 		if node.Directory {
 			node.Deletion = treeops.EmptyDirectories

@@ -55,6 +55,36 @@ func (s *matchStore) Assign(ctx context.Context, id, fileID int64, signature []b
 	return s.query(ctx).Where("id = ?", id).Updates(values).Error
 }
 
+func (s *matchStore) Pending(ctx context.Context, after string, limit int) ([]Pending, error) {
+	var rows []struct {
+		Path      string
+		Signature []byte
+		Evidence  Evidence `gorm:"embedded"`
+	}
+	err := s.query(ctx).Where("file_id = 0 AND change != ? AND path > ?", entity.ScanChange_SCAN_CHANGE_REMOVED, after).
+		Order("path").Limit(limit).Find(&rows).Error
+	pending := make([]Pending, 0, len(rows))
+	for _, row := range rows {
+		pending = append(pending, Pending{Path: row.Path, Signature: row.Signature, Evidence: row.Evidence})
+	}
+	return pending, err
+}
+
+func (s *matchStore) Observed(ctx context.Context, paths []string) (map[string]bool, error) {
+	observed := make(map[string]bool, len(paths))
+	if len(paths) == 0 {
+		return observed, nil
+	}
+	var found []string
+	if err := s.query(ctx).Where("path IN ?", paths).Pluck("path", &found).Error; err != nil {
+		return nil, err
+	}
+	for _, name := range found {
+		observed[name] = true
+	}
+	return observed, nil
+}
+
 func (s *matchStore) query(ctx context.Context) *gorm.DB {
 	return s.db.WithContext(ctx).Session(&gorm.Session{})
 }
@@ -68,11 +98,12 @@ func matchQuery(query *gorm.DB, criteria MatchCriteria) (*gorm.DB, error) {
 	case MatchNative:
 		key := criteria.Evidence
 		query = query.Where("native_scope = ? AND native_key = ?", key.NativeScope, key.NativeKey)
+		// A lifetime guard constrains only observations that recorded one too.
 		if key.BirthNS != 0 {
-			query = query.Where("birth_ns = ?", key.BirthNS)
+			query = query.Where("birth_ns IN ?", []int64{0, key.BirthNS})
 		}
 		if key.Generation != 0 {
-			query = query.Where("generation = ?", key.Generation)
+			query = query.Where("generation IN ?", []uint64{0, key.Generation})
 		}
 		return query, nil
 	default:

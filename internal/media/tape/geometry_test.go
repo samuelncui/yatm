@@ -208,22 +208,6 @@ func TestGeometryFirstOnlyHasNoInventedEndpointAssociation(t *testing.T) {
 	}
 }
 
-func TestGeometryRefreshRefusesBeforeQueriesOrMutation(t *testing.T) {
-	// An explicitly unsupported reload form leaves baseline inspection and access unchanged.
-	f := newGeometryFixture()
-	f.deviceFixture.unsupported = 0x1b
-	d := geometryDevice(t, f)
-	forms, queries, security := f.formQueries, f.wrapQueries, f.security
-	if err := d.RefreshPositionMap(context.Background()); !errors.Is(err, ErrUnsupported) || f.formQueries != forms || f.wrapQueries != queries || f.security != security || f.selects != 0 || f.formats != 0 || f.motions != 0 || f.writes != 0 {
-		t.Fatalf("refresh=%v forms=%d queries=%d mode=%d motion=%d write=%d", err, f.formQueries, f.wrapQueries, f.selects, f.motions, f.writes)
-	}
-
-	// Unsupported refresh retains the ordinary cleanup boundary.
-	if err := d.Cleanup(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func vendorWrapReportData() []byte {
 	// The vendor-specific report supplies no standard field-mask evidence for qualifier 45h or RA.
 	return []byte{0, 5, 0, 12, 0xa3, 0x1f, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}

@@ -81,12 +81,6 @@ enum TapePositionDirection {
     TAPE_POSITION_DIRECTION_REVERSE = 2;
 }
 
-enum TapePositionEndpointConvention {
-    TAPE_POSITION_ENDPOINT_CONVENTION_UNSPECIFIED = 0;
-    TAPE_POSITION_ENDPOINT_CONVENTION_INCLUSIVE = 1;
-    TAPE_POSITION_ENDPOINT_CONVENTION_EXCLUSIVE = 2;
-}
-
 // Logical coverage is partition-scoped; absent EOD remains unknown.
 message TapePositionPartition {
     uint32 partition = 1;
@@ -101,6 +95,7 @@ message TapePositionWrap {
     uint32 band = 3;
     TapePositionDirection direction = 4;
     bool full = 5;
+    // Exclusive end: the first logical object after this wrap, or actual EOD for a partial wrap.
     optional uint64 endpoint = 6;
     // A partial wrap keeps its actual EOD; this is only its interpolation denominator.
     optional uint64 estimated_span_objects = 7;
@@ -115,7 +110,6 @@ message TapePositionMap {
     optional uint64 ltfs_index_generation = 3;
     repeated TapePositionPartition partitions = 4;
     repeated TapePositionWrap wraps = 5;
-    TapePositionEndpointConvention endpoint_convention = 6;
     string source = 7;
     optional uint64 min_lpos = 8;
     optional uint64 max_lpos = 9;
@@ -177,7 +171,6 @@ message ReadTapeTarget {
     // Optional selection from the Job's frozen candidates; the Session still proves identity.
     optional int64 media_id = 2;
     // Explicit qualified preparation for tar Restore and VERIFY_COPIES only.
-    bool refresh_position_map = 3;
 }
 
 message ReadVolumeTarget {

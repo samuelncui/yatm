@@ -87,7 +87,7 @@ func (d *TemporaryDirectory) Close() error {
 		delete(temporaryOwners.paths, path)
 		temporaryOwners.Unlock()
 	}()
-	if err := removeTemporaryDirectory(d.Directory); err != nil {
+	if err := os.RemoveAll(d.Directory); err != nil {
 		return fmt.Errorf("remove temporary directory %q failed, %w", d.Directory, err)
 	}
 	d.Directory = ""
@@ -144,7 +144,7 @@ func CleanupTemporary(work string, now time.Time) (result error) {
 			}
 
 			// Unique allocation never adopts an existing expired directory after this decision.
-			if err := removeTemporaryDirectory(path); err != nil {
+			if err := os.RemoveAll(path); err != nil {
 				result = errors.Join(result, fmt.Errorf("remove stale temporary directory %q failed, %w", path, err))
 			}
 		}

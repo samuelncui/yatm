@@ -66,15 +66,13 @@ uses the actual interval midpoint `min + (max-min)/2`. Alternatively,
 coordinate. Its estimates are not guaranteed latency bounds.
 
 Parameter priority is manual read parameters, learned read parameters matching
-all observed conditions, then source-labelled built-in initial values. Generation/density sources
-supply documented layout and native-rate references. The generic seven-term timing seed comes from
-the recorded HP LTO-5 experiment; it is an unmeasured borrowed prior for other readers, not an LTO
-standard or portable validation result. Missing serial, firmware, density, record or written control
+all observed conditions, then [built-in initial values](../../internal/executor/media_tar_defaults.go):
+timing measured on HP LTO-5 and per-density wraps, native rate and rewind, which passive learning
+corrects on each drive. Missing serial, firmware, density, record or written control
 facts remain unknown. Partial manual input is never silently filled from learning. Hardware-compressed
 written content retains ordinary reading and exact seek but is excluded from linear smart ordering.
 Changing current drive compression does not change the cartridge's written policy.
-The optional `completion` parameters keep full-span rewind and fixed unload work separate. Built-in
-completion values borrow provisional HP references; they are not generation-wide mechanical guarantees.
+The optional `completion` parameters keep full-span rewind and fixed unload work separate.
 
 Passive read learning defaults on and adds no measurement command. The native transport emits completed
 scalar observations into a bounded 256-entry queue; overflow drops observations and increments a
@@ -93,7 +91,12 @@ and file number when known), their wrap and longitudinal offset within the wrap'
 as resolved by the Session's position map, that map's source, observation time and LPOS bounds, the
 SCSI opcode, action, preceding action, absolute start, host idle time before the action, and for
 READ records the command count, bytes, device seconds, host wait, largest host gap and discard label.
-Each record also names its device and applicability. Band, direction and access features are derived
+Each record also names its device and applicability. The current fit reads only the device,
+applicability, Job, action, endpoint partitions, wraps and offsets, map LPOS bounds, bytes and
+device seconds. The barcode, map source and time, opcode, preceding action, start time, idle time,
+logical object and file numbers, command count, host timing and discard label are recorded but
+unused: they keep each record a portable, self-describing measurement that a later model or
+another drive's analysis can use without the Catalog. Band, direction and access features are derived
 at fit time from the wrap and the generation layout through the same feature function the cost model
 uses. After native I/O settles and the drive is released, the attempt's records are appended to its
 Job bundle's [observation file](persistence.md#job-bundle). A background refit, serialized per device
@@ -155,49 +158,50 @@ invalidates the Session's model before another attempt can use it.
 ## Position Maps
 
 Position maps belong to Media and contain spatial facts, source, binding and uncertainty. A live
-complete REOWP report takes priority. Read preparation tries cartridge memory once on the owned
-HP LTO-5 descriptor if REOWP has no complete directory; ordinary device Inspect does not read CM.
-The READ BUFFER descriptor bounds the image to 8 KiB and each transfer to 4 KiB. Unsupported,
-malformed or inconsistent CM leaves matching retained geometry available; cancellation, uncertain
-completion and medium changes remain preparation errors. No failure triggers LOAD or another motion.
+complete REOWP report takes priority. Read preparation reads cartridge memory once on the owned
+descriptor of any drive if REOWP has no complete directory; ordinary device Inspect does not read CM.
+READ BUFFER tries buffer `10h`, which HP documents for Ultrium 2 to 6, and then `05h`, which IBM
+and HPE Ultrium 7 and later document; HP's `20h` main-buffer segments are never read. The
+descriptor bounds the image to 32 KiB and each transfer to 4 KiB. An empty, unsupported or
+undecodable buffer moves to the next one. Unsupported, malformed or inconsistent CM leaves matching
+retained geometry available; cancellation, uncertain completion and medium changes remain
+preparation errors. No failure triggers LOAD or another motion.
 LTFS obtains the same facts before mounting and closes the raw owner before native reads.
 
-The [CM decoder](../../internal/media/tape/cm_directory.go) accepts the studied version-4 directory
-and version-2 EOD pages for one or two partitions. Checksums protect the tables, directory header,
-each entry and each EOD page. The device's confirmed partition count selects active EOD pages;
-an unused second page can remain after single-partition FORMAT and does not create a partition.
+The [CM decoder](../../internal/media/tape/cm_directory.go) selects the tape directory layout of
+the cartridge generation, because interchange makes the format a property of the cartridge rather
+than of the drive vendor: Ultrium-1's ECMA-319 half-wrap entries, Ultrium-2's 28-byte entries,
+Ultrium-3 to 5's 16-byte header and Ultrium-6 to 9's 48-byte header, each with its wrap count.
+A directory is accepted only when its exact length and every checksum fit one layout; the version
+nibble is also required where hardware showed it (4 for Ultrium-5, 5 for Ultrium-6). EOD pages
+`0x104`, `0x10e`, `0x10f` and `0x110` serve partitions 0 to 3. Ultrium-5 and Ultrium-6 are
+checked against hardware images; the other generations are supported but unverified. Checksums
+protect the tables, directory header, each entry and each EOD page. The device's confirmed
+partition count selects active EOD pages; unused pages can remain after a FORMAT with fewer
+partitions and do not create a partition.
 Tar reuses its configured actual count; pre-mount CM fallback otherwise reads the bounded MAM
 partition list once. Unknown partition identity withdraws CM. Complete valid runs must each match exactly one completed EOD's
 terminal dataset/write pass and separate record/filemark totals. Partition starts come from these
 runs, never cartridge identity or nominal capacity. Unexplained extended counts and other formats
 withdraw this source. The [research](../research/tape-read-ordering.md#direct-physical-coordinates)
-states its empirical scope and remaining limits. CM cumulative object counts use exclusive bounds.
-The paired HP Ultrium 5-SCSI/Z6ED density-0x58 REOWP response uses the same qualified count convention;
-other readers retain their existing reported-object interpretation. Earlier inclusive REOWP maps
-from that HP5 configuration require a new observation before reuse. Source selection never changes a saved
-file's logical locator. Accepted derived geometry uses the existing Media map and session lifetime;
+states its empirical scope and remaining limits.
+
+Every wrap endpoint, from REOWP or CM, is exclusive: the first logical object after
+that wrap, or actual EOD for the final partial wrap. This is the HPE-documented cumulative count; CM
+cumulative counts already equal it. A drive whose completed-wrap value names the last object on the
+wrap shifts that boundary by one object, which is accepted as estimation error. The
+[endpoint research](../research/tape-read-ordering.md#reowp-endpoint-definition) records the vendor
+definitions. Source selection never changes a saved file's logical locator. Accepted derived geometry uses the existing Media map and session lifetime;
 no raw CM image or per-file wrap is persisted. A new read after APPEND observes the current directory.
 
 When timing parameters omit nominal layout,
 a self-described tar map remains usable only if current full boundaries agree and current EOD covers
 its saved prefix; confirmation never extends retained coverage. Tar maps bind to initialization ID; LTFS maps
-bind to volume UUID and index generation. Each map owns its explicit endpoint convention. Missing
-or ambiguous coverage refuses cost estimates without changing exact logical seek addresses. Session
+bind to volume UUID and index generation. Missing or ambiguous coverage refuses cost estimates without changing exact logical seek addresses. Session
 invalidation withdraws live estimates. The four-band, alternating-wrap interpolation assumption uses
 a sourced nominal wrap count; complete intervals use their own boundaries. A partial final interval
 uses the greater of its observed length and typical complete interval length for scale, while actual
 EOD still bounds readable data. Locations whose wrap classification is ambiguous remain unknown.
-
-Tar WRITE geometry inference uses existing start/final position checks and completed WRITE facts,
-with no new command. The consumer bins native time by cumulative confirmed bytes, separately retains
-host-supply gaps, checks first-half frequency, recurrence, phase and harmonics, and rejects starved,
-constant-slow or continuously backhitching signals. Fixed bin storage is bounded; raw observations
-are discarded after deriving the map. A successful APPEND preserves the complete prefix and replaces
-only the affected tail; insufficient evidence retains old coverage without claiming the new tail.
-Rejected inputs allocate no byte-bin storage.
-Unknown acceptance never becomes inferred written bytes. Map publication follows physical cleanup,
-and failure to save optional geometry cannot fail content publication. The [research evidence](../research/tar-tape.md)
-separates the same-cartridge blind replay from prospective hardware qualification.
 
 Tar planning and execution share one full-range evaluator for retained-record reuse, continued READ
 with gap discard/filemarks, and LOCATE plus target reads. Headers, padding, cross-record ends and
@@ -216,28 +220,7 @@ query supplies OBSERVED evidence, with physical validation UNVALIDATED. Typed ob
 long command form and source, with count only after an interpretable response; these do not prove
 full-wrap coverage. Successful querying
 alone leaves freshness unknown. The live reported observation preserves gaps, pair identities and
-endpoint semantics, and becomes unusable after its owner writes, initializes, loses certainty or
+reported endpoints, and becomes unusable after its owner writes, initializes, loses certainty or
 closes. Direction, band, full-wrap normalization and empirical costs require separate applicable
 evidence.
 
-## Position-Map Refresh
-
-Explicit position-map refresh precedes read settings/key application and label validation under the
-attempt lease. Applicable documented HOLD/LOAD semantics, positively reported exact synchronous
-forms, a ready cartridge, usable all-wrap reporting and logical navigation establish eligibility;
-physical validation remains separate. The provider requires encryption/decryption off without
-foreign control before motion. It invalidates old geometry/navigation, performs one non-ejecting
-HOLD, confirms the held/unthreaded state and performs one LOAD. It then reobserves drive identity,
-readiness, navigation and the bounded map on the same descriptor. The factory cross-checks the
-cartridge identity again before applying the frozen read policy/key and validating the label.
-Only that post-HOLD readiness check accepts the exact current held-state response; it does not
-close shared command admission. Ordinary readiness loss, uncertain completion and cancellation
-still prevent further motion.
-Original non-secret controls are captured before motion and retained through ordinary cleanup.
-Cancellation or failure never schedules a compensating LOAD, retry or eject; failed restoration
-keeps the existing device-unavailability boundary.
-
-The replacement map is a newly acquired reported observation. The cycle does not establish map
-reconstruction, full physical coverage or `Fresh=true`, and supplies no timing model or AUTO
-recommendation. AUTO never adds a reload. Restore preserves the explicit action through frozen
-selection; Scan accepts it only for frozen tar VERIFY_COPIES.

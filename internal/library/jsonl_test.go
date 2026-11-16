@@ -377,7 +377,7 @@ func TestLibraryJSONLImportRejectsInvalidSnapshots(t *testing.T) {
 		{name: "empty", want: "detect library import failed"},
 		{name: "malformed header", snapshot: "{\n", want: "detect library import failed"},
 		{
-			name: "obsolete tracking evidence",
+			name: "unknown tracking evidence",
 			snapshot: `{"type":"header","format":"yatm-library-backup","version":1,"entities":["file","file_version","file_version_archive","location","file_location","file_tracking_key"]}
 {"type":"file","data":{"id":2,"name":"replacement","kind":1,"created_at_ns":"0","updated_at_ns":"0"}}
 {"type":"file_tracking_key","data":{"file_id":2,"kind":"yatm_uuid","scope":"test","key_value":"a2V5","observed_at_ns":"0"}}

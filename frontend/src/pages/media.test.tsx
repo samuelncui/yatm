@@ -191,10 +191,11 @@ describe("Media page", () => {
     });
   });
 
-  it("keeps View controls while offering built-in Sort only for a complete Media or Position listing", async () => {
+  it("reads every page of a Media or Position listing and offers built-in Sort only once it is complete", async () => {
+    let finishMedia!: (value: unknown) => void;
     mediaList
       .mockReturnValueOnce(call({ media: [{ id: 1n, name: "First" }], hasMore: true }))
-      .mockReturnValueOnce(call({ media: [{ id: 2n, name: "Second" }], hasMore: false }));
+      .mockReturnValueOnce({ response: new Promise((resolve) => (finishMedia = resolve)) });
     mediaGetPositions
       .mockReturnValueOnce(call({ positions: [{ fileId: 10n, mediaId: 1n, path: "a/" }], hasMore: true }))
       .mockReturnValueOnce(call({ positions: [{ fileId: 11n, mediaId: 1n, path: "b/" }], hasMore: false }));
@@ -211,17 +212,18 @@ describe("Media page", () => {
     const sortIds = [ChonkyActions.SortFilesByName.id, ChonkyActions.SortFilesBySize.id, ChonkyActions.SortFilesByDate.id];
     const rootOptions = [ChonkyActions.ToggleHiddenFiles.id, ChonkyActions.ToggleShowFoldersFirst.id];
 
+    // The first page is visible while the next one is read; sorting waits for the complete listing.
     await waitFor(() => expect(result.current.browserProps.files[0]?.name).toBe("First"));
     expect(result.current.browserProps.disableDefaultFileActions).toEqual([...rootOptions, ...sortIds, ChonkyActions.SelectAllFiles.id]);
-    act(() => result.current.browserProps.onFileAction(action(LoadMoreAction.id)));
+    expect(result.current.browserProps.fileActions.map((value) => value.id)).not.toContain(LoadMoreAction.id);
+    await act(async () => finishMedia({ media: [{ id: 2n, name: "Second" }], hasMore: false }));
     await waitFor(() => expect(result.current.browserProps.files).toHaveLength(2));
     expect(result.current.browserProps.disableDefaultFileActions).toEqual(rootOptions);
+    expect(mediaList).toHaveBeenCalledTimes(2);
 
     act(() => result.current.browserProps.onFileAction(action(ChonkyActions.OpenFiles.id, result.current.browserProps.files[0]!)));
-    await waitFor(() => expect(result.current.browserProps.files[0]?.name).toBe("a/"));
-    expect(result.current.browserProps.disableDefaultFileActions).toEqual([...rootOptions, ...sortIds, ChonkyActions.SelectAllFiles.id]);
-    act(() => result.current.browserProps.onFileAction(action(LoadMoreAction.id)));
     await waitFor(() => expect(result.current.browserProps.files).toHaveLength(2));
+    expect(result.current.browserProps.files.map((file) => file?.name)).toEqual(["a/", "b/"]);
     expect(result.current.browserProps.disableDefaultFileActions).toEqual([ChonkyActions.ToggleHiddenFiles.id]);
   });
 
@@ -586,18 +588,14 @@ describe("Media page", () => {
     );
 
     // Wait for the first real page instead of matching the initial null loading placeholder.
-    await waitFor(() => expect(result.current.browserProps.files[0]?.name).toBe("First"));
-    act(() => result.current.browserProps.onFileAction(action(LoadMoreAction.id)));
     await waitFor(() => expect(result.current.browserProps.files).toHaveLength(2));
     expect(mediaList).toHaveBeenLastCalledWith({
       param: { oneofKind: "list", list: { kinds: [], offset: 1n, limit: 100n, query: "" } },
     });
 
-    // Open the first Media and wait until its cursor is ready before requesting another page.
+    // Opening the first Media reads its Positions through the cursor of each page.
     const mediaFolder = { id: "1", name: "First", isDir: true };
     act(() => result.current.browserProps.onFileAction(action("open_files", mediaFolder)));
-    await waitFor(() => expect(result.current.browserProps.files[0]?.name).toBe("a/"));
-    act(() => result.current.browserProps.onFileAction(action(LoadMoreAction.id)));
     await waitFor(() => expect(mediaGetPositions).toHaveBeenCalledTimes(2));
     expect(mediaGetPositions).toHaveBeenLastCalledWith({
       id: 1n,

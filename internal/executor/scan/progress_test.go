@@ -47,7 +47,7 @@ func newProgressRunner(t *testing.T) *runner {
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "scan.db"))
 	require.NoError(t, err)
 	require.NoError(t, prepareSchema(db))
-	return &runner{db: db, progress: executor.NewProgress()}
+	return &runner{db: db, progress: executor.NewProgress(), tracker: executor.NewTracker()}
 }
 
 // startContentAttempt publishes the attempt state a running content stage reads: the durable

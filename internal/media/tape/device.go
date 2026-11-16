@@ -126,11 +126,6 @@ func (d *Device) Configure(ctx context.Context, profile *entity.TarMediaProfile,
 	} else if bounded, ok := d.transport.(interface{ TransferLimit() int }); ok && bounded.TransferLimit() < mode.MaximumBytes {
 		return Records{}, fmt.Errorf("selected record exceeds the transport buffer")
 	}
-	for _, kind := range []entity.DeviceFeatureKind{entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_READ, entity.DeviceFeatureKind_DEVICE_FEATURE_KIND_SEQUENTIAL_WRITE} {
-		if records := feature(d.report, kind).GetRecords(); records != nil {
-			records.TransportMaximumBytes = transportMaximumBytes(d.transport)
-		}
-	}
 
 	// Read current non-secret controls and required medium facts before any MODE SELECT or write.
 	current, pages, err := d.readMode(ctx, false)

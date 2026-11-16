@@ -21,7 +21,7 @@ func TestWalkHidesYATMManagedEntries(t *testing.T) {
 
 	writeAnalyzeFile(t, source, "file.txt", "ordinary")
 	writeAnalyzeFile(t, source, ".yatm.json", "archive marker")
-	writeAnalyzeFile(t, source, ".yatm-restore-probe/must-not-index", "temporary")
+	writeAnalyzeFile(t, source, ".yatm-fileops-staged/must-not-index", "temporary")
 
 	var walked []string
 	require.NoError(t, walk(ctx, exe, source, "", 0, func(relative string, _ os.FileInfo) error {
