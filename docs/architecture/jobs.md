@@ -88,7 +88,7 @@ An optional companion Scan with Preview enabled starts only after the Archive Jo
 
 One [Media operation](../../internal/executor/archive/media.go) proceeds in this order:
 
-1. Acquire the target's exclusive attempt lease and create its typed Write Session.
+1. Acquire the target's exclusive attempt lease, resolve its Media record once and decide FORMAT/APPEND eligibility under [Media admission](media-io.md#session-boundary), then create the typed Write Session from the resolved target and registered Media.
 2. Submit PENDING items to ACP in target order, one bounded manifest page per submission.
    Each item uses the current original Location's read mode; Archive does not regroup files by Location because that would change Media order and the prefix that fits on a full target.
 3. Persist each successful ACP result as STAGED immediately, including the actual Media path, hash, size, mode, times and any target-provided provisional storage position. The Archive records the bytes ACP transferred instead of running a second source-stability policy.
@@ -101,6 +101,11 @@ The [result stream](../../internal/executor/archive/stream.go) validates complet
 ACP target no-space normalization retains the original error chain, including joined write, close
 and temporary-output cleanup failures. The failed item stays PENDING without a staged copy result.
 
+The first file that does not fit ends writing to that Media. Later items, including smaller ones
+that would fit in the remaining space, are not attempted and stay PENDING for another explicit Media
+choice. This is deliberate: files of one directory usually belong together, and filling leftover
+space with later files would spread such a group over more Tapes than necessary for a Restore.
+
 An Archive Media operation ending in an error or operator cancellation settles the runner and returns the Job to its pre-Media `READY` state with its reason and timing. The prepared manifest and successfully submitted items remain; another explicit load-Media operation processes the remaining items.
 
 Tar keeps each provisional locator in the existing item result, with no separate member report.
@@ -110,6 +115,9 @@ returns no publishable tar result; cleanup does not seal or salvage that Archive
 A source-open failure can leave a gap before later complete files. Incomplete members remain
 pending. A successfully finalized zero-member tar FORMAT registers the initialized Media, its
 Job property and zero-file report while retaining the stop reason and remaining work in READY.
+The Job log records each tar Tape file completion with whether the end-of-archive blocks were
+written (`end_of_archive`) and the closing filemark result; a stopped stream writes no end-of-archive
+blocks, and readers end the archive at the filemark.
 An EW first observed during the final buffered WRITE remains a no-space result. Unaccepted staged
 members return to pending under that known stop; missing evidence on normal completion remains an error.
 It advances no content progress. Failed physical completion or cleanup publishes no usable result.
@@ -146,7 +154,7 @@ canceled cleanup. The original read error and physical-release error remain inde
 
 Read preparation selects exclusively from pending frozen candidates. An explicit Tape Media hint
 outside those candidates is rejected before device access; expected identity/profile always come
-from the Job. Automatic tar selection reads the cartridge memory barcode under the attempt lease and returns a
+from the Job, which resolves that Media record once and passes it to the read Session. Automatic tar selection reads the cartridge memory barcode under the attempt lease and returns a
 trusted frozen candidate; a Tape without a cartridge memory barcode fails identification.
 Explicit tar hints bypass LTFS barcode scripts. All-LTFS selection retains its configured adapter.
 Sequential tar reads use logical Tape file/header order. [Media/I/O](media-io.md) owns label validation

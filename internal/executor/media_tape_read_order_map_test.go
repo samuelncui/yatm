@@ -68,7 +68,7 @@ func TestLTFSReadOrderPositionMapKeepsPartitionCoverageAndIndexOwner(t *testing.
 	snapshot := &ltfsReadSnapshot{source: "A3/1F/45", observedAt: time.Now(),
 		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 			{Partition: 1, Wrap: 4, Object: 8}}}
-	value, observed, reason := ltfsReadPositionMap(parameters, stored, facts, snapshot)
+	value, observed, reason := ltfsReadPositionMap(parameters, describeMedia(stored), facts, snapshot)
 	require.NotNil(t, value, reason)
 	require.True(t, observed)
 	require.Equal(t, uint64(100), value.Wraps[1].GetEstimatedSpanObjects())
@@ -85,7 +85,7 @@ func TestLTFSReadOrderPositionMapKeepsPartitionCoverageAndIndexOwner(t *testing.
 
 	// Retained geometry can be reused only by the exact mounted UUID and captured Index generation.
 	stored.TapePositionMap = value
-	retained, observed, reason := ltfsReadPositionMap(parameters, stored, facts, &ltfsReadSnapshot{})
+	retained, observed, reason := ltfsReadPositionMap(parameters, describeMedia(stored), facts, &ltfsReadSnapshot{})
 	require.NotNil(t, retained, reason)
 	require.False(t, observed)
 	require.True(t, proto.Equal(value, retained))
@@ -93,7 +93,7 @@ func TestLTFSReadOrderPositionMapKeepsPartitionCoverageAndIndexOwner(t *testing.
 		{uuid: "e20588e2-9df7-4a45-99c8-229de7b08796", generation: facts.generation},
 		{uuid: facts.uuid, generation: facts.generation + 1},
 	} {
-		retained, _, reason := ltfsReadPositionMap(parameters, stored, changed, &ltfsReadSnapshot{})
+		retained, _, reason := ltfsReadPositionMap(parameters, describeMedia(stored), changed, &ltfsReadSnapshot{})
 		require.Nil(t, retained)
 		require.Contains(t, reason, "matching retained")
 	}
@@ -124,7 +124,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 	facts := &ltfsReadFacts{uuid: "204d1c2f-c755-44cf-ac70-8541ded5f005", generation: 7}
 	snapshot := &ltfsReadSnapshot{source: geometry.Source, observedAt: geometry.ObservedAt,
 		endpoints: geometry.Endpoints}
-	value, observed, reason := ltfsReadPositionMap(parameters, stored, facts, snapshot)
+	value, observed, reason := ltfsReadPositionMap(parameters, describeMedia(stored), facts, snapshot)
 	require.NotNil(t, value, reason)
 	require.True(t, observed)
 	require.Equal(t, uint64(36765), value.Wraps[1].GetEndpoint())
@@ -137,7 +137,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 	require.NoError(t, err)
 	var expectedEndpoints []tape.WrapEndpoint
 	require.NoError(t, json.Unmarshal(expectedData, &expectedEndpoints))
-	confirmed, _, reason := ltfsReadPositionMap(parameters, stored, facts, &ltfsReadSnapshot{
+	confirmed, _, reason := ltfsReadPositionMap(parameters, describeMedia(stored), facts, &ltfsReadSnapshot{
 		endpoints: expectedEndpoints, source: "Independently captured endpoints with explicit count semantics",
 		observedAt: geometry.ObservedAt,
 	})
@@ -155,7 +155,7 @@ func TestLTFSCartridgeDirectoryUsesTheSameConfirmedIntervals(t *testing.T) {
 	}
 	require.Equal(t, 3, provider.cmCalls)
 	stored.TapePositionMap = value
-	retained, fresh, reason := ltfsReadPositionMap(parameters, stored, facts, &ltfsReadSnapshot{})
+	retained, fresh, reason := ltfsReadPositionMap(parameters, describeMedia(stored), facts, &ltfsReadSnapshot{})
 	require.NotNil(t, retained, reason)
 	require.False(t, fresh)
 	require.True(t, proto.Equal(value, retained))

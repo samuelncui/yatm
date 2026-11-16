@@ -161,7 +161,11 @@ func TestTarFilemarkWarningCompletionGate(t *testing.T) {
 				options.Finish = func(context.Context) error { finished = true; return nil }
 				completions := 0
 				if override {
-					options.Complete = func(context.Context) error { completions++; return tc.err }
+					options.Complete = func(_ context.Context, terminated bool) error {
+						require.True(t, terminated, "a healthy stream writes its end-of-archive blocks first")
+						completions++
+						return tc.err
+					}
 				}
 				s, err := newTarTestWriteSession(d, options)
 				if err != nil {
@@ -196,7 +200,11 @@ func TestTarPreparedStopAdmitsNoContentOrAdditionalBoundary(t *testing.T) {
 	options := tarTestOptions(t, false, 4096)
 	options.Stop = errors.Join(ErrTargetNoSpace, tape.ErrEarlyWarning)
 	completions, cleanups := 0, 0
-	options.Complete = func(context.Context) error { completions++; return nil }
+	options.Complete = func(_ context.Context, terminated bool) error {
+		require.False(t, terminated, "a stopped stream writes no end-of-archive blocks")
+		completions++
+		return nil
+	}
 	options.Cleanup = func(context.Context) error { cleanups++; return nil }
 	s, err := newTarTestWriteSession(d, options)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/tools"
@@ -14,7 +15,7 @@ import (
 func (s *mediaService) List(ctx context.Context, req *entity.ListMediaRequest) (*entity.ListMediaResponse, error) {
 	// Reject an absent request before routing its typed filter.
 	if req == nil {
-		return nil, fmt.Errorf("Media list request is missing")
+		return nil, fmt.Errorf("%w: Media list request is missing", executor.ErrInvalidRequest)
 	}
 
 	// Resolve the requested Library page through the existing typed oneof router.

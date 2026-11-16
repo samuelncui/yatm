@@ -10,8 +10,6 @@ import (
 func (a *jobRestoreRunner) restoreEventHandler(ctx context.Context) acp.EventHandler {
 	return func(event acp.Event) {
 		switch value := event.(type) {
-		case *acp.EventUpdateCount:
-			a.logger.WithContext(ctx).Infof("restore copy started, files=%d bytes=%d", value.Files, value.Bytes)
 		case *acp.EventUpdateProgress:
 			a.getProgress().UpdateSessionCurrent(value.Bytes, value.Files)
 			// The event that advances the work counters also samples the copy stage, so the estimate

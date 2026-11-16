@@ -24,7 +24,7 @@ const (
 type options struct {
 	Version           bool          `long:"version" description:"Print local program version and commit (used alone)"`
 	Server            string        `long:"server" env:"YATM_SERVER" default:"http://127.0.0.1:8080" description:"YATM server URL"`
-	Timeout           time.Duration `long:"timeout" env:"YATM_TIMEOUT" default:"30s" description:"Request timeout; use 0 for no deadline"`
+	Timeout           time.Duration `long:"timeout" env:"YATM_TIMEOUT" default:"30s" description:"Request timeout; Tape device inspection allows at least 10m; use 0 for no deadline"`
 	BasicUser         string        `long:"basic-user" env:"YATM_BASIC_USER" description:"HTTP Basic Auth user"`
 	BasicPasswordFile string        `long:"basic-password-file" env:"YATM_BASIC_PASSWORD_FILE" value-name:"FILE" description:"File containing the HTTP Basic Auth password"`
 }

@@ -265,5 +265,5 @@ func TestScanSchemaContainsOnlyConfigAndManifest(t *testing.T) {
 	r := newProgressRunner(t)
 	var tables []string
 	require.NoError(t, r.db.Raw("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").Scan(&tables).Error)
-	require.Equal(t, []string{"config", "entries"}, tables)
+	require.Equal(t, []string{"config", "entries", "job"}, tables, "the common Job record plus the Scan config and manifest")
 }

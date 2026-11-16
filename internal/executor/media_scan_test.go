@@ -65,7 +65,7 @@ func TestTapeReadFinalizeDoesNotRequireASecondInventoryCapture(t *testing.T) {
 	require.NoError(t, os.WriteFile(index, []byte(readInventoryFixture), 0o600))
 	unmount := writeExecutorTestScript(t, "unmount", ":")
 	exe := New(nil, nil, nil, Paths{}, Scripts{Umount: unmount}, nil)
-	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
+	session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend),
 		media: &mediapkg.Descriptor{Identity: "ABC001"}, device: "fixture-device", mountPoint: mountPoint,
 		tapeDir: root, indexPath: index, recycleKey: func() {}}
 

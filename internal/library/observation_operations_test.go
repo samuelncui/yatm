@@ -61,7 +61,7 @@ func TestObservationHashEnrichmentPreservesOnlyUnchangedOpaqueContent(t *testing
 					_, err = lib.PublishSelectedObservations(ctx, location.ID, observedTestManifest(after))
 				}
 				require.NoError(t, err)
-				stored, err := lib.GetFileLocation(ctx, original.FileID)
+				stored, err := readOriginal(ctx, lib, original.FileID)
 				require.NoError(t, err)
 				require.Equal(t, want, stored.Signature)
 				require.Equal(t, after.Hash, stored.Hash)

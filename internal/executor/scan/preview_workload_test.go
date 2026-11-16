@@ -31,8 +31,7 @@ func TestPreviewWorkloadStreamsDuplicateGroupsWithoutRowQueries(t *testing.T) {
 	// Repeated signatures span many manifest pages and include unsupported earlier names.
 	p := &workloadPreviewer{present: map[string]bool{}}
 	exe, _ := setupAnalyzeWithPreview(t, p)
-	r := newProgressRunner(t)
-	r.exe = exe
+	r := newJobRunner(t, exe)
 	for group := 0; group < 4; group++ {
 		hash := sha256.Sum256([]byte(fmt.Sprint(group)))
 		var entries []*Entry
@@ -75,8 +74,7 @@ func TestPreviewWorkloadCancellationClosesStream(t *testing.T) {
 	defer cancel()
 	p := &workloadPreviewer{cancel: cancel}
 	exe, _ := setupAnalyzeWithPreview(t, p)
-	r := newProgressRunner(t)
-	r.exe = exe
+	r := newJobRunner(t, exe)
 	for index := 0; index < 10; index++ {
 		hash := sha256.Sum256([]byte(fmt.Sprint(index)))
 		require.NoError(t, r.db.Create(&Entry{Path: fmt.Sprint(index), SourcePath: "image.jpg", SHA256: hash[:]}).Error)

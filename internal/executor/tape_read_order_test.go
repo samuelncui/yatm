@@ -27,7 +27,7 @@ func readyReadOrderJob(t *testing.T, exe *Executor, kind entity.JobKind) *Job {
 }
 
 func admittedTapeReadOrder(ctx context.Context, backend *mediaBackend) (entity.TapeReadOrder, error) {
-	defaults, err := backend.tapeDefaults(ctx, "/dev/nst0")
+	defaults, err := backend.executor.tapeDefaults(ctx, "/dev/nst0")
 	return settingspkg.TapeDefaultReadOrder(defaults), err
 }
 
@@ -86,7 +86,7 @@ func TestTapeReadOrderFreezesAtEveryJobAdmission(t *testing.T) {
 func TestTarAutoFallsBackAndRefreshRejectsBeforeControls(t *testing.T) {
 	ctx := context.Background()
 	exe, backend, fixture, jobID := tarFactoryFixture(t)
-	write, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+	write, err := openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 	require.NoError(t, err)
 	result, err := write.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestTarAutoFallsBackAndRefreshRejectsBeforeControls(t *testing.T) {
 	require.NoError(t, err)
 	var diagnostics bytes.Buffer
 	backend.logger.SetOutput(&diagnostics)
-	read, err := backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+	read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 	require.NoError(t, err)
 	require.NoError(t, read.Finalize(ctx, nil))
 	require.Contains(t, diagnostics.String(), "requested_read_order=TAPE_READ_ORDER_AUTO")

@@ -21,8 +21,8 @@ type mediaBackend struct {
 	mediaWait func(waiting bool)
 }
 
-// NewMediaBackend creates the factory bound to one active Job attempt.
-func (e *Executor) NewMediaBackend(jobID int64, logger *logrus.Logger, mediaWait func(bool)) mediapkg.Backend {
+// newMediaBackend creates the factory bound to one active Job attempt.
+func (e *Executor) newMediaBackend(jobID int64, logger *logrus.Logger, mediaWait func(bool)) mediapkg.Backend {
 	if logger == nil {
 		logger = logrus.New()
 	}
@@ -40,22 +40,24 @@ func (b *mediaBackend) acquireDevice(ctx context.Context, acquire func(context.C
 	return err
 }
 
+// NewReadSession opens the Media the Job resolved for this attempt behind the selected physical target.
 func (b *mediaBackend) NewReadSession(
 	ctx context.Context,
 	target *entity.ReadMediaTarget,
+	media *mediapkg.Descriptor,
 ) (mediapkg.ReadSession, error) {
-	if target == nil {
+	if target == nil || media == nil {
 		return nil, fmt.Errorf("create Media read session failed, request is incomplete")
 	}
 	var session mediapkg.ReadSession
 	route := tools.NewActionRouter[*entity.ReadMediaTarget, entity.OneofReadMediaTarget](
 		tools.ActionMethod(func(ctx context.Context, access *entity.ReadTapeTarget) error {
 			var err error
-			switch target.ExpectedProfile.GetTape().GetFormat() {
+			switch media.Profile.GetTape().GetFormat() {
 			case library.TapeFormatTarPAXV1:
-				session, err = b.newTarReadSession(ctx, access, target)
+				session, err = b.newTarReadSession(ctx, access, media)
 			case library.TapeFormatLTFSV0, library.TapeFormatLTFSV1:
-				session, err = b.newTapeReadSession(ctx, access, target)
+				session, err = b.newTapeReadSession(ctx, access, media)
 			default:
 				err = fmt.Errorf("Tape read format is unsupported")
 			}
@@ -63,7 +65,7 @@ func (b *mediaBackend) NewReadSession(
 		}),
 		tools.ActionMethod(func(ctx context.Context, access *entity.ReadVolumeTarget) error {
 			var err error
-			session, err = b.newVolumeReadSession(ctx, access, target)
+			session, err = b.newVolumeReadSession(ctx, access, media)
 			return err
 		}),
 	)
@@ -73,18 +75,11 @@ func (b *mediaBackend) NewReadSession(
 	return session, nil
 }
 
-func validateReadExpectation(stored *library.Media, target *entity.ReadMediaTarget) error {
-	// Read only from the Media identity and profile frozen for this attempt.
-	if stored.ID != target.ExpectedMediaId || stored.Identity != target.ExpectedIdentity ||
-		!proto.Equal(stored.Profile, target.ExpectedProfile) {
-		return fmt.Errorf("Media read identity differs from the frozen expectation, media_id=%d identity=%q", stored.ID, stored.Identity)
-	}
-	return nil
-}
-
+// NewWriteSession opens an admitted write. The target is already resolved; media is nil only for FORMAT.
 func (b *mediaBackend) NewWriteSession(
 	ctx context.Context,
 	target *entity.ArchiveMediaTarget,
+	media *mediapkg.Descriptor,
 ) (mediapkg.WriteSession, error) {
 	if target == nil {
 		return nil, fmt.Errorf("create Media write session failed, request is incomplete")
@@ -92,21 +87,17 @@ func (b *mediaBackend) NewWriteSession(
 	var session mediapkg.WriteSession
 	route := tools.NewActionRouter[*entity.ArchiveMediaTarget, entity.OneofArchiveMediaTarget](
 		tools.ActionMethod(func(ctx context.Context, target *entity.ArchiveTapeTarget) error {
-			// Resolve the requested or immutable format before invoking any adapter.
-			resolved, err := b.resolveTapeWrite(ctx, target)
-			if err != nil {
-				return err
-			}
-			if resolved.GetFormat() == library.TapeFormatTarPAXV1 {
-				session, err = b.newTarWriteSession(ctx, resolved)
+			var err error
+			if target.GetFormat() == library.TapeFormatTarPAXV1 {
+				session, err = b.newTarWriteSession(ctx, target, media)
 			} else {
-				session, err = b.newTapeWriteSession(ctx, resolved)
+				session, err = b.newTapeWriteSession(ctx, target, media)
 			}
 			return err
 		}),
 		tools.ActionMethod(func(ctx context.Context, target *entity.ArchiveVolumeTarget) error {
 			var err error
-			session, err = b.newVolumeWriteSession(ctx, target)
+			session, err = b.newVolumeWriteSession(ctx, target, media)
 			return err
 		}),
 	)
@@ -114,6 +105,19 @@ func (b *mediaBackend) NewWriteSession(
 		return nil, err
 	}
 	return session, nil
+}
+
+// registeredMedia rejects a write that needs the Job's registered Media but received none.
+func registeredMedia(media *mediapkg.Descriptor, kind entity.MediaKind, identity string) error {
+	if media == nil || media.Kind != kind || media.Identity != identity {
+		return fmt.Errorf("Media write requires the registered Media, identity=%q", identity)
+	}
+	return nil
+}
+
+// validatePositionMap applies the Library's structural map rules to a boundary descriptor.
+func validatePositionMap(media *mediapkg.Descriptor, value *entity.TapePositionMap) error {
+	return library.ValidateTapePositionMap(&library.Media{Kind: media.Kind, Profile: media.Profile}, value)
 }
 
 func describeMedia(value *library.Media) *mediapkg.Descriptor {

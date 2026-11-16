@@ -280,17 +280,6 @@ func (s *IdenticalSnapshot) Groups(cursor string, limit int64) (IdenticalGroupPa
 	return page, nil
 }
 
-// Fingerprint identifies the complete group by its members, signatures and originals.
-// Auxiliary metadata and unrelated groups do not invalidate a group operation.
-func (s *IdenticalSnapshot) Fingerprint(groupID string) (string, error) {
-	// Stream deterministic content evidence through a bounded hash.
-	id, err := s.groupID(groupID)
-	if err != nil {
-		return "", err
-	}
-	return s.fingerprint(id)
-}
-
 func (s *IdenticalSnapshot) fingerprint(id int64) (string, error) {
 	hash := sha256.New()
 	hash.Write([]byte(s.scope))

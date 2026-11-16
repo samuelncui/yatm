@@ -159,7 +159,7 @@ func TestRequestRenamePreservesOrganizationAndNestedOriginals(t *testing.T) {
 		file *library.File
 		path string
 	}{{first, "Renamed/one.txt"}, {second, "Renamed/nested/two.txt"}} {
-		original, err := f.exe.Lib().GetFileLocation(context.Background(), expected.file.ID)
+		original, err := readOriginal(context.Background(), f.exe.Lib(), expected.file.ID)
 		require.NoError(t, err)
 		require.Equal(t, expected.path, original.Path)
 		stored, err := f.exe.Lib().GetFile(context.Background(), expected.file.ID)
@@ -244,7 +244,7 @@ func TestRequestPublicationFailurePreservesPhysicalMove(t *testing.T) {
 		id   int64
 		path string
 	}{{first.ID, "target/a.txt"}, {second.ID, "b.txt"}} {
-		original, err := f.exe.Lib().GetFileLocation(context.Background(), expected.id)
+		original, err := readOriginal(context.Background(), f.exe.Lib(), expected.id)
 		require.NoError(t, err)
 		require.Equal(t, expected.path, original.Path)
 	}

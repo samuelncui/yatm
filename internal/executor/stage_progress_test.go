@@ -2,6 +2,7 @@ package executor
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
@@ -17,7 +18,8 @@ func observePreview(p *Progress, key string, completed, total, work, workTotal i
 		Total:     &Counts{Files: total, Bytes: total * 10},
 		Work:      Counts{Files: work}, WorkKnown: true, WorkTotal: &Counts{Files: workTotal}, Minimum: 3,
 	}
-	return p.ObserveStage(in)
+	p.ObserveStage(in)
+	return reportPreview(p, in)
 }
 
 // reportPreview reads the stage without recording a sample, exactly as a progress request does.
@@ -26,89 +28,89 @@ func reportPreview(p *Progress, in StageInput) *entity.StageProgress {
 }
 
 func TestStageMeterWindowsStaleRecoveryAndScopeIsolation(t *testing.T) {
-	// Fixed clocks make the minimum warmup and slow-file boundary independent of test speed.
-	now := time.Unix(100, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
-	first := observePreview(p, "scope-a", 10, 110, 0, 100)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, first.EstimateState)
-	for index := int64(1); index <= 3; index++ {
-		now = now.Add(5 * time.Second)
-		observePreview(p, "scope-a", 10+index, 110, index, 100)
-	}
-	require.Equal(t, first.WindowId, observePreview(p, "scope-a", 13, 110, 3, 100).WindowId, "one attempt keeps one window")
-	settled := observePreview(p, "scope-a", 13, 110, 3, 100)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, settled.EstimateState)
-	require.EqualValues(t, 485, *settled.RemainingSeconds)
-
-	// A moderately slow item preserves the estimate rather than flickering at twice its mean.
-	now = now.Add(13 * time.Second)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, observePreview(p, "scope-a", 13, 110, 3, 100).EstimateState)
-	now = now.Add(18 * time.Second)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, observePreview(p, "scope-a", 13, 110, 3, 100).EstimateState)
-	for index := int64(4); index <= 6; index++ {
-		now = now.Add(5 * time.Second)
-		value := observePreview(p, "scope-a", 10+index, 110, index, 100)
-		if index < 6 {
-			require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
+	synctest.Test(t, func(t *testing.T) {
+		// The bubble clock makes the minimum warmup and slow-file boundary independent of test speed.
+		p := NewProgress()
+		first := observePreview(p, "scope-a", 10, 110, 0, 100)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, first.EstimateState)
+		for index := int64(1); index <= 3; index++ {
+			time.Sleep(5 * time.Second)
+			observePreview(p, "scope-a", 10+index, 110, index, 100)
 		}
-	}
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, observePreview(p, "scope-a", 16, 110, 6, 100).EstimateState)
+		require.Equal(t, first.WindowId, observePreview(p, "scope-a", 13, 110, 3, 100).WindowId, "one attempt keeps one window")
+		settled := observePreview(p, "scope-a", 13, 110, 3, 100)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, settled.EstimateState)
+		require.EqualValues(t, 485, *settled.RemainingSeconds)
 
-	// A new scope cannot borrow either the previous rate or the previous window identity.
-	newScope := observePreview(p, "scope-b", 10, 110, 0, 100)
-	require.NotEqual(t, first.WindowId, newScope.WindowId)
-	require.Nil(t, newScope.RatePerSecond)
-	require.Nil(t, newScope.RemainingSeconds)
+		// A moderately slow item preserves the estimate rather than flickering at twice its mean.
+		time.Sleep(13 * time.Second)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, observePreview(p, "scope-a", 13, 110, 3, 100).EstimateState)
+		time.Sleep(18 * time.Second)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, observePreview(p, "scope-a", 13, 110, 3, 100).EstimateState)
+		for index := int64(4); index <= 6; index++ {
+			time.Sleep(5 * time.Second)
+			value := observePreview(p, "scope-a", 10+index, 110, index, 100)
+			if index < 6 {
+				require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
+			}
+		}
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, observePreview(p, "scope-a", 16, 110, 6, 100).EstimateState)
+
+		// A new scope cannot borrow either the previous rate or the previous window identity.
+		newScope := observePreview(p, "scope-b", 10, 110, 0, 100)
+		require.NotEqual(t, first.WindowId, newScope.WindowId)
+		require.Nil(t, newScope.RatePerSecond)
+		require.Nil(t, newScope.RemainingSeconds)
+	})
 }
 
 func TestStageMeterDetectsStallWithoutAnIntermediatePoll(t *testing.T) {
-	// Worker completion sampling must notice a long pause even with no visible UI consumer.
-	now := time.Unix(100, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
-	var value *entity.StageProgress
-	for index := int64(0); index <= 3; index++ {
-		value = observePreview(p, "work", index, 10, index, 10)
-		now = now.Add(5 * time.Second)
-	}
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, value.EstimateState)
-	now = now.Add(time.Minute)
-	value = observePreview(p, "work", 4, 10, 4, 10)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
-	require.Nil(t, value.RemainingSeconds)
+	synctest.Test(t, func(t *testing.T) {
+		// Worker completion sampling must notice a long pause even with no visible UI consumer.
+		p := NewProgress()
+		var value *entity.StageProgress
+		for index := int64(0); index <= 3; index++ {
+			value = observePreview(p, "work", index, 10, index, 10)
+			time.Sleep(5 * time.Second)
+		}
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, value.EstimateState)
+		time.Sleep(time.Minute)
+		value = observePreview(p, "work", 4, 10, 4, 10)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
+		require.Nil(t, value.RemainingSeconds)
+	})
 }
 
 func TestStageMeterSkippedItemsUnknownWorkAndIndeterminatePhases(t *testing.T) {
-	// Settled cache hits update the displayed item counter, never actual generation throughput.
-	now := time.Unix(100, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
-	for index := int64(0); index < 5; index++ {
-		value := observePreview(p, "preview", index*100, 1000, 0, 10)
-		require.Nil(t, value.RatePerSecond)
-		require.Nil(t, value.RemainingSeconds)
-		now = now.Add(5 * time.Second)
-	}
-	for index := int64(1); index < 5; index++ {
-		value := observePreview(p, "preview", 500+index, 1000, index, 0)
-		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
-		now = now.Add(5 * time.Second)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		// Settled cache hits update the displayed item counter, never actual generation throughput.
+		p := NewProgress()
+		for index := int64(0); index < 5; index++ {
+			value := observePreview(p, "preview", index*100, 1000, 0, 10)
+			require.Nil(t, value.RatePerSecond)
+			require.Nil(t, value.RemainingSeconds)
+			time.Sleep(5 * time.Second)
+		}
+		for index := int64(1); index < 5; index++ {
+			value := observePreview(p, "preview", 500+index, 1000, index, 0)
+			require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, value.EstimateState)
+			time.Sleep(5 * time.Second)
+		}
 
-	// Cancellation, waiting and publication never advertise a running estimate.
-	for _, phase := range []entity.JobPhase{
-		entity.JobPhase_JOB_PHASE_UNSPECIFIED, entity.JobPhase_JOB_PHASE_QUEUED,
-		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
-	} {
-		in := StageInput{Key: phase.String(), Phase: phase, Completed: Counts{Files: 505}}
-		p.ObserveStage(in)
-		value := p.StageReport(in).Stage
-		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE, value.EstimateState)
-		require.Nil(t, value.Total)
-		require.Nil(t, value.RemainingSeconds)
-		require.EqualValues(t, 505, value.Completed)
-	}
+		// Cancellation, waiting and publication never advertise a running estimate.
+		for _, phase := range []entity.JobPhase{
+			entity.JobPhase_JOB_PHASE_UNSPECIFIED, entity.JobPhase_JOB_PHASE_QUEUED,
+			entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
+		} {
+			in := StageInput{Key: phase.String(), Phase: phase, Completed: Counts{Files: 505}}
+			p.ObserveStage(in)
+			value := p.StageReport(in).Stage
+			require.Equal(t, entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE, value.EstimateState)
+			require.Nil(t, value.Total)
+			require.Nil(t, value.RemainingSeconds)
+			require.EqualValues(t, 505, value.Completed)
+		}
+	})
 }
 
 func TestStageRuleNeverShowsAPercentageWithoutADenominator(t *testing.T) {
@@ -127,8 +129,6 @@ func TestStageRuleNeverShowsAPercentageWithoutADenominator(t *testing.T) {
 
 		// Even a caller that attaches a denominator cannot make such a phase a percentage.
 		p := NewProgress()
-		now := time.Unix(100, 0)
-		p.now = func() time.Time { return now }
 		in := StageInput{Key: "attempt", Phase: phase, Completed: Counts{Files: 3, Bytes: 30},
 			Total: &Counts{Files: 10, Bytes: 100}, Work: Counts{Files: 3}, WorkTotal: &Counts{Files: 10}}
 		p.ObserveStage(in)
@@ -164,61 +164,64 @@ func TestStageRuleZeroByteDenominatorUsesItems(t *testing.T) {
 }
 
 func TestCopyStageInputUsesItemsForZeroByteFilesAndResetsAttemptWindow(t *testing.T) {
-	// Empty files remain real work despite their byte denominator being zero.
-	p := NewProgress()
-	now := time.Unix(100, 0)
-	p.now = func() time.Time { return now }
-	p.SetGlobalTotal(0, 3)
-	p.SetGlobalCopied(0, 1)
-	p.StartSession()
-	copied := p.CopyStageInput(entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA, p.StagePrefix())
-	unobserved := p.StageReport(copied).Stage
-	require.Empty(t, unobserved.WindowId, "a progress request never opens a window")
-	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_ITEMS, unobserved.Unit)
-	require.EqualValues(t, 1, unobserved.Completed)
-	require.EqualValues(t, 3, *unobserved.Total)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE, unobserved.EstimateState)
+	synctest.Test(t, func(t *testing.T) {
+		// Empty files remain real work despite their byte denominator being zero.
+		p := NewProgress()
+		p.SetGlobalTotal(0, 3)
+		p.SetGlobalCopied(0, 1)
+		p.StartSession()
+		copied := p.CopyStageInput(entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA, p.StagePrefix())
+		unobserved := p.StageReport(copied).Stage
+		require.Empty(t, unobserved.WindowId, "a progress request never opens a window")
+		require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_ITEMS, unobserved.Unit)
+		require.EqualValues(t, 1, unobserved.Completed)
+		require.EqualValues(t, 3, *unobserved.Total)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_NOT_APPLICABLE, unobserved.EstimateState)
 
-	// A subsequent Media attempt changes identity even if nobody polled the waiting state.
-	first := p.ObserveStage(copied)
-	p.CommitSession()
-	now = now.Add(time.Second)
-	p.StartSession()
-	second := p.ObserveStage(p.CopyStageInput(entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA, p.StagePrefix()))
-	require.NotEmpty(t, first.WindowId)
-	require.NotEqual(t, first.WindowId, second.WindowId)
-	waiting := p.StageReport(p.CopyStageInput(entity.JobPhase_JOB_PHASE_QUEUED, p.StagePrefix())).Stage
-	require.Nil(t, waiting.Total)
-	require.Nil(t, waiting.RemainingSeconds)
+		// A subsequent Media attempt changes identity even if nobody polled the waiting state.
+		p.ObserveStage(copied)
+		first := p.StageReport(copied).Stage
+		p.CommitSession()
+		time.Sleep(time.Second)
+		p.StartSession()
+		next := p.CopyStageInput(entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA, p.StagePrefix())
+		p.ObserveStage(next)
+		second := p.StageReport(next).Stage
+		require.NotEmpty(t, first.WindowId)
+		require.NotEqual(t, first.WindowId, second.WindowId)
+		waiting := p.StageReport(p.CopyStageInput(entity.JobPhase_JOB_PHASE_QUEUED, p.StagePrefix())).Stage
+		require.Nil(t, waiting.Total)
+		require.Nil(t, waiting.RemainingSeconds)
+	})
 }
 
 func TestStageReportReadsWithoutSamplingAndWorkDrivesTheEstimate(t *testing.T) {
-	// Only the work path records samples: any number of requests reports the same window, and the
-	// estimate exists because the work advanced rather than because a client polled.
-	now := time.Unix(100, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
-	in := StageInput{Key: "attempt", Phase: entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA,
-		Total: &Counts{Files: 10, Bytes: 1000}, WorkTotal: &Counts{Files: 10, Bytes: 1000}}
-	sample := func(bytes int64) {
-		in.Completed, in.Work = Counts{Files: bytes / 100, Bytes: bytes}, Counts{Files: bytes / 100, Bytes: bytes}
-		p.ObserveStage(in)
-	}
-	sample(0)
-	for step := int64(1); step <= 3; step++ {
-		now = now.Add(5 * time.Second)
-		sample(step * 100)
-	}
-	for index := 0; index < 5; index++ {
-		value := p.StageReport(in).Stage
-		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, value.EstimateState)
-		require.Positive(t, *value.RemainingSeconds)
-	}
-	// A long gap the work path observed invalidates the rate; a request during the gap keeps it.
-	now = now.Add(10 * time.Minute)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, p.StageReport(in).Stage.EstimateState)
-	sample(400)
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, p.StageReport(in).Stage.EstimateState)
+	synctest.Test(t, func(t *testing.T) {
+		// Only the work path records samples: any number of requests reports the same window, and the
+		// estimate exists because the work advanced rather than because a client polled.
+		p := NewProgress()
+		in := StageInput{Key: "attempt", Phase: entity.JobPhase_JOB_PHASE_COPYING_TO_MEDIA,
+			Total: &Counts{Files: 10, Bytes: 1000}, WorkTotal: &Counts{Files: 10, Bytes: 1000}}
+		sample := func(bytes int64) {
+			in.Completed, in.Work = Counts{Files: bytes / 100, Bytes: bytes}, Counts{Files: bytes / 100, Bytes: bytes}
+			p.ObserveStage(in)
+		}
+		sample(0)
+		for step := int64(1); step <= 3; step++ {
+			time.Sleep(5 * time.Second)
+			sample(step * 100)
+		}
+		for index := 0; index < 5; index++ {
+			value := p.StageReport(in).Stage
+			require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, value.EstimateState)
+			require.Positive(t, *value.RemainingSeconds)
+		}
+		// A long gap the work path observed invalidates the rate; a request during the gap keeps it.
+		time.Sleep(10 * time.Minute)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, p.StageReport(in).Stage.EstimateState)
+		sample(400)
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, p.StageReport(in).Stage.EstimateState)
+	})
 }
 
 // TestPreviewSamplingWithoutADenominatorKeepsItsEstimate pins the Preview work path: it records
@@ -226,34 +229,34 @@ func TestStageReportReadsWithoutSamplingAndWorkDrivesTheEstimate(t *testing.T) {
 // counters. The sample must not be dropped — otherwise the stage can never show a rate or a
 // remaining time, which is what a live Preview phase did before this test existed.
 func TestPreviewSamplingWithoutADenominatorKeepsItsEstimate(t *testing.T) {
-	now := time.Unix(300, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
+	synctest.Test(t, func(t *testing.T) {
+		p := NewProgress()
 
-	// Exactly what scan.samplePreview records: sampled decoder work and its classified workload,
-	// with no denominator.
-	observeWork := func(work int64) {
-		p.ObserveStage(StageInput{
+		// Exactly what scan.samplePreview records: sampled decoder work and its classified workload,
+		// with no denominator.
+		observeWork := func(work int64) {
+			p.ObserveStage(StageInput{
+				Key: "attempt/preview", Phase: entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
+				Work: Counts{Files: work}, Minimum: 3, WorkKnown: true, WorkTotal: &Counts{Files: 100},
+			})
+		}
+		observeWork(0)
+		for index := int64(1); index <= 3; index++ {
+			time.Sleep(5 * time.Second)
+			observeWork(index * 10)
+		}
+
+		// A progress request supplies the counters and reads the window the work path recorded.
+		stage := reportPreview(p, StageInput{
 			Key: "attempt/preview", Phase: entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
-			Work: Counts{Files: work}, Minimum: 3, WorkKnown: true, WorkTotal: &Counts{Files: 100},
+			Completed: Counts{Files: 30}, Total: &Counts{Files: 100},
+			Work: Counts{Files: 30}, Minimum: 3, WorkKnown: true, WorkTotal: &Counts{Files: 100},
 		})
-	}
-	observeWork(0)
-	for index := int64(1); index <= 3; index++ {
-		now = now.Add(5 * time.Second)
-		observeWork(index * 10)
-	}
-
-	// A progress request supplies the counters and reads the window the work path recorded.
-	stage := reportPreview(p, StageInput{
-		Key: "attempt/preview", Phase: entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS,
-		Completed: Counts{Files: 30}, Total: &Counts{Files: 100},
-		Work: Counts{Files: 30}, Minimum: 3, WorkKnown: true, WorkTotal: &Counts{Files: 100},
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, stage.EstimateState)
+		require.NotNil(t, stage.RatePerSecond)
+		require.NotNil(t, stage.RemainingSeconds)
+		require.Greater(t, *stage.RemainingSeconds, int64(0))
+		require.EqualValues(t, 30, stage.Completed)
+		require.EqualValues(t, 100, *stage.Total)
 	})
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, stage.EstimateState)
-	require.NotNil(t, stage.RatePerSecond)
-	require.NotNil(t, stage.RemainingSeconds)
-	require.Greater(t, *stage.RemainingSeconds, int64(0))
-	require.EqualValues(t, 30, stage.Completed)
-	require.EqualValues(t, 100, *stage.Total)
 }

@@ -8,14 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -78,59 +76,28 @@ func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
 	spec := f.spec()
 	spec.SignaturePolicy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
 	spec.ResultPolicy = entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS
+	// The middle file stays visible to manifest construction but cannot be read for content.
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses ordinary file permission restrictions")
+	}
+	unreadable := filepath.Join(f.locations[1].RootPath, "selected/file-00000001")
+	require.NoError(t, os.Chmod(unreadable, 0))
+	t.Cleanup(func() { require.NoError(t, os.Chmod(unreadable, 0o644)) })
 	ctx := context.Background()
-	var r *runner
-	var inserted, started atomic.Int64
-	var injected atomic.Bool
-	job, err := f.exe.CreatePreparedJob(ctx, entity.JobKind_JOB_KIND_SCAN, 1, func(db *gorm.DB) error {
-		if err := prepareSchema(db); err != nil {
-			return err
-		}
-		return db.Create(&Config{ID: 1, Spec: spec}).Error
-	}, func(value executor.Runner) error {
-		r = value.(*runner)
-		if err := r.db.Callback().Create().Before("gorm:create").Register("test:manifest-count", func(tx *gorm.DB) {
-			var rows []*Entry
-			switch value := tx.Statement.Dest.(type) {
-			case []*Entry:
-				rows = value
-			case *[]*Entry:
-				rows = *value
-			}
-			for _, row := range rows {
-				if row.ID == 0 {
-					inserted.Add(1)
-				}
-			}
-		}); err != nil {
-			return err
-		}
-		return r.db.Callback().Query().After("gorm:query").Register("test:content-barrier", func(tx *gorm.DB) {
-			if tx.Statement.Table != "entries" || !strings.Contains(tx.Statement.SQL.String(), "needs_hash =") {
-				return
-			}
-			if _, ok := tx.Statement.Dest.(*[]*Entry); !ok {
-				return
-			}
-			started.Add(1)
-			if inserted.Load() != 3 {
-				tx.AddError(fmt.Errorf("content began with %d of 3 manifest entries", inserted.Load()))
-				return
-			}
-			if injected.CompareAndSwap(false, true) {
-				tx.AddError(os.Remove(filepath.Join(f.locations[1].RootPath, "selected/file-00000001")))
-			}
-		})
-	})
+	created, err := Create(ctx, f.exe, &entity.CreateScanJobRequest{Spec: spec})
 	require.NoError(t, err)
-	require.Eventually(t, func() bool { return !f.exe.IsRunning(job.ID) }, 15*time.Second, time.Millisecond)
+	job := created.Job
+	require.Eventually(t, func() bool { return !f.exe.IsRunning(job.Id) }, 15*time.Second, time.Millisecond)
 
-	// A failed content read is terminal, retaining the full manifest and only earlier publication.
-	failed, err := f.exe.GetJob(ctx, job.ID)
+	// A failed content read is terminal, retaining the full manifest, including the Location after
+	// the failure, and only earlier publication.
+	failed, err := f.exe.GetJob(ctx, job.Id)
 	require.NoError(t, err)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, failed.Status)
 	require.Contains(t, failed.Error, "file-00000001")
-	require.Positive(t, started.Load())
+	value, err := f.exe.GetJobRunner(ctx, job.Id)
+	require.NoError(t, err)
+	r := value.(*runner)
 	var rows []*Entry
 	require.NoError(t, r.db.Order("location_id").Find(&rows).Error)
 	require.Len(t, rows, 3)
@@ -150,7 +117,7 @@ func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
 			require.Empty(t, originals[0].Hash, "later Location observations were not published")
 		}
 	}
-	_, err = (&service{exe: f.exe}).ReadMedia(ctx, &entity.ReadScanMediaRequest{Id: job.ID})
+	_, err = (&service{exe: f.exe}).ReadMedia(ctx, &entity.ReadScanMediaRequest{Id: job.Id})
 	require.Error(t, err, "a retained complete manifest cannot restart a failed Scan")
 }
 
@@ -169,7 +136,7 @@ func TestScanLogicalSelectionSkipsFilesWithoutOriginal(t *testing.T) {
 	job, err := f.exe.GetJob(ctx, r.job.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, job.Status, job.Error)
-	original, err := f.exe.Lib().GetFileLocation(ctx, missing.FileID)
+	original, err := readOriginal(ctx, f.exe.Lib(), missing.FileID)
 	require.NoError(t, err)
 	require.Nil(t, original, "a skipped File is never associated by its former path")
 	var published int64
@@ -264,7 +231,7 @@ func TestScanSavedAllOverlapAndTrashKeepSelectionSemantics(t *testing.T) {
 	for i, row := range rows {
 		require.Equal(t, originals[i].FileID, row.Before.GetFileId())
 	}
-	original, err := f.exe.Lib().GetFileLocation(ctx, trashed.ID)
+	original, err := readOriginal(ctx, f.exe.Lib(), trashed.ID)
 	require.NoError(t, err)
 	require.Equal(t, originals[5], original)
 }
@@ -365,8 +332,7 @@ func TestScanMatchingReadsOnlySelectedIdentitiesInGlobalOrder(t *testing.T) {
 		row.Hash, row.Signature = hash, []byte("opaque")
 		require.NoError(t, f.db.Save(row).Error)
 	}
-	r := newProgressRunner(t)
-	r.exe = f.exe
+	r := newJobRunner(t, f.exe)
 	r.logger = logrus.New()
 	source := f.locations[0]
 	require.NoError(t, r.db.Create([]*Entry{
@@ -467,7 +433,7 @@ func TestScanDetachedMatchingRequiresEarlierObservedAbsence(t *testing.T) {
 				require.Equal(t, job.ID, complete.LastSyncJobID, "an empty observed Location still publishes its complete range")
 			} else {
 				require.NotEqual(t, old[0].FileID, moved.FileID)
-				retained, err := f.exe.Lib().GetFileLocation(ctx, old[0].FileID)
+				retained, err := readOriginal(ctx, f.exe.Lib(), old[0].FileID)
 				require.NoError(t, err)
 				require.Equal(t, old[0], retained, "an unobserved Location retains its original")
 			}

@@ -210,7 +210,7 @@ func TestExportLibrarySelectionsRoundTrip(t *testing.T) {
 				require.Equal(t, medium.Kind, restored.Kind)
 				require.Equal(t, medium.Identity, restored.Identity)
 				require.True(t, proto.Equal(medium.Profile, restored.Profile))
-				positions, err := target.ListPositions(ctx, medium.ID, "")
+				positions, _, err := target.ListPositionsPage(ctx, medium.ID, "", "", 1000)
 				require.NoError(t, err)
 				require.Len(t, positions, 1)
 				require.Equal(t, medium.ID, positions[0].ID)

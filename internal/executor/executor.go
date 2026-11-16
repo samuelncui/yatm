@@ -247,18 +247,7 @@ func (e *Executor) CreateJob(
 	priority int64,
 	initialize func(*gorm.DB) error,
 ) (*Job, error) {
-	return e.CreatePreparedJob(ctx, kind, priority, initialize, nil)
-}
-
-// CreatePreparedJob transfers operation admission to a complete runner before indexing can start.
-func (e *Executor) CreatePreparedJob(
-	ctx context.Context,
-	kind entity.JobKind,
-	priority int64,
-	initialize func(*gorm.DB) error,
-	prepare func(Runner) error,
-) (_ *Job, rerr error) {
-	return e.createPreparedJob(ctx, kind, priority, JobTarget{}, initialize, prepare)
+	return e.createJob(ctx, kind, priority, JobTarget{}, initialize)
 }
 
 // CreateTargetJob captures the immutable navigation target of a resource-scoped Job.
@@ -267,10 +256,10 @@ func (e *Executor) CreateTargetJob(ctx context.Context, kind entity.JobKind, pri
 	if kind != entity.JobKind_JOB_KIND_SCAN || target.LocationID < 0 || target.MediaID < 0 || target.LocationID > 0 && target.MediaID > 0 {
 		return nil, fmt.Errorf("Job target does not match its kind")
 	}
-	return e.createPreparedJob(ctx, kind, priority, target, initialize, nil)
+	return e.createJob(ctx, kind, priority, target, initialize)
 }
 
-func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error, prepare func(Runner) error) (_ *Job, rerr error) {
+func (e *Executor) createJob(ctx context.Context, kind entity.JobKind, priority int64, target JobTarget, initialize func(*gorm.DB) error) (_ *Job, rerr error) {
 	if priority < 0 {
 		return nil, fmt.Errorf("%w: Job priority must not be negative, value=%d", ErrInvalidRequest, priority)
 	}
@@ -331,11 +320,6 @@ func (e *Executor) createPreparedJob(ctx context.Context, kind entity.JobKind, p
 	created, err := e.GetJob(ctx, job.ID)
 	if err != nil {
 		return nil, err
-	}
-	if prepare != nil {
-		if err := prepare(runner); err != nil {
-			return nil, err
-		}
 	}
 	if err := e.startIndex(job.ID, runner); err != nil {
 		return nil, err
@@ -430,7 +414,7 @@ func (e *Executor) GetJobRunner(ctx context.Context, id int64) (Runner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create job runner failed, id=%d kind=%s, %w", id, job.Kind, err)
 	}
-	if err := setRunnerActive(runner, false); err != nil {
+	if err := runner.SetActive(false); err != nil {
 		return nil, errors.Join(err, runner.Close())
 	}
 
@@ -630,8 +614,11 @@ func (e *Executor) beginAttempt(jobID int64, cancel context.CancelCauseFunc) err
 	e.runnersLock.Lock()
 	runner := e.runners[jobID]
 	e.runnersLock.Unlock()
-	if err := setRunnerActive(runner, true); err != nil {
-		return fmt.Errorf("activate Job resources failed, id=%d, %w", jobID, err)
+	// A deletion between runner lookup and admission leaves no cached runner to activate.
+	if runner != nil {
+		if err := runner.SetActive(true); err != nil {
+			return fmt.Errorf("activate Job resources failed, id=%d, %w", jobID, err)
+		}
 	}
 	e.attempts[jobID] = &attempt{cancel: cancel, phase: entity.JobPhase_JOB_PHASE_QUEUED}
 	return nil
@@ -648,8 +635,10 @@ func (e *Executor) endAttempt(jobID int64) {
 	e.runnersLock.Lock()
 	runner := e.runners[jobID]
 	e.runnersLock.Unlock()
-	if err := setRunnerActive(runner, false); err != nil {
-		logrus.WithError(err).Errorf("release idle Job resources failed, id=%d", jobID)
+	if runner != nil {
+		if err := runner.SetActive(false); err != nil {
+			logrus.WithError(err).Errorf("release idle Job resources failed, id=%d", jobID)
+		}
 	}
 
 	// Release every resource the attempt still holds; retained ones stay unavailable.
@@ -666,15 +655,6 @@ func (e *Executor) endAttempt(jobID int64) {
 		}
 	}
 	delete(e.attempts, jobID)
-}
-
-// Runners without file resources need no retention hook, including in-memory test runners.
-func setRunnerActive(runner Runner, active bool) error {
-	files, ok := runner.(interface{ SetActive(bool) error })
-	if !ok {
-		return nil
-	}
-	return files.SetActive(active)
 }
 
 func (e *Executor) withNextJobRevision(update func(int64) (bool, error)) error {

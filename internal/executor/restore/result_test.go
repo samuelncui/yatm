@@ -36,6 +36,20 @@ func finishRestoreCopy(t *testing.T, runner *jobRestoreRunner, copy *copyCandida
 	return runner.finalizeOutputs(context.Background(), copy.MediaID)
 }
 
+// readRestorePosition rereads one physical Position through the Media inventory listing.
+func readRestorePosition(t *testing.T, lib *library.Library, mediaID, id int64) *library.Position {
+	t.Helper()
+	positions, err := lib.ListMediaFilePositions(context.Background(), mediaID, "", 100)
+	require.NoError(t, err)
+	for _, position := range positions {
+		if position.ID == id {
+			return position
+		}
+	}
+	t.Fatalf("Position %d is missing", id)
+	return nil
+}
+
 func TestRestoreLatestSelectedVersionReconnectsRegardlessOfCompletionOrder(t *testing.T) {
 	ctx := context.Background()
 	exe, lib := setupTestExecutor(t)
@@ -65,7 +79,7 @@ func TestRestoreLatestSelectedVersionReconnectsRegardlessOfCompletionOrder(t *te
 	newCandidate := loadTestCopyCandidate(t, runner, &newCopy)
 	// Finishing the older version first must not consume the original's empty association slot.
 	require.NoError(t, finishRestoreCopy(t, runner, oldCandidate, []byte("old")))
-	original, err := lib.GetFileLocation(ctx, file.ID)
+	original, err := readOriginal(ctx, lib, file.ID)
 	require.NoError(t, err)
 	require.Nil(t, original)
 	var oldResult File
@@ -76,7 +90,7 @@ func TestRestoreLatestSelectedVersionReconnectsRegardlessOfCompletionOrder(t *te
 	require.Equal(t, library.RestoredName(file.Name, older.ID), created.Name)
 	require.Equal(t, file.ParentID, created.ParentID)
 	require.NoError(t, finishRestoreCopy(t, runner, newCandidate, []byte("new")))
-	original, err = lib.GetFileLocation(ctx, file.ID)
+	original, err = readOriginal(ctx, lib, file.ID)
 	require.NoError(t, err)
 	require.Equal(t, newCandidate.TargetPath, original.Path)
 	require.Equal(t, latest.Signature, original.Signature)
@@ -107,7 +121,7 @@ func TestRestoreJobCheckpointFailureRequiresExplicitHandling(t *testing.T) {
 	err = finishRestoreCopy(t, runner, candidate, []byte("saved"))
 	require.ErrorContains(t, err, "injected Job checkpoint")
 	require.NoError(t, runner.db.Callback().Update().Remove("test:restore-checkpoint"))
-	original, err := lib.GetFileLocation(ctx, file.ID)
+	original, err := readOriginal(ctx, lib, file.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original)
 	// A failed Job checkpoint is reported, never repaired from a permanent receipt.
@@ -149,15 +163,13 @@ func TestRestoreCompleteDamagedOutputRequiresExplicitSalvage(t *testing.T) {
 				require.ErrorContains(t, err, "checksum mismatch")
 				require.NoFileExists(t, runner.restoreTarget(candidate.TargetPath))
 			}
-			original, err := lib.GetFileLocation(ctx, file.ID)
+			original, err := readOriginal(ctx, lib, file.ID)
 			require.NoError(t, err)
 			require.Nil(t, original)
-			position, err := lib.GetPosition(ctx, copy.PositionID)
-			require.NoError(t, err)
+			position := readRestorePosition(t, lib, copy.MediaID, copy.PositionID)
 			require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, position.Health)
 			require.NoError(t, runner.publishHealth(ctx, copy.MediaID))
-			position, err = lib.GetPosition(ctx, copy.PositionID)
-			require.NoError(t, err)
+			position = readRestorePosition(t, lib, copy.MediaID, copy.PositionID)
 			require.Equal(t, entity.PositionHealth_POSITION_HEALTH_DAMAGED, position.Health)
 			summary, err := runner.resultSummary(ctx)
 			require.NoError(t, err)

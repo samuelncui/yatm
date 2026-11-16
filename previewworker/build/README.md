@@ -106,6 +106,11 @@ This optional check runs the normal build twice with its own fresh cache, retain
 `report.json`. `PREVIEW_SOURCE_DIRECTORY` can supply verified native archives to exclude downloads
 from the comparison. The check does not clear a user's existing cache or add another release gate.
 
+`YATM_SOURCE_CACHE` names an optional directory of verified pinned archives shared by this build and
+`build/release/build-test-ffmpeg.sh`. Each archive is copied from it when its SHA-256 matches and
+downloaded and stored there otherwise. CI caches this directory, so a temporary upstream outage
+(for example of ffmpeg.org) affects only a run whose cache is empty.
+
 ## Rebuild From Distributed Sources
 
 The corresponding-source archive includes the exact native archives, checksums, FFmpeg

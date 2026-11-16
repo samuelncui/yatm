@@ -31,9 +31,9 @@ type tapeReadSession struct {
 func (b *mediaBackend) newTapeReadSession(
 	ctx context.Context,
 	target *entity.ReadTapeTarget,
-	expectation *entity.ReadMediaTarget,
+	media *mediapkg.Descriptor,
 ) (result mediapkg.ReadSession, returnErr error) {
-	// Reserve the configured drive and resolve the loaded Tape identity.
+	// Reserve the configured drive and check the loaded Tape against the selected Media.
 	// The active attempt owns the lease through settlement, including failed construction.
 	device := strings.TrimSpace(target.GetDevice())
 	if device == "" {
@@ -51,23 +51,16 @@ func (b *mediaBackend) newTapeReadSession(
 	if barcode == "" {
 		return nil, fmt.Errorf("restore Tape identity is unavailable")
 	}
-	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, barcode)
-	if err != nil {
-		return nil, err
-	}
-	if stored == nil {
-		return nil, fmt.Errorf("restore Tape is not in Library, barcode=%q", barcode)
-	}
-	if err := validateReadExpectation(stored, expectation); err != nil {
-		return nil, err
+	if barcode != media.Identity {
+		return nil, fmt.Errorf("restore Tape identity differs from selected Media, requested=%q device=%q", media.Identity, barcode)
 	}
 
 	// Validate the durable storage profile without depending on any runner's manifest schema.
-	capabilities, err := mediapkg.CapabilitiesForProfile(stored.Profile)
+	capabilities, err := mediapkg.CapabilitiesForProfile(media.Profile)
 	if err != nil {
 		return nil, err
 	}
-	profile := stored.Profile.GetTape()
+	profile := media.Profile.GetTape()
 	if profile == nil {
 		return nil, fmt.Errorf("restore Tape profile is invalid, barcode=%q", barcode)
 	}
@@ -92,7 +85,7 @@ func (b *mediaBackend) newTapeReadSession(
 			recycleKey()
 		}
 	}()
-	if err := b.configureTape(ctx, device, keyPath, barcode, stored.Name, tapeDir); err != nil {
+	if err := b.configureTape(ctx, device, keyPath, barcode, media.Name, tapeDir); err != nil {
 		return nil, err
 	}
 	observation, err := b.observeLTFSReadOrder(ctx, device, profile)
@@ -111,10 +104,10 @@ func (b *mediaBackend) newTapeReadSession(
 
 	// The returned Session now owns the mount and key until Finalize.
 	session := &tapeReadSession{
-		backend: b, media: describeMedia(stored), capabilities: capabilities, mountPoint: mountPoint,
+		backend: b, media: media, capabilities: capabilities, mountPoint: mountPoint,
 		device: device, tapeDir: tapeDir, recycleKey: recycleKey, indexPath: indexPath,
 	}
-	if err := session.prepareReadOrder(ctx, stored, observation); err != nil {
+	if err := session.prepareReadOrder(ctx, observation); err != nil {
 		return nil, err
 	}
 	return session, nil
@@ -193,6 +186,7 @@ type tapeWriteSession struct {
 func (b *mediaBackend) newTapeWriteSession(
 	ctx context.Context,
 	target *entity.ArchiveTapeTarget,
+	media *mediapkg.Descriptor,
 ) (result mediapkg.WriteSession, returnErr error) {
 	// Reserve the requested drive and reject a different loaded Tape before any mutation.
 	// The active attempt owns the lease through settlement, including failed construction.
@@ -220,12 +214,8 @@ func (b *mediaBackend) newTapeWriteSession(
 		return nil, fmt.Errorf("archive Tape changed, requested=%q device=%q", barcode, deviceBarcode)
 	}
 
-	// Resolve the requested FORMAT or APPEND Media and its encryption key.
-	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, barcode)
-	if err != nil {
-		return nil, err
-	}
-	pendingMedia, keyPath, recycleKey, format, err := b.prepareTapeMedia(target, stored, barcode)
+	// Create the FORMAT Media or restore the admitted APPEND Media's encryption key.
+	pendingMedia, keyPath, recycleKey, format, err := b.prepareTapeMedia(target, media, barcode)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +266,7 @@ func (b *mediaBackend) newTapeWriteSession(
 
 	// Transfer only the physical Session resources; the attempt still owns its device lease.
 	return &tapeWriteSession{
-		backend: b, media: describeMedia(pendingMedia),
+		backend: b, media: pendingMedia,
 		capabilities: mediapkg.Capabilities{Read: mediapkg.AccessSequential, Write: mediapkg.AccessSequential},
 		barcode:      barcode, device: device, mountPoint: mountPoint, tapeDir: tapeDir, indexPath: indexPath,
 		pathPrefix: pathPrefix, recycleKey: recycleKey,
@@ -285,40 +275,31 @@ func (b *mediaBackend) newTapeWriteSession(
 
 func (b *mediaBackend) prepareTapeMedia(
 	target *entity.ArchiveTapeTarget,
-	stored *library.Media,
+	media *mediapkg.Descriptor,
 	barcode string,
-) (*library.Media, string, func(), bool, error) {
+) (*mediapkg.Descriptor, string, func(), bool, error) {
 	switch target.GetMode() {
 	case entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT:
-		if stored != nil {
-			return nil, "", nil, false, fmt.Errorf(
-				"format Tape already exists in Library; delete it first, barcode=%q", barcode,
-			)
-		}
 		encryption, keyPath, recycleKey, err := b.executor.NewKey()
 		if err != nil {
 			return nil, "", nil, false, fmt.Errorf("create Tape encryption key failed, %w", err)
 		}
-		return &library.Media{
+		return &mediapkg.Descriptor{
 			Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: barcode, Name: strings.TrimSpace(target.GetName()),
 			Profile: (&entity.TapeMediaProfile{
 				Encryption: encryption, Format: library.TapeFormatLTFSV1,
 			}).Pack(),
-			CreatedAtNS: time.Now().UnixNano(),
+			CreateTime: time.Now(),
 		}, keyPath, recycleKey, true, nil
 	case entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND:
-		if stored == nil {
-			return nil, "", nil, false, fmt.Errorf("append Tape is not in Library, barcode=%q", barcode)
+		if err := registeredMedia(media, entity.MediaKind_MEDIA_KIND_TAPE, barcode); err != nil {
+			return nil, "", nil, false, err
 		}
-		profile := stored.Profile.GetTape()
-		if profile == nil || profile.Format != library.TapeFormatLTFSV1 || stored.DestroyedAtNS != nil {
-			return nil, "", nil, false, fmt.Errorf("append Tape is unavailable, barcode=%q", barcode)
-		}
-		keyPath, recycleKey, err := b.executor.RestoreKey(profile.Encryption)
+		keyPath, recycleKey, err := b.executor.RestoreKey(media.Profile.GetTape().GetEncryption())
 		if err != nil {
 			return nil, "", nil, false, fmt.Errorf("restore append Tape key failed, barcode=%q, %w", barcode, err)
 		}
-		return stored, keyPath, recycleKey, false, nil
+		return media, keyPath, recycleKey, false, nil
 	default:
 		return nil, "", nil, false, fmt.Errorf("unsupported Tape write mode, mode=%s", target.GetMode())
 	}

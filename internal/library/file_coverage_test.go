@@ -26,7 +26,7 @@ func TestOriginalPublicationRetainsExistingCoverageAsOwnVersion(t *testing.T) {
 		Hash: observation.Hash, Size: observation.Size, Mode: 0644, MtimeNS: 9,
 		FirstArchivedAtNS: &first, LastArchivedAtNS: &last}).Error)
 	copy := &Position{MediaID: 1, Path: "other-name", Signature: signature, Hash: observation.Hash, Size: observation.Size}
-	require.NoError(t, lib.SavePosition(ctx, copy))
+	require.NoError(t, lib.db.Create(copy).Error)
 	location := locationTestSource(t, lib)
 
 	// Original publication creates one saved version, using this original's metadata without copying annotations.
@@ -48,8 +48,8 @@ func TestOriginalPublicationRetainsExistingCoverageAsOwnVersion(t *testing.T) {
 	require.Empty(t, file.Note)
 
 	// Additional physical copies and repeated original publication never duplicate versions or invent later dates.
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 2, Path: "second", Signature: signature,
-		Hash: observation.Hash, Size: observation.Size, WrittenAtNS: time.Now().UnixNano()}))
+	require.NoError(t, lib.db.Create(&Position{MediaID: 2, Path: "second", Signature: signature,
+		Hash: observation.Hash, Size: observation.Size, WrittenAtNS: time.Now().UnixNano()}).Error)
 	location, err = lib.PublishAnalyzed(ctx, location.ID, 2, observedTestManifest(observation), nil)
 	require.NoError(t, err)
 	versions, _, err = lib.ListFileVersions(ctx, file.ID, 0, 10)
@@ -74,7 +74,7 @@ func TestOriginalPublicationRetainsExistingCoverageAsOwnVersion(t *testing.T) {
 }
 
 func TestInventoryPublicationRetainsAlreadyIndexedContent(t *testing.T) {
-	for _, operation := range []string{"archive", "scan", "position"} {
+	for _, operation := range []string{"archive", "scan"} {
 		t.Run(operation, func(t *testing.T) {
 			// Two independent originals exist before any physical archive copy.
 			ctx := context.Background()
@@ -101,9 +101,6 @@ func TestInventoryPublicationRetainsAlreadyIndexedContent(t *testing.T) {
 					return yield(&entity.ScanEntry{Path: "saved", Change: entity.ScanChange_SCAN_CHANGE_ADDED,
 						Sha256: one.Hash, SizeBytes: one.Size, Mode: 0644, MtimeNs: 123})
 				})
-			case "position":
-				err = lib.SavePosition(ctx, &Position{MediaID: media.ID, Path: "saved", Signature: one.Signature,
-					Hash: one.Hash, Size: one.Size})
 			}
 			require.NoError(t, err)
 
@@ -168,7 +165,7 @@ func TestCoveredVersionsBoundedPublicationAndRollback(t *testing.T) {
 	db, lib := newTestLibrary(t)
 	location := locationTestSource(t, lib)
 	signature := []byte{255, 0, 3}
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 1, Path: "saved", Signature: signature, Size: 9}), false)
+	require.NoError(t, lib.db.Create(&Position{MediaID: 1, Path: "saved", Signature: signature, Size: 9}).Error)
 	rows := make([]*ObservedEntry, batchSize+3)
 	for index := range rows {
 		rows[index] = &ObservedEntry{Path: fmt.Sprintf("%04d", index), Signature: signature, Size: 9, Mode: 0600}
@@ -208,7 +205,7 @@ func TestCoveredVersionsRequireKnownConsistentContent(t *testing.T) {
 			case "hash conflict":
 				copy.Hash = bytes.Repeat([]byte{7}, 32)
 			}
-			require.NoError(t, lib.SavePosition(ctx, copy))
+			require.NoError(t, lib.db.Create(copy).Error)
 
 			// Invalid or absent evidence cannot create even a transient saved-version record.
 			_, err := lib.PublishAnalyzed(ctx, location.ID, 1, observedTestManifest(original), nil)
@@ -246,7 +243,7 @@ func TestCoveredVersionReadsAllCopyPages(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, versions, 1)
 	require.Equal(t, observedTestEntry("", "content").Hash, versions[0].Hash)
-	original, err := lib.GetFileLocation(ctx, observation.FileID)
+	original, err := readOriginal(ctx, lib, observation.FileID)
 	require.NoError(t, err)
 	require.Empty(t, original.Hash)
 }

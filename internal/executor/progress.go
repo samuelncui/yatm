@@ -16,11 +16,9 @@ type speedEvent struct {
 }
 
 type Progress struct {
-	// stage is the attempt-local sampling window; it is created on first use with the Progress clock.
+	// stage is the attempt-local sampling window.
 	stage     *stageMeter
-	stageOnce sync.Once
 	startTime time.Time
-	now       func() time.Time
 
 	// atomic fields
 	totalBytes, totalFiles        int64
@@ -37,24 +35,16 @@ type Progress struct {
 	speedIdx    int
 }
 
-// SetClock replaces the clock this Progress and its stage window read. It exists so a test can fix
-// attempt timing; production always uses the wall clock NewProgress installed.
-func (p *Progress) SetClock(now func() time.Time) {
-	p.now = now
-	p.stageOnce = sync.Once{}
-	p.stage = nil
-}
-
 func NewProgress() *Progress {
 	return &Progress{
+		stage:       &stageMeter{},
 		startTime:   time.Now(),
-		now:         time.Now,
 		speedEvents: make([]speedEvent, speedLen),
 	}
 }
 
 func (p *Progress) ToEntity() *entity.Progress {
-	now := p.now()
+	now := time.Now()
 	sessionBytes := atomic.LoadInt64(&p.sessionBytes)
 	sessionDuration := time.Duration(0)
 	if startedAt := atomic.LoadInt64(&p.sessionStartedAt); startedAt > 0 {
@@ -86,11 +76,11 @@ func (p *Progress) SetGlobalCopied(bytes, files int64) {
 }
 
 func (p *Progress) StartSession() {
-	atomic.CompareAndSwapInt64(&p.sessionStartedAt, 0, p.now().UnixNano())
+	atomic.CompareAndSwapInt64(&p.sessionStartedAt, 0, time.Now().UnixNano())
 }
 
 func (p *Progress) UpdateSessionCurrent(bytes, files int64) {
-	now := p.now()
+	now := time.Now()
 	p.StartSession()
 	atomic.StoreInt64(&p.sessionBytes, bytes)
 	atomic.StoreInt64(&p.sessionFiles, files)
@@ -133,7 +123,7 @@ func (p *Progress) CommitSession() {
 	atomic.AddInt64(&p.baseBytes, bytes)
 	atomic.AddInt64(&p.baseFiles, atomic.SwapInt64(&p.sessionFiles, 0))
 	if startedAt := atomic.SwapInt64(&p.sessionStartedAt, 0); startedAt > 0 {
-		duration := p.now().Sub(time.Unix(0, startedAt))
+		duration := time.Since(time.Unix(0, startedAt))
 		if duration > 0 && bytes > 0 {
 			atomic.AddInt64(&p.historicalBytes, bytes)
 			atomic.AddInt64(&p.historicalDurationNanoseconds, duration.Nanoseconds())

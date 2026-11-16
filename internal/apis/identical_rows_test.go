@@ -43,7 +43,7 @@ func TestIdenticalRetainedLocationRowsAfterMove(t *testing.T) {
 	require.NotNil(t, summary)
 	require.True(t, summary.Completed)
 	require.Equal(t, int64(1), summary.SucceededCount)
-	original, err := s.api.lib.GetFileLocation(ctx, entry.GetAssociatedFileId())
+	original, err := readOriginal(ctx, s.api.lib, entry.GetAssociatedFileId())
 	require.NoError(t, err)
 	require.Equal(t, "moved/"+entry.Name, original.Path)
 

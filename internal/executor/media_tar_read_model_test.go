@@ -262,7 +262,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 			order := test.order
 			ctx := context.Background()
 			exe, backend, fixture, _ := tarFactoryFixture(t)
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			contents := make([][]byte, 4)
 			for index := range contents {
@@ -307,7 +307,7 @@ func TestTarFactoryLinearModelReachesSharedActionsAndWholeSequence(t *testing.T)
 			exe.tapeProvider = deviceProvider
 
 			// The prepared model and execution index consume the same complete member intervals.
-			read, err := backend.NewReadSession(admitted, tarEncryptedReadTarget(stored))
+			read, err := openRead(admitted, backend, tarEncryptedReadTarget(stored))
 			require.NoError(t, err)
 			finalize := sync.OnceValue(func() error { return read.Finalize(ctx, nil) })
 			t.Cleanup(func() { require.NoError(t, finalize()) })
@@ -453,7 +453,7 @@ func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
 	require.NoError(t, exe.StartJob(ctx, job.ID, entity.JobKind_JOB_KIND_RESTORE, func(runCtx context.Context, _ Runner) error {
 		backend := &mediaBackend{executor: exe}
 		for attempt := 0; attempt < 2; attempt++ {
-			defaults, err := backend.tapeDefaults(runCtx, "/dev/nst0")
+			defaults, err := backend.executor.tapeDefaults(runCtx, "/dev/nst0")
 			if err != nil {
 				return err
 			}
@@ -478,7 +478,7 @@ func TestTarReadParametersFreezeBeforeDevicePreparation(t *testing.T) {
 	require.Equal(t, "SN1", second.AppliesTo.GetDriveSerial())
 	require.Equal(t, float64(90_000_000), second.Reading.GetBytesPerSecond())
 	waitJobReleased(t, exe, job.ID)
-	fresh, err := (&mediaBackend{executor: exe}).tapeDefaults(ctx, "/dev/nst0")
+	fresh, err := exe.tapeDefaults(ctx, "/dev/nst0")
 	require.NoError(t, err)
 	require.Equal(t, "replacement-drive", fresh.ReadParameters.AppliesTo.GetDriveSerial())
 	require.Equal(t, float64(123), fresh.ReadParameters.Reading.GetBytesPerSecond())
@@ -491,7 +491,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 			ctx := context.Background()
 			exe, backend, fixture, _ := tarFactoryFixture(t)
 			fixture.hideAlgorithm = condition == "unknown encrypted algorithm"
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			contents := [][]byte{[]byte("first content"), []byte("second content")}
 			for index, data := range contents {
@@ -543,7 +543,7 @@ func TestTarFactoryLogicalReadUsesApplicableTimingAndRetainedRecord(t *testing.T
 			require.NoError(t, err)
 
 			// Reading policy is independent of AUTO: a matching admitted rate prices Continue without seek timing.
-			read, err := backend.NewReadSession(admitted, tarEncryptedReadTarget(stored))
+			read, err := openRead(admitted, backend, tarEncryptedReadTarget(stored))
 			require.NoError(t, err)
 			finalize := sync.OnceValue(func() error { return read.Finalize(ctx, nil) })
 			t.Cleanup(func() { require.NoError(t, finalize()) })
@@ -635,7 +635,7 @@ func TestTarFactoryPostLabelPositionChecksKnownFile(t *testing.T) {
 			// Freeze a real writer's profile and locator before injecting one contradictory optional report.
 			ctx := context.Background()
 			exe, backend, fixture, _ := tarFactoryFixture(t)
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			target := []byte("ordinary selected content")
 			tarWriteFixtureMember(t, write, "member", target)
@@ -659,7 +659,7 @@ func TestTarFactoryPostLabelPositionChecksKnownFile(t *testing.T) {
 			}}})
 			require.NoError(t, err)
 			exe.tapeProvider = &tarReadInitialProvider{tarDeviceFixture: fixture, position: test.position}
-			read, err := backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+			read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 			if test.wantError {
 				require.Nil(t, read)
 				require.ErrorIs(t, err, mediapkg.ErrReadUnavailable)

@@ -40,7 +40,7 @@ func tarCapacityPreparedFixture(t *testing.T) (*tape.Device, *tarDeviceFixture) 
 func TestTarCapacityPreparationFailureIsNotOptional(t *testing.T) {
 	// Cancellation of the real observation cannot become an optional capacity result.
 	prepared, _ := tarCapacityPreparedFixture(t)
-	backend := (&Executor{}).NewMediaBackend(0, nil, nil).(*mediaBackend)
+	backend := (&Executor{}).newMediaBackend(0, nil, nil).(*mediaBackend)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	options, err := backend.tarCapacity(ctx, prepared, 5*time.Second)
@@ -53,7 +53,7 @@ func TestTarCapacityExplicitOffUsesInitialOnly(t *testing.T) {
 	ctx := context.Background()
 	prepared, fixture := tarCapacityPreparedFixture(t)
 	exe := &Executor{}
-	backend := exe.NewMediaBackend(0, nil, nil).(*mediaBackend)
+	backend := exe.newMediaBackend(0, nil, nil).(*mediaBackend)
 	options, err := backend.tarCapacity(ctx, prepared, 0)
 	require.NoError(t, err)
 	require.Nil(t, options)
@@ -81,7 +81,7 @@ func TestTarCapacitySupportedProviderUsesConfiguredCadenceAndRecoversUnknown(t *
 				if unknown {
 					fixture.capacityEOD, fixture.capacityEW = proto.Uint32(math.MaxUint32), proto.Uint32(math.MaxUint32)
 				}
-				backend := (&Executor{}).NewMediaBackend(0, nil, nil).(*mediaBackend)
+				backend := (&Executor{}).newMediaBackend(0, nil, nil).(*mediaBackend)
 				interval := settingspkg.TapeCapacityPollInterval(&entity.TapeDeviceSettings{CapacityPollIntervalSeconds: config.seconds})
 				options, err := backend.tarCapacity(context.Background(), prepared, interval)
 				require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestTarCapacityFactoryLogsMissesAndRecovery(t *testing.T) {
 			logger := logrus.New()
 			logger.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true, DisableColors: true})
 			logger.SetOutput(&diagnostics)
-			backend := (&Executor{}).NewMediaBackend(0, logger, nil).(*mediaBackend)
+			backend := (&Executor{}).newMediaBackend(0, logger, nil).(*mediaBackend)
 			options, err := backend.tarCapacity(ctx, prepared, 5*time.Second)
 			require.NoError(t, err)
 			require.NotNil(t, options)

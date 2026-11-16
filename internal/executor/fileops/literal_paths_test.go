@@ -52,7 +52,7 @@ func TestOrganizationPreservesLiteralUTF8(t *testing.T) {
 				require.Zero(t, stream.summary().FailedCount)
 				f.exists(t, "target/"+renamed, true)
 				if !logical {
-					original, err := f.f.exe.Lib().GetFileLocation(ctx, originals[name].ID)
+					original, err := readOriginal(ctx, f.f.exe.Lib(), originals[name].ID)
 					require.NoError(t, err)
 					require.Equal(t, "target/"+renamed, original.Path)
 				}

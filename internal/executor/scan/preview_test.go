@@ -202,9 +202,7 @@ func TestScanCheckPreviewsRequireMatchingActualContent(t *testing.T) {
 	exe, volume, media := setupVerifyExecutorWithPreview(t, previews)
 	good := saveVerifyFile(t, exe, volume, media, "good.jpg", []byte("good"))
 	bad := saveVerifyFile(t, exe, volume, media, "bad.jpg", []byte("before"))
-	unknown := saveVerifyFile(t, exe, volume, media, "unknown.jpg", []byte("unknown"))
-	unknown.Hash = nil
-	require.NoError(t, exe.Lib().SavePosition(ctx, unknown))
+	saveUnverifiableFile(t, exe, volume, media, "unknown.jpg", []byte("unknown"))
 	// Stable metadata does not permit previewing corrupt bytes under the recorded good content identity.
 	require.NoError(t, os.WriteFile(filepath.Join(volume.Root, bad.Path), []byte("damage"), 0o644))
 	require.NoError(t, os.Chtimes(filepath.Join(volume.Root, bad.Path), time.Unix(0, bad.MtimeNS), time.Unix(0, bad.MtimeNS)))

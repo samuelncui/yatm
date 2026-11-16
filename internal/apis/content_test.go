@@ -12,7 +12,6 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/apis"
-	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
@@ -54,32 +53,23 @@ func newContentFixture(t *testing.T) *contentFixture {
 	return &contentFixture{api: api, lib: lib, media: initialized.Media, volumeRoot: volumeRoot}
 }
 
-func (fixture *contentFixture) addPosition(t *testing.T, relative string, data []byte) *library.Position {
-	// Save a real file and its matching catalog Position for inventory tests.
+func (fixture *contentFixture) addPosition(t *testing.T, relative string, data []byte) {
+	// Save a real file and publish its physical Position through Media commit.
 	t.Helper()
+	ctx := context.Background()
 	filename := filepath.Join(fixture.volumeRoot, filepath.FromSlash(relative))
 	require.NoError(t, os.MkdirAll(filepath.Dir(filename), 0o755))
 	require.NoError(t, os.WriteFile(filename, data, 0o644))
 	info, err := os.Stat(filename)
 	require.NoError(t, err)
 	hash := sha256.Sum256(data)
-
-	// Register the logical File before recording its physical Position.
-	file := &library.File{
-		Name: filepath.Base(relative), Mode: uint32(info.Mode()), ModTime: info.ModTime(),
-		Size: info.Size(), Hash: hash[:],
-	}
-	require.NoError(t, fixture.lib.SaveFile(context.Background(), file))
-
-	// Store the actual filesystem precision in the Position's ns field.
-	mtime, err := dataformat.Nanoseconds(info.ModTime())
+	media, err := fixture.lib.GetMedia(ctx, fixture.media.Id)
 	require.NoError(t, err)
-	position := &library.Position{
-		MediaID: fixture.media.Id, Path: filepath.ToSlash(relative),
-		Mode: uint32(info.Mode()), MtimeNS: mtime, Size: info.Size(), Hash: hash[:],
-	}
-	require.NoError(t, fixture.lib.SavePosition(context.Background(), position))
-	return position
+	_, err = fixture.lib.CommitMedia(ctx, media, func(_ context.Context, yield func(*library.MediaFile) error) error {
+		return yield(&library.MediaFile{Path: filepath.ToSlash(relative), Size: info.Size(), Mode: info.Mode(),
+			ModTime: info.ModTime(), WriteTime: info.ModTime(), Hash: hash[:]})
+	})
+	require.NoError(t, err)
 }
 
 func TestFileByteHTTPRoutesAreRemoved(t *testing.T) {

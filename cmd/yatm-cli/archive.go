@@ -228,7 +228,7 @@ func (c *archiveWriteTapeAppendCommand) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := c.runtime.context()
+	ctx, cancel := c.runtime.deviceContext()
 	defer cancel()
 	device := strings.TrimSpace(c.Device)
 	if device == "" {
@@ -299,7 +299,7 @@ func (c *archiveWriteTapeFormatCommand) Execute(_ []string) error {
 	}
 
 	// Resolve the selected device's FORMAT preference before selecting its physical adapter.
-	ctx, cancel := c.runtime.context()
+	ctx, cancel := c.runtime.deviceContext()
 	defer cancel()
 	device := strings.TrimSpace(c.Device)
 	if device == "" {

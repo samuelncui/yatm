@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/samuelncui/yatm/entity"
@@ -98,10 +99,22 @@ func (r *runtime) prepare() error {
 }
 
 func (r *runtime) context() (context.Context, context.CancelFunc) {
+	return r.contextAtLeast(0)
+}
+
+// deviceTimeout covers a Tape device inspection that loads a cartridge before reading it.
+const deviceTimeout = 10 * time.Minute
+
+// deviceContext gives commands that inspect a Tape device at least deviceTimeout.
+func (r *runtime) deviceContext() (context.Context, context.CancelFunc) {
+	return r.contextAtLeast(deviceTimeout)
+}
+
+func (r *runtime) contextAtLeast(minimum time.Duration) (context.Context, context.CancelFunc) {
 	if r.options.Timeout == 0 {
 		return context.Background(), func() {}
 	}
-	return context.WithTimeout(context.Background(), r.options.Timeout)
+	return context.WithTimeout(context.Background(), max(r.options.Timeout, minimum))
 }
 
 func (r *runtime) rpcURL(method string) string {

@@ -31,8 +31,7 @@ func TestScanReusesRecordedHashOfRenamedOriginal(t *testing.T) {
 	renamed := filepath.Join(source.RootPath, "selected", "renamed")
 	require.NoError(t, os.Rename(filepath.Join(source.RootPath, filepath.FromSlash(old.Path)), renamed))
 
-	r := newProgressRunner(t)
-	r.exe = f.exe
+	r := newJobRunner(t, f.exe)
 	stage := &locationStage{runner: r, source: source}
 	info, err := executor.Lstat(renamed)
 	require.NoError(t, err)

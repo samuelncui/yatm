@@ -30,7 +30,7 @@ func TestTarPositionMapSurvivesSessionRestart(t *testing.T) {
 	parameters := tarNormalizedParameters()
 	live := new(atomic.Bool)
 	live.Store(true)
-	first, observed, reason := compileTarMediaReadModel(parameters, stored, geometry, live.Load)
+	first, observed, reason := compileTarMediaReadModel(parameters, describeMedia(stored), geometry, live.Load)
 	require.NotNil(t, first, reason)
 	require.NotNil(t, observed)
 	require.NotNil(t, observed.Wraps[0].EndpointUncertaintyObjects)
@@ -44,7 +44,7 @@ func TestTarPositionMapSurvivesSessionRestart(t *testing.T) {
 	reloaded, err := exe.Lib().GetMedia(ctx, stored.ID)
 	require.NoError(t, err)
 	parameters.Geometry = nil // Persisted Media owns the spatial layout; drive timings remain independent.
-	second, capture, reason := compileTarMediaReadModel(parameters, reloaded, nil, live.Load)
+	second, capture, reason := compileTarMediaReadModel(parameters, describeMedia(reloaded), nil, live.Load)
 	require.NotNil(t, second, reason)
 	require.Nil(t, capture)
 	start := &entity.TapeBytePosition{LogicalObject: 20}
@@ -80,7 +80,7 @@ func TestTarPositionMapRejectsWrongInitializationAndProfile(t *testing.T) {
 			media := tarMapMediaFixture()
 			media.TapePositionMap = proto.Clone(value).(*entity.TapePositionMap)
 			change(media)
-			model, capture, reason := compileTarMediaReadModel(parameters, media, nil, func() bool { return true })
+			model, capture, reason := compileTarMediaReadModel(parameters, describeMedia(media), nil, func() bool { return true })
 			require.Nil(t, model)
 			require.Nil(t, capture)
 			require.NotEmpty(t, reason)
@@ -98,7 +98,7 @@ func TestTarPositionMapCurrentReportReplacesOnlyDerivedGeometry(t *testing.T) {
 	stored.TapePositionMap = value
 	profile := proto.Clone(stored.Profile)
 	current, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 22}})
-	model, capture, reason := compileTarMediaReadModel(parameters, stored, current, func() bool { return true })
+	model, capture, reason := compileTarMediaReadModel(parameters, describeMedia(stored), current, func() bool { return true })
 	require.NotNil(t, model, reason)
 	require.Equal(t, uint64(22), *capture.Partitions[0].Eod)
 	require.Equal(t, uint64(24), *stored.TapePositionMap.Partitions[0].Eod, "compilation cannot mutate a cached Media")
@@ -108,7 +108,7 @@ func TestTarPositionMapCurrentReportReplacesOnlyDerivedGeometry(t *testing.T) {
 
 	// Capturing geometry does not require complete timing inputs and cannot turn absence into invented estimates.
 	parameters.Positioning = nil
-	model, capture, reason = compileTarMediaReadModel(parameters, stored, current, func() bool { return true })
+	model, capture, reason = compileTarMediaReadModel(parameters, describeMedia(stored), current, func() bool { return true })
 	require.Nil(t, model)
 	require.NotNil(t, capture)
 	require.NotEmpty(t, reason)
@@ -138,7 +138,7 @@ func TestTarPositionMapCurrentReportConfirmsRetainedLayout(t *testing.T) {
 			parameters.Geometry = test.layout
 			live := new(atomic.Bool)
 			live.Store(true)
-			baseline, capture, reason := compileTarMediaReadModel(parameters, stored, nil, live.Load)
+			baseline, capture, reason := compileTarMediaReadModel(parameters, describeMedia(stored), nil, live.Load)
 			require.NotNil(t, baseline, reason)
 			require.Nil(t, capture)
 
@@ -148,7 +148,7 @@ func TestTarPositionMapCurrentReportConfirmsRetainedLayout(t *testing.T) {
 				endpoints[index] = tape.WrapEndpoint{Wrap: uint32(index), Object: object}
 			}
 			current, closeCurrent := tarReadModelMap(t, endpoints)
-			model, capture, reason := compileTarMediaReadModel(parameters, stored, current, live.Load)
+			model, capture, reason := compileTarMediaReadModel(parameters, describeMedia(stored), current, live.Load)
 			require.NotNil(t, model, reason)
 			require.Nil(t, capture, "confirmation cannot publish old coverage as a new observation")
 			start, eod := &entity.TapeBytePosition{LogicalObject: 20}, &entity.TapeBytePosition{LogicalObject: 24}
@@ -219,7 +219,7 @@ func TestTarPositionMapCurrentReportCannotReenableContradictoryCoverage(t *testi
 			stored.TapePositionMap = proto.Clone(value).(*entity.TapePositionMap)
 			current, _ := tarReadModelMap(t, []tape.WrapEndpoint{{Object: 10}, {Wrap: 1, Object: 20}, {Wrap: 2, Object: 24}})
 			test.change(parameters, stored, current)
-			model, capture, reason := compileTarMediaReadModel(parameters, stored, current, func() bool { return true })
+			model, capture, reason := compileTarMediaReadModel(parameters, describeMedia(stored), current, func() bool { return true })
 			require.Nil(t, model)
 			require.Nil(t, capture)
 			require.NotEmpty(t, reason)
@@ -228,7 +228,7 @@ func TestTarPositionMapCurrentReportCannotReenableContradictoryCoverage(t *testi
 }
 
 func TestTarPositionMapNoReportOrSavedMapPreservesFallback(t *testing.T) {
-	model, capture, reason := compileTarMediaReadModel(tarNormalizedParameters(), tarMapMediaFixture(), nil, func() bool { return true })
+	model, capture, reason := compileTarMediaReadModel(tarNormalizedParameters(), describeMedia(tarMapMediaFixture()), nil, func() bool { return true })
 	require.Nil(t, model)
 	require.Nil(t, capture)
 	require.NotEmpty(t, reason)
@@ -252,7 +252,7 @@ func TestTarPositionMapRetainedUncertainBoundary(t *testing.T) {
 	require.NoError(t, cleanup())
 	value.Wraps[0].EndpointUncertaintyObjects = proto.Uint64(1)
 	stored.TapePositionMap = value
-	model, observed, reason := compileTarMediaReadModel(parameters, stored, nil, func() bool { return true })
+	model, observed, reason := compileTarMediaReadModel(parameters, describeMedia(stored), nil, func() bool { return true })
 	require.NotNil(t, model, reason)
 	require.Nil(t, observed)
 	_, known := model.AccessCost(&entity.TapeBytePosition{LogicalObject: 2}, &entity.TapeBytePosition{LogicalObject: 18})

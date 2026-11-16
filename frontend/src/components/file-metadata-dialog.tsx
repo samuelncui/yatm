@@ -214,11 +214,6 @@ const LoadMetadata = ({ files, onClose, onSaved }: Omit<Props, "open">) => {
     void (async () => {
       const values: FileData[] = [];
       for (const file of files) {
-        if (Array.isArray(file.tags) && typeof file.note === "string") {
-          if (!allowsFileOperation(file, FileOperationKind.UPDATE_METADATA)) throw new Error("Metadata editing is unavailable. Refresh this folder.");
-          values.push(file);
-          continue;
-        }
         const detail = (await filesCli.get({ reference: fileOperationReference(file) }).response).detail;
         if (!active) return;
         if (!detail?.entry) throw new Error("File details are unavailable. Refresh this folder.");

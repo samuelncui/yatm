@@ -394,9 +394,6 @@ func (s *settledRows) finish() {
 
 // wait returns once the bound exceeds after or the stage finished.
 func (s *settledRows) wait(ctx context.Context, after int64) (int64, bool, error) {
-	if s == nil {
-		return 0, true, ctx.Err()
-	}
 	for {
 		s.lock.Lock()
 		bound, final, changed := s.bound, s.final, s.changed
@@ -412,11 +409,15 @@ func (s *settledRows) wait(ctx context.Context, after int64) (int64, bool, error
 	}
 }
 
-func (r *runner) eachPreviewEntry(ctx context.Context, scope *Scope, concurrency int, settled *settledRows, use func(context.Context, *Entry) error) error {
+// previewConcurrency bounds active Preview file callbacks. The Preview manager applies live
+// capacity at each file slot; this traversal only sets a bounded upstream ceiling.
+const previewConcurrency = 16
+
+func (r *runner) eachPreviewEntry(ctx context.Context, scope *Scope, settled *settledRows, use func(context.Context, *Entry) error) error {
 	// Keep at most one bounded manifest page and a fixed number of active file callbacks in memory.
 	// The bound rolls over pages, so one slow file holds only its own slot.
 	group, work := errgroup.WithContext(ctx)
-	group.SetLimit(concurrency)
+	group.SetLimit(previewConcurrency)
 	feed := func() error {
 		var after int64
 		for {
@@ -498,19 +499,8 @@ func (r *runner) generatePreviews(ctx context.Context, config *Config, scope *Sc
 		})
 	}()
 
-	// Without a content stage to follow, every content fact is known now; classify unique work
-	// with bounded memory. Failure still releases the active progress range.
-	if settled == nil {
-		if err := r.classifyPreviews(ctx, config, scope); err != nil {
-			return err
-		}
-	}
-
 	// Traverse bounded pages, allowing skips and reused assets to inform the observed workload mix.
-	// The Preview manager applies live capacity at each file slot; this traversal only sets a
-	// bounded upstream ceiling.
-	concurrency := 16
-	return r.eachPreviewEntry(ctx, scope, concurrency, settled, func(ctx context.Context, row *Entry) error {
+	return r.eachPreviewEntry(ctx, scope, settled, func(ctx context.Context, row *Entry) error {
 		// Only observed, supported content with usable facts can produce derivative assets.
 		if row.Change == entity.ScanChange_SCAN_CHANGE_REMOVED {
 			return nil

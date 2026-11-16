@@ -39,8 +39,9 @@ type TarSessionOptions struct {
 	Navigator TarNavigator
 	Capacity  *TarCapacityOptions
 	TapeFile  uint64
-	Complete  func(context.Context) error
-	Cleanup   func(context.Context) error
+	// Complete writes the closing filemark; the flag reports whether the end-of-archive blocks preceded it.
+	Complete func(ctx context.Context, terminated bool) error
+	Cleanup  func(context.Context) error
 	// Finish replaces preparation cleanup after successful physical completion and includes unloading.
 	Finish               func(context.Context) error
 	Stop                 error // Prepared physical boundary already closes content admission.

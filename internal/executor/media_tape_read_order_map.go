@@ -6,21 +6,21 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/library"
+	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/tape"
 	"google.golang.org/protobuf/proto"
 )
 
-func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.Media,
+func ltfsReadPositionMap(parameters *entity.TapeReadParameters, media *mediapkg.Descriptor,
 	facts *ltfsReadFacts, snapshot *ltfsReadSnapshot,
 ) (*entity.TapePositionMap, bool, string) {
 	// A retained map belongs to the exact mounted initialization and captured Index generation.
 	if len(snapshot.endpoints) == 0 {
-		value := stored.TapePositionMap
+		value := media.TapePositionMap
 		if value == nil || value.LtfsUuid != facts.uuid || value.GetLtfsIndexGeneration() != facts.generation {
 			return nil, false, "No current or matching retained LTFS position map is available"
 		}
-		if err := library.ValidateTapePositionMap(stored, value); err != nil {
+		if err := validatePositionMap(media, value); err != nil {
 			return nil, false, err.Error()
 		}
 		return value, false, ""
@@ -84,7 +84,7 @@ func ltfsReadPositionMap(parameters *entity.TapeReadParameters, stored *library.
 		}
 		value.Wraps[first+len(endpoints)-1].EstimatedSpanObjects = proto.Uint64(max(eod-low, median))
 	}
-	if err := library.ValidateTapePositionMap(stored, value); err != nil {
+	if err := validatePositionMap(media, value); err != nil {
 		return nil, false, err.Error()
 	}
 	return value, true, ""

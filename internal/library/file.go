@@ -357,23 +357,6 @@ func (l *Library) getByName(ctx context.Context, tx *gorm.DB, parentID int64, na
 	return file, nil
 }
 
-func (l *Library) List(ctx context.Context, parentID int64) ([]*File, error) {
-	return l.list(ctx, l.readDB().WithContext(ctx), parentID)
-}
-
-func (l *Library) list(ctx context.Context, tx *gorm.DB, parentID int64) ([]*File, error) {
-	// Read the complete persisted directory before attaching compatibility projections.
-	rows := make([]*fileRow, 0, 4)
-	if r := tx.Where("parent_id = ?", parentID).Order("name").Find(&rows); r.Error != nil {
-		return nil, fmt.Errorf("find files fail, %w", r.Error)
-	}
-	files := fileViews(rows)
-	if err := hydrateFileViews(tx, files...); err != nil {
-		return nil, fmt.Errorf("hydrate files fail, %w", err)
-	}
-	return files, nil
-}
-
 func listFileRowParents(tx *gorm.DB, id int64) ([]*File, error) {
 	// Return a complete bounded ancestry or an error, never a truncated apparent root.
 	// The depth bound also ends a corrupted cyclic ancestry.

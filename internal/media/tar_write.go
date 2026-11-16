@@ -396,6 +396,7 @@ func (s *tarWriteSession) Finalize(ctx context.Context, cause error) (*WriteResu
 	}
 
 	// Per-file source-open failures never enter this cause; only a healthy stream flushes its suffix.
+	terminated := false
 	if s.stop == nil {
 		if err := s.beginPosition(ctx); err != nil {
 			s.stop, s.unusable = err, err
@@ -414,6 +415,7 @@ func (s *tarWriteSession) Finalize(ctx context.Context, cause error) (*WriteResu
 			}
 			_ = s.writeRecord()
 		}
+		terminated = s.stop == nil
 	}
 	s.buffer = nil
 
@@ -421,7 +423,7 @@ func (s *tarWriteSession) Finalize(ctx context.Context, cause error) (*WriteResu
 	var completionErr error
 	if s.unusable == nil {
 		if s.options.Complete != nil {
-			completionErr = s.options.Complete(ctx)
+			completionErr = s.options.Complete(ctx, terminated)
 		} else {
 			completionErr = s.device.Filemarks(ctx, 1)
 		}

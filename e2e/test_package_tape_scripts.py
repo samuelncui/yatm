@@ -37,7 +37,7 @@ class FormatScriptTests(unittest.TestCase):
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, exit_code, result.stderr.decode())
                 self.assertEqual(arguments.read_bytes().split(b"\0")[:-1],
-                                 [b"-f", b"-d", b"/dev/sg7", b"-s", b"TST001", b"-n", tape_name.encode()])
+                                 [b"-f", b"--no-compression", b"-d", b"/dev/sg7", b"-s", b"TST001", b"-n", tape_name.encode()])
 
 
 class DeviceScriptTests(unittest.TestCase):

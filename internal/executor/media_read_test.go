@@ -37,7 +37,7 @@ func TestReadSessionDoesNotDependOnRestoreCopies(t *testing.T) {
 	// The frozen expectation validates the marker/catalog identity without querying a runner's manifest.
 	target := (&entity.ReadVolumeTarget{Uuid: volume.Marker.UUID}).Pack()
 	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
-	session, err := exe.NewMediaBackend(1, nil, nil).NewReadSession(ctx, target)
+	session, err := openRead(ctx, exe.newMediaBackend(1, nil, nil), target)
 	require.NoError(t, err)
 	require.Equal(t, stored.ID, session.Media().ID)
 	require.NoError(t, session.Finalize(ctx, nil))
@@ -64,7 +64,7 @@ func TestTapeReadRejectsWrongExpectedIdentityBeforeMount(t *testing.T) {
 	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, "DIFFERENT", stored.Profile
 
 	// No encryption or mount side effect is permitted for a mismatched cartridge.
-	_, err = exe.NewMediaBackend(1, nil, nil).NewReadSession(ctx, target)
+	_, err = openRead(ctx, exe.newMediaBackend(1, nil, nil), target)
 	require.ErrorContains(t, err, "differs from the frozen expectation")
 	require.NoFileExists(t, mutationMarker)
 }
@@ -86,7 +86,7 @@ func TestTapeReadFinalizeDoesNotReloadTheMountedCartridge(t *testing.T) {
 			mountPoint := filepath.Join(root, "mounted")
 			require.NoError(t, os.Mkdir(mountPoint, 0755))
 			recycled := 0
-			session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
+			session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend),
 				media: &mediapkg.Descriptor{Identity: "ABC001"}, device: "fixture-device", mountPoint: mountPoint,
 				tapeDir: root, recycleKey: func() { recycled++ }}
 

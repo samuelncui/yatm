@@ -28,12 +28,13 @@ func TestFileStatusFactsAndOriginalDuplicates(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&FileLocation{FileID: files[5].ID, LocationID: two.ID, Path: "unique", Signature: []byte("different")}).Error)
 	require.NoError(t, db.Create(&FileLocation{FileID: files[6].ID, LocationID: two.ID, Path: "changed", Signature: []byte("edited")}).Error)
-	for _, file := range []*File{files[3], files[4], files[6]} {
+	// The covered originals already retain their saved versions, as inventory publication records them.
+	for _, file := range []*File{files[0], files[1], files[2], files[3], files[4], files[6]} {
 		require.NoError(t, db.Create(&FileVersion{FileID: file.ID, Signature: signature}).Error)
 	}
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 1, Path: "saved", Signature: signature}))
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 2, Path: "second", Signature: signature}))
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: 1, Path: "folder/", IsDir: true, Signature: signature}))
+	require.NoError(t, db.Create(&Position{MediaID: 1, Path: "saved", Signature: signature}).Error)
+	require.NoError(t, db.Create(&Position{MediaID: 2, Path: "second", Signature: signature}).Error)
+	require.NoError(t, db.Create(&Position{MediaID: 1, Path: "folder/", IsDir: true, Signature: signature}).Error)
 
 	// Status facts see actual non-directory copies without substituting history for unknown originals.
 	ids := make([]int64, 0, len(files))

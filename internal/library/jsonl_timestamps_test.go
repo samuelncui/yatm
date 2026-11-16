@@ -120,7 +120,7 @@ func TestLibraryNanosecondLegacyImport(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, want, media.CreatedAtNS)
 			require.Equal(t, &want, media.DestroyedAtNS)
-			position, err := lib.GetPosition(context.Background(), 11)
+			position, err := readTestPosition(lib, 11)
 			require.NoError(t, err)
 			require.Equal(t, want, position.MtimeNS)
 			require.Equal(t, want, position.WrittenAtNS)

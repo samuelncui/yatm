@@ -56,9 +56,6 @@ type Manager struct {
 	changed    chan struct{}
 }
 
-// StorageRoot identifies the actual managed resource for Location exclusions.
-func (m *Manager) StorageRoot() string { return m.root }
-
 // New constructs the Preview module from one effective process configuration.
 func New(config Config, work string) (*Manager, error) {
 	generators, err := loadGenerators(config.Generators)

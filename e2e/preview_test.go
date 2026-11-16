@@ -3,9 +3,11 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
+	"image"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,29 +32,39 @@ func TestPreviewGenerationPolicy(t *testing.T) {
 	sourceRoot := filepath.Join(root, "source")
 	sourcePath := filepath.Join(sourceRoot, "image.png")
 	require.NoError(t, os.MkdirAll(sourceRoot, 0o755))
-	image, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(sourcePath, image, 0o644))
+	// A source wider than every policy bound makes the generated width show which policy applied.
+	var encoded bytes.Buffer
+	require.NoError(t, png.Encode(&encoded, image.NewGray(image.Rect(0, 0, 480, 240))))
+	require.NoError(t, os.WriteFile(sourcePath, encoded.Bytes(), 0o644))
 
 	// Create the first content-addressed bundle with the initial generator settings.
 	initial, signature := runPreviewPolicyJob(t, root, sourceRoot, "initial", 240, 80, false)
 	manifest, err := initial.Manifest(signature)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"max_height":240,"max_width":240,"format":"png","quality":80}`, string(manifest.SettingsJson))
+	require.EqualValues(t, 240, previewMaxWidth(t, manifest))
 
 	// Missing-only keeps an existing bundle even if generator settings change.
 	updated, sameSignature := runPreviewPolicyJob(t, root, sourceRoot, "updated-disabled", 120, 60, false)
 	require.Equal(t, signature, sameSignature)
 	manifest, err = updated.Manifest(signature)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"max_height":240,"max_width":240,"format":"png","quality":80}`, string(manifest.SettingsJson))
+	require.EqualValues(t, 240, previewMaxWidth(t, manifest))
 
 	// Regenerate-all replaces an existing bundle using the Job's frozen preferences.
 	updated, sameSignature = runPreviewPolicyJob(t, root, sourceRoot, "updated-enabled", 120, 60, true)
 	require.Equal(t, signature, sameSignature)
 	manifest, err = updated.Manifest(signature)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"max_height":120,"max_width":120,"format":"png","quality":60}`, string(manifest.SettingsJson))
+	require.EqualValues(t, 120, previewMaxWidth(t, manifest))
+}
+
+func previewMaxWidth(t *testing.T, manifest *entity.PreviewManifest) uint32 {
+	require.NotEmpty(t, manifest.Assets)
+	var width uint32
+	for _, asset := range manifest.Assets {
+		width = max(width, asset.WidthPx)
+	}
+	return width
 }
 
 func runPreviewPolicyJob(
@@ -113,7 +125,7 @@ func runPreviewPolicyJob(
 	capabilities := new(entity.GetPreviewCapabilitiesResponse)
 	cliResult(t, ctx, connection, capabilities, "preview", "capabilities")
 	require.True(t, capabilities.Available, capabilities.Reason)
-	require.Contains(t, capabilities.Kinds, "image")
+	require.Contains(t, capabilities.InputExtensionsByKind, "image")
 	job := new(entity.CreateScanJobResponse)
 	args := []string{"preview", "create", "--priority", "1", "--location", decimal(selections[0].GetLocation().LocationId) + ":image.png"}
 	if force {

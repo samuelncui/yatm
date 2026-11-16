@@ -37,7 +37,7 @@ func tarEncryptedReadTarget(stored *library.Media) *entity.ReadMediaTarget {
 func formatTarFixture(t *testing.T, exe *Executor, backend *mediaBackend, jobID int64) *library.Media {
 	t.Helper()
 	ctx := context.Background()
-	write, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+	write, err := openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 	require.NoError(t, err)
 	result, err := write.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	exe, backend, fixture, jobID := tarFactoryFixture(t)
 	var diagnostics bytes.Buffer
 	backend.logger.SetOutput(&diagnostics)
-	write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+	write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
 	require.Equal(t, 1, countTarScriptEvents(fixture))
 	events := strings.Join(fixture.securityEvents, ",")
@@ -93,7 +93,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 	fixture.securityEvents = nil
-	appendSession, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+	appendSession, err := newTarFixtureWriteSession(openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 		Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 	}).Pack()))
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestTarScriptFormatAppendAndSelectedRead(t *testing.T) {
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 	fixture.securityEvents = nil
-	read, err := backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+	read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 	require.NoError(t, err)
 	require.Equal(t, 1, countTarScriptEvents(fixture))
 	source, err := read.Source(mediapkg.ReadRequest{Path: member.Path, Storage: member.Storage})
@@ -146,7 +146,7 @@ func TestTarScriptFailureAndWrongKeyDoNotWrite(t *testing.T) {
 				exe, backend, fixture, jobID := tarFactoryFixture(t)
 				var stored *library.Media
 				if operation != "FORMAT" {
-					write, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+					write, err := openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 					require.NoError(t, err)
 					result, err := write.Finalize(ctx, nil)
 					require.NoError(t, err)
@@ -172,11 +172,11 @@ func TestTarScriptFailureAndWrongKeyDoNotWrite(t *testing.T) {
 				var err error
 				switch operation {
 				case "FORMAT":
-					_, err = backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+					_, err = openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 				case "READ":
-					_, err = backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+					_, err = openRead(ctx, backend, tarEncryptedReadTarget(stored))
 				case "APPEND":
-					_, err = backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND}).Pack())
+					_, err = openWrite(ctx, backend, (&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND}).Pack())
 				}
 				require.Error(t, err)
 				if failure == "script exit" {
@@ -194,7 +194,7 @@ func TestTarScriptUnknownAlgorithmRemainsReadable(t *testing.T) {
 	ctx := context.Background()
 	exe, backend, fixture, jobID := tarFactoryFixture(t)
 	fixture.hideAlgorithm = true
-	write, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+	write, err := openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 	require.NoError(t, err)
 	result, err := write.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -206,12 +206,12 @@ func TestTarScriptUnknownAlgorithmRemainsReadable(t *testing.T) {
 	// Unknown algorithm conditions cannot become a plaintext model; ordinary read and APPEND still work.
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
-	read, err := backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+	read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 	require.NoError(t, err)
 	require.NoError(t, read.Finalize(ctx, nil))
 	exe.endAttempt(jobID)
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
-	appendSession, err := backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND}).Pack())
+	appendSession, err := openWrite(ctx, backend, (&entity.ArchiveTapeTarget{Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND}).Pack())
 	require.NoError(t, err)
 	_, err = appendSession.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -235,11 +235,11 @@ func TestTarMismatchedBarcodeNeverRunsEncryptScript(t *testing.T) {
 			var err error
 			switch operation {
 			case "FORMAT":
-				_, err = backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+				_, err = openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 			case "READ":
-				_, err = backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+				_, err = openRead(ctx, backend, tarEncryptedReadTarget(stored))
 			case "APPEND":
-				_, err = backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+				_, err = openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 					Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 				}).Pack())
 			}

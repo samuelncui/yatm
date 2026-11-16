@@ -59,6 +59,8 @@ func (r *testRunner) Phase() entity.JobPhase {
 
 func (*testRunner) Close() error { return nil }
 
+func (*testRunner) SetActive(bool) error { return nil }
+
 func (r *testRunner) Logger() *logrus.Logger {
 	if r.logger == nil {
 		r.logger = logrus.New()

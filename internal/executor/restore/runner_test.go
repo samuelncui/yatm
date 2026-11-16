@@ -430,7 +430,7 @@ func TestRestoreVolumeEndToEnd(t *testing.T) {
 	stored, err := exe.GetJob(context.Background(), job.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, stored.Status)
-	positions, err := lib.ListPositions(context.Background(), media.ID, "")
+	positions, _, err := lib.ListPositionsPage(context.Background(), media.ID, "", "", 1000)
 	require.NoError(t, err)
 	require.Empty(t, positions[0].StorageOrder)
 }

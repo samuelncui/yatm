@@ -24,7 +24,7 @@ func TestTarFactoryHardwareCompressionOwnsProfileAndPreparationOrder(t *testing.
 	original := append([]byte(nil), fixture.mode...)
 	target := tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)
 	target.GetTape().TarOptions.HardwareCompression = proto.Bool(true)
-	write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, target))
+	write, err := newTarFixtureWriteSession(openWrite(ctx, backend, target))
 	require.NoError(t, err)
 	data := bytes.Repeat([]byte("hardware compressed source\n"), 500)
 	tarWriteFixtureMember(t, write, "first.bin", data)
@@ -55,7 +55,7 @@ func TestTarFactoryHardwareCompressionOwnsProfileAndPreparationOrder(t *testing.
 	require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 	fixture.readCompression, fixture.writeCompression = nil, nil
 	fixture.decodeAlgorithmOnRead = proto.Uint32(0xff)
-	appendSession, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+	appendSession, err := newTarFixtureWriteSession(openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 		Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 	}).Pack()))
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestTarFactoryHardwareCompressionOwnsProfileAndPreparationOrder(t *testing.
 	fixture.readCompression = nil
 	readTarget := (&entity.ReadTapeTarget{Device: "/dev/nst0", MediaId: proto.Int64(stored.ID)}).Pack()
 	readTarget.ExpectedMediaId, readTarget.ExpectedIdentity, readTarget.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
-	read, err := backend.NewReadSession(ctx, readTarget)
+	read, err := openRead(ctx, backend, readTarget)
 	require.NoError(t, err)
 	source, err := read.Source(mediapkg.ReadRequest{Path: member.Path, Storage: member.Storage})
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestTarInvalidCompressedAppendNeverAppliesWritePolicy(t *testing.T) {
 			exe, backend, fixture, _ := tarFactoryFixture(t)
 			target := tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)
 			target.GetTape().TarOptions.HardwareCompression = proto.Bool(true)
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, target))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, target))
 			require.NoError(t, err)
 			result, err := write.Finalize(ctx, nil)
 			require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestTarInvalidCompressedAppendNeverAppliesWritePolicy(t *testing.T) {
 			require.NoError(t, err)
 			fixture.selectedCompression = nil
 			original, writes := append([]byte(nil), fixture.mode...), fixture.writes
-			_, err = newTarFixtureWriteSession(backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+			_, err = newTarFixtureWriteSession(openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 				Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 			}).Pack()))
 			require.ErrorContains(t, err, failure)

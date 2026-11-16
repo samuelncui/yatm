@@ -5,20 +5,21 @@ import (
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 )
 
 const maxMediaPositionPageSize = 1000
 
 func (s *mediaService) ListPositions(ctx context.Context, req *entity.ListMediaPositionsRequest) (*entity.ListMediaPositionsResponse, error) {
 	if req == nil {
-		return nil, fmt.Errorf("Media positions request is missing")
+		return nil, fmt.Errorf("%w: Media positions request is missing", executor.ErrInvalidRequest)
 	}
 	limit := int(req.GetLimit())
 	if limit == 0 {
 		limit = 200
 	}
 	if limit < 0 || limit > maxMediaPositionPageSize {
-		return nil, fmt.Errorf("Media position page limit is invalid, limit=%d", limit)
+		return nil, fmt.Errorf("%w: Media position page limit is invalid, limit=%d", executor.ErrInvalidRequest, limit)
 	}
 
 	// Page immediate children by the stable physical path cursor.

@@ -124,7 +124,7 @@ func TestLTFSReadOrderObservationClosesRawAccessBeforeMount(t *testing.T) {
 				}},
 			}}})
 			require.NoError(t, exe.AcquireTapeDevice(ctx, 1, "/dev/nst0", nil))
-			backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+			backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 			snapshot, err := backend.observeLTFSReadOrder(ctx, "/dev/nst0", &entity.TapeMediaProfile{Format: format})
 			require.NoError(t, err)
 			require.NotNil(t, snapshot.report)
@@ -176,10 +176,10 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 				endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 					{Partition: 1, Wrap: 4, Object: 8}}, source: "A3/1F/45", observedAt: time.Now()}
 			exe.scripts.Umount = writeExecutorTestScript(t, "unmounted", ":")
-			session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend), media: describeMedia(stored),
+			session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend), media: describeMedia(stored),
 				device: "/dev/nst0", mountPoint: point, tapeDir: t.TempDir(), recycleKey: func() {}}
 			session.indexPath = filepath.Join(session.tapeDir, "ABC001.schema")
-			require.NoError(t, session.prepareReadOrder(t.Context(), stored, snapshot))
+			require.NoError(t, session.prepareReadOrder(t.Context(), snapshot))
 			provider, reason, err := session.ReadOrder(t.Context())
 			require.NoError(t, err)
 			require.NotNil(t, provider, reason)
@@ -221,9 +221,8 @@ func TestLTFSReadOrderPreparedSessionPublishesUsableNativeProvider(t *testing.T)
 			require.Equal(t, []int64{1, 2}, ids, "the unknown initial position keeps the common first file")
 			require.NoError(t, sequence.Close())
 
-			// The published map has the mounted UUID/index owner, and finalization withdraws that snapshot.
-			updated, err := exe.Lib().GetMediaByIdentity(t.Context(), entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
-			require.NoError(t, err)
+			// The returned map has the mounted UUID/index owner, and finalization withdraws that snapshot.
+			updated := session.Media()
 			require.Equal(t, "204d1c2f-c755-44cf-ac70-8541ded5f005", updated.TapePositionMap.LtfsUuid)
 			require.Equal(t, uint64(7), updated.TapePositionMap.GetLtfsIndexGeneration())
 			require.Equal(t, entity.TapeReadOrder_TAPE_READ_ORDER_AUTO.String(), exe.lastPreparedRead("/dev/nst0").EffectiveOrder)
@@ -247,10 +246,10 @@ func TestLTFSReadOrderOptionalObservationFailurePreservesNativeSession(t *testin
 	require.NoError(t, os.WriteFile(path, []byte("native"), 0600))
 	exe := New(nil, nil, []string{"fixture"}, Paths{}, Scripts{}, nil)
 	stored := &library.Media{ID: 1, Identity: "ABC001", Profile: (&entity.TapeMediaProfile{Format: library.TapeFormatLTFSV1}).Pack()}
-	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
+	session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend),
 		media: describeMedia(stored), mountPoint: point, device: "fixture"}
 	snapshot := &ltfsReadSnapshot{defaults: &entity.TapeDeviceSettings{ReadOrder: entity.TapeReadOrder_TAPE_READ_ORDER_AUTO}}
-	require.NoError(t, session.prepareReadOrder(t.Context(), stored, snapshot))
+	require.NoError(t, session.prepareReadOrder(t.Context(), snapshot))
 	provider, reason, err := session.ReadOrder(t.Context())
 	require.NoError(t, err)
 	require.Nil(t, provider)

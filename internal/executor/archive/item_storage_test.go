@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -146,7 +147,7 @@ func TestArchiveTarStagedStorageWaitsForPhysicalCompletion(t *testing.T) {
 			require.Zero(t, items[0].Result.Storage.Metadata.GetTar().HeaderOffsetBytes)
 			require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, items[1].Status)
 			require.Nil(t, items[1].Result)
-			media, err := exe.Lib().ListMedia(ctx, nil)
+			media, _, err := exe.Lib().ListMediaPage(ctx, nil)
 			require.NoError(t, err)
 			require.Empty(t, media, "provisional item positions cannot publish Catalog copies")
 			require.Zero(t, device.marks.Load())
@@ -161,7 +162,7 @@ func TestArchiveTarStagedStorageWaitsForPhysicalCompletion(t *testing.T) {
 			require.Eventually(t, func() bool { return !exe.IsRunning(job.ID) }, 5*time.Second, time.Millisecond)
 			require.EqualValues(t, 1, cleanups.Load())
 			require.NoError(t, runner.db.Order("target_path").Find(&items).Error)
-			media, queryErr := exe.Lib().ListMedia(ctx, nil)
+			media, _, queryErr := exe.Lib().ListMediaPage(ctx, nil)
 			require.NoError(t, queryErr)
 			if failure != "none" {
 				require.ErrorIs(t, err, cause)
@@ -215,30 +216,44 @@ func TestArchiveTarStorageUsesExistingBatchAndFinalizationPass(t *testing.T) {
 	session, err := mediapkg.NewTarWriteSession(device, mediapkg.TarSessionOptions{Media: archiveStorageDescriptor(),
 		Mode: tape.RecordMode{MaximumBytes: 512 << 10}, TapeFile: 1, Cleanup: func(context.Context) error { return nil }})
 	require.NoError(t, err)
-	reporter := startTestReporter(t, runner)
+	// Each persisted batch is one transaction; group its statements by that transaction.
 	var lock sync.Mutex
-	var batches []int
-	reporter.store = func(ctx context.Context, batch []itemOutcome) error {
-		for _, outcome := range batch {
-			require.NotNil(t, outcome.copyResult.Storage)
+	statements := make(map[gorm.ConnPool][]string)
+	record := func(kind string) func(*gorm.DB) {
+		return func(tx *gorm.DB) {
+			if _, ok := tx.Statement.ConnPool.(*sql.Tx); !ok {
+				return
+			}
+			lock.Lock()
+			statements[tx.Statement.ConnPool] = append(statements[tx.Statement.ConnPool], kind)
+			lock.Unlock()
 		}
-		counter := &countingLogger{Interface: runner.db.Logger}
-		copy := &jobArchiveRunner{db: runner.db.Session(&gorm.Session{Logger: counter})}
-		err := copy.flushOutcomes(ctx, batch)
-		require.Equal(t, len(batch), counter.count(), "storage joins each existing STAGED update without another query")
-		lock.Lock()
-		batches = append(batches, len(batch))
-		lock.Unlock()
-		return err
 	}
+	callbacks := runner.db.Callback()
+	require.NoError(t, callbacks.Query().After("gorm:query").Register("test:batch-query", record("query")))
+	require.NoError(t, callbacks.Row().After("gorm:row").Register("test:batch-row", record("row")))
+	require.NoError(t, callbacks.Create().After("gorm:create").Register("test:batch-create", record("create")))
+	require.NoError(t, callbacks.Update().After("gorm:update").Register("test:batch-update", record("update")))
+	reporter := startTestReporter(t, runner)
 	engine, err := acp.NewStream(ctx, reporter.onResults, acp.WithHashPolicy(acp.HashRead), acp.WithResultBatch(4),
 		acp.WithResultFlushInterval(time.Hour), acp.SetToDevice(acp.LinearDevice(true)))
 	require.NoError(t, err)
 	require.NoError(t, (&copySource{runner: runner, session: session, pageSize: 3}).consume(ctx, engine))
 	require.NoError(t, reporter.Close())
+	require.NoError(t, reporter.err())
+	var batches []int
+	for _, kinds := range statements {
+		for _, kind := range kinds {
+			require.Equal(t, "update", kind, "storage joins each existing STAGED update without another query")
+		}
+		batches = append(batches, len(kinds))
+	}
 	sort.Ints(batches)
 	require.Equal(t, []int{1, 4, 4}, batches)
 	require.Zero(t, device.writes.Load())
+	for _, item := range items {
+		require.NotNil(t, runnerItem(t, runner, item.ID).Result.Storage, "ACP results carry tar positions")
+	}
 
 	// The original paged path update also filters/corrects storage; no separate inventory lookup remains.
 	result, err := session.Finalize(ctx, nil)
@@ -283,7 +298,7 @@ func TestArchiveRestartDiscardsProvisionalTarStorage(t *testing.T) {
 	require.Equal(t, entity.CopyStatus_COPY_STATUS_PENDING, item.Status)
 	require.Nil(t, item.Result)
 	require.Nil(t, item.MediaID)
-	media, err := exe.Lib().ListMedia(ctx, nil)
+	media, _, err := exe.Lib().ListMediaPage(ctx, nil)
 	require.NoError(t, err)
 	require.Empty(t, media)
 }

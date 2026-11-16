@@ -142,7 +142,7 @@ func TestMergedPhysicalDirectoryPreservesTargetOriginals(t *testing.T) {
 		id   int64
 		path string
 	}{{from.ID, "to/folder/a"}, {to.ID, "to/folder/b"}} {
-		original, err := f.exe.Lib().GetFileLocation(context.Background(), test.id)
+		original, err := readOriginal(context.Background(), f.exe.Lib(), test.id)
 		require.NoError(t, err)
 		require.Equal(t, test.path, original.Path)
 	}

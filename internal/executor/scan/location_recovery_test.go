@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -22,28 +22,28 @@ func TestAnalyzeJobCheckpointFailureKeepsPublishedLibrary(t *testing.T) {
 	exe, source := setupAnalyze(t)
 	writeAnalyzeFile(t, source, "file", "content")
 	ctx := context.Background()
-	var r *runner
-	job, err := exe.CreatePreparedJob(ctx, entity.JobKind_JOB_KIND_SCAN, 1, func(db *gorm.DB) error {
-		if err := db.AutoMigrate(frozenLimits(&Config{}), &Item{}); err != nil {
+	job, err := exe.CreateJob(ctx, entity.JobKind_JOB_KIND_SCAN, 1, func(db *gorm.DB) error {
+		if err := prepareSchema(db); err != nil {
 			return err
 		}
-		return db.Create(frozenLimits(&Config{ID: 1, Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)}})).Error
-	}, func(value executor.Runner) error {
-		r = value.(*runner)
-		return r.db.Callback().Create().Before("gorm:create").Register("test:checkpoint", func(tx *gorm.DB) {
-			if rows, ok := tx.Statement.Dest.([]*Entry); ok {
-				for _, row := range rows {
-					if row.Published {
-						tx.AddError(errors.New("injected Job checkpoint failure"))
-						return
-					}
-				}
+		// The bundle's own trigger rejects only the published Entry checkpoint.
+		for _, event := range []string{"INSERT", "UPDATE"} {
+			if err := db.Exec("CREATE TRIGGER test_checkpoint_" + event + " BEFORE " + event + " ON entries WHEN NEW.published BEGIN SELECT RAISE(ABORT, 'injected Job checkpoint failure'); END").Error; err != nil {
+				return err
 			}
-		})
+		}
+		return db.Create(frozenLimits(&Config{ID: 1, Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)}})).Error
 	})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return !exe.IsRunning(job.ID) }, 5*time.Second, 10*time.Millisecond)
+	value, err := exe.GetJobRunner(ctx, job.ID)
+	require.NoError(t, err)
+	r := value.(*runner)
 	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, r.Phase())
+	failed, err := exe.GetJob(ctx, job.ID)
+	require.NoError(t, err)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, failed.Status)
+	require.Contains(t, failed.Error, "injected Job checkpoint failure")
 	published, err := exe.Lib().GetLocation(ctx, source.ID)
 	require.NoError(t, err)
 	require.Equal(t, job.ID, published.LastSyncJobID)
@@ -54,7 +54,6 @@ func TestAnalyzeJobCheckpointFailureKeepsPublishedLibrary(t *testing.T) {
 	// A failed preparation is terminal, so a new Job scans the selection again, including files
 	// removed after publication.
 	require.NoError(t, os.Remove(filepath.Join(source.RootPath, "file")))
-	require.NoError(t, r.db.Callback().Create().Remove("test:checkpoint"))
 	rerun, rerunProgress := runAnalysis(t, exe, &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)})
 	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, rerun.Phase())
 	_ = rerunProgress
@@ -133,51 +132,50 @@ func TestAnalyzeOptionalPreviewUsesOnlyPublishedDeduplicatedManifest(t *testing.
 }
 
 func TestAnalyzeCancellationRetainsOldIndexAndReleasesSource(t *testing.T) {
-	// Block a new manifest insert until the public cancellation path cancels its statement context.
-	exe, source := setupAnalyze(t)
+	// Block the manifest's Library enrichment until the public cancellation path cancels its statement context.
+	exe, source, catalog := setupAnalyzeCatalog(t, nil)
 	ctx := context.Background()
 	writeAnalyzeFile(t, source, "old", "old content")
 	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, runAnalyze(t, exe, source.ID, false).Phase())
 	writeAnalyzeFile(t, source, "new", "new content")
 	entered := make(chan struct{})
-	var r *runner
-	job, err := exe.CreatePreparedJob(ctx, entity.JobKind_JOB_KIND_SCAN, 1, func(db *gorm.DB) error {
-		if err := db.AutoMigrate(frozenLimits(&Config{}), &Item{}); err != nil {
-			return err
+	var armed atomic.Bool
+	armed.Store(true)
+	require.NoError(t, catalog.Callback().Query().Before("gorm:query").Register("test:cancel", func(tx *gorm.DB) {
+		// Only the running attempt carries a cancellable statement context.
+		if tx.Statement.Table != "file_locations" || tx.Statement.Context.Done() == nil || !armed.CompareAndSwap(true, false) {
+			return
 		}
-		return db.Create(frozenLimits(&Config{ID: 1, Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)}})).Error
-	}, func(value executor.Runner) error {
-		r = value.(*runner)
-		return r.db.Callback().Create().Before("gorm:create").Register("test:cancel", func(tx *gorm.DB) {
-			if tx.Statement.Table != "entries" {
-				return
-			}
-			close(entered)
-			<-tx.Statement.Context.Done()
-			tx.AddError(tx.Statement.Context.Err())
-		})
-	})
+		close(entered)
+		<-tx.Statement.Context.Done()
+		tx.AddError(tx.Statement.Context.Err())
+	}))
+	created, err := Create(ctx, exe, &entity.CreateScanJobRequest{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)}})
 	require.NoError(t, err)
+	job := created.Job
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("scan did not reach manifest insertion")
 	}
-	require.NoError(t, exe.Cancel(job.ID))
-	require.Eventually(t, func() bool { return !exe.IsRunning(job.ID) }, 5*time.Second, 10*time.Millisecond)
+	require.NoError(t, exe.Cancel(job.Id))
+	require.Eventually(t, func() bool { return !exe.IsRunning(job.Id) }, 5*time.Second, 10*time.Millisecond)
+	value, err := exe.GetJobRunner(ctx, job.Id)
+	require.NoError(t, err)
+	r := value.(*runner)
 	require.Equal(t, entity.JobPhase_JOB_PHASE_UNSPECIFIED, r.Phase())
+	failed, err := exe.GetJob(ctx, job.Id)
+	require.NoError(t, err)
+	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, failed.Status)
 	rows, err := exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, "old", rows[0].Path)
-	var observations, entries int64
-	require.NoError(t, r.db.Model(&Item{}).Count(&observations).Error)
+	var entries int64
 	require.NoError(t, r.db.Model(&Entry{}).Count(&entries).Error)
-	require.Zero(t, observations)
 	require.Zero(t, entries)
 	// A cancelled preparation is terminal, so a new Job includes the new file instead of retaining
 	// the canceled partial manifest.
-	require.NoError(t, r.db.Callback().Create().Remove("test:cancel"))
 	rerun, _ := runAnalysis(t, exe, &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, Selections: scanLocationSelections(source.ID)})
 	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, rerun.Phase())
 	rows, err = exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)

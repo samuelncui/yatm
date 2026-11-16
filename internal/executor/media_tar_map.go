@@ -5,7 +5,6 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
-	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/media/tape"
 	"google.golang.org/protobuf/proto"
@@ -13,11 +12,11 @@ import (
 
 // compileTarMediaReadModel uses a current report first, or retained coverage owned by this initialization.
 // The returned observation is independently publishable even when elapsed-time inputs are incomplete.
-func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *library.Media,
+func compileTarMediaReadModel(parameters *entity.TapeReadParameters, media *mediapkg.Descriptor,
 	geometry *tape.WrapMap, valid func() bool,
 ) (*mediapkg.ReadCostModel, *entity.TapePositionMap, string) {
 	// The caller proves the label and validated frozen profile before accepting geometry into this session.
-	profile := stored.Profile.GetTape().Tar
+	profile := media.Profile.GetTape().Tar
 	current := geometry.Complete()
 	if current {
 		if reason := tarReportedWrapsReason(geometry); reason != "" {
@@ -29,7 +28,7 @@ func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *lib
 		if observed == nil {
 			return nil, nil, reason
 		}
-		if err := library.ValidateTapePositionMap(stored, observed); err != nil {
+		if err := validatePositionMap(media, observed); err != nil {
 			return nil, nil, err.Error()
 		}
 		model, reason := compileTarPositionMap(parameters, profile, observed,
@@ -38,11 +37,11 @@ func compileTarMediaReadModel(parameters *entity.TapeReadParameters, stored *lib
 	}
 
 	// A saved map supplies no lifetime of its own and cannot change this read attempt's immutable owner.
-	value := stored.TapePositionMap
+	value := media.TapePositionMap
 	if value == nil {
 		return nil, nil, "No current or retained Tape position map is available"
 	}
-	if err := library.ValidateTapePositionMap(stored, value); err != nil {
+	if err := validatePositionMap(media, value); err != nil {
 		return nil, nil, err.Error()
 	}
 	modelValid := valid

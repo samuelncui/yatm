@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/samuelncui/acp"
@@ -31,39 +32,40 @@ func TestRestoreCopyEstimateComesFromACPWorkEvents(t *testing.T) {
 	require.NoError(t, runner.transition(restoreStatePreparingMedia))
 	require.NoError(t, runner.transition(restoreStateCopying))
 
-	// A fixed clock makes every sample an exact five-second productive window. The attempt stays
-	// incomplete on purpose, so a remaining time exists to be estimated.
-	now := time.Unix(100, 0)
-	progress := runner.getProgress()
-	progress.SetClock(func() time.Time { return now })
-	handler := runner.restoreEventHandler(context.Background())
-	handler(&acp.EventUpdateProgress{Bytes: 0, Files: 0})
-	require.Nil(t, runner.progressSnapshot().Stage.RemainingSeconds, "no estimate before any measured work")
+	// Initialize the durable base the way a request or a new attempt does.
+	runner.getProgress()
+	synctest.Test(t, func(t *testing.T) {
+		// The bubble's fake clock makes every sample an exact five-second productive window. The
+		// attempt stays incomplete on purpose, so a remaining time exists to be estimated.
+		handler := runner.restoreEventHandler(context.Background())
+		handler(&acp.EventUpdateProgress{Bytes: 0, Files: 0})
+		require.Nil(t, runner.progressSnapshot().Stage.RemainingSeconds, "no estimate before any measured work")
 
-	// Three productive windows of one settled item each: no progress request is involved.
-	for step := int64(1); step <= 3; step++ {
-		now = now.Add(5 * time.Second)
-		handler(&acp.EventUpdateProgress{Bytes: step * 10, Files: step})
-	}
-	stage := runner.progressSnapshot().Stage
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, stage.EstimateState, "work events produced the estimate")
-	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_BYTES, stage.Unit)
-	require.EqualValues(t, 40, *stage.Total)
-	require.EqualValues(t, 30, stage.Completed)
-	require.Equal(t, 2.0, stage.GetRatePerSecond())
-	require.EqualValues(t, 5, stage.GetRemainingSeconds())
+		// Three productive windows of one settled item each: no progress request is involved.
+		for step := int64(1); step <= 3; step++ {
+			time.Sleep(5 * time.Second)
+			handler(&acp.EventUpdateProgress{Bytes: step * 10, Files: step})
+		}
+		stage := runner.progressSnapshot().Stage
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, stage.EstimateState, "work events produced the estimate")
+		require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_BYTES, stage.Unit)
+		require.EqualValues(t, 40, *stage.Total)
+		require.EqualValues(t, 30, stage.Completed)
+		require.Equal(t, 2.0, stage.GetRatePerSecond())
+		require.EqualValues(t, 5, stage.GetRemainingSeconds())
 
-	// Requests read the recorded window without refreshing it: a long gap the work path has not
-	// sampled yet changes nothing, and the frozen estimate stays readable.
-	now = now.Add(10 * time.Minute)
-	for index := 0; index < 3; index++ {
-		repeated := runner.progressSnapshot().Stage
-		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, repeated.EstimateState)
-		require.Equal(t, stage.GetRemainingSeconds(), repeated.GetRemainingSeconds())
-	}
+		// Requests read the recorded window without refreshing it: a long gap the work path has not
+		// sampled yet changes nothing, and the frozen estimate stays readable.
+		time.Sleep(10 * time.Minute)
+		for index := 0; index < 3; index++ {
+			repeated := runner.progressSnapshot().Stage
+			require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATED, repeated.EstimateState)
+			require.Equal(t, stage.GetRemainingSeconds(), repeated.GetRemainingSeconds())
+		}
 
-	// A real stall is detected by the next work event, not by a visible card.
-	handler(&acp.EventUpdateProgress{Bytes: 40, Files: 4})
-	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, runner.progressSnapshot().Stage.EstimateState)
-	require.EqualValues(t, 40, runner.progressSnapshot().Stage.Completed)
+		// A real stall is detected by the next work event, not by a visible card.
+		handler(&acp.EventUpdateProgress{Bytes: 40, Files: 4})
+		require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, runner.progressSnapshot().Stage.EstimateState)
+		require.EqualValues(t, 40, runner.progressSnapshot().Stage.Completed)
+	})
 }

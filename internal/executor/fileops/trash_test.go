@@ -46,7 +46,7 @@ func TestRemoveRecyclesWholeDirectoryAndDisconnectsDescendants(t *testing.T) {
 	require.Equal(t, "../../outside.txt", link)
 	require.FileExists(t, filepath.Join(f.root, "outside.txt"))
 	for _, file := range []*library.File{first, second} {
-		original, err := f.exe.Lib().GetFileLocation(ctx, file.ID)
+		original, err := readOriginal(ctx, f.exe.Lib(), file.ID)
 		require.NoError(t, err)
 		require.Nil(t, original)
 		stored, err := f.exe.Lib().GetFile(ctx, file.ID)
@@ -65,7 +65,7 @@ func TestRemoveRecyclesWholeDirectoryAndDisconnectsDescendants(t *testing.T) {
 	f.execute(t, &entity.FileOperationSpec{Kind: entity.FileOperationKind_FILE_OPERATION_KIND_MOVE,
 		Sources: []*entity.FileOperationRef{trashRef}, Destination: f.ref(t, ""), Name: "returned"}, nil)
 	require.FileExists(t, filepath.Join(f.root, "returned/a.txt"))
-	original, err := f.exe.Lib().GetFileLocation(ctx, first.ID)
+	original, err := readOriginal(ctx, f.exe.Lib(), first.ID)
 	require.NoError(t, err)
 	require.Nil(t, original)
 }
@@ -184,7 +184,7 @@ func TestConcurrentFirstRemoveInitializesTrashWithoutSerializingPhysicalMoves(t 
 
 	// Each publication detaches only its selected original and retains independent history.
 	for index, file := range files {
-		original, err := f.exe.Lib().GetFileLocation(ctx, file.ID)
+		original, err := readOriginal(ctx, f.exe.Lib(), file.ID)
 		require.NoError(t, err)
 		keys, err := f.exe.Lib().ReadFileTrackingKeys(ctx, []int64{file.ID})
 		require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestTrashPublicationFailureRetainsOutputAndOriginalMetadata(t *testing.T) {
 	target := stream.updates[1].Entry.TargetPath
 	require.True(t, executor.IsLocationTrashContent(target))
 	require.FileExists(t, filepath.Join(f.root, target, "file.txt"))
-	original, err := f.exe.Lib().GetFileLocation(context.Background(), file.ID)
+	original, err := readOriginal(context.Background(), f.exe.Lib(), file.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original, "failed metadata transaction keeps prior state for explicit reconciliation")
 }

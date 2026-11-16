@@ -74,7 +74,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 			var diagnostics bytes.Buffer
 			logger := logrus.New()
 			logger.SetOutput(&diagnostics)
-			backend := exe.NewMediaBackend(1, logger, nil)
+			backend := exe.newMediaBackend(1, logger, nil)
 			ctx := context.Background()
 			if test.readOrder {
 				ctx = context.WithValue(ctx, deviceSettingsKey{}, &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{
@@ -99,7 +99,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 				require.NoError(t, err)
 				target := (&entity.ReadTapeTarget{Device: "/dev/nst0"}).Pack()
 				target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
-				session, err := backend.NewReadSession(ctx, target)
+				session, err := openRead(ctx, backend, target)
 				createErr = err
 				if err == nil {
 					finalize = func() error { return session.Finalize(ctx, nil) }
@@ -110,7 +110,7 @@ func TestTapeSessionConstructionReleasesOwnedResources(t *testing.T) {
 					require.Contains(t, diagnostics.String(), "read_order_reason=")
 				}
 			} else {
-				session, err := backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+				session, err := openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 					Device: "/dev/nst0", Barcode: "ABC001", Name: "Test Tape",
 					Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT,
 				}).Pack())

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/library"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,22 +24,23 @@ func TestRelocateOriginalPreservesOrganizationAndRejectsOccupiedTargets(t *testi
 	service := &filesService{api: api}
 	entry, err := service.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: created.Location.Id, Path: "before.txt"}}}})
 	require.NoError(t, err)
-	admitted, err := api.exe.AdmitLocationEntry(ctx, entry.Detail.Entry.Reference.GetLocation())
-	require.NoError(t, err)
 	note := "keep my organization"
-	require.NoError(t, api.lib.EditFileMetadata(ctx, []int64{admitted.FileID}, library.FileMetadataEdit{Note: &note, AddTags: []string{"keep"}}))
+	updated, err := service.UpdateMetadata(ctx, &entity.UpdateFilesMetadataRequest{References: []*entity.FileOperationRef{entry.Detail.Entry.Reference},
+		Note: &note, AddTags: []string{"keep"}})
+	require.NoError(t, err)
+	admittedID := updated.Entries[0].Entry.GetAssociatedFileId()
 	admittedDetail, err := service.Get(ctx, &entity.GetFileRequest{Reference: entry.Detail.Entry.Reference})
 	require.NoError(t, err)
 	chosen, err := service.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: created.Location.Id, Path: "chosen.txt"}}}})
 	require.NoError(t, err)
-	request := &entity.RelocateOriginalRequest{FileId: admitted.FileID, Reference: chosen.Detail.Entry.Reference.GetLocation()}
+	request := &entity.RelocateOriginalRequest{FileId: admittedID, Reference: chosen.Detail.Entry.Reference.GetLocation()}
 	state, err := service.RelocateOriginal(ctx, request)
 	require.NoError(t, err)
 	require.Equal(t, "chosen.txt", state.Detail.Original.Path)
-	relinked, err := api.lib.GetFileLocation(ctx, admitted.FileID)
+	relinked, err := readOriginal(ctx, api.lib, admittedID)
 	require.NoError(t, err)
 	require.Empty(t, relinked.Signature)
-	file, err := api.lib.GetFile(ctx, admitted.FileID)
+	file, err := api.lib.GetFile(ctx, admittedID)
 	require.NoError(t, err)
 	require.Equal(t, admittedDetail.Detail.Entry.Name, file.Name)
 	require.Equal(t, note, file.Note)
@@ -54,13 +54,12 @@ func TestRelocateOriginalPreservesOrganizationAndRejectsOccupiedTargets(t *testi
 	require.NoError(t, err)
 	occupied, err := service.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_Location{Location: &entity.LocationEntryRef{LocationId: created.Location.Id, Path: "occupied.txt"}}}})
 	require.NoError(t, err)
-	_, err = api.exe.AdmitLocationEntry(ctx, occupied.Detail.Entry.Reference.GetLocation())
-	require.NoError(t, err)
-	_, err = service.RelocateOriginal(ctx, &entity.RelocateOriginalRequest{FileId: admitted.FileID, Reference: occupied.Detail.Entry.Reference.GetLocation()})
+	admitLocationEntry(t, api, occupied.Detail.Entry.Reference.GetLocation())
+	_, err = service.RelocateOriginal(ctx, &entity.RelocateOriginalRequest{FileId: admittedID, Reference: occupied.Detail.Entry.Reference.GetLocation()})
 	require.Error(t, err)
 	// Replacing the object behind the path changes what is recorded, not whether the caller may relink it.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "chosen.txt"), []byte("replaced content"), 0644))
-	restored, err := service.RelocateOriginal(ctx, &entity.RelocateOriginalRequest{FileId: admitted.FileID, Reference: chosen.Detail.Entry.Reference.GetLocation()})
+	restored, err := service.RelocateOriginal(ctx, &entity.RelocateOriginalRequest{FileId: admittedID, Reference: chosen.Detail.Entry.Reference.GetLocation()})
 	require.NoError(t, err)
 	require.Equal(t, "chosen.txt", restored.GetDetail().GetOriginal().GetPath())
 }

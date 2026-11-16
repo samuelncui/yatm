@@ -82,15 +82,12 @@ func TestExplicitIgnoredEntryAdmission(t *testing.T) {
 	require.Empty(t, page.Entries)
 
 	// Explicit admission bypasses only user Ignore and produces a real persistent identity.
-	admitted, err := api.exe.AdmitLocationEntry(ctx, entry.Detail.Entry.Reference.GetLocation())
-	require.NoError(t, err)
+	admitted := admitLocationEntry(t, api, entry.Detail.Entry.Reference.GetLocation())
 	admittedDetail, err := service.Get(ctx, &entity.GetFileRequest{Reference: entry.Detail.Entry.Reference})
 	require.NoError(t, err)
-	require.Equal(t, admitted.FileID, admittedDetail.Detail.Entry.GetAssociatedFileId())
+	require.Equal(t, admitted, admittedDetail.Detail.Entry.GetAssociatedFileId())
 	require.Empty(t, admittedDetail.Detail.ContentSignature)
-	again, err := api.exe.AdmitLocationEntry(ctx, entry.Detail.Entry.Reference.GetLocation())
-	require.NoError(t, err)
-	require.Equal(t, admitted.FileID, again.FileID)
+	require.Equal(t, admitted, admitLocationEntry(t, api, entry.Detail.Entry.Reference.GetLocation()))
 
 	// Symlink leaves can be listed, but entry resolution does not follow them.
 	require.NoError(t, os.Symlink(dir, filepath.Join(dir, "link")))

@@ -80,7 +80,7 @@ func TestTarFactoryNavigationFallbackAndIssuedFailures(t *testing.T) {
 			if tc.prepare != nil {
 				tc.prepare(fixture)
 			}
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			data := []byte("standard logical-object navigation with sequential fallback")
 			copied := tarWriteFixtureMember(t, write, "data.bin", data)
@@ -99,7 +99,7 @@ func TestTarFactoryNavigationFallbackAndIssuedFailures(t *testing.T) {
 			require.NoError(t, err)
 			target := (&entity.ReadTapeTarget{Device: "/dev/nst0", MediaId: proto.Int64(stored.ID)}).Pack()
 			target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
-			read, err := backend.NewReadSession(ctx, target)
+			read, err := openRead(ctx, backend, target)
 			require.NoError(t, err)
 			if tc.runtime != nil {
 				tc.runtime(fixture)
@@ -148,7 +148,7 @@ func TestTarFactoryCompletedPositionControlsOptionalAnchors(t *testing.T) {
 			// Freeze an exact start and physically accepted member before changing the final observation.
 			ctx := context.Background()
 			_, backend, fixture, _ := tarFactoryFixture(t)
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			tarWriteFixtureMember(t, write, "data.bin", []byte("completed content"))
 			tc.inject(fixture)

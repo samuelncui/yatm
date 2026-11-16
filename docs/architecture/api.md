@@ -78,7 +78,7 @@ Handlers return domain errors; the interceptor matches these sentinels with `err
 | Access excluded by administrator rules | PermissionDenied |
 | Location busy, Location unverified, stored Settings unusable | FailedPrecondition |
 | Location conflict | Aborted |
-| Invalid Settings, Keep survivor not a group member | InvalidArgument |
+| Invalid request (a malformed field, page limit, cursor, log filter or name), invalid Settings, Keep survivor not a group member | InvalidArgument |
 | Missing catalog record, File or Job | NotFound |
 
 An error that already carries a gRPC status, directly or wrapped with `%w`, keeps its code.

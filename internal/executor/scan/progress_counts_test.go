@@ -124,9 +124,7 @@ func TestScanMaintainedResultsMatchManifestAggregation(t *testing.T) {
 		saveVerifyFile(t, exe, volume, media, "good", []byte("good"))
 		damaged := saveVerifyFile(t, exe, volume, media, "damaged", []byte("before"))
 		missing := saveVerifyFile(t, exe, volume, media, "missing", []byte("gone"))
-		unknown := saveVerifyFile(t, exe, volume, media, "unknown", []byte("unverified"))
-		unknown.Hash = nil
-		require.NoError(t, exe.Lib().SavePosition(ctx, unknown))
+		saveUnverifiableFile(t, exe, volume, media, "unknown", []byte("unverified"))
 		require.NoError(t, os.WriteFile(filepath.Join(volume.Root, damaged.Path), []byte("damage"), 0644))
 		require.NoError(t, os.Remove(filepath.Join(volume.Root, missing.Path)))
 		id, run := createVerifyJob(t, exe, media.ID, volume)

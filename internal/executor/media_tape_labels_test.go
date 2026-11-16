@@ -120,7 +120,7 @@ func TestLTFSLabelObservationClosesBeforeNativeOwnership(t *testing.T) {
 				}}},
 			})
 			require.NoError(t, exe.AcquireTapeDevice(ctx, 1, "/dev/nst0", nil))
-			backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+			backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 			snapshot, err := backend.observeLTFSReadOrder(ctx, "/dev/nst0", &entity.TapeMediaProfile{
 				Format: library.TapeFormatLTFSV1,
 			})
@@ -237,11 +237,11 @@ func TestLTFSReadOrderPreparedSessionUsesSGLabels(t *testing.T) {
 			Options: &entity.DeviceConfig_Tape{Tape: defaults}}}}, source: "A3/1F/45", observedAt: time.Now(),
 		endpoints: []tape.WrapEndpoint{{Partition: 0, Object: 100}, {Partition: 0, Wrap: 1, Object: 180},
 			{Partition: 1, Wrap: 4, Object: 8}}}
-	session := &tapeReadSession{backend: exe.NewMediaBackend(1, nil, nil).(*mediaBackend),
+	session := &tapeReadSession{backend: exe.newMediaBackend(1, nil, nil).(*mediaBackend),
 		media: describeMedia(stored), device: "/dev/nst0", mountPoint: point}
 
 	// The existing provider and Media map consume the source without changing the native source path.
-	require.NoError(t, session.prepareReadOrder(t.Context(), stored, snapshot))
+	require.NoError(t, session.prepareReadOrder(t.Context(), snapshot))
 	provider, reason, err := session.ReadOrder(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, provider, reason)
@@ -250,9 +250,7 @@ func TestLTFSReadOrderPreparedSessionUsesSGLabels(t *testing.T) {
 	}})
 	require.True(t, known)
 	require.Zero(t, ranges[0].Start.Partition)
-	updated, err := exe.Lib().GetMediaByIdentity(t.Context(), entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
-	require.NoError(t, err)
-	require.Contains(t, updated.TapePositionMap.Source, "pre-mount SG LTFS Labels")
+	require.Contains(t, session.Media().TapePositionMap.Source, "pre-mount SG LTFS Labels")
 
 	// The same Session retains the ordinary native source path passed to ACP.
 	require.NoError(t, os.WriteFile(point+"/file", []byte("native"), 0600))

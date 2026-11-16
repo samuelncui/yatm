@@ -82,9 +82,7 @@ func TestOriginalObservationDistinguishesMissingAndUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	entry, err := api.exe.ObserveLocationEntry(ctx, created.Location.Id, "file.txt")
 	require.NoError(t, err)
-	original, err := api.exe.AdmitLocationEntry(ctx, entry.Reference)
-	require.NoError(t, err)
-	file, err := api.lib.GetFile(ctx, original.FileID)
+	file, err := api.lib.GetFile(ctx, admitLocationEntry(t, api, entry.Reference))
 	require.NoError(t, err)
 	observe := func() (*library.FileReadFacts, *executor.FileReadObservation) {
 		facts, err := api.lib.ReadFileFacts(ctx, []int64{file.ID}, true, true)
@@ -107,7 +105,7 @@ func TestOriginalObservationDistinguishesMissingAndUnavailable(t *testing.T) {
 	require.NoError(t, os.Rename(physical, physical+"-offline"))
 	_, unavailable := observe()
 	require.Equal(t, entity.OriginalAvailability_ORIGINAL_AVAILABILITY_UNAVAILABLE, unavailable.Availability)
-	original, err = api.lib.GetFileLocation(ctx, file.ID)
+	original, err := readOriginal(ctx, api.lib, file.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original, "observation never deletes persistent organization")
 }
@@ -123,7 +121,7 @@ func TestSparseLocationQueryObservesEachEntryOnce(t *testing.T) {
 	created, err := locations.Create(ctx, &entity.CreateLocationRequest{Location: &entity.Location{Name: "Sparse", RootPath: physical}})
 	require.NoError(t, err)
 	seen := make(map[string]bool)
-	page, err := api.exe.ListLocationEntriesMatching(ctx, &entity.LocationEntriesQuery{LocationId: created.Location.Id, Limit: 1}, func(entries []*entity.LocationEntry) ([]int, error) {
+	read, err := api.exe.ReadLocationEntriesMatching(ctx, &entity.LocationEntriesQuery{LocationId: created.Location.Id, Limit: 1}, "", func(_ *library.Location, entries []*entity.LocationEntry, _ map[string]os.FileInfo) ([]int, error) {
 		require.LessOrEqual(t, len(entries), 256)
 		var matches []int
 		for index, entry := range entries {
@@ -136,6 +134,7 @@ func TestSparseLocationQueryObservesEachEntryOnce(t *testing.T) {
 		return matches, nil
 	})
 	require.NoError(t, err)
+	page := read.Page
 	require.Len(t, seen, 600)
 	require.Len(t, page.Entries, 1)
 	require.Equal(t, "file-550", page.Entries[0].Path)
@@ -160,16 +159,15 @@ func TestOriginalDetailFollowsTheCurrentRegistration(t *testing.T) {
 	exe := executor.New(db, lib, nil, executor.Paths{Access: []executor.AccessRange{{Root: root}}, Work: filepath.Join(root, "work")}, executor.Scripts{}, nil)
 	live, err := exe.ObserveLocationEntry(ctx, location.ID, "file.txt")
 	require.NoError(t, err)
-	original, err := exe.AdmitLocationEntry(ctx, live.Reference)
-	require.NoError(t, err)
 	api := New(lib, exe)
+	fileID := admitLocationEntry(t, api, live.Reference)
 	location.RootPath = filepath.Join(root, "after")
 	_, err = lib.UpdateLocation(ctx, location)
 	require.NoError(t, err)
 
 	service := &filesService{api: api}
 	detail := func() *entity.FilesDetail {
-		entry, err := service.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: original.FileID}}})
+		entry, err := service.Get(ctx, &entity.GetFileRequest{Reference: &entity.FileOperationRef{Target: &entity.FileOperationRef_FileId{FileId: fileID}}})
 		require.NoError(t, err)
 		return entry.Detail
 	}
@@ -183,5 +181,5 @@ func TestOriginalDetailFollowsTheCurrentRegistration(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "after", "file.txt"), []byte("after"), 0644))
 	entry = detail()
 	require.NotNil(t, entry.ContentReference)
-	require.Equal(t, original.Path, entry.ContentReference.GetLocation().Path)
+	require.Equal(t, "file.txt", entry.ContentReference.GetLocation().Path)
 }

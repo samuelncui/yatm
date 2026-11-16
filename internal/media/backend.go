@@ -46,9 +46,12 @@ type Capabilities struct {
 }
 
 // Backend creates concrete read and write sessions from public Media targets.
+// The Job resolves the Media record once per attempt and passes it as a Descriptor; a FORMAT
+// write receives nil and returns the new Media facts through its Session. A Backend never
+// reads or writes the Library.
 type Backend interface {
-	NewReadSession(context.Context, *entity.ReadMediaTarget) (ReadSession, error)
-	NewWriteSession(context.Context, *entity.ArchiveMediaTarget) (WriteSession, error)
+	NewReadSession(context.Context, *entity.ReadMediaTarget, *Descriptor) (ReadSession, error)
+	NewWriteSession(context.Context, *entity.ArchiveMediaTarget, *Descriptor) (WriteSession, error)
 }
 
 // Descriptor contains the Library identity, immutable profile and derived geometry for one physical session.

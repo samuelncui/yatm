@@ -30,7 +30,7 @@ func TestCancelledTapeMountCompletesPhysicalRelease(t *testing.T) {
 			exe := New(nil, nil, []string{device}, Paths{}, Scripts{Mount: mount, Umount: unmount}, nil)
 			require.NoError(t, exe.beginAttempt(1, func(error) {}))
 			require.NoError(t, exe.AcquireTapeDevice(context.Background(), 1, device, nil))
-			backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+			backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			done := make(chan error, 1)
@@ -142,7 +142,7 @@ func TestTapeFinalizeStopsAfterUnmountFailureAndKeepsDeviceUnavailable(t *testin
 	exe := New(nil, nil, []string{device}, Paths{}, Scripts{Umount: unmount}, nil)
 	require.NoError(t, exe.beginAttempt(1, func(error) {}))
 	require.NoError(t, exe.AcquireTapeDevice(context.Background(), 1, device, nil))
-	backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+	backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 	indexPath := filepath.Join(t.TempDir(), "ABC001.schema")
 	require.NoError(t, os.WriteFile(indexPath, []byte("invalid index"), 0o600))
 	session := &tapeWriteSession{
@@ -175,7 +175,7 @@ func TestTapeFinalizeReturnsInvalidPostUnmountIndexForArchiveValidation(t *testi
 	exe := New(nil, nil, []string{device}, Paths{}, Scripts{Umount: unmount}, nil)
 	require.NoError(t, exe.beginAttempt(1, func(error) {}))
 	require.NoError(t, exe.AcquireTapeDevice(context.Background(), 1, device, nil))
-	backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+	backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 	session := &tapeWriteSession{
 		backend: backend, barcode: "ABC001", device: device,
 		mountPoint: t.TempDir(), tapeDir: tapeDir, indexPath: filepath.Join(tapeDir, "ABC001.schema"),

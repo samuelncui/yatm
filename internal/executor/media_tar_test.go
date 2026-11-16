@@ -63,7 +63,7 @@ func tarFactoryFixture(t *testing.T) (*Executor, *mediaBackend, *tarDeviceFixtur
 	job := createTestCatalogJob(t, exe, entity.JobKind_JOB_KIND_ARCHIVE)
 	require.NoError(t, exe.beginAttempt(job.ID, func(error) {}))
 	t.Cleanup(func() { exe.endAttempt(job.ID) })
-	return exe, exe.NewMediaBackend(job.ID, nil, nil).(*mediaBackend), fixture, job.ID
+	return exe, exe.newMediaBackend(job.ID, nil, nil).(*mediaBackend), fixture, job.ID
 }
 
 // tarFixtureWriteSession retains receipts for bounded fixtures, where Archive's item table is not present.
@@ -166,7 +166,7 @@ func TestTarFactoryFormatAppendInventoryAndSelectedACPRead(t *testing.T) {
 			fixture.locate10, fixture.shortPosition = tc.opcode == 0x2b, tc.opcode == 0x2b
 			fixture.positionUnknownUntilMotion = true
 			originalMode := append([]byte(nil), fixture.mode...)
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(tc.mode)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(tc.mode)))
 			require.NoError(t, err)
 			data := make([]byte, 12<<10)
 			for i := range data {
@@ -211,7 +211,7 @@ func TestTarFactoryFormatAppendInventoryAndSelectedACPRead(t *testing.T) {
 			// The cartridge memory barcode is the Tape identity; APPEND never substitutes the label for it.
 			barcode, writes := fixture.barcode, fixture.writes
 			fixture.barcode = ""
-			_, err = backend.NewWriteSession(ctx, appendTarget)
+			_, err = openWrite(ctx, backend, appendTarget)
 			require.ErrorContains(t, err, "tar Tape identity is unavailable")
 			require.Equal(t, writes, fixture.writes)
 			require.Equal(t, fixture.opens, fixture.closes)
@@ -221,7 +221,7 @@ func TestTarFactoryFormatAppendInventoryAndSelectedACPRead(t *testing.T) {
 
 			// The bounded tail proof needs long READ POSITION; short-only drives refuse APPEND without writing.
 			if fixture.shortPosition {
-				_, err = backend.NewWriteSession(ctx, appendTarget)
+				_, err = openWrite(ctx, backend, appendTarget)
 				require.ErrorContains(t, err, "APPEND requires long READ POSITION and LOCATE support")
 				require.Equal(t, writes, fixture.writes)
 				require.Equal(t, fixture.opens, fixture.closes)
@@ -229,7 +229,7 @@ func TestTarFactoryFormatAppendInventoryAndSelectedACPRead(t *testing.T) {
 				require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 				fixture.shortPosition = false
 			}
-			appendSession, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, appendTarget))
+			appendSession, err := newTarFixtureWriteSession(openWrite(ctx, backend, appendTarget))
 			require.NoError(t, err)
 			tarWriteFixtureMember(t, appendSession, "later.txt", []byte("later archive"))
 			appended, err := appendSession.Finalize(ctx, nil)
@@ -247,7 +247,7 @@ func TestTarFactoryFormatAppendInventoryAndSelectedACPRead(t *testing.T) {
 			require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 			target := (&entity.ReadTapeTarget{Device: "/dev/nst0", MediaId: proto.Int64(stored.ID)}).Pack()
 			target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, stored.Identity, stored.Profile
-			read, err := backend.NewReadSession(ctx, target)
+			read, err := openRead(ctx, backend, target)
 			require.NoError(t, err)
 			var observed []string
 			require.NoError(t, read.(mediapkg.InventorySession).WalkInventory(ctx, func(value *mediapkg.InventoryEntry) error {
@@ -297,7 +297,7 @@ func TestTarFactoryCachedCapacityClosesBeforeMemberWithoutStreamingQueries(t *te
 		Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{Tape: &entity.TapeDeviceSettings{CapacityPollIntervalSeconds: proto.Uint32(0)}},
 	}}})
 	require.NoError(t, err)
-	write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+	write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
 	require.Equal(t, []int{0, 0, 1}, fixture.capacityQueries)
 	before := fixture.writes
@@ -345,7 +345,7 @@ func TestTarFactoryRefusesUnterminatedAppendWithoutWrite(t *testing.T) {
 	// A valid earlier archive does not authorize overwriting unsealable trailing records.
 	ctx := context.Background()
 	exe, backend, fixture, _ := tarFactoryFixture(t)
-	write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+	write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
 	result, err := write.Finalize(ctx, nil)
 	require.NoError(t, err)
@@ -353,7 +353,7 @@ func TestTarFactoryRefusesUnterminatedAppendWithoutWrite(t *testing.T) {
 	require.NoError(t, err)
 	fixture.records = append(fixture.records, tarFixtureRecord{data: []byte("unterminated tail")})
 	before := fixture.writes
-	_, err = newTarFixtureWriteSession(backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+	_, err = newTarFixtureWriteSession(openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 		Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 	}).Pack()))
 	require.ErrorContains(t, err, "terminating filemark")
@@ -368,7 +368,7 @@ func TestTarFactoryUnknownCompletionWithholdsPublication(t *testing.T) {
 			ctx := context.Background()
 			exe, backend, fixture, jobID := tarFactoryFixture(t)
 			fixture.failMark = failMark
-			session, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			session, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			if failMark == 2 {
 				require.NoError(t, err)
 				result, finalizeErr := session.Finalize(ctx, nil)
@@ -390,7 +390,7 @@ func TestTarFactoryUnknownCompletionWithholdsPublication(t *testing.T) {
 	// A cleanup failure also invalidates an otherwise completed stream and retains the drive.
 	ctx := context.Background()
 	exe, backend, fixture, jobID := tarFactoryFixture(t)
-	session, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+	session, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
 	fixture.cleanupError = errors.New("cleanup failed")
 	result, err := session.Finalize(ctx, nil)
@@ -404,6 +404,7 @@ func TestTarDefaultsStayFrozenBeforeAsynchronousPreparation(t *testing.T) {
 	// Admit a real Archive attempt, then change saved defaults before its factory resolves choices.
 	ctx := context.Background()
 	exe := setupTestExecutor(t)
+	require.NoError(t, exe.Lib().AutoMigrate())
 	job := createTestJob(t, exe, entity.JobKind_JOB_KIND_ARCHIVE, 0)
 	waitJobStatus(t, exe, job.ID, entity.JobStatus_JOB_STATUS_READY)
 	prefs := &entity.DeviceSettings{Devices: []*entity.DeviceConfig{{Device: "/dev/nst0", Options: &entity.DeviceConfig_Tape{
@@ -430,8 +431,8 @@ func TestTarDefaultsStayFrozenBeforeAsynchronousPreparation(t *testing.T) {
 	require.NoError(t, exe.StartJob(ctx, job.ID, entity.JobKind_JOB_KIND_ARCHIVE, func(runCtx context.Context, _ Runner) error {
 		close(started)
 		<-release
-		value, err := exe.NewMediaBackend(job.ID, nil, nil).(*mediaBackend).resolveTapeWrite(runCtx, request)
-		defaults, defaultsErr := exe.NewMediaBackend(job.ID, nil, nil).(*mediaBackend).tapeDefaults(runCtx, request.Device)
+		value, _, err := exe.resolveTapeWrite(runCtx, request)
+		defaults, defaultsErr := exe.tapeDefaults(runCtx, request.Device)
 		resolved <- resolvedTarget{value, settingspkg.TapeCapacityPollInterval(defaults), errors.Join(err, defaultsErr)}
 		return err
 	}))
@@ -452,7 +453,7 @@ func TestTarDefaultsStayFrozenBeforeAsynchronousPreparation(t *testing.T) {
 	require.Nil(t, request.Format)
 	require.Nil(t, request.TarOptions)
 	waitJobReleased(t, exe, job.ID)
-	next, err := exe.NewMediaBackend(job.ID, nil, nil).(*mediaBackend).resolveTapeWrite(ctx, request)
+	next, _, err := exe.resolveTapeWrite(ctx, request)
 	require.NoError(t, err)
 	require.Equal(t, library.TapeFormatLTFSV1, next.GetFormat())
 }
@@ -479,7 +480,7 @@ func TestTarOptionResolutionRecordSizeDefaultAndOverrides(t *testing.T) {
 			require.NoError(t, err)
 			target := tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE).GetTape()
 			target.TarOptions.RecordBytes = tc.explicit
-			resolved, err := backend.resolveTapeWrite(ctx, target)
+			resolved, _, err := backend.executor.resolveTapeWrite(ctx, target)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, resolved.TarOptions.GetRecordBytes())
 			require.Equal(t, tc.explicit, target.TarOptions.RecordBytes)
@@ -496,7 +497,7 @@ func TestTarOptionResolutionDefersCompressionDefault(t *testing.T) {
 	// Admission retains an omitted field so a later qualified device recommendation can fill it.
 	_, backend, _, _ := tarFactoryFixture(t)
 	target := tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE).GetTape()
-	resolved, err := backend.resolveTapeWrite(context.Background(), target)
+	resolved, _, err := backend.executor.resolveTapeWrite(context.Background(), target)
 	require.NoError(t, err)
 	require.Nil(t, resolved.TarOptions.HardwareCompression)
 	recommended := &entity.TarWriteOptions{HardwareCompression: proto.Bool(true)}
@@ -506,7 +507,7 @@ func TestTarOptionResolutionDefersCompressionDefault(t *testing.T) {
 
 	// Explicit off still wins over a recommendation, including after the admission merge.
 	target.TarOptions.HardwareCompression = proto.Bool(false)
-	resolved, err = backend.resolveTapeWrite(context.Background(), target)
+	resolved, _, err = backend.executor.resolveTapeWrite(context.Background(), target)
 	require.NoError(t, err)
 	options = mergeTarOptions(recommended, resolved.TarOptions)
 	require.NotNil(t, options.HardwareCompression)
@@ -531,7 +532,7 @@ func TestTarFormatAssignsAbsentMAMBarcode(t *testing.T) {
 			ctx := context.Background()
 			_, backend, fixture, _ := tarFactoryFixture(t)
 			fixture.barcode, fixture.barcodeStored = tc.barcode, tc.stored
-			session, err := backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
+			session, err := openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE))
 			require.Equal(t, tc.writes, fixture.barcodeWrites)
 			require.Equal(t, fixture.opens, fixture.closes+map[bool]int{false: 0, true: 1}[err == nil])
 			if tc.err != "" {
@@ -594,7 +595,7 @@ func TestTarFormatLabelWarningClosesAdmissionAtTheCompletedBoundary(t *testing.T
 	ctx := context.Background()
 	_, backend, fixture, _ := tarFactoryFixture(t)
 	fixture.warningMark = 1
-	session, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+	session, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 	require.NoError(t, err)
 	writes := fixture.writes
 	_, err = session.Target("never-started", 1)

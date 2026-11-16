@@ -12,5 +12,5 @@ if [[ -n $(find "${device}" -mindepth 1 -maxdepth 1 ! -name filedebug_tc_conf.xm
     exit 1
 fi
 mkdir -p -- "${TAPE_DIR}"
-mkltfs -f -e file -d "${device}" -s "${TAPE_BARCODE}" -n "${TAPE_NAME}" \
+mkltfs -f --no-compression -e file -d "${device}" -s "${TAPE_BARCODE}" -n "${TAPE_NAME}" \
     2>&1 | tee -a "${TAPE_DIR}/ltfs.log"

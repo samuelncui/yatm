@@ -290,7 +290,7 @@ func TestPrepareCreatesOperableReviewFixture(t *testing.T) {
 	current, err := lib.GetByPath(context.Background(), library.Root.ID, "Unforged/Documents/mutable.txt")
 	require.NoError(t, err)
 	require.NotEmpty(t, current.Note)
-	original, err := lib.GetFileLocation(context.Background(), current.ID)
+	original, err := readOriginal(context.Background(), lib, current.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original)
 	latest, err := lib.LatestFileVersion(context.Background(), current.ID)
@@ -433,7 +433,7 @@ func requireReviewIdenticalPaging(t *testing.T, lib *library.Library) {
 	shared, err := lib.GetByPath(ctx, library.Root.ID, "Unforged/Shared files/Large group/.member-000.txt")
 	require.NoError(t, err)
 	require.NotNil(t, shared)
-	original, err := lib.GetFileLocation(ctx, shared.ID)
+	original, err := readOriginal(ctx, lib, shared.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original)
 	snapshot, err := lib.OpenIdenticalSnapshot(ctx, library.IdenticalScope{

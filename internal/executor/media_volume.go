@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 )
 
@@ -25,7 +24,7 @@ type volumeReadSession struct {
 func (b *mediaBackend) newVolumeReadSession(
 	ctx context.Context,
 	target *entity.ReadVolumeTarget,
-	expectation *entity.ReadMediaTarget,
+	media *mediapkg.Descriptor,
 ) (mediapkg.ReadSession, error) {
 	// Reserve and validate the mounted identity before exposing paths to the runner.
 	uuid, err := mediapkg.NormalizeVolumeUUID(target.GetUuid())
@@ -37,14 +36,11 @@ func (b *mediaBackend) newVolumeReadSession(
 	}); err != nil {
 		return nil, err
 	}
-	volume, stored, capabilities, err := b.openVolume(ctx, uuid)
+	volume, capabilities, err := b.openVolume(uuid, media)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateReadExpectation(stored, expectation); err != nil {
-		return nil, err
-	}
-	return &volumeReadSession{volume: volume, media: describeMedia(stored), capabilities: capabilities}, nil
+	return &volumeReadSession{volume: volume, media: media, capabilities: capabilities}, nil
 }
 
 func (s *volumeReadSession) Capabilities() mediapkg.Capabilities { return s.capabilities }
@@ -140,6 +136,7 @@ type volumeWriteSession struct {
 func (b *mediaBackend) newVolumeWriteSession(
 	ctx context.Context,
 	target *entity.ArchiveVolumeTarget,
+	media *mediapkg.Descriptor,
 ) (mediapkg.WriteSession, error) {
 	uuid, err := mediapkg.NormalizeVolumeUUID(target.GetUuid())
 	if err != nil {
@@ -150,7 +147,7 @@ func (b *mediaBackend) newVolumeWriteSession(
 	}); err != nil {
 		return nil, err
 	}
-	volume, stored, capabilities, err := b.openVolume(ctx, uuid)
+	volume, capabilities, err := b.openVolume(uuid, media)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +168,7 @@ func (b *mediaBackend) newVolumeWriteSession(
 		available = 0
 	}
 	return &volumeWriteSession{
-		volume: volume, media: describeMedia(stored), capabilities: capabilities,
+		volume: volume, media: media, capabilities: capabilities,
 		pathPrefix: pathPrefix, available: available,
 	}, nil
 }
@@ -202,29 +199,23 @@ func (s *volumeWriteSession) Finalize(_ context.Context, _ error) (*mediapkg.Wri
 	return &mediapkg.WriteResult{Media: s.media, PathPrefix: s.pathPrefix}, nil
 }
 
-func (b *mediaBackend) openVolume(
-	ctx context.Context,
-	uuid string,
-) (*mediapkg.Volume, *library.Media, mediapkg.Capabilities, error) {
+// openVolume discovers the mounted Volume and checks its marker against the selected Media.
+func (b *mediaBackend) openVolume(uuid string, media *mediapkg.Descriptor) (*mediapkg.Volume, mediapkg.Capabilities, error) {
 	volume, err := mediapkg.DiscoverVolume(b.executor.Paths().Volumes, uuid)
 	if err != nil {
-		return nil, nil, mediapkg.Capabilities{}, err
+		return nil, mediapkg.Capabilities{}, err
 	}
-	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_VOLUME, volume.Marker.UUID)
-	if err != nil {
-		return nil, nil, mediapkg.Capabilities{}, err
+	if media == nil || media.Kind != entity.MediaKind_MEDIA_KIND_VOLUME || media.Identity != volume.Marker.UUID {
+		return nil, mediapkg.Capabilities{}, fmt.Errorf("Volume differs from the selected Media, uuid=%q", volume.Marker.UUID)
 	}
-	if stored == nil {
-		return nil, nil, mediapkg.Capabilities{}, fmt.Errorf("Volume is not in Library, uuid=%q", volume.Marker.UUID)
-	}
-	if !mediapkg.SameVolumeProfile(stored.Profile, volume.Marker) {
-		return nil, nil, mediapkg.Capabilities{}, fmt.Errorf(
+	if !mediapkg.SameVolumeProfile(media.Profile, volume.Marker) {
+		return nil, mediapkg.Capabilities{}, fmt.Errorf(
 			"Volume marker conflicts with Library, uuid=%q", volume.Marker.UUID,
 		)
 	}
-	capabilities, err := mediapkg.VolumeCapabilities(stored.Profile.GetVolume().Type)
+	capabilities, err := mediapkg.VolumeCapabilities(media.Profile.GetVolume().Type)
 	if err != nil {
-		return nil, nil, mediapkg.Capabilities{}, err
+		return nil, mediapkg.Capabilities{}, err
 	}
-	return volume, stored, capabilities, nil
+	return volume, capabilities, nil
 }

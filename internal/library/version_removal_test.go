@@ -19,9 +19,10 @@ func TestRemovingLastVersionLeavesPositionIndependent(t *testing.T) {
 	require.NoError(t, err)
 	_, err = lib.PublishAnalyzed(ctx, location.ID, 1, observedTestManifest(observation), nil)
 	require.NoError(t, err)
-	require.NoError(t, lib.SavePosition(ctx, &Position{
-		MediaID: media.ID, Path: "covered-copy", Signature: observation.Signature, Hash: observation.Hash, Size: observation.Size,
-	}))
+	_, err = lib.CommitMedia(ctx, media, func(_ context.Context, yield func(*MediaFile) error) error {
+		return yield(&MediaFile{Path: "covered-copy", Hash: observation.Hash, Size: observation.Size, Mode: 0644})
+	})
+	require.NoError(t, err)
 	versions, _, err := lib.ListFileVersions(ctx, observation.FileID, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, versions, 1)

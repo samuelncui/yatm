@@ -56,17 +56,49 @@ func setupVerifyExecutorWithPreview(t *testing.T, preview executor.Previewer) (*
 
 func saveVerifyFile(t *testing.T, exe *executor.Executor, volume *mediapkg.Volume, media *library.Media, name string, data []byte) *library.Position {
 	t.Helper()
+	hash := sha256.Sum256(data)
+	return commitVerifyFile(t, exe, volume, media, name, data, hash[:])
+}
+
+// saveUnverifiableFile publishes a copy whose expected content is unknown.
+func saveUnverifiableFile(t *testing.T, exe *executor.Executor, volume *mediapkg.Volume, media *library.Media, name string, data []byte) *library.Position {
+	t.Helper()
+	return commitVerifyFile(t, exe, volume, media, name, data, nil)
+}
+
+func commitVerifyFile(t *testing.T, exe *executor.Executor, volume *mediapkg.Volume, media *library.Media, name string, data, hash []byte) *library.Position {
+	t.Helper()
 	// Make the catalog checksum an independent baseline for the physical fixture.
 	filename := filepath.Join(volume.Root, name)
 	require.NoError(t, os.MkdirAll(filepath.Dir(filename), 0755))
 	require.NoError(t, os.WriteFile(filename, data, 0644))
 	stat, err := os.Stat(filename)
 	require.NoError(t, err)
-	hash := sha256.Sum256(data)
-	position := &library.Position{MediaID: media.ID, Path: name, Size: int64(len(data)), Hash: hash[:], Signature: []byte("opaque-" + name),
-		Mode: uint32(stat.Mode()), MtimeNS: stat.ModTime().UnixNano(), WrittenAtNS: stat.ModTime().UnixNano()}
-	require.NoError(t, exe.Lib().SavePosition(context.Background(), position))
-	return position
+	commitScanPositions(t, exe, media, &library.MediaFile{Path: name, Size: int64(len(data)), Hash: hash,
+		Mode: stat.Mode(), ModTime: stat.ModTime(), WriteTime: stat.ModTime()})
+	positions, _, err := exe.Lib().ListPositionsPage(context.Background(), media.ID, "", "", 1000)
+	require.NoError(t, err)
+	for _, position := range positions {
+		if position.Path == name {
+			return position
+		}
+	}
+	t.Fatalf("committed Position %q is missing", name)
+	return nil
+}
+
+// readVerifyPosition rereads one committed Position through the Media inventory listing.
+func readVerifyPosition(t *testing.T, exe *executor.Executor, position *library.Position) *library.Position {
+	t.Helper()
+	positions, _, err := exe.Lib().ListPositionsPage(context.Background(), position.MediaID, position.ParentPath, "", 1000)
+	require.NoError(t, err)
+	for _, stored := range positions {
+		if stored.ID == position.ID {
+			return stored
+		}
+	}
+	t.Fatalf("Position %d is missing", position.ID)
+	return nil
 }
 
 func createVerifyJob(t *testing.T, exe *executor.Executor, mediaID int64, volume *mediapkg.Volume) (int64, func()) {
@@ -111,9 +143,7 @@ func TestVerifyVolumeFindingsNeverRewriteExpectedContent(t *testing.T) {
 	saveVerifyFile(t, exe, volume, media, "empty", nil)
 	damaged := saveVerifyFile(t, exe, volume, media, "damaged", []byte("before"))
 	missing := saveVerifyFile(t, exe, volume, media, "missing", []byte("gone"))
-	unknown := saveVerifyFile(t, exe, volume, media, "unknown", []byte("unverified"))
-	unknown.Hash = nil
-	require.NoError(t, exe.Lib().SavePosition(ctx, unknown))
+	unknown := saveUnverifiableFile(t, exe, volume, media, "unknown", []byte("unverified"))
 	unreadable := saveVerifyFile(t, exe, volume, media, "unsafe", []byte("safe"))
 	require.NoError(t, os.WriteFile(filepath.Join(volume.Root, damaged.Path), []byte("damage"), 0644))
 	require.NoError(t, os.Remove(filepath.Join(volume.Root, missing.Path)))
@@ -132,13 +162,11 @@ func TestVerifyVolumeFindingsNeverRewriteExpectedContent(t *testing.T) {
 	require.Equal(t, int64(1), progress.UnreadableCount)
 	require.Equal(t, int64(1), progress.UnverifiableCount)
 	require.Zero(t, progress.Progress.TotalFileCount-progress.MatchedCount-progress.DamagedCount-progress.MissingCount-progress.UnreadableCount-progress.UnverifiableCount)
-	stored, err := exe.Lib().GetPosition(ctx, damaged.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, damaged)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_DAMAGED, stored.Health)
 	require.Equal(t, damaged.Hash, stored.Hash)
 	require.Equal(t, damaged.Signature, stored.Signature)
-	stored, err = exe.Lib().GetPosition(ctx, unknown.ID)
-	require.NoError(t, err)
+	stored = readVerifyPosition(t, exe, unknown)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
 	require.Zero(t, stored.CheckedAtNS)
 
@@ -194,8 +222,7 @@ func TestVerifyIgnoresValidSignatureCache(t *testing.T) {
 	id, run := createVerifyJob(t, exe, media.ID, volume)
 	run()
 	waitVerifyIdle(t, exe, id, entity.JobStatus_JOB_STATUS_COMPLETED)
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_DAMAGED, stored.Health)
 
 	// Verify never refreshes that cache; inspection is a read-only physical operation.
@@ -248,22 +275,20 @@ func TestVerifyUnavailableMediaLeavesInventoryAndFindingsPending(t *testing.T) {
 	require.NoError(t, os.Rename(volume.Root, away))
 	run()
 	waitVerifyIdle(t, exe, id, entity.JobStatus_JOB_STATUS_FAILED)
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
 	require.Zero(t, stored.CheckedAtNS)
 
 	// A failed Scan cannot run again, even when the same mounted identity becomes available.
 	require.NoError(t, os.Rename(away, volume.Root))
-	_, err = (&service{exe: exe}).ReadMedia(context.Background(), &entity.ReadScanMediaRequest{
+	_, err := (&service{exe: exe}).ReadMedia(context.Background(), &entity.ReadScanMediaRequest{
 		Id: id, Target: (&entity.ReadVolumeTarget{Uuid: volume.Marker.UUID}).Pack(),
 	})
 	require.ErrorContains(t, err, "cannot start from status JOB_STATUS_FAILED")
 	fresh, run := createVerifyJob(t, exe, media.ID, volume)
 	run()
 	waitVerifyIdle(t, exe, fresh, entity.JobStatus_JOB_STATUS_COMPLETED)
-	stored, err = exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored = readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_HEALTHY, stored.Health)
 }
 
@@ -324,8 +349,7 @@ func TestVerifyFinalizeFailurePublishesNoHealth(t *testing.T) {
 	require.Equal(t, 1, finalized)
 
 	// Tentative Job observations are useful diagnostics but must not certify the current Position.
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
 	var entry Entry
 	require.NoError(t, r.db.First(&entry, position.ID).Error)
@@ -336,10 +360,11 @@ func TestVerifyFinalizeFailurePublishesNoHealth(t *testing.T) {
 func TestVerifyIndexesMultiplePages(t *testing.T) {
 	// A manifest larger than one batch stays paged without requiring any physical scan.
 	exe, volume, media := setupVerifyExecutor(t)
+	files := make([]*library.MediaFile, 0, batchSize+5)
 	for index := 0; index < batchSize+5; index++ {
-		position := &library.Position{MediaID: media.ID, Path: fmt.Sprintf("file-%04d", index), Hash: make([]byte, sha256.Size), Size: 0}
-		require.NoError(t, exe.Lib().SavePosition(context.Background(), position))
+		files = append(files, &library.MediaFile{Path: fmt.Sprintf("file-%04d", index), Hash: make([]byte, sha256.Size)})
 	}
+	commitScanPositions(t, exe, media, files...)
 	id, _ := createVerifyJob(t, exe, media.ID, volume)
 	page, err := (&service{exe: exe}).ListEntries(context.Background(), &entity.ListScanJobEntriesRequest{Id: id, Limit: 2, IncludeTotal: true})
 	require.NoError(t, err)
@@ -367,8 +392,7 @@ func TestVerifyPublicationCheckpointFailureRetainsHealthAndEndsJob(t *testing.T)
 	}))
 	run()
 	waitVerifyIdle(t, exe, id, entity.JobStatus_JOB_STATUS_FAILED)
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_HEALTHY, stored.Health)
 
 	// A new Scan observes the same authoritative Position; the failed Job stays terminal.
@@ -380,7 +404,6 @@ func TestVerifyPublicationCheckpointFailureRetainsHealthAndEndsJob(t *testing.T)
 	fresh, run := createVerifyJob(t, exe, media.ID, volume)
 	run()
 	waitVerifyIdle(t, exe, fresh, entity.JobStatus_JOB_STATUS_COMPLETED)
-	stored, err = exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored = readVerifyPosition(t, exe, position)
 	require.Equal(t, position.Hash, stored.Hash)
 }

@@ -3,7 +3,6 @@ package scan
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +12,6 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
-	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -44,10 +42,30 @@ func frozenLimits(config *Config) *Config {
 
 func newProgressRunner(t *testing.T) *runner {
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "scan.db"))
+	exe, _ := setupAnalyze(t)
+	return newJobRunner(t, exe)
+}
+
+// newJobRunner opens a real Scan Job bundle on exe the way the Executor reopens one, so its
+// counters are not yet known. The Job selects nothing, so its creation attempt completes at once
+// and leaves an empty manifest to seed.
+func newJobRunner(t *testing.T, exe *executor.Executor) *runner {
+	t.Helper()
+	ctx := context.Background()
+	created, err := exe.CreateJob(ctx, entity.JobKind_JOB_KIND_SCAN, 1, func(db *gorm.DB) error {
+		if err := prepareSchema(db); err != nil {
+			return err
+		}
+		return db.Create(&Config{ID: 1, Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY}}).Error
+	})
 	require.NoError(t, err)
-	require.NoError(t, prepareSchema(db))
-	return &runner{db: db, progress: executor.NewProgress(), tracker: executor.NewTracker()}
+	require.Eventually(t, func() bool { return !exe.IsRunning(created.ID) }, 10*time.Second, time.Millisecond)
+	job, err := exe.GetJob(ctx, created.ID)
+	require.NoError(t, err)
+	value, err := newRunner(ctx, exe, job)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = value.Close() })
+	return value.(*runner)
 }
 
 // startContentAttempt publishes the attempt state a running content stage reads: the durable

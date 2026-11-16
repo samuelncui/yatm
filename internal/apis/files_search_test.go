@@ -140,7 +140,7 @@ func TestFilesSearchRecordedLibraryAndLiveLocation(t *testing.T) {
 		require.Equal(t, recordedSize, page.Entries[0].GetSizeBytes())
 		require.Equal(t, availability, page.Entries[0].Status.Original)
 	}
-	original, err := api.lib.GetFileLocation(ctx, fileID)
+	original, err := readOriginal(ctx, api.lib, fileID)
 	require.NoError(t, err)
 	require.Equal(t, recordedSize, original.Size)
 	require.Equal(t, recordedTime.UnixNano(), original.MtimeNS)

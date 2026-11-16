@@ -267,8 +267,6 @@ type itemOutcome struct {
 // and the run continues, because its PENDING row is what a later attempt retries.
 type reporter struct {
 	runner *jobArchiveRunner
-	// store persists one batch of outcomes; a failure of it stops the run.
-	store  func(context.Context, []itemOutcome) error
 	writer *executor.ResultWriter[itemOutcome]
 
 	mutex    sync.Mutex
@@ -276,7 +274,7 @@ type reporter struct {
 }
 
 func newReporter(ctx context.Context, runner *jobArchiveRunner) (*reporter, error) {
-	value := &reporter{runner: runner, store: runner.flushOutcomes}
+	value := &reporter{runner: runner}
 	writer, err := executor.NewResultWriter(ctx, value.writeBatch)
 	if err != nil {
 		return nil, err
@@ -314,9 +312,9 @@ func (r *reporter) onResults(results []acp.Result) error {
 	return r.writer.Enqueue(batch...)
 }
 
-// writeBatch stages one batch of outcomes.
+// writeBatch stages one batch of outcomes; a failure stops the run.
 func (r *reporter) writeBatch(ctx context.Context, batch []itemOutcome) error {
-	if err := r.store(ctx, batch); err != nil {
+	if err := r.runner.flushOutcomes(ctx, batch); err != nil {
 		r.recordError(err)
 		return err
 	}

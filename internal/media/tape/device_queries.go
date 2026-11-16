@@ -135,24 +135,6 @@ func commandFormSupport(data, form []byte) (entity.DeviceFeatureSupport, error) 
 	return entity.DeviceFeatureSupport_DEVICE_FEATURE_SUPPORT_SUPPORTED, nil
 }
 
-func (d *Device) requireEncryptionOff(ctx context.Context) error {
-	// The status page exposes modes, not keys or encrypted-content identity. Unknown never means off.
-	data, err := encryptionStatus(ctx, d.transport, d.report.GetTape())
-	if err != nil {
-		return fmt.Errorf("observe encryption/decryption state failed, %w", err)
-	}
-	if !encryptionOff(data) {
-		return fmt.Errorf("baseline requires encryption and decryption disabled without external control")
-	}
-	return nil
-}
-
-func encryptionOff(data []byte) bool {
-	// A missing status is allowed only after the complete protocol list established absence.
-	return data == nil || len(data) >= 13 && data[5] == 0 && data[6] == 0 && data[4] == 0 &&
-		(data[12]&0x70 == 0x10 || data[12]&0x70 == 0x20)
-}
-
 func encryptionStatus(ctx context.Context, transport Transport, report *entity.TapeDeviceReport) ([]byte, error) {
 	// A complete standard protocol list distinguishes absent tape encryption from unknown status access.
 	data, err := query(ctx, transport, []byte{0xa2, 0, 0, 0, 0, 0, 0, 0, 0x10, 0, 0, 0}, MaxQueryBytes)

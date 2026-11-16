@@ -86,13 +86,17 @@ JOBS="${BUILD_JOBS:-4}"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid BUILD_JOBS' >&2; exit 1; }
 
 download() {
-  local name=$1 url=$2 digest=$3 archive="$PACKAGE/sources/$1"
+  # YATM_SOURCE_CACHE optionally keeps verified pinned archives between builds (CI caches it).
+  local name=$1 url=$2 digest=$3 archive="$PACKAGE/sources/$1" cache="${YATM_SOURCE_CACHE:-}"
   if [[ -n "${PREVIEW_SOURCE_DIRECTORY:-}" ]]; then
     cp "$PREVIEW_SOURCE_DIRECTORY/$name" "$archive"
+  elif [[ -n "$cache" && -f "$cache/$name" && "$(shasum -a 256 "$cache/$name" | cut -d ' ' -f 1)" == "$digest" ]]; then
+    cp "$cache/$name" "$archive"
   else
-    curl --fail --location --retry 3 --output "$archive" "$url"
+    curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 --output "$archive" "$url"
   fi
   [[ "$(shasum -a 256 "$archive" | cut -d ' ' -f 1)" == "$digest" ]] || { echo "Checksum mismatch: $name" >&2; exit 1; }
+  if [[ -n "$cache" && ! -f "$cache/$name" ]]; then mkdir -p "$cache" && cp "$archive" "$cache/$name"; fi
   printf '%s  %s\n' "$digest" "$name" >> "$PACKAGE/sources/SHA256SUMS"
   tar -xf "$archive" -C "$BUILD_DIRECTORY"
 }

@@ -6,13 +6,14 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/samuelncui/yatm/internal/tools"
 )
 
 func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequest) (*entity.InspectMediaResponse, error) {
 	if req == nil {
-		return nil, fmt.Errorf("inspect Media request is missing")
+		return nil, fmt.Errorf("%w: inspect Media request is missing", executor.ErrInvalidRequest)
 	}
 
 	// Inspect the physical target while holding only the backend-specific short-lived resource.
@@ -23,7 +24,7 @@ func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequ
 			// Validate the script-facing name and reserve its captured drive resource.
 			device := strings.TrimSpace(target.Device)
 			if device == "" {
-				return fmt.Errorf("inspect Tape device is empty")
+				return fmt.Errorf("%w: inspect Tape device is empty", executor.ErrInvalidRequest)
 			}
 			release, acquired, err := s.api.exe.TryAcquireTapeDevice(device)
 			if err != nil {
@@ -42,14 +43,18 @@ func (s *mediaService) Inspect(ctx context.Context, req *entity.InspectMediaRequ
 			if barcode == "" && req.Identity != nil {
 				barcode, err = entity.NormalizeTapeBarcode(*req.Identity)
 				if err != nil {
-					return fmt.Errorf("invalid inspected Tape identity, %w", err)
+					return fmt.Errorf("%w: invalid inspected Tape identity, %w", executor.ErrInvalidRequest, err)
 				}
 			}
 			identity = barcode
 			return nil
 		}),
 		tools.ActionMethod(func(_ context.Context, target *entity.InspectMediaVolumeTarget) error {
-			volume, err := mediapkg.DiscoverVolume(s.api.exe.Paths().Volumes, strings.TrimSpace(target.Uuid))
+			uuid, err := mediapkg.NormalizeVolumeUUID(target.Uuid)
+			if err != nil {
+				return fmt.Errorf("%w: %w", executor.ErrInvalidRequest, err)
+			}
+			volume, err := mediapkg.DiscoverVolume(s.api.exe.Paths().Volumes, uuid)
 			if err != nil {
 				return err
 			}

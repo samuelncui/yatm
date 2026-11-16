@@ -10,14 +10,20 @@ pkg-config --exists x264 x265 zlib
 BUILD_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/yatm-test-ffmpeg.XXXXXX")"
 trap 'rm -rf -- "$BUILD_DIRECTORY"' EXIT
 ARCHIVE="$BUILD_DIRECTORY/ffmpeg-8.0.tar.xz"
+DIGEST=b2751fccb6cc4c77708113cd78b561059b6fa904b24162fa0be2d60273d27b8e
+# YATM_SOURCE_CACHE optionally keeps the verified archive between builds (CI caches it).
+CACHED="${YATM_SOURCE_CACHE:+$YATM_SOURCE_CACHE/ffmpeg-8.0.tar.xz}"
 if [[ -n "${FFMPEG_SOURCE_ARCHIVE:-}" ]]; then
   cp "$FFMPEG_SOURCE_ARCHIVE" "$ARCHIVE"
+elif [[ -n "$CACHED" && -f "$CACHED" && "$(shasum -a 256 "$CACHED" | cut -d ' ' -f 1)" == "$DIGEST" ]]; then
+  cp "$CACHED" "$ARCHIVE"
 else
-  curl --fail --location --retry 3 --output "$ARCHIVE" https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+  curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 --output "$ARCHIVE" https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
 fi
-[[ "$(shasum -a 256 "$ARCHIVE" | cut -d ' ' -f 1)" == b2751fccb6cc4c77708113cd78b561059b6fa904b24162fa0be2d60273d27b8e ]] || {
+[[ "$(shasum -a 256 "$ARCHIVE" | cut -d ' ' -f 1)" == "$DIGEST" ]] || {
   echo 'Fixture FFmpeg source checksum mismatch.' >&2; exit 1;
 }
+if [[ -n "$CACHED" && ! -f "$CACHED" ]]; then mkdir -p "$YATM_SOURCE_CACHE" && cp "$ARCHIVE" "$CACHED"; fi
 tar -xf "$ARCHIVE" -C "$BUILD_DIRECTORY"
 cd "$BUILD_DIRECTORY/ffmpeg-8.0"
 ./configure --prefix="$OUTPUT_DIRECTORY" --disable-autodetect --disable-everything \

@@ -40,7 +40,7 @@ func TestFileVersionOwnsArchivedFactsWithoutCopyOwnership(t *testing.T) {
 	}))
 	// A shared copy serves both histories without either version owning it.
 	copy := &Position{MediaID: 1, Path: "physical", Signature: signature, Size: 9}
-	require.NoError(t, lib.SavePosition(ctx, copy))
+	require.NoError(t, lib.db.Create(copy).Error)
 	for _, id := range []int64{one.ID, two.ID} {
 		file, err := lib.GetFile(ctx, id)
 		require.NoError(t, err)

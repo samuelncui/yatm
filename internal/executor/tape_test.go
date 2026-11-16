@@ -266,12 +266,12 @@ func TestTapeSessionsRejectUnverifiedIdentityBeforeMutation(t *testing.T) {
 			}, nil)
 			require.NoError(t, exe.beginAttempt(1, func(error) {}))
 			t.Cleanup(func() { exe.endAttempt(1) })
-			backend := exe.NewMediaBackend(1, nil, nil).(*mediaBackend)
+			backend := exe.newMediaBackend(1, nil, nil).(*mediaBackend)
 
 			// Neither read nor write sessions may cross into encryption, format, or mount.
 			var err error
 			if test.writeTarget != nil {
-				_, err = backend.newTapeWriteSession(context.Background(), test.writeTarget)
+				_, err = backend.newTapeWriteSession(context.Background(), test.writeTarget, nil)
 			} else {
 				_, err = backend.newTapeReadSession(context.Background(), test.readTarget, nil)
 			}

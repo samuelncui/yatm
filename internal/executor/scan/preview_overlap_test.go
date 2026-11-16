@@ -45,25 +45,28 @@ func TestScanSlowPreviewHoldsOnlyItsOwnSlot(t *testing.T) {
 	// pages still completes while it runs, within the traversal's concurrency bound.
 	previews := &slowPreviewer{slow: "/source/file-0000.jpg", release: make(chan struct{})}
 	exe, _ := setupAnalyzeWithPreview(t, previews)
-	r := newProgressRunner(t)
-	r.exe, r.phase = exe, entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS
+	r := newJobRunner(t, exe)
+	r.phase = entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS
 	count := batchSize*2 + 10
 	for index := 0; index < count; index++ {
 		require.NoError(t, r.db.Create(&Entry{Path: fmt.Sprintf("file-%04d.jpg", index),
 			SourcePath: fmt.Sprintf("/source/file-%04d.jpg", index), Size: 1, SHA256: sha256Sum(fmt.Sprint(index))}).Error)
 	}
 
+	// Every content fact is already saved, as after the content stage returned.
+	settled := newSettledRows()
+	settled.finish()
 	done := make(chan error, 1)
 	go func() {
 		done <- r.generatePreviews(context.Background(), &Config{Spec: &entity.ScanJobSpec{
-			PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}, &Scope{}, nil)
+			PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}, &Scope{}, settled)
 	}()
 	require.Eventually(t, func() bool { return previews.finished.Load() == int64(count-1) }, 10*time.Second, time.Millisecond,
 		"files of later pages finish while the first page's slow file still runs")
 	close(previews.release)
 	require.NoError(t, <-done)
 	require.EqualValues(t, count, previews.finished.Load())
-	require.LessOrEqual(t, previews.peak.Load(), int64(16), "the traversal keeps its concurrency bound")
+	require.LessOrEqual(t, previews.peak.Load(), int64(previewConcurrency), "the traversal keeps its concurrency bound")
 	require.EqualValues(t, count, r.previewOutcomes.ready)
 }
 
@@ -80,7 +83,7 @@ func TestScanPreviewFollowsSavedContentFacts(t *testing.T) {
 	visited := func() []int64 { lock.Lock(); defer lock.Unlock(); return append([]int64(nil), seen...) }
 	done := make(chan error, 1)
 	go func() {
-		done <- r.eachPreviewEntry(context.Background(), &Scope{}, 4, settled, func(_ context.Context, row *Entry) error {
+		done <- r.eachPreviewEntry(context.Background(), &Scope{}, settled, func(_ context.Context, row *Entry) error {
 			lock.Lock()
 			seen = append(seen, row.ID)
 			lock.Unlock()

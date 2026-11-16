@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"google.golang.org/protobuf/proto"
@@ -20,7 +21,7 @@ func (s *mediaService) InitializeVolume(
 ) (*entity.InitializeVolumeResponse, error) {
 	// Validate the explicit new-Volume request before creating its durable marker.
 	if req == nil {
-		return nil, fmt.Errorf("Volume initialize request is missing")
+		return nil, fmt.Errorf("%w: Volume initialize request is missing", executor.ErrInvalidRequest)
 	}
 	name, err := validateVolumeName(req.Name)
 	if err != nil {
@@ -34,7 +35,7 @@ func (s *mediaService) InitializeVolume(
 	// Read the physical serial when the caller did not provide one; unknown devices stay empty.
 	profile := req.Profile
 	if profile == nil {
-		return nil, fmt.Errorf("Volume profile is missing")
+		return nil, fmt.Errorf("%w: Volume profile is missing", executor.ErrInvalidRequest)
 	}
 	if strings.TrimSpace(profile.SerialNumber) == "" {
 		if serial := mediapkg.VolumeSerialNumber(root); serial != "" {
@@ -62,7 +63,7 @@ func (s *mediaService) RegisterVolume(
 ) (*entity.RegisterVolumeResponse, error) {
 	// Resolve an existing marker at one configured discovery candidate.
 	if req == nil {
-		return nil, fmt.Errorf("Volume register request is missing")
+		return nil, fmt.Errorf("%w: Volume register request is missing", executor.ErrInvalidRequest)
 	}
 	name, err := validateVolumeName(req.Name)
 	if err != nil {
@@ -120,7 +121,7 @@ func (s *mediaService) ListVolumeCandidates(
 ) (*entity.ListVolumeCandidatesResponse, error) {
 	// Report the configured discovery roots even when no candidate is currently mounted.
 	if req == nil {
-		return nil, fmt.Errorf("Volume candidates request is missing")
+		return nil, fmt.Errorf("%w: Volume candidates request is missing", executor.ErrInvalidRequest)
 	}
 	roots := s.api.exe.Paths().Volumes
 	reply := &entity.ListVolumeCandidatesResponse{DiscoveryRoots: roots}
@@ -233,7 +234,7 @@ func (s *mediaService) createVolumeMedia(
 func validateVolumeName(value string) (string, error) {
 	name := strings.TrimSpace(value)
 	if err := entity.ValidatePathComponent(name); err != nil {
-		return "", fmt.Errorf("invalid Volume name, %w", err)
+		return "", fmt.Errorf("%w: invalid Volume name, %w", executor.ErrInvalidRequest, err)
 	}
 	return name, nil
 }

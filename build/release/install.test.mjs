@@ -70,7 +70,7 @@ main
   assert.equal(fs.readFileSync(path.join(root, 'VERSION'), 'utf8'), 'v0.1.21');
 });
 
-test('legacy and Alpha upgrades show the actionable Tape adapter notice before consent', t => {
+test('only legacy upgrades show the actionable Tape adapter notice before consent', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yatm-tape-upgrade-notice-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   // The guide comes from the candidate, while host actions are isolated behind stand-ins.
@@ -90,8 +90,8 @@ show_migration_guide
 echo fixture-before-consent
 `, 'installer-test', path.join(repository, 'install-release.sh'), root, current, checkOnly], { encoding: 'utf8' });
       assert.equal(result.status, 0, result.stdout + result.stderr);
-      if (current === 'none') {
-        assert.doesNotMatch(result.stdout, /Tape adapter check required/);
+      if (current !== 'v0.1.21') {
+        assert.doesNotMatch(result.stdout, /Tape adapter check required|Keep legacy captures/);
         continue;
       }
       assert.match(result.stdout, /completed final Index at TAPE_DIR\/<barcode>\.schema/);

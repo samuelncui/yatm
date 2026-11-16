@@ -35,7 +35,7 @@ func (s *objectStore) add(key string, directory bool) Node {
 		parent = ""
 	}
 	node := Node{Ref: objectRef(key, directory), Parent: objectRef(parent, true), Name: path.Base(key), Path: key,
-		Directory: directory, Exists: true, Guard: []byte("version:" + key)}
+		Directory: directory, Exists: true}
 	if key == "" {
 		node.Parent = ""
 	}
@@ -114,9 +114,9 @@ func (s *objectStore) ApplyPrimitive(_ context.Context, p Primitive) (Receipt, e
 		return Receipt{Changed: true}, nil
 	}
 
-	// The single-object move represents a guarded copy followed by source deletion.
+	// The single-object move represents a copy followed by source deletion.
 	target := p.Target
-	target.Exists, target.Guard = true, []byte("version:"+target.Path)
+	target.Exists = true
 	s.nodes[target.Ref] = target
 	if p.Kind == Move {
 		delete(s.nodes, p.Source.Ref)

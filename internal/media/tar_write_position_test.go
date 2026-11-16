@@ -232,7 +232,7 @@ func TestTarWritePositionWidthAndPreparedStop(t *testing.T) {
 	options := tarTestOptions(t, false, 4096)
 	options.Navigator = device
 	options.Stop = errors.Join(ErrTargetNoSpace, tape.ErrEarlyWarning)
-	options.Complete = func(context.Context) error { return nil }
+	options.Complete = func(context.Context, bool) error { return nil }
 	session, err := newTarTestWriteSession(device, options)
 	require.NoError(t, err)
 	result, err := session.Finalize(context.Background(), options.Stop)
@@ -534,7 +534,7 @@ func TestTarWriteMixedWarningEvidenceCannotPublish(t *testing.T) {
 			device := &tarMixedWarningDevice{tarTestDevice: &tarTestDevice{}, cause: cause}
 			options := tarTestOptions(t, false, 512)
 			complete, cleanup := 0, 0
-			options.Complete = func(context.Context) error { complete++; return nil }
+			options.Complete = func(context.Context, bool) error { complete++; return nil }
 			options.Cleanup = func(context.Context) error { cleanup++; return nil }
 			session, err := newTarTestWriteSession(device, options)
 			require.NoError(t, err)

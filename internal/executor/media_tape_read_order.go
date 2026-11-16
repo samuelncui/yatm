@@ -40,7 +40,7 @@ type ltfsSessionReadOrder struct {
 func (b *mediaBackend) observeLTFSReadOrder(ctx context.Context, device string,
 	profile *entity.TapeMediaProfile,
 ) (*ltfsReadSnapshot, error) {
-	value, err := b.deviceSettings(ctx)
+	value, err := b.executor.deviceSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -111,15 +111,13 @@ func (b *mediaBackend) logReadDirectoryPreparation(ctx context.Context, device s
 	}
 }
 
-func (s *tapeReadSession) prepareReadOrder(ctx context.Context, stored *library.Media,
-	snapshot *ltfsReadSnapshot,
-) error {
+func (s *tapeReadSession) prepareReadOrder(ctx context.Context, snapshot *ltfsReadSnapshot) error {
 	// Construction always leaves the native path available; only cancellation interrupts optional facts.
 	s.readOrder = &ltfsSessionReadOrder{reason: snapshot.reason}
 	s.readOrder.valid.Store(true)
 	requested := settingspkg.TapeDefaultReadOrder(snapshot.defaults)
 	optimization := &entity.TapePreparedRead{PreparedAtNs: time.Now().UnixNano(), JobId: s.backend.jobID,
-		MediaId: stored.ID, Identity: stored.Identity, RequestedOrder: requested.String(),
+		MediaId: s.media.ID, Identity: s.media.Identity, RequestedOrder: requested.String(),
 		EffectiveOrder: entity.TapeReadOrder_TAPE_READ_ORDER_LOGICAL.String(), ParametersSource: "unavailable",
 		CoverageDetail: "Initial access is unknown; every route retains the same first file"}
 	s.readOrder.prepared = optimization.PreparedAtNs
@@ -150,14 +148,14 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, stored *library.
 	}
 
 	// Model timing keeps its observed record/drive applicability; no LTFS file latency is fabricated.
-	scope := ltfsReadScope(snapshot.report, stored.Profile.GetTape(), facts)
+	scope := ltfsReadScope(snapshot.report, s.media.Profile.GetTape(), facts)
 	parameters, source := selectTapeReadParameters(snapshot.settings, s.device, snapshot.report, scope)
 	optimization.ParametersSource, optimization.ParametersReference = source, parameters.GetSourceReference()
 	if reason := tapeReadParametersReason(parameters, scope); reason != "" {
 		s.readOrder.reason = reason
 		return nil
 	}
-	value, observed, reason := ltfsReadPositionMap(parameters, stored, facts, snapshot)
+	value, observed, reason := ltfsReadPositionMap(parameters, s.media, facts, snapshot)
 	if value == nil {
 		s.readOrder.reason = reason
 		return nil
@@ -190,14 +188,11 @@ func (s *tapeReadSession) prepareReadOrder(ctx context.Context, stored *library.
 	optimization.CoverageDetail = fmt.Sprintf("%d partition maps, %d reported wraps; route comparison assumes no Index rewrite and includes rewind/unload; mounted read-only and clean state are not observed; common initial access is unquoted; cross-partition routes retain LOGICAL order; native Tape timing estimates do not validate LTFS whole-file latency",
 		len(value.Partitions), len(value.Wraps))
 
-	// Geometry is owned by this mounted UUID/index; a save failure cannot veto the available native read.
+	// Geometry is owned by this mounted UUID/index; the Job persists the map this Session returns.
 	if observed {
-		updated, err := s.backend.executor.Lib().UpdateMediaTapePositionMap(ctx, stored, value)
-		if err != nil {
-			s.backend.logger.WithContext(ctx).WithError(err).Warn("save observed LTFS position map failed")
-		} else {
-			s.media = describeMedia(updated)
-		}
+		selected := *s.media
+		selected.TapePositionMap = value
+		s.media = &selected
 	}
 	return ctx.Err()
 }

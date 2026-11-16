@@ -38,8 +38,7 @@ func TestVerifyReadPreparationErrorCompletesAsUnreadable(t *testing.T) {
 	waitVerifyIdle(t, exe, id, entity.JobStatus_JOB_STATUS_COMPLETED)
 
 	// Finalized results retain the independent expected baseline and publish only an unreadable observation.
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNREADABLE, stored.Health)
 	require.Equal(t, position.Hash, stored.Hash)
 	progress, err := (&service{exe: exe}).GetProgress(context.Background(), &entity.GetScanJobProgressRequest{Id: id})
@@ -63,7 +62,6 @@ func TestVerifySequentialManifestCursorUsesStorageOrder(t *testing.T) {
 		position := saveVerifyFile(t, exe, volume, media, fmt.Sprintf("file-%04d", index), nil)
 		position.StorageOrder = make([]byte, 8)
 		binary.BigEndian.PutUint64(position.StorageOrder, uint64((batchSize+6-index)/2))
-		require.NoError(t, exe.Lib().SavePosition(ctx, position))
 		expected = append(expected, position)
 	}
 	sort.Slice(expected, func(i, j int) bool {
@@ -77,6 +75,11 @@ func TestVerifySequentialManifestCursorUsesStorageOrder(t *testing.T) {
 	value, err := exe.GetJobRunner(ctx, id)
 	require.NoError(t, err)
 	r := value.(*runner)
+	// Volume inventory has no storage order, so give the frozen baseline a sequential Media's order keys.
+	for _, position := range expected {
+		require.NoError(t, r.db.Model(&Entry{}).Where("location_id = 0 AND path = ?", position.Path).
+			Update("storage_order", position.StorageOrder).Error)
+	}
 	var config Config
 	require.NoError(t, r.db.First(&config, 1).Error)
 	session := &sequentialCheckSession{checkSession{root: volume.Root, media: media}}
@@ -124,8 +127,7 @@ func TestVerifyCancellationFinalizesWithoutInventingFindings(t *testing.T) {
 	require.Equal(t, 1, finalized)
 
 	// Cancellation is a Job lifecycle event, not a missing or unreadable observation for each remaining file.
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
 	var entry Entry
 	require.NoError(t, r.db.First(&entry, position.ID).Error)
@@ -161,8 +163,7 @@ func TestVerifyDeviceFailureKeepsRemainingEntriesUnchecked(t *testing.T) {
 	var entry Entry
 	require.NoError(t, r.db.First(&entry, position.ID).Error)
 	require.Equal(t, entity.ScanFinding_SCAN_FINDING_NOT_CHECKED, entry.Finding)
-	stored, err := exe.Lib().GetPosition(context.Background(), position.ID)
-	require.NoError(t, err)
+	stored := readVerifyPosition(t, exe, position)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
 }
 

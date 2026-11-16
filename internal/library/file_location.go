@@ -54,17 +54,6 @@ func nullableSignature(value []byte) []byte {
 	return value
 }
 
-func (l *Library) GetFileLocation(ctx context.Context, fileID int64) (*FileLocation, error) {
-	var value FileLocation
-	if err := l.readDB().WithContext(ctx).Where("file_id = ?", fileID).Limit(1).Find(&value).Error; err != nil {
-		return nil, fmt.Errorf("get original failed, %w", err)
-	}
-	if value.FileID == 0 {
-		return nil, nil
-	}
-	return &value, nil
-}
-
 func (l *Library) GetFileLocationAtPath(ctx context.Context, locationID int64, relative string) (*FileLocation, error) {
 	var value FileLocation
 	if err := l.readDB().WithContext(ctx).Where("location_id = ? AND path = ?", locationID, relative).Limit(1).Find(&value).Error; err != nil {

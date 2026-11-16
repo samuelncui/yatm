@@ -86,7 +86,15 @@ jobs:
           echo "GITLEAKS_BIN=$RUNNER_TEMP/gitleaks/gitleaks" >> "$GITHUB_ENV"
       - name: Install frozen frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile --registry=https://registry.npmjs.org
+      - name: Restore verified pinned source archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pinned-sources
+          key: pinned-sources-${{ hashFiles('previewworker/build/build.sh', 'build/release/build-test-ffmpeg.sh') }}
+          restore-keys: pinned-sources-
       - name: Install the Preview fixture generator
+        env:
+          YATM_SOURCE_CACHE: ${{ runner.temp }}/pinned-sources
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config ccache libx264-dev libx265-dev zlib1g-dev
@@ -236,8 +244,16 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Restore verified pinned source archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pinned-sources
+          key: pinned-sources-${{ hashFiles('previewworker/build/build.sh', 'build/release/build-test-ffmpeg.sh') }}
+          restore-keys: pinned-sources-
       - name: Install Linux native build tools
         if: runner.os == 'Linux'
+        env:
+          YATM_SOURCE_CACHE: ${{ runner.temp }}/pinned-sources
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config patchelf ccache libx264-dev libx265-dev zlib1g-dev
@@ -264,6 +280,8 @@ jobs:
           node previewworker/build/fetch-raw-fixtures.mjs "$RUNNER_TEMP/raw-fixtures"
           echo "YATM_TEST_RAW_DIRECTORY=$RUNNER_TEMP/raw-fixtures" >> "$GITHUB_ENV"
       - name: Build and test the optional native helper
+        env:
+          YATM_SOURCE_CACHE: ${{ runner.temp }}/pinned-sources
         run: make preview
       - name: Report native compiler cache statistics
         if: always()
@@ -302,7 +320,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.8'
+      - name: Restore verified pinned source archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/pinned-sources
+          key: pinned-sources-${{ hashFiles('previewworker/build/build.sh', 'build/release/build-test-ffmpeg.sh') }}
+          restore-keys: pinned-sources-
       - name: Install the Preview fixture generator
+        env:
+          YATM_SOURCE_CACHE: ${{ runner.temp }}/pinned-sources
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential pkg-config libx264-dev libx265-dev zlib1g-dev

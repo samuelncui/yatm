@@ -96,7 +96,7 @@ func TestAnalyzeSelectedDirectoryPublishesAbsenceWithoutAdvancingCompleteScan(t 
 	require.Equal(t, before[0], after[0])
 	require.Equal(t, before[1].FileID, after[1].FileID)
 	require.EqualValues(t, len("new selected metadata"), after[1].Size)
-	absent, err := exe.Lib().GetFileLocation(ctx, before[2].FileID)
+	absent, err := readOriginal(ctx, exe.Lib(), before[2].FileID)
 	require.NoError(t, err)
 	require.Nil(t, absent)
 	_, err = exe.Lib().GetFile(ctx, before[2].FileID)

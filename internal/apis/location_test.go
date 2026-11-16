@@ -32,6 +32,15 @@ func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
 	return api, &locationService{api: api}, root
 }
 
+// admitLocationEntry admits one live entry through the executor admission used by explicit metadata updates.
+func admitLocationEntry(t *testing.T, api *API, ref *entity.LocationEntryRef) int64 {
+	t.Helper()
+	admitted, err := api.exe.AdmitLocationEntries(context.Background(), []*entity.LocationEntryRef{ref})
+	require.NoError(t, err)
+	require.Len(t, admitted, 1)
+	return admitted[0].FileID
+}
+
 func TestLocationRegistrationBoundariesAndConfiguration(t *testing.T) {
 	// Authored rules are preserved; an unconfigured registration starts from the default rules.
 	_, service, root := setupLocationAPI(t)

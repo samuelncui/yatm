@@ -95,7 +95,7 @@ func tarAppendFixture(t *testing.T, mode entity.TapeRecordMode) (*Executor, *med
 	t.Helper()
 	// Use the existing writer/publication path to create a complete label and nontrivial archived prefix.
 	exe, backend, fixture, _ := tarFactoryFixture(t)
-	write, err := newTarFixtureWriteSession(backend.NewWriteSession(t.Context(), tarFormatTarget(mode)))
+	write, err := newTarFixtureWriteSession(openWrite(t.Context(), backend, tarFormatTarget(mode)))
 	require.NoError(t, err)
 	tarWriteFixtureMember(t, write, "prefix", bytes.Repeat([]byte{0x4a}, 128<<10))
 	result, err := write.Finalize(t.Context(), nil)
@@ -120,7 +120,7 @@ func TestTarAppendBoundedTailPublishesNextArchive(t *testing.T) {
 			backend.logger = logger
 			end := len(fixture.records)
 			writes := fixture.writes
-			session, err := newTarFixtureWriteSession(backend.NewWriteSession(t.Context(), (&entity.ArchiveTapeTarget{
+			session, err := newTarFixtureWriteSession(openWrite(t.Context(), backend, (&entity.ArchiveTapeTarget{
 				Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 			}).Pack()))
 			require.NoError(t, err)
@@ -182,7 +182,7 @@ func TestTarAppendBadTailNeverStartsWriter(t *testing.T) {
 				fixture.records = append(fixture.records, tarFixtureRecord{data: []byte("unclosed")})
 			}
 			writes, marks, records := fixture.writes, fixture.filemarks, len(fixture.records)
-			session, err := backend.NewWriteSession(t.Context(), (&entity.ArchiveTapeTarget{
+			session, err := openWrite(t.Context(), backend, (&entity.ArchiveTapeTarget{
 				Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 			}).Pack())
 			require.Error(t, err)

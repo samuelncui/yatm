@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"path"
@@ -56,53 +55,6 @@ func (position *Position) BeforeSave(*gorm.DB) error {
 
 // PositionSource yields physical file positions in path order.
 type PositionSource func(context.Context, func(*Position) error) error
-
-func (l *Library) SavePosition(ctx context.Context, position *Position) error {
-	// Direct inventory publication follows the same coverage rule as Archive and Scan.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// An inventory edit cannot carry a health observation onto different expected content.
-		if position.ID != 0 {
-			var previous Position
-			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, position.ID).Error
-			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-				return fmt.Errorf("read previous Position failed, %w", err)
-			}
-			if err == nil {
-				preservePositionHealth(position, &previous)
-			}
-		}
-
-		// Save the inventory and reconcile known archived coverage atomically.
-		if err := tx.Save(position).Error; err != nil {
-			return fmt.Errorf("save Position failed, %w", err)
-		}
-
-		// Directory summaries never establish saved content.
-		if position.IsDir || len(position.Signature) == 0 {
-			return nil
-		}
-		return reconcileCoveredVersions(tx, tx.Where("file_locations.signature = ?", position.Signature))
-	})
-}
-
-// GetPosition returns one physical Position by its Library identity.
-func (l *Library) GetPosition(ctx context.Context, id int64) (*Position, error) {
-	position := new(Position)
-	if err := l.readDB().WithContext(ctx).First(position, id).Error; err != nil {
-		return nil, fmt.Errorf("get Position failed, id=%d, %w", id, err)
-	}
-	return position, nil
-}
-
-func (l *Library) ListPositions(ctx context.Context, mediaID int64, parentPath string) ([]*Position, error) {
-	positions := make([]*Position, 0, 128)
-	if err := l.readDB().WithContext(ctx).
-		Where("media_id = ? AND parent_path = ?", mediaID, parentPath).
-		Order("path ASC").Find(&positions).Error; err != nil {
-		return nil, fmt.Errorf("list Media positions failed, media_id=%d parent=%q, %w", mediaID, parentPath, err)
-	}
-	return positions, nil
-}
 
 // ListPositionsPage returns immediate children using a stable path cursor.
 func (l *Library) ListPositionsPage(

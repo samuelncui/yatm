@@ -143,8 +143,7 @@ func TestMoveFileRequiresExistingSource(t *testing.T) {
 	require.ErrorIs(t, lib.MoveFile(ctx, file), ErrFileNotFound)
 
 	// Both entry points leave an empty catalog rather than inventing the requested source identity.
-	rows, err := lib.List(ctx, 0)
-	require.NoError(t, err)
+	rows := listTestChildren(t, lib, 0)
 	require.Empty(t, rows)
 }
 
@@ -177,8 +176,7 @@ func TestMkdirAllCurrentDirectoryAndParentValidation(t *testing.T) {
 		_, err := lib.MkdirAll(ctx, directory.ID, name, 0o755)
 		require.Error(t, err, name)
 	}
-	children, err := lib.List(ctx, directory.ID)
-	require.NoError(t, err)
+	children := listTestChildren(t, lib, directory.ID)
 	require.Empty(t, children)
 }
 

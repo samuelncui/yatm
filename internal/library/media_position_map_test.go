@@ -60,7 +60,7 @@ func TestMediaOnlyImportUpdatesMapWithoutRebindingPositions(t *testing.T) {
 	media.ID, media.TapePositionMap = 1, testTapePositionMap()
 	_, err := target.CreateMedia(ctx, media)
 	require.NoError(t, err)
-	require.NoError(t, target.SavePosition(ctx, &Position{MediaID: 1, Path: "saved.txt"}))
+	require.NoError(t, target.db.Create(&Position{MediaID: 1, Path: "saved.txt"}).Error)
 	media.TapePositionMap = proto.Clone(media.TapePositionMap).(*entity.TapePositionMap)
 	media.TapePositionMap.Wraps[0].Endpoint = proto.Uint64(90)
 	_, err = source.CreateMedia(ctx, media)

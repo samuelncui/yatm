@@ -43,8 +43,7 @@ func TestLibraryPathsPreserveLiteralUTF8(t *testing.T) {
 	}
 
 	// A listing retains all literal names exactly once, including whitespace-only entries.
-	rows, err := lib.List(ctx, 0)
-	require.NoError(t, err)
+	rows := listTestChildren(t, lib, 0)
 	actual := make([]string, 0, len(rows))
 	for _, row := range rows {
 		actual = append(actual, row.Name)
@@ -110,8 +109,7 @@ func TestSaveFileRejectsInvalidIdentity(t *testing.T) {
 	for _, name := range []string{"", ".", "..", "a/b", "invalid\xff", "nul\x00"} {
 		require.Error(t, lib.SaveFile(ctx, &File{Name: name}))
 	}
-	rows, err := lib.List(ctx, 0)
-	require.NoError(t, err)
+	rows := listTestChildren(t, lib, 0)
 	require.Empty(t, rows)
 }
 

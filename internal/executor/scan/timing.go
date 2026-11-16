@@ -75,25 +75,15 @@ func (r *runner) finishPreviewGeneration(generation *previewGeneration, err erro
 }
 
 func (r *runner) logInfo(message string, fields logrus.Fields) {
-	if r.logger == nil {
-		return
-	}
-	if r.job != nil {
-		fields["job_id"] = r.job.ID
-	}
+	fields["job_id"] = r.job.ID
 	r.logger.WithFields(fields).Info(message)
 }
 
 func (r *runner) logResult(message string, started time.Time, err error, fields logrus.Fields) {
-	if r.logger == nil {
-		return
-	}
 	if !started.IsZero() {
 		fields["elapsed_ms"] = time.Since(started).Milliseconds()
 	}
-	if r.job != nil {
-		fields["job_id"] = r.job.ID
-	}
+	fields["job_id"] = r.job.ID
 	entry := r.logger.WithFields(fields)
 	if err != nil {
 		entry.WithError(err).Warn(message)

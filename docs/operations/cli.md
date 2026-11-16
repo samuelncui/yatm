@@ -16,7 +16,9 @@ domain table does not duplicate the installed command inventory; this document o
 surface rules.
 
 Connection settings are global flags or their `YATM_*` environment variables:
-`--server`, `--timeout` (`0` removes the deadline), `--basic-user` and
+`--server`, `--timeout` (`0` removes the deadline; commands that inspect a Tape device, such as
+`media inspect tape`, `tape device inspect` and `archive write tape`, allow at least 10 minutes because
+the device-information script may load the cartridge), `--basic-user` and
 `--basic-password-file`. Registered Location paths, Volume mount points and Tape
 devices are paths on the server; `--input`, `--output` and `--basic-password-file` are
 paths on the machine running the agent.

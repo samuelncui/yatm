@@ -439,7 +439,7 @@ func TestArchiveTapeBackendCommitsVerifiedFiles(t *testing.T) {
 	media, err := exe.Lib().GetMedia(ctx, *reply.Items[0].MediaId)
 	require.NoError(t, err)
 	require.Equal(t, entity.MediaKind_MEDIA_KIND_TAPE, media.Kind)
-	positions, err := exe.Lib().ListPositions(ctx, media.ID, "")
+	positions, _, err := exe.Lib().ListPositionsPage(ctx, media.ID, "", "", 1000)
 	require.NoError(t, err)
 	require.Len(t, positions, 2)
 	require.Len(t, positions[0].StorageOrder, 17)
@@ -590,7 +590,7 @@ func TestStageCopyResultRecordsPathOnlyAfterSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, bytes)
 	require.Zero(t, files)
-	media, err := exe.Lib().ListMedia(ctx, nil)
+	media, _, err := exe.Lib().ListMediaPage(ctx, nil)
 	require.NoError(t, err)
 	require.Empty(t, media)
 
@@ -660,11 +660,11 @@ func TestArchiveReporterReportsAFailedFlush(t *testing.T) {
 		ID: 1, Status: entity.CopyStatus_COPY_STATUS_PENDING, Size: 4, TargetPath: "file.txt",
 		Data: &entity.ArchiveManifestFile{SourcePath: "/source/file.txt"},
 	})
-	reporter := startTestReporter(t, runner)
 	failure := errors.New("job database is unavailable")
-	reporter.store = func(context.Context, []itemOutcome) error {
-		return failure
-	}
+	require.NoError(t, runner.db.Callback().Update().Before("gorm:update").Register("test:fail-flush", func(tx *gorm.DB) {
+		tx.AddError(failure)
+	}))
+	reporter := startTestReporter(t, runner)
 	target := &copyItem{runner: runner, item: runnerItem(t, runner, 1), mediaTarget: mediapkg.TargetRef{Path: "file.txt"}}
 
 	// The asynchronous write may fail before Enqueue returns. Either observation must retain

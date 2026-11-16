@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/samuelncui/yatm/internal/treeops"
 	"github.com/stretchr/testify/require"
@@ -26,6 +27,23 @@ func newTestLibrary(t *testing.T) (*gorm.DB, *Library) {
 	require.NoError(t, lib.PrepareTemporary(t.TempDir()))
 	require.NoError(t, lib.AutoMigrate())
 	return db, lib
+}
+
+// listTestChildren reads one complete directory level through the Files listing.
+func listTestChildren(t testing.TB, l *Library, parentID int64) []*File {
+	t.Helper()
+	page, err := l.ListFileRows(context.Background(), parentID, entity.FileScope_FILE_SCOPE_ALL, false, "", "", maxFileSearchLimit)
+	require.NoError(t, err)
+	require.Empty(t, page.NextCursor)
+	return page.Files
+}
+
+func readTestPosition(l *Library, id int64) (*Position, error) {
+	position := new(Position)
+	if err := l.db.First(position, id).Error; err != nil {
+		return nil, err
+	}
+	return position, nil
 }
 
 func createFileRows(t testing.TB, db *gorm.DB, files ...*File) {

@@ -18,26 +18,18 @@ func TestPositionHealthPublishesCompletedObservations(t *testing.T) {
 	_, lib := newTestLibrary(t)
 	hash := sha256.Sum256([]byte("content"))
 	position := &Position{MediaID: 1, Path: "file", Signature: []byte("opaque"), Hash: hash[:], Size: 7, Mode: 0644}
-	require.NoError(t, lib.SavePosition(ctx, position))
+	require.NoError(t, lib.db.Create(position).Error)
 	observation := &PositionHealthObservation{PositionID: position.ID, Health: entity.PositionHealth_POSITION_HEALTH_HEALTHY, CheckedAtNS: 100, JobID: 2}
 
 	// The completed result changes health without changing its content baseline.
 	require.NoError(t, lib.PublishPositionHealth(ctx, observation))
 	observation.Health, observation.CheckedAtNS = entity.PositionHealth_POSITION_HEALTH_DAMAGED, 200
 	require.NoError(t, lib.PublishPositionHealth(ctx, observation))
-	stored, err := lib.GetPosition(ctx, position.ID)
+	stored, err := readTestPosition(lib, position.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_DAMAGED, stored.Health)
 	require.Equal(t, hash[:], stored.Hash)
 	require.Equal(t, []byte("opaque"), stored.Signature)
-
-	// Changed expected content clears the old health rather than transferring it to another content identity.
-	stored.Hash = make([]byte, sha256.Size)
-	require.NoError(t, lib.SavePosition(ctx, stored))
-	stored, err = lib.GetPosition(ctx, position.ID)
-	require.NoError(t, err)
-	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
-	require.Zero(t, stored.CheckedAtNS)
 }
 
 func TestPositionHealthConcurrentIndependentPublications(t *testing.T) {
@@ -48,7 +40,7 @@ func TestPositionHealthConcurrentIndependentPublications(t *testing.T) {
 	positions := make([]*Position, checks)
 	for i := range positions {
 		positions[i] = &Position{MediaID: 1, Path: fmt.Sprintf("file-%d", i)}
-		require.NoError(t, lib.SavePosition(ctx, positions[i]))
+		require.NoError(t, lib.db.Create(positions[i]).Error)
 	}
 	lib = New(db.Session(&gorm.Session{SkipDefaultTransaction: true}))
 	publicationCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -96,43 +88,27 @@ func TestPositionHealthConcurrentIndependentPublications(t *testing.T) {
 		}
 	}
 	for _, position := range positions {
-		stored, err := lib.GetPosition(ctx, position.ID)
+		stored, err := readTestPosition(lib, position.ID)
 		require.NoError(t, err)
 		require.Equal(t, entity.PositionHealth_POSITION_HEALTH_HEALTHY, stored.Health)
 	}
 }
 
-func TestSavePositionWithExplicitNewIDPreservesUpsertSemantics(t *testing.T) {
-	// Import callers can establish a previously absent integer ID without claiming a physical check.
+func TestScanPreservesHealthOnlyForUnchangedContent(t *testing.T) {
+	// Publish one copy through Media commit and record a completed damaged check.
 	ctx := context.Background()
 	_, lib := newTestLibrary(t)
-	position := &Position{ID: 42, MediaID: 1, Path: "file", Size: 7, Hash: make([]byte, sha256.Size)}
-	require.NoError(t, lib.SavePosition(ctx, position))
-	stored, err := lib.GetPosition(ctx, 42)
-	require.NoError(t, err)
-	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
-
-	// The same ID remains an ordinary inventory update after insertion.
-	stored.Mode = 0600
-	require.NoError(t, lib.SavePosition(ctx, stored))
-	stored, err = lib.GetPosition(ctx, 42)
-	require.NoError(t, err)
-	require.EqualValues(t, 0600, stored.Mode)
-}
-
-func TestScanDoesNotClearKnownDamageForUnchangedContent(t *testing.T) {
-	// Store a checked damaged copy whose metadata will be refreshed by inventory Scan.
-	ctx := context.Background()
-	_, lib := newTestLibrary(t)
-	media, err := lib.CreateMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
-		Identity: "11111111-1111-1111-1111-111111111111", Profile: (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()})
-	require.NoError(t, err)
 	hash := sha256.Sum256([]byte("saved"))
-	signature, err := NewFileSignature(hash[:], 5)
+	media, err := lib.CommitMedia(ctx, &Media{Kind: entity.MediaKind_MEDIA_KIND_VOLUME,
+		Identity: "11111111-1111-1111-1111-111111111111", Profile: (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()},
+		func(_ context.Context, yield func(*MediaFile) error) error {
+			return yield(&MediaFile{Path: "file", Hash: hash[:], Size: 5, Mode: 0644, ModTime: time.Unix(1, 0), WriteTime: time.Unix(1, 0)})
+		})
 	require.NoError(t, err)
-	position := &Position{MediaID: media.ID, Path: "file", Hash: hash[:], Signature: signature, Size: 5, Mode: 0644,
-		MtimeNS: time.Unix(1, 0).UnixNano(), WrittenAtNS: time.Unix(1, 0).UnixNano()}
-	require.NoError(t, lib.SavePosition(ctx, position))
+	positions, err := lib.ListMediaFilePositions(ctx, media.ID, "", 10)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	position := positions[0]
 	require.NoError(t, lib.PublishPositionHealth(ctx, &PositionHealthObservation{PositionID: position.ID,
 		Health: entity.PositionHealth_POSITION_HEALTH_DAMAGED, CheckedAtNS: 100, JobID: 2}))
 
@@ -142,10 +118,23 @@ func TestScanDoesNotClearKnownDamageForUnchangedContent(t *testing.T) {
 			Mode: 0644, MtimeNs: time.Unix(2, 0).UnixNano(), SizeBytes: 5, Sha256: hash[:]})
 	})
 	require.NoError(t, err)
-	stored, err := lib.GetPosition(ctx, position.ID)
+	stored, err := readTestPosition(lib, position.ID)
 	require.NoError(t, err)
 	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_DAMAGED, stored.Health)
 	require.Equal(t, int64(100), stored.CheckedAtNS)
+
+	// Changed expected content clears the old health rather than transferring it to another content identity.
+	changed := sha256.Sum256([]byte("other"))
+	_, err = lib.ApplyScan(ctx, media.ID, func(_ context.Context, yield func(*entity.ScanEntry) error) error {
+		return yield(&entity.ScanEntry{Path: "file", Change: entity.ScanChange_SCAN_CHANGE_CHANGED,
+			Mode: 0644, MtimeNs: time.Unix(3, 0).UnixNano(), SizeBytes: 5, Sha256: changed[:]})
+	})
+	require.NoError(t, err)
+	stored, err = readTestPosition(lib, position.ID)
+	require.NoError(t, err)
+	require.Equal(t, entity.PositionHealth_POSITION_HEALTH_UNKNOWN, stored.Health)
+	require.Zero(t, stored.CheckedAtNS)
+	require.Zero(t, stored.HealthJobID)
 }
 
 func TestPositionHealthRejectsMissingDirectoryAndInvalidObservations(t *testing.T) {
@@ -153,7 +142,7 @@ func TestPositionHealthRejectsMissingDirectoryAndInvalidObservations(t *testing.
 	ctx := context.Background()
 	_, lib := newTestLibrary(t)
 	directory := &Position{MediaID: 1, Path: "folder/", IsDir: true}
-	require.NoError(t, lib.SavePosition(ctx, directory))
+	require.NoError(t, lib.db.Create(directory).Error)
 	observation := &PositionHealthObservation{PositionID: directory.ID, Health: entity.PositionHealth_POSITION_HEALTH_HEALTHY, CheckedAtNS: 10}
 	require.ErrorContains(t, lib.PublishPositionHealth(ctx, observation), "regular Position")
 	observation.PositionID++

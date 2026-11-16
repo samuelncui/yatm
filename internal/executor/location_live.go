@@ -97,14 +97,6 @@ type locationCursor struct {
 	After      string
 }
 
-// ListLocationEntriesMatching applies a read-only batch predicate during one
-// directory enumeration. The caller binds the predicate to its public cursor.
-// Listing hides administrator, YATM storage and user Ignore entries; explicit
-// entry resolution and size measurement remain available for them.
-func (e *Executor) ListLocationEntriesMatching(ctx context.Context, req *entity.LocationEntriesQuery, match func([]*entity.LocationEntry) ([]int, error)) (*entity.LocationEntriesPage, error) {
-	return e.listLocationEntries(ctx, req, req.GetCursor(), match)
-}
-
 // LocationEntriesRead carries the metadata used to match this query page into its projection.
 type LocationEntriesRead struct {
 	Page     *entity.LocationEntriesPage
@@ -132,21 +124,9 @@ func (h *locationCandidates) Pop() any {
 	return last
 }
 
-func (e *Executor) listLocationEntries(ctx context.Context, req *entity.LocationEntriesQuery, cursor string, match func([]*entity.LocationEntry) ([]int, error)) (*entity.LocationEntriesPage, error) {
-	var predicate func(*library.Location, []*entity.LocationEntry, map[string]os.FileInfo) ([]int, error)
-	if match != nil {
-		predicate = func(_ *library.Location, rows []*entity.LocationEntry, _ map[string]os.FileInfo) ([]int, error) {
-			return match(rows)
-		}
-	}
-	result, err := e.ReadLocationEntriesMatching(ctx, req, cursor, predicate)
-	if err != nil {
-		return nil, err
-	}
-	return result.Page, nil
-}
-
 // ReadLocationEntriesMatching enumerates once per query page, retaining only its smallest matches.
+// Listing hides administrator, YATM storage and user Ignore entries; explicit
+// entry resolution and size measurement remain available for them.
 func (e *Executor) ReadLocationEntriesMatching(ctx context.Context, req *entity.LocationEntriesQuery, requestCursor string,
 	match func(*library.Location, []*entity.LocationEntry, map[string]os.FileInfo) ([]int, error)) (*LocationEntriesRead, error) {
 	// Preserve existing stateless cursor binding and bounded query-page semantics.
@@ -263,13 +243,4 @@ func (e *Executor) ReadLocationEntriesMatching(ctx context.Context, req *entity.
 		result.Page.NextCursor = base64.RawURLEncoding.EncodeToString(data)
 	}
 	return result, nil
-}
-
-// AdmitLocationEntry resolves one explicit ordinary-file selection under the Location gate.
-func (e *Executor) AdmitLocationEntry(ctx context.Context, ref *entity.LocationEntryRef) (*library.FileLocation, error) {
-	results, err := e.AdmitLocationEntries(ctx, []*entity.LocationEntryRef{ref})
-	if err != nil {
-		return nil, err
-	}
-	return results[0], nil
 }

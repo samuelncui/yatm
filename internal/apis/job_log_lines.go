@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 )
 
 const (
@@ -25,13 +26,13 @@ type logLineSpan struct {
 
 func (api *API) ListLogLines(ctx context.Context, req *entity.ListJobLogLinesRequest) (*entity.ListJobLogLinesResponse, error) {
 	if req.Cursor != nil && *req.Cursor < 0 {
-		return nil, fmt.Errorf("log cursor must not be negative, cursor=%d", *req.Cursor)
+		return nil, fmt.Errorf("%w: log cursor must not be negative, cursor=%d", executor.ErrInvalidRequest, *req.Cursor)
 	}
 	if req.Direction != entity.JobLogDirection_JOB_LOG_DIRECTION_OLDER && req.Direction != entity.JobLogDirection_JOB_LOG_DIRECTION_NEWER {
-		return nil, fmt.Errorf("invalid log direction, direction=%s", req.Direction)
+		return nil, fmt.Errorf("%w: invalid log direction, direction=%s", executor.ErrInvalidRequest, req.Direction)
 	}
 	if req.Level != "" && !validLogLevel(req.Level) {
-		return nil, fmt.Errorf("invalid log level, level=%q", req.Level)
+		return nil, fmt.Errorf("%w: invalid log level, level=%q", executor.ErrInvalidRequest, req.Level)
 	}
 
 	// Read one bounded region from the retained Job log. A missing log is an empty page.

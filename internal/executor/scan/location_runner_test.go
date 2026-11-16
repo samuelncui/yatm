@@ -13,6 +13,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func setupAnalyze(t *testing.T) (*executor.Executor, *library.Location) {
@@ -22,6 +23,13 @@ func setupAnalyze(t *testing.T) (*executor.Executor, *library.Location) {
 }
 
 func setupAnalyzeWithPreview(t *testing.T, previews executor.Previewer) (*executor.Executor, *library.Location) {
+	t.Helper()
+	exe, source, _ := setupAnalyzeCatalog(t, previews)
+	return exe, source
+}
+
+// setupAnalyzeCatalog also returns the catalog handle so a test can observe or block its statements.
+func setupAnalyzeCatalog(t *testing.T, previews executor.Previewer) (*executor.Executor, *library.Location, *gorm.DB) {
 	// Keep the real source directory separate from both catalog and Job resources.
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -47,7 +55,7 @@ func setupAnalyzeWithPreview(t *testing.T, previews executor.Previewer) (*execut
 	// Register through the Library model with the same canonical path produced by API admission.
 	source := &library.Location{Name: "Daily", RootPath: sourceRoot, ExecutorID: "local", Config: &entity.LocationConfig{Ignore: &entity.IgnoreRules{Format: "gitignore", Text: "/excluded\n/future"}}}
 	require.NoError(t, l.CreateLocation(context.Background(), source))
-	return exe, source
+	return exe, source, db
 }
 
 func writeAnalyzeFile(t *testing.T, source *library.Location, name, content string) {

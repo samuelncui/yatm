@@ -32,7 +32,7 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	if err != nil {
 		return err
 	}
-	session, err := a.exe.NewMediaBackend(a.job.ID, a.logger, a.mediaWait).NewReadSession(ctx, target)
+	session, err := a.exe.OpenReadSession(ctx, a.job.ID, a.logger, a.mediaWait, target)
 	if err != nil {
 		return err
 	}
@@ -105,6 +105,7 @@ func (a *jobRestoreRunner) restoreMedia(ctx context.Context, target *entity.Read
 	if err != nil {
 		return err
 	}
+	a.logger.WithContext(ctx).Infof("restore copy started, media_id=%d", selected.ID)
 	runErr := source.consume(ctx, engine)
 
 	// Drain accepted results before combining transfer and checkpoint failures.

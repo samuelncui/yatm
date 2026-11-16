@@ -13,7 +13,10 @@ On one HP LTO-5 drive (Z6ED firmware) reading uncompressed tar, Auto took 47–6
 restore files scattered across wraps or at wrap and band boundaries, and kept Logical when the
 selected members were adjacent. The
 [research record](../research/tape-read-ordering.md#software-read-ordering) has the measurements, method and limits.
-These results are not a guarantee on other drives, compressed media or LTFS. Planning stops within
+These results are not a guarantee on other drives, compressed media or LTFS. The project has only this
+drive, so qualification on other drives, generations or LTFS depends on reports from users with that
+hardware; report results or problems in [Issue #14](https://github.com/samuelncui/yatm/issues/14).
+Unrecognized inputs keep Logical order rather than failing. Planning stops within
 the **Read planning budget** (default 300 seconds) and always keeps a complete order.
 
 ## Use Auto
@@ -46,7 +49,7 @@ Auto retains the complete order with the lowest available predicted cost. Predic
 visible, and offline verification checks sensitivity to positioning, longitudinal movement and read
 speed. These estimates do not guarantee a speedup on unmeasured hardware.
 
-Read preparation prefers the drive's wrap report, then the supported HP LTO-5 cartridge-memory
+Read preparation prefers the drive's wrap report, then the cartridge-memory (CM) tape
 directory, then a matching saved position map. If none is usable, ordinary Logical reading remains
 available. CM is queried once during preparation, not per file or during device-details refresh;
 its source and any fallback reason appear in the Job log. It stores no per-file wrap assignment.
@@ -61,6 +64,9 @@ Current **Auto** ordering requires a Tape written with hardware compression **Of
 Hardware-compressed tapes retain ordinary Logical reads and eligible exact seek. Changing the
 drive's current compression setting does not change the cartridge's written profile. Files already
 compressed before Archive are not excluded when Tape hardware compression is Off.
+For LTFS, the formatting script decides: the bundled [`mkfs`](../../scripts/mkfs) formats with
+`mkltfs --no-compression`. A customized script without that option writes compressed LTFS volumes,
+so Auto keeps Logical on them; reformatting is the only way to change an existing volume.
 
 ## Passive Read Learning
 

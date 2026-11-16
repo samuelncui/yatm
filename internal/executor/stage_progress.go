@@ -91,17 +91,17 @@ func amount(unit entity.ProgressUnit, pair Counts) int64 {
 	return pair.Files
 }
 
-// ObserveStage records one work sample for a stage and reports the resulting window. Only a work
-// path calls it, next to the counter update that produced the sample. A stage that may not offer an
-// estimate has no window to keep; a stage whose denominator is not classified yet still records its
-// work, because its rate must survive a request that has no counters to show.
-func (p *Progress) ObserveStage(in StageInput) *entity.StageProgress {
+// ObserveStage records one work sample for a stage; StageReport reads the resulting window. Only a
+// work path calls it, next to the counter update that produced the sample. A stage that may not
+// offer an estimate has no window to keep; a stage whose denominator is not classified yet still
+// records its work, because its rate must survive a request that has no counters to show.
+func (p *Progress) ObserveStage(in StageInput) {
 	rule := RuleFor(in.Phase, in.Total)
 	if !rule.Estimate {
-		return nil
+		return
 	}
-	work, workTotal := sampledWork(rule, in)
-	return p.meter().observe(in, rule, work, workTotal)
+	work, _ := sampledWork(rule, in)
+	p.stage.observe(in.Key, work)
 }
 
 // StageReport assembles the shared reply from the recorded window without sampling; a progress
@@ -110,7 +110,7 @@ func (p *Progress) StageReport(in StageInput) *entity.Progress {
 	rule := RuleFor(in.Phase, in.Total)
 	work, workTotal := sampledWork(rule, in)
 	result := p.ToEntity()
-	result.Stage = p.meter().report(in, rule, work, workTotal)
+	result.Stage = p.stage.report(in, rule, work, workTotal)
 	return result
 }
 
@@ -168,7 +168,6 @@ func (p *Progress) CopyStageInput(phase entity.JobPhase, prefix string) StageInp
 // supply one coherent work window; the meter never reads durable state.
 type stageMeter struct {
 	sync.Mutex
-	now      func() time.Time
 	key      string
 	windowID string
 	sequence int64
@@ -184,23 +183,16 @@ type stageMeter struct {
 	stale    bool
 }
 
-// meter returns the attempt-local sampling window, creating it with the Progress clock.
-func (p *Progress) meter() *stageMeter {
-	p.stageOnce.Do(func() { p.stage = &stageMeter{now: p.now} })
-	return p.stage
-}
-
-// observe records one work sample for the stage range and reports the resulting window. It measures
-// actual work separately from the displayed settled amount, and reports only the counter pair,
-// which the caller supplied in the stage's own unit.
-func (m *stageMeter) observe(in StageInput, rule StageRule, work int64, workTotal *int64) *entity.StageProgress {
+// observe records one work sample for the stage range. It measures actual work, which the caller
+// supplied in the stage's own unit, separately from the displayed settled amount.
+func (m *stageMeter) observe(key string, work int64) {
 	m.Lock()
 	defer m.Unlock()
-	now := m.now()
-	if in.Key != m.key || m.windowID == "" {
+	now := time.Now()
+	if key != m.key || m.windowID == "" {
 		// A new range or phase discards every sample from its predecessor.
 		m.sequence++
-		m.key, m.windowID = in.Key, strconv.FormatInt(now.UnixNano(), 36)+"-"+strconv.FormatInt(m.sequence, 36)
+		m.key, m.windowID = key, strconv.FormatInt(now.UnixNano(), 36)+"-"+strconv.FormatInt(m.sequence, 36)
 		m.last, m.lastWork = now, now
 		m.base, m.previous = work, work
 		m.rate, m.windows, m.interval, m.stale = 0, 0, 0, false
@@ -225,7 +217,7 @@ func (m *stageMeter) observe(in StageInput, rule StageRule, work int64, workTota
 			m.windows, m.rate, m.stale = 0, 0, true
 		}
 		m.last, m.base = now, work
-		return m.window(in, rule, work, workTotal)
+		return
 	}
 
 	// Fixed minimum windows smooth wall-clock throughput, including concurrent work and queue time.
@@ -242,7 +234,6 @@ func (m *stageMeter) observe(in StageInput, rule StageRule, work int64, workTota
 		}
 		m.last, m.base = now, work
 	}
-	return m.window(in, rule, work, workTotal)
 }
 
 // report assembles the window the work path last sampled without recording a sample, so a progress

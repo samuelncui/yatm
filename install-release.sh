@@ -473,7 +473,8 @@ report_script_templates() {
 show_migration_guide() {
   echo "Requested installation: $CURRENT_VERSION → $RELEASE_VERSION"
   [[ "$CURRENT_VERSION" != none ]] || return 0
-  if [[ "$RELEASE_VERSION" == v1.* ]]; then
+  # Only the v0.1.x import changes the Tape adapter contract; v1-to-v1 upgrades keep it.
+  if [[ "$CURRENT_VERSION" == v0.* && "$RELEASE_VERSION" == v1.* ]]; then
     echo 'Tape adapter check required before the first Tape Job: v1 needs the completed final Index at TAPE_DIR/<barcode>.schema.'
     echo 'Custom scripts are retained. Keep legacy captures through migration, then adapt mount output and wait for final Index output and device release in unmount.'
     echo 'Read the verified release guide: docs/operations/migration.md, Tape Script Adaptation.'

@@ -21,10 +21,28 @@ import { FileMetadataDialog } from "@/components/file-metadata-dialog";
 
 const call = <T,>(response: T) => ({ response: Promise.resolve(response) });
 
+// The dialog reads each selected row's metadata from its fresh detail; listing rows carry none.
+const details = new Map<bigint, FilesDetail>();
+const libraryFile = (id: number, name: string, tags: string[] = [], note = "") => {
+  const fileId = BigInt(id);
+  details.set(
+    fileId,
+    FilesDetail.create({
+      entry: { reference: { target: { oneofKind: "fileId", fileId } }, name, operations: [FileOperationKind.UPDATE_METADATA] },
+      organization: { tags, note },
+    }),
+  );
+  return { id: String(id), name };
+};
+
 beforeEach(() => {
   fileMetadataEdit.mockReset();
   tagList.mockReset();
   getDetail.mockReset();
+  details.clear();
+  getDetail.mockImplementation(({ reference }: { reference: FileOperationRef }) =>
+    call(reference.target.oneofKind === "fileId" ? details.get(reference.target.fileId) : undefined),
+  );
   fileMetadataEdit.mockReturnValue(call({}));
   tagList.mockReturnValue(call({ tags: [{ name: "archive", fileCount: 2n }], nextCursor: "" }));
 });
@@ -34,15 +52,8 @@ describe("FileMetadataDialog", () => {
     fileMetadataEdit.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Save unavailable")) }));
     const onClose = vi.fn();
     const onSaved = vi.fn().mockRejectedValue(new Error("Refresh unavailable"));
-    render(
-      <FileMetadataDialog
-        open
-        files={[{ id: "7", name: "file.txt", tags: [], note: "", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] }]}
-        onClose={onClose}
-        onSaved={onSaved}
-      />,
-    );
-    await userEvent.type(screen.getByRole("textbox", { name: "Note" }), "Retain this draft");
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt")]} onClose={onClose} onSaved={onSaved} />);
+    await userEvent.type(await screen.findByRole("textbox", { name: "Note" }), "Retain this draft");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Save unavailable");
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("Retain this draft");
@@ -64,18 +75,9 @@ describe("FileMetadataDialog", () => {
             : { tags: Array.from({ length: 100 }, (_, index) => ({ name: `tag-${index}`, fileCount: 1n })), nextCursor: "more" },
       ),
     );
-    render(
-      <FileMetadataDialog
-        open
-        files={[
-          { id: "7", name: "file.txt", parentId: "0", tags: [], note: "", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
-    );
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt")]} onClose={() => {}} onSaved={async () => {}} />);
 
-    await userEvent.click(screen.getByRole("combobox", { name: "Tags" }));
+    await userEvent.click(await screen.findByRole("combobox", { name: "Tags" }));
     await waitFor(() => expect(tagList).toHaveBeenCalledWith({ prefix: "" }));
     await userEvent.click(await screen.findByRole("button", { name: "Load more tags" }));
     await waitFor(() => expect(tagList).toHaveBeenCalledWith({ prefix: "", cursor: "more" }));
@@ -99,18 +101,9 @@ describe("FileMetadataDialog", () => {
       if (prefix === "b") return call({ tags: [{ name: "beta", fileCount: 1n }], nextCursor: "" });
       return call({ tags: [], nextCursor: "" });
     });
-    render(
-      <FileMetadataDialog
-        open
-        files={[
-          { id: "7", name: "file.txt", parentId: "0", tags: [], note: "", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
-    );
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt")]} onClose={() => {}} onSaved={async () => {}} />);
 
-    const input = screen.getByRole("combobox", { name: "Tags" });
+    const input = await screen.findByRole("combobox", { name: "Tags" });
     await userEvent.type(input, "a");
     expect(await screen.findByRole("option", { name: "alpha" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Load more tags" }));
@@ -166,28 +159,11 @@ describe("FileMetadataDialog", () => {
     const onSaved = vi.fn(async () => {
       events.push("refresh");
     });
-    render(
-      <FileMetadataDialog
-        open
-        files={[
-          {
-            id: "7",
-            name: "file.txt",
-            parentId: "0",
-            tags: ["archive"],
-            note: "old",
-            detailsAvailable: true,
-            allowedOperations: [FileOperationKind.UPDATE_METADATA],
-          },
-        ]}
-        onClose={onClose}
-        onSaved={onSaved}
-      />,
-    );
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt", ["archive"], "old")]} onClose={onClose} onSaved={onSaved} />);
 
     expect(screen.queryByText(/Organize files with searchable|Use tags to group|Add searchable context|Changes apply to this file/)).not.toBeInTheDocument();
-    expect(screen.getByText("Leave empty to clear the note.")).toBeInTheDocument();
-    const tags = screen.getByRole("combobox", { name: "Tags" });
+    expect(await screen.findByText("Leave empty to clear the note.")).toBeInTheDocument();
+    const tags = await screen.findByRole("combobox", { name: "Tags" });
     await userEvent.type(tags, "Favorite{enter}");
     const note = screen.getByRole("textbox", { name: "Note" });
     await userEvent.clear(note);
@@ -208,18 +184,10 @@ describe("FileMetadataDialog", () => {
 
   it("adds one tag to multiple Files without changing their notes", async () => {
     render(
-      <FileMetadataDialog
-        open
-        files={[
-          { id: "7", name: "one", parentId: "0", tags: [], note: "one", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-          { id: "8", name: "two", parentId: "0", tags: [], note: "two", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
+      <FileMetadataDialog open files={[libraryFile(7, "one", [], "one"), libraryFile(8, "two", [], "two")]} onClose={() => {}} onSaved={async () => {}} />,
     );
 
-    const tags = screen.getByRole("combobox", { name: "Tags" });
+    const tags = await screen.findByRole("combobox", { name: "Tags" });
     await userEvent.type(tags, "favorite{enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -237,32 +205,13 @@ describe("FileMetadataDialog", () => {
     render(
       <FileMetadataDialog
         open
-        files={[
-          {
-            id: "7",
-            name: "one",
-            parentId: "0",
-            tags: ["archive", "one"],
-            note: "one",
-            detailsAvailable: true,
-            allowedOperations: [FileOperationKind.UPDATE_METADATA],
-          },
-          {
-            id: "8",
-            name: "two",
-            parentId: "0",
-            tags: ["archive", "two"],
-            note: "two",
-            detailsAvailable: true,
-            allowedOperations: [FileOperationKind.UPDATE_METADATA],
-          },
-        ]}
+        files={[libraryFile(7, "one", ["archive", "one"], "one"), libraryFile(8, "two", ["archive", "two"], "two")]}
         onClose={() => {}}
         onSaved={async () => {}}
       />,
     );
 
-    const tags = screen.getByRole("combobox", { name: "Tags" });
+    const tags = await screen.findByRole("combobox", { name: "Tags" });
     await userEvent.click(tags);
     await userEvent.keyboard("{Backspace}");
     await userEvent.type(tags, "favorite{enter}");
@@ -280,18 +229,10 @@ describe("FileMetadataDialog", () => {
 
   it("keeps bulk note editing opt-in", async () => {
     render(
-      <FileMetadataDialog
-        open
-        files={[
-          { id: "7", name: "one", parentId: "0", tags: [], note: "one", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-          { id: "8", name: "two", parentId: "0", tags: [], note: "two", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
+      <FileMetadataDialog open files={[libraryFile(7, "one", [], "one"), libraryFile(8, "two", [], "two")]} onClose={() => {}} onSaved={async () => {}} />,
     );
 
-    expect(screen.getByText("2 selected files")).toBeInTheDocument();
+    expect(await screen.findByText("2 selected files")).toBeInTheDocument();
     const noteSection = screen.getByText("Note", { selector: "strong" }).closest("section");
     expect(noteSection).not.toBeNull();
     const note = within(noteSection!).getByRole("textbox", { name: "Note" });
@@ -302,26 +243,9 @@ describe("FileMetadataDialog", () => {
   });
 
   it("does not treat a Tag search query as an unsaved edit", async () => {
-    render(
-      <FileMetadataDialog
-        open
-        files={[
-          {
-            id: "7",
-            name: "file.txt",
-            parentId: "0",
-            tags: ["archive"],
-            note: "old",
-            detailsAvailable: true,
-            allowedOperations: [FileOperationKind.UPDATE_METADATA],
-          },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
-    );
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt", ["archive"], "old")]} onClose={() => {}} onSaved={async () => {}} />);
 
-    expect(screen.getByText("No changes to save")).toBeInTheDocument();
+    expect(await screen.findByText("No changes to save")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
     await userEvent.type(screen.getByRole("combobox", { name: "Tags" }), "search-only");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
@@ -329,18 +253,9 @@ describe("FileMetadataDialog", () => {
   });
 
   it("limits each request to 16 added tags", async () => {
-    render(
-      <FileMetadataDialog
-        open
-        files={[
-          { id: "7", name: "file.txt", parentId: "0", tags: [], note: "", detailsAvailable: true, allowedOperations: [FileOperationKind.UPDATE_METADATA] },
-        ]}
-        onClose={() => {}}
-        onSaved={async () => {}}
-      />,
-    );
+    render(<FileMetadataDialog open files={[libraryFile(7, "file.txt")]} onClose={() => {}} onSaved={async () => {}} />);
 
-    const tags = screen.getByRole("combobox", { name: "Tags" });
+    const tags = await screen.findByRole("combobox", { name: "Tags" });
     for (let index = 0; index < 17; index += 1) {
       await userEvent.type(tags, `tag-${index}{enter}`);
     }
@@ -350,20 +265,10 @@ describe("FileMetadataDialog", () => {
   }, 15000);
 
   it("starts with fresh editor state whenever the dialog is reopened", async () => {
-    const files = [
-      {
-        id: "7",
-        name: "file.txt",
-        parentId: "0",
-        tags: ["archive"],
-        note: "old",
-        detailsAvailable: true as const,
-        allowedOperations: [FileOperationKind.UPDATE_METADATA],
-      },
-    ];
+    const files = [libraryFile(7, "file.txt", ["archive"], "old")];
     const { rerender } = render(<FileMetadataDialog open files={files} onClose={() => {}} onSaved={async () => {}} />);
 
-    const note = screen.getByRole("textbox", { name: "Note" });
+    const note = await screen.findByRole("textbox", { name: "Note" });
     await userEvent.clear(note);
     await userEvent.type(note, "unsaved");
     expect(note).toHaveValue("unsaved");
@@ -371,7 +276,7 @@ describe("FileMetadataDialog", () => {
     rerender(<FileMetadataDialog open={false} files={files} onClose={() => {}} onSaved={async () => {}} />);
     rerender(<FileMetadataDialog open files={files} onClose={() => {}} onSaved={async () => {}} />);
 
-    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("old");
+    expect(await screen.findByRole("textbox", { name: "Note" })).toHaveValue("old");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 });

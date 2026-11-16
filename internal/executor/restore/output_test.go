@@ -48,7 +48,7 @@ func TestRestoreExistingEqualContentCompletesWithoutCopyAndRestoresMetadata(t *t
 	require.True(t, os.SameFile(before, after), "equal bytes should not be replaced")
 	require.EqualValues(t, candidate.Mode, after.Mode().Perm())
 	require.Equal(t, candidate.MtimeNS, after.ModTime().UnixNano())
-	original, err := lib.GetFileLocation(ctx, file.ID)
+	original, err := readOriginal(ctx, lib, file.ID)
 	require.NoError(t, err)
 	require.NotNil(t, original)
 	originals, err := exe.NewOriginalResolver(ctx, []int64{file.ID})

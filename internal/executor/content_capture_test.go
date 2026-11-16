@@ -54,7 +54,7 @@ func TestCaptureOriginalKeepsOpaqueSignatureWithoutReadingContent(t *testing.T) 
 	}
 	_, valid, _ = acp.ReadCachedSignature(name)
 	require.False(t, valid, "capture must not read the original")
-	stored, err := exe.lib.GetFileLocation(ctx, file.ID)
+	stored, err := readOriginal(ctx, exe.lib, file.ID)
 	require.NoError(t, err)
 	require.Equal(t, opaque, stored.Signature)
 }

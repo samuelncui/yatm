@@ -86,7 +86,7 @@ func TestSuccessfulEmptyTarFormatRegistersMedia(t *testing.T) {
 			transport := &stoppedTarTransport{finalWarning: tc.finalWarning, budgetStop: tc.budgetStop}
 			mode := tape.RecordMode{MaximumBytes: 262144, WarningCounts: true}
 			var stop error
-			complete := func(context.Context) error { return nil }
+			complete := func(context.Context, bool) error { return nil }
 			if !tc.finalWarning && !tc.budgetStop {
 				stop = errors.Join(mediapkg.ErrTargetNoSpace, tape.ErrEarlyWarning)
 			} else {

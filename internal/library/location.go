@@ -17,7 +17,6 @@ import (
 )
 
 var (
-	ErrLocationBusy       = errors.New("Library maintenance conflicts with another operation")
 	ErrLocationConflict   = errors.New("Location changed; reload and retry")
 	ErrLocationUnverified = errors.New("Location root is not usable for access")
 )

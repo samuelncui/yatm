@@ -16,6 +16,9 @@ type Runner interface {
 	Phase() entity.JobPhase
 	Close() error
 	Logger() *logrus.Logger
+	// SetActive keeps the runner's file resources open for an admitted attempt, or releases the
+	// idle ones between attempts.
+	SetActive(active bool) error
 }
 
 // RunnerFactory opens the typed runner for an existing Job Bundle.

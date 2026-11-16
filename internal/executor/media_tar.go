@@ -79,38 +79,20 @@ func (e *Executor) releaseRawTape(ctx context.Context, jobID int64, device strin
 	return err
 }
 
-func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.ReadTapeTarget, expected *entity.ReadMediaTarget) (session mediapkg.ReadSession, returnErr error) {
-	// Resolve the trusted immutable Media before reserving hardware or exposing a content endpoint.
-	if access == nil || expected == nil || expected.ExpectedMediaId <= 0 {
-		return nil, fmt.Errorf("tar read requires frozen Media expectations")
+func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.ReadTapeTarget, media *mediapkg.Descriptor) (session mediapkg.ReadSession, returnErr error) {
+	// The Job admitted this Media's identity, profile and key before any hardware is reserved.
+	if access == nil || media == nil {
+		return nil, fmt.Errorf("tar read requires the selected Media")
 	}
 	device := strings.TrimSpace(access.Device)
-	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, expected.ExpectedIdentity)
-	if err != nil {
-		return nil, err
-	}
-	if stored == nil || stored.DestroyedAtNS != nil {
-		return nil, fmt.Errorf("tar read Media is unavailable")
-	}
-	if err := validateReadExpectation(stored, expected); err != nil {
-		return nil, err
-	}
-	if err := entity.ValidateTarMediaProfile(stored.Profile.GetTape()); err != nil {
-		return nil, err
-	}
 
 	// Freeze model selection independently of the cartridge identity checks.
-	deviceSettings, err := b.deviceSettings(ctx)
+	deviceSettings, err := b.executor.deviceSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defaults := settingspkg.TapeDefaults(deviceSettings, device)
 	readOrder := settingspkg.TapeDefaultReadOrder(defaults)
-	key, err := decodeTarKey(stored.Profile.GetTape().Encryption)
-	if err != nil {
-		return nil, err
-	}
-	clear(key)
 
 	// Preparation and all cleanup share the existing queued attempt lease.
 	if err := b.acquireDevice(ctx, func(ctx context.Context, onWait func()) error {
@@ -142,7 +124,7 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 			returnErr = errors.Join(returnErr, cleanup(ctx))
 		}
 	}()
-	if err := crossCheckTarBarcode(ctx, prepared, stored.Identity, false); err != nil {
+	if err := crossCheckTarBarcode(ctx, prepared, media.Identity, false); err != nil {
 		return nil, err
 	}
 
@@ -152,19 +134,19 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 	if err != nil {
 		return nil, err
 	}
-	if err := b.prepareTarEncryption(ctx, device, stored, false); err != nil {
+	if err := b.prepareTarEncryption(ctx, device, media, false); err != nil {
 		return nil, err
 	}
 	prepared, err = b.executor.openRawTape(ctx, b.jobID, device)
 	if err != nil {
 		return nil, err
 	}
-	if err := crossCheckTarBarcode(ctx, prepared, stored.Identity, false); err != nil {
+	if err := crossCheckTarBarcode(ctx, prepared, media.Identity, false); err != nil {
 		return nil, err
 	}
 
 	// Apply the frozen record policy after the script hands the device back to a fresh descriptor.
-	profile := stored.Profile.GetTape().Tar
+	profile := media.Profile.GetTape().Tar
 	records, err := prepared.Configure(ctx, profile, tape.Read)
 	if err != nil {
 		return nil, err
@@ -177,7 +159,7 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 	if err != nil {
 		return nil, err
 	}
-	if err := validateTarLabel(label, stored); err != nil {
+	if err := validateTarLabel(label, media); err != nil {
 		return nil, err
 	}
 	navigator, err := b.tarNavigator(ctx, prepared)
@@ -186,8 +168,8 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 	}
 
 	// Optional estimates use the admitted settings and the actual prepared drive, never its path.
-	parameters, parameterSource := selectTarReadParameters(deviceSettings, device, prepared.Report(), stored.Profile.GetTape())
-	parameterReason := tarReadParametersReason(parameters, prepared.Report(), stored.Profile.GetTape())
+	parameters, parameterSource := selectTarReadParameters(deviceSettings, device, prepared.Report(), media.Profile.GetTape())
+	parameterReason := tarReadParametersReason(parameters, prepared.Report(), media.Profile.GetTape())
 	var timing *entity.TapeReadTiming
 	var initialPosition *entity.TapeBytePosition
 	if parameterReason == "" {
@@ -210,7 +192,7 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 			}
 		}
 	}
-	b.logTarPolicy(ctx, device, "READ", stored.Profile.GetTape())
+	b.logTarPolicy(ctx, device, "READ", media.Profile.GetTape())
 
 	// Both read orders share action costing; only AUTO exposes the optional ordering provider.
 	var readModel *mediapkg.ReadCostModel
@@ -227,18 +209,16 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		b.logReadDirectoryPreparation(ctx, device, started, prepared.Report(), "Tape read directory preparation")
 
 		var observed *entity.TapePositionMap
-		readModel, observed, readReason = compileTarMediaReadModel(parameters, stored, geometry, valid.Load)
-		learningMap = stored.TapePositionMap
-		positionSource = stored.TapePositionMap.GetSource()
+		readModel, observed, readReason = compileTarMediaReadModel(parameters, media, geometry, valid.Load)
+		learningMap = media.TapePositionMap
+		positionSource = media.TapePositionMap.GetSource()
 		if observed != nil {
 			learningMap = observed
 			positionSource = observed.Source
-			updated, err := b.executor.Lib().UpdateMediaTapePositionMap(ctx, stored, observed)
-			if err != nil {
-				b.logger.WithContext(ctx).WithError(err).Warn("save observed Tape position map failed")
-			} else {
-				stored = updated
-			}
+			// The Job persists the observed map this Session returns.
+			selected := *media
+			selected.TapePositionMap = observed
+			media = &selected
 		}
 		if readModel != nil {
 			// Completed-command learning may drain after unload invalidates the live Device map.
@@ -264,7 +244,7 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 		"read_model_available": readModel != nil,
 	}).Info("tar read order")
 	optimization := &entity.TapePreparedRead{
-		PreparedAtNs: time.Now().UnixNano(), JobId: b.jobID, MediaId: stored.ID, Identity: stored.Identity,
+		PreparedAtNs: time.Now().UnixNano(), JobId: b.jobID, MediaId: media.ID, Identity: media.Identity,
 		RequestedOrder: readOrder.String(), EffectiveOrder: effectiveReadOrder.String(),
 		ParametersSource: parameterSource, ParametersReference: parameters.GetSourceReference(),
 		ApplicabilityReason: parameterReason, PositionSource: positionSource, CoverageDetail: readReason,
@@ -282,11 +262,11 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 
 	// Transfer the prepared reader and its observation lifetime to the content session.
 	if parameterReason == "" {
-		finishLearning = b.startTarReadLearning(ctx, prepared, device, stored.Identity, deviceSettings, parameters,
+		finishLearning = b.startTarReadLearning(ctx, prepared, device, media.Identity, deviceSettings, parameters,
 			learningModel, learningMap, initialPosition)
 	}
 	return mediapkg.NewTarReadSession(records, mediapkg.TarSessionOptions{
-		Media: describeMedia(stored), Mode: records.Mode, TapeFile: 1, Cleanup: cleanup, Navigator: navigator,
+		Media: media, Mode: records.Mode, TapeFile: 1, Cleanup: cleanup, Navigator: navigator,
 		Finish:    func(ctx context.Context) error { return release(ctx, true) },
 		ReadOrder: readOrder, ReadOrderReason: readReason, ReadModel: readModel,
 		ReadPlanningBudget: settingspkg.TapeReadPlanningBudget(defaults),
@@ -298,22 +278,20 @@ func (b *mediaBackend) newTarReadSession(ctx context.Context, access *entity.Rea
 	})
 }
 
-func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.ArchiveTapeTarget) (session mediapkg.WriteSession, returnErr error) {
+func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.ArchiveTapeTarget, media *mediapkg.Descriptor) (session mediapkg.WriteSession, returnErr error) {
 	// Device cadence is attempt-local for FORMAT and APPEND, including direct backend calls.
-	defaults, err := b.tapeDefaults(ctx, target.Device)
+	defaults, err := b.executor.tapeDefaults(ctx, target.Device)
 	if err != nil {
 		return nil, err
 	}
 	interval := settingspkg.TapeCapacityPollInterval(defaults)
 
-	// Registered profiles own APPEND; a registered identity cannot be silently reformatted.
-	stored, err := b.executor.Lib().GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, target.Barcode)
-	if err != nil {
-		return nil, err
-	}
+	// The Job admitted FORMAT for an unregistered identity or APPEND for its registered Media.
 	format := target.Mode == entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_FORMAT
-	if err := checkTarWriteMedia(stored, target); err != nil {
-		return nil, err
+	if !format {
+		if err := registeredMedia(media, entity.MediaKind_MEDIA_KIND_TAPE, target.Barcode); err != nil {
+			return nil, err
+		}
 	}
 
 	// The attempt holds the device through initialization, adapter handoff and content settlement.
@@ -326,7 +304,6 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	if err != nil {
 		return nil, err
 	}
-	var descriptor *mediapkg.Descriptor
 	release := func(ctx context.Context, complete bool) error {
 		if prepared == nil {
 			return nil
@@ -350,22 +327,22 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		if err != nil {
 			return nil, err
 		}
-		stored = &library.Media{
+		media = &mediapkg.Descriptor{
 			Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: target.Barcode, Name: strings.TrimSpace(target.Name),
-			CreatedAtNS: time.Now().UnixNano(), Profile: (&entity.TapeMediaProfile{
+			CreateTime: time.Now(), Profile: (&entity.TapeMediaProfile{
 				Format: library.TapeFormatTarPAXV1, Tar: &entity.TarMediaProfile{
 					InitializationId: uuid.NewString(), RecordMode: options.GetRecordMode(), RecordBytes: options.GetRecordBytes(),
 					HardwareCompression: options.GetHardwareCompression(),
 				},
 			}).Pack(),
 		}
-	}
-	if err := entity.ValidateTarMediaProfile(stored.Profile.GetTape()); err != nil {
-		return nil, err
+		if err := entity.ValidateTarMediaProfile(media.Profile.GetTape()); err != nil {
+			return nil, err
+		}
 	}
 
 	// FORMAT initializes the partition before any script can load a key or reposition the medium.
-	profile := stored.Profile.GetTape().Tar
+	profile := media.Profile.GetTape().Tar
 	if format {
 		if _, err := prepared.Configure(ctx, profile, tape.Format); err != nil {
 			return nil, err
@@ -373,7 +350,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		if err := prepared.Initialize(ctx); err != nil {
 			return nil, err
 		}
-		if err := assignTarBarcode(ctx, prepared, stored.Identity); err != nil {
+		if err := assignTarBarcode(ctx, prepared, media.Identity); err != nil {
 			return nil, err
 		}
 	}
@@ -384,7 +361,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	if err != nil {
 		return nil, err
 	}
-	if err := b.prepareTarEncryption(ctx, target.Device, stored, format); err != nil {
+	if err := b.prepareTarEncryption(ctx, target.Device, media, format); err != nil {
 		return nil, err
 	}
 	prepared, err = b.executor.openRawTape(ctx, b.jobID, target.Device)
@@ -392,7 +369,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		return nil, err
 	}
 	// FORMAT has assigned the barcode by now, so every reopened descriptor requires it.
-	if err := crossCheckTarBarcode(ctx, prepared, stored.Identity, false); err != nil {
+	if err := crossCheckTarBarcode(ctx, prepared, media.Identity, false); err != nil {
 		return nil, err
 	}
 	if format {
@@ -401,7 +378,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	}
 
 	// Apply the cartridge record policy to the descriptor that will perform actual data I/O.
-	b.logTarPolicy(ctx, target.Device, target.Mode.String(), stored.Profile.GetTape())
+	b.logTarPolicy(ctx, target.Device, target.Mode.String(), media.Profile.GetTape())
 	records, err := prepared.Configure(ctx, profile, operation)
 	if err != nil {
 		return nil, err
@@ -413,10 +390,15 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	// A completed identity file or proven physical tail establishes the next standalone archive.
 	file := uint64(1)
 	var initialStop error
-	complete := func(ctx context.Context) error {
+	complete := func(ctx context.Context, terminated bool) error {
 		err := records.Filemarks(ctx, 1)
-		if err == tape.ErrEarlyWarning {
-			b.logger.WithContext(ctx).Warn("tar completion filemark reported early warning with confirmed count")
+		switch err {
+		case nil:
+			b.logger.WithContext(ctx).Infof("tar Tape file completed, end_of_archive=%t filemark=written", terminated)
+		case tape.ErrEarlyWarning:
+			b.logger.WithContext(ctx).Warnf("tar Tape file completed, end_of_archive=%t filemark=written_at_early_warning", terminated)
+		default:
+			b.logger.WithContext(ctx).WithError(err).Errorf("tar Tape file completion failed, end_of_archive=%t", terminated)
 		}
 		return err
 	}
@@ -426,17 +408,17 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		}
 		b.logTarControls(ctx, "FORMAT", prepared)
 		if err := mediapkg.WriteTarLabel(ctx, records, records.Mode, &mediapkg.TarLabel{
-			Format: library.TapeFormatTarPAXV1, Barcode: stored.Identity, Name: stored.Name, Profile: stored.Profile.GetTape().Tar,
+			Format: library.TapeFormatTarPAXV1, Barcode: media.Identity, Name: media.Name, Profile: media.Profile.GetTape().Tar,
 		}); err != nil {
 			return nil, err
 		}
-		if err := complete(ctx); err != nil {
+		if err := complete(ctx, true); err != nil {
 			if err != tape.ErrEarlyWarning {
 				return nil, err
 			}
 			// The identity is physically complete; EW closes content without another data or mark command.
 			initialStop = errors.Join(mediapkg.ErrTargetNoSpace, tape.ErrEarlyWarning)
-			complete = func(context.Context) error { return nil }
+			complete = func(context.Context, bool) error { return nil }
 		}
 	} else {
 		if err := records.Rewind(ctx); err != nil {
@@ -446,7 +428,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		if err != nil {
 			return nil, err
 		}
-		if err := validateTarLabel(label, stored); err != nil {
+		if err := validateTarLabel(label, media); err != nil {
 			return nil, err
 		}
 
@@ -462,7 +444,7 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 		}).Info("tar APPEND tail verified")
 
 		// Only a validated identity and proven tail may establish the immutable APPEND write controls.
-		records, err = prepared.Configure(ctx, stored.Profile.GetTape().Tar, tape.Append)
+		records, err = prepared.Configure(ctx, media.Profile.GetTape().Tar, tape.Append)
 		if err != nil {
 			return nil, err
 		}
@@ -484,9 +466,8 @@ func (b *mediaBackend) newTarWriteSession(ctx context.Context, target *entity.Ar
 	}
 
 	// Transfer cleanup ownership only after the real Session is complete; test wrappers cannot replace preparation.
-	descriptor = describeMedia(stored)
 	session, err = mediapkg.NewTarWriteSession(records, mediapkg.TarSessionOptions{
-		Media: descriptor, Mode: records.Mode, TapeFile: file,
+		Media: media, Mode: records.Mode, TapeFile: file,
 		Complete: complete, Cleanup: cleanup, Stop: initialStop, Navigator: navigator, Capacity: capacity,
 		Finish: func(ctx context.Context) error { return release(ctx, true) },
 	})
@@ -709,9 +690,9 @@ func assignTarBarcode(ctx context.Context, prepared *tape.Device, expected strin
 	return nil
 }
 
-func validateTarLabel(label *mediapkg.TarLabel, stored *library.Media) error {
-	if label == nil || label.Format != library.TapeFormatTarPAXV1 || label.Barcode != stored.Identity ||
-		!proto.Equal(label.Profile, stored.Profile.GetTape().Tar) {
+func validateTarLabel(label *mediapkg.TarLabel, media *mediapkg.Descriptor) error {
+	if label == nil || label.Format != library.TapeFormatTarPAXV1 || label.Barcode != media.Identity ||
+		!proto.Equal(label.Profile, media.Profile.GetTape().Tar) {
 		return fmt.Errorf("tar label identity or immutable profile differs from selected Media")
 	}
 	return nil
@@ -719,9 +700,9 @@ func validateTarLabel(label *mediapkg.TarLabel, stored *library.Media) error {
 
 // prepareTarEncryption uses the existing adapter without retaining another copy of the key.
 // Its caller owns the device lease and closes every raw descriptor before invoking it.
-func (b *mediaBackend) prepareTarEncryption(ctx context.Context, device string, stored *library.Media, format bool) error {
+func (b *mediaBackend) prepareTarEncryption(ctx context.Context, device string, media *mediapkg.Descriptor, format bool) error {
 	// FORMAT generates the cartridge key; READ and APPEND restore the saved one.
-	tapeDir, err := b.executor.EnsureTapeWorkPath(ctx, b.jobID, stored.Identity)
+	tapeDir, err := b.executor.EnsureTapeWorkPath(ctx, b.jobID, media.Identity)
 	if err != nil {
 		return err
 	}
@@ -730,15 +711,15 @@ func (b *mediaBackend) prepareTarEncryption(ctx context.Context, device string, 
 	var keyPath string
 	var recycle func()
 	if format {
-		stored.Profile.GetTape().Encryption, keyPath, recycle, err = b.executor.NewKey()
+		media.Profile.GetTape().Encryption, keyPath, recycle, err = b.executor.NewKey()
 	} else {
-		keyPath, recycle, err = b.executor.RestoreKey(stored.Profile.GetTape().Encryption)
+		keyPath, recycle, err = b.executor.RestoreKey(media.Profile.GetTape().Encryption)
 	}
 	if err != nil {
 		return err
 	}
 	defer recycle()
-	return b.configureTape(ctx, device, keyPath, stored.Identity, stored.Name, tapeDir)
+	return b.configureTape(ctx, device, keyPath, media.Identity, media.Name, tapeDir)
 }
 
 // observedTapeEncryptionAlgorithm names only one unambiguous current algorithm from an existing report.

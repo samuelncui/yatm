@@ -282,7 +282,7 @@ func TestLibraryNanosecondHealthAndUnknownTimes(t *testing.T) {
 	require.NoError(t, lib.PublishPositionHealth(context.Background(), observation))
 	observation.CheckedAtNS = 0
 	require.ErrorContains(t, lib.PublishPositionHealth(context.Background(), observation), "check time is missing")
-	stored, err := lib.GetPosition(context.Background(), position.ID)
+	stored, err := readTestPosition(lib, position.ID)
 	require.NoError(t, err)
 	require.EqualValues(t, math.MinInt64, stored.CheckedAtNS)
 

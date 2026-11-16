@@ -41,7 +41,7 @@ func TestLibraryOperationsPreserveOrganizationBoundaries(t *testing.T) {
 	parents, err := f.exe.Lib().ReadFileAncestors(ctx, file.ID)
 	require.NoError(t, err)
 	require.EqualValues(t, library.TrashFileID, parents[0].ID)
-	original, err := f.exe.Lib().GetFileLocation(ctx, file.ID)
+	original, err := readOriginal(ctx, f.exe.Lib(), file.ID)
 	require.NoError(t, err)
 	require.Equal(t, "disk.txt", original.Path)
 	require.NoError(t, f.libDB.First(new(library.FileVersion), version.ID).Error)

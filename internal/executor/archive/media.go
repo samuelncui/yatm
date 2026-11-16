@@ -45,7 +45,7 @@ func (a *jobArchiveRunner) archiveMedia(ctx context.Context, target *entity.Arch
 	if pending == 0 {
 		return fmt.Errorf("Archive manifest has no pending items")
 	}
-	session, err := a.exe.NewMediaBackend(a.job.ID, a.logger, a.mediaWait).NewWriteSession(ctx, target)
+	session, err := a.exe.OpenWriteSession(ctx, a.job.ID, a.logger, a.mediaWait, target)
 	if err != nil {
 		return err
 	}

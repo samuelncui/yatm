@@ -18,8 +18,8 @@ func TestMediaOnlyImportRejectsRebindingRetainedPositions(t *testing.T) {
 	_, err := target.CreateMedia(ctx, &Media{ID: 1, Kind: entity.MediaKind_MEDIA_KIND_TAPE,
 		Identity: "ORIGINAL", Profile: (&entity.TapeMediaProfile{Format: TapeFormatLTFSV1}).Pack()})
 	require.NoError(t, err)
-	require.NoError(t, target.SavePosition(ctx, &Position{ID: 1, MediaID: 1, Path: "saved.txt",
-		Signature: []byte("saved-content"), Hash: bytes.Repeat([]byte{1}, 32), Size: 10, Mode: 0o644}))
+	require.NoError(t, target.db.Create(&Position{ID: 1, MediaID: 1, Path: "saved.txt",
+		Signature: []byte("saved-content"), Hash: bytes.Repeat([]byte{1}, 32), Size: 10, Mode: 0o644}).Error)
 
 	// A valid Media-only snapshot from another catalog happens to reuse that numeric ID.
 	source := newJSONLTestLibrary(t)
@@ -34,7 +34,7 @@ func TestMediaOnlyImportRejectsRebindingRetainedPositions(t *testing.T) {
 	media, err := target.GetMedia(ctx, 1)
 	require.NoError(t, err)
 	require.Equal(t, "ORIGINAL", media.Identity)
-	position, err := target.GetPosition(ctx, 1)
+	position, err := readTestPosition(target, 1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), position.MediaID)
 }
@@ -68,7 +68,7 @@ func TestMediaOnlyImportValidatesAllRetainedOwners(t *testing.T) {
 					Profile: (&entity.TapeMediaProfile{Format: TapeFormatLTFSV1}).Pack()}
 				_, err := target.CreateMedia(ctx, owner)
 				require.NoError(t, err)
-				require.NoError(t, target.SavePosition(ctx, &Position{ID: int64(index), MediaID: owner.ID, Path: "saved.txt"}))
+				require.NoError(t, target.db.Create(&Position{ID: int64(index), MediaID: owner.ID, Path: "saved.txt"}).Error)
 				if index == batchSize+1 && test.omitLast {
 					continue
 				}
@@ -99,7 +99,7 @@ func TestMediaOnlyImportValidatesAllRetainedOwners(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "Updated", owner.Name)
 			require.Equal(t, int64(2048), owner.CapacityBytes)
-			position, err := target.GetPosition(ctx, int64(batchSize+1))
+			position, err := readTestPosition(target, int64(batchSize+1))
 			require.NoError(t, err)
 			require.Equal(t, owner.ID, position.MediaID)
 		})
@@ -125,7 +125,7 @@ func TestLegacyTapeOnlyImportPreservesRetainedOwners(t *testing.T) {
 			_, err := lib.CreateMedia(ctx, &Media{ID: 1, Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "ORIGINAL",
 				Profile: (&entity.TapeMediaProfile{Format: TapeFormatLTFSV0}).Pack()})
 			require.NoError(t, err)
-			require.NoError(t, lib.SavePosition(ctx, &Position{ID: 1, MediaID: 1, Path: "saved.txt"}))
+			require.NoError(t, lib.db.Create(&Position{ID: 1, MediaID: 1, Path: "saved.txt"}).Error)
 			tape := &legacyLibraryTape{ID: 1, Barcode: "ORIGINAL"}
 			test.change(tape)
 			snapshot, err := json.Marshal(map[string]any{"tapes": []*legacyLibraryTape{tape}})

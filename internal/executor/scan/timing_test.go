@@ -147,8 +147,7 @@ func TestScanPreviewSamplingExcludesReusedAndSkippedEntries(t *testing.T) {
 				previews, implementation = &wrapped.scanPreviewer, wrapped
 			}
 			exe, location := setupAnalyzeWithPreview(t, implementation)
-			r := newProgressRunner(t)
-			r.exe = exe
+			r := newJobRunner(t, exe)
 			r.phase = entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS
 			var observations []previewTiming
 			previews.before = func(context.Context) {
@@ -176,8 +175,12 @@ func TestScanPreviewSamplingExcludesReusedAndSkippedEntries(t *testing.T) {
 				require.NoError(t, r.db.Create(row).Error)
 			}
 
-			require.NoError(t, r.generatePreviews(context.Background(), frozenLimits(&Config{Spec: &entity.ScanJobSpec{
-				PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}}), &Scope{}, nil))
+			// As after the content stage returned: every fact is saved and the workload is classified.
+			config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY}})
+			require.NoError(t, r.classifyPreviews(context.Background(), config, &Scope{}))
+			settled := newSettledRows()
+			settled.finish()
+			require.NoError(t, r.generatePreviews(context.Background(), config, &Scope{}, settled))
 
 			// Published content never reaches the generator, so a cached scope costs no decoder call
 			// and contributes no work sample; a missing scope classifies its four unique contents.

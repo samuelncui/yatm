@@ -123,7 +123,7 @@ func TestIdenticalLocationPaginationAndStaleCursors(t *testing.T) {
 	require.NotEqual(t, snapshot.Revision, changed.Revision)
 	_, err = changed.Members(group.ID, page.NextCursor, 2)
 	require.Error(t, err)
-	fingerprint, err := changed.Fingerprint(group.ID)
+	fingerprint, err := groupFingerprint(changed, group.ID)
 	require.NoError(t, err)
 	require.NotEqual(t, group.Fingerprint, fingerprint)
 }
@@ -257,7 +257,7 @@ func TestIdenticalGroupFingerprintOnlyTracksRelatedIdentity(t *testing.T) {
 			originals[3].Signature = []byte("different")
 			require.NoError(t, db.Save(&originals[3]).Error)
 			unrelated := open()
-			fingerprint, err := unrelated.Fingerprint(group.ID)
+			fingerprint, err := groupFingerprint(unrelated, group.ID)
 			require.NoError(t, err)
 			require.Equal(t, group.Fingerprint, fingerprint)
 			require.NotEqual(t, initial.Revision, unrelated.Revision)
@@ -271,7 +271,7 @@ func TestIdenticalGroupFingerprintOnlyTracksRelatedIdentity(t *testing.T) {
 			require.NoError(t, db.Save(&originals[0]).Error)
 			require.NoError(t, db.Model(ModelFile).Where("id = ?", files[0].ID).Update("name", "renamed").Error)
 			metadata := open()
-			fingerprint, err = metadata.Fingerprint(group.ID)
+			fingerprint, err = groupFingerprint(metadata, group.ID)
 			require.NoError(t, err)
 			require.Equal(t, group.Fingerprint, fingerprint)
 
@@ -279,15 +279,24 @@ func TestIdenticalGroupFingerprintOnlyTracksRelatedIdentity(t *testing.T) {
 			originals[0].Path = originals[0].Path + "-relocated"
 			require.NoError(t, db.Save(&originals[0]).Error)
 			rebound := open()
-			fingerprint, err = rebound.Fingerprint(group.ID)
+			fingerprint, err = groupFingerprint(rebound, group.ID)
 			require.NoError(t, err)
 			require.NotEqual(t, group.Fingerprint, fingerprint)
 			originals[0].Signature = []byte("new-content")
 			require.NoError(t, db.Save(&originals[0]).Error)
 			changed := open()
-			changedFingerprint, err := changed.Fingerprint(group.ID)
+			changedFingerprint, err := groupFingerprint(changed, group.ID)
 			require.NoError(t, err)
 			require.NotEqual(t, fingerprint, changedFingerprint)
 		})
 	}
+}
+
+// groupFingerprint recomputes one group's token the way the group index records it.
+func groupFingerprint(s *IdenticalSnapshot, groupID string) (string, error) {
+	id, err := s.groupID(groupID)
+	if err != nil {
+		return "", err
+	}
+	return s.fingerprint(id)
 }

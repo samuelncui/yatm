@@ -231,7 +231,7 @@ func (c *mediaPositionsCommand) Execute(_ []string) error {
 }
 
 func (c *mediaInspectTapeCommand) Execute(_ []string) error {
-	ctx, cancel := c.runtime.context()
+	ctx, cancel := c.runtime.deviceContext()
 	defer cancel()
 	reply, err := inspectTape(ctx, c.runtime, c.Device, c.Identity)
 	if err != nil {
@@ -398,7 +398,7 @@ func (c *tapeDeviceInspectCommand) Execute(_ []string) error {
 	}
 
 	// Preserve absent observations and independent feature states in protobuf JSON.
-	ctx, cancel := c.runtime.context()
+	ctx, cancel := c.runtime.deviceContext()
 	defer cancel()
 	reply, err := callRPC[entity.InspectDeviceRequest, entity.InspectDeviceResponse](
 		ctx, c.runtime, entity.MediaService_InspectDevice_FullMethodName, &entity.InspectDeviceRequest{Device: device},

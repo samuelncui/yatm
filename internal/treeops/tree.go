@@ -12,15 +12,13 @@ import (
 
 const PageSize = 128
 
-// Node references and guards belong to the provider; Path is only a display value.
+// Node references belong to the provider; Path is only a display value.
 // Absent destination nodes have a usable Ref without pretending to have identity.
 type Node struct {
 	Ref, Parent, Name, Path string
 	Directory, Exists       bool
 	Protected               bool
 	Deletion                Deletion
-	Guard                   []byte
-	ParentGuard             []byte
 	FileID, Size            int64
 }
 

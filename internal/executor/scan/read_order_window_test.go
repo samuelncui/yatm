@@ -172,7 +172,6 @@ func scanOrderFixture(t *testing.T, names ...string) (*runner, []*Entry, *ordere
 	t.Helper()
 	// Whole-selection preparation owns a disposable route under the same configured Work boundary as production.
 	r := newProgressRunner(t)
-	r.exe = executor.New(nil, nil, nil, executor.Paths{Work: t.TempDir()}, executor.Scripts{}, nil)
 	session := &orderedScanSession{sources: map[string]*scanEndpointSource{}, objects: map[string]uint64{}, native: map[string]string{}, available: true}
 	rows := make([]*Entry, 0, len(names))
 	for i, name := range names {

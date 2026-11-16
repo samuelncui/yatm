@@ -98,7 +98,7 @@ func TestLiveSelectionCachedHashPreservesOpaqueSignature(t *testing.T) {
 	require.NoError(t, os.WriteFile(filename, []byte("known immutable content"), 0644))
 	cacheContentSignature(t, ctx, filename)
 	first := admittedPage(t, service, id)["opaque.txt"]
-	recorded, err := api.lib.GetFileLocation(ctx, first.Entry.GetAssociatedFileId())
+	recorded, err := readOriginal(ctx, api.lib, first.Entry.GetAssociatedFileId())
 	require.NoError(t, err)
 	opaque := []byte{0, 255, 7, 1, 9}
 	_, err = api.lib.AdmitObservations(ctx, id, []*library.ObservedEntry{{FileID: recorded.FileID, Path: "opaque.txt",

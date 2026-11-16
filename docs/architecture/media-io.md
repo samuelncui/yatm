@@ -14,13 +14,30 @@ and transfer/integrity checks remain separate required boundaries.
 ## Session Boundary
 
 The [Backend](../../internal/media/backend.go) is a stateless factory for Read/Write Sessions and
-accepts only the typed physical target. It never receives a Job database. Sessions prepare physical
-access, resolve content references, report capabilities and finalize; Archive, Restore and Scan retain manifest
-paging, ACP orchestration, item transitions and Library publication. ReadSession uses a neutral
-ReadMediaTarget with expected identity/profile; it never queries Restore `copies` or requires fake
-Restore tables for Scan. LTFS expectations precede encryption/mount; tar validates its physical label
-after establishing the required record mode and before content access. Volume expectations precede
-path exposure.
+accepts only the typed physical target and the Media the Job resolved. It never receives a Job
+database and never reads or writes the Library. Sessions prepare physical access, resolve content
+references, report capabilities and finalize; Archive, Restore and Scan retain manifest paging, ACP
+orchestration, item transitions and Library publication.
+
+[Media admission](../../internal/executor/media_admission.go) is the Job's side of that boundary
+and resolves the Media record once per attempt:
+
+- Restore and Scan read the Media of their frozen ReadMediaTarget by ID and require its identity
+  and profile to equal the frozen expectation. A tar Media must also be undestroyed, with a valid
+  tar profile and a decodable stored key. The read never queries Restore `copies` or requires fake
+  Restore tables for Scan.
+- Archive first holds the Tape drive or Volume, then resolves the requested barcode or UUID, the
+  write format and tar options, and decides eligibility: FORMAT requires an unregistered barcode,
+  APPEND an available registered Tape whose immutable format, options and stored key are valid, and
+  a Volume write a registered Volume. Holding the resource first keeps that decision valid for the
+  Session.
+- The Backend receives the resolved target and the registered Media as a plain descriptor, or none
+  for FORMAT. It checks the physical cartridge barcode or Volume marker against that descriptor
+  before encryption, mount or path exposure; tar validates its physical label after establishing
+  the required record mode and before content access. FORMAT generates the new key and profile and
+  returns them in the Session's descriptor, which Archive publishes. A read Session returns the Tape
+  position map it observed in its descriptor; the Job saves that map, and a failed save is logged
+  without vetoing the read.
 
 Read Finalize also receives the caller's read/stop error. A successful raw tar read uses normal
 physical release; failed or canceled work only restores owned controls and closes the descriptor.
@@ -50,7 +67,7 @@ Capabilities derive from immutable [Media profiles](../../entity/media.proto), n
 | HM-SMR | Concurrent random | Sequential |
 | Tape | Sequential | Sequential |
 
-Concurrent random access uses configured ACP concurrency, random access uses a single device thread, and sequential access uses ACP's linear behavior. Read access determines storage-order requirements. An [attempt lease](../../internal/executor/device.go) exclusively reserves a Tape device or Volume UUID; these locks also prevent conflicting YATM operations, not just removable-media swaps. A conflicting Job waits for the holder in arrival order and reports `QUEUED`, so a device in use never fails a Job; an unconfigured Tape device remains an explicit configuration error. Restore acquires the drive before probing its cartridge identity, and Session setup reuses that attempt's lease. The attempt retains the lease through finalization and settlement.
+Concurrent random access uses configured ACP concurrency, random access uses a single device thread, and sequential access uses ACP's linear behavior. Read access determines storage-order requirements. An [attempt lease](../../internal/executor/device.go) exclusively reserves a Tape device or Volume UUID; these locks also prevent conflicting YATM operations, not just removable-media swaps. A conflicting Job waits for the holder in arrival order and reports `QUEUED`, so a device in use never fails a Job; an unconfigured Tape device remains an explicit configuration error. Restore acquires the drive before probing its cartridge identity, Archive acquires its drive or Volume before resolving the Media record, and Session setup reuses that attempt's lease. The attempt retains the lease through finalization and settlement.
 
 ## Volume
 

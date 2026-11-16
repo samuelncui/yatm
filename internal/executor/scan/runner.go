@@ -166,35 +166,33 @@ func (r *runner) validateMedia(ctx context.Context, config *Config) (*library.Me
 }
 
 func (r *runner) openSession(ctx context.Context, config *Config, requested *entity.ReadMediaTarget) (mediapkg.ReadSession, error) {
-	// The physical selector cannot change the immutable Media kind, identity or profile.
-	stored, err := r.validateMedia(ctx, config)
-	if err != nil {
-		return nil, err
-	}
+	// The physical selector cannot change the frozen Media kind, identity or profile; opening the
+	// Session resolves the Media record once and rejects any change since the Job froze it.
+	mediaID, kind, identity := config.Spec.MediaId, config.MediaKind, config.MediaIdentity
 	target := requested
-	if target == nil && stored.Kind == entity.MediaKind_MEDIA_KIND_VOLUME {
-		target = (&entity.ReadVolumeTarget{Uuid: stored.Identity}).Pack()
+	if target == nil && kind == entity.MediaKind_MEDIA_KIND_VOLUME {
+		target = (&entity.ReadVolumeTarget{Uuid: identity}).Pack()
 	}
 	if target == nil {
 		return nil, fmt.Errorf("select a Tape device to scan")
 	}
-	if stored.Kind == entity.MediaKind_MEDIA_KIND_TAPE && target.GetTape() == nil {
+	if kind == entity.MediaKind_MEDIA_KIND_TAPE && target.GetTape() == nil {
 		return nil, fmt.Errorf("Scan requires Tape Media")
 	}
-	if stored.Kind == entity.MediaKind_MEDIA_KIND_VOLUME && target.GetVolume().GetUuid() != stored.Identity {
-		return nil, fmt.Errorf("Scan requires Volume %q", stored.Identity)
+	if kind == entity.MediaKind_MEDIA_KIND_VOLUME && target.GetVolume().GetUuid() != identity {
+		return nil, fmt.Errorf("Scan requires Volume %q", identity)
 	}
 
 	// Retain the physical selector while rebuilding trusted expectations from the frozen configuration.
 	target = proto.Clone(target).(*entity.ReadMediaTarget)
 	if tape := target.GetTape(); tape != nil {
-		if tape.MediaId != nil && tape.GetMediaId() != stored.ID {
-			return nil, fmt.Errorf("Scan Tape hint differs from frozen Media %d", stored.ID)
+		if tape.MediaId != nil && tape.GetMediaId() != mediaID {
+			return nil, fmt.Errorf("Scan Tape hint differs from frozen Media %d", mediaID)
 		}
 		tape.Device = strings.TrimSpace(tape.Device)
 	}
-	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = stored.ID, config.MediaIdentity, config.MediaProfile
-	return r.exe.NewMediaBackend(r.job.ID, r.logger, r.mediaWait).NewReadSession(ctx, target)
+	target.ExpectedMediaId, target.ExpectedIdentity, target.ExpectedProfile = mediaID, identity, config.MediaProfile
+	return r.exe.OpenReadSession(ctx, r.job.ID, r.logger, r.mediaWait, target)
 }
 
 // mediaWait reports waiting for a shared Media resource while the session is prepared.
@@ -218,11 +216,11 @@ func (r *runner) setPhase(phase entity.JobPhase) {
 	// own work path advances them from there. A failed count leaves them to the next request.
 	var counts manifestCounts
 	var err error
-	if countedPhase(phase) && r.db != nil {
+	if countedPhase(phase) {
 		counts, err = r.countManifest(context.Background())
 	}
 	r.lock.Lock()
-	if countedPhase(phase) && r.db != nil {
+	if countedPhase(phase) {
 		r.counts, r.countsKnown = counts, err == nil
 	}
 	r.phase = phase
@@ -234,9 +232,7 @@ func (r *runner) setPhase(phase entity.JobPhase) {
 	r.logInfo("Scan phase started", logrus.Fields{"phase": phase.String()})
 
 	// Publish only phase transitions, keeping runtime samples out of catalog revisions.
-	if r.exe != nil && r.job != nil {
-		r.exe.TouchJob(r.job.ID)
-	}
+	r.exe.TouchJob(r.job.ID)
 }
 func (r *runner) Phase() entity.JobPhase { r.lock.Lock(); defer r.lock.Unlock(); return r.phase }
 func (r *runner) Logger() *logrus.Logger { return r.logger }

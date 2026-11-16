@@ -82,7 +82,7 @@ func TestCancellationDuringPhysicalPublicationSettlesBeforeNextPrimitive(t *test
 		id   int64
 		path string
 	}{{first.ID, "to/a"}, {second.ID, "b"}} {
-		original, err := f.exe.Lib().GetFileLocation(context.Background(), test.id)
+		original, err := readOriginal(context.Background(), f.exe.Lib(), test.id)
 		require.NoError(t, err)
 		require.Equal(t, test.path, original.Path)
 		require.FileExists(t, filepath.Join(f.root, test.path))

@@ -110,7 +110,7 @@ func TestFileReadFactsRestoreEligibilityAndHistory(t *testing.T) {
 	require.NoError(t, db.Create(media).Error)
 	version := &FileVersion{FileID: file.ID, Signature: signature, Hash: hash[:], Size: 3}
 	require.NoError(t, db.Create(version).Error)
-	require.NoError(t, lib.SavePosition(ctx, &Position{MediaID: media.ID, Path: "saved", Signature: signature, Hash: hash[:], Size: 3}))
+	require.NoError(t, lib.db.Create(&Position{MediaID: media.ID, Path: "saved", Signature: signature, Hash: hash[:], Size: 3}).Error)
 	facts, err := lib.ReadFileFacts(ctx, []int64{file.ID}, false, true)
 	require.NoError(t, err)
 	require.True(t, facts[file.ID].HasArchive)

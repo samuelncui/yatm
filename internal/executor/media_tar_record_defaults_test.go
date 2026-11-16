@@ -77,7 +77,7 @@ func TestTarFactoryFormatRecordDefaultsAndOverrides(t *testing.T) {
 				}}})
 				require.NoError(t, err)
 			} else {
-				defaults, err := backend.tapeDefaults(ctx, "/dev/nst0")
+				defaults, err := backend.executor.tapeDefaults(ctx, "/dev/nst0")
 				require.NoError(t, err)
 				require.Nil(t, defaults.GetTarWriteOptions())
 			}
@@ -87,7 +87,7 @@ func TestTarFactoryFormatRecordDefaultsAndOverrides(t *testing.T) {
 			originalMode := bytes.Clone(fixture.mode)
 
 			// Omitted Job options must reach a usable FORMAT Session, not stop at structural resolution.
-			session, err := backend.NewWriteSession(ctx, target)
+			session, err := openWrite(ctx, backend, target)
 			require.NoError(t, err)
 			tarWriteFixtureMember(t, session, "default-record.bin", bytes.Repeat([]byte{0x5a}, int(test.bytes)+512))
 			result, err := session.Finalize(ctx, nil)
@@ -133,7 +133,7 @@ func TestTarFactoryFormatRecordDefaultsRejectUnsupportedBeforeMutation(t *testin
 			target.GetTape().TarOptions = test.options
 			originalTarget := proto.Clone(target)
 			originalMode := bytes.Clone(fixture.mode)
-			session, err := backend.NewWriteSession(t.Context(), target)
+			session, err := openWrite(t.Context(), backend, target)
 			require.Nil(t, session)
 			require.ErrorContains(t, err, test.error)
 

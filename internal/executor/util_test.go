@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/samuelncui/yatm/internal/dataformat"
@@ -75,30 +76,30 @@ func TestUtil_Log(t *testing.T) {
 }
 
 func TestUtil_Progress(t *testing.T) {
-	// Seed a durable baseline and one deterministic active transfer.
-	now := time.Unix(100, 0)
-	p := NewProgress()
-	p.now = func() time.Time { return now }
-	p.SetGlobalTotal(200, 10)
-	p.SetGlobalCopied(20, 1)
-	p.StartSession()
-	p.UpdateSessionCurrent(100, 5)
-	now = now.Add(2 * time.Second)
+	synctest.Test(t, func(t *testing.T) {
+		// Seed a durable baseline and one deterministic active transfer.
+		p := NewProgress()
+		p.SetGlobalTotal(200, 10)
+		p.SetGlobalCopied(20, 1)
+		p.StartSession()
+		p.UpdateSessionCurrent(100, 5)
+		time.Sleep(2 * time.Second)
 
-	// Report current-attempt and observed-history averages from transfer time only.
-	ent := p.ToEntity()
-	assert.Equal(t, int64(200), ent.TotalBytes)
-	assert.Equal(t, int64(10), ent.TotalFileCount)
-	assert.Equal(t, int64(120), ent.CopiedBytes)
-	assert.Equal(t, int64(6), ent.CopiedFileCount)
-	assert.Equal(t, int64(50), ent.AverageSpeedBytesPerSecond)
-	assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
+		// Report current-attempt and observed-history averages from transfer time only.
+		ent := p.ToEntity()
+		assert.Equal(t, int64(200), ent.TotalBytes)
+		assert.Equal(t, int64(10), ent.TotalFileCount)
+		assert.Equal(t, int64(120), ent.CopiedBytes)
+		assert.Equal(t, int64(6), ent.CopiedFileCount)
+		assert.Equal(t, int64(50), ent.AverageSpeedBytesPerSecond)
+		assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
 
-	// Keep completed-session throughput available while resetting current speed.
-	p.CommitSession()
-	ent = p.ToEntity()
-	assert.Zero(t, ent.AverageSpeedBytesPerSecond)
-	assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
+		// Keep completed-session throughput available while resetting current speed.
+		p.CommitSession()
+		ent = p.ToEntity()
+		assert.Zero(t, ent.AverageSpeedBytesPerSecond)
+		assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
+	})
 }
 
 func TestWriteReport(t *testing.T) {

@@ -212,7 +212,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	failedMedia, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
 	require.Nil(t, failedMedia)
-	require.Equal(t, []string{device}, exe.ListAvailableDevices())
+	requireDeviceReleased(t, exe, device)
 
 	// Make the next normal unmount expose an invalid final Index and reject that checkpoint too.
 	_, err = archiveClient.WriteMedia(ctx, &entity.WriteArchiveMediaRequest{
@@ -240,7 +240,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	invalidMedia, err := lib.GetMediaByIdentity(ctx, entity.MediaKind_MEDIA_KIND_TAPE, "ABC001")
 	require.NoError(t, err)
 	require.Nil(t, invalidMedia)
-	require.Equal(t, []string{device}, exe.ListAvailableDevices())
+	requireDeviceReleased(t, exe, device)
 	invalidIndex, err := os.ReadFile(filepath.Join(
 		paths.Work, "jobs", fmt.Sprint(archiveID), "tapes", "ABC001", "ABC001.schema",
 	))
@@ -500,7 +500,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 	require.NoError(t, os.WriteFile(legacyPath, legacyBackup, 0o600))
 	_, err = legacyCLI.run(ctx, "library", "import", "--input", legacyPath)
 	require.NoError(t, err)
-	rootPositions, err := legacyLibrary.ListPositions(ctx, tapes[0].ID, "")
+	rootPositions, _, err := legacyLibrary.ListPositionsPage(ctx, tapes[0].ID, "", "", 1000)
 	require.NoError(t, err)
 	require.NotEmpty(t, rootPositions)
 	for _, position := range rootPositions {
@@ -581,7 +581,7 @@ func TestLTFSArchiveRestore(t *testing.T) {
 		}
 	}
 	require.Equal(t, len(fixtures)+1, verifiedCount)
-	require.Equal(t, []string{device}, exe.ListAvailableDevices())
+	requireDeviceReleased(t, exe, device)
 
 	// Delete the old Media metadata explicitly, then format the same physical barcode.
 	replacementContent := []byte("replacement tape fixture")
@@ -698,4 +698,12 @@ func waitForReadyJob(t *testing.T, ctx context.Context, client entity.JobService
 		case <-ticker.C:
 		}
 	}
+}
+
+func requireDeviceReleased(t *testing.T, exe *executor.Executor, device string) {
+	t.Helper()
+	devices := exe.ListDevices()
+	require.Len(t, devices, 1)
+	require.Equal(t, device, devices[0].Device)
+	require.False(t, devices[0].Busy, "the attempt released the device")
 }

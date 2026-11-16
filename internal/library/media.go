@@ -194,12 +194,6 @@ func (l *Library) GetMediaByIdentity(
 	return result, nil
 }
 
-// ListMedia returns a bounded Media page.
-func (l *Library) ListMedia(ctx context.Context, filter *entity.MediaFilter) ([]*Media, error) {
-	rows, _, err := l.ListMediaPage(ctx, filter)
-	return rows, err
-}
-
 // ListMediaPage returns one bounded Media page and whether another row follows it.
 func (l *Library) ListMediaPage(ctx context.Context, filter *entity.MediaFilter) ([]*Media, bool, error) {
 	// Validate bounds before converting them or choosing one pagination scheme.

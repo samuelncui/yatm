@@ -6,11 +6,15 @@ import (
 	"io"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/executor"
 )
 
 const maxJobLogReadSize = 4 << 20
 
 func (api *API) GetLog(ctx context.Context, req *entity.GetJobLogRequest) (*entity.GetJobLogResponse, error) {
+	if req.Offset != nil && *req.Offset < 0 {
+		return nil, fmt.Errorf("%w: log offset must not be negative, offset=%d", executor.ErrInvalidRequest, *req.Offset)
+	}
 	reader, err := api.exe.NewLogReader(ctx, req.Id)
 	if err != nil {
 		return nil, fmt.Errorf("open log fail, %w", err)
@@ -21,9 +25,6 @@ func (api *API) GetLog(ctx context.Context, req *entity.GetJobLogRequest) (*enti
 	defer reader.Close()
 
 	if req.Offset != nil {
-		if *req.Offset < 0 {
-			return nil, fmt.Errorf("log offset must not be negative, offset=%d", *req.Offset)
-		}
 		if _, err := reader.Seek(*req.Offset, 0); err != nil {
 			return nil, fmt.Errorf("seek log file fail, offset=%d, %w", *req.Offset, err)
 		}

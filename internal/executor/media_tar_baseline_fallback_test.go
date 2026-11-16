@@ -81,7 +81,7 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 
 			// FORMAT publishes ordinary file-relative locators without manufacturing physical object anchors.
 			contents := [][]byte{[]byte("first archive content")}
-			write, err := newTarFixtureWriteSession(backend.NewWriteSession(ctx, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
+			write, err := newTarFixtureWriteSession(openWrite(ctx, backend, tarFormatTarget(entity.TapeRecordMode_TAPE_RECORD_MODE_VARIABLE)))
 			require.NoError(t, err)
 			copied := []acp.Result{tarWriteFixtureMember(t, write, "first.txt", contents[0])}
 			formatted, err := write.Finalize(ctx, nil)
@@ -103,7 +103,7 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 			exe.endAttempt(jobID)
 			require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
 			writes, marks := fixture.writes, fixture.filemarks
-			_, err = backend.NewWriteSession(ctx, (&entity.ArchiveTapeTarget{
+			_, err = openWrite(ctx, backend, (&entity.ArchiveTapeTarget{
 				Device: "/dev/nst0", Barcode: "ABC001", Mode: entity.ArchiveTapeWriteMode_ARCHIVE_TAPE_WRITE_MODE_APPEND,
 			}).Pack())
 			require.ErrorContains(t, err, "APPEND requires long READ POSITION and LOCATE support")
@@ -121,7 +121,7 @@ func TestTarFactoryBaselineFormatAppendSelectedACPReadWithoutOptionalFeatures(t 
 			// The actual read factory keeps LOGICAL access even when a matching timing source exists.
 			exe.endAttempt(jobID)
 			require.NoError(t, exe.beginAttempt(jobID, func(error) {}))
-			read, err := backend.NewReadSession(ctx, tarEncryptedReadTarget(stored))
+			read, err := openRead(ctx, backend, tarEncryptedReadTarget(stored))
 			require.NoError(t, err)
 			order, reason, err := read.(mediapkg.OrderedReadSession).ReadOrder(ctx)
 			require.NoError(t, err)

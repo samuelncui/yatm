@@ -98,15 +98,6 @@ func (e *Engine) runRoot(ctx context.Context, store Store, root *Root, settled f
 		if item.CheckOnly {
 			return nil
 		}
-		if item.Target.Parent != "" && len(item.Target.ParentGuard) == 0 {
-			var created step
-			if err := e.db.WithContext(ctx).Where("id < ? AND target_ref = ? AND outcome = ?", item.ID, item.Target.Parent, Succeeded).Order("id DESC").Limit(1).Find(&created).Error; err != nil {
-				return err
-			}
-			if created.ID != 0 {
-				item.Target.ParentGuard = created.Result.Guard
-			}
-		}
 		receipt := Receipt{Node: item.Target}
 		if receipt.Node.FileID == 0 {
 			receipt.Node.FileID = item.Source.FileID

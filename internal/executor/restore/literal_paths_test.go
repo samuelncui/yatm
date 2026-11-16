@@ -40,7 +40,7 @@ func TestRestorePreservesLiteralUTF8(t *testing.T) {
 		var output File
 		require.NoError(t, runner.db.First(&output, candidate.ItemID).Error)
 		require.Equal(t, candidate.TargetPath, output.Path)
-		original, err := runner.exe.Lib().GetFileLocation(ctx, output.FileID)
+		original, err := readOriginal(ctx, runner.exe.Lib(), output.FileID)
 		require.NoError(t, err)
 		require.NotNil(t, original)
 		require.Equal(t, candidate.TargetPath, original.Path)

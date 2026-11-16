@@ -443,7 +443,7 @@ func TestIdenticalRowIndexBuildBatchesSmallGroups(t *testing.T) {
 	require.NoError(t, db.Order("component").Find(&groups).Error)
 	require.Len(t, groups, 80)
 	for _, group := range groups {
-		fingerprint, err := snapshot.Fingerprint(strconv.FormatInt(group.Component, 10))
+		fingerprint, err := groupFingerprint(snapshot, strconv.FormatInt(group.Component, 10))
 		require.NoError(t, err)
 		require.Equal(t, fingerprint, group.Fingerprint)
 	}

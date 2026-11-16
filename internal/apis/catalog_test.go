@@ -40,7 +40,7 @@ func TestVersionMetadataSurvivesCorruptPreview(t *testing.T) {
 	signature, err := library.NewFileSignature(version.Hash, version.Size)
 	require.NoError(t, err)
 	encoded := hex.EncodeToString(signature)
-	bundle := filepath.Join(previews.StorageRoot(), encoded[:2], encoded[2:4], encoded[4:6], encoded[6:]+".zip")
+	bundle := filepath.Join(preview.ResolveRoot("", root), encoded[:2], encoded[2:4], encoded[4:6], encoded[6:]+".zip")
 	require.NoError(t, os.MkdirAll(filepath.Dir(bundle), 0755))
 	require.NoError(t, os.WriteFile(bundle, []byte("invalid ZIP"), 0644))
 	_, err = previews.Manifest(signature)
@@ -70,10 +70,10 @@ func TestImportArchiveDirectoryReportsBoundedResults(t *testing.T) {
 		Profile: (&entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD}).Pack()})
 	require.NoError(t, err)
 	directory := &library.Position{MediaID: media.ID, Path: "folder/", IsDir: true}
-	require.NoError(t, lib.SavePosition(ctx, directory))
-	require.NoError(t, lib.SavePosition(ctx, &library.Position{MediaID: media.ID, Path: "folder/saved.txt", Signature: []byte("saved"), Mode: 0o644}))
-	require.NoError(t, lib.SavePosition(ctx, &library.Position{MediaID: media.ID, Path: "folder/second.txt", Signature: []byte("second"), Mode: 0o644}))
-	require.NoError(t, lib.SavePosition(ctx, &library.Position{MediaID: media.ID, Path: "folder/unknown.txt", Mode: 0o644}))
+	require.NoError(t, db.Create(directory).Error)
+	require.NoError(t, db.Create(&library.Position{MediaID: media.ID, Path: "folder/saved.txt", Signature: []byte("saved"), Mode: 0o644}).Error)
+	require.NoError(t, db.Create(&library.Position{MediaID: media.ID, Path: "folder/second.txt", Signature: []byte("second"), Mode: 0o644}).Error)
+	require.NoError(t, db.Create(&library.Position{MediaID: media.ID, Path: "folder/unknown.txt", Mode: 0o644}).Error)
 
 	// A public report counts each missing parent once without admitting any File.
 	service := &filesService{api: New(lib, executor.New(db, lib, nil, executor.Paths{Work: root}, executor.Scripts{}, nil))}

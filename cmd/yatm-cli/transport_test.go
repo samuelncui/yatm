@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/samuelncui/yatm/entity"
@@ -385,4 +386,19 @@ func TestTimeoutZeroHasNoDeadline(t *testing.T) {
 	_, hasDeadline := ctx.Deadline()
 	require.False(t, hasDeadline)
 	require.NoError(t, ctx.Err())
+}
+
+func TestDeviceContextAllowsTapeInspection(t *testing.T) {
+	for _, tc := range []struct {
+		timeout, want time.Duration
+	}{{30 * time.Second, deviceTimeout}, {time.Hour, time.Hour}, {0, 0}} {
+		r := &runtime{options: &options{Timeout: tc.timeout}}
+		ctx, cancel := r.deviceContext()
+		deadline, ok := ctx.Deadline()
+		cancel()
+		require.Equal(t, tc.want != 0, ok)
+		if ok {
+			require.InDelta(t, tc.want.Seconds(), time.Until(deadline).Seconds(), 5)
+		}
+	}
 }
