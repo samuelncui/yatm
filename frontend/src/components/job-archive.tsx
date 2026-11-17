@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Fragment, useCallback, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -16,7 +17,7 @@ export const ArchiveCard = ({ job }: { job: Job }) => {
     async (signal: AbortSignal) => GetArchiveJobProgressResponse.create(await archiveJobCli.getProgress({ id: job.id }, { abort: signal }).response),
     [job.id],
   );
-  const { data, error: progressError } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load archive progress");
+  const { data, error: progressError } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, t`Could not load archive progress`);
   const archive = data ?? GetArchiveJobProgressResponse.create();
   const progress = archive.progress ?? null;
 
@@ -36,7 +37,7 @@ export const ArchiveCard = ({ job }: { job: Job }) => {
         <Fragment>
           {job.status === JobStatus.READY && !running && <WriteMediaDialog key={job.id.toString()} job={job} />}
           {running && <CancelJobButton jobID={job.id} />}
-          <JobResultsDialog jobId={job.id} title="Archive results" view={archiveResultView} />
+          <JobResultsDialog jobId={job.id} title={t`Archive results`} view={archiveResultView()} />
         </Fragment>
       }
     />
@@ -44,23 +45,26 @@ export const ArchiveCard = ({ job }: { job: Job }) => {
 };
 
 /** The target Media count skips, the companion Preview the Archive started, or the reason it could not be created. */
-export const archiveExtras = (reply: GetArchiveJobProgressResponse): ReactNode => (
-  <>
-    {reply.skippedTargetReachedCount !== undefined && (
-      <span>
-        Skipped: target Media count reached {String(reply.skippedTargetReachedCount)} · already on this Media {String(reply.skippedAlreadyOnMediaCount ?? 0n)}
-      </span>
-    )}
-    {!!reply.previewJobId && <Link to={`/jobs/${reply.previewJobId}`}>View preview job</Link>}
-    {reply.previewError && <Feedback severity="warning">Preview creation failed: {reply.previewError}</Feedback>}
-  </>
-);
+export const archiveExtras = (reply: GetArchiveJobProgressResponse): ReactNode => {
+  const targetReached = String(reply.skippedTargetReachedCount);
+  const alreadyOnMedia = String(reply.skippedAlreadyOnMediaCount ?? 0n);
+  const previewError = reply.previewError;
+  return (
+    <>
+      {reply.skippedTargetReachedCount !== undefined && (
+        <span>{t`Skipped: target Media count reached ${targetReached} · already on this Media ${alreadyOnMedia}`}</span>
+      )}
+      {!!reply.previewJobId && <Link to={`/jobs/${reply.previewJobId}`}>{t`View preview job`}</Link>}
+      {reply.previewError && <Feedback severity="warning">{t`Preview creation failed: ${previewError}`}</Feedback>}
+    </>
+  );
+};
 
-const archiveResultView: JobItemView = {
-  emptyLabel: "No archive results yet.",
+const archiveResultView = (): JobItemView => ({
+  emptyLabel: t`No archive results yet.`,
   listing: "archive-files",
   cursorOf: (item: ArchiveItem) => item.file?.targetPath ?? "",
   render: (item: ArchiveItem) => (
-    <FileRow src={{ path: item.file?.mediaPath || item.file?.targetPath || "Unknown file", size: item.sizeBytes, status: item.status }} />
+    <FileRow src={{ path: item.file?.mediaPath || item.file?.targetPath || t`Unknown file`, size: item.sizeBytes, status: item.status }} />
   ),
-};
+});

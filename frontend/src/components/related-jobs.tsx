@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { ActionRow } from "@/components/action-row";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,7 +25,7 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
       setJobs(reply.jobs);
       setError("");
     } catch (error) {
-      if (sequence === request.current) setError(errorMessage(error, "Could not load related Jobs"));
+      if (sequence === request.current) setError(errorMessage(error, t`Could not load related Jobs`));
     } finally {
       if (sequence === request.current) setBusy(false);
     }
@@ -40,15 +41,15 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
   }, [load]);
   return (
     <section className="related-jobs-panel">
-      <h2>Recent Jobs</h2>
+      <h2>{t`Recent Jobs`}</h2>
       {error && <Feedback severity="error">{error}</Feedback>}
-      <Table size="small" aria-label="Related Jobs">
+      <Table size="small" aria-label={t`Related Jobs`}>
         <TableHead>
           <TableRow>
-            <TableCell>Job</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Created</TableCell>
-            <TableCell>Updated</TableCell>
+            <TableCell>{t`Job`}</TableCell>
+            <TableCell>{t`Status`}</TableCell>
+            <TableCell>{t`Created`}</TableCell>
+            <TableCell>{t`Updated`}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -66,17 +67,17 @@ export const RelatedJobs = ({ locationID, mediaID }: { locationID?: bigint; medi
           ))}
           {!jobs.length && (
             <TableRow>
-              <TableCell colSpan={4}>{busy ? "Loading…" : error ? "Jobs unavailable" : "No Jobs yet"}</TableCell>
+              <TableCell colSpan={4}>{busy ? t`Loading…` : error ? t`Jobs unavailable` : t`No Jobs yet`}</TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
       <ActionRow>
         <Button component={Link} to={`/jobs?${query}`}>
-          All related Jobs
+          {t`All related Jobs`}
         </Button>
         <Button disabled={busy} onClick={() => void load()}>
-          Refresh
+          {t`Refresh`}
         </Button>
       </ActionRow>
     </section>

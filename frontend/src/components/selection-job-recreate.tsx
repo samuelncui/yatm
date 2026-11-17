@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { Stack } from "@mui/material";
@@ -25,32 +26,35 @@ export type SelectionCreation = ({ kind: "archive"; request: CreateArchiveJobReq
 const loadArchive = async (id: bigint, signal: AbortSignal): Promise<SelectionCreation> => {
   const { request, unavailableReason } = await archiveJobCli.getCreation({ id, latest: false }, { abort: signal }).response;
   signal.throwIfAborted();
-  if (!request) throw new Error(unavailableReason || "The original Archive inputs are unavailable.");
+  if (!request) throw new Error(unavailableReason || t`The original Archive inputs are unavailable.`);
   return { kind: "archive", request, reason: unavailableReason, entries: await readCreationEntries(request.spec?.selections ?? [], [], signal) };
 };
 
 const loadRestore = async (id: bigint, signal: AbortSignal): Promise<SelectionCreation> => {
   const { request, unavailableReason } = await restoreJobCli.getCreation({ id, latest: false }, { abort: signal }).response;
   signal.throwIfAborted();
-  if (!request) throw new Error(unavailableReason || "The original Restore inputs are unavailable.");
+  if (!request) throw new Error(unavailableReason || t`The original Restore inputs are unavailable.`);
   const entries = await readCreationEntries(request.spec?.selections ?? [], request.spec?.fileVersionIds ?? [], signal);
   const result: SelectionCreation = { kind: "restore", request, entries, reason: unavailableReason };
   const destination = request.spec?.destination;
   if (!destination) {
-    result.destinationError = "The original Restore destination is unavailable. Choose a destination.";
+    result.destinationError = t`The original Restore destination is unavailable. Choose a destination.`;
     return result;
   }
   try {
     const { location } = await locationCli.get({ id: destination.locationId }, { abort: signal }).response;
     signal.throwIfAborted();
-    if (!location || location.id !== destination.locationId) throw new Error("This Location is unavailable.");
+    if (!location || location.id !== destination.locationId) throw new Error(t`This Location is unavailable.`);
     const { detail } = await filesCli.get({ reference: locationDirectoryReference(String(location.id), destination.path) }, { abort: signal }).response;
     signal.throwIfAborted();
-    if (!canChooseLocationDirectory(detail?.entry)) throw new Error("This destination is unavailable.");
+    if (!canChooseLocationDirectory(detail?.entry)) throw new Error(t`This destination is unavailable.`);
     result.destination = { location, path: destination.path };
   } catch (failure) {
     signal.throwIfAborted();
-    result.destinationError = `Location ${destination.locationId}/${destination.path}: ${errorMessage(failure, "Could not read the destination")} Choose a destination.`;
+    const locationID = String(destination.locationId);
+    const path = destination.path;
+    const reason = errorMessage(failure, t`Could not read the destination`);
+    result.destinationError = t`Location ${locationID}/${path}: ${reason} Choose a destination.`;
   }
   return result;
 };
@@ -78,6 +82,8 @@ const ApplyCreation = ({
   const [approved, setApproved] = useState<number | undefined>(() => (!entries.length && revision === startingRevision ? revision : undefined));
   const confirmed = useRef(false);
   const navigate = useNavigate();
+  const currentCount = entries.length;
+  const newCount = creation.entries.length;
   const [applied, setApplied] = useState(false);
   const [changed, setChanged] = useState(false);
   useEffect(() => {
@@ -102,8 +108,8 @@ const ApplyCreation = ({
   if (applied) return children(creation);
   return (
     <ActionDialog
-      title="Replace unsent selections?"
-      confirmLabel="Replace selections"
+      title={t`Replace unsent selections?`}
+      confirmLabel={t`Replace selections`}
       onConfirm={() => {
         confirmed.current = true;
         setApproved(revision);
@@ -114,12 +120,13 @@ const ApplyCreation = ({
     >
       <Stack spacing={2}>
         <span>
-          Replace the current {entries.length} {creation.kind === "archive" ? "Archive" : "Restore"} selections with {creation.entries.length} selections from
-          this Job?
+          {creation.kind === "archive"
+            ? t`Replace the current ${currentCount} Archive selections with ${newCount} selections from this Job?`
+            : t`Replace the current ${currentCount} Restore selections with ${newCount} selections from this Job?`}
         </span>
-        <span>Review the creation form before submitting.</span>
+        <span>{t`Review the creation form before submitting.`}</span>
         {creation.reason && <Feedback severity="warning">{creation.reason}</Feedback>}
-        {changed && <Feedback severity="warning">The selections changed while this form was opening. Review them before replacing.</Feedback>}
+        {changed && <Feedback severity="warning">{t`The selections changed while this form was opening. Review them before replacing.`}</Feedback>}
       </Stack>
     </ActionDialog>
   );

@@ -1,8 +1,18 @@
+import { t } from "@lingui/core/macro";
 import { Grid, Stack } from "@mui/material";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsNumberField } from "@/components/settings-field";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { JobExecutionSettings, JobSettings, SettingsGroup } from "@/entity";
+
+const executionSummary = (execution: JobExecutionSettings): string => {
+  const readBatch = String(execution.readBatch);
+  const readBufferMax = String(execution.readBufferMax);
+  const writeBufferMax = String(execution.writeBufferMax);
+  const writeBatchSize = String(execution.writeBatchSize);
+  const flushIntervalMs = String(execution.flushIntervalMs);
+  return t`Manifest batch ${readBatch} items · queued reads ${readBufferMax} · queued results ${writeBufferMax} · ${writeBatchSize} results/update · flush ${flushIntervalMs} ms`;
+};
 
 /** The Executor's pipeline limits: what an attempt batches, buffers and flushes while it runs. */
 export const JobSettingsBrowser = () => {
@@ -40,17 +50,12 @@ export const JobSettingsBrowser = () => {
         }}
       >
         {execution && (
-          <SettingsSection
-            title="Advanced"
-            collapsible
-            hasError={!!invalid}
-            description={`Manifest batch ${execution.readBatch} items · queued reads ${execution.readBufferMax} · queued results ${execution.writeBufferMax} · ${execution.writeBatchSize} results/update · flush ${execution.flushIntervalMs} ms`}
-          >
+          <SettingsSection title={t`Advanced`} collapsible hasError={!!invalid} description={executionSummary(execution)}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Manifest batch (items)"
-                  helperText="Items per manifest page. Does not change the full selection used for Tape planning."
+                  label={t`Manifest batch (items)`}
+                  helperText={t`Items per manifest page. Does not change the full selection used for Tape planning.`}
                   value={execution.readBatch}
                   disabled={loading || saving}
                   onChange={(readBatch) => changeExecution({ readBatch })}
@@ -58,8 +63,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Queued read items"
-                  helperText="Maximum queued reads. Larger queues can use more memory."
+                  label={t`Queued read items`}
+                  helperText={t`Maximum queued reads. Larger queues can use more memory.`}
                   disabled={loading || saving}
                   value={execution.readBufferMax}
                   max={1000000}
@@ -68,8 +73,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Queued results"
-                  helperText="Maximum completed results waiting to be recorded; this is not a Tape byte buffer."
+                  label={t`Queued results`}
+                  helperText={t`Maximum completed results waiting to be recorded; this is not a Tape byte buffer.`}
                   disabled={loading || saving}
                   value={execution.writeBufferMax}
                   max={1000000}
@@ -78,8 +83,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Results per update"
-                  helperText="Maximum results in one update. Larger batches can delay progress reporting."
+                  label={t`Results per update`}
+                  helperText={t`Maximum results in one update. Larger batches can delay progress reporting.`}
                   disabled={loading || saving}
                   value={execution.writeBatchSize}
                   onChange={(writeBatchSize) => changeExecution({ writeBatchSize })}
@@ -87,8 +92,8 @@ export const JobSettingsBrowser = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
-                  label="Result flush interval (ms)"
-                  helperText="Maximum wait before a result update, in milliseconds."
+                  label={t`Result flush interval (ms)`}
+                  helperText={t`Maximum wait before a result update, in milliseconds.`}
                   disabled={loading || saving}
                   value={execution.flushIntervalMs}
                   min={100}

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mediaCli } from "@/api";
 import type { DeviceSummary } from "@/entity";
@@ -7,7 +8,7 @@ import { errorMessage } from "@/tools";
  * One consumer's Tape device list. Availability stays unknown (`null`) until a read succeeds;
  * a newer read, `reset` or unmount supersedes older replies, which then resolve to `null`.
  */
-export function useTapeDevices(failure = "Could not load Tape devices") {
+export function useTapeDevices(failure?: string) {
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +36,7 @@ export function useTapeDevices(failure = "Could not load Tape devices") {
       } catch (reason) {
         if (current !== sequence.current) return null;
         if (!report) throw reason;
-        setError(errorMessage(reason, failure));
+        setError(errorMessage(reason, failure ?? t`Could not load Tape devices`));
         return null;
       } finally {
         if (current === sequence.current) setLoading(false);

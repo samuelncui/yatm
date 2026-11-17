@@ -1,3 +1,5 @@
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { Feedback } from "@/components/feedback";
 import { useState } from "react";
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from "@mui/material";
@@ -13,6 +15,8 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
   const [reference, setReference] = useState<LocationEntryRef>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const fileName = file.name;
+  const targetName = reference ? `${location?.name}/${reference.path}` : "";
   const save = async () => {
     if (!reference || busy) return;
     setBusy(true);
@@ -20,24 +24,24 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
     try {
       await filesCli.relocateOriginal({ fileId: file.id, reference, dryrun: false }).response;
       onClose();
-      runUIAction(onSaved, "Original linked, but its details could not be refreshed");
+      runUIAction(onSaved, t`Original linked, but its details could not be refreshed`);
     } catch (error) {
-      setError(errorMessage(error, "Could not link this original"));
+      setError(errorMessage(error, t`Could not link this original`));
     } finally {
       setBusy(false);
     }
   };
   return (
     <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="md">
-      <DialogTitle>Locate original · {file.name}</DialogTitle>
+      <DialogTitle>{t`Locate original · ${fileName}`}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           <TextField
             select
-            label="Location"
+            label={t`Location`}
             value={location?.id.toString() ?? ""}
             disabled={busy || (loading && !locations.length)}
-            helperText={loading && !locations.length ? "Loading Locations…" : undefined}
+            helperText={loading && !locations.length ? t`Loading Locations…` : undefined}
             onChange={(event) => {
               setError("");
               setReference(undefined);
@@ -55,7 +59,7 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
               severity="error"
               action={
                 <Button disabled={busy || loading} onClick={retry}>
-                  Retry Locations
+                  {t`Retry Locations`}
                 </Button>
               }
             >
@@ -65,11 +69,10 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
           {location && !reference && <LocationEntryBrowser key={String(location.id)} source={location} onChoose={setReference} />}
           {reference && (
             <Alert severity="warning">
-              Link <strong>{file.name}</strong> to{" "}
-              <strong>
-                {location?.name}/{reference.path}
-              </strong>
-              ? This replaces its original reference without moving files or changing tags, notes, or saved versions.
+              <Trans>
+                Link <strong>{fileName}</strong> to <strong>{targetName}</strong>? This replaces its original reference without moving files or changing tags,
+                notes, or saved versions.
+              </Trans>
             </Alert>
           )}
           {error && <Feedback severity="error">{error}</Feedback>}
@@ -77,7 +80,7 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
       </DialogContent>
       <DialogActions>
         <Button variant="contained" disabled={!reference || busy} onClick={() => void save()}>
-          Link original
+          {t`Link original`}
         </Button>
         {reference && (
           <Button
@@ -87,11 +90,11 @@ export const RelocateOriginalDialog = ({ file, onClose, onSaved }: { file: Pick<
               setReference(undefined);
             }}
           >
-            Choose another file
+            {t`Choose another file`}
           </Button>
         )}
         <Button disabled={busy} onClick={onClose}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>

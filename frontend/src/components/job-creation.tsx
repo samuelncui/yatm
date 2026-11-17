@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Box, Button, Stack } from "@mui/material";
@@ -28,11 +29,11 @@ export function JobCreationLoader<T>({
     setResult(undefined);
     setError("");
     void (async () => {
-      if (!/^[1-9]\d*$/.test(id)) throw new Error("Invalid Job ID.");
+      if (!/^[1-9]\d*$/.test(id)) throw new Error(t`Invalid Job ID.`);
       const value = await load(BigInt(id), controller.signal);
       if (!controller.signal.aborted) setResult({ id, value });
     })().catch((failure) => {
-      if (!controller.signal.aborted) setError(errorMessage(failure, "Could not load Job creation inputs"));
+      if (!controller.signal.aborted) setError(errorMessage(failure, t`Could not load Job creation inputs`));
     });
     return () => controller.abort();
   }, [id, load, attempt]);
@@ -40,18 +41,41 @@ export function JobCreationLoader<T>({
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       {error ? (
-        <Feedback severity="error" action={<Button onClick={() => setAttempt((value) => value + 1)}>Retry</Button>}>
+        <Feedback severity="error" action={<Button onClick={() => setAttempt((value) => value + 1)}>{t`Retry`}</Button>}>
           {error}
         </Feedback>
       ) : (
-        <Box role="status">Loading Job creation inputs…</Box>
+        <Box role="status">{t`Loading Job creation inputs…`}</Box>
       )}
       <Button component={Link} to={cancelTo}>
-        Cancel
+        {t`Cancel`}
       </Button>
     </Stack>
   );
 }
+
+const locationLabel = (id: bigint) => {
+  const locationID = String(id);
+  return t`Location ${locationID}`;
+};
+
+// A recorded input names itself until its live entry resolves.
+const creationLabel = (versionID: bigint | undefined, target: FileSelection["target"] | undefined) => {
+  if (versionID !== undefined) {
+    const version = String(versionID);
+    return t`Saved version ${version}`;
+  }
+  if (target?.oneofKind === "library") {
+    const item = String(target.library.fileId);
+    return t`Library item ${item}`;
+  }
+  if (target?.oneofKind === "location") {
+    const locationID = String(target.location.locationId);
+    const path = target.location.path;
+    return t`Location ${locationID}/${path}`;
+  }
+  return t`Unavailable selection`;
+};
 
 export async function readCreationEntries(selections: FileSelection[], versionIDs: bigint[], signal: AbortSignal): Promise<SelectionEntry[]> {
   const inputs = [
@@ -65,14 +89,7 @@ export async function readCreationEntries(selections: FileSelection[], versionID
     const page = await Promise.all(
       inputs.slice(start, start + 20).map(async ({ selection, versionID }) => {
         const target = selection?.target;
-        const label =
-          versionID !== undefined
-            ? `Saved version ${versionID}`
-            : target?.oneofKind === "library"
-              ? `Library item ${target.library.fileId}`
-              : target?.oneofKind === "location"
-                ? `Location ${target.location.locationId}/${target.location.path}`
-                : "Unavailable selection";
+        const label = creationLabel(versionID, target);
         const entry: SelectionEntry = {
           key: selection ? FileSelection.toJsonString(selection) : `version:${versionID}`,
           selection,
@@ -85,7 +102,7 @@ export async function readCreationEntries(selections: FileSelection[], versionID
           if (versionID !== undefined) {
             const { version } = await filesCli.getVersion({ id: versionID }, { abort: signal }).response;
             signal.throwIfAborted();
-            if (!version) throw new Error("This saved version is unavailable.");
+            if (!version) throw new Error(t`This saved version is unavailable.`);
             entry.version = version;
             entry.versionID = undefined;
             entry.fileID = String(version.fileId);
@@ -97,23 +114,24 @@ export async function readCreationEntries(selections: FileSelection[], versionID
               : target?.oneofKind === "location"
                 ? locationDirectoryReference(String(target.location.locationId), target.location.path)
                 : undefined;
-          if (!reference) throw new Error("The original selection has no available reference.");
+          if (!reference) throw new Error(t`The original selection has no available reference.`);
           const { detail } = await filesCli.get({ reference }, { abort: signal }).response;
           signal.throwIfAborted();
           const file = detail?.entry;
           if (file?.error) throw new Error(file.error);
-          if (!file) throw new Error("This selected entry is unavailable.");
+          if (!file) throw new Error(t`This selected entry is unavailable.`);
           entry.name = file.name || label;
           entry.path =
             target?.oneofKind === "location"
-              ? `${detail?.original?.sourceName || `Location ${target.location.locationId}`}/${target.location.path}`
+              ? `${detail?.original?.sourceName || locationLabel(target.location.locationId)}/${target.location.path}`
               : detail?.organization?.path || file.path || entry.name;
           entry.target = detail?.organization?.path;
           entry.isDir = file.kind === EntryKind.DIRECTORY;
           entry.fileID = filesEntryLibraryID(file)?.toString() ?? entry.fileID;
         } catch (failure) {
           signal.throwIfAborted();
-          entry.unavailableReason = `${errorMessage(failure, "Could not resolve this selection")} Remove it or select it again.`;
+          const reason = errorMessage(failure, t`Could not resolve this selection`);
+          entry.unavailableReason = t`${reason} Remove it or select it again.`;
         }
         return entry;
       }),

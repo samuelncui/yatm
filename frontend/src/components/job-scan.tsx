@@ -1,4 +1,7 @@
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
+import { formattingLocale } from "@/i18n/locale";
 import { dateFromNs } from "@/tools/time";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { scanJobCli } from "@/api";
@@ -18,7 +21,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
     async (signal: AbortSignal) => GetScanJobProgressResponse.create(await scanJobCli.getProgress({ id: job.id }, { abort: signal }).response),
     [job.id],
   );
-  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load scan progress");
+  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, t`Could not load scan progress`);
   const scan = data ?? GetScanJobProgressResponse.create();
   const rows = useMemo(() => scanExtraRows(scan), [scan]);
   // A Job's frozen creation settings apply to every row and to the Media chooser.
@@ -28,7 +31,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
       pending ??= scanJobCli
         .getCreation({ id: job.id, latest: false })
         .response.then((reply) => {
-          if (!reply.request?.spec) throw new Error("Scan comparison settings were not returned");
+          if (!reply.request?.spec) throw new Error(t`Scan comparison settings were not returned`);
           return reply;
         })
         .catch((failure) => {
@@ -52,7 +55,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
         }
       })
       .catch((failure) => {
-        if (active) setComparisonError({ jobId: job.id, message: errorMessage(failure, "Could not load Scan comparison settings") });
+        if (active) setComparisonError({ jobId: job.id, message: errorMessage(failure, t`Could not load Scan comparison settings`) });
       });
     return () => {
       active = false;
@@ -71,7 +74,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
         <>
           {error && <Feedback severity="error">{error}</Feedback>}
           {comparisonError?.jobId === job.id && (
-            <Feedback severity="warning" action={<Button onClick={() => setComparisonAttempt((value) => value + 1)}>Retry comparison settings</Button>}>
+            <Feedback severity="warning" action={<Button onClick={() => setComparisonAttempt((value) => value + 1)}>{t`Retry comparison settings`}</Button>}>
               {comparisonError.message}
             </Feedback>
           )}
@@ -90,7 +93,7 @@ export const ScanCard = ({ job }: { job: Job }) => {
               }}
             />
           )}
-          <JobResultsDialog jobId={job.id} title="Scan results" view={resultView} />
+          <JobResultsDialog jobId={job.id} title={t`Scan results`} view={resultView} />
         </>
       }
     />
@@ -99,19 +102,19 @@ export const ScanCard = ({ job }: { job: Job }) => {
 
 /** The Scan's business counters, which are independent of the stage's own window. */
 export const scanExtraRows = (reply: GetScanJobProgressResponse): ProgressRow[] => [
-  { name: "Added", value: Number(reply.addedCount) },
-  { name: "Changed", value: Number(reply.changedCount) },
-  { name: "Removed", value: Number(reply.removedCount) },
+  { name: t`Added`, value: Number(reply.addedCount) },
+  { name: t`Changed`, value: Number(reply.changedCount) },
+  { name: t`Removed`, value: Number(reply.removedCount) },
   ...(
     [
-      ["matchedCount", "Checks passed"],
-      ["damagedCount", "Content mismatch"],
-      ["missingCount", "Missing"],
-      ["unreadableCount", "Unreadable"],
-      ["unverifiableCount", "No baseline"],
-      ["previewsReadyCount", "Previews ready"],
-      ["previewsSkippedCount", "Previews skipped"],
-      ["previewsFailedCount", "Previews failed"],
+      ["matchedCount", t`Checks passed`],
+      ["damagedCount", t`Content mismatch`],
+      ["missingCount", t`Missing`],
+      ["unreadableCount", t`Unreadable`],
+      ["unverifiableCount", t`No baseline`],
+      ["previewsReadyCount", t`Previews ready`],
+      ["previewsSkippedCount", t`Previews skipped`],
+      ["previewsFailedCount", t`Previews failed`],
     ] as const
   )
     .filter(([key]) => reply[key] > 0n)
@@ -125,39 +128,50 @@ const resultRow = (path: string, description: string) => (
 );
 
 const scanResultView = (status: JobStatus, compare: boolean | undefined): JobItemView => ({
-  emptyLabel: "No file results yet.",
+  emptyLabel: t`No file results yet.`,
   listing: "scan-entries",
   cursorOf: (entry: ScanEntry) => String(entry.id),
   render: (entry: ScanEntry) => resultRow(entry.path, scanEntryLabel(entry, status, compare)),
 });
 
-const findingLabels: Record<ScanFinding, string> = {
-  [ScanFinding.UNSPECIFIED]: "Not checked",
-  [ScanFinding.NOT_CHECKED]: "Not checked",
-  [ScanFinding.MATCH]: "Check passed",
-  [ScanFinding.MISMATCH]: "Content mismatch",
-  [ScanFinding.MISSING]: "Missing",
-  [ScanFinding.UNREADABLE]: "Unreadable",
-  [ScanFinding.UNVERIFIABLE]: "No verification baseline",
+const findingLabels: Record<ScanFinding, MessageDescriptor> = {
+  [ScanFinding.UNSPECIFIED]: msg`Not checked`,
+  [ScanFinding.NOT_CHECKED]: msg`Not checked`,
+  [ScanFinding.MATCH]: msg`Check passed`,
+  [ScanFinding.MISMATCH]: msg`Content mismatch`,
+  [ScanFinding.MISSING]: msg`Missing`,
+  [ScanFinding.UNREADABLE]: msg`Unreadable`,
+  [ScanFinding.UNVERIFIABLE]: msg`No verification baseline`,
+};
+// A not-checked entry reads as what changed about it.
+const changeLabels: Record<ScanChange, MessageDescriptor> = {
+  [ScanChange.UNSPECIFIED]: msg({ message: "unspecified", context: "Scan change" }),
+  [ScanChange.ADDED]: msg({ message: "added", context: "Scan change" }),
+  [ScanChange.CHANGED]: msg({ message: "changed", context: "Scan change" }),
+  [ScanChange.REMOVED]: msg({ message: "removed", context: "Scan change" }),
+  [ScanChange.UNCHANGED]: msg({ message: "unchanged", context: "Scan change" }),
 };
 const matchingCopiesLabel = (entry: ScanEntry, status: JobStatus, compare: boolean | undefined) => {
   // Settings that are still loading, or failed with their own error, add nothing to the row.
-  if (entry.change === ScanChange.REMOVED) return "Archived copies not compared (removed)";
+  if (entry.change === ScanChange.REMOVED) return t`Archived copies not compared (removed)`;
   if (compare === undefined) return "";
-  if (!compare) return "Archived copy comparison not requested";
-  if (status !== JobStatus.COMPLETED) return "Archived copy comparison incomplete";
-  if (!entry.signature.length) return "Archived copies unknown (no signature)";
-  return `Matching archived copies: ${entry.matchingCopies}`;
+  if (!compare) return t`Archived copy comparison not requested`;
+  if (status !== JobStatus.COMPLETED) return t`Archived copy comparison incomplete`;
+  if (!entry.signature.length) return t`Archived copies unknown (no signature)`;
+  const matchingCopies = String(entry.matchingCopies);
+  return t`Matching archived copies: ${matchingCopies}`;
 };
-const scanEntryLabel = (entry: ScanEntry, status: JobStatus, compare: boolean | undefined) =>
-  [
-    entry.finding !== ScanFinding.NOT_CHECKED ? findingLabels[entry.finding] : (ScanChange[entry.change] ?? "Unknown").toLowerCase(),
-    entry.checkedAtNs ? dateFromNs(entry.checkedAtNs)?.toLocaleString() : "",
-    entry.preview === ScanPreviewOutcome.READY ? "Preview ready" : "",
-    entry.preview === ScanPreviewOutcome.FAILED ? `Preview failed: ${entry.previewError}` : "",
-    entry.preview === ScanPreviewOutcome.SKIPPED ? "Preview skipped" : "",
+const scanEntryLabel = (entry: ScanEntry, status: JobStatus, compare: boolean | undefined) => {
+  const previewError = entry.previewError;
+  return [
+    entry.finding !== ScanFinding.NOT_CHECKED ? i18n._(findingLabels[entry.finding]) : i18n._(changeLabels[entry.change]),
+    entry.checkedAtNs ? dateFromNs(entry.checkedAtNs)?.toLocaleString(formattingLocale()) : "",
+    entry.preview === ScanPreviewOutcome.READY ? t`Preview ready` : "",
+    entry.preview === ScanPreviewOutcome.FAILED ? t`Preview failed: ${previewError}` : "",
+    entry.preview === ScanPreviewOutcome.SKIPPED ? t`Preview skipped` : "",
     matchingCopiesLabel(entry, status, compare),
     entry.detail,
   ]
     .filter(Boolean)
     .join(" · ");
+};

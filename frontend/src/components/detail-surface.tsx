@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useId, type ReactNode } from "react";
 import { Box, CircularProgress, Dialog, dialogClasses, IconButton, styled, Tab } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -55,9 +56,9 @@ export const DetailSurface = ({ title, titleId, icon, status, busy, tabs, select
             </span>
           )}
         </div>
-        {busy && <CircularProgress size={16} aria-label="Refreshing details" />}
+        {busy && <CircularProgress size={16} aria-label={t`Refreshing details`} />}
         {onClose && (
-          <IconButton size="small" aria-label="Close details" onClick={onClose}>
+          <IconButton size="small" aria-label={t`Close details`} onClick={onClose}>
             <CloseRoundedIcon fontSize="small" />
           </IconButton>
         )}
@@ -69,7 +70,7 @@ export const DetailSurface = ({ title, titleId, icon, status, busy, tabs, select
           value={selectedTab}
           onChange={(_, value: string) => onTabChange?.(value)}
           variant="fullWidth"
-          aria-label={`${title} details`}
+          aria-label={t`${title} details`}
         >
           {tabs.map(({ value, label }) => (
             <Tab key={value} value={value} label={label} id={`${prefix}-tab-${value}`} aria-controls={`${prefix}-panel-${value}`} />
@@ -79,7 +80,7 @@ export const DetailSurface = ({ title, titleId, icon, status, busy, tabs, select
       <div className="detail-surface-scroll">
         {notice}
         {preview && (
-          <div className="detail-surface-preview" aria-label="Preview">
+          <div className="detail-surface-preview" aria-label={t`Preview`}>
             {preview}
           </div>
         )}

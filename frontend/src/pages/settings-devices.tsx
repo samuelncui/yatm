@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { t } from "@lingui/core/macro";
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { defaultTapeFormat, isWritableTapeFormat, ltfsUnsupported, ltfsUnsupportedReason } from "@/components/tape-format";
@@ -38,7 +40,7 @@ import {
 
 export const DeviceSettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.DEVICE, DeviceSettings, "Device");
-  const { devices, loading: listing, error: listError, load: loadDevices } = useTapeDevices("Could not list devices");
+  const { devices, loading: listing, error: listError, load: loadDevices } = useTapeDevices(t`Could not list devices`);
   const [params] = useSearchParams();
   // A link from a Job may name the device to show.
   const [selected, setSelected] = useState(() => params.get("device") ?? "");
@@ -59,12 +61,19 @@ export const DeviceSettingsBrowser = () => {
   // A selection that is neither listed nor saved falls back to the first remaining entry.
   const device = names.includes(selected) ? selected : names[0] || "";
   const summary = devices?.find((value) => value.device === device);
+  const busyDetail = summary?.detail || t`Device in use`;
   const config = editor.draft?.devices.find((value) => value.device === device);
   const tape = config?.options.oneofKind === "tape" ? config.options.tape : TapeDeviceSettings.create();
   const options = tape.tarWriteOptions ?? TarWriteOptions.create();
   const format = tape.defaultFormat ?? defaultTapeFormat;
   // A drive known to lack an LTO-5 or later density offers only Tar; a saved LTFS default stays visible as unsupported.
   const noLtfs = ltfsUnsupported(report);
+  const recordBytes = String(options.recordBytes);
+  const pollSeconds = String(tape.capacityPollIntervalSeconds);
+  const records = options.recordBytes === undefined ? t`512 KiB (default)` : t`${recordBytes} bytes`;
+  const polling =
+    tape.capacityPollIntervalSeconds === undefined ? t`Auto (5 seconds)` : tape.capacityPollIntervalSeconds === 0 ? t`Off` : t`${pollSeconds} seconds`;
+  const advancedSummary = t`Tar records ${records} · capacity polling ${polling}`;
   const change = (next: TapeDeviceSettings) => {
     if (!editor.draft || !device) return;
     const value = DeviceConfig.create({ device, options: { oneofKind: "tape", tape: next } });
@@ -88,7 +97,7 @@ export const DeviceSettingsBrowser = () => {
       const reply = await mediaCli.inspectDevice({ device }).response;
       if (current === sequence.current) setReport(reply);
     } catch (reason) {
-      if (current === sequence.current) setDeviceError(errorMessage(reason, "Could not inspect device"));
+      if (current === sequence.current) setDeviceError(errorMessage(reason, t`Could not inspect device`));
     } finally {
       if (current === sequence.current) setInspecting(false);
     }
@@ -102,7 +111,7 @@ export const DeviceSettingsBrowser = () => {
     const keys = new Set<string>();
     for (const entry of editor.draft.devices) {
       let error = "";
-      if (!entry.device.trim() || keys.has(entry.device)) error = "Device entries must have nonempty, unique names.";
+      if (!entry.device.trim() || keys.has(entry.device)) error = t`Device entries must have nonempty, unique names.`;
       keys.add(entry.device);
       if (error) {
         if (entry.device !== device) selectDevice(entry.device);
@@ -140,7 +149,7 @@ export const DeviceSettingsBrowser = () => {
         onReload={editor.reload}
       />
       {/* Listing devices is not loading saved settings, so it neither relabels nor blocks their reload. */}
-      {listing && !editor.loading && <LinearProgress aria-label="Loading devices" />}
+      {listing && !editor.loading && <LinearProgress aria-label={t`Loading devices`} />}
       {listError && <Feedback severity="error">{listError}</Feedback>}
       <Stack
         component="form"
@@ -154,113 +163,113 @@ export const DeviceSettingsBrowser = () => {
         {editor.draft && (
           <>
             <SettingsSection
-              title="Device defaults"
+              title={t`Device defaults`}
               description={
                 <>
-                  Write defaults apply to new FORMAT; APPEND and reads keep the Tape's storage profile.{" "}
-                  <a href="https://github.com/samuelncui/yatm/blob/v1/docs/operations/devices.md">Device guide</a>
+                  {t`Write defaults apply to new FORMAT; APPEND and reads keep the Tape's storage profile.`}{" "}
+                  <a href="https://github.com/samuelncui/yatm/blob/v1/docs/operations/devices.md">{t`Device guide`}</a>
                 </>
               }
             >
               {names.length === 0 ? (
-                devices !== null && <Alert severity="info">No Tape device is configured.</Alert>
+                devices !== null && <Alert severity="info">{t`No Tape device is configured.`}</Alert>
               ) : (
                 <>
-                  <TextField select fullWidth label="Device" value={device} disabled={disabled} onChange={(event) => selectDevice(event.target.value)}>
+                  <TextField select fullWidth label={t`Device`} value={device} disabled={disabled} onChange={(event) => selectDevice(event.target.value)}>
                     {names.map((name) => (
                       <MenuItem key={name} value={name}>
                         {name}
-                        {devices?.some((value) => value.device === name) ? "" : " · Inactive"}
+                        {devices?.some((value) => value.device === name) ? "" : ` · ${t`Inactive`}`}
                       </MenuItem>
                     ))}
                   </TextField>
                   {!summary && devices !== null && (
-                    <Alert severity="info">This saved entry is inactive. Its Device settings do not authorize device access.</Alert>
+                    <Alert severity="info">{t`This saved entry is inactive. Its Device settings do not authorize device access.`}</Alert>
                   )}
-                  {summary && <p role="status">{summary.busy ? `Busy · ${summary.detail || "Device in use"}` : summary.detail || "Available"}</p>}
+                  {summary && <p role="status">{summary.busy ? t`Busy · ${busyDetail}` : summary.detail || t`Available`}</p>}
                   <TextField
                     select
                     fullWidth
-                    label="Default Tape format"
+                    label={t`Default Tape format`}
                     // An unset format means Tar, so it shows as Tar rather than as a separate entry.
                     value={format}
                     disabled={disabled}
-                    helperText={noLtfs ? ltfsUnsupportedReason : undefined}
+                    helperText={noLtfs ? ltfsUnsupportedReason() : undefined}
                     onChange={(event) => change({ ...tape, defaultFormat: event.target.value })}
                   >
-                    {(!noLtfs || format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? "LTFS · unsupported" : "LTFS"}</MenuItem>}
-                    <MenuItem value="tar_pax_v1">Tar</MenuItem>
-                    {!isWritableTapeFormat(format) && <MenuItem value={format}>{format} · unsupported</MenuItem>}
+                    {(!noLtfs || format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? t`LTFS · unsupported` : "LTFS"}</MenuItem>}
+                    <MenuItem value="tar_pax_v1">{t`Tar`}</MenuItem>
+                    {!isWritableTapeFormat(format) && <MenuItem value={format}>{unsupportedLabel(format)}</MenuItem>}
                   </TextField>
                   {!isWritableTapeFormat(format) && (
-                    <Alert severity="warning">{noLtfs ? "Choose Tar before using this default." : "Choose LTFS or Tar before using this default."}</Alert>
+                    <Alert severity="warning">{noLtfs ? t`Choose Tar before using this default.` : t`Choose LTFS or Tar before using this default.`}</Alert>
                   )}
-                  {noLtfs && format === "ltfs_v1" && <Alert severity="warning">Choose Tar before using this default.</Alert>}
-                  {format === "ltfs_v1" && <Alert severity="info">Tar settings are inactive for LTFS.</Alert>}
+                  {noLtfs && format === "ltfs_v1" && <Alert severity="warning">{t`Choose Tar before using this default.`}</Alert>}
+                  {format === "ltfs_v1" && <Alert severity="info">{t`Tar settings are inactive for LTFS.`}</Alert>}
                   <Alert severity="info">
-                    The configured Encrypt script handles encryption; FORMAT generates a key.
+                    {t`The configured Encrypt script handles encryption; FORMAT generates a key.`}
                     {report?.report.oneofKind === "tape" &&
                       report.report.tape.encryptionEnabled !== undefined &&
-                      ` Last device details: encryption ${report.report.tape.encryptionEnabled ? "on" : "off"}.`}
+                      " " + (report.report.tape.encryptionEnabled ? t`Last device details: encryption on.` : t`Last device details: encryption off.`)}
                   </Alert>
                   <TextField
                     select
                     fullWidth
-                    label="Read order"
+                    label={t`Read order`}
                     value={tape.readOrder === TapeReadOrder.UNSPECIFIED ? TapeReadOrder.LOGICAL : tape.readOrder}
                     disabled={disabled}
                     error={!!readOrderError(tape.readOrder)}
                     helperText={
-                      readOrderError(tape.readOrder) || "Auto plans the selection when positions and costs apply; otherwise it reads in logical order."
+                      readOrderError(tape.readOrder) || t`Auto plans the selection when positions and costs apply; otherwise it reads in logical order.`
                     }
                     onChange={(event) => change({ ...tape, readOrder: Number(event.target.value) })}
                   >
-                    <MenuItem value={TapeReadOrder.LOGICAL}>Logical</MenuItem>
-                    <MenuItem value={TapeReadOrder.AUTO}>Auto</MenuItem>
-                    {readOrderError(tape.readOrder) && <MenuItem value={tape.readOrder}>{tape.readOrder} · unsupported</MenuItem>}
+                    <MenuItem value={TapeReadOrder.LOGICAL}>{t`Logical`}</MenuItem>
+                    <MenuItem value={TapeReadOrder.AUTO}>{t`Auto`}</MenuItem>
+                    {readOrderError(tape.readOrder) && <MenuItem value={tape.readOrder}>{unsupportedLabel(String(tape.readOrder))}</MenuItem>}
                   </TextField>
                 </>
               )}
             </SettingsSection>
             {device && (
               <SettingsSection
-                title="Advanced"
+                title={t`Advanced`}
                 collapsible
                 hasError={
                   !!(validateTarWriteOptions(options) || capacityPollError(tape.capacityPollIntervalSeconds) || readPlanningError(tape.readPlanningSeconds))
                 }
-                description={`Tar records ${options.recordBytes === undefined ? "512 KiB (default)" : `${options.recordBytes} bytes`} · capacity polling ${tape.capacityPollIntervalSeconds === undefined ? "Auto (5 seconds)" : tape.capacityPollIntervalSeconds === 0 ? "Off" : `${tape.capacityPollIntervalSeconds} seconds`}`}
+                description={advancedSummary}
               >
                 <TarWriteOptionsFields value={options} disabled={disabled} onChange={(tarWriteOptions) => change({ ...tape, tarWriteOptions })} />
                 <TextField
                   fullWidth
                   type="number"
-                  label="Tar capacity polling interval (seconds)"
-                  placeholder="Auto (5 seconds)"
+                  label={t`Tar capacity polling interval (seconds)`}
+                  placeholder={t`Auto (5 seconds)`}
                   value={tape.capacityPollIntervalSeconds ?? ""}
                   disabled={disabled}
                   slotProps={{ htmlInput: { min: 0, max: 0xffffffff, step: 1 }, inputLabel: { shrink: true } }}
                   error={!!capacityPollError(tape.capacityPollIntervalSeconds)}
-                  helperText={capacityPollError(tape.capacityPollIntervalSeconds) || "Empty for Auto, 0 for Off, otherwise at least 5 seconds."}
+                  helperText={capacityPollError(tape.capacityPollIntervalSeconds) || t`Empty for Auto, 0 for Off, otherwise at least 5 seconds.`}
                   onChange={(event) => change({ ...tape, capacityPollIntervalSeconds: event.target.value === "" ? undefined : Number(event.target.value) })}
                 />
                 <TextField
                   fullWidth
                   type="number"
-                  label="Read planning budget (seconds)"
-                  placeholder="300 seconds (default)"
+                  label={t`Read planning budget (seconds)`}
+                  placeholder={t`300 seconds (default)`}
                   value={tape.readPlanningSeconds ?? ""}
                   disabled={disabled}
                   slotProps={{ htmlInput: { min: 1, max: 0xffffffff, step: 1 }, inputLabel: { shrink: true } }}
                   error={!!readPlanningError(tape.readPlanningSeconds)}
-                  helperText={readPlanningError(tape.readPlanningSeconds) || "Limit for planning one Tape's read order."}
+                  helperText={readPlanningError(tape.readPlanningSeconds) || t`Limit for planning one Tape's read order.`}
                   onChange={(event) => change({ ...tape, readPlanningSeconds: event.target.value === "" ? undefined : Number(event.target.value) })}
                 />
               </SettingsSection>
             )}
             {device && (
               <>
-                <SettingsSection title="Read parameters" collapsible hasError={invalidParameters || !!validateTapeReadParameterSets(tape.readParameters)}>
+                <SettingsSection title={t`Read parameters`} collapsible hasError={invalidParameters || !!validateTapeReadParameterSets(tape.readParameters)}>
                   <ReadParametersEditor
                     key={device}
                     value={tape.readParameters}
@@ -274,15 +283,15 @@ export const DeviceSettingsBrowser = () => {
                   </ReadParametersEditor>
                 </SettingsSection>
                 <SettingsSection
-                  title="Device details"
-                  description="Explicit device details and the last prepared read, when available. These do not establish the current Tape's effective model."
+                  title={t`Device details`}
+                  description={t`Explicit device details and the last prepared read, when available. These do not establish the current Tape's effective model.`}
                   collapsible
                   hasError={!!deviceError}
                 >
                   {deviceError && <Feedback severity="error">{deviceError}</Feedback>}
                   <ActionRow>
                     <Button type="button" disabled={disabled || inspecting || !summary} onClick={() => void inspect()}>
-                      {inspecting ? "Inspecting device…" : "Refresh device details"}
+                      {inspecting ? t`Inspecting device…` : t`Refresh device details`}
                     </Button>
                   </ActionRow>
                   {report && <DeviceInspectionResult reply={report} />}
@@ -293,7 +302,7 @@ export const DeviceSettingsBrowser = () => {
         )}
         <SettingsActions dirty={dirty} loading={editor.loading} saving={editor.saving} onCancel={editor.cancel}>
           <Button type="button" disabled={listing || editor.saving} onClick={() => void loadDevices()}>
-            Refresh devices
+            {t`Refresh devices`}
           </Button>
         </SettingsActions>
       </Stack>
@@ -371,11 +380,10 @@ const ReadParametersEditor = ({
   return (
     <Stack spacing={2}>
       <Feedback severity="info">
-        A read uses the set for the loaded cartridge&apos;s density code, otherwise built-in values. Missing values stay unknown.
+        {t`A read uses the set for the loaded cartridge's density code, otherwise built-in values. Missing values stay unknown.`}
       </Feedback>
       <Typography variant="body2" color="text.secondary">
-        Values override the built-in ones for their density code. Empty fields stay unknown; do not enter 0 for a value you have not measured. Changes take
-        effect after Save.
+        {t`Values override the built-in ones for their density code. Empty fields stay unknown; do not enter 0 for a value you have not measured. Changes take effect after Save.`}
       </Typography>
       {setsError && <Feedback severity="error">{setsError}</Feedback>}
       {value.map((parameters, at) => (
@@ -393,6 +401,9 @@ const ReadParametersEditor = ({
       {builtinRows.map((parameters) => {
         const code = parameters.appliesTo!.densityCode!;
         const label = densityLabel(code);
+        const fixedTime = formatSeconds(parameters.positioning?.baseSeconds);
+        const seekTime = formatSeconds(parameters.positioning?.seekSecondsPerWrap);
+        const readRate = formatRate(parameters.reading?.bytesPerSecond);
         return (
           <Stack
             key={`builtin-${code}`}
@@ -401,19 +412,19 @@ const ReadParametersEditor = ({
             sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1, border: 1, borderColor: "divider", borderRadius: 1, px: 2, py: 1 }}
           >
             <strong>{label}</strong>
-            <span>Built-in</span>
-            <span>Fixed positioning time {formatSeconds(parameters.positioning?.baseSeconds)}</span>
-            <span>Seek time for one span {formatSeconds(parameters.positioning?.seekSecondsPerWrap)}</span>
-            <span>Read rate {formatRate(parameters.reading?.bytesPerSecond)}</span>
+            <span>{t`Built-in`}</span>
+            <span>{t`Fixed positioning time ${fixedTime}`}</span>
+            <span>{t`Seek time for one span ${seekTime}`}</span>
+            <span>{t`Read rate ${readRate}`}</span>
             <Button
               type="button"
               size="small"
               sx={{ ml: "auto" }}
               disabled={disabled}
-              aria-label={`Edit read parameters for ${label}`}
+              aria-label={t`Edit read parameters for ${label}`}
               onClick={() => onChange([...value, builtinStart(code) ?? TapeReadParameters.create({ appliesTo: { densityCode: code } })])}
             >
-              Edit
+              {t`Edit`}
             </Button>
           </Stack>
         );
@@ -421,13 +432,13 @@ const ReadParametersEditor = ({
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ alignItems: { md: "flex-start" } }}>
         <TextField
           select
-          label="Density code"
+          label={t`Density code`}
           sx={{ minWidth: 240 }}
           slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
           value={otherDensity ? "other" : density}
           disabled={disabled}
           error={!otherDensity && !!shownError}
-          helperText={(!otherDensity && shownError) || "The recorded density of the cartridges a new set applies to."}
+          helperText={(!otherDensity && shownError) || t`The recorded density of the cartridges a new set applies to.`}
           onChange={(event) => {
             const other = event.target.value === "other";
             setOtherDensity(other);
@@ -435,29 +446,29 @@ const ReadParametersEditor = ({
           }}
         >
           <MenuItem value="" disabled>
-            Choose a density code
+            {t`Choose a density code`}
           </MenuItem>
           {[...tapeDensityNames.keys()].map((code) => (
             <MenuItem key={code} value={String(code)} disabled={used.includes(code)}>
               {densityLabel(code)}
-              {used.includes(code) ? " · already set" : ""}
+              {used.includes(code) ? ` · ${t`already set`}` : ""}
             </MenuItem>
           ))}
-          <MenuItem value="other">Other density code</MenuItem>
+          <MenuItem value="other">{t`Other density code`}</MenuItem>
         </TextField>
         {otherDensity && (
           <TextField
-            label="Other density code"
+            label={t`Other density code`}
             value={density}
             disabled={disabled}
             error={!!shownError}
-            helperText={shownError || "Decimal, or hexadecimal with 0x, from 0 to 255."}
+            helperText={shownError || t`Decimal, or hexadecimal with 0x, from 0 to 255.`}
             onChange={(event) => setChoice(event.target.value)}
           />
         )}
         <ActionRow>
           <Button type="button" disabled={disabled} onClick={add}>
-            Add read parameters
+            {t`Add read parameters`}
           </Button>
           {children}
         </ActionRow>
@@ -511,6 +522,7 @@ const ReadParametersSet = ({
   const label = densityLabel(value.appliesTo?.densityCode);
   const reportDensity = report?.report.oneofKind === "tape" ? report.report.tape.densityCode : undefined;
   // The set keeps its density code, so details of another density cannot fill it.
+  const reportLabel = densityLabel(reportDensity);
   const reportMismatch = reportDensity !== undefined && reportDensity !== value.appliesTo?.densityCode;
   const fromDeviceDetails = () => {
     if (!report) return;
@@ -520,7 +532,7 @@ const ReadParametersSet = ({
   return (
     <Box
       component="section"
-      aria-label={`Read parameters for ${label}`}
+      aria-label={t`Read parameters for ${label}`}
       sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 2, display: "flex", flexDirection: "column", gap: 2 }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
@@ -532,48 +544,48 @@ const ReadParametersSet = ({
             type="button"
             size="small"
             disabled={disabled || !report || reportMismatch}
-            title="Fills the drive serial from the device details shown on this page and clears the other values. It does not query the device."
+            title={t`Fills the drive serial from the device details shown on this page and clears the other values. It does not query the device.`}
             onClick={fromDeviceDetails}
           >
-            From device details
+            {t`From device details`}
           </Button>
-          <Button type="button" size="small" disabled={disabled} aria-label={`Reset ${label} to built-in`} onClick={onReset}>
-            Reset to built-in
+          <Button type="button" size="small" disabled={disabled} aria-label={t`Reset ${label} to built-in`} onClick={onReset}>
+            {t`Reset to built-in`}
           </Button>
         </Stack>
       </Stack>
       {(!report || reportMismatch) && (
         <Typography variant="body2" color="text.secondary">
           {!report
-            ? "From device details needs a report: use Refresh device details on this page first."
-            : `The displayed device details report ${densityLabel(reportDensity)}, not this set's density code.`}
+            ? t`From device details needs a report: use Refresh device details on this page first.`
+            : t`The displayed device details report ${reportLabel}, not this set's density code.`}
         </Typography>
       )}
       <TextField
         fullWidth
-        label="Drive serial number"
+        label={t`Drive serial number`}
         value={current.form.driveSerial}
         disabled={disabled}
-        helperText="When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive."
+        helperText={t`When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive.`}
         onChange={(event) => update({ ...current.form, driveSerial: event.target.value })}
       />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
         {readParameterGroups.map((group) => (
-          <Fragment key={group.title}>
+          <Fragment key={group.title.id}>
             <Box component="strong" sx={{ gridColumn: "1 / -1" }}>
-              {group.title}
+              {i18n._(group.title)}
             </Box>
             {group.fields.map((field) => (
               <TextField
                 key={field.key}
                 fullWidth
-                label={field.label}
+                label={i18n._(field.label)}
                 value={current.form.values[field.key]}
                 disabled={disabled}
-                placeholder="Unknown"
+                placeholder={t`Unknown`}
                 slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
                 error={!!errors[field.key]}
-                helperText={errors[field.key] || field.helper}
+                helperText={errors[field.key] || i18n._(field.helper)}
                 onChange={(event) => update({ ...current.form, values: { ...current.form.values, [field.key]: event.target.value } })}
               />
             ))}
@@ -582,25 +594,27 @@ const ReadParametersSet = ({
       </Box>
       <TextField
         fullWidth
-        label="Source reference"
+        label={t`Source reference`}
         value={current.form.sourceReference}
         disabled={disabled}
-        helperText="Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID."
+        helperText={t`Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID.`}
         onChange={(event) => update({ ...current.form, sourceReference: event.target.value })}
       />
     </Box>
   );
 };
 
+const unsupportedLabel = (value: string) => t`${value} · unsupported`;
+
 const readOrderError = (order: TapeReadOrder): string =>
-  order === TapeReadOrder.UNSPECIFIED || order === TapeReadOrder.LOGICAL || order === TapeReadOrder.AUTO ? "" : "Choose Logical or Auto read order.";
+  order === TapeReadOrder.UNSPECIFIED || order === TapeReadOrder.LOGICAL || order === TapeReadOrder.AUTO ? "" : t`Choose Logical or Auto read order.`;
 
 const capacityPollError = (seconds?: number): string =>
   seconds !== undefined && (!Number.isInteger(seconds) || seconds < 0 || seconds > 0xffffffff || (seconds > 0 && seconds < 5))
-    ? "Capacity polling interval must be 0 (Off) or a whole number between 5 and 4294967295 seconds."
+    ? t`Capacity polling interval must be 0 (Off) or a whole number between 5 and 4294967295 seconds.`
     : "";
 
 const readPlanningError = (seconds?: number): string =>
   seconds !== undefined && (!Number.isInteger(seconds) || seconds < 1 || seconds > 0xffffffff)
-    ? "Read planning budget must be a whole number between 1 and 4294967295 seconds."
+    ? t`Read planning budget must be a whole number between 1 and 4294967295 seconds.`
     : "";

@@ -1,0 +1,4305 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-17 18:20+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh-CN\n"
+
+#. placeholder {0}: row.name
+msgid "{0} information"
+msgstr "{0}说明"
+
+#. placeholder {0}: rate.toFixed(1)
+msgid "{0} items/s"
+msgstr "{0} 项/秒"
+
+#. placeholder {0}: formatFilesize(progress.averageSpeedBytesPerSecond)
+#. placeholder {0}: formatFilesize(progress.speedBytesPerSecond)
+msgid "{0}/s"
+msgstr "{0}/秒"
+
+msgid "{amount} MB/s"
+msgstr "{amount} MB/s"
+
+msgid "{amount} s"
+msgstr "{amount} 秒"
+
+msgid "{count, plural, one {# item added to the Archive list.} other {# items added to the Archive list.}}"
+msgstr "已将 # 个项目添加到归档列表。"
+
+msgid "{count, plural, one {# item added to the Restore list.} other {# items added to the Restore list.}}"
+msgstr "已将 # 个项目添加到恢复列表。"
+
+msgid "{counter} Bytes"
+msgstr "{counter}字节"
+
+msgid "{counter} Files"
+msgstr "{counter}文件"
+
+msgid "{damaged} recovered with damage"
+msgstr "{damaged} 个带损坏恢复"
+
+msgid "{deleteCount, plural, one {Delete # selected file.} other {Delete # selected files.}}"
+msgstr "删除 # 个所选文件。"
+
+msgid "{directories, plural, one {# folder} other {# folders}}"
+msgstr "{directories, plural, other {# 个文件夹}}"
+
+msgid "{directoryCount} folder entries"
+msgstr "{directoryCount} 个文件夹条目"
+
+msgid "{draftCount} selected root"
+msgstr "已选 {draftCount} 个根项"
+
+msgid "{draftCount} selected roots"
+msgstr "已选 {draftCount} 个根项"
+
+msgid "{entryCount} selected root"
+msgstr "已选 {entryCount} 个根项"
+
+msgid "{entryCount} selected roots"
+msgstr "已选 {entryCount} 个根项"
+
+msgid "{existingCount} already in Library"
+msgstr "{existingCount} 个已在资料库中"
+
+msgid "{failedCount} failed"
+msgstr "{failedCount} 个失败"
+
+msgid "{fileCount} file"
+msgstr "{fileCount} 个文件"
+
+msgid "{fileCount} files"
+msgstr "{fileCount} 个文件"
+
+msgid "{fileCount} files · {written} written"
+msgstr "{fileCount} 个文件 · 已写入 {written}"
+
+msgid "{fileCount} files from {name} will be added as independent Library files."
+msgstr "来自 {name} 的 {fileCount} 个文件将作为独立的资料库文件添加。"
+
+msgid "{fileCount} files will be added as independent Library files."
+msgstr "{fileCount} 个文件将作为独立的资料库文件添加。"
+
+msgid "{fileCount} restore item"
+msgstr "{fileCount} 个恢复项"
+
+msgid "{fileCount} restore items"
+msgstr "{fileCount} 个恢复项"
+
+msgid "{first}; {second}"
+msgstr "{first}；{second}"
+
+msgid "{folderText} and {fileText}"
+msgstr "{folderText}和{fileText}"
+
+msgid "{format} · unsupported"
+msgstr "{format} · 不支持"
+
+msgid "{gigabytes} GB"
+msgstr "{gigabytes} GB"
+
+msgid "{groupLabel} settings saved."
+msgstr "{groupLabel}设置已保存。"
+
+msgid "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
+msgstr "{ignoredCount} 个输出匹配忽略规则，将被恢复但不会关联到资料库文件。"
+
+msgid "{jobsName} · Jobs"
+msgstr "{jobsName} · 任务"
+
+msgid "{kind} · {read} read · {write} write · {availability}"
+msgstr "{kind} · 读取：{read} · 写入：{write} · {availability}"
+
+msgid "{kind}: {name}"
+msgstr "{kind}：{name}"
+
+msgid "{kindName} details"
+msgstr "{kindName}详情"
+
+msgid "{label} (<0>{field}</0>): {value}"
+msgstr "{label}（<0>{field}</0>）：{value}"
+
+msgid "{label} waitlist"
+msgstr "{label}列表"
+
+msgid "{label}: {extensions}"
+msgstr "{label}：{extensions}"
+
+msgid "{label}: {message}"
+msgstr "{label}：{message}"
+
+msgid "{label}: {value}"
+msgstr "{label}：{value}"
+
+msgid "{mediaName} · Properties"
+msgstr "{mediaName} · 属性"
+
+msgid "{mediaName} · Tape"
+msgstr "{mediaName} · 磁带"
+
+msgid "{mediaName} · Volume"
+msgstr "{mediaName} · 卷"
+
+msgid "{megabytes} MB"
+msgstr "{megabytes} MB"
+
+msgid "{missingCopyCount} item has no usable archived copy."
+msgstr "{missingCopyCount} 项没有可用的归档副本。"
+
+msgid "{missingCopyCount} items have no usable archived copy."
+msgstr "{missingCopyCount} 项没有可用的归档副本。"
+
+msgid "{missingOriginalCount} file has no linked original and will be skipped."
+msgstr "{missingOriginalCount} 个文件没有关联的原件，将被跳过。"
+
+msgid "{missingOriginalCount} files have no linked original and will be skipped."
+msgstr "{missingOriginalCount} 个文件没有关联的原件，将被跳过。"
+
+msgid "{name} · index {index} · key {keyBytes} bytes"
+msgstr "{name} · 索引 {index} · 密钥 {keyBytes} 字节"
+
+msgid "{name} has no eligible current original to add to the Archive list."
+msgstr "{name} 没有可添加到归档列表的合格当前原件。"
+
+msgid "{name} has no saved File in Library to add to the Restore list."
+msgstr "{name} 在资料库中没有可添加到恢复列表的已保存文件。"
+
+msgid "{name}: {positionError}. Find again."
+msgstr "{name}：{positionError}。请重新查找。"
+
+msgid "{name}: {state}"
+msgstr "{name}：{state}"
+
+msgid "{name}: moved to Trash; Library update incomplete"
+msgstr "{name}：已移至回收站；资料库更新未完成"
+
+msgid "{noteLength}/{maxNoteLength} · Leave empty to clear every note."
+msgstr "{noteLength}/{maxNoteLength} · 留空以清除所有备注。"
+
+msgid "{pending} pending"
+msgstr "{pending} 个待处理"
+
+msgid "{pendingCount} Library updates incomplete"
+msgstr "{pendingCount} 项资料库更新未完成"
+
+msgid "{pollSeconds} seconds"
+msgstr "{pollSeconds} 秒"
+
+msgid "{preparedAt} · Job {preparedJob} · Media {preparedIdentity}"
+msgstr "{preparedAt} · 任务 {preparedJob} · 介质 {preparedIdentity}"
+
+msgid "{previous}. Refresh failed: {message}"
+msgstr "{previous}。刷新失败：{message}"
+
+msgid "{rate} MB/s"
+msgstr "{rate} MB/s"
+
+msgid "{readAccess} read · {writeAccess} write"
+msgstr "读取：{readAccess} · 写入：{writeAccess}"
+
+msgid "{reason} Remove it or select it again."
+msgstr "{reason} 请移除它或重新选择。"
+
+msgid "{recordBytes} bytes"
+msgstr "{recordBytes} 字节"
+
+msgid "{regularFiles, plural, one {# file} other {# files}}"
+msgstr "{regularFiles, plural, other {# 个文件}}"
+
+msgid "{remainingBytes} bytes"
+msgstr "{remainingBytes} 字节"
+
+msgid "{replacedCount, plural, one {# automatic selection was replaced by the explicit version.} other {# automatic selections were replaced by the explicit version.}}"
+msgstr "# 个自动选择已被明确版本替换。"
+
+msgid "{seconds} s"
+msgstr "{seconds} 秒"
+
+msgid "{selectedCount, plural, one {# item will move to Library Trash.} other {# items will move to Library Trash.}}"
+msgstr "{selectedCount, plural, other {# 个项目将移入资料库回收站。}}"
+
+msgid "{selectedCount} selected files"
+msgstr "已选择 {selectedCount} 个文件"
+
+msgid "{skippedCount} item has no version to restore and is left out."
+msgstr "{skippedCount} 项没有可恢复的版本，已被排除。"
+
+msgid "{skippedCount} items have no version to restore and are left out."
+msgstr "{skippedCount} 项没有可恢复的版本，已被排除。"
+
+msgid "{skippedCount} without signatures"
+msgstr "{skippedCount} 个没有签名"
+
+msgid "{space} available"
+msgstr "可用 {space}"
+
+msgid "{subject} will be added as independent Library files."
+msgstr "{subject}将作为独立的资料库文件添加。"
+
+msgid "{title} details"
+msgstr "{title}详情"
+
+msgid "{totalSize} known · {unknownSizes} sizes unknown"
+msgstr "{totalSize} 已知 · {unknownSizes} 个大小未知"
+
+msgid "{unlinked} not linked"
+msgstr "{unlinked} 个未关联"
+
+msgid "{unmatchedCount} item has no version matching this policy."
+msgstr "{unmatchedCount} 项没有符合此策略的版本。"
+
+msgid "{unmatchedCount} items have no version matching this policy."
+msgstr "{unmatchedCount} 项没有符合此策略的版本。"
+
+msgid "{unprocessedCount} not processed"
+msgstr "{unprocessedCount} 个未处理"
+
+msgid "{updated} files updated"
+msgstr "已更新 {updated} 个文件"
+
+msgid "{value} · unsupported"
+msgstr "{value} · 不支持"
+
+msgid "{verified} verified"
+msgstr "{verified} 个已校验"
+
+msgctxt "file browser"
+msgid "# hidden"
+msgstr "# 个已隐藏"
+
+msgctxt "file browser"
+msgid "# item"
+msgstr "# 项"
+
+msgctxt "file browser"
+msgid "# items"
+msgstr "# 项"
+
+msgctxt "file browser"
+msgid "# row"
+msgstr "# 行"
+
+msgctxt "file browser"
+msgid "# rows"
+msgstr "# 行"
+
+msgctxt "file browser"
+msgid "# selected"
+msgstr "已选择 #"
+
+msgid "300 seconds (default)"
+msgstr "300 秒（默认）"
+
+msgid "512 KiB (default)"
+msgstr "512 KiB（默认）"
+
+msgid "A directory on the computer running YATM, within the administrator's allowed roots."
+msgstr "运行 YATM 的计算机上的目录，须在管理员允许的根目录之内。"
+
+msgid "A file operation is already in progress for this group."
+msgstr "此分组已有文件操作正在进行。"
+
+msgid "A read uses the set for the loaded cartridge's density code, otherwise built-in values. Missing values stay unknown."
+msgstr "读取时使用与已加载磁带密度代码对应的参数集，否则使用内置值。缺失的值保持未知。"
+
+#. placeholder {0}: format(Number(stage.remainingSeconds) * 1000)
+msgid "About {0}"
+msgstr "约 {0}"
+
+msgid "Access"
+msgstr "访问"
+
+msgctxt "Device field"
+msgid "Access identity"
+msgstr "访问标识"
+
+msgid "Action"
+msgstr "操作"
+
+msgctxt "file action group"
+msgid "Actions"
+msgstr "操作"
+
+msgid "Add an original directory or a restore destination."
+msgstr "请添加原件目录或恢复目标目录。"
+
+msgid "Add another tag"
+msgstr "添加另一个标签"
+
+msgid "Add context about this file"
+msgstr "添加关于此文件的说明"
+
+msgid "Add existing inventory to Library"
+msgstr "将现有清单添加到资料库"
+
+msgid "Add files"
+msgstr "添加文件"
+
+msgid "Add folder contents"
+msgstr "添加文件夹内容"
+
+msgid "Add location"
+msgstr "添加存储位置"
+
+msgid "Add read parameters"
+msgstr "添加读取参数"
+
+msgctxt "file action"
+msgid "Add selected"
+msgstr "添加所选"
+
+msgid "Add tag “{option}”"
+msgstr "添加标签“{option}”"
+
+msgid "Add this folder"
+msgstr "添加此文件夹"
+
+msgid "Add to Archive list"
+msgstr "添加到归档列表"
+
+msgctxt "file action"
+msgid "Add to Archive list"
+msgstr "添加到归档列表"
+
+msgid "Add to Library"
+msgstr "添加到资料库"
+
+msgctxt "file action"
+msgid "Add to Library"
+msgstr "添加到资料库"
+
+msgid "Add to Library?"
+msgstr "添加到资料库？"
+
+msgctxt "file action"
+msgid "Add to list"
+msgstr "添加到列表"
+
+msgid "Add to Restore list"
+msgstr "添加到恢复列表"
+
+msgctxt "file action"
+msgid "Add to Restore list"
+msgstr "添加到恢复列表"
+
+msgid "Add Volume"
+msgstr "添加卷"
+
+msgctxt "file action"
+msgid "Add Volume"
+msgstr "添加卷"
+
+msgid "Add Volume failed"
+msgstr "添加卷失败"
+
+msgctxt "Scan change"
+msgid "added"
+msgstr "新增"
+
+msgid "Added"
+msgstr "新增"
+
+msgid "Added {fileCount} Files to Library"
+msgstr "已将 {fileCount} 个文件添加到资料库"
+
+msgid "Added {fileCount} Files to Library; skipped {skippedRecords}"
+msgstr "已将 {fileCount} 个文件添加到资料库；跳过 {skippedRecords}"
+
+msgid "Added for each crossed filemark and the following READ. Empty leaves it unpriced."
+msgstr "每越过一个文件标记及随后的 READ 时附加。留空则不计入代价。"
+
+msgid "Added for the LTFS unmount script and finalization; tar ignores it."
+msgstr "LTFS 卸载脚本及收尾所需的附加时间；tar 忽略此项。"
+
+msgid "Added time when arriving against the wrap direction"
+msgstr "逆磁带道方向到达时的附加时间"
+
+msgid "Added time when arriving against the wrap direction (s)"
+msgstr "逆 wrap 方向到达时的附加时间（秒）"
+
+msgid "Adding…"
+msgstr "正在添加…"
+
+msgctxt "Device field"
+msgid "Address bits"
+msgstr "地址位数"
+
+msgid "Advanced"
+msgstr "高级"
+
+msgid "Advanced output"
+msgstr "高级输出"
+
+msgid "Advanced Preview"
+msgstr "高级预览"
+
+msgid "Advanced runtime"
+msgstr "高级运行时"
+
+msgid "Algorithm indexes apply to this device. A key instance counter does not establish key presence or a matching recovery key."
+msgstr "算法索引仅适用于此设备。密钥实例计数不能证明密钥存在或恢复密钥匹配。"
+
+msgctxt "Device field"
+msgid "Alignment bytes"
+msgstr "对齐字节数"
+
+msgid "All"
+msgstr "全部"
+
+msgid "All levels"
+msgstr "全部级别"
+
+msgid "All locations"
+msgstr "所有存储位置"
+
+msgid "All related Jobs"
+msgstr "全部相关任务"
+
+msgid "All resources"
+msgstr "全部资源"
+
+msgid "All types"
+msgstr "全部类型"
+
+msgctxt "Device field"
+msgid "All wraps"
+msgstr "全部磁带道"
+
+msgid "All wraps describes the reported command form, not qualified full coverage. Geometry observations alone do not qualify Auto read order."
+msgstr "“全部磁带道”描述的是上报的命令形式，并不代表已确认完整覆盖。仅凭几何观测不足以认定自动读取顺序。"
+
+msgid "Allow damaged copies"
+msgstr "允许损坏副本"
+
+msgid "Allowed directories"
+msgstr "允许的目录"
+
+msgid "Already in the Library as {registeredName}."
+msgstr "已在资料库中，名称为 {registeredName}。"
+
+msgid "already set"
+msgstr "已设置"
+
+msgid "Also added once for each wrap turn crossed while reading."
+msgstr "读取时每越过一次 wrap 转向也会附加一次。"
+
+msgid "An existing marker was found. Register recreates only its Library Media; the marker and files stay unchanged."
+msgstr "发现已有标记。注册只会重新创建其资料库介质；标记和文件保持不变。"
+
+msgid "Another file operation is in progress"
+msgstr "另一个文件操作正在进行"
+
+msgid "Any archived content"
+msgstr "任意归档内容"
+
+msgctxt "Tape action"
+msgid "APPEND"
+msgstr "APPEND"
+
+msgid "APPEND uses {appendFormat} and its immutable cartridge profile."
+msgstr "APPEND 使用 {appendFormat} 及其不可更改的磁带盒配置。"
+
+msgid "Applicability: {applicability}"
+msgstr "适用性：{applicability}"
+
+msgid "Applies to this browser only."
+msgstr "仅对此浏览器生效。"
+
+msgid "Apply current policy to all"
+msgstr "将当前策略应用于全部"
+
+msgid "Apply filters"
+msgstr "应用筛选"
+
+msgid "Approximate time for the current work stage. Later stages are excluded."
+msgstr "当前工作阶段的预计耗时，不含后续阶段。"
+
+msgid "Archive"
+msgstr "归档"
+
+msgctxt "Job kind"
+msgid "Archive"
+msgstr "归档"
+
+msgid "Archive available"
+msgstr "归档可用"
+
+msgid "Archive date not recorded · {fileSize}"
+msgstr "未记录归档日期 · {fileSize}"
+
+msgid "Archive date unknown"
+msgstr "归档日期未知"
+
+msgid "Archive files are kept. Their inventory records and Media profiles will be removed."
+msgstr "归档文件予以保留，但会移除其清单记录和介质配置。"
+
+msgid "Archive not checked"
+msgstr "归档未检查"
+
+msgid "Archive results"
+msgstr "归档结果"
+
+msgid "Archive selection"
+msgstr "归档选择"
+
+msgctxt "file action"
+msgid "Archive selection"
+msgstr "归档所选项"
+
+msgid "Archive started, but the Job list could not refresh"
+msgstr "归档已开始，但任务列表无法刷新"
+
+msgid "Archive storage"
+msgstr "归档存储"
+
+msgid "Archive: {target}"
+msgstr "归档：{target}"
+
+msgid "Archived content"
+msgstr "归档内容"
+
+msgid "Archived copies"
+msgstr "归档副本"
+
+msgid "Archived copies not compared (removed)"
+msgstr "未比对归档副本（已移除）"
+
+msgid "Archived copies unknown (no signature)"
+msgstr "归档副本未知（无签名）"
+
+msgid "Archived copy comparison incomplete"
+msgstr "归档副本比对未完成"
+
+msgid "Archived copy comparison not requested"
+msgstr "未请求比对归档副本"
+
+msgid "Auto"
+msgstr "自动"
+
+msgid "Auto (5 seconds)"
+msgstr "自动（5 秒）"
+
+msgid "Auto plans the selection when positions and costs apply; otherwise it reads in logical order."
+msgstr "当位置和代价信息适用时，自动规划所选内容的读取顺序；否则按逻辑顺序读取。"
+
+msgid "Automatic identification"
+msgstr "自动识别"
+
+msgid "Automatic identification uses the Tape's cartridge memory barcode, and the matching Media supplies its saved key. YATM does not try multiple keys."
+msgstr "自动识别使用磁带盒内存中的条码，由匹配的介质提供其已保存的密钥。YATM 不会尝试多个密钥。"
+
+msgid "Available"
+msgstr "可用"
+
+msgid "Available for Restore"
+msgstr "可用于恢复"
+
+msgid "Average Speed"
+msgstr "平均速度"
+
+msgid "Average throughput in the active read or copy session."
+msgstr "当前读取或复制会话的平均吞吐量。"
+
+msgid "Back"
+msgstr "返回"
+
+msgid "Back to folder"
+msgstr "返回文件夹"
+
+msgid "Back to Location"
+msgstr "返回存储位置"
+
+msgid "Browse directories"
+msgstr "浏览目录"
+
+msgctxt "file browser"
+msgid "Browser menu: {shortcut}"
+msgstr "浏览器菜单：{shortcut}"
+
+msgctxt "Device field"
+msgid "Buffered writes"
+msgstr "缓冲写入"
+
+msgid "Built-in"
+msgstr "内置"
+
+msgctxt "Device report"
+msgid "busy"
+msgstr "忙碌"
+
+msgid "Busy"
+msgstr "忙碌"
+
+msgid "Busy · {busyDetail}"
+msgstr "忙碌 · {busyDetail}"
+
+msgid "Calculating data usage"
+msgstr "正在计算数据用量"
+
+msgid "Calculating what this Media would add…"
+msgstr "正在计算此介质将添加的内容…"
+
+msgid "Calculating…"
+msgstr "正在计算…"
+
+msgid "Calculation canceled"
+msgstr "计算已取消"
+
+msgid "Calculation ended before its final result"
+msgstr "计算在得出最终结果前结束"
+
+msgid "Calibrate {device}"
+msgstr "校准 {device}"
+
+msgid "Calibrate…"
+msgstr "校准…"
+
+msgctxt "Job phase"
+msgid "calibrating"
+msgstr "正在校准"
+
+msgctxt "Job kind"
+msgid "Calibration"
+msgstr "校准"
+
+msgid "Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier cartridge, write test data."
+msgstr "校准只对磁带定位：不读取文件，也不更改任何内容。磁带上需要有两个完整 wrap 的数据（tar 或 LTFS）；磁带较空时，请写入测试数据。"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgctxt "file action"
+msgid "Cancel Data Usage"
+msgstr "取消计算数据用量"
+
+msgid "Capabilities of the saved Preview executable."
+msgstr "已保存的预览可执行文件的能力。"
+
+msgid "Capacity"
+msgstr "容量"
+
+msgid "Capacity polling interval must be 0 (Off) or a whole number between 5 and 4294967295 seconds."
+msgstr "容量轮询间隔必须为 0（关闭），或介于 5 到 4294967295 之间的整数秒。"
+
+msgid "Capacity quality: {quality}"
+msgstr "容量质量：{quality}"
+
+msgctxt "Device report"
+msgid "capacity to warning"
+msgstr "距预警的容量"
+
+msgctxt "file action"
+msgid "Change version"
+msgstr "更改版本"
+
+msgctxt "Scan change"
+msgid "changed"
+msgstr "已变更"
+
+msgid "Changed"
+msgstr "已变更"
+
+msgid "Changes not archived"
+msgstr "更改尚未归档"
+
+msgid "Check failed"
+msgstr "检查失败"
+
+msgctxt "file action"
+msgid "Check integrity"
+msgstr "检查完整性"
+
+msgid "Check passed"
+msgstr "校验通过"
+
+msgid "Check recorded copies"
+msgstr "检查已记录的副本"
+
+msgid "Check results"
+msgstr "检查结果"
+
+msgid "Check saved executable again"
+msgstr "重新检查已保存的可执行文件"
+
+msgid "Check Tape"
+msgstr "检查磁带"
+
+msgid "Checked {checkedAt}"
+msgstr "检查于 {checkedAt}"
+
+msgid "Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here."
+msgstr "勾选的确认会在对应操作前显示。通过“不再显示”关闭的确认在此处为未勾选状态。"
+
+msgid "Checking Preview generation…"
+msgstr "正在检查预览生成…"
+
+msgid "Checking Preview helper"
+msgstr "正在检查预览辅助程序"
+
+msgid "Checks passed"
+msgstr "校验通过"
+
+msgid "Choose"
+msgstr "选择"
+
+msgid "Choose a density code"
+msgstr "选择密度代码"
+
+msgid "Choose a density code."
+msgstr "请选择密度代码。"
+
+msgid "Choose a disk…"
+msgstr "选择磁盘…"
+
+msgid "Choose a Preview option before preparing."
+msgstr "准备前请先选择预览选项。"
+
+msgid "Choose a valid date and time."
+msgstr "请选择有效的日期和时间。"
+
+msgid "Choose a version of {fileName}"
+msgstr "选择 {fileName} 的版本"
+
+msgid "Choose another file"
+msgstr "选择其他文件"
+
+msgid "Choose archive storage"
+msgstr "选择归档介质"
+
+msgid "Choose archive storage to read"
+msgstr "选择要读取的归档介质"
+
+msgid "Choose directory"
+msgstr "选择目录"
+
+msgctxt "file action"
+msgid "Choose file"
+msgstr "选择文件"
+
+msgid "Choose file source"
+msgstr "选择文件来源"
+
+msgid "Choose files and a destination in the same source"
+msgstr "请在同一来源中选择文件和目标"
+
+msgid "Choose files and folders"
+msgstr "选择文件和文件夹"
+
+msgid "Choose files or a destination first"
+msgstr "请先选择文件或目标"
+
+msgid "Choose Fixed or Variable, or inherit the device default."
+msgstr "请选择定长或变长，或继承设备默认值。"
+
+msgid "Choose folder…"
+msgstr "选择文件夹…"
+
+msgid "Choose Locations to search"
+msgstr "请选择要搜索的存储位置"
+
+msgid "Choose Logical or Auto read order."
+msgstr "请选择逻辑或自动读取顺序。"
+
+msgid "Choose LTFS or Tar before using this default."
+msgstr "请先选择 LTFS 或 Tar，再使用此默认值。"
+
+msgid "Choose Media to read"
+msgstr "选择要读取的介质"
+
+msgid "Choose one Scan source."
+msgstr "请选择一个扫描来源。"
+
+msgid "Choose restore target"
+msgstr "选择恢复目标"
+
+msgid "Choose supported preview settings."
+msgstr "请选择受支持的预览设置。"
+
+msgid "Choose Tar before using this default."
+msgstr "请先选择 Tar，再使用此默认值。"
+
+msgid "Choose version"
+msgstr "选择版本"
+
+msgid "Clean up"
+msgstr "清理"
+
+msgctxt "file action"
+msgid "Clean up Library"
+msgstr "清理资料库"
+
+msgid "Clean up Library?"
+msgstr "清理资料库？"
+
+msgid "Clear"
+msgstr "清空"
+
+msgctxt "file action"
+msgid "Clear list"
+msgstr "清空列表"
+
+msgid "Clear search"
+msgstr "清除搜索"
+
+msgid "Clear search failed"
+msgstr "清除搜索失败"
+
+msgctxt "file action"
+msgid "Clear selection"
+msgstr "清除选择"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Close details"
+msgstr "关闭详情"
+
+msgid "Close search failed"
+msgstr "关闭搜索失败"
+
+msgid "Compared"
+msgstr "已比较"
+
+msgctxt "Job phase"
+msgid "comparing content"
+msgstr "正在比较内容"
+
+msgid "Complete all required fields."
+msgstr "请填写所有必填字段。"
+
+msgctxt "Copy status"
+msgid "completed"
+msgstr "已完成"
+
+msgctxt "Job phase"
+msgid "completed"
+msgstr "已完成"
+
+msgid "Completed"
+msgstr "已完成"
+
+msgid "Completion"
+msgstr "完成"
+
+msgid "Concurrency"
+msgstr "并发数"
+
+msgid "Concurrency {concurrency} · timeout {timeoutSeconds} seconds · maximum input {maxInputPixels} pixels"
+msgstr "并发 {concurrency} · 超时 {timeoutSeconds} 秒 · 最大输入 {maxInputPixels} 像素"
+
+msgid "Concurrency must be between 1 and 16."
+msgstr "并发数必须介于 1 到 16 之间。"
+
+msgid "concurrent random"
+msgstr "并发随机"
+
+msgid "Configuration"
+msgstr "配置"
+
+msgid "Configured · algorithm not recorded"
+msgstr "已配置 · 未记录算法"
+
+msgid "Confirm adding a Media’s whole inventory to Library"
+msgstr "添加介质的全部清单到资料库前确认"
+
+msgid "Confirm adding selected inventory entries to Library"
+msgstr "添加所选清单条目到资料库前确认"
+
+msgid "Confirm barcode"
+msgstr "确认条码"
+
+msgid "Confirm Delete"
+msgstr "删除前确认"
+
+msgid "Confirm FORMAT barcode"
+msgstr "确认 FORMAT 条码"
+
+msgid "Confirmations"
+msgstr "确认提示"
+
+msgid "Connect this volume to restore"
+msgstr "请连接此卷以恢复"
+
+msgid "Content mismatch"
+msgstr "内容不一致"
+
+msgid "Content not checked"
+msgstr "内容未检查"
+
+msgid "Continued line"
+msgstr "续行"
+
+msgid "Copied"
+msgstr "已复制"
+
+msgctxt "Job phase"
+msgid "copying from media"
+msgstr "正在从介质复制"
+
+msgctxt "Job phase"
+msgid "copying to media"
+msgstr "正在复制到介质"
+
+msgid "Could not add saved version"
+msgstr "无法添加已保存版本"
+
+msgid "Could not add selection"
+msgstr "无法添加所选内容"
+
+msgid "Could not add the selection to the Archive list"
+msgstr "无法将所选内容添加到归档列表"
+
+msgid "Could not add the selection to the Restore list"
+msgstr "无法将所选内容添加到恢复列表"
+
+msgid "Could not add these records"
+msgstr "无法添加这些记录"
+
+msgid "Could not add this item to the Archive list"
+msgstr "无法将此项目添加到归档列表"
+
+msgid "Could not add this item to the Restore list"
+msgstr "无法将此项目添加到恢复列表"
+
+msgid "Could not browse directory"
+msgstr "无法浏览目录"
+
+msgid "Could not calculate data usage"
+msgstr "无法计算数据用量"
+
+msgid "Could not check access"
+msgstr "无法检查访问状态"
+
+msgid "Could not check Preview generation"
+msgstr "无法检查预览生成"
+
+msgid "Could not check this version"
+msgstr "无法检查此版本"
+
+msgid "Could not create calibration"
+msgstr "无法创建校准"
+
+msgid "Could not create job"
+msgstr "无法创建任务"
+
+msgid "Could not create scan"
+msgstr "无法创建扫描"
+
+msgid "Could not estimate selection"
+msgstr "无法估算所选内容"
+
+msgid "Could not find identical files"
+msgstr "无法查找相同文件"
+
+msgid "Could not find matching files"
+msgstr "无法查找匹配的文件"
+
+msgid "Could not identify the removed row"
+msgstr "无法识别已移除的行"
+
+msgid "Could not import the Library backup"
+msgstr "无法导入资料库备份"
+
+msgid "Could not inspect device"
+msgstr "无法检查设备"
+
+msgid "Could not inspect Tape"
+msgstr "无法检查磁带"
+
+msgid "Could not inspect this Media"
+msgstr "无法检查此介质"
+
+msgid "Could not link this original"
+msgstr "无法关联此原件"
+
+msgid "Could not list devices"
+msgstr "无法列出设备"
+
+msgid "Could not list resources"
+msgstr "无法列出资源"
+
+msgid "Could not load {groupLabel} settings"
+msgstr "无法加载{groupLabel}设置"
+
+msgid "Could not load archive progress"
+msgstr "无法加载归档进度"
+
+msgid "Could not load archive storage"
+msgstr "无法加载归档存储"
+
+msgid "Could not load archive volumes"
+msgstr "无法加载归档卷"
+
+msgid "Could not load archived copies"
+msgstr "无法加载归档副本"
+
+msgid "Could not load calibration progress"
+msgstr "无法加载校准进度"
+
+msgid "Could not load file details"
+msgstr "无法加载文件详情"
+
+msgid "Could not load Job creation inputs"
+msgstr "无法加载任务的创建输入"
+
+msgid "Could not load Job details"
+msgstr "无法加载任务详情"
+
+msgid "Could not load Job results"
+msgstr "无法加载任务结果"
+
+msgid "Could not load jobs"
+msgstr "无法加载任务"
+
+msgid "Could not load latest analysis"
+msgstr "无法加载最近的分析"
+
+msgid "Could not load location"
+msgstr "无法加载存储位置"
+
+msgid "Could not load Locations"
+msgstr "无法加载存储位置"
+
+msgid "Could not load metadata"
+msgstr "无法加载元数据"
+
+msgid "Could not load mounted Volumes"
+msgstr "无法加载已挂载的卷"
+
+msgid "Could not load related Jobs"
+msgstr "无法加载相关任务"
+
+msgid "Could not load restore progress"
+msgstr "无法加载恢复进度"
+
+msgid "Could not load rows"
+msgstr "无法加载行"
+
+msgid "Could not load saved versions"
+msgstr "无法加载已保存版本"
+
+msgid "Could not load Scan comparison settings"
+msgstr "无法加载扫描比对设置"
+
+msgid "Could not load scan progress"
+msgstr "无法加载扫描进度"
+
+msgid "Could not load selected files"
+msgstr "无法加载所选文件"
+
+msgid "Could not load selected folder"
+msgstr "无法加载所选文件夹"
+
+msgid "Could not load selected source"
+msgstr "无法加载所选来源"
+
+msgid "Could not load settings"
+msgstr "无法加载设置"
+
+msgid "Could not load some rows."
+msgstr "无法加载部分行。"
+
+msgid "Could not load Tape devices"
+msgstr "无法加载磁带设备"
+
+msgid "Could not load Tape devices or defaults"
+msgstr "无法加载磁带设备或默认设置"
+
+msgid "Could not load the complete Location catalog"
+msgstr "无法加载完整的存储位置目录"
+
+msgid "Could not load the last restore target. Choose a target."
+msgstr "无法加载上次的恢复目标。请选择目标。"
+
+msgid "Could not load this job"
+msgstr "无法加载此任务"
+
+msgid "Could not load this window of Job results"
+msgstr "无法加载这一段任务结果"
+
+msgid "Could not locate a collapsed group. Find again."
+msgstr "无法找到已折叠的分组。请重新查找。"
+
+msgid "Could not locate a group in this result. Find again."
+msgstr "无法在此结果中找到该分组。请重新查找。"
+
+msgid "Could not locate selected files in this result. Find again."
+msgstr "无法在此结果中找到所选文件。请重新查找。"
+
+msgid "Could not locate this group. Find again."
+msgstr "无法定位此分组。请重新查找。"
+
+msgid "Could not locate updated files in this result. Find again."
+msgstr "无法在此结果中定位已更新的文件。请重新查找。"
+
+msgid "Could not open root"
+msgstr "无法打开根目录"
+
+msgid "Could not read Job log"
+msgstr "无法读取任务日志"
+
+msgid "Could not read Media"
+msgstr "无法读取介质"
+
+msgid "Could not read the destination"
+msgstr "无法读取目标位置"
+
+msgid "Could not read the other hidden-file view. Find again."
+msgstr "无法读取另一个隐藏文件视图。请重新查找。"
+
+msgid "Could not read this directory"
+msgstr "无法读取此目录"
+
+msgid "Could not refresh devices"
+msgstr "无法刷新设备"
+
+msgid "Could not resolve saved versions"
+msgstr "无法解析已保存版本"
+
+msgid "Could not resolve this selection"
+msgstr "无法解析此选择"
+
+msgid "Could not save {groupLabel} settings"
+msgstr "无法保存{groupLabel}设置"
+
+msgid "Could not save location"
+msgstr "无法保存存储位置"
+
+msgid "Could not save metadata"
+msgstr "无法保存元数据"
+
+msgid "Could not save this choice; the confirmation will appear again."
+msgstr "无法保存此选择；确认提示将再次出现。"
+
+msgid "Could not save this choice."
+msgstr "无法保存此选择。"
+
+msgid "Could not search Media"
+msgstr "无法搜索介质"
+
+msgid "Could not search tags"
+msgstr "无法搜索标签"
+
+msgid "Could not sort identical files"
+msgstr "无法对相同文件排序"
+
+msgid "Could not start restore"
+msgstr "无法开始恢复"
+
+msgid "Could not start scan"
+msgstr "无法开始扫描"
+
+msgid "Could not switch hidden files"
+msgstr "无法切换隐藏文件"
+
+msgid "Could not update both row views"
+msgstr "无法更新两个行视图"
+
+msgid "Count matching archived copies"
+msgstr "统计匹配的归档副本"
+
+msgid "Counts recorded copies with the same signature; it does not check their current readability."
+msgstr "统计签名相同的已记录副本，不检查它们当前是否可读。"
+
+msgid "Create"
+msgstr "创建"
+
+msgctxt "file action"
+msgid "Create a folder"
+msgstr "新建文件夹"
+
+msgid "Create a new identity marker and Library Media for an already mounted disk."
+msgstr "为已挂载的磁盘创建新的身份标记和资料库介质。"
+
+msgctxt "file action"
+msgid "Create folder"
+msgstr "新建文件夹"
+
+msgid "Created"
+msgstr "创建时间"
+
+msgid "Created {created}"
+msgstr "创建于 {created}"
+
+msgid "Created {createdTime}"
+msgstr "创建于 {createdTime}"
+
+msgid "Creating folder…"
+msgstr "正在创建文件夹…"
+
+msgid "Creating…"
+msgstr "正在创建…"
+
+msgid "current"
+msgstr "当前"
+
+msgctxt "Device field"
+msgid "Current algorithm index"
+msgstr "当前算法索引"
+
+msgid "Current content archived"
+msgstr "当前内容已归档"
+
+msgid "Current content not checked"
+msgstr "当前内容未检查"
+
+msgid "Current Phase"
+msgstr "当前阶段"
+
+msgid "Current Speed"
+msgstr "当前速度"
+
+msgid "Custom version · {date}"
+msgstr "自选版本 · {date}"
+
+msgid "Custom version · {date} · After selected time"
+msgstr "自选版本 · {date} · 晚于所选时间"
+
+msgctxt "file action"
+msgid "Cut"
+msgstr "剪切"
+
+msgid "Cut files first"
+msgstr "请先剪切文件"
+
+msgid "Damaged"
+msgstr "已损坏"
+
+msgid "Damaged copies allowed"
+msgstr "允许损坏副本"
+
+msgid "Damaged copies allowed. Complete damaged output may be retained for recovery. It is not a verified saved version."
+msgstr "已允许损坏副本。完整的损坏输出可能会保留以供恢复，它不是经过校验的已保存版本。"
+
+msgctxt "file action"
+msgid "Data Usage"
+msgstr "数据用量"
+
+msgid "Data usage for all matching items"
+msgstr "所有匹配项目的数据用量"
+
+msgid "Date not recorded"
+msgstr "日期未记录"
+
+msgid "Date unknown"
+msgstr "日期未知"
+
+msgid "Decimal, or hexadecimal with 0x, from 0 to 255."
+msgstr "十进制，或带 0x 的十六进制，范围 0 到 255。"
+
+msgctxt "Device field"
+msgid "Decryption mode"
+msgstr "解密模式"
+
+msgid "Default Tape format"
+msgstr "默认磁带格式"
+
+msgid "Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device."
+msgstr "默认值用于之后的磁带 FORMAT 选择。保存设备设置不会操作设备。"
+
+msgid "Defaults to 512 KiB (524288 bytes) unless set for the device or FORMAT. Sizes must be aligned to 512 bytes."
+msgstr "默认为 512 KiB（524288 字节），除非在设备或 FORMAT 中另行设置。大小必须按 512 字节对齐。"
+
+msgid "Defaults to Variable unless set for the device or FORMAT."
+msgstr "默认为变长，除非在设备或 FORMAT 中另行设置。"
+
+msgid "Delete"
+msgstr "删除"
+
+msgctxt "file action"
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete failed"
+msgstr "删除失败"
+
+msgid "Delete failed: {failureDetail}"
+msgstr "删除失败：{failureDetail}"
+
+msgid "Delete files?"
+msgstr "删除文件？"
+
+msgid "Delete Job"
+msgstr "删除任务"
+
+msgid "Delete Job {jobNumber}?"
+msgstr "删除任务 {jobNumber}？"
+
+msgid "Delete moves selected items to Trash immediately."
+msgstr "删除会立即将所选项移入回收站。"
+
+msgid "Deleting…"
+msgstr "正在删除…"
+
+msgid "Density code"
+msgstr "密度代码"
+
+msgctxt "Device field"
+msgid "Density code"
+msgstr "密度代码"
+
+msgid "Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID."
+msgstr "说明数值的来源和测量条件。校准会写入校准任务及其 ID。"
+
+msgid "Destination observation is missing. Refresh this folder."
+msgstr "缺少目标的观测结果。请刷新此文件夹。"
+
+msgid "Destination path"
+msgstr "目标路径"
+
+msgid "Details"
+msgstr "详情"
+
+msgid "Details unavailable"
+msgstr "详情不可用"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Device availability is unknown. Refresh devices to try again."
+msgstr "设备可用性未知。请刷新设备后重试。"
+
+msgid "Device compatibility is unavailable."
+msgstr "设备兼容性信息不可用。"
+
+msgid "Device defaults"
+msgstr "设备默认值"
+
+msgid "Device defaults are unavailable. Refresh devices to try again."
+msgstr "设备默认设置不可用。请刷新设备后重试。"
+
+msgid "Device details"
+msgstr "设备详情"
+
+msgid "Device entries must have nonempty, unique names."
+msgstr "设备条目的名称必须非空且唯一。"
+
+msgid "Device guide"
+msgstr "设备指南"
+
+msgid "Device in use"
+msgstr "设备使用中"
+
+msgid "Device is busy."
+msgstr "设备正忙。"
+
+msgid "Device settings"
+msgstr "设备设置"
+
+msgid "Device to inspect"
+msgstr "要检查的设备"
+
+msgid "Devices"
+msgstr "设备"
+
+msgid "Directories"
+msgstr "目录"
+
+msgid "Directories YATM may read originals from and write Restore output to."
+msgstr "YATM 可读取原件、并可写入恢复输出的目录。"
+
+msgid "Directory"
+msgstr "目录"
+
+msgid "Discard"
+msgstr "放弃"
+
+msgid "Discard unsaved changes?"
+msgstr "放弃未保存的更改？"
+
+msgid "Discovering mounted Volumes"
+msgstr "正在发现已挂载的卷"
+
+msgid "Disk"
+msgstr "磁盘"
+
+msgid "Does not publish Library or inventory changes. Selected reads and Preview generation still run."
+msgstr "不会发布资料库或清单的变更。所选的读取和预览生成仍会执行。"
+
+msgid "Don’t generate"
+msgstr "不生成"
+
+msgid "Don’t show this again"
+msgstr "不再显示"
+
+msgctxt "file action"
+msgid "Download files"
+msgstr "下载"
+
+msgid "Drive serial number"
+msgstr "驱动器序列号"
+
+msgid "Dual pane"
+msgstr "双栏"
+
+msgid "Duplicates in Locations"
+msgstr "存储位置中的重复文件"
+
+msgctxt "Device report"
+msgid "early warning"
+msgstr "提前预警"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "Edit read parameters for {label}"
+msgstr "编辑 {label} 的读取参数"
+
+msgid "Edit selection"
+msgstr "编辑所选内容"
+
+msgid "Edit tags & note"
+msgstr "编辑标签和备注"
+
+msgctxt "file action"
+msgid "Edit tags & note"
+msgstr "编辑标签和备注"
+
+msgid "Elapsed Time"
+msgstr "已用时间"
+
+msgid "Empty for Auto, 0 for Off, otherwise at least 5 seconds."
+msgstr "留空为自动，0 为关闭，否则至少 5 秒。"
+
+msgid "Enable generation"
+msgstr "启用生成"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Enablement changes apply when the next file starts. Existing Preview assets remain available."
+msgstr "启用状态的更改在下一个文件开始时生效。已有的预览资源仍然可用。"
+
+msgid "Encryption"
+msgstr "加密"
+
+msgctxt "Device field"
+msgid "Encryption enabled"
+msgstr "已启用加密"
+
+msgid "Encryption is handled by the configured Encrypt script using the saved Media profile."
+msgstr "加密由已配置的加密脚本按已保存的介质配置处理。"
+
+msgid "Encryption is handled by the configured Encrypt script."
+msgstr "加密由已配置的加密脚本处理。"
+
+msgid "Encryption is handled by the configured Encrypt script. A new key is generated for FORMAT."
+msgstr "加密由已配置的加密脚本处理。FORMAT 时会生成新密钥。"
+
+msgctxt "Device field"
+msgid "Encryption mode"
+msgstr "加密模式"
+
+msgid "Encryption: {encryption}."
+msgstr "加密：{encryption}。"
+
+msgid "Encryption: {selectedEncryption}."
+msgstr "加密：{selectedEncryption}。"
+
+msgctxt "Device report"
+msgid "end of wrap position"
+msgstr "磁带道末端位置"
+
+msgid "Enter a code from 0 to 255, in decimal or as 0x hexadecimal."
+msgstr "请输入 0 到 255 的代码，十进制或 0x 十六进制均可。"
+
+msgid "Enter a nonnegative decimal number."
+msgstr "请输入非负的十进制数。"
+
+msgid "Enter a path manually…"
+msgstr "手动输入路径…"
+
+msgid "Enter a valid file extension."
+msgstr "请输入有效的文件扩展名。"
+
+msgid "Enter a whole number of at least 1, or leave it empty."
+msgstr "请输入不小于 1 的整数，或留空。"
+
+msgid "Enter at least one file extension."
+msgstr "请至少输入一个文件扩展名。"
+
+msgid "Enter one folder name."
+msgstr "请输入单个文件夹名称。"
+
+msgid "Enter six letters or digits, without the LTO suffix."
+msgstr "请输入六位字母或数字，不含 LTO 后缀。"
+
+msgid "Enter valid dimensions, quality and sampling values."
+msgstr "请输入有效的尺寸、质量和采样值。"
+
+msgid "Entire Location"
+msgstr "整个存储位置"
+
+msgid "Estimate"
+msgstr "估算"
+
+msgid "Estimating selection…"
+msgstr "正在估算所选内容…"
+
+msgid "Estimating…"
+msgstr "估算中…"
+
+msgid "Evidence: {evidence}"
+msgstr "依据：{evidence}"
+
+msgid "Executable"
+msgstr "可执行文件"
+
+msgid "Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are kept."
+msgstr "执行历史和任务附件将被移除，包括旧版本遗留的恢复文件。资料库文件和归档副本会保留。"
+
+msgid "existing marker"
+msgstr "已有标记"
+
+msgid "Existing Volume registered"
+msgstr "已注册现有卷"
+
+msgid "Explicit device details and the last prepared read, when available. These do not establish the current Tape's effective model."
+msgstr "如有，则显示明确的设备详情和最近的预备读取。这些信息不能确定当前磁带的有效模型。"
+
+msgid "Export"
+msgstr "导出"
+
+msgid "Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are not restored."
+msgstr "导出内容包括资料库、存储位置和原文件链接。导入将用备份替换这些内容，全局偏好设置保持不变，磁盘上的文件不会被恢复。"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "File actions"
+msgstr "文件操作"
+
+msgid "File browser layout"
+msgstr "文件浏览器布局"
+
+msgid "File details"
+msgstr "文件详情"
+
+msgid "File details are missing"
+msgstr "缺少文件详情"
+
+msgid "File details are unavailable."
+msgstr "无法获取文件详情。"
+
+msgid "File details are unavailable. Refresh Files and try again."
+msgstr "文件详情不可用。请刷新文件后重试。"
+
+msgid "File details are unavailable. Refresh this folder."
+msgstr "文件详情不可用。请刷新此文件夹。"
+
+msgid "File extensions"
+msgstr "文件扩展名"
+
+msgid "File extensions and video sampling."
+msgstr "文件扩展名和视频采样。"
+
+msgid "File metadata"
+msgstr "文件元数据"
+
+msgid "File metadata updated"
+msgstr "文件元数据已更新"
+
+msgid "File operation failed"
+msgstr "文件操作失败"
+
+msgid "File operation in progress"
+msgstr "文件操作正在进行"
+
+msgid "File operation result is missing"
+msgstr "缺少文件操作结果"
+
+msgid "File reference is missing"
+msgstr "缺少文件引用"
+
+msgid "File reference is missing. Refresh this folder."
+msgstr "缺少文件引用。请刷新此文件夹。"
+
+msgid "File routes, dimensions, format and quality are captured by new Jobs."
+msgstr "文件路径、尺寸、格式和质量由新任务采用。"
+
+msgid "File visibility"
+msgstr "文件可见性"
+
+msgid "Filemark overhead (s)"
+msgstr "文件标记开销（秒）"
+
+msgid "Files"
+msgstr "文件"
+
+msgid "Files and folders move into this Location’s .trash folder. Original associations are removed; Library records and saved versions are kept."
+msgstr "文件和文件夹会移入此存储位置的 .trash 文件夹。原件关联会被移除；资料库记录和已保存版本会保留。"
+
+msgid "Files connected through matching current content or saved versions. Members may have different current content."
+msgstr "通过相同的当前内容或已保存版本关联的文件。成员的当前内容可能不同。"
+
+msgid "Files move into each Location’s .trash folder. Library records and saved versions are kept."
+msgstr "文件将移入各存储位置的 .trash 文件夹，资料库记录和已保存版本予以保留。"
+
+msgid "Fills the drive serial from the device details shown on this page and clears the other values. It does not query the device."
+msgstr "用本页显示的设备详情填入驱动器序列号，并清除其他值。此操作不会查询设备。"
+
+msgctxt "file browser"
+msgid "Filter"
+msgstr "筛选"
+
+msgid "Filter {scopeLabel}"
+msgstr "筛选{scopeLabel}"
+
+msgid "Filter match unknown: continued line"
+msgstr "筛选匹配情况未知：续行"
+
+msgctxt "Job phase"
+msgid "finalizing media"
+msgstr "正在完成介质写入"
+
+msgid "Find"
+msgstr "查找"
+
+msgid "Find again"
+msgstr "重新查找"
+
+msgid "Find again to refresh this result"
+msgstr "请重新查找以刷新此结果"
+
+msgid "Find identical files"
+msgstr "查找相同文件"
+
+msgid "Find identical files to search"
+msgstr "请查找相同文件以开始搜索"
+
+msgid "Find matching files"
+msgstr "查找匹配的文件"
+
+msgid "Finding matching files…"
+msgstr "正在查找匹配的文件…"
+
+msgid "Finding version…"
+msgstr "正在查找版本…"
+
+msgctxt "Device field"
+msgid "Firmware"
+msgstr "固件"
+
+msgid "Fitted read parameters · Density code {densityCode}"
+msgstr "拟合的读取参数 · 密度代码 {densityCode}"
+
+msgid "Fitted read parameters · Density code {densityCode} · Serial number {driveSerial}"
+msgstr "拟合的读取参数 · 密度代码 {densityCode} · 序列号 {driveSerial}"
+
+msgctxt "Tar record mode"
+msgid "fixed"
+msgstr "定长"
+
+msgctxt "Device field"
+msgid "Fixed"
+msgstr "定长"
+
+msgctxt "Record mode"
+msgid "Fixed"
+msgstr "定长"
+
+msgid "Fixed part of the normal rewind and unload."
+msgstr "常规倒带和卸载中的固定部分。"
+
+msgid "Fixed positioning time"
+msgstr "固定定位时间"
+
+msgid "Fixed positioning time (s)"
+msgstr "固定定位时间（秒）"
+
+msgid "Fixed positioning time {fixedTime}"
+msgstr "固定定位时间 {fixedTime}"
+
+msgctxt "Device field"
+msgid "Fixed records"
+msgstr "定长记录"
+
+msgid "Fixed time (s)"
+msgstr "固定时间（秒）"
+
+msgid "Fixed time of every LOCATE the drive does not stream through."
+msgstr "驱动器每次未通过连续读取越过的 LOCATE 的固定耗时。"
+
+msgid "Folder"
+msgstr "文件夹"
+
+msgid "Folder name"
+msgstr "文件夹名称"
+
+msgid "Format"
+msgstr "格式"
+
+msgctxt "Tape action"
+msgid "FORMAT"
+msgstr "FORMAT"
+
+msgid "FORMAT erases the Tape. Confirm its barcode before starting."
+msgstr "FORMAT 会擦除磁带。开始前请确认其条码。"
+
+msgid "Format ID"
+msgstr "格式 ID"
+
+msgid "Found"
+msgstr "已发现"
+
+msgid "From device details"
+msgstr "从设备详情填入"
+
+msgid "From device details needs a report: use Refresh device details on this page first."
+msgstr "“从设备详情填入”需要报告：请先使用本页的“刷新设备详情”。"
+
+msgid "From span"
+msgstr "起始跨度"
+
+msgid "From wrap"
+msgstr "起始磁带道"
+
+msgid "Full-span time (s)"
+msgstr "全长时间（秒）"
+
+msgid "Generate missing"
+msgstr "生成缺失的"
+
+msgid "Generated"
+msgstr "已生成"
+
+msgctxt "Job phase"
+msgid "generating previews"
+msgstr "正在生成预览"
+
+msgid "Generation"
+msgstr "生成"
+
+msgid "Geometry"
+msgstr "几何"
+
+msgid "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded."
+msgstr "浏览、选择和新建原件关联时使用 gitignore 语法；不会加载文件夹中的 .gitignore 文件。"
+
+msgid "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded. Leave blank to use the server's default rules. Custom text replaces those defaults."
+msgstr "浏览、选择和新建原件关联时使用 gitignore 语法；不会加载文件夹中的 .gitignore 文件。留空则使用服务器的默认规则，自定义文本会替换这些默认规则。"
+
+msgid "Go to {sourceName} root"
+msgstr "转到 {sourceName} 根目录"
+
+msgctxt "file action"
+msgid "Go up a directory"
+msgstr "返回上级目录"
+
+msgid "Group changed. Find again before Keep or Merge."
+msgstr "分组已变化。请先重新查找，再执行保留或合并。"
+
+msgctxt "Device report"
+msgid "hardware encryption"
+msgstr "硬件加密"
+
+msgid "Has an archived copy"
+msgstr "有归档副本"
+
+msgid "HDD · concurrent random read/write"
+msgstr "HDD · 支持并发随机读写"
+
+msgid "Helper {helperVersion}"
+msgstr "辅助程序 {helperVersion}"
+
+msgid "Hide matching files"
+msgstr "隐藏匹配的文件"
+
+msgid "HM-SMR · concurrent random read, sequential write"
+msgstr "HM-SMR · 支持并发随机读，顺序写"
+
+msgid "How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies."
+msgstr "驱动器通过继续读取而非定位可向前到达的距离。留空或为 0 时不适用。"
+
+msgctxt "Device field"
+msgid "I_T nexus scope"
+msgstr "I_T nexus 范围"
+
+msgid "Identical file groups"
+msgstr "相同文件分组"
+
+msgid "Identical files"
+msgstr "相同文件"
+
+msgid "Identity"
+msgstr "标识"
+
+msgid "Ignore"
+msgstr "忽略规则"
+
+msgid "Image"
+msgstr "图片"
+
+msgid "Import"
+msgstr "导入"
+
+#. placeholder {0}: response.status
+msgid "Import failed ({0})"
+msgstr "导入失败（{0}）"
+
+msgid "Import Library Backup"
+msgstr "导入资料库备份"
+
+msgid "Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not restored."
+msgstr "导入将用此备份替换资料库，包括存储位置和原文件链接。全局偏好设置保持不变，磁盘上的文件不会被恢复。"
+
+msgid "Importing Library backup"
+msgstr "正在导入资料库备份"
+
+msgid "Importing…"
+msgstr "正在导入…"
+
+msgid "Inactive"
+msgstr "未启用"
+
+msgid "Include again"
+msgstr "重新包含"
+
+msgid "Include files without saved versions"
+msgstr "包含没有已保存版本的文件"
+
+msgctxt "Job phase"
+msgid "indexing"
+msgstr "正在索引"
+
+msgid "Inherited: {inheritedBytes} bytes. Sizes must be aligned to 512 bytes."
+msgstr "继承：{inheritedBytes} 字节。大小必须按 512 字节对齐。"
+
+msgid "Inherited: Fixed."
+msgstr "继承：定长。"
+
+msgid "Inherited: Variable."
+msgstr "继承：变长。"
+
+msgid "Initialization ID"
+msgstr "初始化 ID"
+
+msgctxt "Device report"
+msgid "initialize"
+msgstr "初始化"
+
+msgid "Initialize"
+msgstr "初始化"
+
+msgid "Initialize a mounted Volume from Library → Media first."
+msgstr "请先在“资料库 → 介质”中初始化一个已挂载的卷。"
+
+msgid "Initialize New"
+msgstr "初始化新卷"
+
+msgid "Inspect Tape failed"
+msgstr "检查磁带失败"
+
+msgid "Inspect Volume failed"
+msgstr "检查卷失败"
+
+msgid "Inspecting device…"
+msgstr "正在检查设备…"
+
+msgid "Inspecting Media…"
+msgstr "正在检查介质…"
+
+msgid "Inspector"
+msgstr "检查器"
+
+msgid "Interface language"
+msgstr "界面语言"
+
+msgid "Invalid Job ID."
+msgstr "任务 ID 无效。"
+
+msgid "Invalid Location"
+msgstr "无效的存储位置"
+
+msgid "invalid marker"
+msgstr "无效标记"
+
+msgid "Invalid Scan options. Choose the source again."
+msgstr "扫描选项无效。请重新选择来源。"
+
+msgid "Invalid Scan shortcut."
+msgstr "扫描快捷方式无效。"
+
+msgid "Invalid Scan shortcut. Choose the source again."
+msgstr "扫描快捷方式无效。请重新选择来源。"
+
+msgid "Invalid Scan source. Choose a source."
+msgstr "扫描来源无效。请选择一个来源。"
+
+msgid "Items per manifest page. Does not change the full selection used for Tape planning."
+msgstr "每个清单页包含的项数。不影响磁带规划所用的完整选择。"
+
+msgid "Job"
+msgstr "任务"
+
+msgid "Job {jobNumber}"
+msgstr "任务 {jobNumber}"
+
+msgid "Job deleted, but the list could not refresh"
+msgstr "任务已删除，但列表无法刷新"
+
+msgid "Job no longer exists"
+msgstr "任务已不存在"
+
+msgid "Job type"
+msgstr "任务类型"
+
+msgid "Job views"
+msgstr "任务视图"
+
+msgid "Job was not returned"
+msgstr "未返回任务"
+
+msgid "Job was not returned. Check Jobs before retrying."
+msgstr "未返回任务。重试前请先查看任务列表。"
+
+msgid "Jobs"
+msgstr "任务"
+
+msgid "Jobs unavailable"
+msgstr "任务不可用"
+
+msgid "Keep {keptName} and delete all other {otherCount} members, including members not loaded here."
+msgstr "保留 {keptName}，并删除其余 {otherCount} 个成员，包括未在此处加载的成员。"
+
+msgid "Keep completed"
+msgstr "保留已完成"
+
+msgid "Keep editing"
+msgstr "继续编辑"
+
+msgid "Keep failed"
+msgstr "保留失败"
+
+msgid "Keep failed: {keepDetail}"
+msgstr "保留失败：{keepDetail}"
+
+msgctxt "file action"
+msgid "Keep this"
+msgstr "保留此项"
+
+msgctxt "Device field"
+msgid "Key instance counter"
+msgstr "密钥实例计数"
+
+msgctxt "Device field"
+msgid "Key scope"
+msgstr "密钥范围"
+
+msgid "Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM."
+msgstr "存储在磁带配置中的密钥也会被移除。之后读取加密磁带将依赖您在 YATM 之外保管的密钥副本。"
+
+msgid "Known data usage · {usageError}"
+msgstr "已知数据用量 · {usageError}"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Larger inputs are rejected before decoding; this is not the output size."
+msgstr "更大的输入会在解码前被拒绝；这不是输出尺寸。"
+
+msgid "Last archived"
+msgstr "最近归档"
+
+msgid "Last archived {archived} · {fileSize}"
+msgstr "最近归档 {archived} · {fileSize}"
+
+msgid "Last check"
+msgstr "最近检查"
+
+msgid "Last check · Refresh failed"
+msgstr "上次检查 · 刷新失败"
+
+msgid "Last check passed"
+msgstr "最近检查通过"
+
+msgid "Last device details: encryption off."
+msgstr "最近的设备详情：加密已关闭。"
+
+msgid "Last device details: encryption on."
+msgstr "最近的设备详情：加密已开启。"
+
+msgid "Last prepared read"
+msgstr "上次预备读取"
+
+msgid "Last written {lastWritten}"
+msgstr "最后写入于 {lastWritten}"
+
+msgid "Latest analysis"
+msgstr "最近分析"
+
+msgid "Latest archive at or before…"
+msgstr "不晚于指定时间的最新归档…"
+
+msgid "Latest archives at or before {time}"
+msgstr "不晚于 {time} 的最新归档"
+
+msgid "Latest saved version"
+msgstr "最新已保存版本"
+
+msgid "Latest saved versions"
+msgstr "最新已保存版本"
+
+msgid "Latest version unavailable"
+msgstr "最新版本不可用"
+
+msgid "Left file pane"
+msgstr "左侧文件窗格"
+
+msgid "Level"
+msgstr "级别"
+
+msgid "Library"
+msgstr "资料库"
+
+msgid "Library cleaned up"
+msgstr "资料库已清理"
+
+msgid "Library data"
+msgstr "资料库数据"
+
+msgid "Library item {item}"
+msgstr "资料库项目 {item}"
+
+msgid "Library views"
+msgstr "资料库视图"
+
+msgid "Library, Locations and original links imported. Global preferences were not changed."
+msgstr "已导入资料库、存储位置和原文件链接，全局偏好设置未更改。"
+
+msgid "Limit for planning one Tape's read order."
+msgstr "规划单盘磁带读取顺序的时间上限。"
+
+msgid "Link <0>{fileName}</0> to <1>{targetName}</1>? This replaces its original reference without moving files or changing tags, notes, or saved versions."
+msgstr "将 <0>{fileName}</0> 关联到 <1>{targetName}</1>？这会替换其原件关联，不会移动文件，也不会更改标签、备注或已保存版本。"
+
+msgid "Link original"
+msgstr "关联原件"
+
+msgctxt "file action"
+msgid "Load More"
+msgstr "加载更多"
+
+msgid "Load more copies"
+msgstr "加载更多副本"
+
+msgid "Load more directories"
+msgstr "加载更多目录"
+
+msgid "Load more failed"
+msgstr "加载更多失败"
+
+msgid "Load more matching files"
+msgstr "加载更多匹配的文件"
+
+msgid "Load more saved versions"
+msgstr "加载更多已保存版本"
+
+msgid "Load more tags"
+msgstr "加载更多标签"
+
+msgid "Load newer"
+msgstr "加载更新的"
+
+msgid "Load older"
+msgstr "加载更早的"
+
+msgid "Load the required Tape and select its drive."
+msgstr "请装入所需磁带并选择其驱动器。"
+
+msgid "Load the Tape and select its drive."
+msgstr "请装入磁带并选择其驱动器。"
+
+msgid "Load the Tape into a drive to verify its physical identity."
+msgstr "请将磁带装入驱动器，以验证其物理身份。"
+
+msgid "Load this tape to restore"
+msgstr "请装载此磁带以恢复"
+
+msgid "Load versions failed"
+msgstr "加载版本失败"
+
+msgid "Loaded items size"
+msgstr "已加载项目大小"
+
+msgid "Loading {groupLabel} settings"
+msgstr "正在加载{groupLabel}设置"
+
+msgid "Loading archived copies…"
+msgstr "正在加载归档副本…"
+
+msgid "Loading date picker…"
+msgstr "正在加载日期选择器…"
+
+msgid "Loading devices"
+msgstr "正在加载设备"
+
+msgid "Loading devices…"
+msgstr "正在加载设备…"
+
+msgid "Loading directories"
+msgstr "正在加载目录"
+
+msgid "Loading directories…"
+msgstr "正在加载目录…"
+
+msgid "Loading file details"
+msgstr "正在加载文件详情"
+
+msgid "Loading files"
+msgstr "正在加载文件"
+
+msgid "Loading folder…"
+msgstr "正在加载文件夹…"
+
+msgid "Loading Job creation inputs…"
+msgstr "正在加载任务的创建输入…"
+
+msgid "Loading Job results"
+msgstr "正在加载任务结果"
+
+msgid "Loading locations…"
+msgstr "正在加载存储位置…"
+
+msgid "Loading Locations…"
+msgstr "正在加载存储位置…"
+
+msgid "Loading Media…"
+msgstr "正在加载介质…"
+
+msgid "Loading more Media…"
+msgstr "正在加载更多介质…"
+
+msgid "Loading required Media…"
+msgstr "正在加载所需介质…"
+
+msgid "Loading resources…"
+msgstr "正在加载资源…"
+
+msgid "Loading saved versions…"
+msgstr "正在加载已保存版本…"
+
+msgid "Loading source…"
+msgstr "正在加载来源…"
+
+msgid "Loading your job…"
+msgstr "正在加载任务…"
+
+msgid "Loading…"
+msgstr "正在加载…"
+
+msgid "Local file missing"
+msgstr "本地文件缺失"
+
+msgid "Local file not checked"
+msgstr "本地文件未检查"
+
+msgid "Local file present"
+msgstr "本地文件存在"
+
+msgid "Local file unavailable"
+msgstr "本地文件不可用"
+
+msgctxt "Device report"
+msgid "locate"
+msgstr "定位"
+
+msgid "Locate file failed"
+msgstr "定位文件失败"
+
+msgctxt "file action"
+msgid "Locate in Other Pane"
+msgstr "在另一窗格中定位"
+
+msgid "Locate original"
+msgstr "定位原件"
+
+msgid "Locate original · {fileName}"
+msgstr "定位原件 · {fileName}"
+
+msgid "Location"
+msgstr "存储位置"
+
+msgid "Location · {name}"
+msgstr "存储位置 · {name}"
+
+msgid "Location {id}"
+msgstr "存储位置 {id}"
+
+msgid "Location {locationID}"
+msgstr "存储位置 {locationID}"
+
+msgid "Location {locationID}/{path}"
+msgstr "存储位置 {locationID}/{path}"
+
+msgid "Location {locationID}/{path}: {reason} Choose a destination."
+msgstr "存储位置 {locationID}/{path}：{reason} 请选择目标位置。"
+
+msgid "Location {locationLabel}"
+msgstr "存储位置 {locationLabel}"
+
+msgid "Location details"
+msgstr "存储位置详情"
+
+msgid "Location reply is missing"
+msgstr "缺少存储位置的响应"
+
+msgid "Locations"
+msgstr "存储位置"
+
+msgid "Locations unavailable"
+msgstr "存储位置不可用"
+
+msgid "Logical"
+msgstr "逻辑"
+
+msgid "LTFS · unsupported"
+msgstr "LTFS · 不支持"
+
+msgid "LTFS unmount time (s)"
+msgstr "LTFS 卸载时间（秒）"
+
+msgctxt "Device report"
+msgid "malformed response"
+msgstr "响应格式错误"
+
+msgid "Manifest batch (items)"
+msgstr "清单批量（项）"
+
+msgid "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
+msgstr "清单批量 {readBatch} 项 · 排队读取 {readBufferMax} · 排队结果 {writeBufferMax} · {writeBatchSize} 个结果/次更新 · 刷新 {flushIntervalMs} 毫秒"
+
+msgid "marker conflict"
+msgstr "标记冲突"
+
+msgid "Match unknown"
+msgstr "匹配情况未知"
+
+msgid "Matched the prepared conditions"
+msgstr "符合预备条件"
+
+msgid "Matching archived copies: {matchingCopies}"
+msgstr "匹配的归档副本：{matchingCopies}"
+
+msgid "Matching content"
+msgstr "匹配内容"
+
+msgid "Matching examples: {evidence}"
+msgstr "匹配示例：{evidence}"
+
+msgid "Matching recorded content in the selected Locations. Run Scan separately to update content information."
+msgstr "所选存储位置中记录内容相同的文件。如需更新内容信息，请另行运行扫描。"
+
+msgctxt "Device field"
+msgid "Maximum bytes"
+msgstr "最大字节数"
+
+msgid "Maximum completed results waiting to be recorded; this is not a Tape byte buffer."
+msgstr "等待记录的已完成结果的最大数量；这不是磁带字节缓冲区。"
+
+msgid "Maximum files generating Previews at the same time. Higher values use more memory."
+msgstr "同时生成预览的最大文件数。数值越大，占用内存越多。"
+
+msgid "Maximum generation time per file, after it acquires a slot."
+msgstr "每个文件获得名额后的最长生成时间。"
+
+msgid "Maximum height (px)"
+msgstr "最大高度（px）"
+
+msgid "Maximum input pixels"
+msgstr "最大输入像素"
+
+msgid "Maximum input pixels must be between 1 and 64000000."
+msgstr "最大输入像素必须介于 1 到 64000000 之间。"
+
+msgid "Maximum queued reads. Larger queues can use more memory."
+msgstr "排队读取的最大数量。队列越大，占用内存越多。"
+
+msgid "Maximum results in one update. Larger batches can delay progress reporting."
+msgstr "单次更新的最大结果数。批量越大，进度报告可能越滞后。"
+
+msgid "Maximum timeline frames"
+msgstr "时间轴最大帧数"
+
+msgid "Maximum wait before a result update, in milliseconds."
+msgstr "结果更新前的最长等待时间，单位为毫秒。"
+
+msgid "Maximum width (px)"
+msgstr "最大宽度（px）"
+
+msgid "Measured moves"
+msgstr "已测量的移动"
+
+msgid "Measured Moves"
+msgstr "已测量的移动"
+
+msgid "Measures this drive's positioning times on the loaded cartridge and stores them as its read parameters for that density code. It takes about nine minutes on LTO-5, plus the time to write test data when requested."
+msgstr "在已加载的磁带上测量此驱动器的定位时间，并将其保存为该密度代码的读取参数。LTO-5 上约需九分钟，如需写入测试数据则另加写入时间。"
+
+msgid "Media"
+msgstr "介质"
+
+msgid "Media · {name}"
+msgstr "介质 · {name}"
+
+msgid "Media {mediaID} is no longer available. Choose another Media."
+msgstr "介质 {mediaID} 已不可用。请选择其他介质。"
+
+msgid "Media {mediaLabel}"
+msgstr "介质 {mediaLabel}"
+
+msgid "Media archive"
+msgstr "介质归档"
+
+msgid "Media browser"
+msgstr "介质浏览器"
+
+msgid "Media details"
+msgstr "介质详情"
+
+msgid "Media reading started, but the Job list could not refresh"
+msgstr "已开始读取介质，但任务列表无法刷新"
+
+msgctxt "Device field"
+msgid "Medium present"
+msgstr "已装入介质"
+
+msgid "Merge"
+msgstr "合并"
+
+msgid "Merge all {memberCount} Library files and their saved versions into this file. The selected File keeps its original link. Other Files move to Library Trash and lose their original links. Disk files are kept."
+msgstr "将全部 {memberCount} 个资料库文件及其已保存版本合并到此文件。所选文件保留其原件关联，其他文件移至资料库回收站并失去原件关联，磁盘文件予以保留。"
+
+msgctxt "file action"
+msgid "Merge into"
+msgstr "合并到"
+
+msgid "Merge into {targetName}?"
+msgstr "合并到 {targetName}？"
+
+msgid "Merged into {targetName}"
+msgstr "已合并到 {targetName}"
+
+msgid "Message: "
+msgstr "消息："
+
+msgid "Metadata editing is unavailable. Refresh this folder."
+msgstr "元数据编辑不可用。请刷新此文件夹。"
+
+msgid "Metadata saved, but refresh failed: {reason}"
+msgstr "元数据已保存，但刷新失败：{reason}"
+
+msgid "Method: "
+msgstr "方法："
+
+msgctxt "Device field"
+msgid "Minimum bytes"
+msgstr "最小字节数"
+
+msgid "Minimum sampling interval (seconds)"
+msgstr "最小采样间隔（秒）"
+
+msgid "Missing"
+msgstr "缺失"
+
+msgctxt "Device report"
+msgid "missing tool"
+msgstr "缺少工具"
+
+msgctxt "Device field"
+msgid "Model"
+msgstr "型号"
+
+msgid "Modification time not recorded"
+msgstr "未记录修改时间"
+
+msgid "Modified"
+msgstr "修改时间"
+
+msgid "Modified {modified}"
+msgstr "修改时间 {modified}"
+
+msgid "More filters"
+msgstr "更多筛选"
+
+msgid "More versions"
+msgstr "更多版本"
+
+msgid "Mount Point"
+msgstr "挂载点"
+
+msgid "Mount point: {mountPoint}"
+msgstr "挂载点：{mountPoint}"
+
+msgid "Mount required"
+msgstr "需要挂载"
+
+msgid "Mount this Volume before continuing."
+msgstr "请先挂载此卷再继续。"
+
+msgid "Mounted Volume"
+msgstr "已挂载的卷"
+
+msgid "Move files failed"
+msgstr "移动文件失败"
+
+msgid "Moved {name} to Trash"
+msgstr "已将 {name} 移至回收站"
+
+msgid "Moved to Trash"
+msgstr "已移至回收站"
+
+msgid "Moved to Trash; Library update incomplete"
+msgstr "已移至回收站；资料库更新未完成"
+
+msgid "Moving…"
+msgstr "正在移动…"
+
+msgid "Must be a finite number of seconds below 9223372036."
+msgstr "必须是小于 9223372036 的有限秒数。"
+
+msgid "Must be a whole number between 1 and 4294967295."
+msgstr "必须是介于 1 到 4294967295 之间的整数。"
+
+msgid "Must be above 0."
+msgstr "必须大于 0。"
+
+msgid "Must be at most 18446744073709.551615 MB."
+msgstr "最大为 18446744073709.551615 MB。"
+
+msgid "Must be finite and above 0."
+msgstr "必须是有限数且大于 0。"
+
+msgid "Must be nonnegative."
+msgstr "不能为负。"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Name / directory"
+msgstr "名称 / 目录"
+
+msgid "Native space before early warning: {remaining}"
+msgstr "提前预警前的原生剩余空间：{remaining}"
+
+msgid "New"
+msgstr "新建"
+
+msgid "new disk"
+msgstr "新磁盘"
+
+msgid "New folder"
+msgstr "新建文件夹"
+
+msgid "New tar FORMAT uses this unless the FORMAT overrides it."
+msgstr "新的 tar FORMAT 使用此设置，除非该 FORMAT 另行覆盖。"
+
+msgid "New Volume initialized"
+msgstr "已初始化新卷"
+
+msgid "Next"
+msgstr "下一页"
+
+msgid "No archive at or before selected time"
+msgstr "没有不晚于所选时间的归档"
+
+msgid "No archive results yet."
+msgstr "暂无归档结果。"
+
+msgid "No archived copies recorded."
+msgstr "没有已记录的归档副本。"
+
+msgid "No archived copy comparison"
+msgstr "不比对归档副本"
+
+msgid "No baseline"
+msgstr "无基准"
+
+msgid "No directories."
+msgstr "没有目录。"
+
+msgid "No file results yet."
+msgstr "暂无文件结果。"
+
+msgid "No Jobs yet"
+msgstr "暂无任务"
+
+msgid "No known archived copy"
+msgstr "没有已知的归档副本"
+
+msgid "No local file linked"
+msgstr "未关联本地文件"
+
+msgid "No Location registered"
+msgstr "没有已登记的存储位置"
+
+msgid "No locations"
+msgstr "没有存储位置"
+
+msgid "No matching files"
+msgstr "没有匹配的文件"
+
+msgid "No matching groups"
+msgstr "没有匹配的分组"
+
+msgid "No matching Location"
+msgstr "没有匹配的存储位置"
+
+msgid "No matching log lines."
+msgstr "没有匹配的日志行。"
+
+msgid "No matching Media"
+msgstr "没有匹配的介质"
+
+msgid "No matching tags"
+msgstr "没有匹配的标签"
+
+msgid "No Media identity detected"
+msgstr "未检测到介质标识"
+
+msgid "No Media yet"
+msgstr "还没有介质"
+
+msgctxt "Device report"
+msgid "no medium"
+msgstr "无介质"
+
+msgid "No mounted disk was found under {rootList}."
+msgstr "在 {rootList} 下未发现已挂载的磁盘。"
+
+msgid "No new Files to add: {skippedRecords}."
+msgstr "没有可添加的新文件：{skippedRecords}。"
+
+msgid "No new Files will be added."
+msgstr "不会添加新文件。"
+
+msgid "No other matching files on this page."
+msgstr "此页没有其他匹配的文件。"
+
+msgid "No preferred Locations. <0>Set a restore destination in Settings</0>."
+msgstr "没有首选存储位置。<0>在设置中设定恢复目标</0>。"
+
+msgid "No Preview generators are configured."
+msgstr "未配置预览生成器。"
+
+msgid "No recorded files to add."
+msgstr "没有可添加的已记录文件。"
+
+msgid "No restore results yet."
+msgstr "暂无恢复结果。"
+
+msgid "No result"
+msgstr "没有结果"
+
+msgid "No saved version"
+msgstr "没有已保存版本"
+
+msgid "No saved versions are available to add to the Restore list."
+msgstr "没有可添加到恢复列表的已保存版本。"
+
+msgid "No saved versions."
+msgstr "没有已保存版本。"
+
+msgid "No signature cache"
+msgstr "不写入签名缓存"
+
+msgid "No signature cache on Media"
+msgstr "不在介质上写入签名缓存"
+
+msgid "No signature cache on restored files"
+msgstr "不在恢复的文件上写入签名缓存"
+
+msgid "No Tape device is configured."
+msgstr "未配置磁带设备。"
+
+msgid "No Tape drive is configured."
+msgstr "尚未配置磁带驱动器。"
+
+msgid "No usable archive"
+msgstr "没有可用的归档"
+
+msgid "No usable archived copy."
+msgstr "没有可用的归档副本。"
+
+msgid "No verification baseline"
+msgstr "无校验基准"
+
+msgid "No Volume discovery roots are configured (paths.volumes)."
+msgstr "未配置卷发现根目录（paths.volumes）。"
+
+msgid "No YATM marker. Initialize creates this disk's identity marker and Library Media."
+msgstr "没有 YATM 标记。初始化会创建此磁盘的身份标记和资料库介质。"
+
+msgid "Nominal wraps"
+msgstr "标称 wrap 数"
+
+msgid "Not checked"
+msgstr "未检查"
+
+msgid "Not connected"
+msgstr "未连接"
+
+msgctxt "Device report"
+msgid "not implemented"
+msgstr "未实现"
+
+msgid "Not processed"
+msgstr "未处理"
+
+msgctxt "Device report"
+msgid "not ready"
+msgstr "未就绪"
+
+msgid "Not recorded"
+msgstr "未记录"
+
+msgid "Not recorded for the current original"
+msgstr "当前原件未记录"
+
+msgid "Not supported on Tape"
+msgstr "磁带不支持"
+
+msgid "Not used by normal Restore."
+msgstr "常规恢复不会使用。"
+
+msgid "Not used by normal Restore. Advanced recovery can attempt this copy."
+msgstr "常规恢复不会使用。高级恢复可以尝试使用此副本。"
+
+msgid "Note"
+msgstr "备注"
+
+msgctxt "file browser"
+msgid "Nothing to show"
+msgstr "暂无内容"
+
+msgid "Observation completed: {completed}"
+msgstr "观测完成：{completed}"
+
+msgid "Observation started: {started}"
+msgstr "观测开始：{started}"
+
+msgctxt "Device report"
+msgid "observed"
+msgstr "实测"
+
+msgid "Observed: {observed}"
+msgstr "观测时间：{observed}"
+
+msgid "Off"
+msgstr "关闭"
+
+msgid "Online"
+msgstr "在线"
+
+msgid "Online · {space}"
+msgstr "在线 · {space}"
+
+msgid "Open in Library"
+msgstr "在资料库中打开"
+
+msgid "Open Library folder failed"
+msgstr "打开资料库文件夹失败"
+
+msgid "Open Library root failed"
+msgstr "打开资料库根目录失败"
+
+msgid "Open Media folder failed"
+msgstr "无法打开介质文件夹"
+
+msgctxt "file action"
+msgid "Open selection"
+msgstr "打开所选项"
+
+msgid "Operation canceled"
+msgstr "操作已取消"
+
+msgid "Operation did not complete"
+msgstr "操作未完成"
+
+msgid "Operation ended without a final result"
+msgstr "操作结束时没有最终结果"
+
+msgid "Operation failed"
+msgstr "操作失败"
+
+msgid "Operation succeeded, but refresh failed: {message}"
+msgstr "操作已成功，但刷新失败：{message}"
+
+msgid "Optional. Content already on this many Media or more is skipped. Files whose current content is not confirmed are archived normally."
+msgstr "可选。已存在于这么多个或更多介质上的内容会被跳过。当前内容未确认的文件仍会正常归档。"
+
+msgctxt "file action group"
+msgid "Options"
+msgstr "选项"
+
+msgid "Original files and archive copies are kept."
+msgstr "原始文件和归档副本会保留。"
+
+msgid "Original linked, but its details could not be refreshed"
+msgstr "原件已关联，但无法刷新其详情"
+
+msgid "Other density code"
+msgstr "其他密度代码"
+
+msgid "Output"
+msgstr "输出"
+
+msgid "Output format"
+msgstr "输出格式"
+
+msgid "Output: {outputFormats}"
+msgstr "输出：{outputFormats}"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Overwrite the cartridge in {device}"
+msgstr "覆盖 {device} 中的磁带"
+
+msgctxt "Device report"
+msgid "ownership uncertain"
+msgstr "占用状态不确定"
+
+msgid "Page {page}"
+msgstr "第 {page} 页"
+
+msgctxt "Device field"
+msgid "Parameters control"
+msgstr "参数控制"
+
+msgid "Parameters: {parametersSource}"
+msgstr "参数：{parametersSource}"
+
+msgid "Parent directory"
+msgstr "上级目录"
+
+msgctxt "Device report"
+msgid "partial"
+msgstr "部分支持"
+
+msgctxt "Device field"
+msgid "Partition count"
+msgstr "分区数"
+
+msgid "Partition: {partition}"
+msgstr "分区：{partition}"
+
+msgctxt "file action"
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Paste failed"
+msgstr "粘贴失败"
+
+msgid "Path"
+msgstr "路径"
+
+msgctxt "Copy status"
+msgid "pending"
+msgstr "待处理"
+
+msgctxt "Device report"
+msgid "permission"
+msgstr "权限不足"
+
+msgid "Permission"
+msgstr "权限"
+
+msgid "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
+msgstr "归档、恢复和扫描任务的流水线限制，在下次尝试开始时采用；正在运行的尝试保持当前限制。"
+
+msgid "PNG is lossless; quality does not apply."
+msgstr "PNG 为无损格式，质量设置不适用。"
+
+msgid "Position source: {positionSource}"
+msgstr "位置来源：{positionSource}"
+
+msgid "Positioning"
+msgstr "定位"
+
+msgid "Poster height (px)"
+msgstr "封面高度（px）"
+
+msgid "Poster width (px)"
+msgstr "封面宽度（px）"
+
+msgid "Preferred"
+msgstr "首选"
+
+msgid "Preferred restore destination"
+msgstr "首选恢复目标"
+
+msgid "Prepare archive"
+msgstr "准备归档"
+
+msgid "Prepare restore"
+msgstr "准备恢复"
+
+msgid "Preparing"
+msgstr "准备中"
+
+msgctxt "Job phase"
+msgid "preparing media"
+msgstr "正在准备介质"
+
+msgid "Preparing…"
+msgstr "正在准备…"
+
+msgid "Preview"
+msgstr "预览"
+
+msgid "Preview · archived content"
+msgstr "预览 · 已归档内容"
+
+msgid "Preview · current original"
+msgstr "预览 · 当前原件"
+
+msgid "Preview · selected saved version"
+msgstr "预览 · 所选已保存版本"
+
+msgid "Preview creation failed: {previewError}"
+msgstr "预览创建失败：{previewError}"
+
+msgid "Preview failed: {previewError}"
+msgstr "预览失败：{previewError}"
+
+msgid "Preview generation is disabled."
+msgstr "预览生成已禁用。"
+
+msgid "Preview generation skips files whose signatures are unknown. Read new and changed files to include them."
+msgstr "预览生成会跳过签名未知的文件。选择“读取新增和已变更的文件”可将其包含在内。"
+
+msgid "Preview helper unavailable."
+msgstr "预览辅助程序不可用。"
+
+msgid "Preview not available"
+msgstr "预览不可用"
+
+msgid "Preview of the latest saved version"
+msgstr "最新已保存版本的预览"
+
+msgid "Preview ready"
+msgstr "预览已就绪"
+
+msgid "Preview skipped"
+msgstr "预览已跳过"
+
+msgid "Preview unavailable"
+msgstr "预览不可用"
+
+msgid "Previews"
+msgstr "预览"
+
+msgid "Previews failed"
+msgstr "预览失败"
+
+msgid "Previews ready"
+msgstr "预览已就绪"
+
+msgid "Previews require random-readable Media"
+msgstr "预览需要可随机读取的介质"
+
+msgid "Previews skipped"
+msgstr "预览已跳过"
+
+msgid "Previous"
+msgstr "上一页"
+
+msgid "Processed"
+msgstr "已处理"
+
+msgctxt "Job phase"
+msgid "processing content"
+msgstr "正在处理内容"
+
+msgctxt "file action"
+msgid "Properties"
+msgstr "属性"
+
+msgctxt "Job phase"
+msgid "publishing source"
+msgstr "正在发布来源"
+
+msgid "Quality"
+msgstr "质量"
+
+msgctxt "Job phase"
+msgid "Queued — waiting for Media"
+msgstr "排队中，等待介质"
+
+msgid "Queued read items"
+msgstr "排队读取项"
+
+msgid "Queued results"
+msgstr "排队结果"
+
+msgid "random"
+msgstr "随机"
+
+msgid "Read an existing marker and recreate only its Library Media. Files and marker remain unchanged."
+msgstr "读取已有标记，只重新创建其资料库介质。文件和标记保持不变。"
+
+msgid "Read every file"
+msgstr "读取每个文件"
+
+msgid "Read new and changed files"
+msgstr "读取新增和已变更的文件"
+
+msgid "Read order"
+msgstr "读取顺序"
+
+msgid "Read parameters"
+msgstr "读取参数"
+
+msgid "Read parameters approach reversal must be finite and representable as a duration."
+msgstr "读取参数的逆向到达时间必须是有限数，且可表示为时长。"
+
+msgid "Read parameters approach reversal must be nonnegative."
+msgstr "读取参数的逆向到达时间不能为负。"
+
+msgid "Read parameters base must be finite and representable as a duration."
+msgstr "读取参数的基础时间必须是有限数，且可表示为时长。"
+
+msgid "Read parameters base must be nonnegative."
+msgstr "读取参数的基础时间不能为负。"
+
+msgid "Read parameters bytes per second must be finite and positive."
+msgstr "读取参数的每秒字节数必须是有限的正数。"
+
+msgid "Read parameters density code is required."
+msgstr "读取参数需要密度代码。"
+
+msgid "Read parameters density code must be between 0 and 255."
+msgstr "读取参数的密度代码必须介于 0 和 255 之间。"
+
+msgid "Read parameters drive serial must be nonempty when supplied."
+msgstr "读取参数的驱动器序列号一旦提供就不能为空。"
+
+msgid "Read parameters filemark overhead must be finite and representable as a duration."
+msgstr "读取参数的文件标记开销必须是有限数，且可表示为时长。"
+
+msgid "Read parameters filemark overhead must be nonnegative."
+msgstr "读取参数的文件标记开销不能为负。"
+
+msgid "Read parameters fixed unload must be finite and representable as a duration."
+msgstr "读取参数的固定卸载时间必须是有限数，且可表示为时长。"
+
+msgid "Read parameters fixed unload must be nonnegative."
+msgstr "读取参数的固定卸载时间不能为负。"
+
+msgid "Read parameters for {label}"
+msgstr "{label} 的读取参数"
+
+msgid "Read parameters for density code {density} are repeated."
+msgstr "密度代码 {density} 的读取参数重复。"
+
+msgid "Read parameters full-span unload must be finite and representable as a duration."
+msgstr "读取参数的全长卸载时间必须是有限数，且可表示为时长。"
+
+msgid "Read parameters full-span unload must be nonnegative."
+msgstr "读取参数的全长卸载时间不能为负。"
+
+msgid "Read parameters full-span unload seconds must be positive."
+msgstr "读取参数的全长卸载秒数必须为正。"
+
+msgid "Read parameters in Device settings"
+msgstr "设备设置中的读取参数"
+
+msgid "Read parameters LTFS unmount must be finite and representable as a duration."
+msgstr "读取参数的 LTFS 卸载时间必须是有限数，且可表示为时长。"
+
+msgid "Read parameters LTFS unmount must be nonnegative."
+msgstr "读取参数的 LTFS 卸载时间不能为负。"
+
+msgid "Read parameters nominal wraps must be a positive uint32."
+msgstr "读取参数的标称 wrap 数必须是正的 uint32。"
+
+msgid "Read parameters seek seconds per wrap must be finite and representable as a duration."
+msgstr "读取参数的每 wrap 寻址秒数必须是有限数，且可表示为时长。"
+
+msgid "Read parameters seek seconds per wrap must be nonnegative."
+msgstr "读取参数的每 wrap 寻址秒数不能为负。"
+
+msgid "Read parameters streaming bytes must be a uint64 value."
+msgstr "读取参数的流式字节数必须是 uint64 值。"
+
+msgid "Read planning budget (seconds)"
+msgstr "读取规划预算（秒）"
+
+msgid "Read planning budget must be a whole number between 1 and 4294967295 seconds."
+msgstr "读取规划预算必须是介于 1 到 4294967295 之间的整数秒。"
+
+msgctxt "Device report"
+msgid "read position"
+msgstr "读取位置"
+
+msgctxt "Device field"
+msgid "READ POSITION long form"
+msgstr "READ POSITION 长格式"
+
+msgctxt "Device field"
+msgid "READ POSITION short form"
+msgstr "READ POSITION 短格式"
+
+msgid "Read rate"
+msgstr "读取速率"
+
+msgid "Read rate (MB/s)"
+msgstr "读取速率（MB/s）"
+
+msgid "Read rate {readRate}"
+msgstr "读取速率 {readRate}"
+
+msgid "Read scan Media"
+msgstr "读取扫描介质"
+
+msgid "Reading"
+msgstr "读取"
+
+msgid "Reading Media…"
+msgstr "正在读取介质…"
+
+msgid "Reading speed in decimal megabytes per second; it also prices a read-speed locate."
+msgstr "以十进制 MB/s 表示的读取速度；同时用于计算读速定位的代价。"
+
+msgid "Reading this folder…"
+msgstr "正在读取此文件夹…"
+
+msgid "Reading…"
+msgstr "正在读取…"
+
+msgid "Reads source files again to identify previews before copying. The Archive copy hashes content independently."
+msgstr "复制前再次读取源文件以识别预览。归档副本会独立计算内容哈希。"
+
+msgctxt "Device report"
+msgid "ready"
+msgstr "就绪"
+
+msgid "Reason: {reason}"
+msgstr "原因：{reason}"
+
+msgid "Recent Jobs"
+msgstr "最近的任务"
+
+msgid "Recheck source hashes for previews"
+msgstr "为预览重新核对源文件哈希"
+
+msgid "Record mode"
+msgstr "记录模式"
+
+msgctxt "Device field"
+msgid "Record mode"
+msgstr "记录模式"
+
+msgid "Record size"
+msgstr "记录大小"
+
+msgid "Record size (bytes)"
+msgstr "记录大小（字节）"
+
+msgctxt "Device field"
+msgid "Record size (bytes)"
+msgstr "记录大小（字节）"
+
+msgid "Record size must be a multiple of 512 bytes between 512 and 4294966784."
+msgstr "记录大小必须是 512 的倍数，且介于 512 和 4294966784 之间。"
+
+msgid "Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths."
+msgstr "已记录的历史会保留。之后的操作使用当前目录和忽略规则；已有任务保留其原有的选择和路径。"
+
+msgid "Records {recordBytes} bytes."
+msgstr "记录大小 {recordBytes} 字节。"
+
+msgid "Recovered with damage"
+msgstr "带损坏恢复"
+
+msgid "Recreate"
+msgstr "重新创建"
+
+msgid "Reduce the timeline tile size or maximum frames to stay within 100 million pixels."
+msgstr "请减小时间轴缩略图尺寸或最大帧数，使总像素不超过 1 亿。"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgctxt "file action"
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Refresh device details"
+msgstr "刷新设备详情"
+
+msgid "Refresh devices"
+msgstr "刷新设备"
+
+msgid "Refresh failed"
+msgstr "刷新失败"
+
+msgid "Refresh Library failed"
+msgstr "刷新资料库失败"
+
+msgid "Refreshing details"
+msgstr "正在刷新详情"
+
+msgid "Refreshing devices…"
+msgstr "正在刷新设备…"
+
+msgid "Regenerate all"
+msgstr "全部重新生成"
+
+msgid "Register"
+msgstr "注册"
+
+msgid "Register a directory YATM may read originals from."
+msgstr "登记 YATM 可读取原件的目录。"
+
+msgid "Register Existing"
+msgstr "注册现有卷"
+
+msgid "Related content"
+msgstr "相关内容"
+
+msgid "Related Jobs"
+msgstr "相关任务"
+
+msgctxt "file action"
+msgid "Related Jobs"
+msgstr "相关任务"
+
+msgid "Reload saved settings"
+msgstr "重新加载已保存的设置"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Remove {path}"
+msgstr "移除 {path}"
+
+msgid "Remove {sourceName}?"
+msgstr "移除 {sourceName}？"
+
+msgctxt "file action"
+msgid "Remove from Library"
+msgstr "从资料库移除"
+
+msgctxt "file action"
+msgid "Remove from list"
+msgstr "从列表移除"
+
+msgid "Remove location"
+msgstr "移除存储位置"
+
+msgid "Remove Media from Library?"
+msgstr "从资料库移除介质？"
+
+msgid "Remove saved version?"
+msgstr "移除已保存版本？"
+
+msgid "Remove unreferenced inventory and files without originals or saved versions. Physical files are kept."
+msgstr "移除未被引用的清单，以及没有原件或已保存版本的文件。物理文件予以保留。"
+
+msgid "Remove version"
+msgstr "移除版本"
+
+msgctxt "Scan change"
+msgid "removed"
+msgstr "已移除"
+
+msgid "Removed"
+msgstr "已移除"
+
+msgid "Removes the registration and original links. Disk files, Library organization, saved versions and archive copies are kept."
+msgstr "移除登记和原件关联。磁盘文件、资料库的组织结构、已保存版本和归档副本予以保留。"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgctxt "file action"
+msgid "Rename File"
+msgstr "重命名文件"
+
+msgid "Renaming…"
+msgstr "正在重命名…"
+
+msgid "Replace selections"
+msgstr "替换选择"
+
+msgid "Replace the current {currentCount} Archive selections with {newCount} selections from this Job?"
+msgstr "要用此任务中的 {newCount} 项选择替换当前的 {currentCount} 项归档选择吗？"
+
+msgid "Replace the current {currentCount} Restore selections with {newCount} selections from this Job?"
+msgstr "要用此任务中的 {newCount} 项选择替换当前的 {currentCount} 项恢复选择吗？"
+
+msgid "Replace the note on every selected file"
+msgstr "替换每个所选文件的备注"
+
+msgid "Replace unsent selections?"
+msgstr "替换尚未提交的选择？"
+
+msgctxt "Device report"
+msgid "reported"
+msgstr "设备上报"
+
+msgid "Reported algorithms: {algorithms}"
+msgstr "上报的算法：{algorithms}"
+
+msgctxt "Device field"
+msgid "Reported wraps"
+msgstr "上报的磁带道"
+
+msgid "Request failed"
+msgstr "请求失败"
+
+msgid "Requested: {requestedOrder} · Prepared: {effectiveOrder}"
+msgstr "请求：{requestedOrder} · 已预备：{effectiveOrder}"
+
+msgid "Required Media is missing from the Library."
+msgstr "所需介质不在资料库中。"
+
+msgid "Reset {label} to built-in"
+msgstr "将 {label} 重置为内置值"
+
+msgid "Reset to built-in"
+msgstr "重置为内置值"
+
+msgid "Resource"
+msgstr "资源"
+
+msgid "Restore"
+msgstr "恢复"
+
+msgctxt "Job kind"
+msgid "Restore"
+msgstr "恢复"
+
+msgid "Restore from archive storage"
+msgstr "从归档存储恢复"
+
+msgid "Restore preference"
+msgstr "恢复偏好"
+
+msgid "Restore required"
+msgstr "需要恢复"
+
+msgid "Restore results"
+msgstr "恢复结果"
+
+msgid "Restore selection"
+msgstr "恢复选择"
+
+msgid "Restore time"
+msgstr "恢复时间"
+
+msgid "Restore to"
+msgstr "恢复到"
+
+msgid "Result flush interval (ms)"
+msgstr "结果刷新间隔（毫秒）"
+
+msgid "Results"
+msgstr "结果"
+
+msgid "Results per update"
+msgstr "每次更新的结果数"
+
+msgid "Resume search"
+msgstr "继续搜索"
+
+msgid "Retry"
+msgstr "重试"
+
+msgid "Retry availability"
+msgstr "重试可用性检查"
+
+msgid "Retry comparison settings"
+msgstr "重试加载比对设置"
+
+msgid "Retry destinations"
+msgstr "重试加载目标"
+
+msgid "Retry estimate"
+msgstr "重试估算"
+
+msgid "Retry loading more jobs"
+msgstr "重试加载更多任务"
+
+msgid "Retry loading tags"
+msgstr "重试加载标签"
+
+msgid "Retry locations"
+msgstr "重试加载存储位置"
+
+msgid "Retry Locations"
+msgstr "重试加载存储位置"
+
+msgid "Retry Preview"
+msgstr "重试预览"
+
+msgid "Retry rows"
+msgstr "重试加载行"
+
+msgid "Reuse known signatures only"
+msgstr "仅复用已知签名"
+
+msgid "Review the creation form before submitting."
+msgstr "提交前请检查创建表单。"
+
+msgid "Review the original selections and options, then submit to create a new Job. Priority: {priorityLabel}."
+msgstr "请检查原有的选择与选项，然后提交以创建新任务。优先级：{priorityLabel}。"
+
+msgid "Review what will be added"
+msgstr "查看将加入的内容"
+
+msgid "Rewind and unload time across one physical tape length; must be above 0."
+msgstr "跨越整条磁带物理长度的倒带和卸载时间；必须大于 0。"
+
+msgid "Right file pane"
+msgstr "右侧文件窗格"
+
+msgid "RPC Request Error"
+msgstr "RPC 请求错误"
+
+msgid "Runtime controls apply to the next file; routes and output choices apply to new Jobs."
+msgstr "运行时控制对下一个文件生效；路径和输出选项对新任务生效。"
+
+msgid "Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples."
+msgstr "采样覆盖整个视频。最小间隔和最大帧数会限制采样；受可用关键帧影响，实际样本可能更少。"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save changes"
+msgstr "保存更改"
+
+msgid "Save or cancel the changes below before switching language."
+msgstr "切换语言前，请先保存或取消下方的更改。"
+
+msgid "Save to check this executable. Current capability results describe the saved executable."
+msgstr "保存后才会检查此可执行文件。当前的能力结果描述的是已保存的可执行文件。"
+
+msgid "Saved {time} · Follows selected time"
+msgstr "已保存 {time} · 跟随所选时间"
+
+msgid "Saved {time} · Latest"
+msgstr "已保存 {time} · 最新"
+
+msgid "Saved content versions"
+msgstr "已保存的内容版本"
+
+msgid "Saved copies unavailable"
+msgstr "已保存的副本不可用"
+
+msgid "Saved version {version}"
+msgstr "已保存版本 {version}"
+
+msgid "Saved versions"
+msgstr "已保存版本"
+
+msgid "Saved versions only"
+msgstr "仅有已保存版本"
+
+msgid "Saving…"
+msgstr "正在保存…"
+
+msgid "Scan"
+msgstr "扫描"
+
+msgctxt "file action"
+msgid "Scan"
+msgstr "扫描"
+
+msgctxt "Job kind"
+msgid "Scan"
+msgstr "扫描"
+
+msgid "Scan comparison settings were not returned"
+msgstr "未返回扫描比对设置"
+
+msgid "Scan results"
+msgstr "扫描结果"
+
+msgid "Scope"
+msgstr "范围"
+
+msgid "Scope · {field}: {value}"
+msgstr "范围 · {field}：{value}"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search by name"
+msgstr "按名称搜索"
+
+msgid "Search by name or identity"
+msgstr "按名称或标识搜索"
+
+msgid "Search by name or path"
+msgstr "按名称或路径搜索"
+
+msgid "Search failed"
+msgstr "搜索失败"
+
+msgid "Search log"
+msgstr "搜索日志"
+
+msgid "Search query"
+msgstr "搜索查询"
+
+msgid "Search Results"
+msgstr "搜索结果"
+
+msgid "Search stopped."
+msgstr "搜索已停止。"
+
+msgid "Search unavailable"
+msgstr "搜索不可用"
+
+msgid "Searching Location"
+msgstr "正在搜索存储位置"
+
+msgid "Searching log…"
+msgstr "正在搜索日志…"
+
+msgid "Searching Media"
+msgstr "正在搜索介质"
+
+msgid "Searching tags…"
+msgstr "正在搜索标签…"
+
+msgid "Searching…"
+msgstr "正在搜索…"
+
+msgid "Seconds"
+msgstr "秒数"
+
+msgid "Seek time for one complete span (s)"
+msgstr "完整区段寻址时间（秒）"
+
+msgid "Seek time for one span"
+msgstr "单个跨度的寻道时间"
+
+msgid "Seek time for one span {seekTime}"
+msgstr "单个区段寻址时间 {seekTime}"
+
+msgid "Select a file"
+msgstr "选择文件"
+
+msgid "Select a Location"
+msgstr "选择存储位置"
+
+msgid "Select a Media or Position"
+msgstr "请选择一个介质或介质位置"
+
+msgid "Select a saved version before adding it to the Restore list."
+msgstr "请先选择已保存的版本，再将其添加到恢复列表。"
+
+msgctxt "file action"
+msgid "Select all files"
+msgstr "全选"
+
+msgid "Select backup"
+msgstr "选择备份"
+
+msgid "Select one file or folder to rename."
+msgstr "请选择一个文件或文件夹进行重命名。"
+
+msgid "Select one file to choose its version."
+msgstr "请只选择一个文件来选择其版本。"
+
+msgid "Select one Media."
+msgstr "请选择一个介质。"
+
+msgid "Select Tape action"
+msgstr "选择磁带操作"
+
+msgid "Select version failed"
+msgstr "选择版本失败"
+
+msgid "Selected files and folders"
+msgstr "所选文件和文件夹"
+
+msgid "Selected roots"
+msgstr "已选根项"
+
+msgid "Selected saved version"
+msgstr "所选已保存版本"
+
+msgid "Selection estimate is missing"
+msgstr "缺少选择估算结果"
+
+msgid "sequential"
+msgstr "顺序"
+
+msgctxt "Device report"
+msgid "sequential read"
+msgstr "顺序读取"
+
+msgctxt "Device report"
+msgid "sequential write"
+msgstr "顺序写入"
+
+msgid "Serial number"
+msgstr "序列号"
+
+msgctxt "Device field"
+msgid "Serial number"
+msgstr "序列号"
+
+msgid "Serial Number"
+msgstr "序列号"
+
+msgid "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+msgstr "服务器上的命令路径或名称。留空则依次使用服务器旁的 yatm-preview 和 PATH 中的命令。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Settings reply does not match the requested group"
+msgstr "设置响应与请求的分组不符"
+
+msgid "Settings reply does not match the updated group"
+msgstr "设置响应与已更新的分组不符"
+
+msgid "Settings views"
+msgstr "设置视图"
+
+msgid "Shared tags are shown. Tags unique to individual files are kept."
+msgstr "显示共有标签；各文件独有的标签会保留。"
+
+msgid "Show all confirmations"
+msgstr "显示所有确认提示"
+
+msgid "Show confirmation next time"
+msgstr "下次显示确认"
+
+msgctxt "file action"
+msgid "Show folders first"
+msgstr "文件夹优先"
+
+msgid "Show hidden files"
+msgstr "显示隐藏文件"
+
+msgctxt "file action"
+msgid "Show hidden files"
+msgstr "显示隐藏文件"
+
+msgid "Show more selected roots"
+msgstr "显示更多已选根项"
+
+msgid "Signature"
+msgstr "签名"
+
+msgid "Signatures"
+msgstr "签名"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Size unavailable"
+msgstr "大小不可用"
+
+msgid "size unresolved"
+msgstr "大小未确定"
+
+msgid "Skip {unmatchedCount} item"
+msgstr "跳过 {unmatchedCount} 项"
+
+msgid "Skip {unmatchedCount} items"
+msgstr "跳过 {unmatchedCount} 项"
+
+msgid "Skipped: target Media count reached {targetReached} · already on this Media {alreadyOnMedia}"
+msgstr "已跳过：已达目标介质数量 {targetReached} · 已在此介质上 {alreadyOnMedia}"
+
+msgid "SN {serialNumber}"
+msgstr "序列号 {serialNumber}"
+
+msgid "Some copies need attention"
+msgstr "部分副本需要处理"
+
+msgid "Some selected entries are unavailable. Remove them or select them again before preparing."
+msgstr "部分所选项目不可用。请先移除或重新选择，再进行准备。"
+
+msgid "Some selected entries are unavailable. Remove them or select them again before starting."
+msgstr "部分所选项目不可用。请先移除或重新选择，再开始。"
+
+msgctxt "file action"
+msgid "Sort by date"
+msgstr "按日期排序"
+
+msgctxt "file action"
+msgid "Sort by name"
+msgstr "按名称排序"
+
+msgctxt "file action"
+msgid "Sort by size"
+msgstr "按大小排序"
+
+msgid "Sorting files"
+msgstr "正在排序文件"
+
+msgid "Source"
+msgstr "来源"
+
+msgctxt "Device field"
+msgid "Source"
+msgstr "来源"
+
+msgid "Source hashes will be rechecked"
+msgstr "将重新核对源文件哈希"
+
+msgid "Source reference"
+msgstr "来源说明"
+
+msgid "Special file"
+msgstr "特殊文件"
+
+msgid "Stage Remaining"
+msgstr "阶段剩余"
+
+msgctxt "Copy status"
+msgid "staged"
+msgstr "已暂存"
+
+msgid "Start archive"
+msgstr "开始归档"
+
+msgid "Start calibration"
+msgstr "开始校准"
+
+msgid "Start reading"
+msgstr "开始读取"
+
+msgid "Start restore"
+msgstr "开始恢复"
+
+msgid "Start scan"
+msgstr "开始扫描"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Stop job"
+msgstr "停止任务"
+
+msgid "Stop Job {jobNumber}?"
+msgstr "停止任务 {jobNumber}？"
+
+msgid "Stop requested, but the list could not refresh"
+msgstr "已请求停止，但列表无法刷新"
+
+msgid "Stop search"
+msgstr "停止搜索"
+
+msgid "Storage path"
+msgstr "存储路径"
+
+msgid "Storage type"
+msgstr "存储类型"
+
+msgid "Stores each read file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "把读取的每个文件的签名存入扩展属性，供之后的读取复用。文件内容不变。"
+
+msgid "Stores each read original's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "把读取的每个原件的签名存入扩展属性，供之后的读取复用。文件内容不变。"
+
+msgid "Stores each restored file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "把每个恢复文件的签名存入扩展属性，供之后的读取复用。文件内容不变。"
+
+msgid "Stores the signature of each file read from a Volume or LTFS Tape on that file. On an LTFS Tape this rewrites its Index."
+msgstr "把从卷或 LTFS 磁带读取的每个文件的签名存放在该文件上。对 LTFS 磁带会重写其 Index。"
+
+msgid "Streaming distance"
+msgstr "流式距离"
+
+msgid "Streaming distance (MB)"
+msgstr "流式距离（MB）"
+
+msgctxt "Copy status"
+msgid "submitted"
+msgstr "已提交"
+
+msgid "Support: {support} · Availability: {availability}"
+msgstr "支持：{support} · 可用性：{availability}"
+
+msgctxt "Device report"
+msgid "supported"
+msgstr "支持"
+
+msgid "Supported densities: {densities}"
+msgstr "支持的密度：{densities}"
+
+msgid "Supported formats"
+msgstr "支持的格式"
+
+msgctxt "file action"
+msgid "Switch to Grid"
+msgstr "切换到网格视图"
+
+msgctxt "file action"
+msgid "Switch to List"
+msgstr "切换到列表视图"
+
+msgid "Symbolic link"
+msgstr "符号链接"
+
+msgid "Tag"
+msgstr "标签"
+
+msgid "Tags"
+msgstr "标签"
+
+msgid "Tape"
+msgstr "磁带"
+
+msgid "Tape action"
+msgstr "磁带操作"
+
+msgid "Tape barcode"
+msgstr "磁带条码"
+
+msgid "Tape barcode does not match the inspected identity: requested {identity}, inspected {inspectedIdentity}."
+msgstr "磁带条码与检查到的标识不一致：请求的是 {identity}，检查到的是 {inspectedIdentity}。"
+
+msgid "Tape device"
+msgstr "磁带设备"
+
+msgid "Tape format"
+msgstr "磁带格式"
+
+msgid "Tape Media"
+msgstr "磁带介质"
+
+msgid "Tape Media page did not advance."
+msgstr "磁带介质分页没有推进。"
+
+msgid "Tape Name"
+msgstr "磁带名称"
+
+msgid "Tar"
+msgstr "Tar"
+
+msgid "Tar capacity polling interval (seconds)"
+msgstr "Tar 容量轮询间隔（秒）"
+
+msgid "Tar records {recordMode} · {recordSize}"
+msgstr "Tar 记录 {recordMode} · {recordSize}"
+
+msgid "Tar records {records} · capacity polling {polling}"
+msgstr "Tar 记录 {records} · 容量轮询 {polling}"
+
+msgid "Tar recovery guide"
+msgstr "Tar 恢复指南"
+
+msgid "Tar settings are inactive for LTFS."
+msgstr "LTFS 下 Tar 设置不生效。"
+
+msgid "Target Media count"
+msgstr "目标介质数量"
+
+msgid "Target Media count {targetMediaCount}: {targetReachedCount} file already reaches it and will be skipped."
+msgstr "目标介质数量 {targetMediaCount}：{targetReachedCount} 个文件已达到该数量，将被跳过。"
+
+msgid "Target Media count {targetMediaCount}: {targetReachedCount} files already reach it and will be skipped."
+msgstr "目标介质数量 {targetMediaCount}：{targetReachedCount} 个文件已达到该数量，将被跳过。"
+
+msgid "Technical details"
+msgstr "技术详情"
+
+msgid "The attempt recorded no reason."
+msgstr "该次尝试未记录原因。"
+
+msgid "The configured Encrypt script handles encryption; FORMAT generates a key."
+msgstr "加密由已配置的 Encrypt 脚本处理；FORMAT 会生成密钥。"
+
+msgid "The destination changed. Choose it again."
+msgstr "目标已变更。请重新选择。"
+
+msgid "The displayed device details report {reportLabel}, not this set's density code."
+msgstr "当前显示的设备详情报告的是 {reportLabel}，而非此参数集的密度代码。"
+
+msgid "The extension \"{extension}\" is assigned more than once."
+msgstr "扩展名“{extension}”被重复分配。"
+
+msgid "The inserted Tape does not match this Job’s required Media."
+msgstr "已插入的磁带与此任务所需的介质不匹配。"
+
+msgid "The last restore target is no longer available. Choose another target."
+msgstr "上次的恢复目标已不可用。请选择其他目标。"
+
+msgid "The original Archive inputs are unavailable."
+msgstr "原始归档输入不可用。"
+
+msgid "The original Restore destination is unavailable. Choose a destination."
+msgstr "原始恢复目标不可用。请选择目标位置。"
+
+msgid "The original Restore inputs are unavailable."
+msgstr "原始恢复输入不可用。"
+
+msgid "The original selection has no available reference."
+msgstr "原始选择没有可用的引用。"
+
+msgid "The recorded density of the cartridges a new set applies to."
+msgstr "新参数集所适用磁带的记录密度。"
+
+msgid "The result changed. Find again."
+msgstr "结果已变化。请重新查找。"
+
+msgid "The saved version record is removed. Archive copies and other versions are kept. A later Scan or Archive may establish this version again."
+msgstr "该已保存版本记录将被移除。归档副本和其他版本会保留。之后的扫描或归档可能会重新建立此版本。"
+
+msgid "The selected files are invalid. Return to Files and select them again."
+msgstr "所选文件无效。请返回文件页面重新选择。"
+
+msgid "The selected Location is unavailable. Choose a Location."
+msgstr "所选存储位置不可用。请重新选择存储位置。"
+
+msgid "The selected Media cannot generate Previews. Choose different Media or turn Previews off."
+msgstr "所选介质无法生成预览。请选择其他介质或关闭预览。"
+
+msgid "The selected source is invalid. Choose a source."
+msgstr "所选来源无效。请选择一个来源。"
+
+msgid "The selections changed while this form was opening. Review them before replacing."
+msgstr "打开此表单期间选择发生了变化。替换前请先检查。"
+
+msgid "The server verifies the loaded Tape against this Job before reading."
+msgstr "读取前，服务器会核对已装入的磁带是否属于此任务。"
+
+msgid "These Files already have explicit versions in the Restore list."
+msgstr "这些文件已在恢复列表中指定了明确版本。"
+
+msgid "These items are already in the Archive list."
+msgstr "这些项目已在归档列表中。"
+
+msgid "These items are already in the Restore list."
+msgstr "这些项目已在恢复列表中。"
+
+msgid "This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT."
+msgstr "该条码已登记。请选择 APPEND，或在 FORMAT 之前明确删除其介质元数据。"
+
+msgid "This capacity estimate does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+msgstr "此容量估算不保证文件一定能写入。以实际的提前预警和写入错误为准。"
+
+msgid "This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge."
+msgstr "此磁带是资料库中的介质。请关闭“写入测试数据”后再对其校准，或装入备用磁带。"
+
+msgid "This custom version was saved after the selected time."
+msgstr "此自定义版本保存于所选时间之后。"
+
+msgid "This destination is unavailable."
+msgstr "此目标不可用。"
+
+msgid "This device already has read parameters for {label}; edit that set instead."
+msgstr "此设备已有 {label} 的读取参数；请改为编辑该参数集。"
+
+msgid "This directory cannot be used as a restore destination."
+msgstr "此目录不能用作恢复目标。"
+
+msgid "This directory is not a separately mounted filesystem."
+msgstr "此目录不是单独挂载的文件系统。"
+
+msgid "This disk cannot be registered or initialized."
+msgstr "无法注册或初始化此磁盘。"
+
+msgid "This drive does not support LTFS (needs LTO-5 or later)."
+msgstr "此驱动器不支持 LTFS（需要 LTO-5 或更新版本）。"
+
+msgid "This File already has an explicit version in the Restore list."
+msgstr "此文件已在恢复列表中指定了明确版本。"
+
+msgid "This file has no Library parent."
+msgstr "此文件没有资料库上级目录。"
+
+msgid "This file operation is not supported"
+msgstr "不支持此文件操作"
+
+msgid "This folder does not allow changes. Refresh this folder."
+msgstr "此文件夹不允许更改。请刷新此文件夹。"
+
+msgid "This folder is empty"
+msgstr "此文件夹为空"
+
+msgid "This group changed. Find again."
+msgstr "此分组已变化。请重新查找。"
+
+msgid "This identical result needs a new Find to show accurate rows."
+msgstr "此相同文件结果需要重新查找才能显示准确的行。"
+
+msgid "This item has no eligible current original to add to the Archive list."
+msgstr "此项目没有可添加到归档列表的合格当前原件。"
+
+msgid "This item is already in the Archive list."
+msgstr "此项目已在归档列表中。"
+
+msgid "This item is already in the Restore list."
+msgstr "此项目已在恢复列表中。"
+
+msgid "This Job has no pending Media."
+msgstr "此任务没有待处理的介质。"
+
+msgid "This Job has no supported Media."
+msgstr "此任务没有受支持的介质。"
+
+msgid "This job no longer exists. Your Library files and archive copies are not deleted with it."
+msgstr "此任务已不存在。您的资料库文件和归档副本不会随之删除。"
+
+msgid "This Library file no longer exists."
+msgstr "此资料库文件已不存在。"
+
+msgid "This Location is unavailable."
+msgstr "此存储位置不可用。"
+
+msgid "This Location no longer exists."
+msgstr "此存储位置已不存在。"
+
+msgid "This Media is not registered in the Library."
+msgstr "此介质尚未登记到资料库中。"
+
+msgid "This observation alone does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+msgstr "仅凭此观测不保证文件一定能写入。以实际的提前预警和写入错误为准。"
+
+msgid "This Position records no Signature, so its copies cannot be matched."
+msgstr "此介质位置未记录签名，因此无法匹配其副本。"
+
+msgid "This preview type has no supported settings."
+msgstr "此预览类型没有受支持的设置。"
+
+msgid "This records preparation for that read; it does not identify the currently loaded cartridge or the final read order."
+msgstr "此处记录的是那次读取的准备情况，并不标识当前装入的磁带盒或最终读取顺序。"
+
+msgid "This saved entry is inactive. Its Device settings do not authorize device access."
+msgstr "此已保存条目未启用。其设备设置不授予设备访问权限。"
+
+msgid "This saved format is unsupported. Choose LTFS or Tar explicitly."
+msgstr "已保存的格式不受支持。请明确选择 LTFS 或 Tar。"
+
+msgid "This saved version does not belong to the selected File."
+msgstr "此已保存版本不属于所选文件。"
+
+msgid "This saved version has no File identity."
+msgstr "此已保存版本没有文件标识。"
+
+msgid "This saved version is unavailable."
+msgstr "此已保存版本不可用。"
+
+msgid "This saved version no longer exists."
+msgstr "这个已保存版本已不存在。"
+
+msgid "This selected entry is unavailable."
+msgstr "此所选项目不可用。"
+
+msgid "This selection has no directory reference."
+msgstr "此选择没有目录引用。"
+
+msgid "This Tape cannot be appended. Delete its Media metadata before formatting it."
+msgstr "无法向这盘磁带追加。请先删除其介质元数据，再进行格式化。"
+
+msgid "This version cannot currently be restored: no copies available."
+msgstr "此版本目前无法恢复：没有可用的副本。"
+
+msgid "Time spent in the latest execution attempt; waiting between attempts is excluded."
+msgstr "最近一次执行尝试所用的时间，不含尝试之间的等待。"
+
+msgid "Time to move one complete longitudinal tape span at seek speed, not the time to read a wrap."
+msgstr "以寻址速度移动一个完整纵向磁带区段的时间，而非读取一个 wrap 的时间。"
+
+msgid "Timeline tile height (px)"
+msgstr "时间轴缩略图高度（px）"
+
+msgid "Timeline tile width (px)"
+msgstr "时间轴缩略图宽度（px）"
+
+msgid "Timeout (seconds)"
+msgstr "超时（秒）"
+
+msgid "Timeout must be between 1 and 86400 seconds."
+msgstr "超时必须介于 1 到 86400 秒之间。"
+
+msgid "To span"
+msgstr "目标跨度"
+
+msgid "To wrap"
+msgstr "目标磁带道"
+
+msgid "Tools"
+msgstr "工具"
+
+msgid "Total Bytes"
+msgstr "总字节数"
+
+msgid "Total Files"
+msgstr "文件总数"
+
+msgctxt "Device field"
+msgid "Transport"
+msgstr "传输方式"
+
+msgctxt "Device report"
+msgid "transport error"
+msgstr "传输错误"
+
+msgctxt "Device report"
+msgid "transport unavailable"
+msgstr "传输通道不可用"
+
+msgid "Try again"
+msgstr "重试"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Type a tag and press Enter"
+msgstr "输入标签并按回车键"
+
+msgid "Unable to inspect Media"
+msgstr "无法检查介质"
+
+msgid "Unable to start the Media write"
+msgstr "无法开始写入介质"
+
+msgid "unavailable"
+msgstr "不可用"
+
+msgctxt "Device report"
+msgid "unavailable"
+msgstr "不可用"
+
+msgid "Unavailable"
+msgstr "不可用"
+
+msgid "Unavailable selection"
+msgstr "不可用的选择"
+
+msgctxt "Scan change"
+msgid "unchanged"
+msgstr "未变化"
+
+msgid "unconfirmed"
+msgstr "未确认"
+
+msgid "unknown"
+msgstr "未知"
+
+msgctxt "Device report"
+msgid "unknown"
+msgstr "未知"
+
+msgid "Unknown"
+msgstr "未知"
+
+msgid "Unknown density"
+msgstr "密度未知"
+
+msgid "Unknown error"
+msgstr "未知错误"
+
+msgid "Unknown file"
+msgstr "未知文件"
+
+msgid "unknown refresh error"
+msgstr "未知的刷新错误"
+
+msgctxt "file browser"
+msgid "Unknown total"
+msgstr "总数未知"
+
+msgid "Unnamed"
+msgstr "未命名"
+
+msgid "Unreadable"
+msgstr "无法读取"
+
+msgctxt "Tar record mode"
+msgid "unresolved"
+msgstr "未确定"
+
+msgctxt "Copy status"
+msgid "unspecified"
+msgstr "未指定"
+
+msgctxt "Scan change"
+msgid "unspecified"
+msgstr "未指定"
+
+msgctxt "Device report"
+msgid "unsupported"
+msgstr "不支持"
+
+msgid "Unsupported Settings group"
+msgstr "不支持的设置分组"
+
+msgid "Unsupported type"
+msgstr "不支持的类型"
+
+msgid "Update inventory"
+msgstr "更新清单"
+
+msgid "Update Library originals"
+msgstr "更新资料库原件"
+
+msgid "Updated"
+msgstr "更新时间"
+
+msgid "Updating hidden files"
+msgstr "正在更新隐藏文件"
+
+msgid "Use at most six decimal places (whole bytes)."
+msgstr "最多使用六位小数（整数字节）。"
+
+msgid "Use device default"
+msgstr "使用设备默认值"
+
+msgid "Use memory mapping when Archive and Scan read original file content. Off by default."
+msgstr "归档和扫描读取原始文件内容时使用内存映射。默认关闭。"
+
+msgid "Use mmap for content reads"
+msgstr "读取内容时使用 mmap"
+
+msgid "Values override the built-in ones for their density code. Empty fields stay unknown; do not enter 0 for a value you have not measured. Changes take effect after Save."
+msgstr "所填值会覆盖对应密度代码的内置值。留空的字段保持未知；未测量的值请勿填 0。更改在保存后生效。"
+
+msgctxt "Tar record mode"
+msgid "variable"
+msgstr "变长"
+
+msgctxt "Device field"
+msgid "Variable"
+msgstr "变长"
+
+msgctxt "Record mode"
+msgid "Variable"
+msgstr "变长"
+
+msgctxt "Device field"
+msgid "Vendor"
+msgstr "厂商"
+
+msgid "Verified · Linked"
+msgstr "已校验 · 已关联"
+
+msgid "Verified · Not linked"
+msgstr "已校验 · 未关联"
+
+msgctxt "Job phase"
+msgid "verifying media"
+msgstr "正在校验介质"
+
+msgid "version {versionId}"
+msgstr "版本 {versionId}"
+
+msgid "Version #{number}"
+msgstr "版本 #{number}"
+
+msgid "Version #{number} · Current selection"
+msgstr "版本 #{number} · 当前选择"
+
+msgid "Version removed, but refresh failed: {reason}"
+msgstr "版本已移除，但刷新失败：{reason}"
+
+msgid "Versions"
+msgstr "版本"
+
+msgid "Video"
+msgstr "视频"
+
+msgid "Video preview position"
+msgstr "视频预览位置"
+
+msgctxt "file action"
+msgid "View Details"
+msgstr "查看详情"
+
+msgid "View job"
+msgstr "查看任务"
+
+msgid "View list"
+msgstr "查看列表"
+
+msgid "View Log"
+msgstr "查看日志"
+
+msgid "View preview job"
+msgstr "查看预览任务"
+
+msgid "View results only"
+msgstr "仅查看结果"
+
+msgid "Volume"
+msgstr "卷"
+
+msgid "Volume added, but the Media list could not refresh"
+msgstr "卷已添加，但介质列表未能刷新"
+
+msgid "Volume type"
+msgstr "卷类型"
+
+msgid "Volume Type"
+msgstr "卷类型"
+
+msgid "Wait for sorting to finish before deleting files."
+msgstr "请等待排序完成后再删除文件。"
+
+msgid "Wait for sorting to finish before keeping a file."
+msgstr "请等待排序完成后再保留文件。"
+
+msgid "Wait for sorting to finish before merging files."
+msgstr "请等待排序完成后再合并文件。"
+
+msgid "Wait for the current operation to finish before sorting."
+msgstr "请等待当前操作完成后再排序。"
+
+msgid "What Library shows, how it removes items, and where its data can go."
+msgstr "资料库显示的内容、移除项目的方式，以及数据的去向。"
+
+msgid "When off, Library shows files with saved versions. Locations are unaffected."
+msgstr "关闭时，资料库只显示有已保存版本的文件，存储位置不受影响。"
+
+msgid "When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive."
+msgstr "设置后，此参数集不适用于报告其他序列号的驱动器。留空则适用于任何驱动器。"
+
+msgid "Whole number of wraps on the cartridge; required to derive geometry from a live wrap report."
+msgstr "磁带上的 wrap 总数（整数）；根据实时 wrap 报告推导几何信息时必需。"
+
+msgid "Working…"
+msgstr "处理中…"
+
+msgid "Write defaults apply to new FORMAT; APPEND and reads keep the Tape's storage profile."
+msgstr "写入默认值用于新的 FORMAT；APPEND 和读取沿用磁带的存储配置。"
+
+msgctxt "Device field"
+msgid "Write protected"
+msgstr "写保护"
+
+msgid "Write signature cache"
+msgstr "写入签名缓存"
+
+msgid "Write signature cache onto Media"
+msgstr "将签名缓存写入介质"
+
+msgid "Write signature cache onto restored files"
+msgstr "将签名缓存写入恢复的文件"
+
+msgid "Write test data"
+msgstr "写入测试数据"
+
+msgid "Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the cartridge again afterwards, initialize it with FORMAT. Confirm before starting."
+msgstr "写入测试数据会从磁带起始处覆盖驱动器中的磁带。切勿对存有数据的磁带使用。之后若要再次使用该磁带，请用 FORMAT 初始化。开始前请确认。"
+
+msgid "Written"
+msgstr "写入时间"
+
+msgctxt "Media bytes"
+msgid "Written"
+msgstr "已写入"
+
+msgid "YATM modules"
+msgstr "YATM 模块"
+
+msgid "Your {groupLabel} settings have not been saved."
+msgstr "您的{groupLabel}设置尚未保存。"
+
+msgid "Your Location configuration has not been saved."
+msgstr "您的存储位置配置尚未保存。"

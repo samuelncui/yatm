@@ -1,3 +1,5 @@
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { Fragment, useCallback, useMemo, useState } from "react";
 
 import Chip from "@mui/material/Chip";
@@ -52,7 +54,7 @@ export const RestoreCard = ({ job }: { job: Job }) => {
     },
     [job.id, job.status],
   );
-  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, "Could not load restore progress");
+  const { data, error } = useJobProgress(job.id, visible, isJobRunning(job), loadProgress, t`Could not load restore progress`);
   const progress = data?.progress ?? null;
   const summary = data?.summary;
   const media = data?.media ?? [];
@@ -86,28 +88,47 @@ export const RestoreCard = ({ job }: { job: Job }) => {
             />
           )}
           {running && <CancelJobButton jobID={job.id} />}
-          <JobResultsDialog jobId={job.id} title="Restore results" view={resultView} />
+          <JobResultsDialog jobId={job.id} title={t`Restore results`} view={resultView} />
         </Fragment>
       }
     />
   );
 };
 
-const restoreSummary = (summary: GetRestoreJobProgressResponse["summary"]) => (
-  <Stack className="product-actions" direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }} aria-label="Restore results">
-    <Chip label={`${summary!.verifiedFiles} verified`} color="success" variant="outlined" />
-    <Chip label={`${summary!.damagedFiles} recovered with damage`} color={summary!.damagedFiles > 0n ? "warning" : "default"} variant="outlined" />
-    <Chip label={`${summary!.unlinkedFiles} not linked`} variant="outlined" />
-    <Chip label={`${summary!.pendingFiles} pending`} variant="outlined" />
-  </Stack>
-);
+const restoreSummary = (summary: GetRestoreJobProgressResponse["summary"]) => {
+  const verified = String(summary!.verifiedFiles);
+  const damaged = String(summary!.damagedFiles);
+  const unlinked = String(summary!.unlinkedFiles);
+  const pending = String(summary!.pendingFiles);
+  return (
+    <Stack className="product-actions" direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }} aria-label={t`Restore results`}>
+      <Chip label={t`${verified} verified`} color="success" variant="outlined" />
+      <Chip label={t`${damaged} recovered with damage`} color={summary!.damagedFiles > 0n ? "warning" : "default"} variant="outlined" />
+      <Chip label={t`${unlinked} not linked`} variant="outlined" />
+      <Chip label={t`${pending} pending`} variant="outlined" />
+    </Stack>
+  );
+};
+
+const copyStatusLabels: Record<CopyStatus, MessageDescriptor> = {
+  [CopyStatus.UNSPECIFIED]: msg({ message: "unspecified", context: "Copy status" }),
+  [CopyStatus.PENDING]: msg({ message: "pending", context: "Copy status" }),
+  [CopyStatus.STAGED]: msg({ message: "staged", context: "Copy status" }),
+  [CopyStatus.SUBMITTED]: msg({ message: "submitted", context: "Copy status" }),
+  [CopyStatus.COMPLETED]: msg({ message: "completed", context: "Copy status" }),
+};
+
+const mediaStatusLabel = (name: string, status: CopyStatus) => {
+  const state = i18n._(copyStatusLabels[status]);
+  return t`${name}: ${state}`;
+};
 
 const restoreMediaChips = (media: RestoreMedia[], storage?: Map<bigint, Media>) => (
   <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", marginTop: 2 }}>
     {media.map((value) => (
       <Chip
         key={value.mediaId.toString()}
-        label={`${storage?.get(value.mediaId)?.name || value.identity}: ${CopyStatus[value.status].toLowerCase()}`}
+        label={mediaStatusLabel(storage?.get(value.mediaId)?.name || value.identity, value.status)}
         color={value.status === CopyStatus.COMPLETED ? "success" : "primary"}
         variant="outlined"
       />
@@ -118,15 +139,15 @@ const restoreMediaChips = (media: RestoreMedia[], storage?: Map<bigint, Media>) 
 const restoreResultRow = (identity: string | undefined, item: RestoreItem) => (
   <FileRow
     src={{
-      path: item.file?.targetPath || item.candidate?.mediaPath || "Unknown file",
+      path: item.file?.targetPath || item.candidate?.mediaPath || t`Unknown file`,
       size: item.sizeBytes,
       status: item.status,
       resultLabel: item.damaged
-        ? "Recovered with damage"
+        ? t`Recovered with damage`
         : item.status === CopyStatus.COMPLETED
           ? item.linked
-            ? "Verified · Linked"
-            : "Verified · Not linked"
+            ? t`Verified · Linked`
+            : t`Verified · Not linked`
           : undefined,
       resultMessage: [identity, item.resultMessage].filter(Boolean).join(" · "),
       resultFileID: item.resultFileId,
@@ -135,7 +156,7 @@ const restoreResultRow = (identity: string | undefined, item: RestoreItem) => (
 );
 
 const restoreResultView = (storage: Map<bigint, Media> | undefined): JobItemView => ({
-  emptyLabel: "No restore results yet.",
+  emptyLabel: t`No restore results yet.`,
   listing: "restore-files",
   // One composite key spans every Media in a single sequence.
   cursorOf: (item: RestoreItem) => `${item.candidate?.mediaId ?? 0n}:${item.id}`,

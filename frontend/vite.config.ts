@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { lingui } from "@lingui/vite-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -10,6 +11,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
+      lingui({ macroTransform: true }),
       react(),
       {
         name: "release-identity",

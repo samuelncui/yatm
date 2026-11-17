@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useState } from "react";
 import { Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Typography } from "@mui/material";
@@ -7,14 +8,17 @@ import { errorMessage } from "@/tools";
 import { useSkippableConfirmation } from "./confirmations";
 
 export const admissionToast = (files: bigint, existing: bigint, skipped: bigint) => {
-  const skippedRecords = [existing > 0n ? `${existing} already in Library` : "", skipped > 0n ? `${skipped} without signatures` : ""]
-    .filter(Boolean)
-    .join("; ");
+  const existingCount = String(existing);
+  const skippedCount = String(skipped);
+  const recordParts = [existing > 0n ? t`${existingCount} already in Library` : "", skipped > 0n ? t`${skippedCount} without signatures` : ""].filter(Boolean);
+  const [first = "", second = ""] = recordParts;
+  const skippedRecords = recordParts.length === 2 ? t`${first}; ${second}` : first;
   if (files > 0n) {
-    toast.success(`Added ${files} Files to Library${skippedRecords ? `; skipped ${skippedRecords}` : ""}`);
+    const fileCount = String(files);
+    toast.success(skippedRecords ? t`Added ${fileCount} Files to Library; skipped ${skippedRecords}` : t`Added ${fileCount} Files to Library`);
     return;
   }
-  toast.info(skippedRecords ? `No new Files to add: ${skippedRecords}.` : "No recorded files to add.");
+  toast.info(skippedRecords ? t`No new Files to add: ${skippedRecords}.` : t`No recorded files to add.`);
 };
 
 /**
@@ -49,7 +53,7 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
       })
       .catch((error: unknown) => {
         if (!active || controller.signal.aborted) return;
-        setState({ phase: "error", message: errorMessage(error, "Could not inspect this Media") });
+        setState({ phase: "error", message: errorMessage(error, t`Could not inspect this Media`) });
       });
     return () => {
       active = false;
@@ -69,12 +73,12 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
       const reply = await filesCli.importPositions({ positionIds: [], mediaId: mediaID, dryrun: false }).response;
       // The records are added; a choice that cannot be stored only keeps the confirmation as it was.
       if (remember && skipPrompt !== promptSuppressed) {
-        await setConfirmationSkipped(skipPrompt).catch(() => toast.info("Could not save this choice."));
+        await setConfirmationSkipped(skipPrompt).catch(() => toast.info(t`Could not save this choice.`));
       }
       admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
       close();
     } catch (error) {
-      setState({ phase: "error", message: errorMessage(error, "Could not add these records") });
+      setState({ phase: "error", message: errorMessage(error, t`Could not add these records`) });
     }
   };
 
@@ -101,7 +105,7 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
           setPromptSuppressed(false);
           setSkipPrompt(false);
         },
-        () => toast.info("Could not save this choice."),
+        () => toast.info(t`Could not save this choice.`),
       ),
     review,
     ask: () => {
@@ -120,23 +124,26 @@ export const useLibraryAdmission = (mediaID: bigint | undefined) => {
 
 export const ImportPositionsDialog = ({ admission, name }: { admission: ReturnType<typeof useLibraryAdmission>; name?: string }) => {
   if (!admission.open) return null;
+  const fileCount = String(admission.counts.files);
   return (
     <Dialog open onClose={() => (admission.busy ? undefined : admission.close())} maxWidth="sm" fullWidth>
-      <DialogTitle>Add existing inventory to Library</DialogTitle>
+      <DialogTitle>{t`Add existing inventory to Library`}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           {admission.calculating && (
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <CircularProgress size={20} />
-              <Typography>Calculating what this Media would add…</Typography>
+              <Typography>{t`Calculating what this Media would add…`}</Typography>
             </Stack>
           )}
           {!admission.calculating && !admission.error && !admission.busy && (
             <>
               <Typography>
                 {admission.counts.files > 0n
-                  ? `${admission.counts.files} files${name ? ` from ${name}` : ""} will be added as independent Library files.`
-                  : "No new Files will be added."}
+                  ? name
+                    ? t`${fileCount} files from ${name} will be added as independent Library files.`
+                    : t`${fileCount} files will be added as independent Library files.`
+                  : t`No new Files will be added.`}
               </Typography>
               <Summary counts={admission.counts} />
               <FormControlLabel
@@ -147,7 +154,7 @@ export const ImportPositionsDialog = ({ admission, name }: { admission: ReturnTy
                     onChange={(_, next) => admission.setSkipPrompt(next)}
                   />
                 }
-                label="Don’t show this again"
+                label={t`Don’t show this again`}
               />
             </>
           )}
@@ -156,20 +163,20 @@ export const ImportPositionsDialog = ({ admission, name }: { admission: ReturnTy
       </DialogContent>
       <DialogActions>
         <Button type="button" variant="contained" disabled={admission.busy || !admission.canConfirm} onClick={admission.confirm}>
-          {admission.busy ? "Adding…" : "Add to Library"}
+          {admission.busy ? t`Adding…` : t`Add to Library`}
         </Button>
         {admission.error && (
           <Button type="button" onClick={admission.retry}>
-            Retry
+            {t`Retry`}
           </Button>
         )}
         {admission.promptSuppressed && (
           <Button type="button" disabled={admission.busy} onClick={admission.restorePrompt}>
-            Show confirmation next time
+            {t`Show confirmation next time`}
           </Button>
         )}
         <Button type="button" disabled={admission.busy} onClick={admission.close}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -177,15 +184,18 @@ export const ImportPositionsDialog = ({ admission, name }: { admission: ReturnTy
 };
 
 const Summary = ({ counts }: { counts: { files: bigint; directories: bigint; existing: bigint; skipped: bigint } }) => {
+  const directoryCount = String(counts.directories);
+  const existingCount = String(counts.existing);
+  const skippedCount = String(counts.skipped);
   const parts = [
-    counts.directories > 0n ? `${counts.directories} folder entries` : "",
-    counts.existing > 0n ? `${counts.existing} already in Library` : "",
-    counts.skipped > 0n ? `${counts.skipped} without signatures` : "",
+    counts.directories > 0n ? t`${directoryCount} folder entries` : "",
+    counts.existing > 0n ? t`${existingCount} already in Library` : "",
+    counts.skipped > 0n ? t`${skippedCount} without signatures` : "",
   ].filter(Boolean);
   if (!parts.length && counts.files > 0n) return null;
   return (
     <Typography variant="body2" color="text.secondary">
-      {parts.length ? parts.join(" · ") : "No recorded files to add."}
+      {parts.length ? parts.join(" · ") : t`No recorded files to add.`}
     </Typography>
   );
 };

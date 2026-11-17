@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useState } from "react";
 import { Box, Button, IconButton, ListSubheader, Menu, MenuItem } from "@mui/material";
 import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
@@ -33,7 +34,8 @@ export const PaneSourceSelector = ({
 }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const { locations, loading, error, retry } = useLocationChoices({ enabled: true });
-  const sourceName = source.kind === "library" ? "Library" : (locations.find((location) => String(location.id) === source.id)?.name ?? source.name);
+  const sourceName = source.kind === "library" ? t`Library` : (locations.find((location) => String(location.id) === source.id)?.name ?? source.name);
+  const rootLabel = t`Go to ${sourceName} root`;
   const close = () => setAnchor(null);
   const select = (value: PaneSource) => {
     close();
@@ -46,7 +48,7 @@ export const PaneSourceSelector = ({
           size="small"
           color="inherit"
           onClick={onNavigateRoot}
-          aria-label={`Go to ${sourceName} root`}
+          aria-label={rootLabel}
           sx={{ textTransform: "none", fontSize: 13, fontWeight: 650, minWidth: 0, maxWidth: 200, height: 28, px: 0.25 }}
         >
           <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -57,7 +59,7 @@ export const PaneSourceSelector = ({
           size="small"
           color="inherit"
           sx={{ height: 28, width: 22, borderRadius: 1 }}
-          aria-label="Choose file source"
+          aria-label={t`Choose file source`}
           aria-haspopup="menu"
           aria-expanded={!!anchor}
           onClick={(event) => setAnchor(event.currentTarget)}
@@ -67,9 +69,9 @@ export const PaneSourceSelector = ({
       </Box>
       <Menu anchorEl={anchor} open={!!anchor} onClose={close} slotProps={{ paper: { sx: { maxHeight: 420, minWidth: 240 } } }}>
         <MenuItem selected={source.kind === "library"} onClick={() => select(librarySource)}>
-          Library
+          {t`Library`}
         </MenuItem>
-        <ListSubheader>Locations</ListSubheader>
+        <ListSubheader>{t`Locations`}</ListSubheader>
         {locations.map((location) => (
           <MenuItem
             key={String(location.id)}
@@ -84,9 +86,9 @@ export const PaneSourceSelector = ({
             <Feedback severity="error">{error}</Feedback>
           </Box>
         )}
-        {error && <MenuItem onClick={retry}>Retry locations</MenuItem>}
-        {!locations.length && loading && <MenuItem disabled>Loading Locations…</MenuItem>}
-        {!locations.length && !loading && !error && <MenuItem disabled>No locations</MenuItem>}
+        {error && <MenuItem onClick={retry}>{t`Retry locations`}</MenuItem>}
+        {!locations.length && loading && <MenuItem disabled>{t`Loading Locations…`}</MenuItem>}
+        {!locations.length && !loading && !error && <MenuItem disabled>{t`No locations`}</MenuItem>}
       </Menu>
     </>
   );

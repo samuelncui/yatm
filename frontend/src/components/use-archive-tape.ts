@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useRef, useState } from "react";
 
 import { mediaCli } from "@/api";
@@ -26,7 +27,6 @@ const emptyTapeForm = (): TapeForm => ({
   format: defaultTapeFormat,
   options: TarWriteOptions.create(),
 });
-const devicesFailure = "Could not load Tape devices or defaults";
 
 export type ArchiveTape = ReturnType<typeof useArchiveTape>;
 
@@ -36,6 +36,7 @@ export type ArchiveTape = ReturnType<typeof useArchiveTape>;
  * initial read, which also blocks the Tape choice; `onError` reports to the dialog's shared error.
  */
 export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError: (message: string) => void }) => {
+  const devicesFailure = t`Could not load Tape devices or defaults`;
   const tapeDevices = useTapeDevices(devicesFailure);
   const [defaults, setDefaults] = useState<DeviceSettings | null>(null);
   const [defaultsError, setDefaultsError] = useState("");
@@ -69,7 +70,8 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
     const reply = await inspect({ oneofKind: "tape", tape: { device } }, identity);
     if (!reply || sequence !== deviceRequest.current) return;
     if (identity && reply.identity && reply.identity !== identity) {
-      onError(`Tape barcode does not match the inspected identity: requested ${identity}, inspected ${reply.identity}.`);
+      const inspectedIdentity = reply.identity;
+      onError(t`Tape barcode does not match the inspected identity: requested ${identity}, inspected ${inspectedIdentity}.`);
       return;
     }
     setRegistered(reply.media);
@@ -96,7 +98,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
       const found = reply.media.find((value) => value.identity === barcode && value.kind === MediaKind.TAPE);
       if (found || !reply.hasMore) return found;
       const next = reply.media.at(-1)?.id;
-      if (next === undefined || next <= afterId) throw new Error("Tape Media page did not advance.");
+      if (next === undefined || next <= afterId) throw new Error(t`Tape Media page did not advance.`);
       afterId = next;
     }
   };
@@ -124,7 +126,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
         setForm((current) => (current.mode === ArchiveTapeWriteMode.APPEND ? { ...current, format: tapeFormatOf(existing), name: existing.name } : current));
       }
     } catch (reason) {
-      if (sequence === deviceRequest.current) onError(errorMessage(reason, "Could not inspect Tape"));
+      if (sequence === deviceRequest.current) onError(errorMessage(reason, t`Could not inspect Tape`));
     } finally {
       if (sequence === deviceRequest.current) setChecking(false);
     }
@@ -159,7 +161,7 @@ export const useArchiveTape = ({ opening, onError }: { opening: boolean; onError
   };
   const selectDevice = (device: string) => {
     if (!defaults) {
-      onError("Device defaults are unavailable. Refresh devices to try again.");
+      onError(t`Device defaults are unavailable. Refresh devices to try again.`);
       return;
     }
     deviceRequest.current++;

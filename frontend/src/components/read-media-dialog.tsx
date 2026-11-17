@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { SettingsSection } from "@/components/settings-page";
 import { isLtfsFormat, tapeFormatOf } from "@/components/tape-format";
 import { Feedback } from "@/components/feedback";
@@ -70,14 +71,14 @@ export const ReadMediaDialog = ({
     setError("");
     resetChoices();
     try {
-      if (!mediaIDs.length) throw new Error("This Job has no pending Media.");
+      if (!mediaIDs.length) throw new Error(t`This Job has no pending Media.`);
       const mediaReply = await mediaCli.list({ param: { oneofKind: "ids", ids: { ids: mediaIDs } } }).response;
       if (current !== request.current) return;
       const required = mediaReply.media.filter((value) => mediaIDs.includes(value.id));
-      if (mediaIDs.some((id) => !required.some((value) => value.id === id))) throw new Error("Required Media is missing from the Library.");
+      if (mediaIDs.some((id) => !required.some((value) => value.id === id))) throw new Error(t`Required Media is missing from the Library.`);
       const pendingVolumes = required.filter((value) => value.kind === MediaKind.VOLUME);
       const hasTape = required.some((value) => value.kind === MediaKind.TAPE);
-      if (!pendingVolumes.length && !hasTape) throw new Error("This Job has no supported Media.");
+      if (!pendingVolumes.length && !hasTape) throw new Error(t`This Job has no supported Media.`);
       setMedia(required);
       setBackend(pendingVolumes.length ? "volume" : "tape");
       if (pendingVolumes.length === 1) setVolumeUUID(pendingVolumes[0].identity);
@@ -93,7 +94,7 @@ export const ReadMediaDialog = ({
         );
       }
     } catch (error) {
-      if (current === request.current) setError(errorMessage(error, "Could not load archive storage"));
+      if (current === request.current) setError(errorMessage(error, t`Could not load archive storage`));
     } finally {
       if (current === request.current) setLoading(false);
     }
@@ -112,9 +113,9 @@ export const ReadMediaDialog = ({
       const selected = backend === "volume" ? selectedVolume : useLTFS ? inspection.reply?.media : undefined;
       await onRead(ReadMediaTarget.create({ ...target, ...(selected ? { expectedMediaId: selected.id, expectedIdentity: selected.identity } : {}) }));
       dismiss();
-      runUIAction(refresh, "Media reading started, but the Job list could not refresh");
+      runUIAction(refresh, t`Media reading started, but the Job list could not refresh`);
     } catch (error) {
-      setError(errorMessage(error, `Could not start ${operation}`));
+      setError(errorMessage(error, operation === "restore" ? t`Could not start restore` : t`Could not start scan`));
     } finally {
       setSubmitting(false);
     }
@@ -125,6 +126,7 @@ export const ReadMediaDialog = ({
     .some((value) => value.id === inspection.reply?.media?.id && value.identity === inspection.reply.identity);
   const selectedTape = tapes.find((value) => value.id.toString() === tapeID);
   const isLTFS = (value: Media) => isLtfsFormat(tapeFormatOf(value));
+  const selectedEncryption = selectedTape ? tapeEncryption(selectedTape) : undefined;
   const useLTFS = selectedTape ? isLTFS(selectedTape) : tapes.length > 0 && tapes.every(isLTFS);
   const inspectTape = (nextDevice: string, choices = tapes, hint = tapeID) => {
     if (!nextDevice) return;
@@ -141,7 +143,7 @@ export const ReadMediaDialog = ({
         if (sequence === request.current && inspectionSequence === deviceRequest.current) setDeviceReport(reply);
       })
       .catch((reason) => {
-        if (sequence === request.current && inspectionSequence === deviceRequest.current) setError(errorMessage(reason, "Could not inspect device"));
+        if (sequence === request.current && inspectionSequence === deviceRequest.current) setError(errorMessage(reason, t`Could not inspect device`));
       });
   };
   const refreshDevices = async () => {
@@ -165,7 +167,7 @@ export const ReadMediaDialog = ({
   return (
     <Fragment>
       <Button size="small" disabled={open || submitting} onClick={show}>
-        {operation === "restore" ? "Choose archive storage to read" : "Choose Media to read"}
+        {operation === "restore" ? t`Choose archive storage to read` : t`Choose Media to read`}
       </Button>
       {open && (
         <Dialog
@@ -183,14 +185,14 @@ export const ReadMediaDialog = ({
             },
           }}
         >
-          <DialogTitle>{operation === "restore" ? "Restore from archive storage" : "Read scan Media"}</DialogTitle>
+          <DialogTitle>{operation === "restore" ? t`Restore from archive storage` : t`Read scan Media`}</DialogTitle>
           <DialogContent>
             {error && <Feedback severity="error">{error}</Feedback>}
-            {loading && <p role="status">Loading required Media…</p>}
+            {loading && <p role="status">{t`Loading required Media…`}</p>}
             {!loading && candidates.length === 1 && (
               <p>
                 <strong>
-                  {backend === "tape" ? "Tape" : "Volume"}: {candidates[0].name || candidates[0].identity}
+                  {backend === "tape" ? t`Tape` : t`Volume`}: {candidates[0].name || candidates[0].identity}
                 </strong>
                 {candidates[0].name && <span className="product-muted"> · {candidates[0].identity}</span>}
               </p>
@@ -201,7 +203,7 @@ export const ReadMediaDialog = ({
                 required
                 disabled={submitting}
                 margin="normal"
-                label="Storage type"
+                label={t`Storage type`}
                 fullWidth
                 value={backend}
                 onChange={(event) => {
@@ -214,8 +216,8 @@ export const ReadMediaDialog = ({
                   }
                 }}
               >
-                <MenuItem value="tape">Tape</MenuItem>
-                <MenuItem value="volume">Mounted Volume</MenuItem>
+                <MenuItem value="tape">{t`Tape`}</MenuItem>
+                <MenuItem value="volume">{t`Mounted Volume`}</MenuItem>
               </TextField>
             )}
             {!loading &&
@@ -223,14 +225,14 @@ export const ReadMediaDialog = ({
               (backend === "volume" ? (
                 <Fragment>
                   {volumes.length === 1 ? (
-                    selectedVolume?.mounted !== true && <Alert severity="warning">Mount this Volume before continuing.</Alert>
+                    selectedVolume?.mounted !== true && <Alert severity="warning">{t`Mount this Volume before continuing.`}</Alert>
                   ) : (
                     <TextField
                       select
                       required
                       disabled={submitting}
                       margin="normal"
-                      label="Volume"
+                      label={t`Volume`}
                       fullWidth
                       value={volumeUUID}
                       onChange={(event) => setVolumeUUID(event.target.value)}
@@ -245,7 +247,7 @@ export const ReadMediaDialog = ({
                 </Fragment>
               ) : (
                 <Fragment>
-                  <DialogContentText>Load the required Tape and select its drive.</DialogContentText>
+                  <DialogContentText>{t`Load the required Tape and select its drive.`}</DialogContentText>
                   <TapeDeviceChoice
                     devices={devices}
                     loading={tapeDevices.loading}
@@ -264,7 +266,7 @@ export const ReadMediaDialog = ({
                     select
                     fullWidth
                     margin="normal"
-                    label="Tape Media"
+                    label={t`Tape Media`}
                     slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                     value={tapeID}
                     disabled={submitting}
@@ -275,9 +277,9 @@ export const ReadMediaDialog = ({
                       setDeviceReport(null);
                       inspectTape(device, tapes, hint);
                     }}
-                    helperText="The server verifies the loaded Tape against this Job before reading."
+                    helperText={t`The server verifies the loaded Tape against this Job before reading.`}
                   >
-                    <MenuItem value="">Automatic identification</MenuItem>
+                    <MenuItem value="">{t`Automatic identification`}</MenuItem>
                     {tapes.map((value) => (
                       <MenuItem key={value.id.toString()} value={value.id.toString()}>
                         {value.name || value.identity} · {value.identity}
@@ -285,36 +287,39 @@ export const ReadMediaDialog = ({
                     ))}
                   </TextField>
                   <Alert severity="info">
-                    Encryption is handled by the configured Encrypt script using the saved Media profile.
-                    {selectedTape && tapeEncryption(selectedTape) && ` Encryption: ${tapeEncryption(selectedTape)}.`}
+                    {[
+                      t`Encryption is handled by the configured Encrypt script using the saved Media profile.`,
+                      selectedEncryption && t`Encryption: ${selectedEncryption}.`,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   </Alert>
                   {useLTFS ? (
                     <MediaInspectResult {...inspection} />
                   ) : (
                     <>
                       <Alert severity="info">
-                        Automatic identification uses the Tape's cartridge memory barcode, and the matching Media supplies its saved key. YATM does not try
-                        multiple keys.
+                        {t`Automatic identification uses the Tape's cartridge memory barcode, and the matching Media supplies its saved key. YATM does not try multiple keys.`}
                       </Alert>
                     </>
                   )}
                   {!useLTFS && deviceReport && (
-                    <SettingsSection title="Device details" collapsible>
+                    <SettingsSection title={t`Device details`} collapsible>
                       <DeviceInspectionResult reply={deviceReport} />
                     </SettingsSection>
                   )}
                   {useLTFS && inspection.reply?.identity && !tapeMatches && (
-                    <Feedback severity="error">The inserted Tape does not match this Job’s required Media.</Feedback>
+                    <Feedback severity="error">{t`The inserted Tape does not match this Job’s required Media.`}</Feedback>
                   )}
                 </Fragment>
               ))}
           </DialogContent>
           <DialogActions>
             <Button type="submit" disabled={!canSubmit}>
-              {operation === "restore" ? "Start restore" : "Start reading"}
+              {operation === "restore" ? t`Start restore` : t`Start reading`}
             </Button>
             <Button disabled={submitting} onClick={close}>
-              Cancel
+              {t`Cancel`}
             </Button>
           </DialogActions>
         </Dialog>

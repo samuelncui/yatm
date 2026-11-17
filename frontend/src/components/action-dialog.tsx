@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { type FormEvent, type ReactNode, useCallback, useId, useRef, useState } from "react";
 import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, TextField } from "@mui/material";
@@ -20,7 +21,7 @@ type ActionRequest = {
 export const ActionDialog = ({
   title,
   confirmLabel,
-  cancelLabel = "Cancel",
+  cancelLabel = t`Cancel`,
   children,
   danger,
   input,
@@ -47,10 +48,10 @@ export const ActionDialog = ({
     try {
       await onConfirm(value);
       // The confirmed action already happened; a choice that cannot be stored only keeps the confirmation.
-      if (skipNextTime) await onSkipNextTime?.().catch(() => toast.info("Could not save this choice; the confirmation will appear again."));
+      if (skipNextTime) await onSkipNextTime?.().catch(() => toast.info(t`Could not save this choice; the confirmation will appear again.`));
       onClose();
     } catch (error) {
-      setError(errorMessage(error, "Operation failed"));
+      setError(errorMessage(error, t`Operation failed`));
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -105,14 +106,14 @@ export const ActionDialog = ({
         {onSkipNextTime && (
           <FormControlLabel
             control={<Checkbox checked={skipNextTime} disabled={busy} onChange={(_, checked) => setSkipNextTime(checked)} />}
-            label="Don’t show this again"
+            label={t`Don’t show this again`}
           />
         )}
         {error && <Feedback severity="error">{error}</Feedback>}
       </DialogContent>
       <DialogActions>
         <Button type="submit" variant="contained" color={danger ? "error" : "primary"} disabled={busy || !valid}>
-          {busy ? "Working…" : confirmLabel}
+          {busy ? t`Working…` : confirmLabel}
         </Button>
         <Button ref={cancelButton} type="button" autoFocus={!input} disabled={busy} onClick={close}>
           {cancelLabel}

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileBrowser } from "@/components/file-browser";
 import { useCallback, useRef, useState } from "react";
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, List, ListItem, ListItemText, Typography } from "@mui/material";
@@ -30,6 +31,8 @@ const refreshNothing = async () => {};
 
 const accepts = (file: FileData | null | undefined) => allowsFileOperation(file, FileOperationKind.SCAN);
 
+const removeLabel = (path: string) => t`Remove ${path}`;
+
 export const ScanSelectionDialog = ({
   entries,
   location,
@@ -50,10 +53,11 @@ export const ScanSelectionDialog = ({
     source,
     onChange: changeSource,
   });
+  const draftCount = draft.length;
   const chain = browser.browserProps.folderChain;
   const current = chain.at(-1);
   const canAddDirectory = accepts(current) && !(source.kind === "library" && current?.id === "0");
-  const sourceLabel = source.kind === "library" ? "Library" : source.name;
+  const sourceLabel = source.kind === "library" ? t`Library` : source.name;
   const directory = chain
     .slice(1)
     .map((file) => file?.name)
@@ -107,7 +111,7 @@ export const ScanSelectionDialog = ({
   };
   return (
     <Dialog open fullWidth maxWidth="md" onClose={close} aria-labelledby="scan-selection-title">
-      <DialogTitle id="scan-selection-title">Choose files and folders</DialogTitle>
+      <DialogTitle id="scan-selection-title">{t`Choose files and folders`}</DialogTitle>
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, minHeight: 0 }}>
         <Box sx={{ height: 340, minHeight: 220, flexShrink: 0 }}>
           <FileBrowser
@@ -126,10 +130,10 @@ export const ScanSelectionDialog = ({
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.5 }}>
           <Typography variant="body2" sx={{ flexGrow: 1 }}>
-            {draft.length} selected {draft.length === 1 ? "root" : "roots"}
+            {draftCount === 1 ? t`${draftCount} selected root` : t`${draftCount} selected roots`}
           </Typography>
           <Button size="small" sx={{ textTransform: "none" }} disabled={unavailable || !canAddDirectory} onClick={() => void addDirectory()}>
-            Add this folder
+            {t`Add this folder`}
           </Button>
           <Button
             size="small"
@@ -140,11 +144,11 @@ export const ScanSelectionDialog = ({
               setVisibleRoots(selectedPageSize);
             }}
           >
-            Clear
+            {t`Clear`}
           </Button>
         </Box>
         {!!draft.length && (
-          <List dense aria-label="Selected roots" sx={{ maxHeight: 160, overflowY: "auto", flexShrink: 0, py: 0 }}>
+          <List dense aria-label={t`Selected roots`} sx={{ maxHeight: 160, overflowY: "auto", flexShrink: 0, py: 0 }}>
             {draft.slice(0, visibleRoots).map((entry) => (
               <ListItem
                 key={scanSelectionKey(entry)}
@@ -152,7 +156,7 @@ export const ScanSelectionDialog = ({
                 secondaryAction={
                   <IconButton
                     size="small"
-                    aria-label={`Remove ${entry.path}`}
+                    aria-label={removeLabel(entry.path)}
                     onClick={() => setDraft((current) => current.filter((item) => scanSelectionKey(item) !== scanSelectionKey(entry)))}
                   >
                     <Close fontSize="small" />
@@ -164,7 +168,7 @@ export const ScanSelectionDialog = ({
             ))}
             {visibleRoots < draft.length && (
               <Button size="small" onClick={() => setVisibleRoots((value) => value + selectedPageSize)}>
-                Show more selected roots
+                {t`Show more selected roots`}
               </Button>
             )}
           </List>
@@ -172,9 +176,9 @@ export const ScanSelectionDialog = ({
       </DialogContent>
       <DialogActions>
         <Button variant="contained" onClick={() => onChoose(draft)}>
-          Choose
+          {t`Choose`}
         </Button>
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{t`Cancel`}</Button>
       </DialogActions>
     </Dialog>
   );

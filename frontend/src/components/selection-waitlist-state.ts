@@ -1,3 +1,4 @@
+import { plural, t } from "@lingui/core/macro";
 import type { FileData } from "@samuelncui/chonky";
 import { filesCli } from "@/api";
 import { FileOperationKind, FileScope, FileSelection, FileVersion, type FilesDetail } from "@/entity";
@@ -9,17 +10,25 @@ export type { SelectionEntry, SelectionKind, SelectionMergeResult } from "@/stat
 import type { SelectionEntry, SelectionKind, SelectionMergeResult } from "@/state/selections";
 
 export function selectionAddMessage(kind: SelectionKind, result: Omit<SelectionMergeResult, "entries">): string {
-  const label = kind === "archive" ? "Archive" : "Restore";
+  const archive = kind === "archive";
   if (!result.added) {
     if (result.keptExplicit)
       return result.keptExplicit === 1
-        ? "This File already has an explicit version in the Restore list."
-        : "These Files already have explicit versions in the Restore list.";
-    return result.duplicates === 1 ? `This item is already in the ${label} list.` : `These items are already in the ${label} list.`;
+        ? t`This File already has an explicit version in the Restore list.`
+        : t`These Files already have explicit versions in the Restore list.`;
+    if (result.duplicates === 1) return archive ? t`This item is already in the Archive list.` : t`This item is already in the Restore list.`;
+    return archive ? t`These items are already in the Archive list.` : t`These items are already in the Restore list.`;
   }
-  const added = `${result.added} ${result.added === 1 ? "item" : "items"} added to the ${label} list.`;
+  const count = result.added;
+  const added = archive
+    ? t`${plural(count, { one: "# item added to the Archive list.", other: "# items added to the Archive list." })}`
+    : t`${plural(count, { one: "# item added to the Restore list.", other: "# items added to the Restore list." })}`;
   if (!result.replacedAutomatic) return added;
-  const replaced = `${result.replacedAutomatic} automatic ${result.replacedAutomatic === 1 ? "selection was" : "selections were"} replaced by the explicit version.`;
+  const replacedCount = result.replacedAutomatic;
+  const replaced = t`${plural(replacedCount, {
+    one: "# automatic selection was replaced by the explicit version.",
+    other: "# automatic selections were replaced by the explicit version.",
+  })}`;
   return `${added} ${replaced}`;
 }
 
@@ -28,19 +37,20 @@ export const canAddFileToSelection = (kind: SelectionKind, file: FileData | null
 
 async function fileDetail(fileID: string): Promise<FilesDetail> {
   const detail = (await filesCli.get({ reference: libraryDirectoryReference(fileID) }).response).detail;
-  if (!detail?.entry) throw new Error("File details are unavailable. Refresh Files and try again.");
+  if (!detail?.entry) throw new Error(t`File details are unavailable. Refresh Files and try again.`);
   return detail;
 }
 
 export async function selectionEntriesForFiles(kind: SelectionKind, files: FileData[], scope: FileScope, sourceName: string): Promise<SelectionEntry[]> {
   const entries: SelectionEntry[] = [];
   for (const file of files) {
+    const name = file.name;
     if (kind === "archive" && !allowsFileOperation(file, FileOperationKind.ARCHIVE)) {
-      throw new Error(`${file.name} has no eligible current original to add to the Archive list.`);
+      throw new Error(t`${name} has no eligible current original to add to the Archive list.`);
     }
     const fileID = associatedLibraryFileID(file);
     if (kind === "restore" && !file.isDir) {
-      if (!fileID) throw new Error(`${file.name} has no saved File in Library to add to the Restore list.`);
+      if (!fileID) throw new Error(t`${name} has no saved File in Library to add to the Restore list.`);
       const selection = FileSelection.create({ target: { oneofKind: "library", library: { fileId: BigInt(fileID) } }, scope: FileScope.SAVED });
       const detail = await fileDetail(fileID);
       const target = detail.organization?.path || detail.entry?.path || file.name;
@@ -68,14 +78,14 @@ export async function selectionEntriesForFiles(kind: SelectionKind, files: FileD
 }
 
 export function archiveEntryForDetail(detail: FilesDetail): SelectionEntry {
-  if (!detail.entry) throw new Error("File details are unavailable. Refresh Files and try again.");
+  if (!detail.entry) throw new Error(t`File details are unavailable. Refresh Files and try again.`);
   const file = filesEntryData(detail.entry);
   if (!allowsFileOperation(file, FileOperationKind.ARCHIVE)) {
-    throw new Error("This item has no eligible current original to add to the Archive list.");
+    throw new Error(t`This item has no eligible current original to add to the Archive list.`);
   }
   const selection = selectionForFile(file, FileScope.DEFAULT);
   const target = detail.organization?.path || detail.entry.path || detail.entry.name;
-  const sourceName = detail.original?.sourceName || "Location";
+  const sourceName = detail.original?.sourceName || t`Location`;
   return {
     key: FileSelection.toJsonString(selection),
     name: detail.entry.name,
@@ -88,10 +98,10 @@ export function archiveEntryForDetail(detail: FilesDetail): SelectionEntry {
 }
 
 export function restoreVersionEntry(detail: FilesDetail, version: FileVersion): SelectionEntry {
-  if (!detail.entry) throw new Error("File details are unavailable. Refresh Files and try again.");
-  if (version.fileId <= 0n) throw new Error("This saved version has no File identity.");
+  if (!detail.entry) throw new Error(t`File details are unavailable. Refresh Files and try again.`);
+  if (version.fileId <= 0n) throw new Error(t`This saved version has no File identity.`);
   const detailFileID = filesEntryLibraryID(detail.entry);
-  if (detailFileID !== undefined && detailFileID !== version.fileId) throw new Error("This saved version does not belong to the selected File.");
+  if (detailFileID !== undefined && detailFileID !== version.fileId) throw new Error(t`This saved version does not belong to the selected File.`);
   const fileID = String(version.fileId);
   const target = detail.organization?.path || detail.entry.path || detail.entry.name;
   return {

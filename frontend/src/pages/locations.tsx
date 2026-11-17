@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router";
@@ -52,8 +53,8 @@ const LocationList = () => {
           const id = String(page[index].id);
           errors[id] = {};
           if (result.status === "rejected") {
-            errors[id].access = errorMessage(result.reason, "Could not check access");
-            errors[id].job = "Could not load latest analysis";
+            errors[id].access = errorMessage(result.reason, t`Could not check access`);
+            errors[id].job = t`Could not load latest analysis`;
             return;
           }
           observations[id] = result.value;
@@ -64,11 +65,11 @@ const LocationList = () => {
         recent.forEach((result, index) => {
           const location = jobLocations[index];
           if (result.status === "rejected") {
-            errors[String(location.id)].job = errorMessage(result.reason, "Could not load Job details");
+            errors[String(location.id)].job = errorMessage(result.reason, t`Could not load Job details`);
             return;
           }
           if (!result.value.job) {
-            errors[String(location.id)].job = "Job no longer exists";
+            errors[String(location.id)].job = t`Job no longer exists`;
             return;
           }
           jobs[String(result.value.job.id)] = result.value.job;
@@ -85,18 +86,18 @@ const LocationList = () => {
     };
   }, [locations]);
   return (
-    <SettingsPage title="Locations" description="Directories YATM may read originals from and write Restore output to.">
+    <SettingsPage title={t`Locations`} description={t`Directories YATM may read originals from and write Restore output to.`}>
       <SettingsLoading label="Location" loading={catalogLoading} />
       {error && <Feedback severity="error">{error}</Feedback>}
       <Card>
         <TableContainer>
-          <Table aria-label="Locations" size="small">
+          <Table aria-label={t`Locations`} size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Name / directory</TableCell>
-                <TableCell>Restore preference</TableCell>
-                <TableCell>Access</TableCell>
-                <TableCell>Latest analysis</TableCell>
+                <TableCell>{t`Name / directory`}</TableCell>
+                <TableCell>{t`Restore preference`}</TableCell>
+                <TableCell>{t`Access`}</TableCell>
+                <TableCell>{t`Latest analysis`}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -113,27 +114,27 @@ const LocationList = () => {
                         <code>{location.rootPath}</code>
                       </Typography>
                     </TableCell>
-                    <TableCell>{location.restoreTarget ? "Preferred" : "—"}</TableCell>
+                    <TableCell>{location.restoreTarget ? t`Preferred` : "—"}</TableCell>
                     <TableCell>
                       <span title={detailsError?.access || observation?.error || (observation ? contentTime(observation.checkedAtNs || undefined) : "")}>
-                        {!observation ? (detailsError?.access ? "Check failed" : "Not checked") : observation.accessible ? "Available" : "Unavailable"}
+                        {!observation ? (detailsError?.access ? t`Check failed` : t`Not checked`) : observation.accessible ? t`Available` : t`Unavailable`}
                       </span>
                       {observation && detailsError?.access && (
                         <Typography variant="caption" color="text.secondary" component="div" title={detailsError.access}>
-                          Last check · Refresh failed
+                          {t`Last check · Refresh failed`}
                         </Typography>
                       )}
                     </TableCell>
                     <TableCell>
                       {lastJobId ? (
                         <>
-                          <Link to={`/jobs/${lastJobId}`}>{jobs[String(lastJobId)] ? jobStatusLabel(jobs[String(lastJobId)]) : "View job"}</Link>
+                          <Link to={`/jobs/${lastJobId}`}>{jobs[String(lastJobId)] ? jobStatusLabel(jobs[String(lastJobId)]) : t`View job`}</Link>
                           <Typography variant="caption" color="text.secondary" component="div">
                             {contentTime(jobs[String(lastJobId)]?.createdAtNs || undefined, "")}
                           </Typography>
                           {detailsError?.job && (
                             <Typography variant="caption" color="text.secondary" component="div" title={detailsError.job}>
-                              Details unavailable
+                              {t`Details unavailable`}
                             </Typography>
                           )}
                         </>
@@ -150,15 +151,15 @@ const LocationList = () => {
       </Card>
       {!loading && !error && !locations.length && (
         <Typography variant="body2" color="text.secondary">
-          Add an original directory or a restore destination.
+          {t`Add an original directory or a restore destination.`}
         </Typography>
       )}
       <ActionRow>
         <Button component={Link} to="new" variant="contained">
-          Add location
+          {t`Add location`}
         </Button>
         <Button disabled={loading} onClick={refresh}>
-          Refresh
+          {t`Refresh`}
         </Button>
       </ActionRow>
     </SettingsPage>
@@ -169,7 +170,7 @@ const NewLocation = () => {
   const store = useAppStore();
   const navigate = useNavigate();
   return (
-    <SettingsPage title="Add location" description="Register a directory YATM may read originals from.">
+    <SettingsPage title={t`Add location`} description={t`Register a directory YATM may read originals from.`}>
       <LocationForm
         onCancel={() => navigate("/settings/locations")}
         onSaved={(location) => {
@@ -196,14 +197,14 @@ const LocationDetail = () => {
     const sequence = ++request.current;
     setError("");
     try {
-      if (!/^[1-9]\d*$/.test(id)) throw new Error("Invalid Location");
+      if (!/^[1-9]\d*$/.test(id)) throw new Error(t`Invalid Location`);
       const next = await locationCli.get({ id: BigInt(id) }).response;
       if (sequence !== request.current) return;
-      if (!next.location) throw new Error("Location reply is missing");
+      if (!next.location) throw new Error(t`Location reply is missing`);
       setReply(next);
       setError("");
     } catch (error) {
-      if (sequence === request.current) setError(errorMessage(error, "Could not load location"));
+      if (sequence === request.current) setError(errorMessage(error, t`Could not load location`));
     }
   }, [id]);
   useEffect(() => {
@@ -217,21 +218,26 @@ const LocationDetail = () => {
     };
   }, [load]);
   const source = reply?.location;
-  const failure = error && <Feedback action={<Button onClick={() => void load()}>Retry</Button>}>{error}</Feedback>;
-  if (!source) return <SettingsPage title="Location">{failure || <SettingsLoading label="Location" loading />}</SettingsPage>;
+  const sourceName = source?.name ?? "";
+  const failure = error && <Feedback action={<Button onClick={() => void load()}>{t`Retry`}</Button>}>{error}</Feedback>;
+  if (!source) return <SettingsPage title={t`Location`}>{failure || <SettingsLoading label="Location" loading />}</SettingsPage>;
   return (
     <Stack useFlexGap spacing={2} sx={{ width: "100%", height: "100%", minHeight: 0, p: 3, textAlign: "left" }}>
       <PageHeading
         title={source.name}
         actions={
-          <Chip size="small" label={!reply?.accessibility ? "Not checked" : reply.accessibility.accessible ? "Available" : "Unavailable"} variant="outlined" />
+          <Chip
+            size="small"
+            label={!reply?.accessibility ? t`Not checked` : reply.accessibility.accessible ? t`Available` : t`Unavailable`}
+            variant="outlined"
+          />
         }
       />
       {failure}
-      <PageTabs value={tab} onChange={(_, value) => setParams({ tab: value })} aria-label="Location details">
-        <Tab value="configuration" label="Configuration" />
-        <Tab value="files" label="Files" />
-        <Tab value="jobs" label="Jobs" />
+      <PageTabs value={tab} onChange={(_, value) => setParams({ tab: value })} aria-label={t`Location details`}>
+        <Tab value="configuration" label={t`Configuration`} />
+        <Tab value="files" label={t`Files`} />
+        <Tab value="jobs" label={t`Jobs`} />
       </PageTabs>
       <Box sx={{ flex: 1, minHeight: 0, overflowY: tab === "files" ? "hidden" : "auto" }}>
         {tab === "configuration" && (
@@ -250,7 +256,7 @@ const LocationDetail = () => {
               additionalActions={(busy) => ({
                 beforeCancel: (
                   <Button component={Link} to={`/scan?location=${source.id}`} disabled={busy}>
-                    Scan
+                    {t`Scan`}
                   </Button>
                 ),
                 afterCancel: (
@@ -259,10 +265,10 @@ const LocationDetail = () => {
                     disabled={dirty || busy}
                     onClick={() =>
                       askAction({
-                        title: `Remove ${source.name}?`,
-                        confirmLabel: "Remove",
+                        title: t`Remove ${sourceName}?`,
+                        confirmLabel: t`Remove`,
                         danger: true,
-                        children: "Removes the registration and original links. Disk files, Library organization, saved versions and archive copies are kept.",
+                        children: t`Removes the registration and original links. Disk files, Library organization, saved versions and archive copies are kept.`,
                         onConfirm: async () => {
                           await locationCli.delete({ dryrun: false, id: source.id }).response;
                           removeLocation(store, source.id);
@@ -271,7 +277,7 @@ const LocationDetail = () => {
                       })
                     }
                   >
-                    Remove location
+                    {t`Remove location`}
                   </Button>
                 ),
               })}

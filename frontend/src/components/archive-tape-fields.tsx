@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import DialogContentText from "@mui/material/DialogContentText";
@@ -19,9 +20,10 @@ export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; sub
   const { form, existing, tar, inspection } = tape;
   // A drive known to lack an LTO-5 or later density offers only Tar.
   const noLtfs = ltfsUnsupported(tape.deviceReport);
+  const format = form.format;
   return (
     <>
-      <DialogContentText>Load the Tape and select its drive.</DialogContentText>
+      <DialogContentText>{t`Load the Tape and select its drive.`}</DialogContentText>
       <TapeDeviceChoice
         devices={tape.devices}
         loading={tape.devicesLoading}
@@ -32,7 +34,7 @@ export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; sub
       />
       {tape.devicesError && <Feedback severity="error">{tape.devicesError}</Feedback>}
       {existing && !isWritableTapeFormat(tapeFormatOf(existing)) && (
-        <Alert severity="warning">This Tape cannot be appended. Delete its Media metadata before formatting it.</Alert>
+        <Alert severity="warning">{t`This Tape cannot be appended. Delete its Media metadata before formatting it.`}</Alert>
       )}
       {form.device && (
         <>
@@ -40,44 +42,44 @@ export const ArchiveTapeFields = ({ tape, submitting }: { tape: ArchiveTape; sub
             select
             fullWidth
             margin="normal"
-            label="Tape format"
+            label={t`Tape format`}
             value={form.format}
             disabled={submitting || form.mode === ArchiveTapeWriteMode.APPEND}
-            helperText={noLtfs ? ltfsUnsupportedReason : undefined}
+            helperText={noLtfs ? ltfsUnsupportedReason() : undefined}
             onChange={(event) => tape.changeFormat(event.target.value)}
           >
-            {(!noLtfs || form.format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? "LTFS · unsupported" : "LTFS"}</MenuItem>}
+            {(!noLtfs || form.format === "ltfs_v1") && <MenuItem value="ltfs_v1">{noLtfs ? t`LTFS · unsupported` : "LTFS"}</MenuItem>}
             <MenuItem value="tar_pax_v1">Tar</MenuItem>
-            {!isWritableTapeFormat(form.format) && <MenuItem value={form.format}>{form.format} · unsupported</MenuItem>}
+            {!isWritableTapeFormat(form.format) && <MenuItem value={form.format}>{t`${format} · unsupported`}</MenuItem>}
           </TextField>
-          {!isWritableTapeFormat(form.format) && <Alert severity="warning">This saved format is unsupported. Choose LTFS or Tar explicitly.</Alert>}
+          {!isWritableTapeFormat(form.format) && <Alert severity="warning">{t`This saved format is unsupported. Choose LTFS or Tar explicitly.`}</Alert>}
           {tar && (
             <TextField
               select
               fullWidth
               margin="normal"
-              label="Tape action"
+              label={t`Tape action`}
               value={form.mode}
               disabled={submitting}
               onChange={(event) => tape.changeMode(Number(event.target.value))}
             >
               <MenuItem value={ArchiveTapeWriteMode.UNSPECIFIED} disabled>
-                Select Tape action
+                {t`Select Tape action`}
               </MenuItem>
-              <MenuItem value={ArchiveTapeWriteMode.FORMAT}>FORMAT</MenuItem>
-              <MenuItem value={ArchiveTapeWriteMode.APPEND}>APPEND</MenuItem>
+              <MenuItem value={ArchiveTapeWriteMode.FORMAT}>{t({ message: "FORMAT", context: "Tape action" })}</MenuItem>
+              <MenuItem value={ArchiveTapeWriteMode.APPEND}>{t({ message: "APPEND", context: "Tape action" })}</MenuItem>
             </TextField>
           )}
           <TapeBarcodeFields tape={tape} submitting={submitting} />
           {!tar && <MediaInspectResult reply={inspection.reply} loading={inspection.loading} error={inspection.error} />}
           {tar && tape.deviceReport?.reason !== DeviceReason.UNSPECIFIED && tape.deviceReport && (
-            <Alert severity="warning">{tape.deviceReport.detail || "Device compatibility is unavailable."}</Alert>
+            <Alert severity="warning">{tape.deviceReport.detail || t`Device compatibility is unavailable.`}</Alert>
           )}
           {tar && tape.writeDetail && <Feedback severity="error">{tape.writeDetail}</Feedback>}
           <TapeProfileNotes tape={tape} />
           {tape.formatMode && <FormatFields tape={tape} submitting={submitting} />}
           {tar && tape.deviceReport && (
-            <SettingsSection title="Device details" collapsible>
+            <SettingsSection title={t`Device details`} collapsible>
               <DeviceInspectionResult reply={tape.deviceReport} />
             </SettingsSection>
           )}
@@ -97,20 +99,20 @@ const TapeBarcodeFields = ({ tape, submitting }: { tape: ArchiveTape; submitting
           <TextField
             required
             margin="normal"
-            label="Tape barcode"
+            label={t`Tape barcode`}
             placeholder="ABC123"
-            helperText="Enter six letters or digits, without the LTO suffix."
+            helperText={t`Enter six letters or digits, without the LTO suffix.`}
             fullWidth
             value={tape.form.barcode}
             disabled={submitting}
             onChange={(event) => tape.changeBarcode(event.target.value)}
           />
           <Button disabled={submitting || tape.checking || tape.devicesLoading || !/^[A-Z0-9]{6}$/.test(tape.barcode)} onClick={tape.check}>
-            Check Tape
+            {t`Check Tape`}
           </Button>
         </>
       )}
-      {!tar && inspection.reply?.identity && <TextField margin="normal" label="Tape barcode" fullWidth value={inspection.reply.identity} disabled />}
+      {!tar && inspection.reply?.identity && <TextField margin="normal" label={t`Tape barcode`} fullWidth value={inspection.reply.identity} disabled />}
     </>
   );
 };
@@ -120,16 +122,23 @@ const TapeProfileNotes = ({ tape }: { tape: ArchiveTape }) => {
   const { existing } = tape;
   const existingProfile = existing?.profile?.kind.oneofKind === "tape" ? existing.profile.kind.tape : undefined;
   const existingTar = existingProfile?.tar;
+  const appendFormat = existing ? tapeFormatOf(existing) : "";
+  const recordBytes = String(existingTar?.recordBytes);
+  const encryption = existing ? String(tapeEncryption(existing)) : "";
   return (
     <>
       {tape.form.mode === ArchiveTapeWriteMode.APPEND && existing && (
         <Alert severity="info">
-          APPEND uses {tapeFormatOf(existing)} and its immutable cartridge profile.
-          {existingTar && ` Records ${existingTar.recordBytes} bytes.`}
-          {` Encryption: ${tapeEncryption(existing)}.`}
+          {[t`APPEND uses ${appendFormat} and its immutable cartridge profile.`, existingTar && t`Records ${recordBytes} bytes.`, t`Encryption: ${encryption}.`]
+            .filter(Boolean)
+            .join(" ")}
         </Alert>
       )}
-      <Alert severity="info">Encryption is handled by the configured Encrypt script. {!existingProfile && "A new key is generated for FORMAT."}</Alert>
+      <Alert severity="info">
+        {existingProfile
+          ? t`Encryption is handled by the configured Encrypt script.`
+          : t`Encryption is handled by the configured Encrypt script. A new key is generated for FORMAT.`}
+      </Alert>
     </>
   );
 };
@@ -138,18 +147,23 @@ const TapeProfileNotes = ({ tape }: { tape: ArchiveTape }) => {
 const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boolean }) => {
   const { effectiveOptions, optionError } = tape;
   const recordMode =
-    effectiveOptions.recordMode === TapeRecordMode.FIXED ? "fixed" : effectiveOptions.recordMode === TapeRecordMode.VARIABLE ? "variable" : "unresolved";
-  const recordSize = effectiveOptions.recordBytes === undefined ? "size unresolved" : `${effectiveOptions.recordBytes} bytes`;
+    effectiveOptions.recordMode === TapeRecordMode.FIXED
+      ? t({ message: "fixed", context: "Tar record mode" })
+      : effectiveOptions.recordMode === TapeRecordMode.VARIABLE
+        ? t({ message: "variable", context: "Tar record mode" })
+        : t({ message: "unresolved", context: "Tar record mode" });
+  const recordBytes = String(effectiveOptions.recordBytes);
+  const recordSize = effectiveOptions.recordBytes === undefined ? t`size unresolved` : t`${recordBytes} bytes`;
   return (
     <>
       {!tape.tar && tape.existing && (
-        <Feedback severity="error">This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT.</Feedback>
+        <Feedback severity="error">{t`This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT.`}</Feedback>
       )}
-      <Alert severity="warning">FORMAT erases the Tape. Confirm its barcode before starting.</Alert>
+      <Alert severity="warning">{t`FORMAT erases the Tape. Confirm its barcode before starting.`}</Alert>
       <TextField
         required
         margin="normal"
-        label="Tape Name"
+        label={t`Tape Name`}
         fullWidth
         value={tape.form.name}
         disabled={submitting}
@@ -158,14 +172,14 @@ const FormatFields = ({ tape, submitting }: { tape: ArchiveTape; submitting: boo
       <TextField
         required
         margin="normal"
-        label="Confirm FORMAT barcode"
+        label={t`Confirm FORMAT barcode`}
         fullWidth
         value={tape.confirmation}
         disabled={submitting}
         onChange={(event) => tape.setConfirmation(event.target.value)}
       />
       {tape.tar && (
-        <SettingsSection title="Advanced" collapsible hasError={!!optionError} description={`Tar records ${recordMode} · ${recordSize}`}>
+        <SettingsSection title={t`Advanced`} collapsible hasError={!!optionError} description={t`Tar records ${recordMode} · ${recordSize}`}>
           <TarWriteOptionsFields value={tape.form.options} effective={effectiveOptions} disabled={submitting} onChange={tape.changeOptions} />
         </SettingsSection>
       )}

@@ -1,3 +1,4 @@
+import { t, plural } from "@lingui/core/macro";
 import { FileBrowser } from "@/components/file-browser";
 import { ChangeEvent, Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "react-toastify";
@@ -67,15 +68,16 @@ const readBrowserPage = async (page: BrowserPage): Promise<{ converted: FileArra
 const positionPageSize = 200n;
 const mediaSortActionIds = [ChonkyActions.SortFilesByName.id, ChonkyActions.SortFilesBySize.id, ChonkyActions.SortFilesByDate.id];
 
-const MediaRoot: FileData = {
-  id: "0",
-  name: "Media",
+const mediaRootID = "0";
+const mediaRoot = (): FileData => ({
+  id: mediaRootID,
+  name: t`Media`,
   isDir: true,
   openable: true,
   selectable: true,
   draggable: false,
   droppable: false,
-};
+});
 
 export const useMediaBrowser = (
   addVolume: () => void,
@@ -86,7 +88,7 @@ export const useMediaBrowser = (
   relatedJobs: (media: MediaFileData) => void,
 ) => {
   const [files, setFiles] = useState<FileArray>([]);
-  const [folderChain, setFolderChain] = useState<FileArray>([MediaRoot]);
+  const [folderChain, setFolderChain] = useState<FileArray>(() => [mediaRoot()]);
   const [panelLoading, setPanelLoading] = useState<"initial" | "refreshing" | "more" | undefined>("initial");
   const [loadError, setLoadError] = useState("");
   const loading = useRef(false);
@@ -117,7 +119,7 @@ export const useMediaBrowser = (
       }
     } catch (error) {
       if (sequence !== request.current) return;
-      const message = errorMessage(error, "Could not read Media");
+      const message = errorMessage(error, t`Could not read Media`);
       setFiles([]);
       setLoadError(message);
     } finally {
@@ -130,8 +132,8 @@ export const useMediaBrowser = (
 
   const openFolder = useCallback(
     async (target: FileData) => {
-      if (target.id === MediaRoot.id) {
-        setFolderChain([MediaRoot]);
+      if (target.id === mediaRootID) {
+        setFolderChain([mediaRoot()]);
         setFiles([]);
         await loadPage({ kind: "media", offset: 0n }, true);
         return;
@@ -155,7 +157,7 @@ export const useMediaBrowser = (
   );
 
   useEffect(() => {
-    void openFolder(MediaRoot);
+    void openFolder(mediaRoot());
     return () => {
       request.current += 1;
       loading.current = false;
@@ -170,7 +172,7 @@ export const useMediaBrowser = (
           const file = data.payload.targetFile ?? data.payload.files[0];
           if (!file?.isDir) return;
           selectFile(null);
-          runUIAction(() => openFolder(file), "Open Media folder failed");
+          runUIAction(() => openFolder(file), t`Open Media folder failed`);
           return;
         }
         case ChonkyActions.ChangeSelection.id: {
@@ -178,26 +180,26 @@ export const useMediaBrowser = (
           selectFile(selected && (isMediaFile(selected) || isArchivePosition(selected)) ? selected : null);
           return;
         }
-        case ChonkyActions.DeleteFiles.id: {
+        case DeleteMediaAction.id: {
           const media = data.state.selectedFilesForAction.filter(isMediaFile);
           if (media.length === 0) return;
           ask({
-            title: "Remove Media from Library?",
-            confirmLabel: "Remove",
+            title: t`Remove Media from Library?`,
+            confirmLabel: t`Remove`,
             danger: true,
             children: (
               <>
                 <p>{media.map((value) => value.name).join(", ")}</p>
-                <p>Archive files are kept. Their inventory records and Media profiles will be removed.</p>
+                <p>{t`Archive files are kept. Their inventory records and Media profiles will be removed.`}</p>
                 {media.some((value) => value.media.encryptionKeySaved) && (
-                  <p>Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM.</p>
+                  <p>{t`Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM.`}</p>
                 )}
               </>
             ),
             onConfirm: async () => {
               await mediaCli.delete({ ids: media.map((value) => BigInt(value.id)), dryrun: false }).response;
               selectFile(null);
-              void openFolder(MediaRoot);
+              void openFolder(mediaRoot());
             },
           });
           return;
@@ -211,7 +213,7 @@ export const useMediaBrowser = (
         case MediaJobsAction.id: {
           const selected = (data.state.selectedFilesForAction ?? data.state.selectedFiles).filter(isMediaFile);
           if (selected.length !== 1) {
-            toast.info("Select one Media.");
+            toast.info(t`Select one Media.`);
             return;
           }
           const handlers: Record<string, (media: MediaFileData) => void> = {
@@ -225,15 +227,15 @@ export const useMediaBrowser = (
         }
         case TrimLibraryAction.id:
           ask({
-            title: "Clean up Library?",
-            confirmLabel: "Clean up",
+            title: t`Clean up Library?`,
+            confirmLabel: t`Clean up`,
             danger: true,
-            children: <p>Remove unreferenced inventory and files without originals or saved versions. Physical files are kept.</p>,
+            children: <p>{t`Remove unreferenced inventory and files without originals or saved versions. Physical files are kept.`}</p>,
             onConfirm: async () => {
               await cli.trim({ trimFile: true, trimPosition: true, dryrun: false }).response;
-              toast.success("Library cleaned up");
+              toast.success(t`Library cleaned up`);
               selectFile(null);
-              void openFolder(MediaRoot);
+              void openFolder(mediaRoot());
             },
           });
           return;
@@ -247,19 +249,16 @@ export const useMediaBrowser = (
             admissionToast(reply.fileCount, reply.existingCount, reply.skippedFileCount);
           };
           if (skipAddEntries) {
-            void add().catch((failure: unknown) => toast.error(errorMessage(failure, "Could not add these records")));
+            void add().catch((failure: unknown) => toast.error(errorMessage(failure, t`Could not add these records`)));
             return;
           }
+          const folderText = t`${plural(directories, { one: "# folder", other: "# folders" })}`;
+          const fileText = t`${plural(regularFiles, { one: "# file", other: "# files" })}`;
+          const subject = directories > 0 && regularFiles > 0 ? t`${folderText} and ${fileText}` : directories > 0 ? folderText : fileText;
           ask({
-            title: "Add to Library?",
-            confirmLabel: directories > 0 ? "Add folder contents" : "Add files",
-            children: (
-              <p>
-                {directories > 0 && `${directories} ${directories === 1 ? "folder" : "folders"}`}
-                {directories > 0 && regularFiles > 0 && " and "}
-                {regularFiles > 0 && `${regularFiles} ${regularFiles === 1 ? "file" : "files"}`} will be added as independent Library files.
-              </p>
-            ),
+            title: t`Add to Library?`,
+            confirmLabel: directories > 0 ? t`Add folder contents` : t`Add files`,
+            children: <p>{t`${subject} will be added as independent Library files.`}</p>,
             onSkipNextTime: () => setSkipAddEntries(true),
             onConfirm: add,
           });
@@ -306,20 +305,20 @@ export const useMediaBrowser = (
       // The initial read publishes its own placeholder instead of the empty list Chonky draws for
       // it; a continuation keeps its rows and Chonky's unobtrusive indicator.
       loading: panelLoading === "initial" ? undefined : panelLoading,
-      loadingLabel: panelLoading === "more" ? "Loading more Media…" : "Loading Media…",
+      loadingLabel: panelLoading === "more" ? t`Loading more Media…` : t`Loading Media…`,
       emptyPlaceholder: loadError ? (
         <DirectoryReadError error={loadError} onRetry={() => loadPage(retryPage.current, true)} />
       ) : panelLoading ? (
-        <ListPlaceholder loading label={folderChain.length > 1 ? "Reading this folder…" : "Reading Media…"} />
+        <ListPlaceholder loading label={folderChain.length > 1 ? t`Reading this folder…` : t`Reading Media…`} />
       ) : folderChain.length > 1 ? (
-        <ListPlaceholder label="This folder is empty" />
+        <ListPlaceholder label={t`This folder is empty`} />
       ) : (
-        <ListPlaceholder label="No Media yet" />
+        <ListPlaceholder label={t`No Media yet`} />
       ),
     },
     refresh: () => {
       selectFile(null);
-      return openFolder(MediaRoot);
+      return openFolder(mediaRoot());
     },
     dialog,
   };
@@ -330,13 +329,15 @@ const ManualVolumePath = "__manual__";
 const volumeCandidateNotice = (candidate: VolumeCandidate): string => {
   switch (candidate.state) {
     case VolumeCandidateState.UNINITIALIZED:
-      return "No YATM marker. Initialize creates this disk's identity marker and Library Media.";
+      return t`No YATM marker. Initialize creates this disk's identity marker and Library Media.`;
     case VolumeCandidateState.UNREGISTERED:
-      return "An existing marker was found. Register recreates only its Library Media; the marker and files stay unchanged.";
-    case VolumeCandidateState.REGISTERED:
-      return `Already in the Library as ${candidate.media?.name || candidate.name}.`;
+      return t`An existing marker was found. Register recreates only its Library Media; the marker and files stay unchanged.`;
+    case VolumeCandidateState.REGISTERED: {
+      const registeredName = candidate.media?.name || candidate.name;
+      return t`Already in the Library as ${registeredName}.`;
+    }
     default:
-      return candidate.detail || "This disk cannot be registered or initialized.";
+      return candidate.detail || t`This disk cannot be registered or initialized.`;
   }
 };
 
@@ -403,7 +404,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
         }
       } catch (error) {
         if (active) {
-          setLoadError(errorMessage(error, "Could not load mounted Volumes"));
+          setLoadError(errorMessage(error, t`Could not load mounted Volumes`));
           if (!edited.current) setManual(true);
         }
       } finally {
@@ -418,6 +419,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
     };
   }, [open, attempt, applyCandidate]);
 
+  const rootList = roots.join(", ");
   const fieldsDisabled = submitting || (loading && !discovered);
 
   const candidate = manual ? undefined : candidates.find((value) => value.mountPoint === selected);
@@ -436,17 +438,17 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
     try {
       if (operation === "register") {
         await mediaCli.registerVolume({ mountPoint: mountPoint.trim(), name: name.trim() }).response;
-        toast.success("Existing Volume registered");
+        toast.success(t`Existing Volume registered`);
       } else {
         await mediaCli.initializeVolume({
           mountPoint: mountPoint.trim(),
           name: name.trim(),
           profile: { serialNumber: serialNumber.trim(), type },
         }).response;
-        toast.success("New Volume initialized");
+        toast.success(t`New Volume initialized`);
       }
       onClose();
-      runUIAction(onAdded, "Volume added, but the Media list could not refresh");
+      runUIAction(onAdded, t`Volume added, but the Media list could not refresh`);
     } finally {
       setSubmitting(false);
     }
@@ -454,14 +456,14 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
 
   return (
     <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
-      <DialogTitle>Add Volume</DialogTitle>
+      <DialogTitle>{t`Add Volume`}</DialogTitle>
       <DialogContent>
-        {loading && <CircularProgress size={20} aria-label="Discovering mounted Volumes" />}
+        {loading && <CircularProgress size={20} aria-label={t`Discovering mounted Volumes`} />}
         {!manual && (
           <TextField
             select
             margin="normal"
-            label="Disk"
+            label={t`Disk`}
             fullWidth
             disabled={fieldsDisabled}
             value={selected}
@@ -482,15 +484,15 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
             }}
           >
             <MenuItem value="" disabled>
-              Choose a disk…
+              {t`Choose a disk…`}
             </MenuItem>
             {candidates.map((value) => (
               <MenuItem key={value.mountPoint} value={value.mountPoint}>
                 {value.mountPoint} · {value.state === VolumeCandidateState.REGISTERED ? value.media?.name || value.name : volumeStateLabel(value)}
-                {value.profile?.serialNumber ? ` · SN ${value.profile.serialNumber}` : ""}
+                {value.profile?.serialNumber ? ` · ${serialLabel(value.profile.serialNumber)}` : ""}
               </MenuItem>
             ))}
-            <MenuItem value={ManualVolumePath}>Enter a path manually…</MenuItem>
+            <MenuItem value={ManualVolumePath}>{t`Enter a path manually…`}</MenuItem>
           </TextField>
         )}
         {loadError && (
@@ -498,7 +500,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
             severity="warning"
             action={
               <Button onClick={() => setAttempt((value) => value + 1)} disabled={loading || submitting}>
-                Retry
+                {t`Retry`}
               </Button>
             }
           >
@@ -507,7 +509,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
         )}
         {!loading && !manual && candidates.length === 0 && !loadError && (
           <DialogContentText>
-            {roots.length === 0 ? "No Volume discovery roots are configured (paths.volumes)." : `No mounted disk was found under ${roots.join(", ")}.`}
+            {roots.length === 0 ? t`No Volume discovery roots are configured (paths.volumes).` : t`No mounted disk was found under ${rootList}.`}
           </DialogContentText>
         )}
         {manual && (
@@ -515,7 +517,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
             <TextField
               select
               margin="normal"
-              label="Action"
+              label={t`Action`}
               fullWidth
               disabled={fieldsDisabled}
               value={operation}
@@ -524,20 +526,20 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
                 setOperation(event.target.value as "initialize" | "register");
               }}
             >
-              <MenuItem value="initialize">Initialize New</MenuItem>
-              <MenuItem value="register">Register Existing</MenuItem>
+              <MenuItem value="initialize">{t`Initialize New`}</MenuItem>
+              <MenuItem value="register">{t`Register Existing`}</MenuItem>
             </TextField>
             <DialogContentText>
               {operation === "initialize"
-                ? "Create a new identity marker and Library Media for an already mounted disk."
-                : "Read an existing marker and recreate only its Library Media. Files and marker remain unchanged."}
+                ? t`Create a new identity marker and Library Media for an already mounted disk.`
+                : t`Read an existing marker and recreate only its Library Media. Files and marker remain unchanged.`}
             </DialogContentText>
           </>
         )}
         <TextField
           required
           margin="normal"
-          label="Mount Point"
+          label={t`Mount Point`}
           fullWidth
           value={mountPoint}
           disabled={fieldsDisabled}
@@ -549,7 +551,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
         <TextField
           required
           margin="normal"
-          label="Name"
+          label={t`Name`}
           fullWidth
           value={name}
           disabled={fieldsDisabled}
@@ -562,7 +564,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
           <>
             <TextField
               margin="normal"
-              label="Serial Number"
+              label={t`Serial Number`}
               fullWidth
               value={serialNumber}
               disabled={fieldsDisabled}
@@ -575,7 +577,7 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
               select
               required
               margin="normal"
-              label="Volume Type"
+              label={t`Volume Type`}
               fullWidth
               disabled={fieldsDisabled}
               value={type}
@@ -584,40 +586,42 @@ export const AddVolumeDialog = ({ open, onClose, onAdded }: { open: boolean; onC
                 setType(Number(event.target.value) as VolumeType);
               }}
             >
-              <MenuItem value={VolumeType.HDD}>HDD · concurrent random read/write</MenuItem>
-              <MenuItem value={VolumeType.HM_SMR}>HM-SMR · concurrent random read, sequential write</MenuItem>
+              <MenuItem value={VolumeType.HDD}>{t`HDD · concurrent random read/write`}</MenuItem>
+              <MenuItem value={VolumeType.HM_SMR}>{t`HM-SMR · concurrent random read, sequential write`}</MenuItem>
             </TextField>
           </>
         )}
         {candidate && (
           <Alert severity={blocked ? "warning" : "info"}>
             {volumeCandidateNotice(candidate)}
-            {!candidate.separateFilesystem ? " This directory is not a separately mounted filesystem." : ""}
+            {!candidate.separateFilesystem ? " " + t`This directory is not a separately mounted filesystem.` : ""}
           </Alert>
         )}
       </DialogContent>
       <DialogActions>
-        <Button disabled={fieldsDisabled || blocked || !mountPoint.trim() || !name.trim()} onClick={() => runUIAction(submit, "Add Volume failed")}>
-          {operation === "initialize" ? "Initialize" : "Register"}
+        <Button disabled={fieldsDisabled || blocked || !mountPoint.trim() || !name.trim()} onClick={() => runUIAction(submit, t`Add Volume failed`)}>
+          {operation === "initialize" ? t`Initialize` : t`Register`}
         </Button>
         <Button onClick={close} disabled={submitting}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
 
+const serialLabel = (serialNumber: string) => t`SN ${serialNumber}`;
+
 const volumeStateLabel = (candidate: VolumeCandidate): string => {
   switch (candidate.state) {
     case VolumeCandidateState.UNREGISTERED:
-      return "existing marker";
+      return t`existing marker`;
     case VolumeCandidateState.CONFLICT:
-      return "marker conflict";
+      return t`marker conflict`;
     case VolumeCandidateState.INVALID:
-      return "invalid marker";
+      return t`invalid marker`;
     default:
-      return "new disk";
+      return t`new disk`;
   }
 };
 
@@ -628,13 +632,14 @@ export const InspectMediaDialog = ({ media, onClose }: { media: MediaFileData; o
   const titleId = useId();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+  const mediaName = media.name;
 
   useEffect(() => {
     resetDevices();
     setDevice("");
     reset();
     if (media.media.kind === MediaKind.VOLUME) {
-      runUIAction(() => inspect({ oneofKind: "volume", volume: { uuid: media.media.identity ?? "" } }), "Inspect Volume failed");
+      runUIAction(() => inspect({ oneofKind: "volume", volume: { uuid: media.media.identity ?? "" } }), t`Inspect Volume failed`);
       return;
     }
     void (async () => {
@@ -656,15 +661,15 @@ export const InspectMediaDialog = ({ media, onClose }: { media: MediaFileData; o
   const selectDevice = (value: string) => {
     setDevice(value);
     reset();
-    if (value) runUIAction(() => inspect({ oneofKind: "tape", tape: { device: value } }), "Inspect Tape failed");
+    if (value) runUIAction(() => inspect({ oneofKind: "tape", tape: { device: value } }), t`Inspect Tape failed`);
   };
 
   return (
     <DetailDialog open onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen} aria-labelledby={titleId}>
-      <DetailSurface title={`${media.name} · Properties`} titleId={titleId} icon={<StorageRoundedIcon fontSize="small" />} onClose={onClose}>
+      <DetailSurface title={t`${mediaName} · Properties`} titleId={titleId} icon={<StorageRoundedIcon fontSize="small" />} onClose={onClose}>
         {media.media.kind === MediaKind.TAPE && (
           <>
-            <DialogContentText>Load the Tape into a drive to verify its physical identity.</DialogContentText>
+            <DialogContentText>{t`Load the Tape into a drive to verify its physical identity.`}</DialogContentText>
             <TapeDeviceChoice devices={devices} loading={devicesLoading} value={device} onChange={selectDevice} onRefresh={refreshDevices} />
             {devicesError && <Feedback severity="error">{devicesError}</Feedback>}
           </>
@@ -681,6 +686,7 @@ export const MediaBrowser = () => {
   const [inspectTarget, setInspectTarget] = useState<MediaFileData | null>(null);
   const [selection, setSelection] = useState<MediaFileData | MediaPositionFileData | null>(null);
   const [jobsMedia, setJobsMedia] = useState<MediaFileData>();
+  const jobsName = jobsMedia?.name ?? "";
   const addVolume = useCallback(() => setAddOpen(true), []);
   const scanMedia = useCallback((media: MediaFileData) => navigate(`/scan?media=${media.id}`), [navigate]);
   const inspectMedia = useCallback((media: MediaFileData) => setInspectTarget(media), []);
@@ -699,7 +705,7 @@ export const MediaBrowser = () => {
       {mediaDialog}
       <Box className="browser-box">
         <Grid className="browser-container" container columnSpacing={1.5}>
-          <Grid component="section" aria-label="Media browser" className="browser" size={7}>
+          <Grid component="section" aria-label={t`Media browser`} className="browser" size={7}>
             <FileBrowser instanceId="media" {...browserProps} clearSelectionOnOutsideClick={false}>
               <FileNavbar />
               <FileToolbar />
@@ -715,10 +721,10 @@ export const MediaBrowser = () => {
       <AddVolumeDialog open={addOpen} onClose={() => setAddOpen(false)} onAdded={refresh} />
       {inspectTarget && <InspectMediaDialog media={inspectTarget} onClose={() => setInspectTarget(null)} />}
       <Dialog open={!!jobsMedia} onClose={() => setJobsMedia(undefined)} maxWidth="lg" fullWidth>
-        <DialogTitle>{jobsMedia?.name} · Jobs</DialogTitle>
+        <DialogTitle>{t`${jobsName} · Jobs`}</DialogTitle>
         <DialogContent>{jobsMedia && <RelatedJobs mediaID={BigInt(jobsMedia.id)} />}</DialogContent>
         <DialogActions>
-          <Button onClick={() => setJobsMedia(undefined)}>Close</Button>
+          <Button onClick={() => setJobsMedia(undefined)}>{t`Close`}</Button>
         </DialogActions>
       </Dialog>
     </Fragment>

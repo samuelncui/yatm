@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 import type { FileData } from "@samuelncui/chonky";
@@ -30,7 +31,7 @@ export function rowFileID(row: IdenticalRow | undefined) {
 
 function moveInterval(interval: Interval | undefined, start: bigint | undefined): Interval | undefined {
   if (!interval) return undefined;
-  if (start === undefined) throw new Error("Could not locate a group in this result. Find again.");
+  if (start === undefined) throw new Error(t`Could not locate a group in this result. Find again.`);
   return { start: Number(start), end: Number(start) + interval.end - interval.start };
 }
 
@@ -164,10 +165,10 @@ export function useIdenticalSparse(
                 sortKey,
                 sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
               });
-              if (request !== epoch.current) throw new Error("The result changed. Find again.");
+              if (request !== epoch.current) throw new Error(t`The result changed. Find again.`);
               fileId = rowFileID(reply.rows[0]);
             }
-            if (fileId === undefined) throw new Error("Could not locate a collapsed group. Find again.");
+            if (fileId === undefined) throw new Error(t`Could not locate a collapsed group. Find again.`);
             groupAnchors.set(id, fileId);
           }
           for (const [id, interval] of removedGroupIntervals) groupAnchors.set(id, interval.fileId);
@@ -182,10 +183,10 @@ export function useIdenticalSparse(
             sortKey: nextSortKey,
             sortOrder: nextDescending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
           });
-          if (request !== epoch.current) throw new Error("The result changed. Find again.");
+          if (request !== epoch.current) throw new Error(t`The result changed. Find again.`);
           for (const position of reply.positions) positions.set(String(position.fileId), position);
         }
-        if (ids.some((id) => !positions.has(String(id)))) throw new Error("Could not locate selected files in this result. Find again.");
+        if (ids.some((id) => !positions.has(String(id)))) throw new Error(t`Could not locate selected files in this result. Find again.`);
         if (stale()) continue;
         const next = new Map<string, { row: IdenticalRow; file: FileData }>();
         for (const [fileId, value] of selected) {
@@ -231,7 +232,7 @@ export function useIdenticalSparse(
               },
               {},
             );
-            if (request !== epoch.current) throw new Error("The result changed. Find again.");
+            if (request !== epoch.current) throw new Error(t`The result changed. Find again.`);
             nextPages.set(page, reply.rows);
             while (nextPages.size > maxPages) nextPages.delete(nextPages.keys().next().value!);
           }
@@ -334,7 +335,7 @@ export function useIdenticalSparse(
             setErrors((current) => {
               const next = new Map(current);
               next.delete(page);
-              next.set(page, errorMessage(failure, "Could not load rows"));
+              next.set(page, errorMessage(failure, t`Could not load rows`));
               while (next.size > maxPages) next.delete(next.keys().next().value!);
               return next;
             });
@@ -405,9 +406,9 @@ export function useIdenticalSparse(
         name: row.group.name,
         memberCount: Math.max(0, Number(row.displayMemberCount) - (removedCounts.get(row.group.id) ?? 0)),
         description: changedGroups.has(row.group.id)
-          ? "Group changed. Find again before Keep or Merge."
+          ? t`Group changed. Find again before Keep or Merge.`
           : busyGroups.has(row.group.id)
-            ? "File operation in progress"
+            ? t`File operation in progress`
             : description,
         actionIds,
         expanded: !collapsed.has(row.group.id),

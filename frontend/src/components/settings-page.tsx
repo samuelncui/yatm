@@ -1,3 +1,5 @@
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { type ReactNode, Suspense, useCallback, useId, useRef, useState } from "react";
 import Card from "@mui/material/Card";
@@ -13,6 +15,16 @@ import { ActionRow } from "@/components/action-row";
 import { PageHeading } from "@/components/page-heading";
 import { ActionDialog } from "@/components/action-dialog";
 import { useBeforeUnload, useBlocker } from "react-router";
+
+// Callers name a Settings group in English; the group is shown in the active language.
+const groupLabels: Record<string, MessageDescriptor> = {
+  Library: msg`Library`,
+  Preview: msg`Preview`,
+  Job: msg`Job`,
+  Device: msg`Device`,
+  Location: msg`Location`,
+};
+export const settingsGroupLabel = (label: string) => (groupLabels[label] ? i18n._(groupLabels[label]) : label);
 
 /**
  * A whole Settings surface: its heading and the settings it holds across the available width.
@@ -91,18 +103,20 @@ export const SettingsActions = ({
 }) => (
   <ActionRow>
     <Button variant="contained" type="submit" disabled={!dirty || saving || loading}>
-      {saving ? "Saving…" : "Save"}
+      {saving ? t`Saving…` : t`Save`}
     </Button>
     <Button disabled={!dirty || saving || loading} onClick={onCancel}>
-      Cancel
+      {t`Cancel`}
     </Button>
     {children}
   </ActionRow>
 );
 
 /** One loading indicator for Settings editors and the configured Location list. */
-export const SettingsLoading = ({ label, loading }: { label: string; loading: boolean }) =>
-  loading ? <LinearProgress aria-label={`Loading ${label} settings`} /> : null;
+export const SettingsLoading = ({ label, loading }: { label: string; loading: boolean }) => {
+  const groupLabel = settingsGroupLabel(label);
+  return loading ? <LinearProgress aria-label={t`Loading ${groupLabel} settings`} /> : null;
+};
 
 /** Keep the page frame in place while its editor code and then its values load. */
 export const SettingsEditorPage = ({
@@ -142,26 +156,29 @@ export const SettingsEditorFeedback = ({
   dirty: boolean;
   hasDraft: boolean;
   onReload: () => void;
-}) => (
-  <>
-    <UnsavedChangesPrompt when={() => dirty}>Your {label} settings have not been saved.</UnsavedChangesPrompt>
-    <SettingsLoading label={label} loading={loading} />
-    {error && (
-      <Feedback
-        severity="error"
-        action={
-          <Button color="inherit" disabled={loading || saving} onClick={onReload}>
-            {hasDraft ? "Reload saved settings" : "Retry"}
-          </Button>
-        }
-      >
-        {error}
-      </Feedback>
-    )}
-    {invalid && <Feedback severity="error">{invalid}</Feedback>}
-    {saved && !dirty && <Alert severity="success">{label} settings saved.</Alert>}
-  </>
-);
+}) => {
+  const groupLabel = settingsGroupLabel(label);
+  return (
+    <>
+      <UnsavedChangesPrompt when={() => dirty}>{t`Your ${groupLabel} settings have not been saved.`}</UnsavedChangesPrompt>
+      <SettingsLoading label={label} loading={loading} />
+      {error && (
+        <Feedback
+          severity="error"
+          action={
+            <Button color="inherit" disabled={loading || saving} onClick={onReload}>
+              {hasDraft ? t`Reload saved settings` : t`Retry`}
+            </Button>
+          }
+        >
+          {error}
+        </Feedback>
+      )}
+      {invalid && <Feedback severity="error">{invalid}</Feedback>}
+      {saved && !dirty && <Alert severity="success">{t`${groupLabel} settings saved.`}</Alert>}
+    </>
+  );
+};
 
 /** Confirms leaving a page with unsaved edits; `when` is read at the moment of navigation or unload. */
 export const UnsavedChangesPrompt = ({ when, children }: { when: () => boolean; children: ReactNode }) => {
@@ -180,9 +197,9 @@ export const UnsavedChangesPrompt = ({ when, children }: { when: () => boolean; 
   if (blocker.state !== "blocked") return null;
   return (
     <ActionDialog
-      title="Discard unsaved changes?"
-      confirmLabel="Discard"
-      cancelLabel="Keep editing"
+      title={t`Discard unsaved changes?`}
+      confirmLabel={t`Discard`}
+      cancelLabel={t`Keep editing`}
       danger
       onConfirm={() => {
         confirmed.current = true;

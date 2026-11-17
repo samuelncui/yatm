@@ -4,6 +4,7 @@ import { Nullable } from "tsdef";
 import { filesize } from "filesize";
 import { I18nConfig, FileData, defaultFormatters } from "@samuelncui/chonky";
 import { toast } from "react-toastify";
+import { chonkyMessages, currentLocale } from "@/i18n";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 
 export const errorMessage = (error: unknown, fallback: string): string => {
@@ -27,7 +28,14 @@ export const formatFilesize = (size: number | bigint): string =>
     standard: "jedec",
   });
 
+// Chonky reads locale and messages when a browser renders; the interface remounts on a language change.
 export const chonkyI18n: I18nConfig = {
+  get locale() {
+    return currentLocale();
+  },
+  get messages() {
+    return chonkyMessages();
+  },
   formatters: {
     ...defaultFormatters,
     formatFileSize: (_intl: IntlShape, file: Nullable<FileData>): Nullable<string> => {

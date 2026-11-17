@@ -63,6 +63,13 @@ export const GetDataUsageAction = defineFileAction({
   __extraStateType: {} as RenameFileState,
 } as FileAction);
 
+// The tooltip state while a measurement runs; Chonky resolves one text per action id.
+export const CancelDataUsageAction = defineFileAction({
+  ...GetDataUsageAction,
+  id: "cancel_data_usage",
+  button: { ...GetDataUsageAction.button, tooltip: "Cancel Data Usage" },
+} as FileAction);
+
 export const RefreshListAction = defineFileAction({
   id: "refresh_list",
   button: { name: "Refresh", tooltip: "Refresh", toolbar: true, icon: "mui-refresh", iconOnly: true },
@@ -87,6 +94,13 @@ export const ArchiveLibraryAction = defineFileAction({
   id: "archive_library_selection",
   requiresSelection: true,
   button: { name: "Archive selection", toolbar: true, contextMenu: true, group: "Actions", icon: "mui-fiber-new" },
+} as FileAction);
+
+// The Files browser names Archive selection as a list action; the id keeps its translation separate.
+export const AddToArchiveListAction = defineFileAction({
+  ...ArchiveLibraryAction,
+  id: "add_to_archive_list",
+  button: { ...ArchiveLibraryAction.button, name: "Add to Archive list", tooltip: "Add to Archive list" },
 } as FileAction);
 
 export const RestoreLibraryAction = defineFileAction({
@@ -195,6 +209,7 @@ export const MediaJobsAction = defineFileAction({
 
 export const DeleteMediaAction = defineFileAction({
   ...ChonkyActions.DeleteFiles,
+  id: "remove_media_from_library",
   fileFilter: (file) => file?.isMedia === true,
   button: { ...ChonkyActions.DeleteFiles.button, name: "Remove from Library" },
 } as FileAction);

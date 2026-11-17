@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +12,11 @@ import { SavedVersionChoice } from "@/components/saved-version-choice";
 import { useContentPreview } from "./use-content-preview";
 import { versionArchiveLabel } from "@/components/content-status";
 import { useFileVersionPages } from "./use-file-versions";
+const versionNumberLabel = (id: bigint, current: boolean) => {
+  const number = String(id);
+  return current ? t`Version #${number} · Current selection` : t`Version #${number}`;
+};
+
 export const ChooseVersionDialog = ({
   file,
   selectedVersion,
@@ -26,6 +32,7 @@ export const ChooseVersionDialog = ({
   onClose: () => void;
   onChoose: (version: FileVersion) => Promise<void>;
 }) => {
+  const fileName = file.name;
   const selectedVersionID = selectedVersion?.id;
   const { versions, more, loading, failure, load } = useFileVersionPages(BigInt(file.id), selectedVersionID);
   const [selectedID, setSelectedID] = useState(selectedVersionID);
@@ -40,7 +47,7 @@ export const ChooseVersionDialog = ({
       mounted.current = false;
     };
   }, [file.id, selectedVersionID]);
-  const loadError = failure === undefined ? "" : errorMessage(failure, "Load versions failed");
+  const loadError = failure === undefined ? "" : errorMessage(failure, t`Load versions failed`);
   const choices = selectedVersion && !versions.some((version) => version.id === selectedVersion.id) ? [selectedVersion, ...versions] : versions;
   const selected = choices.find((version) => version.id === selectedID);
   const choose = async () => {
@@ -51,16 +58,16 @@ export const ChooseVersionDialog = ({
       await onChoose(selected);
       if (mounted.current) onClose();
     } catch (error) {
-      if (mounted.current) setError(errorMessage(error, "Select version failed"));
+      if (mounted.current) setError(errorMessage(error, t`Select version failed`));
     } finally {
       if (mounted.current) setSaving(false);
     }
   };
   return (
     <Dialog open onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
-      <DialogTitle>Choose a version of {file.name}</DialogTitle>
+      <DialogTitle>{t`Choose a version of ${fileName}`}</DialogTitle>
       <DialogContent dividers>
-        {loading && (choices.length ? <LinearProgress /> : <ListPlaceholder loading label="Loading saved versions…" />)}
+        {loading && (choices.length ? <LinearProgress /> : <ListPlaceholder loading label={t`Loading saved versions…`} />)}
         {(error || loadError) && (
           <Feedback
             severity="error"
@@ -72,40 +79,37 @@ export const ChooseVersionDialog = ({
                   void load();
                 }}
               >
-                Retry
+                {t`Retry`}
               </Button>
             }
           >
             {error || loadError}
           </Feedback>
         )}
-        {!loading && !error && !loadError && choices.length === 0 && <ListPlaceholder label="No saved versions." />}
+        {!loading && !error && !loadError && choices.length === 0 && <ListPlaceholder label={t`No saved versions.`} />}
         <Stack spacing={1}>
           {choices.map((version) => (
             <SavedVersionChoice key={String(version.id)} selected={version.id === selectedID} disabled={saving} onClick={() => setSelectedID(version.id)}>
               <span>
                 {versionArchiveLabel(version)} · {formatFilesize(version.sizeBytes)}
-                <small>
-                  Version #{String(version.id)}
-                  {version.id === selectedVersionID ? " · Current selection" : ""}
-                </small>
+                <small>{versionNumberLabel(version.id, version.id === selectedVersionID)}</small>
               </span>
             </SavedVersionChoice>
           ))}
         </Stack>
         {more && (
           <Button disabled={loading || saving} onClick={() => void load(versions.at(-1)?.id)}>
-            More versions
+            {t`More versions`}
           </Button>
         )}
         {selected && <VersionDetails key={String(selected.id)} version={selected} cutoff={cutoff} allowDamagedCopies={allowDamagedCopies} />}
       </DialogContent>
       <DialogActions>
         <Button variant="contained" disabled={!selected || saving} onClick={() => void choose()}>
-          Choose version
+          {t`Choose version`}
         </Button>
         <Button disabled={saving} onClick={onClose}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -125,11 +129,11 @@ const VersionDetails = ({ version, cutoff, allowDamagedCopies }: { version: File
       .estimate(EstimateRestoreJobRequest.create({ fileVersionIds: [version.id], allowDamagedCopies }))
       .response.then((availability) => {
         if (!active) return;
-        if (!availability.result) throw new Error("Selection estimate is missing");
+        if (!availability.result) throw new Error(t`Selection estimate is missing`);
         setUnavailable(availability.result.missingCopyCount > 0n);
       })
       .catch((error) => {
-        if (active) setAvailabilityError(errorMessage(error, "Could not check this version"));
+        if (active) setAvailabilityError(errorMessage(error, t`Could not check this version`));
       });
     return () => {
       active = false;
@@ -143,15 +147,15 @@ const VersionDetails = ({ version, cutoff, allowDamagedCopies }: { version: File
           <PreviewMedia key={JSON.stringify(preview)} assets={preview} />
         </Box>
       )}
-      {afterCutoff ? <Alert severity="info">This custom version was saved after the selected time.</Alert> : null}
-      {unavailable && <Alert severity="warning">No usable archived copy.</Alert>}
+      {afterCutoff ? <Alert severity="info">{t`This custom version was saved after the selected time.`}</Alert> : null}
+      {unavailable && <Alert severity="warning">{t`No usable archived copy.`}</Alert>}
       {previewError && (
-        <Feedback severity="info" action={<Button onClick={reloadPreview}>Retry Preview</Button>}>
+        <Feedback severity="info" action={<Button onClick={reloadPreview}>{t`Retry Preview`}</Button>}>
           {previewError}
         </Feedback>
       )}
       {availabilityError && (
-        <Feedback severity="warning" action={<Button onClick={() => setAvailabilityAttempt((value) => value + 1)}>Retry availability</Button>}>
+        <Feedback severity="warning" action={<Button onClick={() => setAvailabilityAttempt((value) => value + 1)}>{t`Retry availability`}</Button>}>
           {availabilityError}
         </Feedback>
       )}

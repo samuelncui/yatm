@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
@@ -49,23 +50,24 @@ export const InlineFileMetadata = ({ reference, tags, note, editable, onRefresh 
         note: noteChanged ? draft.note : undefined,
       }).response;
     } catch (failure) {
-      setError(errorMessage(failure, "Could not save metadata"));
+      setError(errorMessage(failure, t`Could not save metadata`));
       setSaving(false);
       return;
     }
     baselineRef.current = draft;
     setBaseline(draft);
     setSaving(false);
-    toast.success("File metadata updated");
+    toast.success(t`File metadata updated`);
     try {
       await onRefresh();
     } catch (failure) {
-      toast.error(`Metadata saved, but refresh failed: ${errorMessage(failure, "Refresh failed")}`);
+      const reason = errorMessage(failure, t`Refresh failed`);
+      toast.error(t`Metadata saved, but refresh failed: ${reason}`);
     }
   };
 
   return (
-    <section className="file-inline-metadata" aria-label="File metadata">
+    <section className="file-inline-metadata" aria-label={t`File metadata`}>
       {editable ? (
         <>
           <TagSelect
@@ -77,8 +79,8 @@ export const InlineFileMetadata = ({ reference, tags, note, editable, onRefresh 
           />
           <TextField
             size="small"
-            label="Note"
-            placeholder="Add context about this file"
+            label={t`Note`}
+            placeholder={t`Add context about this file`}
             value={draft.note}
             onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
             disabled={saving}
@@ -98,7 +100,7 @@ export const InlineFileMetadata = ({ reference, tags, note, editable, onRefresh 
               disabled={!dirty || Boolean(tagError) || Boolean(noteError) || saving}
               startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
             >
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? t`Saving…` : t`Save changes`}
             </Button>
             <Button
               size="small"
@@ -108,15 +110,15 @@ export const InlineFileMetadata = ({ reference, tags, note, editable, onRefresh 
               }}
               disabled={!dirty || saving}
             >
-              Cancel
+              {t`Cancel`}
             </Button>
           </ActionRow>
         </>
       ) : (
         <dl className="file-detail-summary">
-          <dt>Tags</dt>
+          <dt>{t`Tags`}</dt>
           <dd>{draft.tags.length ? draft.tags.join(", ") : "—"}</dd>
-          <dt>Note</dt>
+          <dt>{t`Note`}</dt>
           <dd className="file-detail-note">{draft.note || "—"}</dd>
         </dl>
       )}

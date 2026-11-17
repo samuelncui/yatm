@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { locationCli } from "@/api";
 import { Location } from "@/entity";
@@ -70,12 +71,12 @@ export async function loadLocations(store: AppStore, refresh = false) {
       for (const location of page.locations) entries[String(location.id)] = Location.toJsonString(location);
       if (!page.hasMore) break;
       const next = page.locations.at(-1)?.id;
-      if (next === undefined || next <= afterId) throw new Error("Could not load the complete Location catalog");
+      if (next === undefined || next <= afterId) throw new Error(t`Could not load the complete Location catalog`);
       afterId = next;
     }
     store.dispatch(locationActions.received({ request, entries }));
   } catch (error) {
-    store.dispatch(locationActions.failed({ request, error: errorMessage(error, "Could not load Locations") }));
+    store.dispatch(locationActions.failed({ request, error: errorMessage(error, t`Could not load Locations`) }));
   }
 }
 

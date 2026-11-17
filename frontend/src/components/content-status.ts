@@ -1,12 +1,16 @@
+import { t } from "@lingui/core/macro";
 import type { FileVersion } from "@/entity";
+import { formattingLocale } from "@/i18n/locale";
 import { dateFromNs } from "@/tools/time";
 
-export const contentTime = (value?: bigint, fallback = "Date unknown") =>
-  dateFromNs(value)?.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) ?? fallback;
+export const contentTime = (value?: bigint, fallback?: string) =>
+  dateFromNs(value)?.toLocaleString(formattingLocale(), { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) ??
+  fallback ??
+  t`Date unknown`;
 
 export const versionArchiveTime = (version: FileVersion) => version.lastArchivedAtNs ?? version.firstArchivedAtNs;
 /** A saved version's display date; every version list uses the same unrecorded wording. */
-export const versionArchiveLabel = (version: FileVersion) => contentTime(versionArchiveTime(version), "Date not recorded");
+export const versionArchiveLabel = (version: FileVersion) => contentTime(versionArchiveTime(version), t`Date not recorded`);
 
 /** Permission bits in the familiar three-digit octal form. */
 export const contentMode = (mode: number | bigint) => (BigInt(mode) & 0o777n).toString(8).padStart(3, "0");

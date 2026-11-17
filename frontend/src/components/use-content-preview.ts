@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { previewCli } from "@/api";
 import { GetPreviewRequest, PreviewAvailability, type PreviewResource } from "@/entity";
@@ -21,7 +22,7 @@ export function useContentPreview(signature: Uint8Array, refresh?: unknown) {
         setResult({ key, assets: reply.availability === PreviewAvailability.READY ? reply.assets : [] });
       })
       .catch((error) => {
-        if (!controller.signal.aborted) setFailure({ key, message: errorMessage(error, "Preview unavailable") });
+        if (!controller.signal.aborted) setFailure({ key, message: errorMessage(error, t`Preview unavailable`) });
       });
     return () => controller.abort();
   }, [key, signature, refresh, attempt]);

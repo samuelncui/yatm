@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileSelection, PreviewPolicy, ScanResultPolicy, ScanSignaturePolicy } from "@/entity";
 import type { ScanSelectionEntry } from "@/components/scan-selection";
 import { resultForSource, type LastScan } from "./scan-preferences";
@@ -21,14 +22,14 @@ export const collectionOptions: Omit<ScanOptions, "writeSignatureCache"> = {
 };
 
 function checkedPrefill(value: unknown): ScanPrefill {
-  if (!value || typeof value !== "object") throw new Error("Invalid Scan shortcut. Choose the source again.");
+  if (!value || typeof value !== "object") throw new Error(t`Invalid Scan shortcut. Choose the source again.`);
   const input = value as ScanPrefill;
   const target = input.target;
   if (target) {
     switch (target.kind) {
       case "location":
       case "media":
-        if (typeof target.id !== "string" || !/^[1-9]\d*$/.test(target.id)) throw new Error("The selected source is invalid. Choose a source.");
+        if (typeof target.id !== "string" || !/^[1-9]\d*$/.test(target.id)) throw new Error(t`The selected source is invalid. Choose a source.`);
         break;
       case "files":
         if (
@@ -44,10 +45,10 @@ function checkedPrefill(value: unknown): ScanPrefill {
               typeof entry.isDir !== "boolean",
           )
         )
-          throw new Error("The selected files are invalid. Return to Files and select them again.");
+          throw new Error(t`The selected files are invalid. Return to Files and select them again.`);
         break;
       default:
-        throw new Error("Invalid Scan source. Choose a source.");
+        throw new Error(t`Invalid Scan source. Choose a source.`);
     }
   }
   const options = input.options;
@@ -64,7 +65,7 @@ function checkedPrefill(value: unknown): ScanPrefill {
       (options.compare !== undefined && typeof options.compare !== "boolean") ||
       (options.writeSignatureCache !== undefined && typeof options.writeSignatureCache !== "boolean"))
   )
-    throw new Error("Invalid Scan options. Choose the source again.");
+    throw new Error(t`Invalid Scan options. Choose the source again.`);
   return input;
 }
 
@@ -75,7 +76,7 @@ export function initialScan(params: URLSearchParams, state: unknown, saved?: Las
     const route = state as { scan?: unknown } | null;
     const location = params.get("location");
     const media = params.get("media");
-    if (location && media) throw new Error("Choose one Scan source.");
+    if (location && media) throw new Error(t`Choose one Scan source.`);
     if (media) prefill.target = { kind: "media", id: media };
     else if (location) prefill.target = { kind: "location", id: location };
     const options: Partial<ScanOptions> = {};
@@ -92,7 +93,7 @@ export function initialScan(params: URLSearchParams, state: unknown, saved?: Las
     }
     prefill = checkedPrefill(prefill);
   } catch (failure) {
-    error = failure instanceof Error ? failure.message : "Invalid Scan shortcut.";
+    error = failure instanceof Error ? failure.message : t`Invalid Scan shortcut.`;
     // Invalid explicit input must not fall back to a remembered whole source.
     prefill = { target: { kind: "files", entries: [] } };
   }

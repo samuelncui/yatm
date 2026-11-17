@@ -1,3 +1,5 @@
+import { i18n } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useId, useState } from "react";
 import {
@@ -20,10 +22,10 @@ import type { Location } from "@/entity";
 import { useLocationChoices } from "./use-location-choices";
 
 export const archiveFilters = [
-  { value: "all", label: "Any archived content", query: "" },
-  { value: "needed", label: "No known archived copy", query: "has:original AND NOT has:unknown AND NOT has:archive" },
-  { value: "saved", label: "Has an archived copy", query: "has:archive" },
-  { value: "unknown", label: "Content not checked", query: "has:original AND has:unknown" },
+  { value: "all", label: msg`Any archived content`, query: "" },
+  { value: "needed", label: msg`No known archived copy`, query: "has:original AND NOT has:unknown AND NOT has:archive" },
+  { value: "saved", label: msg`Has an archived copy`, query: "has:archive" },
+  { value: "unknown", label: msg`Content not checked`, query: "has:original AND has:unknown" },
 ] as const;
 
 export const buildLibraryQuery = (text: string, location: string, status: string, duplicates = false) => {
@@ -40,7 +42,7 @@ export const LibraryFilters = ({
   onSearch,
   onClear,
   initialQuery = "",
-  scopeLabel = "Library",
+  scopeLabel = t`Library`,
   locationScope,
   searchActive = false,
 }: {
@@ -97,7 +99,7 @@ export const LibraryFilters = ({
         <TextField
           size="small"
           fullWidth
-          label="Search query"
+          label={t`Search query`}
           placeholder="name:*.jpg AND tag:travel"
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -113,7 +115,7 @@ export const LibraryFilters = ({
                 <InputAdornment position="end">
                   <IconButton
                     size="small"
-                    aria-label="Clear search"
+                    aria-label={t`Clear search`}
                     disabled={!text && !searchActive}
                     onClick={() => {
                       setText("");
@@ -134,45 +136,45 @@ export const LibraryFilters = ({
             setOpen(true);
           }}
         >
-          More filters
+          {t`More filters`}
         </Button>
-        <Button type="submit">Search</Button>
+        <Button type="submit">{t`Search`}</Button>
         <Button onClick={() => navigate(locationScope ? `/tools/identical?source=locations&location=${locationScope.id}` : "/tools/identical")}>
-          Find identical files
+          {t`Find identical files`}
         </Button>
       </form>
       <Dialog open={open} onClose={() => setOpen(false)} aria-labelledby={titleID} fullWidth maxWidth="sm">
-        <DialogTitle id={titleID}>Filter {scopeLabel}</DialogTitle>
+        <DialogTitle id={titleID}>{t`Filter ${scopeLabel}`}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Tag" value={tag} onChange={(event) => setTag(event.target.value)} />
-            <TextField label="Note" value={note} onChange={(event) => setNote(event.target.value)} />
+            <TextField label={t`Tag`} value={tag} onChange={(event) => setTag(event.target.value)} />
+            <TextField label={t`Note`} value={note} onChange={(event) => setNote(event.target.value)} />
             <TextField
               select
-              label="Location"
-              helperText={showLocations && loading ? "Loading locations…" : undefined}
+              label={t`Location`}
+              helperText={showLocations && loading ? t`Loading locations…` : undefined}
               value={locationScope && !duplicates ? "current" : String(location?.id ?? "all")}
               disabled={!!locationScope && !duplicates}
               onChange={(event) => setLocation(options.find((item) => String(item.id) === event.target.value))}
             >
               {locationScope && !duplicates && <MenuItem value="current">{locationScope.name}</MenuItem>}
-              <MenuItem value="all">All locations</MenuItem>
+              <MenuItem value="all">{t`All locations`}</MenuItem>
               {options.map((item) => (
                 <MenuItem key={String(item.id)} value={String(item.id)}>
                   {item.name}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField select label="Archived content" value={status} onChange={(event) => setStatus(event.target.value)}>
+            <TextField select label={t`Archived content`} value={status} onChange={(event) => setStatus(event.target.value)}>
               {archiveFilters.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
-                  {item.label}
+                  {i18n._(item.label)}
                 </MenuItem>
               ))}
             </TextField>
             <FormControlLabel
               control={<Checkbox checked={duplicates} onChange={(_, checked) => setDuplicates(checked)} />}
-              label="Duplicates in Locations"
+              label={t`Duplicates in Locations`}
               slotProps={{ typography: { sx: { fontSize: 12 } } }}
             />
             {showLocations && error && (
@@ -180,7 +182,7 @@ export const LibraryFilters = ({
                 severity="warning"
                 action={
                   <Button disabled={loading} onClick={retry}>
-                    Retry
+                    {t`Retry`}
                   </Button>
                 }
               >
@@ -191,9 +193,9 @@ export const LibraryFilters = ({
         </DialogContent>
         <DialogActions>
           <Button variant="contained" onClick={apply}>
-            Apply filters
+            {t`Apply filters`}
           </Button>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => setOpen(false)}>{t`Cancel`}</Button>
         </DialogActions>
       </Dialog>
     </>

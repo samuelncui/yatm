@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
@@ -28,9 +29,6 @@ type Props = {
   onSaved: () => Promise<void>;
 };
 
-// Single-file editing lives in the file details; this dialog edits a multi-file selection.
-const title = "Edit tags & note";
-
 const fileTags = (file: FileData) => {
   const tags = (file as FileData & { tags?: unknown }).tags;
   return Array.isArray(tags) && tags.every((tag): tag is string => typeof tag === "string") ? tags : [];
@@ -56,6 +54,8 @@ const FileMetadataEditor = ({ files, onClose, onSaved }: Omit<Props, "open">) =>
   const noteError = replaceNote ? validateNote(note) : "";
   const hasChanges = addTags.length > 0 || removeTags.length > 0 || replaceNote;
   const canSubmit = hasChanges && !tagError && !noteError && !submitting;
+  const selectedCount = files.length;
+  const noteLength = unicodeLength(note);
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -69,39 +69,41 @@ const FileMetadataEditor = ({ files, onClose, onSaved }: Omit<Props, "open">) =>
         note: replaceNote ? note : undefined,
       }).response;
     } catch (error) {
-      setError(errorMessage(error, "Could not save metadata"));
+      setError(errorMessage(error, t`Could not save metadata`));
       setSubmitting(false);
       return;
     }
 
     setSubmitting(false);
     onClose();
-    toast.success(`${files.length} files updated`);
+    const updated = files.length;
+    toast.success(t`${updated} files updated`);
     try {
       await onSaved();
     } catch (error) {
-      toast.error(`Metadata saved, but refresh failed: ${errorMessage(error, "Refresh failed")}`);
+      const reason = errorMessage(error, t`Refresh failed`);
+      toast.error(t`Metadata saved, but refresh failed: ${reason}`);
     }
   };
 
   return (
     <Dialog open onClose={submitting ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
+      <DialogTitle>{t`Edit tags & note`}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            {files.length} selected files
+            {t`${selectedCount} selected files`}
           </Typography>
           <TagSelect
             value={tags}
             onChange={setTags}
             disabled={submitting}
             error={Boolean(tagError)}
-            helperText={tagError || "Shared tags are shown. Tags unique to individual files are kept."}
+            helperText={tagError || t`Shared tags are shown. Tags unique to individual files are kept.`}
           />
           <FormControlLabel
             control={<Checkbox checked={replaceNote} onChange={(_, checked) => setReplaceNote(checked)} disabled={submitting} />}
-            label="Replace the note on every selected file"
+            label={t`Replace the note on every selected file`}
           />
           {replaceNote && (
             <TextField
@@ -109,11 +111,11 @@ const FileMetadataEditor = ({ files, onClose, onSaved }: Omit<Props, "open">) =>
               minRows={3}
               maxRows={8}
               fullWidth
-              label="Note"
+              label={t`Note`}
               value={note}
               disabled={submitting}
               error={Boolean(noteError)}
-              helperText={noteError || `${unicodeLength(note)}/${maxNoteLength} · Leave empty to clear every note.`}
+              helperText={noteError || t`${noteLength}/${maxNoteLength} · Leave empty to clear every note.`}
               onChange={(event) => setNote(event.target.value)}
             />
           )}
@@ -127,10 +129,10 @@ const FileMetadataEditor = ({ files, onClose, onSaved }: Omit<Props, "open">) =>
           disabled={!canSubmit}
           startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
         >
-          {submitting ? "Saving…" : "Save changes"}
+          {submitting ? t`Saving…` : t`Save changes`}
         </Button>
         <Button onClick={onClose} disabled={submitting}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -155,14 +157,14 @@ const LoadMetadata = ({ files, onClose, onSaved }: Omit<Props, "open">) => {
       for (const file of files) {
         const detail = (await filesCli.get({ reference: fileOperationReference(file) }).response).detail;
         if (!active) return;
-        if (!detail?.entry) throw new Error("File details are unavailable. Refresh this folder.");
+        if (!detail?.entry) throw new Error(t`File details are unavailable. Refresh this folder.`);
         const observed = filesEntryData(detail.entry);
-        if (!allowsFileOperation(observed, FileOperationKind.UPDATE_METADATA)) throw new Error("Metadata editing is unavailable. Refresh this folder.");
+        if (!allowsFileOperation(observed, FileOperationKind.UPDATE_METADATA)) throw new Error(t`Metadata editing is unavailable. Refresh this folder.`);
         values.push({ ...file, ...observed, tags: detail.organization?.tags ?? [] });
       }
       if (active) setLoaded(values);
     })().catch((failure) => {
-      if (active) setError(errorMessage(failure, "Could not load metadata"));
+      if (active) setError(errorMessage(failure, t`Could not load metadata`));
     });
     return () => {
       active = false;
@@ -171,10 +173,10 @@ const LoadMetadata = ({ files, onClose, onSaved }: Omit<Props, "open">) => {
   if (loaded) return <FileMetadataEditor files={loaded} onClose={onClose} onSaved={onSaved} />;
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>{title}</DialogTitle>
+      <DialogTitle>{t`Edit tags & note`}</DialogTitle>
       <DialogContent>
         {error ? (
-          <Feedback severity="error" action={<Button onClick={() => setAttempt((value) => value + 1)}>Retry</Button>}>
+          <Feedback severity="error" action={<Button onClick={() => setAttempt((value) => value + 1)}>{t`Retry`}</Button>}>
             {error}
           </Feedback>
         ) : (
@@ -182,7 +184,7 @@ const LoadMetadata = ({ files, onClose, onSaved }: Omit<Props, "open">) => {
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t`Cancel`}</Button>
       </DialogActions>
     </Dialog>
   );

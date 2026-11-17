@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FileArray } from "@samuelncui/chonky";
 import { filesCli } from "@/api";
@@ -29,7 +30,7 @@ export function useFilesMeasure(files: FileArray) {
   const cancel = useCallback(() => {
     active.current?.abort();
     active.current = undefined;
-    setState({ running: false, error: "Calculation canceled" });
+    setState({ running: false, error: t`Calculation canceled` });
     setSizes({});
   }, []);
 
@@ -54,11 +55,11 @@ export function useFilesMeasure(files: FileArray) {
         }
       }
       if (active.current !== controller || controller.signal.aborted) return;
-      if (!summary) throw new Error("Calculation ended before its final result");
+      if (!summary) throw new Error(t`Calculation ended before its final result`);
       setState({ running: false, summary });
     } catch (error) {
       if (active.current !== controller || controller.signal.aborted) return;
-      setState({ running: false, error: errorMessage(error, "Could not calculate data usage") });
+      setState({ running: false, error: errorMessage(error, t`Could not calculate data usage`) });
     } finally {
       if (active.current === controller) active.current = undefined;
     }

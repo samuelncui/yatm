@@ -1,3 +1,5 @@
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast, type Id } from "react-toastify";
 import type { FileData } from "@samuelncui/chonky";
@@ -10,7 +12,7 @@ import { errorMessage } from "@/tools";
 export function fileOperationReference(file: FileData): FileOperationRef {
   if (FileOperationRef.is(file.operationReference)) return FileOperationRef.clone(file.operationReference);
   if (file.physicalLocationID) return FileOperationRef.create({ target: { oneofKind: "location", location: fileLocationReference(file) } });
-  if (!/^-?\d+$/.test(file.id)) throw new Error("File reference is missing. Refresh this folder.");
+  if (!/^-?\d+$/.test(file.id)) throw new Error(t`File reference is missing. Refresh this folder.`);
   return FileOperationRef.create({ target: { oneofKind: "fileId", fileId: BigInt(file.id) } });
 }
 
@@ -32,10 +34,10 @@ export function canPasteFiles(clipboard: Clipboard | undefined, destination: Fil
   }
 }
 
-const operationLabels: Partial<Record<FileOperationKind, string>> = {
-  [FileOperationKind.MOVE]: "Moving",
-  [FileOperationKind.REMOVE]: "Deleting",
-  [FileOperationKind.MKDIR]: "Creating folder",
+const operationLabels: Partial<Record<FileOperationKind, MessageDescriptor>> = {
+  [FileOperationKind.MOVE]: msg`Moving…`,
+  [FileOperationKind.REMOVE]: msg`Deleting…`,
+  [FileOperationKind.MKDIR]: msg`Creating folder…`,
 };
 
 /** Library and disk organization share request, feedback and refresh behavior. */
@@ -58,7 +60,7 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
       createCall: (signal: AbortSignal) => Pick<ReturnType<typeof filesCli.remove>, "responses"> & PromiseLike<unknown>,
       rename = false,
     ) => {
-      if (active.current) throw new Error("Another file operation is in progress");
+      if (active.current) throw new Error(t`Another file operation is in progress`);
       const operation = { controller: new AbortController(), notification: undefined as Id | undefined };
       active.current = operation;
       // A submitted Rename settles one primitive; only batch work exposes cancellation.
@@ -66,7 +68,8 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
         if (!mounted.current || active.current !== operation) return;
         operation.notification = toast.info(
           <span>
-            {rename ? "Renaming" : (operationLabels[kind] ?? "Working")}…{!rename && <button onClick={() => operation.controller.abort()}>Cancel</button>}
+            {rename ? t`Renaming…` : operationLabels[kind] ? i18n._(operationLabels[kind]) : t`Working…`}
+            {!rename && <button onClick={() => operation.controller.abort()}>{t`Cancel`}</button>}
           </span>,
           { autoClose: false, closeButton: false, closeOnClick: false, draggable: false },
         );
@@ -78,23 +81,26 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
         const call = createCall(operation.controller.signal);
         for await (const update of call.responses) {
           const result = update.result;
-          if (!result) throw new Error("File operation result is missing");
+          if (!result) throw new Error(t`File operation result is missing`);
           if (result.entry && result.entry.outcome !== FileOperationOutcome.SUCCEEDED && result.entry.error && !entryError) {
             entryError = `${result.entry.sourcePath || result.entry.targetPath}: ${result.entry.error}`;
           }
           if (result.summary) summary = result.summary;
         }
         await call;
-        if (operation.controller.signal.aborted) throw new Error("Operation canceled");
-        if (!summary?.completed) throw new Error("Operation did not complete");
+        if (operation.controller.signal.aborted) throw new Error(t`Operation canceled`);
+        if (!summary?.completed) throw new Error(t`Operation did not complete`);
+        const failedCount = String(summary.failedCount);
+        const pendingCount = String(summary.publicationPendingCount);
+        const unprocessedCount = String(summary.unprocessedCount);
         const issues = [
-          summary.failedCount > 0n ? `${summary.failedCount} failed` : "",
-          summary.publicationPendingCount > 0n ? `${summary.publicationPendingCount} Library updates incomplete` : "",
-          summary.unprocessedCount > 0n ? `${summary.unprocessedCount} not processed` : "",
+          summary.failedCount > 0n ? t`${failedCount} failed` : "",
+          summary.publicationPendingCount > 0n ? t`${pendingCount} Library updates incomplete` : "",
+          summary.unprocessedCount > 0n ? t`${unprocessedCount} not processed` : "",
         ].filter(Boolean);
         if (issues.length) throw new Error([issues.join(" · "), entryError].filter(Boolean).join(": "));
       } catch (error) {
-        failure = new Error(operation.controller.signal.aborted ? "Operation canceled" : errorMessage(error, "File operation failed"));
+        failure = new Error(operation.controller.signal.aborted ? t`Operation canceled` : errorMessage(error, t`File operation failed`));
       } finally {
         window.clearTimeout(timer);
         if (operation.notification !== undefined) toast.dismiss(operation.notification);
@@ -103,9 +109,11 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
           try {
             await onComplete();
           } catch (error) {
-            const message = errorMessage(error, "unknown refresh error");
-            if (failure) failure = new Error(`${failure.message}. Refresh failed: ${message}`);
-            else toast.error(`Operation succeeded, but refresh failed: ${message}`);
+            const message = errorMessage(error, t`unknown refresh error`);
+            if (failure) {
+              const previous = failure.message;
+              failure = new Error(t`${previous}. Refresh failed: ${message}`);
+            } else toast.error(t`Operation succeeded, but refresh failed: ${message}`);
           }
         }
         active.current = undefined;
@@ -117,12 +125,12 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
 
   const start = useCallback(
     async (spec: FileOperationSpec) => {
-      if (active.current) throw new Error("Another file operation is in progress");
+      if (active.current) throw new Error(t`Another file operation is in progress`);
       if (![FileOperationKind.MOVE, FileOperationKind.MKDIR, FileOperationKind.REMOVE].includes(spec.kind))
-        throw new Error("This file operation is not supported");
+        throw new Error(t`This file operation is not supported`);
       const scope = spec.destination ?? spec.sources[0];
-      if (!scope) throw new Error("Choose files or a destination first");
-      if (spec.sources.some((source) => !sameScope(source, scope))) throw new Error("Choose files and a destination in the same source");
+      if (!scope) throw new Error(t`Choose files or a destination first`);
+      if (spec.sources.some((source) => !sameScope(source, scope))) throw new Error(t`Choose files and a destination in the same source`);
       await execute(
         spec.kind,
         (signal) =>
@@ -143,7 +151,7 @@ export const useFileOperations = (onComplete: () => Promise<void>) => {
 
   const paste = useCallback(
     async (destination: FileOperationRef) => {
-      if (!clipboard?.files.length) throw new Error("Cut files first");
+      if (!clipboard?.files.length) throw new Error(t`Cut files first`);
       await start(FileOperationSpec.create({ kind: clipboard.kind, sources: clipboard.files.map(fileOperationReference), destination }));
       if (clipboard.kind === FileOperationKind.MOVE) setClipboard(undefined);
     },

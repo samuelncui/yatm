@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useRef, useState } from "react";
 import { Autocomplete, Box, Button, CircularProgress, Stack, TextField, Typography } from "@mui/material";
@@ -12,6 +13,8 @@ const pageSize = 30;
 type SelectionProps<T> = { value: T | null; onChange: (item: T | null) => void; disabled?: boolean };
 type SearchProps<T> = SelectionProps<T> & {
   label: string;
+  noMatchText: string;
+  searchingLabel: string;
   placeholder: string;
   name: (item: T) => string;
   detail: (item: T) => string;
@@ -32,6 +35,8 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
   onChange,
   disabled = false,
   label,
+  noMatchText,
+  searchingLabel,
   placeholder,
   name,
   detail,
@@ -48,6 +53,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const paper = useRef<HTMLDivElement>(null);
+  const page = paging ? String(paging.page) : "";
   const optionLabel = (item: T) => `${name(item)} · ${detail(item)}`;
   const footer = (
     <>
@@ -62,7 +68,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
                 onRetry();
               }}
             >
-              Retry
+              {t`Retry`}
             </Button>
           }
         >
@@ -78,9 +84,9 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
               paging.previous();
             }}
           >
-            Previous
+            {t`Previous`}
           </Button>
-          <Typography variant="caption">Page {paging.page}</Typography>
+          <Typography variant="caption">{t`Page ${page}`}</Typography>
           <Button
             disabled={loading || !paging.hasMore}
             onClick={() => {
@@ -88,7 +94,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
               paging.next();
             }}
           >
-            Next
+            {t`Next`}
           </Button>
         </Stack>
       )}
@@ -122,8 +128,8 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
       open={open && !disabled}
       options={options}
       loading={loading}
-      loadingText="Searching…"
-      noOptionsText={error ? "Search unavailable" : `No matching ${label}`}
+      loadingText={t`Searching…`}
+      noOptionsText={error ? t`Search unavailable` : noMatchText}
       filterOptions={(values) => values}
       getOptionLabel={optionLabel}
       getOptionKey={(item) => String(item.id)}
@@ -170,7 +176,7 @@ const CatalogSearchSelect = <T extends { id: bigint }>({
               ...params.slotProps.input,
               endAdornment: (
                 <>
-                  {loading && open && <CircularProgress color="inherit" size={18} aria-label={`Searching ${label}`} />}
+                  {loading && open && <CircularProgress color="inherit" size={18} aria-label={searchingLabel} />}
                   {params.slotProps.input.endAdornment}
                 </>
               ),
@@ -223,7 +229,7 @@ export const MediaSearchSelect = ({ kinds = allMediaKinds, ...props }: Selection
       } catch (error) {
         if (pending.current !== generation) return;
         failed.current = true;
-        setError(errorMessage(error, "Could not search Media"));
+        setError(errorMessage(error, t`Could not search Media`));
       } finally {
         if (pending.current === generation) setLoading(false);
       }
@@ -237,8 +243,10 @@ export const MediaSearchSelect = ({ kinds = allMediaKinds, ...props }: Selection
   return (
     <CatalogSearchSelect
       {...props}
-      label="Media"
-      placeholder="Search by name or identity"
+      label={t`Media`}
+      noMatchText={t`No matching Media`}
+      searchingLabel={t`Searching Media`}
+      placeholder={t`Search by name or identity`}
       open={open}
       onOpenChange={setOpen}
       query={query}
@@ -267,7 +275,7 @@ export const MediaSearchSelect = ({ kinds = allMediaKinds, ...props }: Selection
       }
       name={(item) => item.name || item.identity || `#${item.id}`}
       detail={(item) =>
-        [item.kind === MediaKind.TAPE ? "Tape" : "Volume", item.name && item.name !== item.identity ? item.identity || `#${item.id}` : ""]
+        [item.kind === MediaKind.TAPE ? t`Tape` : t`Volume`, item.name && item.name !== item.identity ? item.identity || `#${item.id}` : ""]
           .filter(Boolean)
           .join(" · ")
       }
@@ -283,8 +291,10 @@ export const LocationSearchSelect = (props: SelectionProps<Location>) => {
     <CatalogSearchSelect
       {...props}
       value={locations.find((location) => location.id === props.value?.id) ?? props.value}
-      label="Location"
-      placeholder="Search by name or path"
+      label={t`Location`}
+      noMatchText={t`No matching Location`}
+      searchingLabel={t`Searching Location`}
+      placeholder={t`Search by name or path`}
       open={open}
       onOpenChange={setOpen}
       query={query}

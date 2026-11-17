@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { type MouseEvent, useEffect, useState } from "react";
 import InsertDriveFileRoundedIcon from "@mui/icons-material/InsertDriveFileRounded";
 import type { PreviewResource } from "@/entity";
@@ -71,7 +72,7 @@ export const PreviewMedia = ({ assets }: { assets: PreviewResource[] }) => {
       </div>
       <div className="file-detail-video-controls">
         <input
-          aria-label="Video preview position"
+          aria-label={t`Video preview position`}
           type="range"
           min={0}
           max={duration}

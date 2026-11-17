@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 
@@ -62,14 +63,14 @@ const FocusedJob = ({ id }: { id: bigint }) => {
       if (sequence !== request.current) return;
       if (!reply.job || reply.job.deletedAtNs !== 0n) {
         setJob(undefined);
-        throw new Error("This job no longer exists. Your Library files and archive copies are not deleted with it.");
+        throw new Error(t`This job no longer exists. Your Library files and archive copies are not deleted with it.`);
       }
       setJob(reply.job);
       setError("");
     } catch (error) {
       if (sequence !== request.current) return;
       if (error instanceof RpcError && error.code === "NOT_FOUND") setJob(undefined);
-      setError(errorMessage(error, "Could not load this job"));
+      setError(errorMessage(error, t`Could not load this job`));
     }
   }, [id]);
   useEffect(() => {
@@ -81,6 +82,8 @@ const FocusedJob = ({ id }: { id: bigint }) => {
   }, [refresh]);
   // Like card progress, only a running Job polls; user actions refresh a settled one through RefreshContext.
   const running = !!job && isJobRunning(job);
+  const kindName = job ? jobLabel(job.kind) : t`Job`;
+  const createdTime = job ? contentTime(job.createdAtNs || undefined) : "";
   useEffect(() => {
     if (!running) return;
     let active = true;
@@ -102,19 +105,19 @@ const FocusedJob = ({ id }: { id: bigint }) => {
       <Box className="browser-box jobs-page focused-job-page">
         <Box sx={{ pb: 2.5 }}>
           <PageHeading
-            title={`${job ? jobLabel(job.kind) : "Job"} details`}
-            description={job ? `Created ${contentTime(job.createdAtNs || undefined)}` : error ? undefined : "Loading your job…"}
+            title={t`${kindName} details`}
+            description={job ? t`Created ${createdTime}` : error ? undefined : t`Loading your job…`}
             actions={
               typeof location.state?.returnTo === "string" && /^\/settings\/locations\/[1-9]\d*\?tab=jobs$/.test(location.state.returnTo) ? (
                 <Button component={Link} to={location.state.returnTo}>
-                  Back to Location
+                  {t`Back to Location`}
                 </Button>
               ) : undefined
             }
           />
         </Box>
         {error && (
-          <Feedback severity="error" action={<Button onClick={() => void refresh()}>Retry</Button>}>
+          <Feedback severity="error" action={<Button onClick={() => void refresh()}>{t`Retry`}</Button>}>
             {error}
           </Feedback>
         )}
@@ -215,7 +218,7 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
       else await refresh();
       if (request === generation.current) setCatalogError("");
     } catch (error) {
-      if (request === generation.current) setCatalogError(errorMessage(error, "Could not load jobs"));
+      if (request === generation.current) setCatalogError(errorMessage(error, t`Could not load jobs`));
     } finally {
       if (request === generation.current) refreshing.current = false;
     }
@@ -262,14 +265,14 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
     <RefreshContext.Provider value={updateCatalog}>
       <div
         className="job-list"
-        aria-label="Jobs"
+        aria-label={t`Jobs`}
         ref={listRef}
         onScroll={(event) => {
           scrollTop.current = event.currentTarget.scrollTop;
         }}
       >
         {catalogError && (
-          <Feedback severity="error" action={<Button onClick={() => void updateCatalog()}>Retry</Button>}>
+          <Feedback severity="error" action={<Button onClick={() => void updateCatalog()}>{t`Retry`}</Button>}>
             {catalogError}
           </Feedback>
         )}
@@ -280,7 +283,7 @@ const AllJobsBrowser = ({ filter, filterKey }: { filter: JobFilter; filterKey: s
           {loadingMore && <LinearProgress />}
           {loadMoreFailed && (
             <Button size="small" onClick={() => void loadMore()}>
-              Retry loading more jobs
+              {t`Retry loading more jobs`}
             </Button>
           )}
         </div>

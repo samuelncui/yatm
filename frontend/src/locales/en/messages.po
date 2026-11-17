@@ -1,0 +1,4305 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-17 18:20+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#. placeholder {0}: row.name
+msgid "{0} information"
+msgstr "{0} information"
+
+#. placeholder {0}: rate.toFixed(1)
+msgid "{0} items/s"
+msgstr "{0} items/s"
+
+#. placeholder {0}: formatFilesize(progress.averageSpeedBytesPerSecond)
+#. placeholder {0}: formatFilesize(progress.speedBytesPerSecond)
+msgid "{0}/s"
+msgstr "{0}/s"
+
+msgid "{amount} MB/s"
+msgstr "{amount} MB/s"
+
+msgid "{amount} s"
+msgstr "{amount} s"
+
+msgid "{count, plural, one {# item added to the Archive list.} other {# items added to the Archive list.}}"
+msgstr "{count, plural, one {# item added to the Archive list.} other {# items added to the Archive list.}}"
+
+msgid "{count, plural, one {# item added to the Restore list.} other {# items added to the Restore list.}}"
+msgstr "{count, plural, one {# item added to the Restore list.} other {# items added to the Restore list.}}"
+
+msgid "{counter} Bytes"
+msgstr "{counter} Bytes"
+
+msgid "{counter} Files"
+msgstr "{counter} Files"
+
+msgid "{damaged} recovered with damage"
+msgstr "{damaged} recovered with damage"
+
+msgid "{deleteCount, plural, one {Delete # selected file.} other {Delete # selected files.}}"
+msgstr "{deleteCount, plural, one {Delete # selected file.} other {Delete # selected files.}}"
+
+msgid "{directories, plural, one {# folder} other {# folders}}"
+msgstr "{directories, plural, one {# folder} other {# folders}}"
+
+msgid "{directoryCount} folder entries"
+msgstr "{directoryCount} folder entries"
+
+msgid "{draftCount} selected root"
+msgstr "{draftCount} selected root"
+
+msgid "{draftCount} selected roots"
+msgstr "{draftCount} selected roots"
+
+msgid "{entryCount} selected root"
+msgstr "{entryCount} selected root"
+
+msgid "{entryCount} selected roots"
+msgstr "{entryCount} selected roots"
+
+msgid "{existingCount} already in Library"
+msgstr "{existingCount} already in Library"
+
+msgid "{failedCount} failed"
+msgstr "{failedCount} failed"
+
+msgid "{fileCount} file"
+msgstr "{fileCount} file"
+
+msgid "{fileCount} files"
+msgstr "{fileCount} files"
+
+msgid "{fileCount} files · {written} written"
+msgstr "{fileCount} files · {written} written"
+
+msgid "{fileCount} files from {name} will be added as independent Library files."
+msgstr "{fileCount} files from {name} will be added as independent Library files."
+
+msgid "{fileCount} files will be added as independent Library files."
+msgstr "{fileCount} files will be added as independent Library files."
+
+msgid "{fileCount} restore item"
+msgstr "{fileCount} restore item"
+
+msgid "{fileCount} restore items"
+msgstr "{fileCount} restore items"
+
+msgid "{first}; {second}"
+msgstr "{first}; {second}"
+
+msgid "{folderText} and {fileText}"
+msgstr "{folderText} and {fileText}"
+
+msgid "{format} · unsupported"
+msgstr "{format} · unsupported"
+
+msgid "{gigabytes} GB"
+msgstr "{gigabytes} GB"
+
+msgid "{groupLabel} settings saved."
+msgstr "{groupLabel} settings saved."
+
+msgid "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
+msgstr "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
+
+msgid "{jobsName} · Jobs"
+msgstr "{jobsName} · Jobs"
+
+msgid "{kind} · {read} read · {write} write · {availability}"
+msgstr "{kind} · {read} read · {write} write · {availability}"
+
+msgid "{kind}: {name}"
+msgstr "{kind}: {name}"
+
+msgid "{kindName} details"
+msgstr "{kindName} details"
+
+msgid "{label} (<0>{field}</0>): {value}"
+msgstr "{label} (<0>{field}</0>): {value}"
+
+msgid "{label} waitlist"
+msgstr "{label} waitlist"
+
+msgid "{label}: {extensions}"
+msgstr "{label}: {extensions}"
+
+msgid "{label}: {message}"
+msgstr "{label}: {message}"
+
+msgid "{label}: {value}"
+msgstr "{label}: {value}"
+
+msgid "{mediaName} · Properties"
+msgstr "{mediaName} · Properties"
+
+msgid "{mediaName} · Tape"
+msgstr "{mediaName} · Tape"
+
+msgid "{mediaName} · Volume"
+msgstr "{mediaName} · Volume"
+
+msgid "{megabytes} MB"
+msgstr "{megabytes} MB"
+
+msgid "{missingCopyCount} item has no usable archived copy."
+msgstr "{missingCopyCount} item has no usable archived copy."
+
+msgid "{missingCopyCount} items have no usable archived copy."
+msgstr "{missingCopyCount} items have no usable archived copy."
+
+msgid "{missingOriginalCount} file has no linked original and will be skipped."
+msgstr "{missingOriginalCount} file has no linked original and will be skipped."
+
+msgid "{missingOriginalCount} files have no linked original and will be skipped."
+msgstr "{missingOriginalCount} files have no linked original and will be skipped."
+
+msgid "{name} · index {index} · key {keyBytes} bytes"
+msgstr "{name} · index {index} · key {keyBytes} bytes"
+
+msgid "{name} has no eligible current original to add to the Archive list."
+msgstr "{name} has no eligible current original to add to the Archive list."
+
+msgid "{name} has no saved File in Library to add to the Restore list."
+msgstr "{name} has no saved File in Library to add to the Restore list."
+
+msgid "{name}: {positionError}. Find again."
+msgstr "{name}: {positionError}. Find again."
+
+msgid "{name}: {state}"
+msgstr "{name}: {state}"
+
+msgid "{name}: moved to Trash; Library update incomplete"
+msgstr "{name}: moved to Trash; Library update incomplete"
+
+msgid "{noteLength}/{maxNoteLength} · Leave empty to clear every note."
+msgstr "{noteLength}/{maxNoteLength} · Leave empty to clear every note."
+
+msgid "{pending} pending"
+msgstr "{pending} pending"
+
+msgid "{pendingCount} Library updates incomplete"
+msgstr "{pendingCount} Library updates incomplete"
+
+msgid "{pollSeconds} seconds"
+msgstr "{pollSeconds} seconds"
+
+msgid "{preparedAt} · Job {preparedJob} · Media {preparedIdentity}"
+msgstr "{preparedAt} · Job {preparedJob} · Media {preparedIdentity}"
+
+msgid "{previous}. Refresh failed: {message}"
+msgstr "{previous}. Refresh failed: {message}"
+
+msgid "{rate} MB/s"
+msgstr "{rate} MB/s"
+
+msgid "{readAccess} read · {writeAccess} write"
+msgstr "{readAccess} read · {writeAccess} write"
+
+msgid "{reason} Remove it or select it again."
+msgstr "{reason} Remove it or select it again."
+
+msgid "{recordBytes} bytes"
+msgstr "{recordBytes} bytes"
+
+msgid "{regularFiles, plural, one {# file} other {# files}}"
+msgstr "{regularFiles, plural, one {# file} other {# files}}"
+
+msgid "{remainingBytes} bytes"
+msgstr "{remainingBytes} bytes"
+
+msgid "{replacedCount, plural, one {# automatic selection was replaced by the explicit version.} other {# automatic selections were replaced by the explicit version.}}"
+msgstr "{replacedCount, plural, one {# automatic selection was replaced by the explicit version.} other {# automatic selections were replaced by the explicit version.}}"
+
+msgid "{seconds} s"
+msgstr "{seconds} s"
+
+msgid "{selectedCount, plural, one {# item will move to Library Trash.} other {# items will move to Library Trash.}}"
+msgstr "{selectedCount, plural, one {# item will move to Library Trash.} other {# items will move to Library Trash.}}"
+
+msgid "{selectedCount} selected files"
+msgstr "{selectedCount} selected files"
+
+msgid "{skippedCount} item has no version to restore and is left out."
+msgstr "{skippedCount} item has no version to restore and is left out."
+
+msgid "{skippedCount} items have no version to restore and are left out."
+msgstr "{skippedCount} items have no version to restore and are left out."
+
+msgid "{skippedCount} without signatures"
+msgstr "{skippedCount} without signatures"
+
+msgid "{space} available"
+msgstr "{space} available"
+
+msgid "{subject} will be added as independent Library files."
+msgstr "{subject} will be added as independent Library files."
+
+msgid "{title} details"
+msgstr "{title} details"
+
+msgid "{totalSize} known · {unknownSizes} sizes unknown"
+msgstr "{totalSize} known · {unknownSizes} sizes unknown"
+
+msgid "{unlinked} not linked"
+msgstr "{unlinked} not linked"
+
+msgid "{unmatchedCount} item has no version matching this policy."
+msgstr "{unmatchedCount} item has no version matching this policy."
+
+msgid "{unmatchedCount} items have no version matching this policy."
+msgstr "{unmatchedCount} items have no version matching this policy."
+
+msgid "{unprocessedCount} not processed"
+msgstr "{unprocessedCount} not processed"
+
+msgid "{updated} files updated"
+msgstr "{updated} files updated"
+
+msgid "{value} · unsupported"
+msgstr "{value} · unsupported"
+
+msgid "{verified} verified"
+msgstr "{verified} verified"
+
+msgctxt "file browser"
+msgid "# hidden"
+msgstr "# hidden"
+
+msgctxt "file browser"
+msgid "# item"
+msgstr "# item"
+
+msgctxt "file browser"
+msgid "# items"
+msgstr "# items"
+
+msgctxt "file browser"
+msgid "# row"
+msgstr "# row"
+
+msgctxt "file browser"
+msgid "# rows"
+msgstr "# rows"
+
+msgctxt "file browser"
+msgid "# selected"
+msgstr "# selected"
+
+msgid "300 seconds (default)"
+msgstr "300 seconds (default)"
+
+msgid "512 KiB (default)"
+msgstr "512 KiB (default)"
+
+msgid "A directory on the computer running YATM, within the administrator's allowed roots."
+msgstr "A directory on the computer running YATM, within the administrator's allowed roots."
+
+msgid "A file operation is already in progress for this group."
+msgstr "A file operation is already in progress for this group."
+
+msgid "A read uses the set for the loaded cartridge's density code, otherwise built-in values. Missing values stay unknown."
+msgstr "A read uses the set for the loaded cartridge's density code, otherwise built-in values. Missing values stay unknown."
+
+#. placeholder {0}: format(Number(stage.remainingSeconds) * 1000)
+msgid "About {0}"
+msgstr "About {0}"
+
+msgid "Access"
+msgstr "Access"
+
+msgctxt "Device field"
+msgid "Access identity"
+msgstr "Access identity"
+
+msgid "Action"
+msgstr "Action"
+
+msgctxt "file action group"
+msgid "Actions"
+msgstr "Actions"
+
+msgid "Add an original directory or a restore destination."
+msgstr "Add an original directory or a restore destination."
+
+msgid "Add another tag"
+msgstr "Add another tag"
+
+msgid "Add context about this file"
+msgstr "Add context about this file"
+
+msgid "Add existing inventory to Library"
+msgstr "Add existing inventory to Library"
+
+msgid "Add files"
+msgstr "Add files"
+
+msgid "Add folder contents"
+msgstr "Add folder contents"
+
+msgid "Add location"
+msgstr "Add location"
+
+msgid "Add read parameters"
+msgstr "Add read parameters"
+
+msgctxt "file action"
+msgid "Add selected"
+msgstr "Add selected"
+
+msgid "Add tag “{option}”"
+msgstr "Add tag “{option}”"
+
+msgid "Add this folder"
+msgstr "Add this folder"
+
+msgid "Add to Archive list"
+msgstr "Add to Archive list"
+
+msgctxt "file action"
+msgid "Add to Archive list"
+msgstr "Add to Archive list"
+
+msgid "Add to Library"
+msgstr "Add to Library"
+
+msgctxt "file action"
+msgid "Add to Library"
+msgstr "Add to Library"
+
+msgid "Add to Library?"
+msgstr "Add to Library?"
+
+msgctxt "file action"
+msgid "Add to list"
+msgstr "Add to list"
+
+msgid "Add to Restore list"
+msgstr "Add to Restore list"
+
+msgctxt "file action"
+msgid "Add to Restore list"
+msgstr "Add to Restore list"
+
+msgid "Add Volume"
+msgstr "Add Volume"
+
+msgctxt "file action"
+msgid "Add Volume"
+msgstr "Add Volume"
+
+msgid "Add Volume failed"
+msgstr "Add Volume failed"
+
+msgctxt "Scan change"
+msgid "added"
+msgstr "added"
+
+msgid "Added"
+msgstr "Added"
+
+msgid "Added {fileCount} Files to Library"
+msgstr "Added {fileCount} Files to Library"
+
+msgid "Added {fileCount} Files to Library; skipped {skippedRecords}"
+msgstr "Added {fileCount} Files to Library; skipped {skippedRecords}"
+
+msgid "Added for each crossed filemark and the following READ. Empty leaves it unpriced."
+msgstr "Added for each crossed filemark and the following READ. Empty leaves it unpriced."
+
+msgid "Added for the LTFS unmount script and finalization; tar ignores it."
+msgstr "Added for the LTFS unmount script and finalization; tar ignores it."
+
+msgid "Added time when arriving against the wrap direction"
+msgstr "Added time when arriving against the wrap direction"
+
+msgid "Added time when arriving against the wrap direction (s)"
+msgstr "Added time when arriving against the wrap direction (s)"
+
+msgid "Adding…"
+msgstr "Adding…"
+
+msgctxt "Device field"
+msgid "Address bits"
+msgstr "Address bits"
+
+msgid "Advanced"
+msgstr "Advanced"
+
+msgid "Advanced output"
+msgstr "Advanced output"
+
+msgid "Advanced Preview"
+msgstr "Advanced Preview"
+
+msgid "Advanced runtime"
+msgstr "Advanced runtime"
+
+msgid "Algorithm indexes apply to this device. A key instance counter does not establish key presence or a matching recovery key."
+msgstr "Algorithm indexes apply to this device. A key instance counter does not establish key presence or a matching recovery key."
+
+msgctxt "Device field"
+msgid "Alignment bytes"
+msgstr "Alignment bytes"
+
+msgid "All"
+msgstr "All"
+
+msgid "All levels"
+msgstr "All levels"
+
+msgid "All locations"
+msgstr "All locations"
+
+msgid "All related Jobs"
+msgstr "All related Jobs"
+
+msgid "All resources"
+msgstr "All resources"
+
+msgid "All types"
+msgstr "All types"
+
+msgctxt "Device field"
+msgid "All wraps"
+msgstr "All wraps"
+
+msgid "All wraps describes the reported command form, not qualified full coverage. Geometry observations alone do not qualify Auto read order."
+msgstr "All wraps describes the reported command form, not qualified full coverage. Geometry observations alone do not qualify Auto read order."
+
+msgid "Allow damaged copies"
+msgstr "Allow damaged copies"
+
+msgid "Allowed directories"
+msgstr "Allowed directories"
+
+msgid "Already in the Library as {registeredName}."
+msgstr "Already in the Library as {registeredName}."
+
+msgid "already set"
+msgstr "already set"
+
+msgid "Also added once for each wrap turn crossed while reading."
+msgstr "Also added once for each wrap turn crossed while reading."
+
+msgid "An existing marker was found. Register recreates only its Library Media; the marker and files stay unchanged."
+msgstr "An existing marker was found. Register recreates only its Library Media; the marker and files stay unchanged."
+
+msgid "Another file operation is in progress"
+msgstr "Another file operation is in progress"
+
+msgid "Any archived content"
+msgstr "Any archived content"
+
+msgctxt "Tape action"
+msgid "APPEND"
+msgstr "APPEND"
+
+msgid "APPEND uses {appendFormat} and its immutable cartridge profile."
+msgstr "APPEND uses {appendFormat} and its immutable cartridge profile."
+
+msgid "Applicability: {applicability}"
+msgstr "Applicability: {applicability}"
+
+msgid "Applies to this browser only."
+msgstr "Applies to this browser only."
+
+msgid "Apply current policy to all"
+msgstr "Apply current policy to all"
+
+msgid "Apply filters"
+msgstr "Apply filters"
+
+msgid "Approximate time for the current work stage. Later stages are excluded."
+msgstr "Approximate time for the current work stage. Later stages are excluded."
+
+msgid "Archive"
+msgstr "Archive"
+
+msgctxt "Job kind"
+msgid "Archive"
+msgstr "Archive"
+
+msgid "Archive available"
+msgstr "Archive available"
+
+msgid "Archive date not recorded · {fileSize}"
+msgstr "Archive date not recorded · {fileSize}"
+
+msgid "Archive date unknown"
+msgstr "Archive date unknown"
+
+msgid "Archive files are kept. Their inventory records and Media profiles will be removed."
+msgstr "Archive files are kept. Their inventory records and Media profiles will be removed."
+
+msgid "Archive not checked"
+msgstr "Archive not checked"
+
+msgid "Archive results"
+msgstr "Archive results"
+
+msgid "Archive selection"
+msgstr "Archive selection"
+
+msgctxt "file action"
+msgid "Archive selection"
+msgstr "Archive selection"
+
+msgid "Archive started, but the Job list could not refresh"
+msgstr "Archive started, but the Job list could not refresh"
+
+msgid "Archive storage"
+msgstr "Archive storage"
+
+msgid "Archive: {target}"
+msgstr "Archive: {target}"
+
+msgid "Archived content"
+msgstr "Archived content"
+
+msgid "Archived copies"
+msgstr "Archived copies"
+
+msgid "Archived copies not compared (removed)"
+msgstr "Archived copies not compared (removed)"
+
+msgid "Archived copies unknown (no signature)"
+msgstr "Archived copies unknown (no signature)"
+
+msgid "Archived copy comparison incomplete"
+msgstr "Archived copy comparison incomplete"
+
+msgid "Archived copy comparison not requested"
+msgstr "Archived copy comparison not requested"
+
+msgid "Auto"
+msgstr "Auto"
+
+msgid "Auto (5 seconds)"
+msgstr "Auto (5 seconds)"
+
+msgid "Auto plans the selection when positions and costs apply; otherwise it reads in logical order."
+msgstr "Auto plans the selection when positions and costs apply; otherwise it reads in logical order."
+
+msgid "Automatic identification"
+msgstr "Automatic identification"
+
+msgid "Automatic identification uses the Tape's cartridge memory barcode, and the matching Media supplies its saved key. YATM does not try multiple keys."
+msgstr "Automatic identification uses the Tape's cartridge memory barcode, and the matching Media supplies its saved key. YATM does not try multiple keys."
+
+msgid "Available"
+msgstr "Available"
+
+msgid "Available for Restore"
+msgstr "Available for Restore"
+
+msgid "Average Speed"
+msgstr "Average Speed"
+
+msgid "Average throughput in the active read or copy session."
+msgstr "Average throughput in the active read or copy session."
+
+msgid "Back"
+msgstr "Back"
+
+msgid "Back to folder"
+msgstr "Back to folder"
+
+msgid "Back to Location"
+msgstr "Back to Location"
+
+msgid "Browse directories"
+msgstr "Browse directories"
+
+msgctxt "file browser"
+msgid "Browser menu: {shortcut}"
+msgstr "Browser menu: {shortcut}"
+
+msgctxt "Device field"
+msgid "Buffered writes"
+msgstr "Buffered writes"
+
+msgid "Built-in"
+msgstr "Built-in"
+
+msgctxt "Device report"
+msgid "busy"
+msgstr "busy"
+
+msgid "Busy"
+msgstr "Busy"
+
+msgid "Busy · {busyDetail}"
+msgstr "Busy · {busyDetail}"
+
+msgid "Calculating data usage"
+msgstr "Calculating data usage"
+
+msgid "Calculating what this Media would add…"
+msgstr "Calculating what this Media would add…"
+
+msgid "Calculating…"
+msgstr "Calculating…"
+
+msgid "Calculation canceled"
+msgstr "Calculation canceled"
+
+msgid "Calculation ended before its final result"
+msgstr "Calculation ended before its final result"
+
+msgid "Calibrate {device}"
+msgstr "Calibrate {device}"
+
+msgid "Calibrate…"
+msgstr "Calibrate…"
+
+msgctxt "Job phase"
+msgid "calibrating"
+msgstr "calibrating"
+
+msgctxt "Job kind"
+msgid "Calibration"
+msgstr "Calibration"
+
+msgid "Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier cartridge, write test data."
+msgstr "Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier cartridge, write test data."
+
+msgid "Cancel"
+msgstr "Cancel"
+
+msgctxt "file action"
+msgid "Cancel Data Usage"
+msgstr "Cancel Data Usage"
+
+msgid "Capabilities of the saved Preview executable."
+msgstr "Capabilities of the saved Preview executable."
+
+msgid "Capacity"
+msgstr "Capacity"
+
+msgid "Capacity polling interval must be 0 (Off) or a whole number between 5 and 4294967295 seconds."
+msgstr "Capacity polling interval must be 0 (Off) or a whole number between 5 and 4294967295 seconds."
+
+msgid "Capacity quality: {quality}"
+msgstr "Capacity quality: {quality}"
+
+msgctxt "Device report"
+msgid "capacity to warning"
+msgstr "capacity to warning"
+
+msgctxt "file action"
+msgid "Change version"
+msgstr "Change version"
+
+msgctxt "Scan change"
+msgid "changed"
+msgstr "changed"
+
+msgid "Changed"
+msgstr "Changed"
+
+msgid "Changes not archived"
+msgstr "Changes not archived"
+
+msgid "Check failed"
+msgstr "Check failed"
+
+msgctxt "file action"
+msgid "Check integrity"
+msgstr "Check integrity"
+
+msgid "Check passed"
+msgstr "Check passed"
+
+msgid "Check recorded copies"
+msgstr "Check recorded copies"
+
+msgid "Check results"
+msgstr "Check results"
+
+msgid "Check saved executable again"
+msgstr "Check saved executable again"
+
+msgid "Check Tape"
+msgstr "Check Tape"
+
+msgid "Checked {checkedAt}"
+msgstr "Checked {checkedAt}"
+
+msgid "Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here."
+msgstr "Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here."
+
+msgid "Checking Preview generation…"
+msgstr "Checking Preview generation…"
+
+msgid "Checking Preview helper"
+msgstr "Checking Preview helper"
+
+msgid "Checks passed"
+msgstr "Checks passed"
+
+msgid "Choose"
+msgstr "Choose"
+
+msgid "Choose a density code"
+msgstr "Choose a density code"
+
+msgid "Choose a density code."
+msgstr "Choose a density code."
+
+msgid "Choose a disk…"
+msgstr "Choose a disk…"
+
+msgid "Choose a Preview option before preparing."
+msgstr "Choose a Preview option before preparing."
+
+msgid "Choose a valid date and time."
+msgstr "Choose a valid date and time."
+
+msgid "Choose a version of {fileName}"
+msgstr "Choose a version of {fileName}"
+
+msgid "Choose another file"
+msgstr "Choose another file"
+
+msgid "Choose archive storage"
+msgstr "Choose archive storage"
+
+msgid "Choose archive storage to read"
+msgstr "Choose archive storage to read"
+
+msgid "Choose directory"
+msgstr "Choose directory"
+
+msgctxt "file action"
+msgid "Choose file"
+msgstr "Choose file"
+
+msgid "Choose file source"
+msgstr "Choose file source"
+
+msgid "Choose files and a destination in the same source"
+msgstr "Choose files and a destination in the same source"
+
+msgid "Choose files and folders"
+msgstr "Choose files and folders"
+
+msgid "Choose files or a destination first"
+msgstr "Choose files or a destination first"
+
+msgid "Choose Fixed or Variable, or inherit the device default."
+msgstr "Choose Fixed or Variable, or inherit the device default."
+
+msgid "Choose folder…"
+msgstr "Choose folder…"
+
+msgid "Choose Locations to search"
+msgstr "Choose Locations to search"
+
+msgid "Choose Logical or Auto read order."
+msgstr "Choose Logical or Auto read order."
+
+msgid "Choose LTFS or Tar before using this default."
+msgstr "Choose LTFS or Tar before using this default."
+
+msgid "Choose Media to read"
+msgstr "Choose Media to read"
+
+msgid "Choose one Scan source."
+msgstr "Choose one Scan source."
+
+msgid "Choose restore target"
+msgstr "Choose restore target"
+
+msgid "Choose supported preview settings."
+msgstr "Choose supported preview settings."
+
+msgid "Choose Tar before using this default."
+msgstr "Choose Tar before using this default."
+
+msgid "Choose version"
+msgstr "Choose version"
+
+msgid "Clean up"
+msgstr "Clean up"
+
+msgctxt "file action"
+msgid "Clean up Library"
+msgstr "Clean up Library"
+
+msgid "Clean up Library?"
+msgstr "Clean up Library?"
+
+msgid "Clear"
+msgstr "Clear"
+
+msgctxt "file action"
+msgid "Clear list"
+msgstr "Clear list"
+
+msgid "Clear search"
+msgstr "Clear search"
+
+msgid "Clear search failed"
+msgstr "Clear search failed"
+
+msgctxt "file action"
+msgid "Clear selection"
+msgstr "Clear selection"
+
+msgid "Close"
+msgstr "Close"
+
+msgid "Close details"
+msgstr "Close details"
+
+msgid "Close search failed"
+msgstr "Close search failed"
+
+msgid "Compared"
+msgstr "Compared"
+
+msgctxt "Job phase"
+msgid "comparing content"
+msgstr "comparing content"
+
+msgid "Complete all required fields."
+msgstr "Complete all required fields."
+
+msgctxt "Copy status"
+msgid "completed"
+msgstr "completed"
+
+msgctxt "Job phase"
+msgid "completed"
+msgstr "completed"
+
+msgid "Completed"
+msgstr "Completed"
+
+msgid "Completion"
+msgstr "Completion"
+
+msgid "Concurrency"
+msgstr "Concurrency"
+
+msgid "Concurrency {concurrency} · timeout {timeoutSeconds} seconds · maximum input {maxInputPixels} pixels"
+msgstr "Concurrency {concurrency} · timeout {timeoutSeconds} seconds · maximum input {maxInputPixels} pixels"
+
+msgid "Concurrency must be between 1 and 16."
+msgstr "Concurrency must be between 1 and 16."
+
+msgid "concurrent random"
+msgstr "concurrent random"
+
+msgid "Configuration"
+msgstr "Configuration"
+
+msgid "Configured · algorithm not recorded"
+msgstr "Configured · algorithm not recorded"
+
+msgid "Confirm adding a Media’s whole inventory to Library"
+msgstr "Confirm adding a Media’s whole inventory to Library"
+
+msgid "Confirm adding selected inventory entries to Library"
+msgstr "Confirm adding selected inventory entries to Library"
+
+msgid "Confirm barcode"
+msgstr "Confirm barcode"
+
+msgid "Confirm Delete"
+msgstr "Confirm Delete"
+
+msgid "Confirm FORMAT barcode"
+msgstr "Confirm FORMAT barcode"
+
+msgid "Confirmations"
+msgstr "Confirmations"
+
+msgid "Connect this volume to restore"
+msgstr "Connect this volume to restore"
+
+msgid "Content mismatch"
+msgstr "Content mismatch"
+
+msgid "Content not checked"
+msgstr "Content not checked"
+
+msgid "Continued line"
+msgstr "Continued line"
+
+msgid "Copied"
+msgstr "Copied"
+
+msgctxt "Job phase"
+msgid "copying from media"
+msgstr "copying from media"
+
+msgctxt "Job phase"
+msgid "copying to media"
+msgstr "copying to media"
+
+msgid "Could not add saved version"
+msgstr "Could not add saved version"
+
+msgid "Could not add selection"
+msgstr "Could not add selection"
+
+msgid "Could not add the selection to the Archive list"
+msgstr "Could not add the selection to the Archive list"
+
+msgid "Could not add the selection to the Restore list"
+msgstr "Could not add the selection to the Restore list"
+
+msgid "Could not add these records"
+msgstr "Could not add these records"
+
+msgid "Could not add this item to the Archive list"
+msgstr "Could not add this item to the Archive list"
+
+msgid "Could not add this item to the Restore list"
+msgstr "Could not add this item to the Restore list"
+
+msgid "Could not browse directory"
+msgstr "Could not browse directory"
+
+msgid "Could not calculate data usage"
+msgstr "Could not calculate data usage"
+
+msgid "Could not check access"
+msgstr "Could not check access"
+
+msgid "Could not check Preview generation"
+msgstr "Could not check Preview generation"
+
+msgid "Could not check this version"
+msgstr "Could not check this version"
+
+msgid "Could not create calibration"
+msgstr "Could not create calibration"
+
+msgid "Could not create job"
+msgstr "Could not create job"
+
+msgid "Could not create scan"
+msgstr "Could not create scan"
+
+msgid "Could not estimate selection"
+msgstr "Could not estimate selection"
+
+msgid "Could not find identical files"
+msgstr "Could not find identical files"
+
+msgid "Could not find matching files"
+msgstr "Could not find matching files"
+
+msgid "Could not identify the removed row"
+msgstr "Could not identify the removed row"
+
+msgid "Could not import the Library backup"
+msgstr "Could not import the Library backup"
+
+msgid "Could not inspect device"
+msgstr "Could not inspect device"
+
+msgid "Could not inspect Tape"
+msgstr "Could not inspect Tape"
+
+msgid "Could not inspect this Media"
+msgstr "Could not inspect this Media"
+
+msgid "Could not link this original"
+msgstr "Could not link this original"
+
+msgid "Could not list devices"
+msgstr "Could not list devices"
+
+msgid "Could not list resources"
+msgstr "Could not list resources"
+
+msgid "Could not load {groupLabel} settings"
+msgstr "Could not load {groupLabel} settings"
+
+msgid "Could not load archive progress"
+msgstr "Could not load archive progress"
+
+msgid "Could not load archive storage"
+msgstr "Could not load archive storage"
+
+msgid "Could not load archive volumes"
+msgstr "Could not load archive volumes"
+
+msgid "Could not load archived copies"
+msgstr "Could not load archived copies"
+
+msgid "Could not load calibration progress"
+msgstr "Could not load calibration progress"
+
+msgid "Could not load file details"
+msgstr "Could not load file details"
+
+msgid "Could not load Job creation inputs"
+msgstr "Could not load Job creation inputs"
+
+msgid "Could not load Job details"
+msgstr "Could not load Job details"
+
+msgid "Could not load Job results"
+msgstr "Could not load Job results"
+
+msgid "Could not load jobs"
+msgstr "Could not load jobs"
+
+msgid "Could not load latest analysis"
+msgstr "Could not load latest analysis"
+
+msgid "Could not load location"
+msgstr "Could not load location"
+
+msgid "Could not load Locations"
+msgstr "Could not load Locations"
+
+msgid "Could not load metadata"
+msgstr "Could not load metadata"
+
+msgid "Could not load mounted Volumes"
+msgstr "Could not load mounted Volumes"
+
+msgid "Could not load related Jobs"
+msgstr "Could not load related Jobs"
+
+msgid "Could not load restore progress"
+msgstr "Could not load restore progress"
+
+msgid "Could not load rows"
+msgstr "Could not load rows"
+
+msgid "Could not load saved versions"
+msgstr "Could not load saved versions"
+
+msgid "Could not load Scan comparison settings"
+msgstr "Could not load Scan comparison settings"
+
+msgid "Could not load scan progress"
+msgstr "Could not load scan progress"
+
+msgid "Could not load selected files"
+msgstr "Could not load selected files"
+
+msgid "Could not load selected folder"
+msgstr "Could not load selected folder"
+
+msgid "Could not load selected source"
+msgstr "Could not load selected source"
+
+msgid "Could not load settings"
+msgstr "Could not load settings"
+
+msgid "Could not load some rows."
+msgstr "Could not load some rows."
+
+msgid "Could not load Tape devices"
+msgstr "Could not load Tape devices"
+
+msgid "Could not load Tape devices or defaults"
+msgstr "Could not load Tape devices or defaults"
+
+msgid "Could not load the complete Location catalog"
+msgstr "Could not load the complete Location catalog"
+
+msgid "Could not load the last restore target. Choose a target."
+msgstr "Could not load the last restore target. Choose a target."
+
+msgid "Could not load this job"
+msgstr "Could not load this job"
+
+msgid "Could not load this window of Job results"
+msgstr "Could not load this window of Job results"
+
+msgid "Could not locate a collapsed group. Find again."
+msgstr "Could not locate a collapsed group. Find again."
+
+msgid "Could not locate a group in this result. Find again."
+msgstr "Could not locate a group in this result. Find again."
+
+msgid "Could not locate selected files in this result. Find again."
+msgstr "Could not locate selected files in this result. Find again."
+
+msgid "Could not locate this group. Find again."
+msgstr "Could not locate this group. Find again."
+
+msgid "Could not locate updated files in this result. Find again."
+msgstr "Could not locate updated files in this result. Find again."
+
+msgid "Could not open root"
+msgstr "Could not open root"
+
+msgid "Could not read Job log"
+msgstr "Could not read Job log"
+
+msgid "Could not read Media"
+msgstr "Could not read Media"
+
+msgid "Could not read the destination"
+msgstr "Could not read the destination"
+
+msgid "Could not read the other hidden-file view. Find again."
+msgstr "Could not read the other hidden-file view. Find again."
+
+msgid "Could not read this directory"
+msgstr "Could not read this directory"
+
+msgid "Could not refresh devices"
+msgstr "Could not refresh devices"
+
+msgid "Could not resolve saved versions"
+msgstr "Could not resolve saved versions"
+
+msgid "Could not resolve this selection"
+msgstr "Could not resolve this selection"
+
+msgid "Could not save {groupLabel} settings"
+msgstr "Could not save {groupLabel} settings"
+
+msgid "Could not save location"
+msgstr "Could not save location"
+
+msgid "Could not save metadata"
+msgstr "Could not save metadata"
+
+msgid "Could not save this choice; the confirmation will appear again."
+msgstr "Could not save this choice; the confirmation will appear again."
+
+msgid "Could not save this choice."
+msgstr "Could not save this choice."
+
+msgid "Could not search Media"
+msgstr "Could not search Media"
+
+msgid "Could not search tags"
+msgstr "Could not search tags"
+
+msgid "Could not sort identical files"
+msgstr "Could not sort identical files"
+
+msgid "Could not start restore"
+msgstr "Could not start restore"
+
+msgid "Could not start scan"
+msgstr "Could not start scan"
+
+msgid "Could not switch hidden files"
+msgstr "Could not switch hidden files"
+
+msgid "Could not update both row views"
+msgstr "Could not update both row views"
+
+msgid "Count matching archived copies"
+msgstr "Count matching archived copies"
+
+msgid "Counts recorded copies with the same signature; it does not check their current readability."
+msgstr "Counts recorded copies with the same signature; it does not check their current readability."
+
+msgid "Create"
+msgstr "Create"
+
+msgctxt "file action"
+msgid "Create a folder"
+msgstr "Create a folder"
+
+msgid "Create a new identity marker and Library Media for an already mounted disk."
+msgstr "Create a new identity marker and Library Media for an already mounted disk."
+
+msgctxt "file action"
+msgid "Create folder"
+msgstr "Create folder"
+
+msgid "Created"
+msgstr "Created"
+
+msgid "Created {created}"
+msgstr "Created {created}"
+
+msgid "Created {createdTime}"
+msgstr "Created {createdTime}"
+
+msgid "Creating folder…"
+msgstr "Creating folder…"
+
+msgid "Creating…"
+msgstr "Creating…"
+
+msgid "current"
+msgstr "current"
+
+msgctxt "Device field"
+msgid "Current algorithm index"
+msgstr "Current algorithm index"
+
+msgid "Current content archived"
+msgstr "Current content archived"
+
+msgid "Current content not checked"
+msgstr "Current content not checked"
+
+msgid "Current Phase"
+msgstr "Current Phase"
+
+msgid "Current Speed"
+msgstr "Current Speed"
+
+msgid "Custom version · {date}"
+msgstr "Custom version · {date}"
+
+msgid "Custom version · {date} · After selected time"
+msgstr "Custom version · {date} · After selected time"
+
+msgctxt "file action"
+msgid "Cut"
+msgstr "Cut"
+
+msgid "Cut files first"
+msgstr "Cut files first"
+
+msgid "Damaged"
+msgstr "Damaged"
+
+msgid "Damaged copies allowed"
+msgstr "Damaged copies allowed"
+
+msgid "Damaged copies allowed. Complete damaged output may be retained for recovery. It is not a verified saved version."
+msgstr "Damaged copies allowed. Complete damaged output may be retained for recovery. It is not a verified saved version."
+
+msgctxt "file action"
+msgid "Data Usage"
+msgstr "Data Usage"
+
+msgid "Data usage for all matching items"
+msgstr "Data usage for all matching items"
+
+msgid "Date not recorded"
+msgstr "Date not recorded"
+
+msgid "Date unknown"
+msgstr "Date unknown"
+
+msgid "Decimal, or hexadecimal with 0x, from 0 to 255."
+msgstr "Decimal, or hexadecimal with 0x, from 0 to 255."
+
+msgctxt "Device field"
+msgid "Decryption mode"
+msgstr "Decryption mode"
+
+msgid "Default Tape format"
+msgstr "Default Tape format"
+
+msgid "Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device."
+msgstr "Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device."
+
+msgid "Defaults to 512 KiB (524288 bytes) unless set for the device or FORMAT. Sizes must be aligned to 512 bytes."
+msgstr "Defaults to 512 KiB (524288 bytes) unless set for the device or FORMAT. Sizes must be aligned to 512 bytes."
+
+msgid "Defaults to Variable unless set for the device or FORMAT."
+msgstr "Defaults to Variable unless set for the device or FORMAT."
+
+msgid "Delete"
+msgstr "Delete"
+
+msgctxt "file action"
+msgid "Delete"
+msgstr "Delete"
+
+msgid "Delete failed"
+msgstr "Delete failed"
+
+msgid "Delete failed: {failureDetail}"
+msgstr "Delete failed: {failureDetail}"
+
+msgid "Delete files?"
+msgstr "Delete files?"
+
+msgid "Delete Job"
+msgstr "Delete Job"
+
+msgid "Delete Job {jobNumber}?"
+msgstr "Delete Job {jobNumber}?"
+
+msgid "Delete moves selected items to Trash immediately."
+msgstr "Delete moves selected items to Trash immediately."
+
+msgid "Deleting…"
+msgstr "Deleting…"
+
+msgid "Density code"
+msgstr "Density code"
+
+msgctxt "Device field"
+msgid "Density code"
+msgstr "Density code"
+
+msgid "Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID."
+msgstr "Describes where the values come from and the measurement conditions. A Calibration writes Calibration Job and its ID."
+
+msgid "Destination observation is missing. Refresh this folder."
+msgstr "Destination observation is missing. Refresh this folder."
+
+msgid "Destination path"
+msgstr "Destination path"
+
+msgid "Details"
+msgstr "Details"
+
+msgid "Details unavailable"
+msgstr "Details unavailable"
+
+msgid "Device"
+msgstr "Device"
+
+msgid "Device availability is unknown. Refresh devices to try again."
+msgstr "Device availability is unknown. Refresh devices to try again."
+
+msgid "Device compatibility is unavailable."
+msgstr "Device compatibility is unavailable."
+
+msgid "Device defaults"
+msgstr "Device defaults"
+
+msgid "Device defaults are unavailable. Refresh devices to try again."
+msgstr "Device defaults are unavailable. Refresh devices to try again."
+
+msgid "Device details"
+msgstr "Device details"
+
+msgid "Device entries must have nonempty, unique names."
+msgstr "Device entries must have nonempty, unique names."
+
+msgid "Device guide"
+msgstr "Device guide"
+
+msgid "Device in use"
+msgstr "Device in use"
+
+msgid "Device is busy."
+msgstr "Device is busy."
+
+msgid "Device settings"
+msgstr "Device settings"
+
+msgid "Device to inspect"
+msgstr "Device to inspect"
+
+msgid "Devices"
+msgstr "Devices"
+
+msgid "Directories"
+msgstr "Directories"
+
+msgid "Directories YATM may read originals from and write Restore output to."
+msgstr "Directories YATM may read originals from and write Restore output to."
+
+msgid "Directory"
+msgstr "Directory"
+
+msgid "Discard"
+msgstr "Discard"
+
+msgid "Discard unsaved changes?"
+msgstr "Discard unsaved changes?"
+
+msgid "Discovering mounted Volumes"
+msgstr "Discovering mounted Volumes"
+
+msgid "Disk"
+msgstr "Disk"
+
+msgid "Does not publish Library or inventory changes. Selected reads and Preview generation still run."
+msgstr "Does not publish Library or inventory changes. Selected reads and Preview generation still run."
+
+msgid "Don’t generate"
+msgstr "Don’t generate"
+
+msgid "Don’t show this again"
+msgstr "Don’t show this again"
+
+msgctxt "file action"
+msgid "Download files"
+msgstr "Download files"
+
+msgid "Drive serial number"
+msgstr "Drive serial number"
+
+msgid "Dual pane"
+msgstr "Dual pane"
+
+msgid "Duplicates in Locations"
+msgstr "Duplicates in Locations"
+
+msgctxt "Device report"
+msgid "early warning"
+msgstr "early warning"
+
+msgid "Edit"
+msgstr "Edit"
+
+msgid "Edit read parameters for {label}"
+msgstr "Edit read parameters for {label}"
+
+msgid "Edit selection"
+msgstr "Edit selection"
+
+msgid "Edit tags & note"
+msgstr "Edit tags & note"
+
+msgctxt "file action"
+msgid "Edit tags & note"
+msgstr "Edit tags & note"
+
+msgid "Elapsed Time"
+msgstr "Elapsed Time"
+
+msgid "Empty for Auto, 0 for Off, otherwise at least 5 seconds."
+msgstr "Empty for Auto, 0 for Off, otherwise at least 5 seconds."
+
+msgid "Enable generation"
+msgstr "Enable generation"
+
+msgid "Enabled"
+msgstr "Enabled"
+
+msgid "Enablement changes apply when the next file starts. Existing Preview assets remain available."
+msgstr "Enablement changes apply when the next file starts. Existing Preview assets remain available."
+
+msgid "Encryption"
+msgstr "Encryption"
+
+msgctxt "Device field"
+msgid "Encryption enabled"
+msgstr "Encryption enabled"
+
+msgid "Encryption is handled by the configured Encrypt script using the saved Media profile."
+msgstr "Encryption is handled by the configured Encrypt script using the saved Media profile."
+
+msgid "Encryption is handled by the configured Encrypt script."
+msgstr "Encryption is handled by the configured Encrypt script."
+
+msgid "Encryption is handled by the configured Encrypt script. A new key is generated for FORMAT."
+msgstr "Encryption is handled by the configured Encrypt script. A new key is generated for FORMAT."
+
+msgctxt "Device field"
+msgid "Encryption mode"
+msgstr "Encryption mode"
+
+msgid "Encryption: {encryption}."
+msgstr "Encryption: {encryption}."
+
+msgid "Encryption: {selectedEncryption}."
+msgstr "Encryption: {selectedEncryption}."
+
+msgctxt "Device report"
+msgid "end of wrap position"
+msgstr "end of wrap position"
+
+msgid "Enter a code from 0 to 255, in decimal or as 0x hexadecimal."
+msgstr "Enter a code from 0 to 255, in decimal or as 0x hexadecimal."
+
+msgid "Enter a nonnegative decimal number."
+msgstr "Enter a nonnegative decimal number."
+
+msgid "Enter a path manually…"
+msgstr "Enter a path manually…"
+
+msgid "Enter a valid file extension."
+msgstr "Enter a valid file extension."
+
+msgid "Enter a whole number of at least 1, or leave it empty."
+msgstr "Enter a whole number of at least 1, or leave it empty."
+
+msgid "Enter at least one file extension."
+msgstr "Enter at least one file extension."
+
+msgid "Enter one folder name."
+msgstr "Enter one folder name."
+
+msgid "Enter six letters or digits, without the LTO suffix."
+msgstr "Enter six letters or digits, without the LTO suffix."
+
+msgid "Enter valid dimensions, quality and sampling values."
+msgstr "Enter valid dimensions, quality and sampling values."
+
+msgid "Entire Location"
+msgstr "Entire Location"
+
+msgid "Estimate"
+msgstr "Estimate"
+
+msgid "Estimating selection…"
+msgstr "Estimating selection…"
+
+msgid "Estimating…"
+msgstr "Estimating…"
+
+msgid "Evidence: {evidence}"
+msgstr "Evidence: {evidence}"
+
+msgid "Executable"
+msgstr "Executable"
+
+msgid "Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are kept."
+msgstr "Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are kept."
+
+msgid "existing marker"
+msgstr "existing marker"
+
+msgid "Existing Volume registered"
+msgstr "Existing Volume registered"
+
+msgid "Explicit device details and the last prepared read, when available. These do not establish the current Tape's effective model."
+msgstr "Explicit device details and the last prepared read, when available. These do not establish the current Tape's effective model."
+
+msgid "Export"
+msgstr "Export"
+
+msgid "Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are not restored."
+msgstr "Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are not restored."
+
+msgid "Failed"
+msgstr "Failed"
+
+msgid "File actions"
+msgstr "File actions"
+
+msgid "File browser layout"
+msgstr "File browser layout"
+
+msgid "File details"
+msgstr "File details"
+
+msgid "File details are missing"
+msgstr "File details are missing"
+
+msgid "File details are unavailable."
+msgstr "File details are unavailable."
+
+msgid "File details are unavailable. Refresh Files and try again."
+msgstr "File details are unavailable. Refresh Files and try again."
+
+msgid "File details are unavailable. Refresh this folder."
+msgstr "File details are unavailable. Refresh this folder."
+
+msgid "File extensions"
+msgstr "File extensions"
+
+msgid "File extensions and video sampling."
+msgstr "File extensions and video sampling."
+
+msgid "File metadata"
+msgstr "File metadata"
+
+msgid "File metadata updated"
+msgstr "File metadata updated"
+
+msgid "File operation failed"
+msgstr "File operation failed"
+
+msgid "File operation in progress"
+msgstr "File operation in progress"
+
+msgid "File operation result is missing"
+msgstr "File operation result is missing"
+
+msgid "File reference is missing"
+msgstr "File reference is missing"
+
+msgid "File reference is missing. Refresh this folder."
+msgstr "File reference is missing. Refresh this folder."
+
+msgid "File routes, dimensions, format and quality are captured by new Jobs."
+msgstr "File routes, dimensions, format and quality are captured by new Jobs."
+
+msgid "File visibility"
+msgstr "File visibility"
+
+msgid "Filemark overhead (s)"
+msgstr "Filemark overhead (s)"
+
+msgid "Files"
+msgstr "Files"
+
+msgid "Files and folders move into this Location’s .trash folder. Original associations are removed; Library records and saved versions are kept."
+msgstr "Files and folders move into this Location’s .trash folder. Original associations are removed; Library records and saved versions are kept."
+
+msgid "Files connected through matching current content or saved versions. Members may have different current content."
+msgstr "Files connected through matching current content or saved versions. Members may have different current content."
+
+msgid "Files move into each Location’s .trash folder. Library records and saved versions are kept."
+msgstr "Files move into each Location’s .trash folder. Library records and saved versions are kept."
+
+msgid "Fills the drive serial from the device details shown on this page and clears the other values. It does not query the device."
+msgstr "Fills the drive serial from the device details shown on this page and clears the other values. It does not query the device."
+
+msgctxt "file browser"
+msgid "Filter"
+msgstr "Filter"
+
+msgid "Filter {scopeLabel}"
+msgstr "Filter {scopeLabel}"
+
+msgid "Filter match unknown: continued line"
+msgstr "Filter match unknown: continued line"
+
+msgctxt "Job phase"
+msgid "finalizing media"
+msgstr "finalizing media"
+
+msgid "Find"
+msgstr "Find"
+
+msgid "Find again"
+msgstr "Find again"
+
+msgid "Find again to refresh this result"
+msgstr "Find again to refresh this result"
+
+msgid "Find identical files"
+msgstr "Find identical files"
+
+msgid "Find identical files to search"
+msgstr "Find identical files to search"
+
+msgid "Find matching files"
+msgstr "Find matching files"
+
+msgid "Finding matching files…"
+msgstr "Finding matching files…"
+
+msgid "Finding version…"
+msgstr "Finding version…"
+
+msgctxt "Device field"
+msgid "Firmware"
+msgstr "Firmware"
+
+msgid "Fitted read parameters · Density code {densityCode}"
+msgstr "Fitted read parameters · Density code {densityCode}"
+
+msgid "Fitted read parameters · Density code {densityCode} · Serial number {driveSerial}"
+msgstr "Fitted read parameters · Density code {densityCode} · Serial number {driveSerial}"
+
+msgctxt "Tar record mode"
+msgid "fixed"
+msgstr "fixed"
+
+msgctxt "Device field"
+msgid "Fixed"
+msgstr "Fixed"
+
+msgctxt "Record mode"
+msgid "Fixed"
+msgstr "Fixed"
+
+msgid "Fixed part of the normal rewind and unload."
+msgstr "Fixed part of the normal rewind and unload."
+
+msgid "Fixed positioning time"
+msgstr "Fixed positioning time"
+
+msgid "Fixed positioning time (s)"
+msgstr "Fixed positioning time (s)"
+
+msgid "Fixed positioning time {fixedTime}"
+msgstr "Fixed positioning time {fixedTime}"
+
+msgctxt "Device field"
+msgid "Fixed records"
+msgstr "Fixed records"
+
+msgid "Fixed time (s)"
+msgstr "Fixed time (s)"
+
+msgid "Fixed time of every LOCATE the drive does not stream through."
+msgstr "Fixed time of every LOCATE the drive does not stream through."
+
+msgid "Folder"
+msgstr "Folder"
+
+msgid "Folder name"
+msgstr "Folder name"
+
+msgid "Format"
+msgstr "Format"
+
+msgctxt "Tape action"
+msgid "FORMAT"
+msgstr "FORMAT"
+
+msgid "FORMAT erases the Tape. Confirm its barcode before starting."
+msgstr "FORMAT erases the Tape. Confirm its barcode before starting."
+
+msgid "Format ID"
+msgstr "Format ID"
+
+msgid "Found"
+msgstr "Found"
+
+msgid "From device details"
+msgstr "From device details"
+
+msgid "From device details needs a report: use Refresh device details on this page first."
+msgstr "From device details needs a report: use Refresh device details on this page first."
+
+msgid "From span"
+msgstr "From span"
+
+msgid "From wrap"
+msgstr "From wrap"
+
+msgid "Full-span time (s)"
+msgstr "Full-span time (s)"
+
+msgid "Generate missing"
+msgstr "Generate missing"
+
+msgid "Generated"
+msgstr "Generated"
+
+msgctxt "Job phase"
+msgid "generating previews"
+msgstr "generating previews"
+
+msgid "Generation"
+msgstr "Generation"
+
+msgid "Geometry"
+msgstr "Geometry"
+
+msgid "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded."
+msgstr "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded."
+
+msgid "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded. Leave blank to use the server's default rules. Custom text replaces those defaults."
+msgstr "Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded. Leave blank to use the server's default rules. Custom text replaces those defaults."
+
+msgid "Go to {sourceName} root"
+msgstr "Go to {sourceName} root"
+
+msgctxt "file action"
+msgid "Go up a directory"
+msgstr "Go up a directory"
+
+msgid "Group changed. Find again before Keep or Merge."
+msgstr "Group changed. Find again before Keep or Merge."
+
+msgctxt "Device report"
+msgid "hardware encryption"
+msgstr "hardware encryption"
+
+msgid "Has an archived copy"
+msgstr "Has an archived copy"
+
+msgid "HDD · concurrent random read/write"
+msgstr "HDD · concurrent random read/write"
+
+msgid "Helper {helperVersion}"
+msgstr "Helper {helperVersion}"
+
+msgid "Hide matching files"
+msgstr "Hide matching files"
+
+msgid "HM-SMR · concurrent random read, sequential write"
+msgstr "HM-SMR · concurrent random read, sequential write"
+
+msgid "How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies."
+msgstr "How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies."
+
+msgctxt "Device field"
+msgid "I_T nexus scope"
+msgstr "I_T nexus scope"
+
+msgid "Identical file groups"
+msgstr "Identical file groups"
+
+msgid "Identical files"
+msgstr "Identical files"
+
+msgid "Identity"
+msgstr "Identity"
+
+msgid "Ignore"
+msgstr "Ignore"
+
+msgid "Image"
+msgstr "Image"
+
+msgid "Import"
+msgstr "Import"
+
+#. placeholder {0}: response.status
+msgid "Import failed ({0})"
+msgstr "Import failed ({0})"
+
+msgid "Import Library Backup"
+msgstr "Import Library Backup"
+
+msgid "Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not restored."
+msgstr "Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not restored."
+
+msgid "Importing Library backup"
+msgstr "Importing Library backup"
+
+msgid "Importing…"
+msgstr "Importing…"
+
+msgid "Inactive"
+msgstr "Inactive"
+
+msgid "Include again"
+msgstr "Include again"
+
+msgid "Include files without saved versions"
+msgstr "Include files without saved versions"
+
+msgctxt "Job phase"
+msgid "indexing"
+msgstr "indexing"
+
+msgid "Inherited: {inheritedBytes} bytes. Sizes must be aligned to 512 bytes."
+msgstr "Inherited: {inheritedBytes} bytes. Sizes must be aligned to 512 bytes."
+
+msgid "Inherited: Fixed."
+msgstr "Inherited: Fixed."
+
+msgid "Inherited: Variable."
+msgstr "Inherited: Variable."
+
+msgid "Initialization ID"
+msgstr "Initialization ID"
+
+msgctxt "Device report"
+msgid "initialize"
+msgstr "initialize"
+
+msgid "Initialize"
+msgstr "Initialize"
+
+msgid "Initialize a mounted Volume from Library → Media first."
+msgstr "Initialize a mounted Volume from Library → Media first."
+
+msgid "Initialize New"
+msgstr "Initialize New"
+
+msgid "Inspect Tape failed"
+msgstr "Inspect Tape failed"
+
+msgid "Inspect Volume failed"
+msgstr "Inspect Volume failed"
+
+msgid "Inspecting device…"
+msgstr "Inspecting device…"
+
+msgid "Inspecting Media…"
+msgstr "Inspecting Media…"
+
+msgid "Inspector"
+msgstr "Inspector"
+
+msgid "Interface language"
+msgstr "Interface language"
+
+msgid "Invalid Job ID."
+msgstr "Invalid Job ID."
+
+msgid "Invalid Location"
+msgstr "Invalid Location"
+
+msgid "invalid marker"
+msgstr "invalid marker"
+
+msgid "Invalid Scan options. Choose the source again."
+msgstr "Invalid Scan options. Choose the source again."
+
+msgid "Invalid Scan shortcut."
+msgstr "Invalid Scan shortcut."
+
+msgid "Invalid Scan shortcut. Choose the source again."
+msgstr "Invalid Scan shortcut. Choose the source again."
+
+msgid "Invalid Scan source. Choose a source."
+msgstr "Invalid Scan source. Choose a source."
+
+msgid "Items per manifest page. Does not change the full selection used for Tape planning."
+msgstr "Items per manifest page. Does not change the full selection used for Tape planning."
+
+msgid "Job"
+msgstr "Job"
+
+msgid "Job {jobNumber}"
+msgstr "Job {jobNumber}"
+
+msgid "Job deleted, but the list could not refresh"
+msgstr "Job deleted, but the list could not refresh"
+
+msgid "Job no longer exists"
+msgstr "Job no longer exists"
+
+msgid "Job type"
+msgstr "Job type"
+
+msgid "Job views"
+msgstr "Job views"
+
+msgid "Job was not returned"
+msgstr "Job was not returned"
+
+msgid "Job was not returned. Check Jobs before retrying."
+msgstr "Job was not returned. Check Jobs before retrying."
+
+msgid "Jobs"
+msgstr "Jobs"
+
+msgid "Jobs unavailable"
+msgstr "Jobs unavailable"
+
+msgid "Keep {keptName} and delete all other {otherCount} members, including members not loaded here."
+msgstr "Keep {keptName} and delete all other {otherCount} members, including members not loaded here."
+
+msgid "Keep completed"
+msgstr "Keep completed"
+
+msgid "Keep editing"
+msgstr "Keep editing"
+
+msgid "Keep failed"
+msgstr "Keep failed"
+
+msgid "Keep failed: {keepDetail}"
+msgstr "Keep failed: {keepDetail}"
+
+msgctxt "file action"
+msgid "Keep this"
+msgstr "Keep this"
+
+msgctxt "Device field"
+msgid "Key instance counter"
+msgstr "Key instance counter"
+
+msgctxt "Device field"
+msgid "Key scope"
+msgstr "Key scope"
+
+msgid "Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM."
+msgstr "Keys stored in Tape profiles will also be removed. Reading encrypted Tape will depend on a key copy you keep outside YATM."
+
+msgid "Known data usage · {usageError}"
+msgstr "Known data usage · {usageError}"
+
+msgid "Language"
+msgstr "Language"
+
+msgid "Larger inputs are rejected before decoding; this is not the output size."
+msgstr "Larger inputs are rejected before decoding; this is not the output size."
+
+msgid "Last archived"
+msgstr "Last archived"
+
+msgid "Last archived {archived} · {fileSize}"
+msgstr "Last archived {archived} · {fileSize}"
+
+msgid "Last check"
+msgstr "Last check"
+
+msgid "Last check · Refresh failed"
+msgstr "Last check · Refresh failed"
+
+msgid "Last check passed"
+msgstr "Last check passed"
+
+msgid "Last device details: encryption off."
+msgstr "Last device details: encryption off."
+
+msgid "Last device details: encryption on."
+msgstr "Last device details: encryption on."
+
+msgid "Last prepared read"
+msgstr "Last prepared read"
+
+msgid "Last written {lastWritten}"
+msgstr "Last written {lastWritten}"
+
+msgid "Latest analysis"
+msgstr "Latest analysis"
+
+msgid "Latest archive at or before…"
+msgstr "Latest archive at or before…"
+
+msgid "Latest archives at or before {time}"
+msgstr "Latest archives at or before {time}"
+
+msgid "Latest saved version"
+msgstr "Latest saved version"
+
+msgid "Latest saved versions"
+msgstr "Latest saved versions"
+
+msgid "Latest version unavailable"
+msgstr "Latest version unavailable"
+
+msgid "Left file pane"
+msgstr "Left file pane"
+
+msgid "Level"
+msgstr "Level"
+
+msgid "Library"
+msgstr "Library"
+
+msgid "Library cleaned up"
+msgstr "Library cleaned up"
+
+msgid "Library data"
+msgstr "Library data"
+
+msgid "Library item {item}"
+msgstr "Library item {item}"
+
+msgid "Library views"
+msgstr "Library views"
+
+msgid "Library, Locations and original links imported. Global preferences were not changed."
+msgstr "Library, Locations and original links imported. Global preferences were not changed."
+
+msgid "Limit for planning one Tape's read order."
+msgstr "Limit for planning one Tape's read order."
+
+msgid "Link <0>{fileName}</0> to <1>{targetName}</1>? This replaces its original reference without moving files or changing tags, notes, or saved versions."
+msgstr "Link <0>{fileName}</0> to <1>{targetName}</1>? This replaces its original reference without moving files or changing tags, notes, or saved versions."
+
+msgid "Link original"
+msgstr "Link original"
+
+msgctxt "file action"
+msgid "Load More"
+msgstr "Load More"
+
+msgid "Load more copies"
+msgstr "Load more copies"
+
+msgid "Load more directories"
+msgstr "Load more directories"
+
+msgid "Load more failed"
+msgstr "Load more failed"
+
+msgid "Load more matching files"
+msgstr "Load more matching files"
+
+msgid "Load more saved versions"
+msgstr "Load more saved versions"
+
+msgid "Load more tags"
+msgstr "Load more tags"
+
+msgid "Load newer"
+msgstr "Load newer"
+
+msgid "Load older"
+msgstr "Load older"
+
+msgid "Load the required Tape and select its drive."
+msgstr "Load the required Tape and select its drive."
+
+msgid "Load the Tape and select its drive."
+msgstr "Load the Tape and select its drive."
+
+msgid "Load the Tape into a drive to verify its physical identity."
+msgstr "Load the Tape into a drive to verify its physical identity."
+
+msgid "Load this tape to restore"
+msgstr "Load this tape to restore"
+
+msgid "Load versions failed"
+msgstr "Load versions failed"
+
+msgid "Loaded items size"
+msgstr "Loaded items size"
+
+msgid "Loading {groupLabel} settings"
+msgstr "Loading {groupLabel} settings"
+
+msgid "Loading archived copies…"
+msgstr "Loading archived copies…"
+
+msgid "Loading date picker…"
+msgstr "Loading date picker…"
+
+msgid "Loading devices"
+msgstr "Loading devices"
+
+msgid "Loading devices…"
+msgstr "Loading devices…"
+
+msgid "Loading directories"
+msgstr "Loading directories"
+
+msgid "Loading directories…"
+msgstr "Loading directories…"
+
+msgid "Loading file details"
+msgstr "Loading file details"
+
+msgid "Loading files"
+msgstr "Loading files"
+
+msgid "Loading folder…"
+msgstr "Loading folder…"
+
+msgid "Loading Job creation inputs…"
+msgstr "Loading Job creation inputs…"
+
+msgid "Loading Job results"
+msgstr "Loading Job results"
+
+msgid "Loading locations…"
+msgstr "Loading locations…"
+
+msgid "Loading Locations…"
+msgstr "Loading Locations…"
+
+msgid "Loading Media…"
+msgstr "Loading Media…"
+
+msgid "Loading more Media…"
+msgstr "Loading more Media…"
+
+msgid "Loading required Media…"
+msgstr "Loading required Media…"
+
+msgid "Loading resources…"
+msgstr "Loading resources…"
+
+msgid "Loading saved versions…"
+msgstr "Loading saved versions…"
+
+msgid "Loading source…"
+msgstr "Loading source…"
+
+msgid "Loading your job…"
+msgstr "Loading your job…"
+
+msgid "Loading…"
+msgstr "Loading…"
+
+msgid "Local file missing"
+msgstr "Local file missing"
+
+msgid "Local file not checked"
+msgstr "Local file not checked"
+
+msgid "Local file present"
+msgstr "Local file present"
+
+msgid "Local file unavailable"
+msgstr "Local file unavailable"
+
+msgctxt "Device report"
+msgid "locate"
+msgstr "locate"
+
+msgid "Locate file failed"
+msgstr "Locate file failed"
+
+msgctxt "file action"
+msgid "Locate in Other Pane"
+msgstr "Locate in Other Pane"
+
+msgid "Locate original"
+msgstr "Locate original"
+
+msgid "Locate original · {fileName}"
+msgstr "Locate original · {fileName}"
+
+msgid "Location"
+msgstr "Location"
+
+msgid "Location · {name}"
+msgstr "Location · {name}"
+
+msgid "Location {id}"
+msgstr "Location {id}"
+
+msgid "Location {locationID}"
+msgstr "Location {locationID}"
+
+msgid "Location {locationID}/{path}"
+msgstr "Location {locationID}/{path}"
+
+msgid "Location {locationID}/{path}: {reason} Choose a destination."
+msgstr "Location {locationID}/{path}: {reason} Choose a destination."
+
+msgid "Location {locationLabel}"
+msgstr "Location {locationLabel}"
+
+msgid "Location details"
+msgstr "Location details"
+
+msgid "Location reply is missing"
+msgstr "Location reply is missing"
+
+msgid "Locations"
+msgstr "Locations"
+
+msgid "Locations unavailable"
+msgstr "Locations unavailable"
+
+msgid "Logical"
+msgstr "Logical"
+
+msgid "LTFS · unsupported"
+msgstr "LTFS · unsupported"
+
+msgid "LTFS unmount time (s)"
+msgstr "LTFS unmount time (s)"
+
+msgctxt "Device report"
+msgid "malformed response"
+msgstr "malformed response"
+
+msgid "Manifest batch (items)"
+msgstr "Manifest batch (items)"
+
+msgid "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
+msgstr "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
+
+msgid "marker conflict"
+msgstr "marker conflict"
+
+msgid "Match unknown"
+msgstr "Match unknown"
+
+msgid "Matched the prepared conditions"
+msgstr "Matched the prepared conditions"
+
+msgid "Matching archived copies: {matchingCopies}"
+msgstr "Matching archived copies: {matchingCopies}"
+
+msgid "Matching content"
+msgstr "Matching content"
+
+msgid "Matching examples: {evidence}"
+msgstr "Matching examples: {evidence}"
+
+msgid "Matching recorded content in the selected Locations. Run Scan separately to update content information."
+msgstr "Matching recorded content in the selected Locations. Run Scan separately to update content information."
+
+msgctxt "Device field"
+msgid "Maximum bytes"
+msgstr "Maximum bytes"
+
+msgid "Maximum completed results waiting to be recorded; this is not a Tape byte buffer."
+msgstr "Maximum completed results waiting to be recorded; this is not a Tape byte buffer."
+
+msgid "Maximum files generating Previews at the same time. Higher values use more memory."
+msgstr "Maximum files generating Previews at the same time. Higher values use more memory."
+
+msgid "Maximum generation time per file, after it acquires a slot."
+msgstr "Maximum generation time per file, after it acquires a slot."
+
+msgid "Maximum height (px)"
+msgstr "Maximum height (px)"
+
+msgid "Maximum input pixels"
+msgstr "Maximum input pixels"
+
+msgid "Maximum input pixels must be between 1 and 64000000."
+msgstr "Maximum input pixels must be between 1 and 64000000."
+
+msgid "Maximum queued reads. Larger queues can use more memory."
+msgstr "Maximum queued reads. Larger queues can use more memory."
+
+msgid "Maximum results in one update. Larger batches can delay progress reporting."
+msgstr "Maximum results in one update. Larger batches can delay progress reporting."
+
+msgid "Maximum timeline frames"
+msgstr "Maximum timeline frames"
+
+msgid "Maximum wait before a result update, in milliseconds."
+msgstr "Maximum wait before a result update, in milliseconds."
+
+msgid "Maximum width (px)"
+msgstr "Maximum width (px)"
+
+msgid "Measured moves"
+msgstr "Measured moves"
+
+msgid "Measured Moves"
+msgstr "Measured Moves"
+
+msgid "Measures this drive's positioning times on the loaded cartridge and stores them as its read parameters for that density code. It takes about nine minutes on LTO-5, plus the time to write test data when requested."
+msgstr "Measures this drive's positioning times on the loaded cartridge and stores them as its read parameters for that density code. It takes about nine minutes on LTO-5, plus the time to write test data when requested."
+
+msgid "Media"
+msgstr "Media"
+
+msgid "Media · {name}"
+msgstr "Media · {name}"
+
+msgid "Media {mediaID} is no longer available. Choose another Media."
+msgstr "Media {mediaID} is no longer available. Choose another Media."
+
+msgid "Media {mediaLabel}"
+msgstr "Media {mediaLabel}"
+
+msgid "Media archive"
+msgstr "Media archive"
+
+msgid "Media browser"
+msgstr "Media browser"
+
+msgid "Media details"
+msgstr "Media details"
+
+msgid "Media reading started, but the Job list could not refresh"
+msgstr "Media reading started, but the Job list could not refresh"
+
+msgctxt "Device field"
+msgid "Medium present"
+msgstr "Medium present"
+
+msgid "Merge"
+msgstr "Merge"
+
+msgid "Merge all {memberCount} Library files and their saved versions into this file. The selected File keeps its original link. Other Files move to Library Trash and lose their original links. Disk files are kept."
+msgstr "Merge all {memberCount} Library files and their saved versions into this file. The selected File keeps its original link. Other Files move to Library Trash and lose their original links. Disk files are kept."
+
+msgctxt "file action"
+msgid "Merge into"
+msgstr "Merge into"
+
+msgid "Merge into {targetName}?"
+msgstr "Merge into {targetName}?"
+
+msgid "Merged into {targetName}"
+msgstr "Merged into {targetName}"
+
+msgid "Message: "
+msgstr "Message: "
+
+msgid "Metadata editing is unavailable. Refresh this folder."
+msgstr "Metadata editing is unavailable. Refresh this folder."
+
+msgid "Metadata saved, but refresh failed: {reason}"
+msgstr "Metadata saved, but refresh failed: {reason}"
+
+msgid "Method: "
+msgstr "Method: "
+
+msgctxt "Device field"
+msgid "Minimum bytes"
+msgstr "Minimum bytes"
+
+msgid "Minimum sampling interval (seconds)"
+msgstr "Minimum sampling interval (seconds)"
+
+msgid "Missing"
+msgstr "Missing"
+
+msgctxt "Device report"
+msgid "missing tool"
+msgstr "missing tool"
+
+msgctxt "Device field"
+msgid "Model"
+msgstr "Model"
+
+msgid "Modification time not recorded"
+msgstr "Modification time not recorded"
+
+msgid "Modified"
+msgstr "Modified"
+
+msgid "Modified {modified}"
+msgstr "Modified {modified}"
+
+msgid "More filters"
+msgstr "More filters"
+
+msgid "More versions"
+msgstr "More versions"
+
+msgid "Mount Point"
+msgstr "Mount Point"
+
+msgid "Mount point: {mountPoint}"
+msgstr "Mount point: {mountPoint}"
+
+msgid "Mount required"
+msgstr "Mount required"
+
+msgid "Mount this Volume before continuing."
+msgstr "Mount this Volume before continuing."
+
+msgid "Mounted Volume"
+msgstr "Mounted Volume"
+
+msgid "Move files failed"
+msgstr "Move files failed"
+
+msgid "Moved {name} to Trash"
+msgstr "Moved {name} to Trash"
+
+msgid "Moved to Trash"
+msgstr "Moved to Trash"
+
+msgid "Moved to Trash; Library update incomplete"
+msgstr "Moved to Trash; Library update incomplete"
+
+msgid "Moving…"
+msgstr "Moving…"
+
+msgid "Must be a finite number of seconds below 9223372036."
+msgstr "Must be a finite number of seconds below 9223372036."
+
+msgid "Must be a whole number between 1 and 4294967295."
+msgstr "Must be a whole number between 1 and 4294967295."
+
+msgid "Must be above 0."
+msgstr "Must be above 0."
+
+msgid "Must be at most 18446744073709.551615 MB."
+msgstr "Must be at most 18446744073709.551615 MB."
+
+msgid "Must be finite and above 0."
+msgstr "Must be finite and above 0."
+
+msgid "Must be nonnegative."
+msgstr "Must be nonnegative."
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Name / directory"
+msgstr "Name / directory"
+
+msgid "Native space before early warning: {remaining}"
+msgstr "Native space before early warning: {remaining}"
+
+msgid "New"
+msgstr "New"
+
+msgid "new disk"
+msgstr "new disk"
+
+msgid "New folder"
+msgstr "New folder"
+
+msgid "New tar FORMAT uses this unless the FORMAT overrides it."
+msgstr "New tar FORMAT uses this unless the FORMAT overrides it."
+
+msgid "New Volume initialized"
+msgstr "New Volume initialized"
+
+msgid "Next"
+msgstr "Next"
+
+msgid "No archive at or before selected time"
+msgstr "No archive at or before selected time"
+
+msgid "No archive results yet."
+msgstr "No archive results yet."
+
+msgid "No archived copies recorded."
+msgstr "No archived copies recorded."
+
+msgid "No archived copy comparison"
+msgstr "No archived copy comparison"
+
+msgid "No baseline"
+msgstr "No baseline"
+
+msgid "No directories."
+msgstr "No directories."
+
+msgid "No file results yet."
+msgstr "No file results yet."
+
+msgid "No Jobs yet"
+msgstr "No Jobs yet"
+
+msgid "No known archived copy"
+msgstr "No known archived copy"
+
+msgid "No local file linked"
+msgstr "No local file linked"
+
+msgid "No Location registered"
+msgstr "No Location registered"
+
+msgid "No locations"
+msgstr "No locations"
+
+msgid "No matching files"
+msgstr "No matching files"
+
+msgid "No matching groups"
+msgstr "No matching groups"
+
+msgid "No matching Location"
+msgstr "No matching Location"
+
+msgid "No matching log lines."
+msgstr "No matching log lines."
+
+msgid "No matching Media"
+msgstr "No matching Media"
+
+msgid "No matching tags"
+msgstr "No matching tags"
+
+msgid "No Media identity detected"
+msgstr "No Media identity detected"
+
+msgid "No Media yet"
+msgstr "No Media yet"
+
+msgctxt "Device report"
+msgid "no medium"
+msgstr "no medium"
+
+msgid "No mounted disk was found under {rootList}."
+msgstr "No mounted disk was found under {rootList}."
+
+msgid "No new Files to add: {skippedRecords}."
+msgstr "No new Files to add: {skippedRecords}."
+
+msgid "No new Files will be added."
+msgstr "No new Files will be added."
+
+msgid "No other matching files on this page."
+msgstr "No other matching files on this page."
+
+msgid "No preferred Locations. <0>Set a restore destination in Settings</0>."
+msgstr "No preferred Locations. <0>Set a restore destination in Settings</0>."
+
+msgid "No Preview generators are configured."
+msgstr "No Preview generators are configured."
+
+msgid "No recorded files to add."
+msgstr "No recorded files to add."
+
+msgid "No restore results yet."
+msgstr "No restore results yet."
+
+msgid "No result"
+msgstr "No result"
+
+msgid "No saved version"
+msgstr "No saved version"
+
+msgid "No saved versions are available to add to the Restore list."
+msgstr "No saved versions are available to add to the Restore list."
+
+msgid "No saved versions."
+msgstr "No saved versions."
+
+msgid "No signature cache"
+msgstr "No signature cache"
+
+msgid "No signature cache on Media"
+msgstr "No signature cache on Media"
+
+msgid "No signature cache on restored files"
+msgstr "No signature cache on restored files"
+
+msgid "No Tape device is configured."
+msgstr "No Tape device is configured."
+
+msgid "No Tape drive is configured."
+msgstr "No Tape drive is configured."
+
+msgid "No usable archive"
+msgstr "No usable archive"
+
+msgid "No usable archived copy."
+msgstr "No usable archived copy."
+
+msgid "No verification baseline"
+msgstr "No verification baseline"
+
+msgid "No Volume discovery roots are configured (paths.volumes)."
+msgstr "No Volume discovery roots are configured (paths.volumes)."
+
+msgid "No YATM marker. Initialize creates this disk's identity marker and Library Media."
+msgstr "No YATM marker. Initialize creates this disk's identity marker and Library Media."
+
+msgid "Nominal wraps"
+msgstr "Nominal wraps"
+
+msgid "Not checked"
+msgstr "Not checked"
+
+msgid "Not connected"
+msgstr "Not connected"
+
+msgctxt "Device report"
+msgid "not implemented"
+msgstr "not implemented"
+
+msgid "Not processed"
+msgstr "Not processed"
+
+msgctxt "Device report"
+msgid "not ready"
+msgstr "not ready"
+
+msgid "Not recorded"
+msgstr "Not recorded"
+
+msgid "Not recorded for the current original"
+msgstr "Not recorded for the current original"
+
+msgid "Not supported on Tape"
+msgstr "Not supported on Tape"
+
+msgid "Not used by normal Restore."
+msgstr "Not used by normal Restore."
+
+msgid "Not used by normal Restore. Advanced recovery can attempt this copy."
+msgstr "Not used by normal Restore. Advanced recovery can attempt this copy."
+
+msgid "Note"
+msgstr "Note"
+
+msgctxt "file browser"
+msgid "Nothing to show"
+msgstr "Nothing to show"
+
+msgid "Observation completed: {completed}"
+msgstr "Observation completed: {completed}"
+
+msgid "Observation started: {started}"
+msgstr "Observation started: {started}"
+
+msgctxt "Device report"
+msgid "observed"
+msgstr "observed"
+
+msgid "Observed: {observed}"
+msgstr "Observed: {observed}"
+
+msgid "Off"
+msgstr "Off"
+
+msgid "Online"
+msgstr "Online"
+
+msgid "Online · {space}"
+msgstr "Online · {space}"
+
+msgid "Open in Library"
+msgstr "Open in Library"
+
+msgid "Open Library folder failed"
+msgstr "Open Library folder failed"
+
+msgid "Open Library root failed"
+msgstr "Open Library root failed"
+
+msgid "Open Media folder failed"
+msgstr "Open Media folder failed"
+
+msgctxt "file action"
+msgid "Open selection"
+msgstr "Open selection"
+
+msgid "Operation canceled"
+msgstr "Operation canceled"
+
+msgid "Operation did not complete"
+msgstr "Operation did not complete"
+
+msgid "Operation ended without a final result"
+msgstr "Operation ended without a final result"
+
+msgid "Operation failed"
+msgstr "Operation failed"
+
+msgid "Operation succeeded, but refresh failed: {message}"
+msgstr "Operation succeeded, but refresh failed: {message}"
+
+msgid "Optional. Content already on this many Media or more is skipped. Files whose current content is not confirmed are archived normally."
+msgstr "Optional. Content already on this many Media or more is skipped. Files whose current content is not confirmed are archived normally."
+
+msgctxt "file action group"
+msgid "Options"
+msgstr "Options"
+
+msgid "Original files and archive copies are kept."
+msgstr "Original files and archive copies are kept."
+
+msgid "Original linked, but its details could not be refreshed"
+msgstr "Original linked, but its details could not be refreshed"
+
+msgid "Other density code"
+msgstr "Other density code"
+
+msgid "Output"
+msgstr "Output"
+
+msgid "Output format"
+msgstr "Output format"
+
+msgid "Output: {outputFormats}"
+msgstr "Output: {outputFormats}"
+
+msgid "Overview"
+msgstr "Overview"
+
+msgid "Overwrite the cartridge in {device}"
+msgstr "Overwrite the cartridge in {device}"
+
+msgctxt "Device report"
+msgid "ownership uncertain"
+msgstr "ownership uncertain"
+
+msgid "Page {page}"
+msgstr "Page {page}"
+
+msgctxt "Device field"
+msgid "Parameters control"
+msgstr "Parameters control"
+
+msgid "Parameters: {parametersSource}"
+msgstr "Parameters: {parametersSource}"
+
+msgid "Parent directory"
+msgstr "Parent directory"
+
+msgctxt "Device report"
+msgid "partial"
+msgstr "partial"
+
+msgctxt "Device field"
+msgid "Partition count"
+msgstr "Partition count"
+
+msgid "Partition: {partition}"
+msgstr "Partition: {partition}"
+
+msgctxt "file action"
+msgid "Paste"
+msgstr "Paste"
+
+msgid "Paste failed"
+msgstr "Paste failed"
+
+msgid "Path"
+msgstr "Path"
+
+msgctxt "Copy status"
+msgid "pending"
+msgstr "pending"
+
+msgctxt "Device report"
+msgid "permission"
+msgstr "permission"
+
+msgid "Permission"
+msgstr "Permission"
+
+msgid "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
+msgstr "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
+
+msgid "PNG is lossless; quality does not apply."
+msgstr "PNG is lossless; quality does not apply."
+
+msgid "Position source: {positionSource}"
+msgstr "Position source: {positionSource}"
+
+msgid "Positioning"
+msgstr "Positioning"
+
+msgid "Poster height (px)"
+msgstr "Poster height (px)"
+
+msgid "Poster width (px)"
+msgstr "Poster width (px)"
+
+msgid "Preferred"
+msgstr "Preferred"
+
+msgid "Preferred restore destination"
+msgstr "Preferred restore destination"
+
+msgid "Prepare archive"
+msgstr "Prepare archive"
+
+msgid "Prepare restore"
+msgstr "Prepare restore"
+
+msgid "Preparing"
+msgstr "Preparing"
+
+msgctxt "Job phase"
+msgid "preparing media"
+msgstr "preparing media"
+
+msgid "Preparing…"
+msgstr "Preparing…"
+
+msgid "Preview"
+msgstr "Preview"
+
+msgid "Preview · archived content"
+msgstr "Preview · archived content"
+
+msgid "Preview · current original"
+msgstr "Preview · current original"
+
+msgid "Preview · selected saved version"
+msgstr "Preview · selected saved version"
+
+msgid "Preview creation failed: {previewError}"
+msgstr "Preview creation failed: {previewError}"
+
+msgid "Preview failed: {previewError}"
+msgstr "Preview failed: {previewError}"
+
+msgid "Preview generation is disabled."
+msgstr "Preview generation is disabled."
+
+msgid "Preview generation skips files whose signatures are unknown. Read new and changed files to include them."
+msgstr "Preview generation skips files whose signatures are unknown. Read new and changed files to include them."
+
+msgid "Preview helper unavailable."
+msgstr "Preview helper unavailable."
+
+msgid "Preview not available"
+msgstr "Preview not available"
+
+msgid "Preview of the latest saved version"
+msgstr "Preview of the latest saved version"
+
+msgid "Preview ready"
+msgstr "Preview ready"
+
+msgid "Preview skipped"
+msgstr "Preview skipped"
+
+msgid "Preview unavailable"
+msgstr "Preview unavailable"
+
+msgid "Previews"
+msgstr "Previews"
+
+msgid "Previews failed"
+msgstr "Previews failed"
+
+msgid "Previews ready"
+msgstr "Previews ready"
+
+msgid "Previews require random-readable Media"
+msgstr "Previews require random-readable Media"
+
+msgid "Previews skipped"
+msgstr "Previews skipped"
+
+msgid "Previous"
+msgstr "Previous"
+
+msgid "Processed"
+msgstr "Processed"
+
+msgctxt "Job phase"
+msgid "processing content"
+msgstr "processing content"
+
+msgctxt "file action"
+msgid "Properties"
+msgstr "Properties"
+
+msgctxt "Job phase"
+msgid "publishing source"
+msgstr "publishing source"
+
+msgid "Quality"
+msgstr "Quality"
+
+msgctxt "Job phase"
+msgid "Queued — waiting for Media"
+msgstr "Queued — waiting for Media"
+
+msgid "Queued read items"
+msgstr "Queued read items"
+
+msgid "Queued results"
+msgstr "Queued results"
+
+msgid "random"
+msgstr "random"
+
+msgid "Read an existing marker and recreate only its Library Media. Files and marker remain unchanged."
+msgstr "Read an existing marker and recreate only its Library Media. Files and marker remain unchanged."
+
+msgid "Read every file"
+msgstr "Read every file"
+
+msgid "Read new and changed files"
+msgstr "Read new and changed files"
+
+msgid "Read order"
+msgstr "Read order"
+
+msgid "Read parameters"
+msgstr "Read parameters"
+
+msgid "Read parameters approach reversal must be finite and representable as a duration."
+msgstr "Read parameters approach reversal must be finite and representable as a duration."
+
+msgid "Read parameters approach reversal must be nonnegative."
+msgstr "Read parameters approach reversal must be nonnegative."
+
+msgid "Read parameters base must be finite and representable as a duration."
+msgstr "Read parameters base must be finite and representable as a duration."
+
+msgid "Read parameters base must be nonnegative."
+msgstr "Read parameters base must be nonnegative."
+
+msgid "Read parameters bytes per second must be finite and positive."
+msgstr "Read parameters bytes per second must be finite and positive."
+
+msgid "Read parameters density code is required."
+msgstr "Read parameters density code is required."
+
+msgid "Read parameters density code must be between 0 and 255."
+msgstr "Read parameters density code must be between 0 and 255."
+
+msgid "Read parameters drive serial must be nonempty when supplied."
+msgstr "Read parameters drive serial must be nonempty when supplied."
+
+msgid "Read parameters filemark overhead must be finite and representable as a duration."
+msgstr "Read parameters filemark overhead must be finite and representable as a duration."
+
+msgid "Read parameters filemark overhead must be nonnegative."
+msgstr "Read parameters filemark overhead must be nonnegative."
+
+msgid "Read parameters fixed unload must be finite and representable as a duration."
+msgstr "Read parameters fixed unload must be finite and representable as a duration."
+
+msgid "Read parameters fixed unload must be nonnegative."
+msgstr "Read parameters fixed unload must be nonnegative."
+
+msgid "Read parameters for {label}"
+msgstr "Read parameters for {label}"
+
+msgid "Read parameters for density code {density} are repeated."
+msgstr "Read parameters for density code {density} are repeated."
+
+msgid "Read parameters full-span unload must be finite and representable as a duration."
+msgstr "Read parameters full-span unload must be finite and representable as a duration."
+
+msgid "Read parameters full-span unload must be nonnegative."
+msgstr "Read parameters full-span unload must be nonnegative."
+
+msgid "Read parameters full-span unload seconds must be positive."
+msgstr "Read parameters full-span unload seconds must be positive."
+
+msgid "Read parameters in Device settings"
+msgstr "Read parameters in Device settings"
+
+msgid "Read parameters LTFS unmount must be finite and representable as a duration."
+msgstr "Read parameters LTFS unmount must be finite and representable as a duration."
+
+msgid "Read parameters LTFS unmount must be nonnegative."
+msgstr "Read parameters LTFS unmount must be nonnegative."
+
+msgid "Read parameters nominal wraps must be a positive uint32."
+msgstr "Read parameters nominal wraps must be a positive uint32."
+
+msgid "Read parameters seek seconds per wrap must be finite and representable as a duration."
+msgstr "Read parameters seek seconds per wrap must be finite and representable as a duration."
+
+msgid "Read parameters seek seconds per wrap must be nonnegative."
+msgstr "Read parameters seek seconds per wrap must be nonnegative."
+
+msgid "Read parameters streaming bytes must be a uint64 value."
+msgstr "Read parameters streaming bytes must be a uint64 value."
+
+msgid "Read planning budget (seconds)"
+msgstr "Read planning budget (seconds)"
+
+msgid "Read planning budget must be a whole number between 1 and 4294967295 seconds."
+msgstr "Read planning budget must be a whole number between 1 and 4294967295 seconds."
+
+msgctxt "Device report"
+msgid "read position"
+msgstr "read position"
+
+msgctxt "Device field"
+msgid "READ POSITION long form"
+msgstr "READ POSITION long form"
+
+msgctxt "Device field"
+msgid "READ POSITION short form"
+msgstr "READ POSITION short form"
+
+msgid "Read rate"
+msgstr "Read rate"
+
+msgid "Read rate (MB/s)"
+msgstr "Read rate (MB/s)"
+
+msgid "Read rate {readRate}"
+msgstr "Read rate {readRate}"
+
+msgid "Read scan Media"
+msgstr "Read scan Media"
+
+msgid "Reading"
+msgstr "Reading"
+
+msgid "Reading Media…"
+msgstr "Reading Media…"
+
+msgid "Reading speed in decimal megabytes per second; it also prices a read-speed locate."
+msgstr "Reading speed in decimal megabytes per second; it also prices a read-speed locate."
+
+msgid "Reading this folder…"
+msgstr "Reading this folder…"
+
+msgid "Reading…"
+msgstr "Reading…"
+
+msgid "Reads source files again to identify previews before copying. The Archive copy hashes content independently."
+msgstr "Reads source files again to identify previews before copying. The Archive copy hashes content independently."
+
+msgctxt "Device report"
+msgid "ready"
+msgstr "ready"
+
+msgid "Reason: {reason}"
+msgstr "Reason: {reason}"
+
+msgid "Recent Jobs"
+msgstr "Recent Jobs"
+
+msgid "Recheck source hashes for previews"
+msgstr "Recheck source hashes for previews"
+
+msgid "Record mode"
+msgstr "Record mode"
+
+msgctxt "Device field"
+msgid "Record mode"
+msgstr "Record mode"
+
+msgid "Record size"
+msgstr "Record size"
+
+msgid "Record size (bytes)"
+msgstr "Record size (bytes)"
+
+msgctxt "Device field"
+msgid "Record size (bytes)"
+msgstr "Record size (bytes)"
+
+msgid "Record size must be a multiple of 512 bytes between 512 and 4294966784."
+msgstr "Record size must be a multiple of 512 bytes between 512 and 4294966784."
+
+msgid "Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths."
+msgstr "Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths."
+
+msgid "Records {recordBytes} bytes."
+msgstr "Records {recordBytes} bytes."
+
+msgid "Recovered with damage"
+msgstr "Recovered with damage"
+
+msgid "Recreate"
+msgstr "Recreate"
+
+msgid "Reduce the timeline tile size or maximum frames to stay within 100 million pixels."
+msgstr "Reduce the timeline tile size or maximum frames to stay within 100 million pixels."
+
+msgid "Refresh"
+msgstr "Refresh"
+
+msgctxt "file action"
+msgid "Refresh"
+msgstr "Refresh"
+
+msgid "Refresh device details"
+msgstr "Refresh device details"
+
+msgid "Refresh devices"
+msgstr "Refresh devices"
+
+msgid "Refresh failed"
+msgstr "Refresh failed"
+
+msgid "Refresh Library failed"
+msgstr "Refresh Library failed"
+
+msgid "Refreshing details"
+msgstr "Refreshing details"
+
+msgid "Refreshing devices…"
+msgstr "Refreshing devices…"
+
+msgid "Regenerate all"
+msgstr "Regenerate all"
+
+msgid "Register"
+msgstr "Register"
+
+msgid "Register a directory YATM may read originals from."
+msgstr "Register a directory YATM may read originals from."
+
+msgid "Register Existing"
+msgstr "Register Existing"
+
+msgid "Related content"
+msgstr "Related content"
+
+msgid "Related Jobs"
+msgstr "Related Jobs"
+
+msgctxt "file action"
+msgid "Related Jobs"
+msgstr "Related Jobs"
+
+msgid "Reload saved settings"
+msgstr "Reload saved settings"
+
+msgid "Remove"
+msgstr "Remove"
+
+msgid "Remove {path}"
+msgstr "Remove {path}"
+
+msgid "Remove {sourceName}?"
+msgstr "Remove {sourceName}?"
+
+msgctxt "file action"
+msgid "Remove from Library"
+msgstr "Remove from Library"
+
+msgctxt "file action"
+msgid "Remove from list"
+msgstr "Remove from list"
+
+msgid "Remove location"
+msgstr "Remove location"
+
+msgid "Remove Media from Library?"
+msgstr "Remove Media from Library?"
+
+msgid "Remove saved version?"
+msgstr "Remove saved version?"
+
+msgid "Remove unreferenced inventory and files without originals or saved versions. Physical files are kept."
+msgstr "Remove unreferenced inventory and files without originals or saved versions. Physical files are kept."
+
+msgid "Remove version"
+msgstr "Remove version"
+
+msgctxt "Scan change"
+msgid "removed"
+msgstr "removed"
+
+msgid "Removed"
+msgstr "Removed"
+
+msgid "Removes the registration and original links. Disk files, Library organization, saved versions and archive copies are kept."
+msgstr "Removes the registration and original links. Disk files, Library organization, saved versions and archive copies are kept."
+
+msgid "Rename"
+msgstr "Rename"
+
+msgctxt "file action"
+msgid "Rename File"
+msgstr "Rename File"
+
+msgid "Renaming…"
+msgstr "Renaming…"
+
+msgid "Replace selections"
+msgstr "Replace selections"
+
+msgid "Replace the current {currentCount} Archive selections with {newCount} selections from this Job?"
+msgstr "Replace the current {currentCount} Archive selections with {newCount} selections from this Job?"
+
+msgid "Replace the current {currentCount} Restore selections with {newCount} selections from this Job?"
+msgstr "Replace the current {currentCount} Restore selections with {newCount} selections from this Job?"
+
+msgid "Replace the note on every selected file"
+msgstr "Replace the note on every selected file"
+
+msgid "Replace unsent selections?"
+msgstr "Replace unsent selections?"
+
+msgctxt "Device report"
+msgid "reported"
+msgstr "reported"
+
+msgid "Reported algorithms: {algorithms}"
+msgstr "Reported algorithms: {algorithms}"
+
+msgctxt "Device field"
+msgid "Reported wraps"
+msgstr "Reported wraps"
+
+msgid "Request failed"
+msgstr "Request failed"
+
+msgid "Requested: {requestedOrder} · Prepared: {effectiveOrder}"
+msgstr "Requested: {requestedOrder} · Prepared: {effectiveOrder}"
+
+msgid "Required Media is missing from the Library."
+msgstr "Required Media is missing from the Library."
+
+msgid "Reset {label} to built-in"
+msgstr "Reset {label} to built-in"
+
+msgid "Reset to built-in"
+msgstr "Reset to built-in"
+
+msgid "Resource"
+msgstr "Resource"
+
+msgid "Restore"
+msgstr "Restore"
+
+msgctxt "Job kind"
+msgid "Restore"
+msgstr "Restore"
+
+msgid "Restore from archive storage"
+msgstr "Restore from archive storage"
+
+msgid "Restore preference"
+msgstr "Restore preference"
+
+msgid "Restore required"
+msgstr "Restore required"
+
+msgid "Restore results"
+msgstr "Restore results"
+
+msgid "Restore selection"
+msgstr "Restore selection"
+
+msgid "Restore time"
+msgstr "Restore time"
+
+msgid "Restore to"
+msgstr "Restore to"
+
+msgid "Result flush interval (ms)"
+msgstr "Result flush interval (ms)"
+
+msgid "Results"
+msgstr "Results"
+
+msgid "Results per update"
+msgstr "Results per update"
+
+msgid "Resume search"
+msgstr "Resume search"
+
+msgid "Retry"
+msgstr "Retry"
+
+msgid "Retry availability"
+msgstr "Retry availability"
+
+msgid "Retry comparison settings"
+msgstr "Retry comparison settings"
+
+msgid "Retry destinations"
+msgstr "Retry destinations"
+
+msgid "Retry estimate"
+msgstr "Retry estimate"
+
+msgid "Retry loading more jobs"
+msgstr "Retry loading more jobs"
+
+msgid "Retry loading tags"
+msgstr "Retry loading tags"
+
+msgid "Retry locations"
+msgstr "Retry locations"
+
+msgid "Retry Locations"
+msgstr "Retry Locations"
+
+msgid "Retry Preview"
+msgstr "Retry Preview"
+
+msgid "Retry rows"
+msgstr "Retry rows"
+
+msgid "Reuse known signatures only"
+msgstr "Reuse known signatures only"
+
+msgid "Review the creation form before submitting."
+msgstr "Review the creation form before submitting."
+
+msgid "Review the original selections and options, then submit to create a new Job. Priority: {priorityLabel}."
+msgstr "Review the original selections and options, then submit to create a new Job. Priority: {priorityLabel}."
+
+msgid "Review what will be added"
+msgstr "Review what will be added"
+
+msgid "Rewind and unload time across one physical tape length; must be above 0."
+msgstr "Rewind and unload time across one physical tape length; must be above 0."
+
+msgid "Right file pane"
+msgstr "Right file pane"
+
+msgid "RPC Request Error"
+msgstr "RPC Request Error"
+
+msgid "Runtime controls apply to the next file; routes and output choices apply to new Jobs."
+msgstr "Runtime controls apply to the next file; routes and output choices apply to new Jobs."
+
+msgid "Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples."
+msgstr "Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples."
+
+msgid "Save"
+msgstr "Save"
+
+msgid "Save changes"
+msgstr "Save changes"
+
+msgid "Save or cancel the changes below before switching language."
+msgstr "Save or cancel the changes below before switching language."
+
+msgid "Save to check this executable. Current capability results describe the saved executable."
+msgstr "Save to check this executable. Current capability results describe the saved executable."
+
+msgid "Saved {time} · Follows selected time"
+msgstr "Saved {time} · Follows selected time"
+
+msgid "Saved {time} · Latest"
+msgstr "Saved {time} · Latest"
+
+msgid "Saved content versions"
+msgstr "Saved content versions"
+
+msgid "Saved copies unavailable"
+msgstr "Saved copies unavailable"
+
+msgid "Saved version {version}"
+msgstr "Saved version {version}"
+
+msgid "Saved versions"
+msgstr "Saved versions"
+
+msgid "Saved versions only"
+msgstr "Saved versions only"
+
+msgid "Saving…"
+msgstr "Saving…"
+
+msgid "Scan"
+msgstr "Scan"
+
+msgctxt "file action"
+msgid "Scan"
+msgstr "Scan"
+
+msgctxt "Job kind"
+msgid "Scan"
+msgstr "Scan"
+
+msgid "Scan comparison settings were not returned"
+msgstr "Scan comparison settings were not returned"
+
+msgid "Scan results"
+msgstr "Scan results"
+
+msgid "Scope"
+msgstr "Scope"
+
+msgid "Scope · {field}: {value}"
+msgstr "Scope · {field}: {value}"
+
+msgid "Search"
+msgstr "Search"
+
+msgid "Search by name"
+msgstr "Search by name"
+
+msgid "Search by name or identity"
+msgstr "Search by name or identity"
+
+msgid "Search by name or path"
+msgstr "Search by name or path"
+
+msgid "Search failed"
+msgstr "Search failed"
+
+msgid "Search log"
+msgstr "Search log"
+
+msgid "Search query"
+msgstr "Search query"
+
+msgid "Search Results"
+msgstr "Search Results"
+
+msgid "Search stopped."
+msgstr "Search stopped."
+
+msgid "Search unavailable"
+msgstr "Search unavailable"
+
+msgid "Searching Location"
+msgstr "Searching Location"
+
+msgid "Searching log…"
+msgstr "Searching log…"
+
+msgid "Searching Media"
+msgstr "Searching Media"
+
+msgid "Searching tags…"
+msgstr "Searching tags…"
+
+msgid "Searching…"
+msgstr "Searching…"
+
+msgid "Seconds"
+msgstr "Seconds"
+
+msgid "Seek time for one complete span (s)"
+msgstr "Seek time for one complete span (s)"
+
+msgid "Seek time for one span"
+msgstr "Seek time for one span"
+
+msgid "Seek time for one span {seekTime}"
+msgstr "Seek time for one span {seekTime}"
+
+msgid "Select a file"
+msgstr "Select a file"
+
+msgid "Select a Location"
+msgstr "Select a Location"
+
+msgid "Select a Media or Position"
+msgstr "Select a Media or Position"
+
+msgid "Select a saved version before adding it to the Restore list."
+msgstr "Select a saved version before adding it to the Restore list."
+
+msgctxt "file action"
+msgid "Select all files"
+msgstr "Select all files"
+
+msgid "Select backup"
+msgstr "Select backup"
+
+msgid "Select one file or folder to rename."
+msgstr "Select one file or folder to rename."
+
+msgid "Select one file to choose its version."
+msgstr "Select one file to choose its version."
+
+msgid "Select one Media."
+msgstr "Select one Media."
+
+msgid "Select Tape action"
+msgstr "Select Tape action"
+
+msgid "Select version failed"
+msgstr "Select version failed"
+
+msgid "Selected files and folders"
+msgstr "Selected files and folders"
+
+msgid "Selected roots"
+msgstr "Selected roots"
+
+msgid "Selected saved version"
+msgstr "Selected saved version"
+
+msgid "Selection estimate is missing"
+msgstr "Selection estimate is missing"
+
+msgid "sequential"
+msgstr "sequential"
+
+msgctxt "Device report"
+msgid "sequential read"
+msgstr "sequential read"
+
+msgctxt "Device report"
+msgid "sequential write"
+msgstr "sequential write"
+
+msgid "Serial number"
+msgstr "Serial number"
+
+msgctxt "Device field"
+msgid "Serial number"
+msgstr "Serial number"
+
+msgid "Serial Number"
+msgstr "Serial Number"
+
+msgid "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+msgstr "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+
+msgid "Settings"
+msgstr "Settings"
+
+msgid "Settings reply does not match the requested group"
+msgstr "Settings reply does not match the requested group"
+
+msgid "Settings reply does not match the updated group"
+msgstr "Settings reply does not match the updated group"
+
+msgid "Settings views"
+msgstr "Settings views"
+
+msgid "Shared tags are shown. Tags unique to individual files are kept."
+msgstr "Shared tags are shown. Tags unique to individual files are kept."
+
+msgid "Show all confirmations"
+msgstr "Show all confirmations"
+
+msgid "Show confirmation next time"
+msgstr "Show confirmation next time"
+
+msgctxt "file action"
+msgid "Show folders first"
+msgstr "Show folders first"
+
+msgid "Show hidden files"
+msgstr "Show hidden files"
+
+msgctxt "file action"
+msgid "Show hidden files"
+msgstr "Show hidden files"
+
+msgid "Show more selected roots"
+msgstr "Show more selected roots"
+
+msgid "Signature"
+msgstr "Signature"
+
+msgid "Signatures"
+msgstr "Signatures"
+
+msgid "Size"
+msgstr "Size"
+
+msgid "Size unavailable"
+msgstr "Size unavailable"
+
+msgid "size unresolved"
+msgstr "size unresolved"
+
+msgid "Skip {unmatchedCount} item"
+msgstr "Skip {unmatchedCount} item"
+
+msgid "Skip {unmatchedCount} items"
+msgstr "Skip {unmatchedCount} items"
+
+msgid "Skipped: target Media count reached {targetReached} · already on this Media {alreadyOnMedia}"
+msgstr "Skipped: target Media count reached {targetReached} · already on this Media {alreadyOnMedia}"
+
+msgid "SN {serialNumber}"
+msgstr "SN {serialNumber}"
+
+msgid "Some copies need attention"
+msgstr "Some copies need attention"
+
+msgid "Some selected entries are unavailable. Remove them or select them again before preparing."
+msgstr "Some selected entries are unavailable. Remove them or select them again before preparing."
+
+msgid "Some selected entries are unavailable. Remove them or select them again before starting."
+msgstr "Some selected entries are unavailable. Remove them or select them again before starting."
+
+msgctxt "file action"
+msgid "Sort by date"
+msgstr "Sort by date"
+
+msgctxt "file action"
+msgid "Sort by name"
+msgstr "Sort by name"
+
+msgctxt "file action"
+msgid "Sort by size"
+msgstr "Sort by size"
+
+msgid "Sorting files"
+msgstr "Sorting files"
+
+msgid "Source"
+msgstr "Source"
+
+msgctxt "Device field"
+msgid "Source"
+msgstr "Source"
+
+msgid "Source hashes will be rechecked"
+msgstr "Source hashes will be rechecked"
+
+msgid "Source reference"
+msgstr "Source reference"
+
+msgid "Special file"
+msgstr "Special file"
+
+msgid "Stage Remaining"
+msgstr "Stage Remaining"
+
+msgctxt "Copy status"
+msgid "staged"
+msgstr "staged"
+
+msgid "Start archive"
+msgstr "Start archive"
+
+msgid "Start calibration"
+msgstr "Start calibration"
+
+msgid "Start reading"
+msgstr "Start reading"
+
+msgid "Start restore"
+msgstr "Start restore"
+
+msgid "Start scan"
+msgstr "Start scan"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Stop job"
+msgstr "Stop job"
+
+msgid "Stop Job {jobNumber}?"
+msgstr "Stop Job {jobNumber}?"
+
+msgid "Stop requested, but the list could not refresh"
+msgstr "Stop requested, but the list could not refresh"
+
+msgid "Stop search"
+msgstr "Stop search"
+
+msgid "Storage path"
+msgstr "Storage path"
+
+msgid "Storage type"
+msgstr "Storage type"
+
+msgid "Stores each read file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "Stores each read file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+
+msgid "Stores each read original's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "Stores each read original's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+
+msgid "Stores each restored file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+msgstr "Stores each restored file's signature in an extended attribute so later reads can reuse it. File content is unchanged."
+
+msgid "Stores the signature of each file read from a Volume or LTFS Tape on that file. On an LTFS Tape this rewrites its Index."
+msgstr "Stores the signature of each file read from a Volume or LTFS Tape on that file. On an LTFS Tape this rewrites its Index."
+
+msgid "Streaming distance"
+msgstr "Streaming distance"
+
+msgid "Streaming distance (MB)"
+msgstr "Streaming distance (MB)"
+
+msgctxt "Copy status"
+msgid "submitted"
+msgstr "submitted"
+
+msgid "Support: {support} · Availability: {availability}"
+msgstr "Support: {support} · Availability: {availability}"
+
+msgctxt "Device report"
+msgid "supported"
+msgstr "supported"
+
+msgid "Supported densities: {densities}"
+msgstr "Supported densities: {densities}"
+
+msgid "Supported formats"
+msgstr "Supported formats"
+
+msgctxt "file action"
+msgid "Switch to Grid"
+msgstr "Switch to Grid"
+
+msgctxt "file action"
+msgid "Switch to List"
+msgstr "Switch to List"
+
+msgid "Symbolic link"
+msgstr "Symbolic link"
+
+msgid "Tag"
+msgstr "Tag"
+
+msgid "Tags"
+msgstr "Tags"
+
+msgid "Tape"
+msgstr "Tape"
+
+msgid "Tape action"
+msgstr "Tape action"
+
+msgid "Tape barcode"
+msgstr "Tape barcode"
+
+msgid "Tape barcode does not match the inspected identity: requested {identity}, inspected {inspectedIdentity}."
+msgstr "Tape barcode does not match the inspected identity: requested {identity}, inspected {inspectedIdentity}."
+
+msgid "Tape device"
+msgstr "Tape device"
+
+msgid "Tape format"
+msgstr "Tape format"
+
+msgid "Tape Media"
+msgstr "Tape Media"
+
+msgid "Tape Media page did not advance."
+msgstr "Tape Media page did not advance."
+
+msgid "Tape Name"
+msgstr "Tape Name"
+
+msgid "Tar"
+msgstr "Tar"
+
+msgid "Tar capacity polling interval (seconds)"
+msgstr "Tar capacity polling interval (seconds)"
+
+msgid "Tar records {recordMode} · {recordSize}"
+msgstr "Tar records {recordMode} · {recordSize}"
+
+msgid "Tar records {records} · capacity polling {polling}"
+msgstr "Tar records {records} · capacity polling {polling}"
+
+msgid "Tar recovery guide"
+msgstr "Tar recovery guide"
+
+msgid "Tar settings are inactive for LTFS."
+msgstr "Tar settings are inactive for LTFS."
+
+msgid "Target Media count"
+msgstr "Target Media count"
+
+msgid "Target Media count {targetMediaCount}: {targetReachedCount} file already reaches it and will be skipped."
+msgstr "Target Media count {targetMediaCount}: {targetReachedCount} file already reaches it and will be skipped."
+
+msgid "Target Media count {targetMediaCount}: {targetReachedCount} files already reach it and will be skipped."
+msgstr "Target Media count {targetMediaCount}: {targetReachedCount} files already reach it and will be skipped."
+
+msgid "Technical details"
+msgstr "Technical details"
+
+msgid "The attempt recorded no reason."
+msgstr "The attempt recorded no reason."
+
+msgid "The configured Encrypt script handles encryption; FORMAT generates a key."
+msgstr "The configured Encrypt script handles encryption; FORMAT generates a key."
+
+msgid "The destination changed. Choose it again."
+msgstr "The destination changed. Choose it again."
+
+msgid "The displayed device details report {reportLabel}, not this set's density code."
+msgstr "The displayed device details report {reportLabel}, not this set's density code."
+
+msgid "The extension \"{extension}\" is assigned more than once."
+msgstr "The extension \"{extension}\" is assigned more than once."
+
+msgid "The inserted Tape does not match this Job’s required Media."
+msgstr "The inserted Tape does not match this Job’s required Media."
+
+msgid "The last restore target is no longer available. Choose another target."
+msgstr "The last restore target is no longer available. Choose another target."
+
+msgid "The original Archive inputs are unavailable."
+msgstr "The original Archive inputs are unavailable."
+
+msgid "The original Restore destination is unavailable. Choose a destination."
+msgstr "The original Restore destination is unavailable. Choose a destination."
+
+msgid "The original Restore inputs are unavailable."
+msgstr "The original Restore inputs are unavailable."
+
+msgid "The original selection has no available reference."
+msgstr "The original selection has no available reference."
+
+msgid "The recorded density of the cartridges a new set applies to."
+msgstr "The recorded density of the cartridges a new set applies to."
+
+msgid "The result changed. Find again."
+msgstr "The result changed. Find again."
+
+msgid "The saved version record is removed. Archive copies and other versions are kept. A later Scan or Archive may establish this version again."
+msgstr "The saved version record is removed. Archive copies and other versions are kept. A later Scan or Archive may establish this version again."
+
+msgid "The selected files are invalid. Return to Files and select them again."
+msgstr "The selected files are invalid. Return to Files and select them again."
+
+msgid "The selected Location is unavailable. Choose a Location."
+msgstr "The selected Location is unavailable. Choose a Location."
+
+msgid "The selected Media cannot generate Previews. Choose different Media or turn Previews off."
+msgstr "The selected Media cannot generate Previews. Choose different Media or turn Previews off."
+
+msgid "The selected source is invalid. Choose a source."
+msgstr "The selected source is invalid. Choose a source."
+
+msgid "The selections changed while this form was opening. Review them before replacing."
+msgstr "The selections changed while this form was opening. Review them before replacing."
+
+msgid "The server verifies the loaded Tape against this Job before reading."
+msgstr "The server verifies the loaded Tape against this Job before reading."
+
+msgid "These Files already have explicit versions in the Restore list."
+msgstr "These Files already have explicit versions in the Restore list."
+
+msgid "These items are already in the Archive list."
+msgstr "These items are already in the Archive list."
+
+msgid "These items are already in the Restore list."
+msgstr "These items are already in the Restore list."
+
+msgid "This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT."
+msgstr "This barcode is registered. Choose APPEND, or delete its Media metadata explicitly before FORMAT."
+
+msgid "This capacity estimate does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+msgstr "This capacity estimate does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+
+msgid "This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge."
+msgstr "This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge."
+
+msgid "This custom version was saved after the selected time."
+msgstr "This custom version was saved after the selected time."
+
+msgid "This destination is unavailable."
+msgstr "This destination is unavailable."
+
+msgid "This device already has read parameters for {label}; edit that set instead."
+msgstr "This device already has read parameters for {label}; edit that set instead."
+
+msgid "This directory cannot be used as a restore destination."
+msgstr "This directory cannot be used as a restore destination."
+
+msgid "This directory is not a separately mounted filesystem."
+msgstr "This directory is not a separately mounted filesystem."
+
+msgid "This disk cannot be registered or initialized."
+msgstr "This disk cannot be registered or initialized."
+
+msgid "This drive does not support LTFS (needs LTO-5 or later)."
+msgstr "This drive does not support LTFS (needs LTO-5 or later)."
+
+msgid "This File already has an explicit version in the Restore list."
+msgstr "This File already has an explicit version in the Restore list."
+
+msgid "This file has no Library parent."
+msgstr "This file has no Library parent."
+
+msgid "This file operation is not supported"
+msgstr "This file operation is not supported"
+
+msgid "This folder does not allow changes. Refresh this folder."
+msgstr "This folder does not allow changes. Refresh this folder."
+
+msgid "This folder is empty"
+msgstr "This folder is empty"
+
+msgid "This group changed. Find again."
+msgstr "This group changed. Find again."
+
+msgid "This identical result needs a new Find to show accurate rows."
+msgstr "This identical result needs a new Find to show accurate rows."
+
+msgid "This item has no eligible current original to add to the Archive list."
+msgstr "This item has no eligible current original to add to the Archive list."
+
+msgid "This item is already in the Archive list."
+msgstr "This item is already in the Archive list."
+
+msgid "This item is already in the Restore list."
+msgstr "This item is already in the Restore list."
+
+msgid "This Job has no pending Media."
+msgstr "This Job has no pending Media."
+
+msgid "This Job has no supported Media."
+msgstr "This Job has no supported Media."
+
+msgid "This job no longer exists. Your Library files and archive copies are not deleted with it."
+msgstr "This job no longer exists. Your Library files and archive copies are not deleted with it."
+
+msgid "This Library file no longer exists."
+msgstr "This Library file no longer exists."
+
+msgid "This Location is unavailable."
+msgstr "This Location is unavailable."
+
+msgid "This Location no longer exists."
+msgstr "This Location no longer exists."
+
+msgid "This Media is not registered in the Library."
+msgstr "This Media is not registered in the Library."
+
+msgid "This observation alone does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+msgstr "This observation alone does not guarantee that a file will fit. Actual early warning and write errors remain authoritative."
+
+msgid "This Position records no Signature, so its copies cannot be matched."
+msgstr "This Position records no Signature, so its copies cannot be matched."
+
+msgid "This preview type has no supported settings."
+msgstr "This preview type has no supported settings."
+
+msgid "This records preparation for that read; it does not identify the currently loaded cartridge or the final read order."
+msgstr "This records preparation for that read; it does not identify the currently loaded cartridge or the final read order."
+
+msgid "This saved entry is inactive. Its Device settings do not authorize device access."
+msgstr "This saved entry is inactive. Its Device settings do not authorize device access."
+
+msgid "This saved format is unsupported. Choose LTFS or Tar explicitly."
+msgstr "This saved format is unsupported. Choose LTFS or Tar explicitly."
+
+msgid "This saved version does not belong to the selected File."
+msgstr "This saved version does not belong to the selected File."
+
+msgid "This saved version has no File identity."
+msgstr "This saved version has no File identity."
+
+msgid "This saved version is unavailable."
+msgstr "This saved version is unavailable."
+
+msgid "This saved version no longer exists."
+msgstr "This saved version no longer exists."
+
+msgid "This selected entry is unavailable."
+msgstr "This selected entry is unavailable."
+
+msgid "This selection has no directory reference."
+msgstr "This selection has no directory reference."
+
+msgid "This Tape cannot be appended. Delete its Media metadata before formatting it."
+msgstr "This Tape cannot be appended. Delete its Media metadata before formatting it."
+
+msgid "This version cannot currently be restored: no copies available."
+msgstr "This version cannot currently be restored: no copies available."
+
+msgid "Time spent in the latest execution attempt; waiting between attempts is excluded."
+msgstr "Time spent in the latest execution attempt; waiting between attempts is excluded."
+
+msgid "Time to move one complete longitudinal tape span at seek speed, not the time to read a wrap."
+msgstr "Time to move one complete longitudinal tape span at seek speed, not the time to read a wrap."
+
+msgid "Timeline tile height (px)"
+msgstr "Timeline tile height (px)"
+
+msgid "Timeline tile width (px)"
+msgstr "Timeline tile width (px)"
+
+msgid "Timeout (seconds)"
+msgstr "Timeout (seconds)"
+
+msgid "Timeout must be between 1 and 86400 seconds."
+msgstr "Timeout must be between 1 and 86400 seconds."
+
+msgid "To span"
+msgstr "To span"
+
+msgid "To wrap"
+msgstr "To wrap"
+
+msgid "Tools"
+msgstr "Tools"
+
+msgid "Total Bytes"
+msgstr "Total Bytes"
+
+msgid "Total Files"
+msgstr "Total Files"
+
+msgctxt "Device field"
+msgid "Transport"
+msgstr "Transport"
+
+msgctxt "Device report"
+msgid "transport error"
+msgstr "transport error"
+
+msgctxt "Device report"
+msgid "transport unavailable"
+msgstr "transport unavailable"
+
+msgid "Try again"
+msgstr "Try again"
+
+msgid "Type"
+msgstr "Type"
+
+msgid "Type a tag and press Enter"
+msgstr "Type a tag and press Enter"
+
+msgid "Unable to inspect Media"
+msgstr "Unable to inspect Media"
+
+msgid "Unable to start the Media write"
+msgstr "Unable to start the Media write"
+
+msgid "unavailable"
+msgstr "unavailable"
+
+msgctxt "Device report"
+msgid "unavailable"
+msgstr "unavailable"
+
+msgid "Unavailable"
+msgstr "Unavailable"
+
+msgid "Unavailable selection"
+msgstr "Unavailable selection"
+
+msgctxt "Scan change"
+msgid "unchanged"
+msgstr "unchanged"
+
+msgid "unconfirmed"
+msgstr "unconfirmed"
+
+msgid "unknown"
+msgstr "unknown"
+
+msgctxt "Device report"
+msgid "unknown"
+msgstr "unknown"
+
+msgid "Unknown"
+msgstr "Unknown"
+
+msgid "Unknown density"
+msgstr "Unknown density"
+
+msgid "Unknown error"
+msgstr "Unknown error"
+
+msgid "Unknown file"
+msgstr "Unknown file"
+
+msgid "unknown refresh error"
+msgstr "unknown refresh error"
+
+msgctxt "file browser"
+msgid "Unknown total"
+msgstr "Unknown total"
+
+msgid "Unnamed"
+msgstr "Unnamed"
+
+msgid "Unreadable"
+msgstr "Unreadable"
+
+msgctxt "Tar record mode"
+msgid "unresolved"
+msgstr "unresolved"
+
+msgctxt "Copy status"
+msgid "unspecified"
+msgstr "unspecified"
+
+msgctxt "Scan change"
+msgid "unspecified"
+msgstr "unspecified"
+
+msgctxt "Device report"
+msgid "unsupported"
+msgstr "unsupported"
+
+msgid "Unsupported Settings group"
+msgstr "Unsupported Settings group"
+
+msgid "Unsupported type"
+msgstr "Unsupported type"
+
+msgid "Update inventory"
+msgstr "Update inventory"
+
+msgid "Update Library originals"
+msgstr "Update Library originals"
+
+msgid "Updated"
+msgstr "Updated"
+
+msgid "Updating hidden files"
+msgstr "Updating hidden files"
+
+msgid "Use at most six decimal places (whole bytes)."
+msgstr "Use at most six decimal places (whole bytes)."
+
+msgid "Use device default"
+msgstr "Use device default"
+
+msgid "Use memory mapping when Archive and Scan read original file content. Off by default."
+msgstr "Use memory mapping when Archive and Scan read original file content. Off by default."
+
+msgid "Use mmap for content reads"
+msgstr "Use mmap for content reads"
+
+msgid "Values override the built-in ones for their density code. Empty fields stay unknown; do not enter 0 for a value you have not measured. Changes take effect after Save."
+msgstr "Values override the built-in ones for their density code. Empty fields stay unknown; do not enter 0 for a value you have not measured. Changes take effect after Save."
+
+msgctxt "Tar record mode"
+msgid "variable"
+msgstr "variable"
+
+msgctxt "Device field"
+msgid "Variable"
+msgstr "Variable"
+
+msgctxt "Record mode"
+msgid "Variable"
+msgstr "Variable"
+
+msgctxt "Device field"
+msgid "Vendor"
+msgstr "Vendor"
+
+msgid "Verified · Linked"
+msgstr "Verified · Linked"
+
+msgid "Verified · Not linked"
+msgstr "Verified · Not linked"
+
+msgctxt "Job phase"
+msgid "verifying media"
+msgstr "verifying media"
+
+msgid "version {versionId}"
+msgstr "version {versionId}"
+
+msgid "Version #{number}"
+msgstr "Version #{number}"
+
+msgid "Version #{number} · Current selection"
+msgstr "Version #{number} · Current selection"
+
+msgid "Version removed, but refresh failed: {reason}"
+msgstr "Version removed, but refresh failed: {reason}"
+
+msgid "Versions"
+msgstr "Versions"
+
+msgid "Video"
+msgstr "Video"
+
+msgid "Video preview position"
+msgstr "Video preview position"
+
+msgctxt "file action"
+msgid "View Details"
+msgstr "View Details"
+
+msgid "View job"
+msgstr "View job"
+
+msgid "View list"
+msgstr "View list"
+
+msgid "View Log"
+msgstr "View Log"
+
+msgid "View preview job"
+msgstr "View preview job"
+
+msgid "View results only"
+msgstr "View results only"
+
+msgid "Volume"
+msgstr "Volume"
+
+msgid "Volume added, but the Media list could not refresh"
+msgstr "Volume added, but the Media list could not refresh"
+
+msgid "Volume type"
+msgstr "Volume type"
+
+msgid "Volume Type"
+msgstr "Volume Type"
+
+msgid "Wait for sorting to finish before deleting files."
+msgstr "Wait for sorting to finish before deleting files."
+
+msgid "Wait for sorting to finish before keeping a file."
+msgstr "Wait for sorting to finish before keeping a file."
+
+msgid "Wait for sorting to finish before merging files."
+msgstr "Wait for sorting to finish before merging files."
+
+msgid "Wait for the current operation to finish before sorting."
+msgstr "Wait for the current operation to finish before sorting."
+
+msgid "What Library shows, how it removes items, and where its data can go."
+msgstr "What Library shows, how it removes items, and where its data can go."
+
+msgid "When off, Library shows files with saved versions. Locations are unaffected."
+msgstr "When off, Library shows files with saved versions. Locations are unaffected."
+
+msgid "When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive."
+msgstr "When set, the set does not apply to a drive reporting another serial number. Empty applies to any drive."
+
+msgid "Whole number of wraps on the cartridge; required to derive geometry from a live wrap report."
+msgstr "Whole number of wraps on the cartridge; required to derive geometry from a live wrap report."
+
+msgid "Working…"
+msgstr "Working…"
+
+msgid "Write defaults apply to new FORMAT; APPEND and reads keep the Tape's storage profile."
+msgstr "Write defaults apply to new FORMAT; APPEND and reads keep the Tape's storage profile."
+
+msgctxt "Device field"
+msgid "Write protected"
+msgstr "Write protected"
+
+msgid "Write signature cache"
+msgstr "Write signature cache"
+
+msgid "Write signature cache onto Media"
+msgstr "Write signature cache onto Media"
+
+msgid "Write signature cache onto restored files"
+msgstr "Write signature cache onto restored files"
+
+msgid "Write test data"
+msgstr "Write test data"
+
+msgid "Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the cartridge again afterwards, initialize it with FORMAT. Confirm before starting."
+msgstr "Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the cartridge again afterwards, initialize it with FORMAT. Confirm before starting."
+
+msgid "Written"
+msgstr "Written"
+
+msgctxt "Media bytes"
+msgid "Written"
+msgstr "Written"
+
+msgid "YATM modules"
+msgstr "YATM modules"
+
+msgid "Your {groupLabel} settings have not been saved."
+msgstr "Your {groupLabel} settings have not been saved."
+
+msgid "Your Location configuration has not been saved."
+msgstr "Your Location configuration has not been saved."

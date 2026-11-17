@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Fragment, useContext, useEffect, useRef, useState, type FormEvent } from "react";
 
 import Alert from "@mui/material/Alert";
@@ -55,7 +56,7 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
         more = reply.hasMore && reply.media.length > 0;
       }
     } catch (reason) {
-      if (sequence === request.current) setSubmitError(errorMessage(reason, "Could not load archive volumes"));
+      if (sequence === request.current) setSubmitError(errorMessage(reason, t`Could not load archive volumes`));
     } finally {
       if (sequence === request.current) {
         loadingVolumes.current = false;
@@ -99,9 +100,9 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
           : { backend: { oneofKind: "tape" as const, tape: tape.target() } };
       await archiveJobCli.writeMedia({ id: job.id, target }).response;
       resetDialog();
-      runUIAction(refresh, "Archive started, but the Job list could not refresh");
+      runUIAction(refresh, t`Archive started, but the Job list could not refresh`);
     } catch (reason) {
-      setSubmitError(errorMessage(reason, "Unable to start the Media write"));
+      setSubmitError(errorMessage(reason, t`Unable to start the Media write`));
       setSubmitting(false);
     }
   };
@@ -110,7 +111,7 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
   return (
     <Fragment>
       <Button size="small" disabled={dialogOpen || submitting} onClick={open}>
-        Choose archive storage
+        {t`Choose archive storage`}
       </Button>
       {dialogOpen && (
         <Dialog
@@ -128,13 +129,13 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
             },
           }}
         >
-          <DialogTitle>Choose archive storage</DialogTitle>
+          <DialogTitle>{t`Choose archive storage`}</DialogTitle>
           <DialogContent>
             <TextField
               select
               required
               margin="normal"
-              label="Storage type"
+              label={t`Storage type`}
               fullWidth
               value={backend}
               disabled={submitting}
@@ -144,8 +145,8 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
                 if (selected === "tape") tape.selectSoleDevice();
               }}
             >
-              <MenuItem value="tape">Tape</MenuItem>
-              <MenuItem value="volume">Mounted Volume</MenuItem>
+              <MenuItem value="tape">{t`Tape`}</MenuItem>
+              <MenuItem value="volume">{t`Mounted Volume`}</MenuItem>
             </TextField>
             {backend === "volume" ? (
               <VolumeChoice volumes={volumes} value={volumeUUID} loading={volumeLoading} disabled={submitting} onChange={setVolumeUUID} />
@@ -156,10 +157,10 @@ export const WriteMediaDialog = ({ job }: { job: Job }) => {
           </DialogContent>
           <DialogActions>
             <Button type="submit" disabled={!canSubmit}>
-              Start archive
+              {t`Start archive`}
             </Button>
             <Button disabled={submitting} onClick={close}>
-              Cancel
+              {t`Cancel`}
             </Button>
           </DialogActions>
         </Dialog>
@@ -182,13 +183,13 @@ const VolumeChoice = ({
   onChange: (uuid: string) => void;
 }) => (
   <>
-    <TextField select required margin="normal" label="Volume" fullWidth disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
+    <TextField select required margin="normal" label={t`Volume`} fullWidth disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>
       {volumes.map((volume) => (
         <MenuItem key={volume.id.toString()} value={volume.identity} disabled={volume.mounted !== true}>
           {volume.name || volume.identity} · {volumeSpaceLabel(volume)}
         </MenuItem>
       ))}
     </TextField>
-    {!loading && volumes.length === 0 && <Alert severity="info">Initialize a mounted Volume from Library → Media first.</Alert>}
+    {!loading && volumes.length === 0 && <Alert severity="info">{t`Initialize a mounted Volume from Library → Media first.`}</Alert>}
   </>
 );

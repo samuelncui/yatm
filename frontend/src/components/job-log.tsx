@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -91,7 +92,7 @@ export const ViewLogDialog = ({ jobID, active }: { jobID: bigint; active: boolea
   return (
     <Fragment>
       <Button size="small" onClick={() => setOpen(true)}>
-        View Log
+        {t`View Log`}
       </Button>
       {open && (
         <Dialog
@@ -103,12 +104,12 @@ export const ViewLogDialog = ({ jobID, active }: { jobID: bigint; active: boolea
           className="job-view-dialog"
           slotProps={{ paper: { sx: { height: "calc(100% - 64px)" } } }}
         >
-          <DialogTitle>View Log</DialogTitle>
+          <DialogTitle>{t`View Log`}</DialogTitle>
           <DialogContent dividers>
             <LogConsole jobId={jobID} active={active} />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpen(false)}>Close</Button>
+            <Button onClick={() => setOpen(false)}>{t`Close`}</Button>
           </DialogActions>
         </Dialog>
       )}
@@ -170,7 +171,7 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
         }
       } catch (cause) {
         if (currentGeneration === generation.current) {
-          setError(errorMessage(cause, "Could not read Job log"));
+          setError(errorMessage(cause, t`Could not read Job log`));
           setFailedRead(inFlight.current);
         }
       } finally {
@@ -218,26 +219,26 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
   return (
     <div className="job-log-console">
       <div className="job-log-controls">
-        <TextField select size="small" label="Level" className="job-log-level" value={level} onChange={(event) => setLevel(event.target.value)}>
-          <MenuItem value="">All levels</MenuItem>
+        <TextField select size="small" label={t`Level`} className="job-log-level" value={level} onChange={(event) => setLevel(event.target.value)}>
+          <MenuItem value="">{t`All levels`}</MenuItem>
           {(["error", "warning", "info", "debug", "trace", "fatal", "panic"] as const).map((value) => (
             <MenuItem key={value} value={value}>
               {value}
             </MenuItem>
           ))}
         </TextField>
-        <TextField size="small" label="Search log" className="job-log-query" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} />
-        {loading && <span role="status">Searching log…</span>}
+        <TextField size="small" label={t`Search log`} className="job-log-query" value={queryInput} onChange={(event) => setQueryInput(event.target.value)} />
+        {loading && <span role="status">{t`Searching log…`}</span>}
         {loading && (level || query) && (
           <Button size="small" onClick={stopSearch}>
-            Stop search
+            {t`Stop search`}
           </Button>
         )}
         {stoppedRead && (
           <span role="status">
-            Search stopped.{" "}
+            {t`Search stopped.`}{" "}
             <Button size="small" onClick={() => void load(stoppedRead.direction, stoppedRead.cursor, stoppedRead.initial)}>
-              Resume search
+              {t`Resume search`}
             </Button>
           </span>
         )}
@@ -246,7 +247,7 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
         <Feedback
           action={
             <Button size="small" onClick={() => void load(failedRead.direction, failedRead.cursor, failedRead.initial)}>
-              Retry
+              {t`Retry`}
             </Button>
           }
         >
@@ -255,7 +256,7 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
       )}
       {page.loaded && page.hasOlder && (
         <Button size="small" onClick={older} disabled={loading || !!stoppedRead}>
-          Load older
+          {t`Load older`}
         </Button>
       )}
       {page.lines.length > 0 ? (
@@ -272,11 +273,11 @@ const LogConsole = ({ jobId, active }: { jobId: bigint; active: boolean }) => {
           itemContent={(_index, line) => <LogLine line={line} filtered={!!(level || query)} />}
         />
       ) : page.loaded && !loading && !error && !stoppedRead ? (
-        <p>No matching log lines.</p>
+        <p>{t`No matching log lines.`}</p>
       ) : null}
       {page.loaded && page.hasNewer && (
         <Button size="small" onClick={newer} disabled={loading || !!stoppedRead}>
-          Load newer
+          {t`Load newer`}
         </Button>
       )}
     </div>
@@ -289,14 +290,14 @@ const LogLine = ({ line, filtered }: { line: JobLogLine; filtered: boolean }) =>
   return (
     <div
       className={`job-log-line job-log-line--${severity || "plain"}`}
-      title={line.continuation ? (filtered ? "Filter match unknown: continued line" : "Continued line") : undefined}
+      title={line.continuation ? (filtered ? t`Filter match unknown: continued line` : t`Continued line`) : undefined}
     >
       {line.continuation && (
         <span className="job-log-continuation" aria-hidden="true">
           ↳{" "}
         </span>
       )}
-      {line.continuation && filtered && <span className="job-log-continuation">Match unknown · </span>}
+      {line.continuation && filtered && <span className="job-log-continuation">{t`Match unknown`} · </span>}
       {timestamp && <span className="job-log-timestamp">{timestamp}</span>}
       {line.text.slice(timestamp.length)}
     </div>

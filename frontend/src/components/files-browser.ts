@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import type { FileData } from "@samuelncui/chonky";
 import { filesCli } from "@/api";
 import { dateFromNs } from "@/tools/time";
@@ -35,30 +36,30 @@ function filesStatusIndicator(status: FilesEntry["status"]) {
   if (present && status.archive === FilesArchive.NONE && currentKnown) tone = "warning";
 
   let issue = "";
-  if (status.issues.includes(FilesIssue.ALL_COPIES_UNAVAILABLE)) issue = "Saved copies unavailable";
-  else if (status.issues.includes(FilesIssue.LATEST_VERSION_UNAVAILABLE)) issue = "Latest version unavailable";
-  else if (status.issues.includes(FilesIssue.PARTIAL_COPIES_UNAVAILABLE)) issue = "Some copies need attention";
+  if (status.issues.includes(FilesIssue.ALL_COPIES_UNAVAILABLE)) issue = t`Saved copies unavailable`;
+  else if (status.issues.includes(FilesIssue.LATEST_VERSION_UNAVAILABLE)) issue = t`Latest version unavailable`;
+  else if (status.issues.includes(FilesIssue.PARTIAL_COPIES_UNAVAILABLE)) issue = t`Some copies need attention`;
   let marker: ArchiveMarker | undefined;
   if (issue) marker = { kind: "warning", color: archiveColors.warning, label: issue };
   else if (present && status.current === FilesCoverage.UNCOVERED && archived)
-    marker = { kind: "changed", color: archiveColors.warning, label: "Changes not archived" };
+    marker = { kind: "changed", color: archiveColors.warning, label: t`Changes not archived` };
   else if (present && status.current === FilesCoverage.UNSPECIFIED)
-    marker = { kind: "unknown", color: archiveColors.info, label: "Current content not checked" };
+    marker = { kind: "unknown", color: archiveColors.info, label: t`Current content not checked` };
 
   const originalLabels = {
-    [OriginalAvailability.UNSPECIFIED]: "Local file not checked",
-    [OriginalAvailability.PRESENT]: "Local file present",
-    [OriginalAvailability.MISSING]: "Local file missing",
-    [OriginalAvailability.UNLINKED]: "No local file linked",
-    [OriginalAvailability.UNAVAILABLE]: "Local file unavailable",
+    [OriginalAvailability.UNSPECIFIED]: t`Local file not checked`,
+    [OriginalAvailability.PRESENT]: t`Local file present`,
+    [OriginalAvailability.MISSING]: t`Local file missing`,
+    [OriginalAvailability.UNLINKED]: t`No local file linked`,
+    [OriginalAvailability.UNAVAILABLE]: t`Local file unavailable`,
   };
   const archiveLabel = archived
     ? present && status.current === FilesCoverage.COVERED
-      ? "Current content archived"
-      : "Archive available"
+      ? t`Current content archived`
+      : t`Archive available`
     : status.archive === FilesArchive.NONE
-      ? "No usable archive"
-      : "Archive not checked";
+      ? t`No usable archive`
+      : t`Archive not checked`;
   return { color: archiveColors[tone], label: [originalLabels[original], archiveLabel, marker?.label].filter(Boolean).join(" · "), marker };
 }
 
@@ -82,7 +83,7 @@ export function filesEntryData(entry: FilesEntry, index?: number): FileData {
       status: { color: archiveColors.error, label: entry.error },
     };
   }
-  if (!entry.reference) throw new Error("File reference is missing");
+  if (!entry.reference) throw new Error(t`File reference is missing`);
   const target = entry.reference.target;
   const isDir = entry.kind === EntryKind.DIRECTORY;
   const location = target.oneofKind === "location" ? target.location : undefined;

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useState } from "react";
 import { Button, MenuItem, TextField } from "@mui/material";
@@ -19,6 +20,9 @@ export function jobFilterFromParams(params: URLSearchParams): JobFilter {
     ...(media && /^[1-9]\d*$/.test(media) ? { mediaId: BigInt(media) } : {}),
   };
 }
+const locationOption = (name: string) => t`Location · ${name}`;
+const mediaOption = (name: string) => t`Media · ${name}`;
+
 export const JobFilters = () => {
   const [params, setParams] = useSearchParams();
   const filter = jobFilterFromParams(params);
@@ -44,7 +48,7 @@ export const JobFilters = () => {
       setLoaded(true);
       setError("");
     } catch (error) {
-      setError(errorMessage(error, "Could not list resources"));
+      setError(errorMessage(error, t`Could not list resources`));
     } finally {
       setLoading(false);
     }
@@ -57,6 +61,8 @@ export const JobFilters = () => {
     setParams(next);
   };
   const resource = filter.locationId ? `location:${filter.locationId}` : filter.mediaId ? `media:${filter.mediaId}` : "";
+  const locationLabel = String(filter.locationId);
+  const mediaLabel = String(filter.mediaId);
   const knownResource = locations.some((value) => resource === `location:${value.id}`) || media.some((value) => resource === `media:${value.id}`);
   return (
     <div className="job-filters">
@@ -64,12 +70,12 @@ export const JobFilters = () => {
         className="job-filter"
         select
         size="small"
-        label="Job type"
+        label={t`Job type`}
         slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
         value={filter.kind ?? ""}
         onChange={(event) => change("kind", event.target.value)}
       >
-        <MenuItem value="">All types</MenuItem>
+        <MenuItem value="">{t`All types`}</MenuItem>
         {jobKinds.map((kind) => (
           <MenuItem key={kind} value={kind}>
             {jobLabel(kind)}
@@ -80,7 +86,7 @@ export const JobFilters = () => {
         className="job-filter job-filter-resource"
         select
         size="small"
-        label="Resource"
+        label={t`Resource`}
         value={resource}
         slotProps={{
           inputLabel: { shrink: true },
@@ -102,21 +108,21 @@ export const JobFilters = () => {
           setParams(next);
         }}
       >
-        <MenuItem value="">All resources</MenuItem>
-        {resource && !knownResource && <MenuItem value={resource}>{filter.locationId ? `Location ${filter.locationId}` : `Media ${filter.mediaId}`}</MenuItem>}
+        <MenuItem value="">{t`All resources`}</MenuItem>
+        {resource && !knownResource && <MenuItem value={resource}>{filter.locationId ? t`Location ${locationLabel}` : t`Media ${mediaLabel}`}</MenuItem>}
         {locations.map((value) => (
           <MenuItem key={`location:${value.id}`} value={`location:${value.id}`}>
-            Location · {value.name}
+            {locationOption(value.name)}
           </MenuItem>
         ))}
         {media.map((value) => (
           <MenuItem key={`media:${value.id}`} value={`media:${value.id}`}>
-            Media · {value.name}
+            {mediaOption(value.name)}
           </MenuItem>
         ))}
-        {(loading || choices.loading) && <MenuItem disabled>Loading resources…</MenuItem>}
+        {(loading || choices.loading) && <MenuItem disabled>{t`Loading resources…`}</MenuItem>}
       </TextField>
-      {(filter.kind !== undefined || resource) && <Button onClick={() => setParams({})}>Clear</Button>}
+      {(filter.kind !== undefined || resource) && <Button onClick={() => setParams({})}>{t`Clear`}</Button>}
       {(error || choices.error) && (
         <Feedback
           severity="error"
@@ -128,7 +134,7 @@ export const JobFilters = () => {
                 if (error) void loadMedia();
               }}
             >
-              Retry
+              {t`Retry`}
             </Button>
           }
         >

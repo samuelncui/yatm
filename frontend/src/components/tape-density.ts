@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 /** The standard LTO density codes the UI can name; any other code shows as the code alone. */
 export const tapeDensityNames: ReadonlyMap<number, string> = new Map([
   [0x40, "LTO-1"],
@@ -13,7 +14,7 @@ export const tapeDensityNames: ReadonlyMap<number, string> = new Map([
 ]);
 
 export const densityLabel = (code?: number): string => {
-  if (code === undefined) return "Unknown density";
+  if (code === undefined) return t`Unknown density`;
   const hex = `0x${code.toString(16).toUpperCase().padStart(2, "0")}`;
   const name = tapeDensityNames.get(code);
   return name ? `${hex} ${name}` : hex;

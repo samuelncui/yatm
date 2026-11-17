@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import {
@@ -39,7 +40,7 @@ export const LocationPathPicker = ({ initialPath, onChoose, onClose }: { initial
         if (controller.signal.aborted) return;
         setPage((current) => (cursor && current ? { ...reply, directories: [...current.directories, ...reply.directories] } : reply));
       } catch (failure) {
-        if (!controller.signal.aborted) setError({ message: errorMessage(failure, "Could not browse directory"), path: requestPath, cursor });
+        if (!controller.signal.aborted) setError({ message: errorMessage(failure, t`Could not browse directory`), path: requestPath, cursor });
       } finally {
         if (!controller.signal.aborted) setLoading(false);
         if (request.current === controller) request.current = null;
@@ -70,20 +71,21 @@ export const LocationPathPicker = ({ initialPath, onChoose, onClose }: { initial
   };
   return (
     <Dialog open onClose={close} maxWidth="sm" fullWidth scroll="paper">
-      <DialogTitle>Choose directory</DialogTitle>
+      <DialogTitle>{t`Choose directory`}</DialogTitle>
       <DialogContent dividers>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Button disabled={!path} onClick={() => navigate(paths.slice(0, -1))}>
-            Back
+            {t`Back`}
           </Button>
           <Button disabled={!path} onClick={() => navigate([])}>
-            Allowed directories
+            {t`Allowed directories`}
           </Button>
         </Stack>
         {path && <Typography sx={{ overflowWrap: "anywhere", my: 1 }}>{page?.path ?? path}</Typography>}
-        {loading && (page?.directories.length ? <LinearProgress aria-label="Loading directories" /> : <ListPlaceholder loading label="Loading directories…" />)}
-        {error && <Feedback action={<Button onClick={() => void load(error.cursor, error.path)}>Retry</Button>}>{error.message}</Feedback>}
-        <List aria-label="Directories" disablePadding>
+        {loading &&
+          (page?.directories.length ? <LinearProgress aria-label={t`Loading directories`} /> : <ListPlaceholder loading label={t`Loading directories…`} />)}
+        {error && <Feedback action={<Button onClick={() => void load(error.cursor, error.path)}>{t`Retry`}</Button>}>{error.message}</Feedback>}
+        <List aria-label={t`Directories`} disablePadding>
           {page?.directories.map((directory) => (
             <ListItemButton key={directory.path} onClick={() => navigate([...paths, directory.path])}>
               <ListItemIcon>
@@ -93,18 +95,18 @@ export const LocationPathPicker = ({ initialPath, onChoose, onClose }: { initial
             </ListItemButton>
           ))}
         </List>
-        {!loading && !error && page?.directories.length === 0 && <ListPlaceholder label="No directories." />}
+        {!loading && !error && page?.directories.length === 0 && <ListPlaceholder label={t`No directories.`} />}
         {page?.nextCursor && (
           <Button disabled={loading || !!error} onClick={() => void load(page.nextCursor, page.path)}>
-            Load more directories
+            {t`Load more directories`}
           </Button>
         )}
       </DialogContent>
       <DialogActions>
         <Button variant="contained" disabled={loading || !!error || !page?.path} onClick={() => onChoose(page!.path)}>
-          Choose directory
+          {t`Choose directory`}
         </Button>
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{t`Cancel`}</Button>
       </DialogActions>
     </Dialog>
   );

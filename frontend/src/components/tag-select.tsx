@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -55,7 +56,7 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
         })
         .catch((failure) => {
           if (pending.current === generation) {
-            setResults({ query, names: [], nextCursor: "", loading: false, error: errorMessage(failure, "Could not search tags") });
+            setResults({ query, names: [], nextCursor: "", loading: false, error: errorMessage(failure, t`Could not search tags`) });
           }
         });
     }, 200);
@@ -85,7 +86,7 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
       .catch((failure) => {
         if (request.current === generation) {
           setResults((previous) =>
-            previous?.query === query ? { ...previous, loading: false, error: errorMessage(failure, "Could not search tags") } : previous,
+            previous?.query === query ? { ...previous, loading: false, error: errorMessage(failure, t`Could not search tags`) } : previous,
           );
         }
       });
@@ -110,7 +111,7 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
                 }
                 disabled={current.loading || disabled}
               >
-                {current.nextCursor ? "Retry loading tags" : "Retry"}
+                {current.nextCursor ? t`Retry loading tags` : t`Retry`}
               </Button>
             }
           >
@@ -118,7 +119,7 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
           </Feedback>
         ) : (
           <Button size="small" onClick={loadMore} disabled={current.loading || disabled}>
-            Load more tags
+            {t`Load more tags`}
           </Button>
         )}
       </>
@@ -149,8 +150,8 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
         filterOptions={(values) => values}
         options={canAdd ? [query, ...names] : names}
         loading={Boolean(current?.loading)}
-        loadingText="Searching tags…"
-        noOptionsText={current?.error ? "Could not search tags" : "No matching tags"}
+        loadingText={t`Searching tags…`}
+        noOptionsText={current?.error ? t`Could not search tags` : t`No matching tags`}
         value={value}
         inputValue={input}
         open={open && !disabled}
@@ -172,7 +173,7 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
         }}
         renderOption={({ key, ...props }, option) => (
           <li key={key} {...props}>
-            {canAdd && option === query ? `Add tag “${option}”` : option}
+            {canAdd && option === query ? t`Add tag “${option}”` : option}
           </li>
         )}
         slots={{ paper: SearchPaper }}
@@ -185,8 +186,8 @@ export const TagSelect = ({ value, onChange, disabled = false, error = false, he
           <TextField
             {...params}
             inputRef={inputRef}
-            label="Tags"
-            placeholder={value.length === 0 ? "Type a tag and press Enter" : "Add another tag"}
+            label={t`Tags`}
+            placeholder={value.length === 0 ? t`Type a tag and press Enter` : t`Add another tag`}
             error={error}
             helperText={helperText}
           />

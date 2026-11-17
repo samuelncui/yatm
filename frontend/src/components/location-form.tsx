@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Button, Checkbox, Grid, Stack, TextField } from "@mui/material";
@@ -57,7 +58,7 @@ export const LocationForm = ({
       leave.current = true;
       onSaved(reply.location);
     } catch (error) {
-      setError(errorMessage(error, "Could not save location"));
+      setError(errorMessage(error, t`Could not save location`));
     } finally {
       setBusy(false);
     }
@@ -79,14 +80,14 @@ export const LocationForm = ({
           void save();
         }}
       >
-        <SettingsSection title="Location">
+        <SettingsSection title={t`Location`}>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 4 }}>
               <TextField
                 required
                 fullWidth
                 disabled={busy}
-                label="Name"
+                label={t`Name`}
                 value={value.name}
                 onChange={(event) => setValue({ ...value, name: event.target.value })}
               />
@@ -97,19 +98,19 @@ export const LocationForm = ({
                   required
                   fullWidth
                   disabled={busy}
-                  label="Directory"
+                  label={t`Directory`}
                   value={value.rootPath}
                   onChange={(event) => setValue({ ...value, rootPath: event.target.value })}
-                  helperText="A directory on the computer running YATM, within the administrator's allowed roots."
+                  helperText={t`A directory on the computer running YATM, within the administrator's allowed roots.`}
                 />
                 <Button disabled={busy} onClick={() => setBrowsing(true)} sx={{ flexShrink: 0, mt: { sm: 1 } }}>
-                  Browse directories
+                  {t`Browse directories`}
                 </Button>
               </Stack>
             </Grid>
             <Grid size={12}>
               <SettingsField
-                label="Preferred restore destination"
+                label={t`Preferred restore destination`}
                 control={<Checkbox disabled={busy} checked={value.restoreTarget} onChange={(_, restoreTarget) => setValue({ ...value, restoreTarget })} />}
               />
             </Grid>
@@ -117,7 +118,7 @@ export const LocationForm = ({
               <TextField
                 fullWidth
                 disabled={busy}
-                label="Ignore"
+                label={t`Ignore`}
                 multiline
                 minRows={5}
                 value={value.ignore}
@@ -126,34 +127,35 @@ export const LocationForm = ({
                 slotProps={{ htmlInput: { style: { fontFamily: "ui-monospace, monospace" } } }}
                 helperText={
                   <>
-                    Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded.
-                    {!source && " Leave blank to use the server's default rules. Custom text replaces those defaults."}
+                    {source
+                      ? t`Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded.`
+                      : t`Gitignore syntax for browsing, selection and new original links; folder .gitignore files are not loaded. Leave blank to use the server's default rules. Custom text replaces those defaults.`}
                   </>
                 }
               />
             </Grid>
           </Grid>
         </SettingsSection>
-        <SettingsSection title="Advanced" collapsible>
+        <SettingsSection title={t`Advanced`} collapsible>
           <SettingsField
-            label="Use mmap for content reads"
-            description="Use memory mapping when Archive and Scan read original file content. Off by default."
+            label={t`Use mmap for content reads`}
+            description={t`Use memory mapping when Archive and Scan read original file content. Off by default.`}
             control={<Checkbox disabled={busy} checked={value.useMmap} onChange={(_, useMmap) => setValue({ ...value, useMmap })} />}
           />
         </SettingsSection>
         {source && scopeChanged && (
           <Alert severity="info">
-            Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths.
+            {t`Recorded history is kept. Later operations use the current directory and Ignore rules; existing Jobs keep their original selections and paths.`}
           </Alert>
         )}
         {error && <Feedback severity="error">{error}</Feedback>}
         <ActionRow>
           <Button type="submit" variant="contained" disabled={busy || !value.name.trim() || !value.rootPath.trim() || (!!source && !dirty)}>
-            {busy ? "Saving…" : source ? "Save changes" : "Add location"}
+            {busy ? t`Saving…` : source ? t`Save changes` : t`Add location`}
           </Button>
           {actions?.beforeCancel}
           <Button disabled={busy} onClick={cancel}>
-            Cancel
+            {t`Cancel`}
           </Button>
           {actions?.afterCancel}
         </ActionRow>
@@ -168,7 +170,7 @@ export const LocationForm = ({
           }}
         />
       )}
-      <UnsavedChangesPrompt when={() => dirty && !leave.current}>Your Location configuration has not been saved.</UnsavedChangesPrompt>
+      <UnsavedChangesPrompt when={() => dirty && !leave.current}>{t`Your Location configuration has not been saved.`}</UnsavedChangesPrompt>
     </>
   );
 };

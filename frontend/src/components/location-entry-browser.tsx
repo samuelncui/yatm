@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileBrowser } from "@/components/file-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box } from "@mui/material";
@@ -57,7 +58,7 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
     } catch (error) {
       if (sequence === request.current) {
         setPositions([]);
-        setError(errorMessage(error, "Could not read this directory"));
+        setError(errorMessage(error, t`Could not read this directory`));
       }
     } finally {
       if (sequence === request.current) setPending(false);
@@ -136,9 +137,9 @@ export const LocationEntryBrowser = ({ source, onChoose, fill }: { source: Locat
               error ? (
                 <DirectoryReadError error={error} onRetry={load} />
               ) : pending ? (
-                <ListPlaceholder loading label="Reading this folder…" />
+                <ListPlaceholder loading label={t`Reading this folder…`} />
               ) : (
-                <ListPlaceholder label="This folder is empty" />
+                <ListPlaceholder label={t`This folder is empty`} />
               )
             }
           />

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useRef, useState } from "react";
 
@@ -29,7 +30,7 @@ export const useMediaInspect = () => {
     } catch (reason) {
       if (current !== sequence.current) return null;
       setReply(null);
-      setError(errorMessage(reason, "Unable to inspect Media"));
+      setError(errorMessage(reason, t`Unable to inspect Media`));
       return null;
     } finally {
       if (current === sequence.current) setLoading(false);
@@ -51,7 +52,7 @@ export const MediaInspectResult = ({ reply, loading, error }: { reply: InspectMe
     return (
       <Stack direction="row" spacing={1} sx={{ mt: 2, alignItems: "center" }}>
         <CircularProgress size={18} />
-        <span>Inspecting Media…</span>
+        <span>{t`Inspecting Media…`}</span>
       </Stack>
     );
   }
@@ -59,25 +60,28 @@ export const MediaInspectResult = ({ reply, loading, error }: { reply: InspectMe
   if (!reply) return null;
 
   const media = reply.media;
-  const kind = media?.kind === MediaKind.TAPE ? "Tape" : media?.kind === MediaKind.VOLUME ? "Volume" : "Media";
+  const kind = media?.kind === MediaKind.TAPE ? t`Tape` : media?.kind === MediaKind.VOLUME ? t`Volume` : t`Media`;
+  const name = media?.name || t`Unnamed`;
+  const fileCount = media ? reply.fileCount.toString() : "";
+  const written = media ? formatFilesize(media.writtenBytes) : "";
+  const mountPoint = reply.mountPoint ?? "";
+  const created = media ? contentTime(media.createdAtNs) : "";
+  const lastWritten = reply.lastWrittenAtNs !== undefined ? contentTime(reply.lastWrittenAtNs) : "";
+  const space = media?.kind === MediaKind.VOLUME ? volumeSpaceLabel(media) : "";
   return (
     <Stack spacing={0.5} sx={{ mt: 2 }}>
-      <strong>{reply.identity || "No Media identity detected"}</strong>
-      {reply.mountPoint && <span>Mount point: {reply.mountPoint}</span>}
+      <strong>{reply.identity || t`No Media identity detected`}</strong>
+      {reply.mountPoint && <span>{t`Mount point: ${mountPoint}`}</span>}
       {media ? (
         <>
-          <span>
-            {kind}: {media.name || "Unnamed"}
-          </span>
-          <span>
-            {reply.fileCount.toString()} files · {formatFilesize(media.writtenBytes)} written
-          </span>
-          <span>Created {contentTime(media.createdAtNs)}</span>
-          {reply.lastWrittenAtNs !== undefined && <span>Last written {contentTime(reply.lastWrittenAtNs)}</span>}
-          {media.kind === MediaKind.VOLUME && <span>{media.mounted ? `Online · ${volumeSpaceLabel(media)}` : volumeSpaceLabel(media)}</span>}
+          <span>{t`${kind}: ${name}`}</span>
+          <span>{t`${fileCount} files · ${written} written`}</span>
+          <span>{t`Created ${created}`}</span>
+          {reply.lastWrittenAtNs !== undefined && <span>{t`Last written ${lastWritten}`}</span>}
+          {media.kind === MediaKind.VOLUME && <span>{media.mounted ? t`Online · ${space}` : space}</span>}
         </>
       ) : (
-        <Alert severity="info">This Media is not registered in the Library.</Alert>
+        <Alert severity="info">{t`This Media is not registered in the Library.`}</Alert>
       )}
     </Stack>
   );

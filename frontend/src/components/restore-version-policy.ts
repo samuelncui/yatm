@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileScope, FileSelection, RestoreVersionMatch, type RestoreVersionResolution } from "@/entity";
 import { contentTime, versionArchiveLabel } from "@/components/content-status";
 import type { SelectionEntry } from "@/components/selection-waitlist";
@@ -34,20 +35,27 @@ export const followRestorePolicy = (entries: SelectionEntry[]): SelectionEntry[]
 };
 
 export const restoreVersionLabel = (entry: SelectionEntry, resolution?: RestoreVersionResolution, cutoff?: bigint): string => {
-  if (entry.isDir) return cutoff !== undefined ? `Latest archives at or before ${contentTime(cutoff)}` : "Latest saved versions";
+  if (entry.isDir) {
+    if (cutoff === undefined) return t`Latest saved versions`;
+    const time = contentTime(cutoff);
+    return t`Latest archives at or before ${time}`;
+  }
   if (entry.version) {
     const outside = cutoff !== undefined && entry.version.firstArchivedAtNs !== undefined && entry.version.firstArchivedAtNs > cutoff;
-    return `Custom version · ${versionArchiveLabel(entry.version)}${outside ? " · After selected time" : ""}`;
+    const date = versionArchiveLabel(entry.version);
+    return outside ? t`Custom version · ${date} · After selected time` : t`Custom version · ${date}`;
   }
-  if (!resolution) return "Finding version…";
+  if (!resolution) return t`Finding version…`;
   switch (resolution.match) {
     case RestoreVersionMatch.NO_SAVED_VERSION:
-      return "No saved version";
+      return t`No saved version`;
     case RestoreVersionMatch.AFTER_CUTOFF:
-      return "No archive at or before selected time";
+      return t`No archive at or before selected time`;
     case RestoreVersionMatch.DATE_UNKNOWN:
-      return "Archive date unknown";
-    default:
-      return `Saved ${contentTime(resolution.archivedAtNs)}${cutoff !== undefined ? " · Follows selected time" : " · Latest"}`;
+      return t`Archive date unknown`;
+    default: {
+      const time = contentTime(resolution.archivedAtNs);
+      return cutoff !== undefined ? t`Saved ${time} · Follows selected time` : t`Saved ${time} · Latest`;
+    }
   }
 };

@@ -1,5 +1,7 @@
+import { i18n } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { readStored, writeStored, stringCodec } from "@/state/storage";
-import { lazy, Suspense, SyntheticEvent, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { LibraryLayoutToggle, PageNavigation, PageNavigationDivider, PageTabs, SidebarTabs } from "@/components/page-navigation";
 import { SettingsEditorPage } from "@/components/settings-page";
 import { Routes, Route, useNavigate, Navigate, useLocation, Link } from "react-router";
@@ -14,7 +16,8 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Tab from "@mui/material/Tab";
 import ToggleButton from "@mui/material/ToggleButton";
 import { styled, ThemeProvider } from "@mui/material/styles";
-import { theme } from "@/theme";
+import { createAppTheme } from "@/theme";
+import { useLocale } from "@/i18n";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -55,10 +58,10 @@ const NewJobType = "new-job";
 const libraryLayoutStorageKey = "library:file-layout";
 
 const navigation = [
-  { label: "Library", value: FileBrowserType, icon: <Inventory2RoundedIcon /> },
-  { label: "Tools", value: "tools/identical", icon: <ViewColumnRoundedIcon /> },
-  { label: "Jobs", value: JobsType, icon: <WorkHistoryRoundedIcon /> },
-  { label: "Settings", value: SettingsType, icon: <SettingsRoundedIcon /> },
+  { label: msg`Library`, value: FileBrowserType, icon: <Inventory2RoundedIcon /> },
+  { label: msg`Tools`, value: "tools/identical", icon: <ViewColumnRoundedIcon /> },
+  { label: msg`Jobs`, value: JobsType, icon: <WorkHistoryRoundedIcon /> },
+  { label: msg`Settings`, value: SettingsType, icon: <SettingsRoundedIcon /> },
 ];
 
 const moduleByPage: Record<string, string> = {
@@ -94,9 +97,9 @@ const ModuleNavigation = ({
 
   if (page === "tools")
     return (
-      <PageNavigation label="Tools">
+      <PageNavigation label={t`Tools`}>
         <PageTabs placement="module" value="identical">
-          <Tab value="identical" label="Identical files" />
+          <Tab value="identical" label={t`Identical files`} />
         </PageTabs>
       </PageNavigation>
     );
@@ -104,16 +107,16 @@ const ModuleNavigation = ({
   if (page === SettingsType) {
     const path = location.pathname.replace(/\/+$/, "");
     return (
-      <PageNavigation label="Settings views">
+      <PageNavigation label={t`Settings views`}>
         <PageTabs
           placement="module"
           value={["/settings/library", "/settings/preview", "/settings/jobs", "/settings/devices"].includes(path) ? path.slice(1) : LocationsType}
         >
-          <Tab component={Link} to={"/" + LocationsType} label="Locations" value={LocationsType} />
-          <Tab component={Link} to="/settings/library" label="Library" value="settings/library" />
-          <Tab component={Link} to="/settings/preview" label="Preview" value="settings/preview" />
-          <Tab component={Link} to="/settings/jobs" label="Jobs" value="settings/jobs" />
-          <Tab component={Link} to="/settings/devices" label="Devices" value="settings/devices" />
+          <Tab component={Link} to={"/" + LocationsType} label={t`Locations`} value={LocationsType} />
+          <Tab component={Link} to="/settings/library" label={t`Library`} value="settings/library" />
+          <Tab component={Link} to="/settings/preview" label={t`Preview`} value="settings/preview" />
+          <Tab component={Link} to="/settings/jobs" label={t`Jobs`} value="settings/jobs" />
+          <Tab component={Link} to="/settings/devices" label={t`Devices`} value="settings/devices" />
         </PageTabs>
       </PageNavigation>
     );
@@ -126,17 +129,17 @@ const ModuleNavigation = ({
     };
 
     return (
-      <PageNavigation label="Library views">
+      <PageNavigation label={t`Library views`}>
         <PageTabs placement="module" value={page} onChange={openPage}>
-          <Tab label="Files" value={FileBrowserType} />
-          <Tab label="Media" value={MediaType} />
+          <Tab label={t`Files`} value={FileBrowserType} />
+          <Tab label={t`Media`} value={MediaType} />
         </PageTabs>
         {page === FileBrowserType && (
-          <LibraryLayoutToggle className="library-layout-toggle" value={libraryLayout} exclusive onChange={changeLayout} aria-label="File browser layout">
-            <ToggleButton value={libraryLayouts.dual} aria-label="Dual pane" title="Dual pane">
+          <LibraryLayoutToggle className="library-layout-toggle" value={libraryLayout} exclusive onChange={changeLayout} aria-label={t`File browser layout`}>
+            <ToggleButton value={libraryLayouts.dual} aria-label={t`Dual pane`} title={t`Dual pane`}>
               <ViewColumnRoundedIcon />
             </ToggleButton>
-            <ToggleButton value={libraryLayouts.inspector} aria-label="Inspector" title="Inspector">
+            <ToggleButton value={libraryLayouts.inspector} aria-label={t`Inspector`} title={t`Inspector`}>
               <PreviewRoundedIcon />
             </ToggleButton>
           </LibraryLayoutToggle>
@@ -149,18 +152,18 @@ const ModuleNavigation = ({
   if (page !== JobsType && !creatingJob) return null;
 
   return (
-    <PageNavigation label="Job views">
+    <PageNavigation label={t`Job views`}>
       <PageTabs placement="module" value={creatingJob ? NewJobType : JobsType}>
-        <Tab component={Link} to={jobListPath(location.state?.returnTo)} label="All" value={JobsType} />
-        <Tab component={Link} to={"/" + ArchiveType} label="New" value={NewJobType} />
+        <Tab component={Link} to={jobListPath(location.state?.returnTo)} label={t`All`} value={JobsType} />
+        <Tab component={Link} to={"/" + ArchiveType} label={t`New`} value={NewJobType} />
       </PageTabs>
       {creatingJob && (
         <>
           <PageNavigationDivider />
           <PageTabs placement="compact" value={page} onChange={openPage}>
-            <Tab label="Archive" value={ArchiveType} />
-            <Tab label="Restore" value={RestoreType} />
-            <Tab label="Scan" value={ScanType} />
+            <Tab label={t`Archive`} value={ArchiveType} />
+            <Tab label={t`Restore`} value={RestoreType} />
+            <Tab label={t`Scan`} value={ScanType} />
           </PageTabs>
         </>
       )}
@@ -170,6 +173,8 @@ const ModuleNavigation = ({
 
 const App = () => {
   const location = useLocation();
+  const { locale } = useLocale();
+  const theme = useMemo(() => createAppTheme(locale), [locale]);
   const [libraryLayout, setLibraryLayout] = useState<LibraryLayout>(() =>
     readStored("local", libraryLayoutStorageKey, stringCodec) === libraryLayouts.dual ? libraryLayouts.dual : libraryLayouts.inspector,
   );
@@ -191,15 +196,15 @@ const App = () => {
       toast.error(
         <div>
           <ErrorMessage>
-            <b>RPC Request Error</b>
+            <b>{t`RPC Request Error`}</b>
           </ErrorMessage>
           <ErrorMessage>
-            <b>Method: </b>
+            <b>{t`Method: `}</b>
             {error.reason.methodName}
           </ErrorMessage>
           <ErrorMessage>
-            <b>Message: </b>
-            {errorMessage(error.reason, "Request failed")}
+            <b>{t`Message: `}</b>
+            {errorMessage(error.reason, t`Request failed`)}
           </ErrorMessage>
         </div>,
       );
@@ -220,10 +225,10 @@ const App = () => {
             </span>
             <span className="app-brand-copy">
               <strong>YATM</strong>
-              <small>Media archive</small>
+              <small>{t`Media archive`}</small>
             </span>
           </div>
-          <SidebarTabs className="tabs" value={currentModule} orientation="vertical" aria-label="YATM modules">
+          <SidebarTabs className="tabs" value={currentModule} orientation="vertical" aria-label={t`YATM modules`}>
             {navigation.map((item) => (
               <Tab
                 key={item.value}
@@ -231,7 +236,7 @@ const App = () => {
                 to={item.value === JobsType ? jobListPath(location.state?.returnTo) : "/" + item.value}
                 icon={item.icon}
                 iconPosition="start"
-                label={item.label}
+                label={i18n._(item.label)}
                 value={item.value}
               />
             ))}
@@ -257,7 +262,11 @@ const App = () => {
                   <Route
                     path="settings/library"
                     element={
-                      <SettingsEditorPage key="library" title="Library" description="What Library shows, how it removes items, and where its data can go.">
+                      <SettingsEditorPage
+                        key="library"
+                        title={t`Library`}
+                        description={t`What Library shows, how it removes items, and where its data can go.`}
+                      >
                         <SettingsBrowser />
                       </SettingsEditorPage>
                     }
@@ -267,8 +276,8 @@ const App = () => {
                     element={
                       <SettingsEditorPage
                         key="preview"
-                        title="Preview"
-                        description="Runtime controls apply to the next file; routes and output choices apply to new Jobs."
+                        title={t`Preview`}
+                        description={t`Runtime controls apply to the next file; routes and output choices apply to new Jobs.`}
                       >
                         <PreviewSettingsBrowser />
                       </SettingsEditorPage>
@@ -279,9 +288,9 @@ const App = () => {
                     element={
                       <SettingsEditorPage
                         key="jobs"
-                        title="Jobs"
-                        label="Job"
-                        description="Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
+                        title={t`Jobs`}
+                        label={t`Job`}
+                        description={t`Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits.`}
                       >
                         <JobSettingsBrowser />
                       </SettingsEditorPage>
@@ -292,8 +301,8 @@ const App = () => {
                     element={
                       <SettingsEditorPage
                         key="devices"
-                        title="Devices"
-                        description="Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device."
+                        title={t`Devices`}
+                        description={t`Defaults apply to later Tape FORMAT choices. Saving Device settings does not operate the device.`}
                       >
                         <DeviceSettingsBrowser />
                       </SettingsEditorPage>

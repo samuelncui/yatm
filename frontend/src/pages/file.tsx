@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileBrowser as ChonkyFileBrowser } from "@/components/file-browser";
 import { writeStored, stringCodec } from "@/state/storage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,7 +30,7 @@ import { useFileBrowser } from "@/components/use-file-browser";
 const SearchStatus = ({ query, onClose }: { query: string; onClose: () => void }) => (
   <div className="search-result-bar" title={query}>
     <Button size="small" onClick={onClose}>
-      Back to folder
+      {t`Back to folder`}
     </Button>
   </div>
 );
@@ -87,13 +88,13 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
   const locateFromLeft = useCallback(
     (file: LibraryFileData) => {
       const locate = layout === libraryLayouts.dual ? rightLocate.current : leftLocate.current;
-      if (locate) runUIAction(() => locate(file), "Locate file failed");
+      if (locate) runUIAction(() => locate(file), t`Locate file failed`);
     },
     [layout],
   );
   const locateFromRight = useCallback((file: LibraryFileData) => {
     const locate = leftLocate.current;
-    if (locate) runUIAction(() => locate(file), "Locate file failed");
+    if (locate) runUIAction(() => locate(file), t`Locate file failed`);
   }, []);
 
   const leftBrowser = useFileBrowser(
@@ -156,22 +157,25 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
     <Box className="browser-box library-file-browser">
       <LibraryFilters
         initialQuery={initialQuery}
-        scopeLabel={source.kind === "library" ? "Library" : source.name}
+        scopeLabel={source.kind === "library" ? t`Library` : source.name}
         locationScope={source.kind === "location" ? source : undefined}
         searchActive={!!leftBrowser.searchState || (layout === libraryLayouts.dual && !!rightBrowser.searchState)}
         onSearch={(query) => {
-          runUIAction(() => activeBrowser.search(query), "Search failed");
+          runUIAction(() => activeBrowser.search(query), t`Search failed`);
         }}
         onClear={() =>
-          runUIAction(async () => {
-            await Promise.all([leftBrowser.closeSearch(), ...(layout === libraryLayouts.dual ? [rightBrowser.closeSearch()] : [])]);
-          }, "Clear search failed")
+          runUIAction(
+            async () => {
+              await Promise.all([leftBrowser.closeSearch(), ...(layout === libraryLayouts.dual ? [rightBrowser.closeSearch()] : [])]);
+            },
+            t`Clear search failed`,
+          )
         }
       />
       <Grid className="browser-container" container columnSpacing={1.5}>
         <Grid
           component="section"
-          aria-label="Left file pane"
+          aria-label={t`Left file pane`}
           className={activePane === "left" || layout !== libraryLayouts.dual ? "browser browser-active" : "browser"}
           size={layout === libraryLayouts.dual ? 6 : 7}
           onMouseDown={() => setActivePane("left")}
@@ -186,7 +190,7 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
             clearSelectionOnOutsideClick={clearSelectionOnOutsideClick}
           >
             {leftBrowser.searchState && (
-              <SearchStatus query={leftBrowser.searchState.query} onClose={() => runUIAction(leftBrowser.closeSearch, "Close search failed")} />
+              <SearchStatus query={leftBrowser.searchState.query} onClose={() => runUIAction(leftBrowser.closeSearch, t`Close search failed`)} />
             )}
             <FileNavbar rootContent={leftBrowser.selector} />
             <FileToolbar layout="inline" {...leftBrowser.toolbarProps}>
@@ -200,7 +204,7 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
         {layout === libraryLayouts.dual ? (
           <Grid
             component="section"
-            aria-label="Right file pane"
+            aria-label={t`Right file pane`}
             className={activePane === "right" ? "browser browser-active" : "browser"}
             size={6}
             onMouseDown={() => setActivePane("right")}
@@ -214,7 +218,7 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
               clearSelectionOnOutsideClick={clearSelectionOnOutsideClick}
             >
               {rightBrowser.searchState && (
-                <SearchStatus query={rightBrowser.searchState.query} onClose={() => runUIAction(rightBrowser.closeSearch, "Close search failed")} />
+                <SearchStatus query={rightBrowser.searchState.query} onClose={() => runUIAction(rightBrowser.closeSearch, t`Close search failed`)} />
               )}
               <FileNavbar rootContent={rightBrowser.selector} />
               <FileToolbar layout="inline" {...rightBrowser.toolbarProps}>

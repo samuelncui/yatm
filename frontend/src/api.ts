@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import type { FileData } from "@samuelncui/chonky";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
 import {
@@ -64,7 +65,10 @@ export const settingsCli = new SettingsServiceClient(transport);
 
 export const Root: FileData = {
   id: "0",
-  name: "Library",
+  // Read on use, after the language catalog is loaded.
+  get name() {
+    return t`Library`;
+  },
   isDir: true,
   openable: true,
   selectable: true,
@@ -122,39 +126,49 @@ export function convertMedia(media: Array<Media>): MediaFileData[] {
 function mediaCapabilityLabel(media: Media): string {
   const kind =
     media.kind === MediaKind.TAPE
-      ? "Tape"
+      ? t`Tape`
       : media.profile?.kind.oneofKind === "volume" && media.profile.kind.volume.type === VolumeType.HM_SMR
         ? "HM-SMR"
         : "HDD";
   const read = accessLabel(media.capabilities?.read);
   const write = accessLabel(media.capabilities?.write);
   const availability = mediaAvailabilityLabel(media);
-  return `${kind} · ${read} read · ${write} write · ${availability}`;
+  return t`${kind} · ${read} read · ${write} write · ${availability}`;
 }
 
 /** A Volume's free space while mounted; otherwise the same mount requirement as its availability. */
-export const volumeSpaceLabel = (volume: Media): string =>
-  volume.mounted ? `${formatFilesize(volume.filesystemAvailableBytes ?? 0n)} available` : "Mount required";
+export const volumeSpaceLabel = (volume: Media): string => {
+  const space = formatFilesize(volume.filesystemAvailableBytes ?? 0n);
+  return volume.mounted ? t`${space} available` : t`Mount required`;
+};
+
+type MediaAvailability = "restore" | "mount" | "online";
+const mediaAvailability = (media: Media): MediaAvailability => {
+  if (media.capabilities?.read !== MediaAccess.CONCURRENT_RANDOM) return "restore";
+  if (media.kind === MediaKind.VOLUME && media.mounted !== true) return "mount";
+  return "online";
+};
 
 export function mediaAvailabilityLabel(media: Media): string {
-  if (media.capabilities?.read !== MediaAccess.CONCURRENT_RANDOM) return "Restore required";
-  if (media.kind === MediaKind.VOLUME && media.mounted !== true) return "Mount required";
-  return "Online";
+  const availability = mediaAvailability(media);
+  if (availability === "restore") return t`Restore required`;
+  if (availability === "mount") return t`Mount required`;
+  return t`Online`;
 }
 
 /** Media whose copies can be read now, without loading or mounting it first. */
-export const isMediaOnline = (media: Media | undefined): boolean => !!media && mediaAvailabilityLabel(media) === "Online";
+export const isMediaOnline = (media: Media | undefined): boolean => !!media && mediaAvailability(media) === "online";
 
 export function accessLabel(access?: MediaAccess): string {
   switch (access) {
     case MediaAccess.CONCURRENT_RANDOM:
-      return "concurrent random";
+      return t`concurrent random`;
     case MediaAccess.RANDOM:
-      return "random";
+      return t`random`;
     case MediaAccess.SEQUENTIAL:
-      return "sequential";
+      return t`sequential`;
     default:
-      return "unknown";
+      return t`unknown`;
   }
 }
 

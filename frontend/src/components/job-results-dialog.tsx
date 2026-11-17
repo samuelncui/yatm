@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Virtuoso, type ListRange } from "react-virtuoso";
@@ -129,7 +130,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
       }
       if (page.rows.length === 0) {
         if (viewport !== visibleRange.current) return;
-        if (target < totalRef.current) throw new Error("Could not load this window of Job results");
+        if (target < totalRef.current) throw new Error(t`Could not load this window of Job results`);
         return;
       }
       const rows = plan.backwards ? [...page.rows].reverse() : page.rows;
@@ -158,7 +159,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
     } catch (reason) {
       if (run === generation.current) {
         failed.current = true;
-        setError(errorMessage(reason, "Could not load Job results"));
+        setError(errorMessage(reason, t`Could not load Job results`));
       }
     } finally {
       if (run === generation.current) {
@@ -210,7 +211,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
   return (
     <>
       <Button size="small" onClick={show}>
-        Results
+        {t`Results`}
       </Button>
       {open && (
         <Dialog
@@ -225,7 +226,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
           <DialogTitle>{title}</DialogTitle>
           <DialogContent dividers className="job-results-content" sx={{ p: 0 }}>
             <div className="job-results-page">
-              {loading && <LinearProgress className="job-results-loading" aria-label="Loading Job results" />}
+              {loading && <LinearProgress className="job-results-loading" aria-label={t`Loading Job results`} />}
               {error && (
                 <Feedback
                   severity="error"
@@ -237,7 +238,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
                         schedule({ startIndex: visibleRange.current.start, endIndex: visibleRange.current.end }, totalRef.current === 0);
                       }}
                     >
-                      Retry
+                      {t`Retry`}
                     </Button>
                   }
                 >
@@ -261,7 +262,7 @@ export const JobResultsDialog = ({ jobId, title, view }: { jobId: bigint; title:
             </div>
           </DialogContent>
           <DialogActions>
-            <Button onClick={close}>Close</Button>
+            <Button onClick={close}>{t`Close`}</Button>
           </DialogActions>
         </Dialog>
       )}

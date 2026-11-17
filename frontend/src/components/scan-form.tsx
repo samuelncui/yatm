@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -72,6 +73,8 @@ export function scanRequest(target: ScanTarget, options: ScanOptions) {
   });
 }
 
+const removeLabel = (path: string) => t`Remove ${path}`;
+
 export const ScanForm = ({ initial }: { initial: InitialScan }) => {
   const navigate = useNavigate();
   const [target, setTarget] = useState<ScanTarget>(() => (initial.target.kind === "files" ? initial.target : emptyTarget(initial.target.kind)));
@@ -99,20 +102,22 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
       if (source.kind === "location") {
         const location = (await locationCli.get({ id: BigInt(source.id) }, { abort: controller.signal }).response).location;
         if (controller.signal.aborted) return;
-        if (!location || String(location.id) !== source.id) throw new Error("The selected Location is unavailable. Choose a Location.");
+        if (!location || String(location.id) !== source.id) throw new Error(t`The selected Location is unavailable. Choose a Location.`);
         setTarget({ kind: "location", location, partial: false, entries: [] });
         return;
       }
       const reply = await mediaCli.list({ param: { oneofKind: "ids", ids: { ids: [BigInt(source.id)] } } }, { abort: controller.signal }).response;
       if (controller.signal.aborted) return;
       const media = reply.media.find((item) => String(item.id) === source.id);
-      if (!media || ![MediaKind.TAPE, MediaKind.VOLUME].includes(media.kind))
-        throw new Error(`Media ${source.id} is no longer available. Choose another Media.`);
+      if (!media || ![MediaKind.TAPE, MediaKind.VOLUME].includes(media.kind)) {
+        const mediaID = source.id;
+        throw new Error(t`Media ${mediaID} is no longer available. Choose another Media.`);
+      }
       setTarget({ kind: "media", media });
     };
     void load()
       .catch((failure) => {
-        if (!controller.signal.aborted) setError(errorMessage(failure, "Could not load selected source"));
+        if (!controller.signal.aborted) setError(errorMessage(failure, t`Could not load selected source`));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingTarget(false);
@@ -144,6 +149,8 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
     !entries.some((entry) => entry.unavailableReason) &&
     (options.previewPolicy === PreviewPolicy.NONE || (canPreview && generation.available)) &&
     (target.kind === "media" ? !!target.media : target.kind === "files" ? entries.length > 0 : !!target.location && (!target.partial || entries.length > 0));
+  const priorityLabel = String(initial.priority);
+  const entryCount = entries.length;
   const submit = async () => {
     if (submitting.current || !ready) return;
     submitting.current = true;
@@ -152,10 +159,10 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
     try {
       const spec = scanRequest(target, options);
       const reply = await scanJobCli.create({ priority: initial.priority ?? 1n, spec }).response;
-      if (!reply.job) throw new Error("Job was not returned");
+      if (!reply.job) throw new Error(t`Job was not returned`);
       if (active.current) navigate(`/jobs/${reply.job.id}`);
     } catch (failure) {
-      if (active.current) setError(errorMessage(failure, "Could not create scan"));
+      if (active.current) setError(errorMessage(failure, t`Could not create scan`));
     } finally {
       if (active.current) setBusy(false);
       submitting.current = false;
@@ -166,21 +173,19 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
       <div className="short-form-page">
         <Card className="job-create-card">
           {initial.priority !== undefined && (
-            <Feedback severity="info">
-              Review the original selections and options, then submit to create a new Job. Priority: {String(initial.priority)}.
-            </Feedback>
+            <Feedback severity="info">{t`Review the original selections and options, then submit to create a new Job. Priority: ${priorityLabel}.`}</Feedback>
           )}
           {initial.creationReason && <Feedback severity="warning">{initial.creationReason}</Feedback>}
           <TextField
             select
-            label="Source"
+            label={t`Source`}
             value={target.kind}
             disabled={busy}
             onChange={(event) => changeTarget(emptyTarget(event.target.value as ScanTarget["kind"]))}
           >
-            <MenuItem value="location">Location</MenuItem>
-            <MenuItem value="files">Files</MenuItem>
-            <MenuItem value="media">Media</MenuItem>
+            <MenuItem value="location">{t`Location`}</MenuItem>
+            <MenuItem value="files">{t`Files`}</MenuItem>
+            <MenuItem value="media">{t`Media`}</MenuItem>
           </TextField>
           {target.kind === "location" && (
             <>
@@ -191,13 +196,13 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
               />
               <TextField
                 select
-                label="Scope"
+                label={t`Scope`}
                 value={target.partial ? "selected" : "all"}
                 disabled={busy || loadingTarget || !target.location}
                 onChange={(event) => setTarget({ ...target, partial: event.target.value === "selected" })}
               >
-                <MenuItem value="all">Entire Location</MenuItem>
-                <MenuItem value="selected">Selected files and folders</MenuItem>
+                <MenuItem value="all">{t`Entire Location`}</MenuItem>
+                <MenuItem value="selected">{t`Selected files and folders`}</MenuItem>
               </TextField>
             </>
           )}
@@ -205,29 +210,29 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
           {loadingTarget && (
             <Stack direction="row" role="status" sx={{ gap: 1, alignItems: "center" }}>
               <CircularProgress size={16} />
-              <Typography variant="body2">Loading source…</Typography>
+              <Typography variant="body2">{t`Loading source…`}</Typography>
             </Stack>
           )}
           {selectedRange && (
             <>
               <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
                 <Typography variant="body2" sx={{ flex: 1 }}>
-                  {entries.length} selected {entries.length === 1 ? "root" : "roots"}
+                  {entryCount === 1 ? t`${entryCount} selected root` : t`${entryCount} selected roots`}
                 </Typography>
                 <Button disabled={busy || loadingTarget} onClick={() => setChoosing(true)}>
-                  Edit selection
+                  {t`Edit selection`}
                 </Button>
                 <Button disabled={busy || !entries.length} onClick={() => setEntries([])}>
-                  Clear
+                  {t`Clear`}
                 </Button>
               </Stack>
               {!!entries.length && (
-                <List dense aria-label="Selected roots" sx={{ maxHeight: 220, overflowY: "auto", py: 0 }}>
+                <List dense aria-label={t`Selected roots`} sx={{ maxHeight: 220, overflowY: "auto", py: 0 }}>
                   {entries.map((entry, index) => (
                     <ListItem
                       key={`${scanSelectionKey(entry)}:${index}`}
                       secondaryAction={
-                        <IconButton disabled={busy} aria-label={`Remove ${entry.path}`} onClick={() => setEntries(entries.filter((_, at) => at !== index))}>
+                        <IconButton disabled={busy} aria-label={removeLabel(entry.path)} onClick={() => setEntries(entries.filter((_, at) => at !== index))}>
                           <Close fontSize="small" />
                         </IconButton>
                       }
@@ -245,28 +250,28 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
           )}
           <TextField
             select
-            label="Results"
+            label={t`Results`}
             helperText={
               options.resultPolicy === ScanResultPolicy.REPORT_ONLY
-                ? "Does not publish Library or inventory changes. Selected reads and Preview generation still run."
+                ? t`Does not publish Library or inventory changes. Selected reads and Preview generation still run.`
                 : undefined
             }
             disabled={busy}
             value={options.resultPolicy}
             onChange={(event) => update({ resultPolicy: Number(event.target.value) })}
           >
-            <MenuItem value={ScanResultPolicy.REPORT_ONLY}>View results only</MenuItem>
+            <MenuItem value={ScanResultPolicy.REPORT_ONLY}>{t`View results only`}</MenuItem>
             {target.kind === "media" ? (
               [
                 <MenuItem key="inventory" value={ScanResultPolicy.PUBLISH_INVENTORY}>
-                  Update inventory
+                  {t`Update inventory`}
                 </MenuItem>,
                 <MenuItem key="verify" value={ScanResultPolicy.VERIFY_COPIES}>
-                  Check recorded copies
+                  {t`Check recorded copies`}
                 </MenuItem>,
               ]
             ) : (
-              <MenuItem value={ScanResultPolicy.PUBLISH_ORIGINALS}>Update Library originals</MenuItem>
+              <MenuItem value={ScanResultPolicy.PUBLISH_ORIGINALS}>{t`Update Library originals`}</MenuItem>
             )}
           </TextField>
           <PreviewPolicySelect
@@ -277,34 +282,44 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
             helperText={
               target.kind === "media" && target.media && !canPreview
                 ? target.media.kind === MediaKind.TAPE
-                  ? "Not supported on Tape"
-                  : "Previews require random-readable Media"
+                  ? t`Not supported on Tape`
+                  : t`Previews require random-readable Media`
                 : undefined
             }
           />
           <SettingsSection
-            title="Advanced"
+            title={t`Advanced`}
             collapsible
             hasError={!!error}
-            description={`${verifying || options.signaturePolicy === ScanSignaturePolicy.FORCE_READ ? "Read every file" : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING ? "Read new and changed files" : "Reuse known signatures only"} · ${options.compare ? "Count matching archived copies" : "No archived copy comparison"}${!cacheApplies || options.writeSignatureCache ? "" : " · No signature cache"}`}
+            description={[
+              verifying || options.signaturePolicy === ScanSignaturePolicy.FORCE_READ
+                ? t`Read every file`
+                : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING
+                  ? t`Read new and changed files`
+                  : t`Reuse known signatures only`,
+              options.compare ? t`Count matching archived copies` : t`No archived copy comparison`,
+              !cacheApplies || options.writeSignatureCache ? "" : t`No signature cache`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           >
             <TextField
               select
-              label="Signatures"
+              label={t`Signatures`}
               value={verifying ? ScanSignaturePolicy.FORCE_READ : options.signaturePolicy}
               disabled={busy || verifying}
               onChange={(event) => update({ signaturePolicy: Number(event.target.value) })}
             >
-              <MenuItem value={ScanSignaturePolicy.KNOWN_ONLY}>Reuse known signatures only</MenuItem>
-              <MenuItem value={ScanSignaturePolicy.FILL_MISSING}>Read new and changed files</MenuItem>
-              <MenuItem value={ScanSignaturePolicy.FORCE_READ}>Read every file</MenuItem>
+              <MenuItem value={ScanSignaturePolicy.KNOWN_ONLY}>{t`Reuse known signatures only`}</MenuItem>
+              <MenuItem value={ScanSignaturePolicy.FILL_MISSING}>{t`Read new and changed files`}</MenuItem>
+              <MenuItem value={ScanSignaturePolicy.FORCE_READ}>{t`Read every file`}</MenuItem>
             </TextField>
             <FormControlLabel
               control={<Checkbox disabled={busy} checked={options.compare} onChange={(_, compare) => update({ compare })} />}
-              label="Count matching archived copies"
+              label={t`Count matching archived copies`}
             />
             <Typography variant="body2" color="text.secondary">
-              Counts recorded copies with the same signature; it does not check their current readability.
+              {t`Counts recorded copies with the same signature; it does not check their current readability.`}
             </Typography>
             <FormControlLabel
               control={
@@ -314,10 +329,10 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
                   onChange={(_, writeSignatureCache) => update({ writeSignatureCache })}
                 />
               }
-              label="Write signature cache"
+              label={t`Write signature cache`}
             />
             <Typography variant="body2" color="text.secondary">
-              Stores each read file&apos;s signature in an extended attribute so later reads can reuse it. File content is unchanged.
+              {t`Stores each read file's signature in an extended attribute so later reads can reuse it. File content is unchanged.`}
             </Typography>
           </SettingsSection>
           {!verifying && options.signaturePolicy === ScanSignaturePolicy.KNOWN_ONLY && options.previewPolicy !== PreviewPolicy.NONE && (
@@ -325,31 +340,31 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
               severity="info"
               action={
                 <Button disabled={busy} onClick={() => update({ signaturePolicy: ScanSignaturePolicy.FILL_MISSING })}>
-                  Read new and changed files
+                  {t`Read new and changed files`}
                 </Button>
               }
             >
-              Preview generation skips files whose signatures are unknown. Read new and changed files to include them.
+              {t`Preview generation skips files whose signatures are unknown. Read new and changed files to include them.`}
             </Feedback>
           )}
           {!canPreview && options.previewPolicy !== PreviewPolicy.NONE && (
-            <Feedback severity="error">The selected Media cannot generate Previews. Choose different Media or turn Previews off.</Feedback>
+            <Feedback severity="error">{t`The selected Media cannot generate Previews. Choose different Media or turn Previews off.`}</Feedback>
           )}
           {entries.some((entry) => entry.unavailableReason) && (
-            <Feedback severity="error">Some selected entries are unavailable. Remove them or select them again before starting.</Feedback>
+            <Feedback severity="error">{t`Some selected entries are unavailable. Remove them or select them again before starting.`}</Feedback>
           )}
           {error && <Feedback severity="error">{error}</Feedback>}
           <ActionRow className="job-create-actions">
             <Button variant="contained" disabled={busy || !ready} onClick={() => void submit()}>
-              {busy ? "Creating…" : "Start scan"}
+              {busy ? t`Creating…` : t`Start scan`}
             </Button>
             {target.kind === "media" && options.resultPolicy === ScanResultPolicy.PUBLISH_INVENTORY && (
               <>
                 <Button disabled={busy || !target.media || admission.busy || admission.calculating} onClick={admission.ask}>
-                  Add existing inventory to Library
+                  {t`Add existing inventory to Library`}
                 </Button>
                 <Button disabled={busy || !target.media || admission.busy || admission.calculating} onClick={admission.review}>
-                  Review what will be added
+                  {t`Review what will be added`}
                 </Button>
               </>
             )}

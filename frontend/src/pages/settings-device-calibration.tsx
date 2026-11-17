@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, TextField } from "@mui/material";
@@ -15,7 +16,7 @@ export const CalibrationButton = ({ device, disabled }: { device: string; disabl
   return (
     <>
       <Button type="button" disabled={disabled || open} onClick={() => setOpen(true)}>
-        Calibrate…
+        {t`Calibrate…`}
       </Button>
       {open && <CalibrationDialog device={device} onClose={() => setOpen(false)} />}
     </>
@@ -55,7 +56,7 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
   const settled = !inspection.loading && (!!inspection.reply || !!inspection.error);
   // Only overwriting consults the Library: a cartridge it holds is never written.
   const mediaError =
-    writeTestData && registered ? "This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge." : "";
+    writeTestData && registered ? t`This cartridge is Media in the Library. Turn off Write test data to calibrate on it, or load a spare cartridge.` : "";
   const ready = !busy && !inspection.loading && !mediaError && (!writeTestData || (settled && (identity ? confirmation === identity : acknowledged)));
 
   const close = () => {
@@ -69,10 +70,10 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
     try {
       const spec = CalibrationJobSpec.create({ device, writeTestData });
       const reply = await calibrationJobCli.create({ spec }).response;
-      if (!reply.job) throw new Error("Job was not returned. Check Jobs before retrying.");
+      if (!reply.job) throw new Error(t`Job was not returned. Check Jobs before retrying.`);
       if (active.current) navigate(`/jobs/${reply.job.id}`);
     } catch (failure) {
-      if (active.current) setError(errorMessage(failure, "Could not create calibration"));
+      if (active.current) setError(errorMessage(failure, t`Could not create calibration`));
     } finally {
       submitting.current = false;
       if (active.current) setBusy(false);
@@ -98,16 +99,15 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
         },
       }}
     >
-      <DialogTitle id={titleID}>Calibrate {device}</DialogTitle>
+      <DialogTitle id={titleID}>{t`Calibrate ${device}`}</DialogTitle>
       <DialogContent>
         <DialogContentText>
-          Measures this drive&apos;s positioning times on the loaded cartridge and stores them as its read parameters for that density code. It takes about nine
-          minutes on LTO-5, plus the time to write test data when requested.
+          {t`Measures this drive's positioning times on the loaded cartridge and stores them as its read parameters for that density code. It takes about nine minutes on LTO-5, plus the time to write test data when requested.`}
         </DialogContentText>
         <MediaInspectResult {...inspection} />
         <ActionRow>
           <Button type="button" disabled={busy || inspection.loading} onClick={check}>
-            Check Tape
+            {t`Check Tape`}
           </Button>
         </ActionRow>
         <FormControlLabel
@@ -122,25 +122,23 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
               }}
             />
           }
-          label="Write test data"
+          label={t`Write test data`}
         />
         {!writeTestData && (
           <Alert severity="info">
-            Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier
-            cartridge, write test data.
+            {t`Calibration only positions the tape: it reads no files and changes nothing. The cartridge needs two full wraps of data, tar or LTFS; for an emptier cartridge, write test data.`}
           </Alert>
         )}
         {writeTestData && (
           <>
             <Alert severity="warning">
-              Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the
-              cartridge again afterwards, initialize it with FORMAT. Confirm before starting.
+              {t`Write test data overwrites the cartridge in the drive from the beginning of tape. Never use it on a cartridge that holds data. To use the cartridge again afterwards, initialize it with FORMAT. Confirm before starting.`}
             </Alert>
             {/* A spare cartridge has no barcode until FORMAT writes one, so it is confirmed by naming the drive instead. */}
             {settled && !registered && !identity && (
               <FormControlLabel
                 control={<Checkbox checked={acknowledged} disabled={busy} onChange={(_, checked) => setAcknowledged(checked)} />}
-                label={`Overwrite the cartridge in ${device}`}
+                label={t`Overwrite the cartridge in ${device}`}
               />
             )}
             {settled && !registered && identity && (
@@ -148,7 +146,7 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
                 required
                 fullWidth
                 margin="normal"
-                label="Confirm barcode"
+                label={t`Confirm barcode`}
                 value={confirmation}
                 disabled={busy}
                 onChange={(event) => setConfirmation(event.target.value)}
@@ -161,10 +159,10 @@ const CalibrationDialog = ({ device, onClose }: { device: string; onClose: () =>
       </DialogContent>
       <DialogActions>
         <Button type="submit" variant="contained" color={writeTestData ? "error" : "primary"} disabled={!ready}>
-          {busy ? "Working…" : "Start calibration"}
+          {busy ? t`Working…` : t`Start calibration`}
         </Button>
         <Button type="button" disabled={busy} onClick={close}>
-          Cancel
+          {t`Cancel`}
         </Button>
       </DialogActions>
     </Dialog>

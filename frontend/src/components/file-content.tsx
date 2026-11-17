@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useSelectionActions } from "@/state/react";
 import { ListPlaceholder } from "@/components/list-placeholder";
 import { Feedback } from "@/components/feedback";
@@ -59,6 +60,12 @@ import { archiveEntryForDetail, restoreVersionEntry, selectionAddMessage, type S
 import { useContentPreview } from "./use-content-preview";
 import { compareVersionDates, useFileVersionPages } from "./use-file-versions";
 
+const versionChoiceLabel = (date: bigint | undefined, size: bigint) => {
+  const archived = date !== undefined ? contentTime(date) : "";
+  const fileSize = formatFilesize(size);
+  return date !== undefined ? t`Last archived ${archived} · ${fileSize}` : t`Archive date not recorded · ${fileSize}`;
+};
+
 const sortVersions = (versions: FileVersion[]) => [...versions].sort(compareVersionDates);
 
 export const FileContent = ({
@@ -96,7 +103,7 @@ export const FileContent = ({
   const fileID = filesEntryLibraryID(entry);
   const regular = entry.kind === EntryKind.FILE;
   const metadata = { ...filesEntryData(entry), tags: detail.organization?.tags ?? [], note: detail.organization?.note ?? "" };
-  const name = title || entry.name || "File details";
+  const name = title || entry.name || t`File details`;
   const status = regular ? filesEntryData(entry).status : undefined;
   const archiveEligible =
     allowsFileOperation(filesEntryData(entry), FileOperationKind.ARCHIVE) &&
@@ -107,7 +114,7 @@ export const FileContent = ({
       let addition;
       if (kind === "archive") addition = archiveEntryForDetail(detail);
       else {
-        if (!version) throw new Error("Select a saved version before adding it to the Restore list.");
+        if (!version) throw new Error(t`Select a saved version before adding it to the Restore list.`);
         addition = restoreVersionEntry(detail, version);
       }
       const result = addSelectionEntries(kind, [addition]);
@@ -115,7 +122,7 @@ export const FileContent = ({
     } catch (failure) {
       setSelectionFeedback({
         kind,
-        message: errorMessage(failure, `Could not add this item to the ${kind === "archive" ? "Archive" : "Restore"} list`),
+        message: errorMessage(failure, kind === "archive" ? t`Could not add this item to the Archive list` : t`Could not add this item to the Restore list`),
         added: false,
         error: true,
       });
@@ -127,7 +134,7 @@ export const FileContent = ({
       action={
         !selectionFeedback.error && (
           <Button color="inherit" size="small" onClick={() => navigate(`/${selectionFeedback.kind}`)}>
-            View list
+            {t`View list`}
           </Button>
         )
       }
@@ -139,17 +146,17 @@ export const FileContent = ({
     regular &&
     (view === "overview" ? (
       detail.contentSignature.length > 0 ? (
-        <ContentPreview signature={detail.contentSignature} refresh={detail} label="Preview · current original" reserveSpace />
+        <ContentPreview signature={detail.contentSignature} refresh={detail} label={t`Preview · current original`} reserveSpace />
       ) : !detail.contentReference ? (
         <SavedPreview detail={detail} reserveSpace />
       ) : (
-        <ContentPreview signature={new Uint8Array()} label="Preview · current original" reserveSpace />
+        <ContentPreview signature={new Uint8Array()} label={t`Preview · current original`} reserveSpace />
       )
     ) : (
       <ContentPreview
         signature={selectedVersion?.signature ?? new Uint8Array()}
         refresh={selectedVersion}
-        label="Preview · selected saved version"
+        label={t`Preview · selected saved version`}
         reserveSpace
       />
     ));
@@ -171,8 +178,8 @@ export const FileContent = ({
       tabs={
         regular
           ? [
-              { value: "overview", label: "Overview" },
-              { value: "versions", label: "Saved versions" },
+              { value: "overview", label: t`Overview` },
+              { value: "versions", label: t`Saved versions` },
             ]
           : undefined
       }
@@ -201,16 +208,16 @@ export const FileContent = ({
         />
         <OverviewTechnical detail={detail} />
         {(archiveEligible || (regular && fileID !== undefined)) && (
-          <section className="file-detail-actions" aria-label="File actions">
+          <section className="file-detail-actions" aria-label={t`File actions`}>
             <ActionRow>
               {archiveEligible && (
                 <Button variant="outlined" onClick={() => addToSelection("archive")}>
-                  Add to Archive list
+                  {t`Add to Archive list`}
                 </Button>
               )}
               {regular && fileID !== undefined && (
                 <Button variant="outlined" disabled={busy} onClick={() => setRelocating(true)}>
-                  Locate original
+                  {t`Locate original`}
                 </Button>
               )}
             </ActionRow>
@@ -248,7 +255,7 @@ const Overview = ({ detail }: { detail: FilesDetail }) => {
       <dl className="file-detail-summary">
         {original && (
           <>
-            <dt>Location</dt>
+            <dt>{t`Location`}</dt>
             <dd>
               {live ? (
                 <OriginalLocationLink location={{ id: live.locationId, name: original.sourceName, rootPath: "" }} path={original.path} />
@@ -260,23 +267,23 @@ const Overview = ({ detail }: { detail: FilesDetail }) => {
         )}
         {!original && regular && filesEntryLibraryID(entry) !== undefined && (
           <>
-            <dt>Location</dt>
-            <dd>Saved versions only</dd>
+            <dt>{t`Location`}</dt>
+            <dd>{t`Saved versions only`}</dd>
           </>
         )}
         {!regular && (
           <>
-            <dt>Type</dt>
-            <dd>{entry.kind === EntryKind.DIRECTORY ? "Folder" : entry.kind === EntryKind.LINK ? "Symbolic link" : "Special file"}</dd>
+            <dt>{t`Type`}</dt>
+            <dd>{entry.kind === EntryKind.DIRECTORY ? t`Folder` : entry.kind === EntryKind.LINK ? t`Symbolic link` : t`Special file`}</dd>
           </>
         )}
         {regular && (
           <>
-            <dt>Size</dt>
-            <dd>{entry.sizeBytes === undefined ? "Unknown" : formatFilesize(entry.sizeBytes)}</dd>
+            <dt>{t`Size`}</dt>
+            <dd>{entry.sizeBytes === undefined ? t`Unknown` : formatFilesize(entry.sizeBytes)}</dd>
           </>
         )}
-        <dt>Modified</dt>
+        <dt>{t`Modified`}</dt>
         <dd>{contentTime(entry.mtimeNs, "—")}</dd>
       </dl>
     </section>
@@ -288,14 +295,14 @@ const OverviewTechnical = ({ detail }: { detail: FilesDetail }) => {
   const live = target?.oneofKind === "location" ? target.location : undefined;
   return (
     <details className="technical-details file-detail-technical">
-      <summary>Technical details</summary>
+      <summary>{t`Technical details`}</summary>
       <dl className="file-detail-summary">
-        <dt>Permission</dt>
-        <dd>{live?.facts ? contentMode(live.facts.mode) : "Not recorded"}</dd>
-        <dt>Signature</dt>
-        <dd className="file-detail-hash">{contentHex(detail.contentSignature) || "Not recorded"}</dd>
+        <dt>{t`Permission`}</dt>
+        <dd>{live?.facts ? contentMode(live.facts.mode) : t`Not recorded`}</dd>
+        <dt>{t`Signature`}</dt>
+        <dd className="file-detail-hash">{contentHex(detail.contentSignature) || t`Not recorded`}</dd>
         <dt>SHA-256</dt>
-        <dd className="file-detail-hash">Not recorded for the current original</dd>
+        <dd className="file-detail-hash">{t`Not recorded for the current original`}</dd>
       </dl>
     </details>
   );
@@ -306,7 +313,7 @@ const OverviewTechnical = ({ detail }: { detail: FilesDetail }) => {
 const SavedPreview = ({ detail, reserveSpace = false }: { detail: FilesDetail; reserveSpace?: boolean }) => {
   const version = detail.latestVersion;
   if (!version) return null;
-  return <ContentPreview signature={version.signature} refresh={detail} label="Preview of the latest saved version" reserveSpace={reserveSpace} />;
+  return <ContentPreview signature={version.signature} refresh={detail} label={t`Preview of the latest saved version`} reserveSpace={reserveSpace} />;
 };
 
 export const ContentPreview = ({
@@ -324,7 +331,7 @@ export const ContentPreview = ({
   return (
     <>
       {error && (
-        <Feedback severity="info" action={<Button onClick={reload}>Retry Preview</Button>}>
+        <Feedback severity="info" action={<Button onClick={reload}>{t`Retry Preview`}</Button>}>
           {error}
         </Feedback>
       )}
@@ -334,7 +341,7 @@ export const ContentPreview = ({
             {assets.length > 0 ? (
               <PreviewMedia key={`${key}:${JSON.stringify(assets)}`} assets={assets} />
             ) : (
-              <span className="file-detail-preview-empty">Preview not available</span>
+              <span className="file-detail-preview-empty">{t`Preview not available`}</span>
             )}
           </div>
           {label && <p className="file-detail-preview-label">{label}</p>}
@@ -362,33 +369,29 @@ const Versions = ({
   const { ask, dialog } = useActionDialog();
   const { versions, more, loading, failure, load, remove } = useFileVersionPages(fileID, refresh, true);
   const [selectedID, setSelectedID] = useState<bigint>();
-  const error = failure === undefined ? "" : errorMessage(failure, "Could not load saved versions");
+  const error = failure === undefined ? "" : errorMessage(failure, t`Could not load saved versions`);
   const displayed = sortVersions(versions);
   const selected = versions.find((version) => version.id === selectedID) ?? displayed[0];
   useEffect(() => {
     onSelectedVersion(selected);
   }, [onSelectedVersion, selected]);
   return (
-    <div role="tabpanel" id={`${panelID}-panel-versions`} aria-labelledby={`${panelID}-tab-versions`} aria-label="Saved versions">
+    <div role="tabpanel" id={`${panelID}-panel-versions`} aria-labelledby={`${panelID}-tab-versions`} aria-label={t`Saved versions`}>
       {error && (
-        <Feedback severity="error" action={<Button onClick={() => void load()}>Retry</Button>}>
+        <Feedback severity="error" action={<Button onClick={() => void load()}>{t`Retry`}</Button>}>
           {error}
         </Feedback>
       )}
-      {loading && !versions.length && <ListPlaceholder loading label="Loading saved versions…" />}
-      {!loading && !error && !versions.length && <ListPlaceholder label="No saved versions are available to add to the Restore list." />}
-      <p className="version-list-label">Last archived</p>
-      <div className="version-list" aria-label="Saved content versions">
+      {loading && !versions.length && <ListPlaceholder loading label={t`Loading saved versions…`} />}
+      {!loading && !error && !versions.length && <ListPlaceholder label={t`No saved versions are available to add to the Restore list.`} />}
+      <p className="version-list-label">{t`Last archived`}</p>
+      <div className="version-list" aria-label={t`Saved content versions`}>
         {displayed.map((version) => {
           const date = archiveTime(version);
           return (
             <SavedVersionChoice
               key={String(version.id)}
-              aria-label={
-                date !== undefined
-                  ? `Last archived ${contentTime(date)} · ${formatFilesize(version.sizeBytes)}`
-                  : `Archive date not recorded · ${formatFilesize(version.sizeBytes)}`
-              }
+              aria-label={versionChoiceLabel(date, version.sizeBytes)}
               selected={selected?.id === version.id}
               onClick={() => setSelectedID(version.id)}
             >
@@ -400,7 +403,7 @@ const Versions = ({
       </div>
       {more && (
         <Button disabled={loading} onClick={() => void load(versions.at(-1)?.id)}>
-          Load more saved versions
+          {t`Load more saved versions`}
         </Button>
       )}
       {selected && (
@@ -408,19 +411,17 @@ const Versions = ({
           <SavedVersion key={String(selected.id)} version={selected} />
           <ActionRow className="file-detail-version-actions">
             <Button variant="outlined" onClick={() => onAddToRestore(selected)}>
-              Add to Restore list
+              {t`Add to Restore list`}
             </Button>
             <Button
               color="error"
               onClick={() =>
                 ask({
-                  title: "Remove saved version?",
-                  confirmLabel: "Remove version",
+                  title: t`Remove saved version?`,
+                  confirmLabel: t`Remove version`,
                   danger: true,
                   children: (
-                    <p>
-                      The saved version record is removed. Archive copies and other versions are kept. A later Scan or Archive may establish this version again.
-                    </p>
+                    <p>{t`The saved version record is removed. Archive copies and other versions are kept. A later Scan or Archive may establish this version again.`}</p>
                   ),
                   onConfirm: async () => {
                     await filesCli.removeVersion({ fileId: selected.fileId, versionId: selected.id, dryrun: false }).response;
@@ -429,13 +430,14 @@ const Versions = ({
                     try {
                       await onRefresh();
                     } catch (failure) {
-                      toast.error(`Version removed, but refresh failed: ${errorMessage(failure, "Refresh failed")}`);
+                      const reason = errorMessage(failure, t`Refresh failed`);
+                      toast.error(t`Version removed, but refresh failed: ${reason}`);
                     }
                   },
                 })
               }
             >
-              Remove version
+              {t`Remove version`}
             </Button>
           </ActionRow>
         </>
@@ -446,19 +448,20 @@ const Versions = ({
 };
 
 const SavedVersion = ({ version }: { version: FileVersion }) => {
+  const modified = version.mtimeNs ? contentTime(version.mtimeNs) : "";
   return (
-    <section className="selected-version" aria-label="Selected saved version">
-      <p className="selected-version-summary">{version.mtimeNs ? `Modified ${contentTime(version.mtimeNs)}` : "Modification time not recorded"}</p>
+    <section className="selected-version" aria-label={t`Selected saved version`}>
+      <p className="selected-version-summary">{version.mtimeNs ? t`Modified ${modified}` : t`Modification time not recorded`}</p>
       <ContentCopies signature={version.signature} versionID={version.id} fileID={version.fileId} />
       <details className="technical-details file-detail-technical">
-        <summary>Technical details</summary>
+        <summary>{t`Technical details`}</summary>
         <dl className="file-detail-summary">
-          <dt>Permission</dt>
+          <dt>{t`Permission`}</dt>
           <dd>{contentMode(version.mode)}</dd>
           <dt>SHA-256</dt>
-          <dd className="file-detail-hash">{contentHex(version.sha256) || "Not checked"}</dd>
-          <dt>Signature</dt>
-          <dd className="file-detail-hash">{contentHex(version.signature) || "Not checked"}</dd>
+          <dd className="file-detail-hash">{contentHex(version.sha256) || t`Not checked`}</dd>
+          <dt>{t`Signature`}</dt>
+          <dd className="file-detail-hash">{contentHex(version.signature) || t`Not checked`}</dd>
         </dl>
       </details>
     </section>
@@ -504,7 +507,7 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
         setMore(page.hasMore);
         setError("");
       } catch (error) {
-        if (sequence === request.current) setError(errorMessage(error, "Could not load archived copies"));
+        if (sequence === request.current) setError(errorMessage(error, t`Could not load archived copies`));
       } finally {
         if (sequence === request.current) setLoading(false);
       }
@@ -519,20 +522,20 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
     };
   }, [load]);
   return (
-    <section className="file-detail-copies" aria-label="Archived copies">
-      <h3>Archived copies</h3>
+    <section className="file-detail-copies" aria-label={t`Archived copies`}>
+      <h3>{t`Archived copies`}</h3>
       {error && (
-        <Feedback severity="error" action={<Button onClick={() => void load()}>Try again</Button>}>
+        <Feedback severity="error" action={<Button onClick={() => void load()}>{t`Try again`}</Button>}>
           {error}
         </Feedback>
       )}
       {loading && positions.length === 0 && (
         <p className="product-muted" role="status">
-          Loading archived copies…
+          {t`Loading archived copies…`}
         </p>
       )}
       {!loading && !error && positions.length === 0 && (
-        <Alert severity="warning">{versionID ? "This version cannot currently be restored: no copies available." : "No archived copies recorded."}</Alert>
+        <Alert severity="warning">{versionID ? t`This version cannot currently be restored: no copies available.` : t`No archived copies recorded.`}</Alert>
       )}
       {positions.map((position) => {
         const value = media.get(position.mediaId);
@@ -545,42 +548,43 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
               <span className="copy-heading">
                 <StorageRoundedIcon fontSize="small" />
                 <span className="copy-heading-text">
-                  <strong>{value?.name || value?.identity || "Archive storage"}</strong>
+                  <strong>{value?.name || value?.identity || t`Archive storage`}</strong>
                   <small>
-                    {value?.kind === MediaKind.TAPE ? "Tape" : "Volume"} · {online ? "Available" : "Not connected"} · {copyHealthLabel(health)}
+                    {value?.kind === MediaKind.TAPE ? t`Tape` : t`Volume`} · {online ? t`Available` : t`Not connected`} · {copyHealthLabel(health)}
                   </small>
                 </span>
               </span>
             </AccordionSummary>
             <AccordionDetails>
               <dl className="file-detail-summary">
-                <dt>Storage path</dt>
-                <dd className="file-detail-path">{position.path || "Not recorded"}</dd>
-                <dt>Written</dt>
+                <dt>{t`Storage path`}</dt>
+                <dd className="file-detail-path">{position.path || t`Not recorded`}</dd>
+                <dt>{t`Written`}</dt>
                 <dd>{contentTime(position.writtenAtNs || undefined)}</dd>
-                <dt>Last check</dt>
-                <dd>{position.checkedAtNs ? contentTime(position.checkedAtNs) : "Not checked"}</dd>
+                <dt>{t`Last check`}</dt>
+                <dd>{position.checkedAtNs ? contentTime(position.checkedAtNs) : t`Not checked`}</dd>
               </dl>
-              {position.healthJobId ? <Link to={`/jobs/${position.healthJobId}`}>Check results</Link> : null}
+              {position.healthJobId ? <Link to={`/jobs/${position.healthJobId}`}>{t`Check results`}</Link> : null}
               {!normalCopy && (
                 <Feedback severity="warning">
-                  Not used by normal Restore.
-                  {health === PositionHealth.DAMAGED || health === PositionHealth.UNREADABLE ? " Advanced recovery can attempt this copy." : ""}
+                  {health === PositionHealth.DAMAGED || health === PositionHealth.UNREADABLE
+                    ? t`Not used by normal Restore. Advanced recovery can attempt this copy.`
+                    : t`Not used by normal Restore.`}
                 </Feedback>
               )}
-              {!online && <p className="product-muted">{value?.kind === MediaKind.TAPE ? "Load this tape to restore" : "Connect this volume to restore"}</p>}
-              {online && normalCopy && <p className="product-muted">Available for Restore</p>}
+              {!online && <p className="product-muted">{value?.kind === MediaKind.TAPE ? t`Load this tape to restore` : t`Connect this volume to restore`}</p>}
+              {online && normalCopy && <p className="product-muted">{t`Available for Restore`}</p>}
             </AccordionDetails>
           </ArchivedCopy>
         );
       })}
       {more && (
         <Button disabled={loading} onClick={() => void load(positions.at(-1)?.id)}>
-          Load more copies
+          {t`Load more copies`}
         </Button>
       )}
       <Button size="small" onClick={() => setDuplicates(!duplicates)} aria-expanded={duplicates}>
-        {duplicates ? "Hide matching files" : "Find matching files"}
+        {duplicates ? t`Hide matching files` : t`Find matching files`}
       </Button>
       {duplicates && <ContentDuplicates signature={signature} fileID={fileID} />}
     </section>
@@ -589,12 +593,12 @@ const CopyList = ({ signature, versionID, fileID }: CopyProps) => {
 
 export const copyHealthLabel = (health: PositionHealth) =>
   ({
-    [PositionHealth.UNSPECIFIED]: "Not checked",
-    [PositionHealth.UNKNOWN]: "Not checked",
-    [PositionHealth.HEALTHY]: "Last check passed",
-    [PositionHealth.DAMAGED]: "Damaged",
-    [PositionHealth.MISSING]: "Missing",
-    [PositionHealth.UNREADABLE]: "Unreadable",
+    [PositionHealth.UNSPECIFIED]: t`Not checked`,
+    [PositionHealth.UNKNOWN]: t`Not checked`,
+    [PositionHealth.HEALTHY]: t`Last check passed`,
+    [PositionHealth.DAMAGED]: t`Damaged`,
+    [PositionHealth.MISSING]: t`Missing`,
+    [PositionHealth.UNREADABLE]: t`Unreadable`,
   })[health];
 
 const ContentDuplicates = ({ signature, fileID }: { signature: Uint8Array; fileID?: bigint }) => {
@@ -616,7 +620,7 @@ const ContentDuplicates = ({ signature, fileID }: { signature: Uint8Array; fileI
         setMore(reply.hasMore);
         setError("");
       } catch (error) {
-        if (sequence === request.current) setError(errorMessage(error, "Could not find matching files"));
+        if (sequence === request.current) setError(errorMessage(error, t`Could not find matching files`));
       } finally {
         if (sequence === request.current) setLoading(false);
       }
@@ -635,24 +639,24 @@ const ContentDuplicates = ({ signature, fileID }: { signature: Uint8Array; fileI
     <div className="matching-files">
       {loading && !files.length && (
         <p className="product-muted" role="status">
-          Finding matching files…
+          {t`Finding matching files…`}
         </p>
       )}
       {error && (
-        <Feedback severity="error" action={<Button onClick={() => void load()}>Try again</Button>}>
+        <Feedback severity="error" action={<Button onClick={() => void load()}>{t`Try again`}</Button>}>
           {error}
         </Feedback>
       )}
       {matches.map((file) => (
         <Link key={String(filesEntryLibraryID(file))} to={`/file?file=${filesEntryLibraryID(file)}`}>
           <strong>{file.name}</strong>
-          <small>{file.path || "Open in Library"}</small>
+          <small>{file.path || t`Open in Library`}</small>
         </Link>
       ))}
-      {!loading && !error && matches.length === 0 && <p className="product-muted">No other matching files on this page.</p>}
+      {!loading && !error && matches.length === 0 && <p className="product-muted">{t`No other matching files on this page.`}</p>}
       {more && (
         <Button disabled={loading} onClick={() => void load(cursor)}>
-          Load more matching files
+          {t`Load more matching files`}
         </Button>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { restoreJobCli } from "@/api";
 import { FileOperationRef, FileScope, FileSelection, EstimateRestoreJobRequest, type RestoreVersionResolution } from "@/entity";
@@ -22,7 +23,7 @@ function directoryReference(selection: FileSelection): FileOperationRef {
         },
       });
     default:
-      throw new Error("This selection has no directory reference.");
+      throw new Error(t`This selection has no directory reference.`);
   }
 }
 
@@ -63,7 +64,7 @@ export function useWaitlistDirectory(directory: SelectionEntry | undefined, rest
       } catch (error) {
         if (request !== sequence.current) return;
         setPage({ key, entries: [], cursor: "" });
-        setError(errorMessage(error, "Could not load selected folder"));
+        setError(errorMessage(error, t`Could not load selected folder`));
       } finally {
         if (request === sequence.current) {
           pending.current = false;
@@ -104,12 +105,12 @@ export function useWaitlistDirectory(directory: SelectionEntry | undefined, rest
           }),
         ).response;
         if (!active) return;
-        if (!result.result) throw new Error("Selection estimate is missing");
+        if (!result.result) throw new Error(t`Selection estimate is missing`);
         resolutions.push(...result.result.resolvedVersions);
       }
       if (active) setVersions({ key: versionKey, resolutions });
     })().catch((error) => {
-      if (active) setVersionError(errorMessage(error, "Could not resolve saved versions"));
+      if (active) setVersionError(errorMessage(error, t`Could not resolve saved versions`));
     });
     return () => {
       active = false;

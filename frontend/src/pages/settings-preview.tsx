@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useState } from "react";
 import {
   Alert,
@@ -36,6 +37,8 @@ export const PreviewSettingsBrowser = () => {
     }
     if (await saveDraft()) generation.reload();
   };
+  const helperVersion = generation.capabilities?.version || t`unavailable`;
+  const outputFormats = generation.capabilities?.outputFormats?.join(", ") ?? "";
   const activeSelected = draft ? Math.min(selected, Math.max(0, draft.generators.length - 1)) : 0;
   return (
     <>
@@ -62,9 +65,12 @@ export const PreviewSettingsBrowser = () => {
       >
         {draft && (
           <>
-            <SettingsSection title="Generation" description="Enablement changes apply when the next file starts. Existing Preview assets remain available.">
+            <SettingsSection
+              title={t`Generation`}
+              description={t`Enablement changes apply when the next file starts. Existing Preview assets remain available.`}
+            >
               <SettingsField
-                label="Enable generation"
+                label={t`Enable generation`}
                 control={<Switch checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
               />
               {!generation.loading && (generation.error || !generation.capabilities?.available) && (
@@ -73,7 +79,7 @@ export const PreviewSettingsBrowser = () => {
                   action={
                     generation.error ? (
                       <Button disabled={generation.loading || loading || saving || commandChanged} onClick={generation.reload}>
-                        Retry
+                        {t`Retry`}
                       </Button>
                     ) : undefined
                   }
@@ -82,9 +88,9 @@ export const PreviewSettingsBrowser = () => {
                 </Feedback>
               )}
             </SettingsSection>
-            {draft.generators.length === 0 && <Alert severity="info">No Preview generators are configured.</Alert>}
+            {draft.generators.length === 0 && <Alert severity="info">{t`No Preview generators are configured.`}</Alert>}
             {draft.generators.length > 0 && (
-              <SettingsSection title="Output" description="File routes, dimensions, format and quality are captured by new Jobs.">
+              <SettingsSection title={t`Output`} description={t`File routes, dimensions, format and quality are captured by new Jobs.`}>
                 <Stack useFlexGap spacing={2}>
                   <Autocomplete
                     disableClearable
@@ -98,7 +104,7 @@ export const PreviewSettingsBrowser = () => {
                       stringify: (index) => generatorLabel(draft, index) + " " + draft.generators[index].extensions.map((entry) => entry.name).join(" "),
                     })}
                     onChange={(_, index) => setSelected(index)}
-                    renderInput={(params) => <TextField {...params} label="Type" />}
+                    renderInput={(params) => <TextField {...params} label={t`Type`} />}
                   />
                   {draft.generators[activeSelected] && (
                     <GeneratorForm
@@ -118,22 +124,17 @@ export const PreviewSettingsBrowser = () => {
                 </Stack>
               </SettingsSection>
             )}
-            <SettingsSection
-              title="Advanced runtime"
-              collapsible
-              hasError={!!validateRuntime(draft)}
-              description={`Concurrency ${draft.concurrency} · timeout ${draft.timeoutSeconds} seconds · maximum input ${draft.maxInputPixels} pixels`}
-            >
+            <SettingsSection title={t`Advanced runtime`} collapsible hasError={!!validateRuntime(draft)} description={runtimeSummary(draft)}>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, lg: 8 }}>
                   <TextField
                     fullWidth
                     size="small"
-                    label="Executable"
+                    label={t`Executable`}
                     helperText={
                       commandChanged
-                        ? "Save to check this executable. Current capability results describe the saved executable."
-                        : "Server command path or name. Leave empty to use yatm-preview beside the server, then PATH."
+                        ? t`Save to check this executable. Current capability results describe the saved executable.`
+                        : t`Server command path or name. Leave empty to use yatm-preview beside the server, then PATH.`
                     }
                     value={draft.command}
                     disabled={loading || saving}
@@ -142,8 +143,8 @@ export const PreviewSettingsBrowser = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                   <SettingsNumberField
-                    label="Concurrency"
-                    helperText="Maximum files generating Previews at the same time. Higher values use more memory."
+                    label={t`Concurrency`}
+                    helperText={t`Maximum files generating Previews at the same time. Higher values use more memory.`}
                     value={draft.concurrency}
                     max={16}
                     disabled={loading || saving}
@@ -152,8 +153,8 @@ export const PreviewSettingsBrowser = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                   <SettingsNumberField
-                    label="Timeout (seconds)"
-                    helperText="Maximum generation time per file, after it acquires a slot."
+                    label={t`Timeout (seconds)`}
+                    helperText={t`Maximum generation time per file, after it acquires a slot.`}
                     value={draft.timeoutSeconds}
                     max={86400}
                     disabled={loading || saving}
@@ -162,8 +163,8 @@ export const PreviewSettingsBrowser = () => {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                   <SettingsNumberField
-                    label="Maximum input pixels"
-                    helperText="Larger inputs are rejected before decoding; this is not the output size."
+                    label={t`Maximum input pixels`}
+                    helperText={t`Larger inputs are rejected before decoding; this is not the output size.`}
                     value={Number(draft.maxInputPixels)}
                     max={64000000}
                     disabled={loading || saving}
@@ -172,33 +173,38 @@ export const PreviewSettingsBrowser = () => {
                 </Grid>
               </Grid>
             </SettingsSection>
-            <SettingsSection title="Supported formats" collapsible hasError={!!generation.error} description="Capabilities of the saved Preview executable.">
+            <SettingsSection
+              title={t`Supported formats`}
+              collapsible
+              hasError={!!generation.error}
+              description={t`Capabilities of the saved Preview executable.`}
+            >
               <Stack useFlexGap spacing={1}>
                 {generation.capabilities && (
                   <>
                     <div>
-                      Helper {generation.capabilities.version || "unavailable"}
+                      {t`Helper ${helperVersion}`}
                       {generation.capabilities.ffmpegVersion && ` · FFmpeg ${generation.capabilities.ffmpegVersion}`}
                       {generation.capabilities.librawVersion && ` · LibRaw ${generation.capabilities.librawVersion}`}
                     </div>
                     {Object.entries(generation.capabilities.inputExtensionsByKind ?? {})
                       .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([kind, formats]) => (
-                        <div key={kind}>
-                          {kind === "image" ? "Image" : kind === "video" ? "Video" : kind}: {formats.extensions.join(", ")}
-                        </div>
-                      ))}
-                    <div>Output: {generation.capabilities.outputFormats?.join(", ")}</div>
+                      .map(([kind, formats]) => {
+                        const label = kindLabel(kind);
+                        const extensions = formats.extensions.join(", ");
+                        return <div key={kind}>{t`${label}: ${extensions}`}</div>;
+                      })}
+                    <div>{t`Output: ${outputFormats}`}</div>
                   </>
                 )}
-                {generation.loading && <LinearProgress aria-label="Checking Preview helper" />}
+                {generation.loading && <LinearProgress aria-label={t`Checking Preview helper`} />}
                 <Button
                   type="button"
                   sx={{ alignSelf: "flex-start" }}
                   disabled={loading || saving || generation.loading || commandChanged}
                   onClick={generation.reload}
                 >
-                  Check saved executable again
+                  {t`Check saved executable again`}
                 </Button>
               </Stack>
             </SettingsSection>
@@ -226,7 +232,7 @@ const GeneratorForm = ({
   onChange: (value: PreviewGeneratorSettings) => void;
 }) => {
   const { options } = generator;
-  if (!options.oneofKind) return <Alert severity="warning">This preview type has no supported settings.</Alert>;
+  if (!options.oneofKind) return <Alert severity="warning">{t`This preview type has no supported settings.`}</Alert>;
   const value = options.oneofKind === "image" ? options.image : options.video;
   const change = (field: string, next: string | number) => {
     const nextOptions =
@@ -238,26 +244,26 @@ const GeneratorForm = ({
   const dimensions =
     options.oneofKind === "image"
       ? [
-          { field: "maxWidth", label: "Maximum width", value: options.image.maxWidth },
-          { field: "maxHeight", label: "Maximum height", value: options.image.maxHeight },
+          { field: "maxWidth", label: t`Maximum width (px)`, value: options.image.maxWidth },
+          { field: "maxHeight", label: t`Maximum height (px)`, value: options.image.maxHeight },
         ]
       : [
-          { field: "posterWidth", label: "Poster width", value: options.video.posterWidth },
-          { field: "posterHeight", label: "Poster height", value: options.video.posterHeight },
-          { field: "timelineWidth", label: "Timeline tile width", value: options.video.timelineWidth },
-          { field: "timelineHeight", label: "Timeline tile height", value: options.video.timelineHeight },
+          { field: "posterWidth", label: t`Poster width (px)`, value: options.video.posterWidth },
+          { field: "posterHeight", label: t`Poster height (px)`, value: options.video.posterHeight },
+          { field: "timelineWidth", label: t`Timeline tile width (px)`, value: options.video.timelineWidth },
+          { field: "timelineHeight", label: t`Timeline tile height (px)`, value: options.video.timelineHeight },
         ];
   return (
     <FormControl component="fieldset" fullWidth disabled={disabled} aria-label={label}>
       <Stack useFlexGap spacing={2}>
         <SettingsField
-          label="Enabled"
+          label={t`Enabled`}
           control={<Switch checked={generator.enabled} disabled={disabled} onChange={(_, enabled) => onChange({ ...generator, enabled })} />}
         />
         <Grid container spacing={2}>
           {dimensions.map(({ field, label, value }) => (
             <Grid key={field} size={{ xs: 12, sm: 6, lg: 3 }}>
-              <SettingsNumberField label={label + " (px)"} value={value} max={8192} disabled={disabled} onChange={(next) => change(field, next)} />
+              <SettingsNumberField label={label} value={value} max={8192} disabled={disabled} onChange={(next) => change(field, next)} />
             </Grid>
           ))}
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
@@ -266,7 +272,7 @@ const GeneratorForm = ({
               fullWidth
               disabled={disabled}
               size="small"
-              label="Output format"
+              label={t`Output format`}
               value={value.format}
               onChange={(event) => change("format", event.target.value)}
             >
@@ -278,26 +284,26 @@ const GeneratorForm = ({
           </Grid>
           <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
             <SettingsNumberField
-              label="Quality"
+              label={t`Quality`}
               value={value.quality}
               max={100}
               disabled={disabled || value.format === "png"}
-              helperText={value.format === "png" ? "PNG is lossless; quality does not apply." : undefined}
+              helperText={value.format === "png" ? t`PNG is lossless; quality does not apply.` : undefined}
               onChange={(next) => change("quality", next)}
             />
           </Grid>
         </Grid>
-        <SettingsSection title="Advanced output" collapsible hasError={hasError} description="File extensions and video sampling.">
+        <SettingsSection title={t`Advanced output`} collapsible hasError={hasError} description={t`File extensions and video sampling.`}>
           {options.oneofKind === "video" && (
             <Alert severity="info">
-              Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples.
+              {t`Samples cover the whole video. The minimum interval and maximum frame count limit sampling; available keyframes may produce fewer samples.`}
             </Alert>
           )}
           {options.oneofKind === "video" && (
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                 <SettingsNumberField
-                  label="Minimum sampling interval (seconds)"
+                  label={t`Minimum sampling interval (seconds)`}
                   value={options.video.timelineIntervalSeconds}
                   max={2147483647}
                   disabled={disabled}
@@ -306,7 +312,7 @@ const GeneratorForm = ({
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                 <SettingsNumberField
-                  label="Maximum timeline frames"
+                  label={t`Maximum timeline frames`}
                   value={options.video.timelineMaxFrames}
                   max={1000}
                   disabled={disabled}
@@ -341,7 +347,7 @@ const GeneratorForm = ({
               <li {...props} key={option}>
                 <Checkbox checked={selected} tabIndex={-1} disableRipple />
                 {option}
-                {supportedExtensions?.includes(option) ? "" : " · unconfirmed"}
+                {supportedExtensions?.includes(option) ? "" : ` · ${t`unconfirmed`}`}
               </li>
             )}
             renderValue={(values, getItemProps) =>
@@ -364,7 +370,7 @@ const GeneratorForm = ({
                 );
               })
             }
-            renderInput={(params) => <TextField {...params} label="File extensions" />}
+            renderInput={(params) => <TextField {...params} label={t`File extensions`} />}
           />
         </SettingsSection>
       </Stack>
@@ -372,11 +378,20 @@ const GeneratorForm = ({
   );
 };
 
+const kindLabel = (kind: string): string => (kind === "image" ? t`Image` : kind === "video" ? t`Video` : kind);
+
+const runtimeSummary = (settings: PreviewSettings): string => {
+  const concurrency = String(settings.concurrency);
+  const timeoutSeconds = String(settings.timeoutSeconds);
+  const maxInputPixels = String(settings.maxInputPixels);
+  return t`Concurrency ${concurrency} · timeout ${timeoutSeconds} seconds · maximum input ${maxInputPixels} pixels`;
+};
+
 const generatorLabel = (settings: PreviewSettings, index: number): string => {
   const generator = settings.generators[index];
   if (!generator) return "";
   const kind = generator.options.oneofKind;
-  const name = kind === "image" ? "Image" : kind === "video" ? "Video" : "Unsupported type";
+  const name = kind === "image" ? t`Image` : kind === "video" ? t`Video` : t`Unsupported type`;
   if (settings.generators.filter((entry) => entry.options.oneofKind === kind).length < 2) return name;
   return `${name} · ${generator.extensions.map((entry) => entry.name).join(", ")}`;
 };
@@ -388,39 +403,42 @@ const validatePreview = (settings: PreviewSettings): { index: number; message: s
 
 // Runtime limits are validated separately so only their own section reports an error.
 const validateRuntime = (settings: PreviewSettings): string => {
-  if (!Number.isInteger(settings.concurrency) || settings.concurrency < 1 || settings.concurrency > 16) return "Concurrency must be between 1 and 16.";
+  if (!Number.isInteger(settings.concurrency) || settings.concurrency < 1 || settings.concurrency > 16) return t`Concurrency must be between 1 and 16.`;
   if (!Number.isInteger(settings.timeoutSeconds) || settings.timeoutSeconds < 1 || settings.timeoutSeconds > 86400)
-    return "Timeout must be between 1 and 86400 seconds.";
-  if (settings.maxInputPixels < 1n || settings.maxInputPixels > 64000000n) return "Maximum input pixels must be between 1 and 64000000.";
+    return t`Timeout must be between 1 and 86400 seconds.`;
+  if (settings.maxInputPixels < 1n || settings.maxInputPixels > 64000000n) return t`Maximum input pixels must be between 1 and 64000000.`;
   return "";
 };
 
 const validateGenerators = (settings: PreviewSettings): { index: number; message: string } | undefined => {
   const extensions = new Set<string>();
   for (const [index, generator] of settings.generators.entries()) {
-    const invalid = (message: string) => ({ index, message: `${generatorLabel(settings, index)}: ${message}` });
-    if (!generator.extensions.length) return invalid("Enter at least one file extension.");
+    const invalid = (message: string) => {
+      const label = generatorLabel(settings, index);
+      return { index, message: t`${label}: ${message}` };
+    };
+    if (!generator.extensions.length) return invalid(t`Enter at least one file extension.`);
     for (const entry of generator.extensions) {
       const extension = entry.name.trim().toLowerCase().replace(/^\./, "");
-      if (!extension || /[/\\,\s]/.test(extension)) return invalid("Enter a valid file extension.");
-      if (extensions.has(extension)) return invalid(`The extension "${extension}" is assigned more than once.`);
+      if (!extension || /[/\\,\s]/.test(extension)) return invalid(t`Enter a valid file extension.`);
+      if (extensions.has(extension)) return invalid(t`The extension "${extension}" is assigned more than once.`);
       extensions.add(extension);
     }
     const { options } = generator;
-    if (!options.oneofKind) return invalid("Choose supported preview settings.");
+    if (!options.oneofKind) return invalid(t`Choose supported preview settings.`);
     const values = options.oneofKind === "image" ? options.image : options.video;
     for (const [field, value] of Object.entries(values)) {
-      if (typeof value === "string" && !value.trim()) return invalid("Complete all required fields.");
+      if (typeof value === "string" && !value.trim()) return invalid(t`Complete all required fields.`);
       if (typeof value !== "number") continue;
       const limit = field === "quality" ? 100 : field === "timelineMaxFrames" ? 1000 : field === "timelineIntervalSeconds" ? 2147483647 : 8192;
-      if (!Number.isInteger(value) || value < 1 || value > limit) return invalid("Enter valid dimensions, quality and sampling values.");
+      if (!Number.isInteger(value) || value < 1 || value > limit) return invalid(t`Enter valid dimensions, quality and sampling values.`);
     }
     if (options.oneofKind === "video") {
       const video = options.video;
       const columns = Math.min(video.timelineMaxFrames, 10);
       const rows = Math.ceil(video.timelineMaxFrames / columns);
       if (columns * rows * video.timelineWidth * video.timelineHeight > 100000000)
-        return invalid("Reduce the timeline tile size or maximum frames to stay within 100 million pixels.");
+        return invalid(t`Reduce the timeline tile size or maximum frames to stay within 100 million pixels.`);
     }
   }
   return undefined;

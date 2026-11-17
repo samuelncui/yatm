@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { Button, Link, MenuItem, TextField } from "@mui/material";
 import { previewCli } from "@/api";
@@ -24,7 +25,7 @@ export function usePreviewGeneration(active = true, settings?: PreviewSettings) 
       })
       .catch((failure) => {
         if (!controller.signal.aborted) {
-          setError(errorMessage(failure, "Could not check Preview generation"));
+          setError(errorMessage(failure, t`Could not check Preview generation`));
         }
       })
       .finally(() => {
@@ -36,9 +37,9 @@ export function usePreviewGeneration(active = true, settings?: PreviewSettings) 
   const pending = loading || (!settings && committed.loading);
   const failure = error || (!settings ? committed.error : "");
   let reason = failure;
-  if (pending) reason = "Checking Preview generation…";
-  else if (!failure && !generationEnabled) reason = "Preview generation is disabled.";
-  else if (!failure && !capabilities?.available) reason = capabilities?.reason || "Preview helper unavailable.";
+  if (pending) reason = t`Checking Preview generation…`;
+  else if (!failure && !generationEnabled) reason = t`Preview generation is disabled.`;
+  else if (!failure && !capabilities?.available) reason = capabilities?.reason || t`Preview helper unavailable.`;
   return {
     capabilities,
     loading: pending,
@@ -68,7 +69,7 @@ export const PreviewPolicySelect = ({
   <TextField
     select
     fullWidth
-    label="Previews"
+    label={t`Previews`}
     value={value}
     disabled={disabled}
     helperText={
@@ -78,22 +79,22 @@ export const PreviewPolicySelect = ({
           {generation.reason}{" "}
           {generation.error ? (
             <Button size="small" disabled={disabled || generation.loading} onClick={generation.reload}>
-              Retry
+              {t`Retry`}
             </Button>
           ) : !generation.loading ? (
-            <Link href="/settings/preview">Settings</Link>
+            <Link href="/settings/preview">{t`Settings`}</Link>
           ) : null}
         </>
       ))
     }
     onChange={(event) => onChange(Number(event.target.value))}
   >
-    <MenuItem value={PreviewPolicy.NONE}>Don’t generate</MenuItem>
+    <MenuItem value={PreviewPolicy.NONE}>{t`Don’t generate`}</MenuItem>
     <MenuItem disabled={generation && !generation.available} value={PreviewPolicy.MISSING_ONLY}>
-      Generate missing
+      {t`Generate missing`}
     </MenuItem>
     <MenuItem disabled={generation && !generation.available} value={PreviewPolicy.REGENERATE_ALL}>
-      Regenerate all
+      {t`Regenerate all`}
     </MenuItem>
   </TextField>
 );

@@ -1,3 +1,5 @@
+import { msg, t } from "@lingui/core/macro";
+import type { MessageDescriptor } from "@lingui/core";
 import { TapeReadParameters, type InspectDeviceResponse } from "@/entity";
 import { densityLabel } from "@/components/tape-density";
 
@@ -6,35 +8,64 @@ const maxDurationSeconds = 9223372036.854776;
 // validateTapeReadParameters checks one set: it names its density code, and supplied values are usable.
 export const validateTapeReadParameters = (value: TapeReadParameters): string => {
   const scope = value.appliesTo;
-  if (scope?.densityCode === undefined) return "Read parameters density code is required.";
+  if (scope?.densityCode === undefined) return t`Read parameters density code is required.`;
   if (!Number.isInteger(scope.densityCode) || scope.densityCode < 0 || scope.densityCode > 255)
-    return "Read parameters density code must be between 0 and 255.";
-  if (scope.driveSerial !== undefined && !scope.driveSerial.trim()) return "Read parameters drive serial must be nonempty when supplied.";
+    return t`Read parameters density code must be between 0 and 255.`;
+  if (scope.driveSerial !== undefined && !scope.driveSerial.trim()) return t`Read parameters drive serial must be nonempty when supplied.`;
   const nominalWraps = value.geometry?.nominalWraps;
   if (nominalWraps !== undefined && (!Number.isInteger(nominalWraps) || nominalWraps <= 0 || nominalWraps > 0xffffffff))
-    return "Read parameters nominal wraps must be a positive uint32.";
+    return t`Read parameters nominal wraps must be a positive uint32.`;
   const positioning = value.positioning;
   const reading = value.reading;
   const completion = value.completion;
-  if (completion?.fullSpanSeconds !== undefined && completion.fullSpanSeconds <= 0) return "Read parameters full-span unload seconds must be positive.";
-  const seconds: [string, number | undefined][] = [
-    ["base", positioning?.baseSeconds],
-    ["approach reversal", positioning?.approachReversalSeconds],
-    ["seek seconds per wrap", positioning?.seekSecondsPerWrap],
-    ["filemark overhead", reading?.filemarkOverheadSeconds],
-    ["full-span unload", completion?.fullSpanSeconds],
-    ["fixed unload", completion?.fixedSeconds],
-    ["LTFS unmount", completion?.ltfsUnmountSeconds],
+  if (completion?.fullSpanSeconds !== undefined && completion.fullSpanSeconds <= 0) return t`Read parameters full-span unload seconds must be positive.`;
+  // Each duration carries its two messages, so every error is one whole sentence.
+  const seconds: [number | undefined, () => string, () => string][] = [
+    [
+      positioning?.baseSeconds,
+      () => t`Read parameters base must be finite and representable as a duration.`,
+      () => t`Read parameters base must be nonnegative.`,
+    ],
+    [
+      positioning?.approachReversalSeconds,
+      () => t`Read parameters approach reversal must be finite and representable as a duration.`,
+      () => t`Read parameters approach reversal must be nonnegative.`,
+    ],
+    [
+      positioning?.seekSecondsPerWrap,
+      () => t`Read parameters seek seconds per wrap must be finite and representable as a duration.`,
+      () => t`Read parameters seek seconds per wrap must be nonnegative.`,
+    ],
+    [
+      reading?.filemarkOverheadSeconds,
+      () => t`Read parameters filemark overhead must be finite and representable as a duration.`,
+      () => t`Read parameters filemark overhead must be nonnegative.`,
+    ],
+    [
+      completion?.fullSpanSeconds,
+      () => t`Read parameters full-span unload must be finite and representable as a duration.`,
+      () => t`Read parameters full-span unload must be nonnegative.`,
+    ],
+    [
+      completion?.fixedSeconds,
+      () => t`Read parameters fixed unload must be finite and representable as a duration.`,
+      () => t`Read parameters fixed unload must be nonnegative.`,
+    ],
+    [
+      completion?.ltfsUnmountSeconds,
+      () => t`Read parameters LTFS unmount must be finite and representable as a duration.`,
+      () => t`Read parameters LTFS unmount must be nonnegative.`,
+    ],
   ];
-  for (const [name, number] of seconds) {
+  for (const [number, notFinite, negative] of seconds) {
     if (number === undefined) continue;
-    if (!Number.isFinite(number) || Math.abs(number) >= maxDurationSeconds) return `Read parameters ${name} must be finite and representable as a duration.`;
-    if (number < 0) return `Read parameters ${name} must be nonnegative.`;
+    if (!Number.isFinite(number) || Math.abs(number) >= maxDurationSeconds) return notFinite();
+    if (number < 0) return negative();
   }
   if (positioning?.streamingBytes !== undefined && (positioning.streamingBytes < 0n || positioning.streamingBytes > 0xffffffffffffffffn))
-    return "Read parameters streaming bytes must be a uint64 value.";
+    return t`Read parameters streaming bytes must be a uint64 value.`;
   if (reading?.bytesPerSecond !== undefined && (!Number.isFinite(reading.bytesPerSecond) || reading.bytesPerSecond <= 0))
-    return "Read parameters bytes per second must be finite and positive.";
+    return t`Read parameters bytes per second must be finite and positive.`;
   return "";
 };
 
@@ -45,7 +76,7 @@ export const validateTapeReadParameterSets = (values: TapeReadParameters[]): str
     const error = validateTapeReadParameters(value);
     if (error) return error;
     const density = value.appliesTo!.densityCode!;
-    if (densities.has(density)) return `Read parameters for density code ${density} are repeated.`;
+    if (densities.has(density)) return t`Read parameters for density code ${density} are repeated.`;
     densities.add(density);
   }
   return "";
@@ -79,108 +110,108 @@ export type ReadParameterField = {
   section: Section;
   field: string;
   kind: Kind;
-  label: string;
-  helper: string;
+  label: MessageDescriptor;
+  helper: MessageDescriptor;
 };
 
-export const readParameterGroups: { title: string; fields: ReadParameterField[] }[] = [
+export const readParameterGroups: { title: MessageDescriptor; fields: ReadParameterField[] }[] = [
   {
-    title: "Positioning",
+    title: msg`Positioning`,
     fields: [
       {
         key: "baseSeconds",
         section: "positioning",
         field: "baseSeconds",
         kind: "seconds",
-        label: "Fixed positioning time (s)",
-        helper: "Fixed time of every LOCATE the drive does not stream through.",
+        label: msg`Fixed positioning time (s)`,
+        helper: msg`Fixed time of every LOCATE the drive does not stream through.`,
       },
       {
         key: "seekSecondsPerWrap",
         section: "positioning",
         field: "seekSecondsPerWrap",
         kind: "seconds",
-        label: "Seek time for one complete span (s)",
-        helper: "Time to move one complete longitudinal tape span at seek speed, not the time to read a wrap.",
+        label: msg`Seek time for one complete span (s)`,
+        helper: msg`Time to move one complete longitudinal tape span at seek speed, not the time to read a wrap.`,
       },
       {
         key: "approachReversalSeconds",
         section: "positioning",
         field: "approachReversalSeconds",
         kind: "seconds",
-        label: "Added time when arriving against the wrap direction (s)",
-        helper: "Also added once for each wrap turn crossed while reading.",
+        label: msg`Added time when arriving against the wrap direction (s)`,
+        helper: msg`Also added once for each wrap turn crossed while reading.`,
       },
       {
         key: "streamingBytes",
         section: "positioning",
         field: "streamingBytes",
         kind: "megabytes",
-        label: "Streaming distance (MB)",
-        helper: "How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies.",
+        label: msg`Streaming distance (MB)`,
+        helper: msg`How far ahead the drive reaches by continuing to read instead of positioning. Empty or 0 never applies.`,
       },
     ],
   },
   {
-    title: "Reading",
+    title: msg`Reading`,
     fields: [
       {
         key: "bytesPerSecond",
         section: "reading",
         field: "bytesPerSecond",
         kind: "rate",
-        label: "Read rate (MB/s)",
-        helper: "Reading speed in decimal megabytes per second; it also prices a read-speed locate.",
+        label: msg`Read rate (MB/s)`,
+        helper: msg`Reading speed in decimal megabytes per second; it also prices a read-speed locate.`,
       },
       {
         key: "filemarkOverheadSeconds",
         section: "reading",
         field: "filemarkOverheadSeconds",
         kind: "seconds",
-        label: "Filemark overhead (s)",
-        helper: "Added for each crossed filemark and the following READ. Empty leaves it unpriced.",
+        label: msg`Filemark overhead (s)`,
+        helper: msg`Added for each crossed filemark and the following READ. Empty leaves it unpriced.`,
       },
     ],
   },
   {
-    title: "Completion",
+    title: msg`Completion`,
     fields: [
       {
         key: "fixedSeconds",
         section: "completion",
         field: "fixedSeconds",
         kind: "seconds",
-        label: "Fixed time (s)",
-        helper: "Fixed part of the normal rewind and unload.",
+        label: msg`Fixed time (s)`,
+        helper: msg`Fixed part of the normal rewind and unload.`,
       },
       {
         key: "fullSpanSeconds",
         section: "completion",
         field: "fullSpanSeconds",
         kind: "positiveSeconds",
-        label: "Full-span time (s)",
-        helper: "Rewind and unload time across one physical tape length; must be above 0.",
+        label: msg`Full-span time (s)`,
+        helper: msg`Rewind and unload time across one physical tape length; must be above 0.`,
       },
       {
         key: "ltfsUnmountSeconds",
         section: "completion",
         field: "ltfsUnmountSeconds",
         kind: "seconds",
-        label: "LTFS unmount time (s)",
-        helper: "Added for the LTFS unmount script and finalization; tar ignores it.",
+        label: msg`LTFS unmount time (s)`,
+        helper: msg`Added for the LTFS unmount script and finalization; tar ignores it.`,
       },
     ],
   },
   {
-    title: "Geometry",
+    title: msg`Geometry`,
     fields: [
       {
         key: "nominalWraps",
         section: "geometry",
         field: "nominalWraps",
         kind: "wraps",
-        label: "Nominal wraps",
-        helper: "Whole number of wraps on the cartridge; required to derive geometry from a live wrap report.",
+        label: msg`Nominal wraps`,
+        helper: msg`Whole number of wraps on the cartridge; required to derive geometry from a live wrap report.`,
       },
     ],
   },
@@ -216,20 +247,20 @@ const parseText = (field: ReadParameterField, input: string): { value?: Stored; 
   if (!text) return { value: undefined };
   if (field.kind === "megabytes" || field.kind === "rate") {
     const shifted = shiftDecimal(text);
-    if (!shifted) return { error: "Enter a nonnegative decimal number." };
+    if (!shifted) return { error: t`Enter a nonnegative decimal number.` };
     if (field.kind === "rate") {
       const rate = Number(`${shifted.whole}${shifted.fraction ? `.${shifted.fraction}` : ""}`);
-      return Number.isFinite(rate) && rate > 0 ? { value: rate } : { error: "Must be finite and above 0." };
+      return Number.isFinite(rate) && rate > 0 ? { value: rate } : { error: t`Must be finite and above 0.` };
     }
-    if (shifted.fraction) return { error: "Use at most six decimal places (whole bytes)." };
-    return shifted.whole <= 0xffffffffffffffffn ? { value: shifted.whole } : { error: "Must be at most 18446744073709.551615 MB." };
+    if (shifted.fraction) return { error: t`Use at most six decimal places (whole bytes).` };
+    return shifted.whole <= 0xffffffffffffffffn ? { value: shifted.whole } : { error: t`Must be at most 18446744073709.551615 MB.` };
   }
   const number = Number(text);
   if (field.kind === "wraps")
-    return Number.isInteger(number) && number > 0 && number <= 0xffffffff ? { value: number } : { error: "Must be a whole number between 1 and 4294967295." };
-  if (!Number.isFinite(number) || Math.abs(number) >= maxDurationSeconds) return { error: "Must be a finite number of seconds below 9223372036." };
-  if (number < 0) return { error: "Must be nonnegative." };
-  if (field.kind === "positiveSeconds" && number <= 0) return { error: "Must be above 0." };
+    return Number.isInteger(number) && number > 0 && number <= 0xffffffff ? { value: number } : { error: t`Must be a whole number between 1 and 4294967295.` };
+  if (!Number.isFinite(number) || Math.abs(number) >= maxDurationSeconds) return { error: t`Must be a finite number of seconds below 9223372036.` };
+  if (number < 0) return { error: t`Must be nonnegative.` };
+  if (field.kind === "positiveSeconds" && number <= 0) return { error: t`Must be above 0.` };
   return { value: number };
 };
 
@@ -252,9 +283,12 @@ export const readParametersForm = (value: TapeReadParameters): ReadParametersFor
 export const readParametersFormErrors = (form: ReadParametersForm, usedDensities: number[]): Record<string, string> => {
   const errors: Record<string, string> = {};
   const density = parseDensityCode(form.density);
-  if (!form.density.trim()) errors.density = "Choose a density code.";
-  else if (Number.isNaN(density)) errors.density = "Enter a code from 0 to 255, in decimal or as 0x hexadecimal.";
-  else if (usedDensities.includes(density)) errors.density = `This device already has read parameters for ${densityLabel(density)}; edit that set instead.`;
+  if (!form.density.trim()) errors.density = t`Choose a density code.`;
+  else if (Number.isNaN(density)) errors.density = t`Enter a code from 0 to 255, in decimal or as 0x hexadecimal.`;
+  else if (usedDensities.includes(density)) {
+    const label = densityLabel(density);
+    errors.density = t`This device already has read parameters for ${label}; edit that set instead.`;
+  }
   for (const field of readParameterFields) {
     const { error } = parseText(field, form.values[field.key]);
     if (error) errors[field.key] = error;
@@ -298,5 +332,13 @@ export const applyReadParametersForm = (original: TapeReadParameters, initial: R
 };
 
 /** Compact display of a stored value for the parameter table. */
-export const formatSeconds = (value?: number) => (value === undefined ? "Unknown" : `${value.toFixed(2)} s`);
-export const formatRate = (value?: number) => (value === undefined ? "Unknown" : `${(value / 1e6).toFixed(1)} MB/s`);
+export const formatSeconds = (value?: number) => {
+  if (value === undefined) return t`Unknown`;
+  const seconds = value.toFixed(2);
+  return t`${seconds} s`;
+};
+export const formatRate = (value?: number) => {
+  if (value === undefined) return t`Unknown`;
+  const rate = (value / 1e6).toFixed(1);
+  return t`${rate} MB/s`;
+};

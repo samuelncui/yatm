@@ -1,6 +1,8 @@
+import { i18n } from "@lingui/core";
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { ChangeEvent, Fragment, useState } from "react";
-import { Alert, Checkbox, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Checkbox, LinearProgress, MenuItem, Select, Stack, Typography } from "@mui/material";
 
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import UploadRoundedIcon from "@mui/icons-material/UploadRounded";
@@ -18,9 +20,11 @@ import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/comp
 import { LibrarySettings, SettingsGroup } from "@/entity";
 import { loadLocations } from "@/state/locations";
 import { useAppStore } from "@/state/react";
+import { localeNames, locales, useLocale, type Locale } from "@/i18n";
 
 export const SettingsBrowser = () => {
   const editor = useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library");
+  const { locale, setLocale } = useLocale();
   const { cancel, dirty, draft, error, invalid, loading, reload, save, saved, saving, setDraft } = editor;
   return (
     <>
@@ -45,12 +49,33 @@ export const SettingsBrowser = () => {
           void save();
         }}
       >
+        <SettingsSection title={t`Language`} description={t`Applies to this browser only.`}>
+          <SettingsField
+            label={t`Interface language`}
+            description={dirty ? t`Save or cancel the changes below before switching language.` : undefined}
+            control={
+              <Select<Locale>
+                size="small"
+                value={locale}
+                disabled={dirty || saving}
+                onChange={(event) => void setLocale(event.target.value)}
+                inputProps={{ "aria-label": t`Interface language` }}
+              >
+                {locales.map((value) => (
+                  <MenuItem key={value} value={value}>
+                    {localeNames[value]}
+                  </MenuItem>
+                ))}
+              </Select>
+            }
+          />
+        </SettingsSection>
         {draft && (
           <>
-            <SettingsSection title="File visibility">
+            <SettingsSection title={t`File visibility`}>
               <SettingsField
-                label="Include files without saved versions"
-                description="When off, Library shows files with saved versions. Locations are unaffected."
+                label={t`Include files without saved versions`}
+                description={t`When off, Library shows files with saved versions. Locations are unaffected.`}
                 control={
                   <Checkbox
                     checked={draft.includeFilesWithoutVersions}
@@ -61,12 +86,12 @@ export const SettingsBrowser = () => {
               />
             </SettingsSection>
             <SettingsSection
-              title="Confirmations"
-              description="Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here."
+              title={t`Confirmations`}
+              description={t`Checked confirmations appear before their action. A confirmation turned off with “Don’t show this again” is unchecked here.`}
             >
               <SettingsField
-                label="Confirm Delete"
-                description={!draft.confirmRemove ? "Delete moves selected items to Trash immediately." : undefined}
+                label={t`Confirm Delete`}
+                description={!draft.confirmRemove ? t`Delete moves selected items to Trash immediately.` : undefined}
                 control={
                   <Checkbox
                     checked={draft.confirmRemove}
@@ -78,7 +103,7 @@ export const SettingsBrowser = () => {
               {skippableConfirmations.map(({ field, label }) => (
                 <SettingsField
                   key={field}
-                  label={label}
+                  label={i18n._(label)}
                   control={
                     <Checkbox
                       checked={!draft[field]}
@@ -98,16 +123,15 @@ export const SettingsBrowser = () => {
                     )
                   }
                 >
-                  Show all confirmations
+                  {t`Show all confirmations`}
                 </Button>
               </div>
             </SettingsSection>
           </>
         )}
-        <SettingsSection title="Library data">
+        <SettingsSection title={t`Library data`}>
           <Typography variant="body2" color="text.secondary">
-            Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are
-            not restored.
+            {t`Export includes the Library, Locations and original links. Import replaces these from the backup; global preferences stay unchanged. Disk files are not restored.`}
           </Typography>
         </SettingsSection>
         <SettingsActions dirty={dirty} loading={loading} saving={saving} onCancel={cancel}>
@@ -122,7 +146,7 @@ const LibraryDataActions = () => (
   <>
     <ImportLibraryButton />
     <Button variant="outlined" startIcon={<DownloadRoundedIcon />} onClick={() => window.location.assign(fileBase + "/library/_export")}>
-      Export
+      {t`Export`}
     </Button>
   </>
 );
@@ -150,11 +174,11 @@ const ImportLibraryButton = () => {
     setError("");
     try {
       const response = await fetch(fileBase + "/library/_import", { body: file, method: "POST" });
-      if (!response.ok) throw new Error((await response.text()) || `Import failed (${response.status})`);
+      if (!response.ok) throw new Error((await response.text()) || t`Import failed (${response.status})`);
       void loadLocations(store, true);
       setStatus("success");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not import the Library backup");
+      setError(failure instanceof Error ? failure.message : t`Could not import the Library backup`);
       setStatus("error");
     }
   };
@@ -162,22 +186,23 @@ const ImportLibraryButton = () => {
   return (
     <Fragment>
       <Button variant="outlined" startIcon={<UploadRoundedIcon />} onClick={() => setOpen(true)}>
-        Import
+        {t`Import`}
       </Button>
       {open && (
         <Dialog open onClose={status === "pending" ? undefined : close} maxWidth="sm" fullWidth>
-          <DialogTitle>Import Library Backup</DialogTitle>
+          <DialogTitle>{t`Import Library Backup`}</DialogTitle>
           <DialogContent>
             <Stack useFlexGap spacing={2}>
               <Alert severity="info">
-                Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not
-                restored.
+                {t`Import replaces the Library, including Locations and original links, from this backup. Global preferences stay unchanged. Disk files are not restored.`}
               </Alert>
-              {status === "pending" && <LinearProgress aria-label="Importing Library backup" />}
-              {status === "success" && <Alert severity="success">Library, Locations and original links imported. Global preferences were not changed.</Alert>}
+              {status === "pending" && <LinearProgress aria-label={t`Importing Library backup`} />}
+              {status === "success" && (
+                <Alert severity="success">{t`Library, Locations and original links imported. Global preferences were not changed.`}</Alert>
+              )}
               {status === "error" && <Feedback severity="error">{error}</Feedback>}
               <Button variant="outlined" component="label" startIcon={<UploadRoundedIcon />} disabled={status === "pending"}>
-                Select backup
+                {t`Select backup`}
                 <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" onChange={selectFile} hidden />
               </Button>
               {file && <div>{file.name}</div>}
@@ -186,11 +211,11 @@ const ImportLibraryButton = () => {
           <DialogActions>
             {status !== "success" && (
               <Button variant="contained" disabled={!file || status === "pending"} onClick={submit}>
-                {status === "pending" ? "Importing…" : "Import"}
+                {status === "pending" ? t`Importing…` : t`Import`}
               </Button>
             )}
             <Button disabled={status === "pending"} onClick={close}>
-              {status === "success" ? "Close" : "Cancel"}
+              {status === "success" ? t`Close` : t`Cancel`}
             </Button>
           </DialogActions>
         </Dialog>

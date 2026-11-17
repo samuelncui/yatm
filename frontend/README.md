@@ -117,6 +117,37 @@ cache. Cache timings exclude RPC and DOM rendering; the real browser regression 
 scroll geometry and cursor requests. The [Go result benchmarks](../docs/development/performance.md#performance-acceptance)
 measure backend paging separately.
 
+## Localization
+
+The [localization architecture](../docs/architecture/ui.md#localization) owns scope and terms. The English
+source text is the message key (Lingui macros, PO catalogs in `src/locales/{en,zh-CN}/messages.po`).
+Macros come from `@lingui/core/macro` and run through the Lingui Vite plugin's native macro transform
+(`macroTransform: true` in `vite.config.ts`, which also serves vitest); no Babel is involved.
+
+- Components, hooks and ordinary modules call `t` at the point of use: `` t`Save changes` ``,
+  `` t`${count} files updated` `` and attributes such as `aria-label={t`Close`}`. Interpolate a plain variable
+  (`bigint` and expressions give unreadable `{0}` placeholders), so bind `const jobNumber = String(id)` first.
+- Plurals: `` t`${plural(count, { one: "# file", other: "# files" })}` `` with `plural` from the same macro.
+- The same English word with different meanings takes a context: `t({ message: "Scan", context: "Job kind" })`.
+  Contexts are string literals.
+- Text that is defined at module level (constant tables, enum maps, action definitions) is declared with
+  `msg` and translated at use, never with `t` at import time: `const labels = { [JobKind.SCAN]: msg({ message:
+"Scan", context: "Job kind" }) }` and `i18n._(labels[kind])` with `i18n` from `@lingui/core`. Map each enum
+  value to its message explicitly; do not derive text from an enum name.
+- Do not build sentences from fragments; give the translator the whole sentence with placeholders.
+- Rich text inside a sentence uses `<Trans>` from `@lingui/react/macro`, which needs the provider. Tests render
+  through `@/state/test-render`, which supplies it; plain `t` needs none.
+- Chonky looks labels up by action id. A new `defineFileAction` adds its row to `src/i18n/chonky.ts` with the same
+  English text as its button name. Pages that rename a shared action in English cannot be translated
+  separately, because Chonky resolves one text per id.
+- Dates and numbers: use `formattingLocale()` from `@/i18n` for `toLocaleString`-style calls; MUI and date pickers
+  follow the theme and `currentLocale()`.
+- Add or change strings, then run `pnpm i18n:extract`, fill every empty `msgstr` in
+  `src/locales/zh-CN/messages.po` using the `_Chinese_` terms in CONTEXT, and commit the catalogs.
+  `pnpm i18n:check` (part of `pnpm check`) fails on a stale catalog or an empty zh-CN translation.
+- Tests render English without a catalog. A test of Chinese output calls `await activateLocale("zh-CN")` and
+  restores `en` afterwards.
+
 ## Inline feedback
 
 Use `Feedback` for inline errors and any Alert with actions; put controls in its `action` slot.

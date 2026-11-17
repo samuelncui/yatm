@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { FileBrowser } from "@/components/file-browser";
 import { Feedback } from "@/components/feedback";
 import { type ReactNode, useMemo, useState } from "react";
@@ -22,6 +23,7 @@ import type { SelectionEntry } from "@/components/selection-waitlist-state";
 
 export type { SelectionEntry } from "@/components/selection-waitlist-state";
 export const waitlistRootID = (kind: string) => `waitlist:${kind}`;
+const archiveTarget = (target: string) => t`Archive: ${target}`;
 const RemoveSelection = defineFileAction({
   id: "remove_job_selection",
   requiresSelection: true,
@@ -60,6 +62,7 @@ export const SelectionWaitlist = ({
   cutoff?: bigint;
 }) => {
   const theme = useTheme();
+  const waitlistLabel = t`${label} waitlist`;
   const [trail, setTrail] = useState<SelectionEntry[]>([]);
   const activeTrail = entries.some((entry) => entry.key === trail[0]?.key) ? trail : [];
   const directory = activeTrail.at(-1);
@@ -103,9 +106,9 @@ export const SelectionWaitlist = ({
             ...(entry.unavailableReason ? [entry.unavailableReason] : []),
             ...(entry.path !== entry.name ? [entry.path] : []),
             ...(kind === "restore" && !entry.unavailableReason
-              ? [!entry.isDir && !entry.fileID ? "No saved version" : restoreVersionLabel(entry, resolution, cutoff)]
+              ? [!entry.isDir && !entry.fileID ? t`No saved version` : restoreVersionLabel(entry, resolution, cutoff)]
               : []),
-            ...(kind === "archive" && entry.target && entry.target !== entry.path ? [`Archive: ${entry.target}`] : []),
+            ...(kind === "archive" && entry.target && entry.target !== entry.path ? [archiveTarget(entry.target)] : []),
           ],
         };
       }),
@@ -143,7 +146,7 @@ export const SelectionWaitlist = ({
     }
     if (data.id === ChangeVersion.id) {
       if (data.state.selectedFilesForAction.length !== 1) {
-        toast.info("Select one file to choose its version.");
+        toast.info(t`Select one file to choose its version.`);
         return;
       }
       const entry = displayed.find((entry) => entry.key === data.state.selectedFilesForAction[0].id);
@@ -151,7 +154,7 @@ export const SelectionWaitlist = ({
     }
   };
   return (
-    <div className="selection-waitlist" aria-label={`${label} waitlist`}>
+    <div className="selection-waitlist" aria-label={waitlistLabel}>
       <FileBrowser
         footer={
           footer != null && footer !== false ? (
@@ -163,7 +166,7 @@ export const SelectionWaitlist = ({
         instanceId={waitlistRootID(kind)}
         files={files}
         folderChain={[
-          { id: waitlistRootID(kind), name: `${label} waitlist`, isDir: true, droppable: !busy, draggable: false, openable: true },
+          { id: waitlistRootID(kind), name: waitlistLabel, isDir: true, droppable: !busy, draggable: false, openable: true },
           ...activeTrail.map((entry) => ({ id: entry.key, name: entry.name, isDir: true, droppable: false, draggable: false })),
         ]}
         onFileAction={action}
@@ -175,7 +178,7 @@ export const SelectionWaitlist = ({
         <FileNavbar />
         <FileToolbar layout="inline" />
         {directory && browse.error && (
-          <Feedback severity="error" action={<Button onClick={browse.retry}>Retry</Button>}>
+          <Feedback severity="error" action={<Button onClick={browse.retry}>{t`Retry`}</Button>}>
             {browse.error}
           </Feedback>
         )}
@@ -184,7 +187,7 @@ export const SelectionWaitlist = ({
             if (currentTarget.scrollTop + currentTarget.clientHeight >= currentTarget.scrollHeight - 100) browse.loadMore();
           }}
           loading={directory && browse.loading && browse.entries.length ? "more" : undefined}
-          emptyPlaceholder={directory && browse.loading && !browse.entries.length ? <ListPlaceholder loading label="Loading folder…" /> : undefined}
+          emptyPlaceholder={directory && browse.loading && !browse.entries.length ? <ListPlaceholder loading label={t`Loading folder…`} /> : undefined}
         />
         <FileContextMenu />
       </FileBrowser>

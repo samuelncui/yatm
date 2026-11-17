@@ -1,3 +1,4 @@
+import { t, plural } from "@lingui/core/macro";
 import { readStored, writeStored, stringCodec } from "@/state/storage";
 import { useSelectionActions } from "@/state/react";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject, type UIEvent } from "react";
@@ -34,7 +35,7 @@ import { canPasteFiles, fileOperationReference, useFileOperations, type FileOper
 import {
   AddLocationFileAction,
   ScanFilesAction,
-  ArchiveLibraryAction,
+  AddToArchiveListAction,
   RestoreLibraryAction,
   CutFilesAction,
   PasteFilesAction,
@@ -45,6 +46,7 @@ import {
   RenameFileAction,
   ViewFileDetailsAction,
   GetDataUsageAction,
+  CancelDataUsageAction,
 } from "@/actions";
 import { selectionAddMessage, selectionEntriesForFiles, type SelectionKind } from "@/components/selection-waitlist-state";
 import { useActionDialog } from "@/components/action-dialog";
@@ -61,7 +63,10 @@ type SearchState = {
 
 const SearchRoot: FileData = {
   id: "library-search-results",
-  name: "Search Results",
+  // Read on use, after the language catalog is loaded.
+  get name() {
+    return t`Search Results`;
+  },
   isDir: true,
   openable: false,
   selectable: false,
@@ -253,7 +258,7 @@ export const useFileBrowser = (
         loadedView.current = previous ? view : "";
         setFiles(previous?.files ?? []);
         setListingTotal(previous?.total);
-        setLoadError(errorMessage(error, "Could not read this directory"));
+        setLoadError(errorMessage(error, t`Could not read this directory`));
         throw error;
       } finally {
         cancelFrame();
@@ -333,7 +338,7 @@ export const useFileBrowser = (
           setFiles([]);
         }
         setSearchState({ query, originID, nextCursor: "" });
-        setLoadError(errorMessage(error, "Could not read this directory"));
+        setLoadError(errorMessage(error, t`Could not read this directory`));
         throw error;
       } finally {
         if (sequence === request.current) {
@@ -353,7 +358,7 @@ export const useFileBrowser = (
       try {
         await runSearch(query, originID);
       } catch (error) {
-        toast.error(errorMessage(error, "Search failed"));
+        toast.error(errorMessage(error, t`Search failed`));
       }
     },
     [currentID, runSearch, searchState?.originID],
@@ -364,7 +369,7 @@ export const useFileBrowser = (
     try {
       await runSearch(searchState.query, searchState.originID, searchState.nextCursor, true);
     } catch (error) {
-      toast.error(errorMessage(error, "Load more failed"));
+      toast.error(errorMessage(error, t`Load more failed`));
     }
   }, [runSearch, searchState]);
 
@@ -386,7 +391,7 @@ export const useFileBrowser = (
       }
       if (sequence !== locateRequest.current || viewRequest !== request.current) return false;
       const parent = detail?.organization?.parent?.target;
-      if (parent?.oneofKind !== "fileId") throw new Error("This file has no Library parent.");
+      if (parent?.oneofKind !== "fileId") throw new Error(t`This file has no Library parent.`);
       const parentID = String(parent.fileId);
       pendingReveal.current = file.id;
       if (source.kind !== "library") {
@@ -425,55 +430,58 @@ export const useFileBrowser = (
         ? { id: initialLocationID, path: initialLocationPath, reveal: initialLocationReveal }
         : undefined;
     let active = true;
-    runUIAction(async () => {
-      try {
-        if (requestedLocation) {
-          const reply = await locationCli.get({ id: BigInt(requestedLocation.id) }).response;
-          if (!active || consumedLocationRequest.current === initialLocationRequest) return;
-          if (!reply.location) throw new Error("This Location no longer exists.");
-          setLiveDetails(undefined);
-          const folder = locationDirectoryID(requestedLocation.path);
-          pendingReveal.current = requestedLocation.reveal ? `location-file:${requestedLocation.id}:${requestedLocation.reveal}` : null;
-          if (source.kind !== "location" || source.id !== requestedLocation.id) {
-            consumedLocationRequest.current = initialLocationRequest;
-            writeStored("local", `${storageKey}:location:${requestedLocation.id}`, folder, stringCodec);
-            setSource({ kind: "location", id: requestedLocation.id, name: reply.location.name });
+    runUIAction(
+      async () => {
+        try {
+          if (requestedLocation) {
+            const reply = await locationCli.get({ id: BigInt(requestedLocation.id) }).response;
+            if (!active || consumedLocationRequest.current === initialLocationRequest) return;
+            if (!reply.location) throw new Error(t`This Location no longer exists.`);
+            setLiveDetails(undefined);
+            const folder = locationDirectoryID(requestedLocation.path);
+            pendingReveal.current = requestedLocation.reveal ? `location-file:${requestedLocation.id}:${requestedLocation.reveal}` : null;
+            if (source.kind !== "location" || source.id !== requestedLocation.id) {
+              consumedLocationRequest.current = initialLocationRequest;
+              writeStored("local", `${storageKey}:location:${requestedLocation.id}`, folder, stringCodec);
+              setSource({ kind: "location", id: requestedLocation.id, name: reply.location.name });
+              return;
+            }
+            await openFolder(folder);
+            if (active) consumedLocationRequest.current = initialLocationRequest;
             return;
           }
-          await openFolder(folder);
-          if (active) consumedLocationRequest.current = initialLocationRequest;
-          return;
+          if (requestedFileID) {
+            const reply = (await filesCli.get({ reference: libraryDirectoryReference(requestedFileID) }).response).detail;
+            if (!active || consumedFileRequest.current === initialFileRequest) return;
+            if (!reply?.entry) throw new Error(t`This Library file no longer exists.`);
+            const file = {
+              ...filesEntryData(reply.entry),
+              parentId: String(reply.organization?.parent?.target.oneofKind === "fileId" ? reply.organization.parent.target.fileId : 0n),
+              tags: reply.organization?.tags ?? [],
+              note: reply.organization?.note ?? "",
+              detailsAvailable: true as const,
+            };
+            if (!(await locate(file))) return;
+            if (!active || consumedFileRequest.current === initialFileRequest) return;
+            consumedFileRequest.current = initialFileRequest;
+            onSelectionChange?.(file);
+            openInitialFile?.(file);
+            return;
+          }
+          await openFolder(storedID ?? root.id);
+          if (active && initial?.query) await runSearch(initial.query, storedID ?? Root.id);
+        } catch (error) {
+          if (!active) return;
+          if (requestedLocation && consumedLocationRequest.current === initialLocationRequest) return;
+          if (requestedLocation) throw error;
+          if (requestedFileID && consumedFileRequest.current === initialFileRequest) return;
+          if (requestedFileID || !storedID || source.kind === "location") throw error;
+          console.error("Open stored Library directory failed", error);
+          await openFolder(root.id);
         }
-        if (requestedFileID) {
-          const reply = (await filesCli.get({ reference: libraryDirectoryReference(requestedFileID) }).response).detail;
-          if (!active || consumedFileRequest.current === initialFileRequest) return;
-          if (!reply?.entry) throw new Error("This Library file no longer exists.");
-          const file = {
-            ...filesEntryData(reply.entry),
-            parentId: String(reply.organization?.parent?.target.oneofKind === "fileId" ? reply.organization.parent.target.fileId : 0n),
-            tags: reply.organization?.tags ?? [],
-            note: reply.organization?.note ?? "",
-            detailsAvailable: true as const,
-          };
-          if (!(await locate(file))) return;
-          if (!active || consumedFileRequest.current === initialFileRequest) return;
-          consumedFileRequest.current = initialFileRequest;
-          onSelectionChange?.(file);
-          openInitialFile?.(file);
-          return;
-        }
-        await openFolder(storedID ?? root.id);
-        if (active && initial?.query) await runSearch(initial.query, storedID ?? Root.id);
-      } catch (error) {
-        if (!active) return;
-        if (requestedLocation && consumedLocationRequest.current === initialLocationRequest) return;
-        if (requestedLocation) throw error;
-        if (requestedFileID && consumedFileRequest.current === initialFileRequest) return;
-        if (requestedFileID || !storedID || source.kind === "location") throw error;
-        console.error("Open stored Library directory failed", error);
-        await openFolder(root.id);
-      }
-    }, "Open Library folder failed");
+      },
+      t`Open Library folder failed`,
+    );
     return () => {
       active = false;
       request.current += 1;
@@ -525,7 +533,7 @@ export const useFileBrowser = (
         const scan: ScanPrefill = {
           target: {
             kind: "files",
-            entries: selected.map((file) => scanSelectionEntry(file, effectiveScope, source.kind === "library" ? "Library" : source.name, directory)),
+            entries: selected.map((file) => scanSelectionEntry(file, effectiveScope, source.kind === "library" ? t`Library` : source.name, directory)),
           },
           ...(collect ? { options: collectionOptions } : {}),
         };
@@ -536,17 +544,18 @@ export const useFileBrowser = (
         else setLiveDetails(file);
       };
       const destination = async (target = folderChain.at(-1)!): Promise<FileOperationRef> => {
-        if (!allowsFileOperation(target, FileOperationKind.MKDIR)) throw new Error("This folder does not allow changes. Refresh this folder.");
+        if (!allowsFileOperation(target, FileOperationKind.MKDIR)) throw new Error(t`This folder does not allow changes. Refresh this folder.`);
         const reference = target.physicalLocationID
           ? locationDirectoryReference(String(target.physicalLocationID), String(target.physicalPath))
           : fileOperationReference(target);
         const detail = (await filesCli.get({ reference }).response).detail;
-        if (!detail?.entry?.reference) throw new Error("Destination observation is missing. Refresh this folder.");
-        if (!detail.entry.operations.includes(FileOperationKind.MKDIR)) throw new Error("This folder does not allow changes. Refresh this folder.");
+        if (!detail?.entry?.reference) throw new Error(t`Destination observation is missing. Refresh this folder.`);
+        if (!detail.entry.operations.includes(FileOperationKind.MKDIR)) throw new Error(t`This folder does not allow changes. Refresh this folder.`);
         return detail.entry.reference;
       };
       switch (data.id) {
-        case GetDataUsageAction.id: {
+        case GetDataUsageAction.id:
+        case CancelDataUsageAction.id: {
           if (measurement.state.running) {
             measurement.cancel();
             return;
@@ -570,7 +579,7 @@ export const useFileBrowser = (
           return;
         case PasteFilesAction.id:
           if (!canPasteFiles(operations.clipboard, folderChain.at(-1))) return;
-          runUIAction(async () => operations.paste(await destination()), "Paste failed");
+          runUIAction(async () => operations.paste(await destination()), t`Paste failed`);
           return;
         case AddLocationFileAction.id:
           if (!selectedAllow(FileOperationKind.ADMIT)) return;
@@ -591,12 +600,12 @@ export const useFileBrowser = (
             if (file.detailsAvailable === true) {
               locateOther(file as LibraryFileData);
             } else if (file.id === Root.id) {
-              runUIAction(() => openFolder(Root.id), "Open Library root failed");
+              runUIAction(() => openFolder(Root.id), t`Open Library root failed`);
             }
             return;
           }
           if (file.isDir) {
-            runUIAction(() => openFolder(file.id, file), "Open Library folder failed");
+            runUIAction(() => openFolder(file.id, file), t`Open Library folder failed`);
             return;
           }
           showDetails(file);
@@ -617,21 +626,21 @@ export const useFileBrowser = (
                   destination: await destination(target),
                 }),
               ),
-            "Move files failed",
+            t`Move files failed`,
           );
           return;
         }
         case RenameFileAction.id: {
           if (!selectedAllow(FileOperationKind.MOVE)) return;
           if (selected.length !== 1) {
-            toast.info("Select one file or folder to rename.");
+            toast.info(t`Select one file or folder to rename.`);
             return;
           }
           const file = selected[0];
           ask({
-            title: "Rename",
-            confirmLabel: "Rename",
-            input: { label: "Name", defaultValue: file.name },
+            title: t`Rename`,
+            confirmLabel: t`Rename`,
+            input: { label: t`Name`, defaultValue: file.name },
             onConfirm: async (name) =>
               operations.start(
                 FileOperationSpec.create({ kind: FileOperationKind.MOVE, sources: [fileOperationReference(file)], destination: await destination(), name }),
@@ -642,9 +651,9 @@ export const useFileBrowser = (
         case CreateFolder.id: {
           if (!allowsFileOperation(folderChain.at(-1), FileOperationKind.MKDIR)) return;
           ask({
-            title: "New folder",
-            confirmLabel: "Create",
-            input: { label: "Name" },
+            title: t`New folder`,
+            confirmLabel: t`Create`,
+            input: { label: t`Name` },
             onConfirm: async (name) => operations.start(FileOperationSpec.create({ kind: FileOperationKind.MKDIR, destination: await destination(), name })),
           });
           return;
@@ -652,15 +661,16 @@ export const useFileBrowser = (
         case ChonkyActions.DeleteFiles.id: {
           if (!selectedAllow(FileOperationKind.REMOVE)) return;
           if (source.kind === "location" && !organization) return;
+          const selectedCount = selected.length;
           const remove = () => operations.start(FileOperationSpec.create({ kind: FileOperationKind.REMOVE, sources: selected.map(fileOperationReference) }));
           const physical = source.kind === "location";
           if (organization && !organization.confirmRemove) {
-            runUIAction(remove, "Delete failed");
+            runUIAction(remove, t`Delete failed`);
             return;
           }
           ask({
-            title: "Delete files?",
-            confirmLabel: "Delete",
+            title: t`Delete files?`,
+            confirmLabel: t`Delete`,
             danger: true,
             children: physical ? (
               <>
@@ -669,16 +679,12 @@ export const useFileBrowser = (
                     <li key={file.id}>{String(file.physicalPath)}</li>
                   ))}
                 </ul>
-                <p>
-                  Files and folders move into this Location’s .trash folder. Original associations are removed; Library records and saved versions are kept.
-                </p>
+                <p>{t`Files and folders move into this Location’s .trash folder. Original associations are removed; Library records and saved versions are kept.`}</p>
               </>
             ) : (
               <>
-                <p>
-                  {selected.length} {selected.length === 1 ? "item" : "items"} will move to Library Trash.
-                </p>
-                <p>Original files and archive copies are kept.</p>
+                <p>{t`${plural(selectedCount, { one: "# item will move to Library Trash.", other: "# items will move to Library Trash." })}`}</p>
+                <p>{t`Original files and archive copies are kept.`}</p>
               </>
             ),
             onConfirm: remove,
@@ -689,29 +695,29 @@ export const useFileBrowser = (
           if (!selectedAllow(FileOperationKind.UPDATE_METADATA)) return;
           setMetadataFiles(data.state.selectedFilesForAction);
           return;
-        case ArchiveLibraryAction.id:
+        case AddToArchiveListAction.id:
         case RestoreLibraryAction.id: {
-          const kind: SelectionKind = data.id === ArchiveLibraryAction.id ? "archive" : "restore";
+          const kind: SelectionKind = data.id === AddToArchiveListAction.id ? "archive" : "restore";
           runUIAction(
             async () => {
               const additions = await selectionEntriesForFiles(
                 kind,
                 data.state.selectedFilesForAction,
                 kind === "archive" ? FileScope.DEFAULT : effectiveScope,
-                source.kind === "location" ? source.name : "Library",
+                source.kind === "location" ? source.name : t`Library`,
               );
               const result = addSelectionEntries(kind, additions);
               toast.success(
                 <span>
                   {selectionAddMessage(kind, result)}{" "}
                   <Button size="small" color="inherit" onClick={() => navigate(`/${kind}`)}>
-                    View list
+                    {t`View list`}
                   </Button>
                 </span>,
                 { closeOnClick: false },
               );
             },
-            `Could not add the selection to the ${kind === "archive" ? "Archive" : "Restore"} list`,
+            kind === "archive" ? t`Could not add the selection to the Archive list` : t`Could not add the selection to the Restore list`,
           );
           return;
         }
@@ -726,7 +732,7 @@ export const useFileBrowser = (
           return;
         }
         case RefreshListAction.id:
-          runUIAction(refresh, "Refresh Library failed");
+          runUIAction(refresh, t`Refresh Library failed`);
           return;
       }
     },
@@ -760,21 +766,14 @@ export const useFileBrowser = (
       ChonkyActions.ToggleHiddenFiles,
       ViewFileDetailsAction,
       { ...EditFileMetadataAction, fileFilter: allows(FileOperationKind.UPDATE_METADATA) },
-      {
-        ...ArchiveLibraryAction,
-        button: { ...ArchiveLibraryAction.button, name: "Add to Archive list", tooltip: "Add to Archive list" },
-        fileFilter: allows(FileOperationKind.ARCHIVE),
-      },
+      { ...AddToArchiveListAction, fileFilter: allows(FileOperationKind.ARCHIVE) },
       {
         ...RestoreLibraryAction,
         fileFilter: (file: FileData | null) => !!file && (!!file.isDir || !!associatedLibraryFileID(file)),
       },
       { ...ScanFilesAction, fileFilter: allows(FileOperationKind.SCAN) },
       RefreshListAction,
-      {
-        ...GetDataUsageAction,
-        button: { ...GetDataUsageAction.button, name: "Data Usage", tooltip: measurement.state.running ? "Cancel Data Usage" : "Data Usage" },
-      },
+      measurement.state.running ? CancelDataUsageAction : GetDataUsageAction,
     ];
     const writable = allowsFileOperation(folderChain.at(-1), FileOperationKind.MKDIR);
     const paste = {
@@ -838,11 +837,11 @@ export const useFileBrowser = (
       emptyPlaceholder: loadError ? (
         <DirectoryReadError error={loadError} onRetry={refresh} />
       ) : panelLoading ? (
-        <ListPlaceholder loading label="Reading…" />
+        <ListPlaceholder loading label={t`Reading…`} />
       ) : searchState ? (
-        <ListPlaceholder label="No matching files" />
+        <ListPlaceholder label={t`No matching files`} />
       ) : (
-        <ListPlaceholder label="This folder is empty" />
+        <ListPlaceholder label={t`This folder is empty`} />
       ),
     },
     files: measurement.files,
@@ -860,7 +859,7 @@ export const useFileBrowser = (
           consumedFileRequest.current = initialFileRequest;
           consumedLocationRequest.current = initialLocationRequest;
           pendingReveal.current = null;
-          runUIAction(() => openFolder(root.id), "Could not open root");
+          runUIAction(() => openFolder(root.id), t`Could not open root`);
         }}
         onChange={(value) => {
           if (JSON.stringify(value) === JSON.stringify(source)) return;

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Alert } from "@mui/material";
 import { tapeFormatLabel } from "@/components/tape-format";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
@@ -21,7 +22,7 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
   const health = position?.health ?? PositionHealth.UNKNOWN;
   return (
     <DetailSurface
-      title={name || "Media details"}
+      title={name || t`Media details`}
       icon={<StorageRoundedIcon fontSize="small" />}
       status={
         selected
@@ -30,7 +31,7 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
             ? { label: copyHealthLabel(health), color: health === PositionHealth.HEALTHY ? archiveColors.success : archiveColors.info }
             : undefined
       }
-      preview={position?.signature.length ? <ContentPreview signature={position.signature} label="Preview · archived content" reserveSpace /> : undefined}
+      preview={position?.signature.length ? <ContentPreview signature={position.signature} label={t`Preview · archived content`} reserveSpace /> : undefined}
     >
       {selected ? (
         <MediaContent media={selected} />
@@ -39,7 +40,7 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
       ) : (
         <div className="detail-surface-empty">
           <StorageRoundedIcon />
-          <h3>Select a Media or Position</h3>
+          <h3>{t`Select a Media or Position`}</h3>
         </div>
       )}
     </DetailSurface>
@@ -50,8 +51,8 @@ export const MediaInspector = ({ selection, media }: { selection?: MediaFileData
 export const tapeEncryption = (media: Media) => {
   const tape = media.profile?.kind.oneofKind === "tape" ? media.profile.kind.tape : undefined;
   if (!tape) return undefined;
-  if (!media.encryptionKeySaved) return "Off";
-  return tape.tar?.encryptionAlgorithm || "Configured · algorithm not recorded";
+  if (!media.encryptionKeySaved) return t`Off`;
+  return tape.tar?.encryptionAlgorithm || t`Configured · algorithm not recorded`;
 };
 
 // Users see the storage format; the stored profile identifier stays in Technical details.
@@ -60,86 +61,93 @@ const MediaContent = ({ media }: { media: Media }) => {
   const profile = media.profile?.kind;
   const serial = profile?.oneofKind === "tape" ? profile.tape.serialNumber : profile?.oneofKind === "volume" ? profile.volume.serialNumber : "";
   const tape = profile?.oneofKind === "tape" ? profile.tape : undefined;
+  const recordBytes = String(tape?.tar?.recordBytes);
+  const readAccess = accessLabel(media.capabilities?.read);
+  const writeAccess = accessLabel(media.capabilities?.write);
   const volumeType = profile?.oneofKind === "volume" ? (profile.volume.type === VolumeType.HM_SMR ? "HM-SMR" : "HDD") : "";
   return (
     <div className="detail-surface-content">
       <section className="file-detail-facts-section">
         <dl className="file-detail-summary">
-          <dt>Type</dt>
-          <dd>{media.kind === MediaKind.TAPE ? "Tape" : "Volume"}</dd>
+          <dt>{t`Type`}</dt>
+          <dd>{media.kind === MediaKind.TAPE ? t`Tape` : t`Volume`}</dd>
           {tape && (
             <>
-              <dt>Format</dt>
+              <dt>{t`Format`}</dt>
               <dd>{tapeFormatLabel(tape.format)}</dd>
-              <dt>Encryption</dt>
+              <dt>{t`Encryption`}</dt>
               <dd>{tapeEncryption(media)}</dd>
             </>
           )}
           {tape?.tar && (
             <>
-              <dt>Record mode</dt>
-              <dd>{tape.tar.recordMode === TapeRecordMode.FIXED ? "Fixed" : tape.tar.recordMode === TapeRecordMode.VARIABLE ? "Variable" : "Unknown"}</dd>
-              <dt>Record size</dt>
-              <dd>{tape.tar.recordBytes} bytes</dd>
+              <dt>{t`Record mode`}</dt>
+              <dd>
+                {tape.tar.recordMode === TapeRecordMode.FIXED
+                  ? t({ message: "Fixed", context: "Record mode" })
+                  : tape.tar.recordMode === TapeRecordMode.VARIABLE
+                    ? t({ message: "Variable", context: "Record mode" })
+                    : t`Unknown`}
+              </dd>
+              <dt>{t`Record size`}</dt>
+              <dd>{t`${recordBytes} bytes`}</dd>
             </>
           )}
-          <dt>Capacity</dt>
+          <dt>{t`Capacity`}</dt>
           <dd>{formatFilesize(media.capacityBytes)}</dd>
-          <dt>Written</dt>
+          <dt>{t({ message: "Written", context: "Media bytes" })}</dt>
           <dd>{formatFilesize(media.writtenBytes)}</dd>
           {media.filesystemAvailableBytes !== undefined && (
             <>
-              <dt>Available</dt>
+              <dt>{t`Available`}</dt>
               <dd>{formatFilesize(media.filesystemAvailableBytes)}</dd>
             </>
           )}
         </dl>
         {tape && (
           <p>
-            <a href="/settings/devices">Device settings</a>
+            <a href="/settings/devices">{t`Device settings`}</a>
             {tape.format === "tar_pax_v1" && (
               <>
                 {" "}
-                · <a href="https://github.com/samuelncui/yatm/blob/v1/docs/operations/tar-tape-recovery.md">Tar recovery guide</a>
+                · <a href="https://github.com/samuelncui/yatm/blob/v1/docs/operations/tar-tape-recovery.md">{t`Tar recovery guide`}</a>
               </>
             )}
           </p>
         )}
       </section>
       <details className="technical-details file-detail-technical">
-        <summary>Technical details</summary>
+        <summary>{t`Technical details`}</summary>
         <dl className="file-detail-summary">
-          <dt>Identity</dt>
+          <dt>{t`Identity`}</dt>
           <dd className="file-detail-path">{media.identity || "—"}</dd>
           {tape?.format && (
             <>
-              <dt>Format ID</dt>
+              <dt>{t`Format ID`}</dt>
               <dd>{tape.format}</dd>
             </>
           )}
           {tape?.tar && (
             <>
-              <dt>Initialization ID</dt>
+              <dt>{t`Initialization ID`}</dt>
               <dd>{tape.tar.initializationId}</dd>
             </>
           )}
           {serial && (
             <>
-              <dt>Serial number</dt>
+              <dt>{t`Serial number`}</dt>
               <dd>{serial}</dd>
             </>
           )}
           {volumeType && (
             <>
-              <dt>Volume type</dt>
+              <dt>{t`Volume type`}</dt>
               <dd>{volumeType}</dd>
             </>
           )}
-          <dt>Access</dt>
-          <dd>
-            {accessLabel(media.capabilities?.read)} read · {accessLabel(media.capabilities?.write)} write
-          </dd>
-          <dt>Created</dt>
+          <dt>{t`Access`}</dt>
+          <dd>{t`${readAccess} read · ${writeAccess} write`}</dd>
+          <dt>{t`Created`}</dt>
           <dd>{contentTime(media.createdAtNs || undefined)}</dd>
         </dl>
       </details>
@@ -150,37 +158,40 @@ const MediaContent = ({ media }: { media: Media }) => {
 const PositionContent = ({ position, media }: { position: Position; media?: Media }) => {
   const health = position.health ?? PositionHealth.UNKNOWN;
   const normalCopy = health === PositionHealth.UNSPECIFIED || health === PositionHealth.UNKNOWN || health === PositionHealth.HEALTHY;
-  const mediaLabel = media ? `${media.name || media.identity}${media.kind === MediaKind.TAPE ? " · Tape" : " · Volume"}` : "—";
+  const mediaName = media ? media.name || media.identity : "";
+  const mediaLabel = media ? (media.kind === MediaKind.TAPE ? t`${mediaName} · Tape` : t`${mediaName} · Volume`) : "—";
+  const checkedAt = position.checkedAtNs ? contentTime(position.checkedAtNs) : "";
   return (
     <div className="detail-surface-content">
       <section className="file-detail-facts-section">
         <dl className="file-detail-summary">
-          <dt>Media</dt>
+          <dt>{t`Media`}</dt>
           <dd>{mediaLabel}</dd>
-          <dt>Path</dt>
+          <dt>{t`Path`}</dt>
           <dd className="file-detail-path">{position.path}</dd>
-          <dt>Size</dt>
+          <dt>{t`Size`}</dt>
           <dd>{formatFilesize(position.sizeBytes)}</dd>
-          <dt>Modified</dt>
+          <dt>{t`Modified`}</dt>
           <dd>{contentTime(position.mtimeNs || undefined)}</dd>
-          <dt>Written</dt>
+          <dt>{t`Written`}</dt>
           <dd>{contentTime(position.writtenAtNs || undefined)}</dd>
         </dl>
         {(position.checkedAtNs > 0n || position.healthJobId > 0n) && (
           <p className="product-muted">
-            {position.checkedAtNs ? `Checked ${contentTime(position.checkedAtNs)}` : "Not checked"}
+            {position.checkedAtNs ? t`Checked ${checkedAt}` : t`Not checked`}
             {position.healthJobId > 0n && (
               <>
                 {" "}
-                · <a href={`/jobs/${position.healthJobId}`}>Check results</a>
+                · <a href={`/jobs/${position.healthJobId}`}>{t`Check results`}</a>
               </>
             )}
           </p>
         )}
         {!normalCopy && (
           <Alert severity="warning">
-            Not used by normal Restore.
-            {health === PositionHealth.DAMAGED || health === PositionHealth.UNREADABLE ? " Advanced recovery can attempt this copy." : ""}
+            {health === PositionHealth.DAMAGED || health === PositionHealth.UNREADABLE
+              ? t`Not used by normal Restore. Advanced recovery can attempt this copy.`
+              : t`Not used by normal Restore.`}
           </Alert>
         )}
       </section>
@@ -188,18 +199,18 @@ const PositionContent = ({ position, media }: { position: Position; media?: Medi
         <ContentCopies signature={position.signature} />
       ) : (
         <section className="file-detail-copies">
-          <p className="product-muted">This Position records no Signature, so its copies cannot be matched.</p>
+          <p className="product-muted">{t`This Position records no Signature, so its copies cannot be matched.`}</p>
         </section>
       )}
       <details className="technical-details file-detail-technical">
-        <summary>Technical details</summary>
+        <summary>{t`Technical details`}</summary>
         <dl className="file-detail-summary">
-          <dt>Permission</dt>
+          <dt>{t`Permission`}</dt>
           <dd>{contentMode(position.mode)}</dd>
           <dt>SHA-256</dt>
-          <dd className="file-detail-hash">{contentHex(position.sha256) || "Not checked"}</dd>
-          <dt>Signature</dt>
-          <dd className="file-detail-hash">{contentHex(position.signature) || "Not checked"}</dd>
+          <dd className="file-detail-hash">{contentHex(position.sha256) || t`Not checked`}</dd>
+          <dt>{t`Signature`}</dt>
+          <dd className="file-detail-hash">{contentHex(position.signature) || t`Not checked`}</dd>
         </dl>
       </details>
     </div>

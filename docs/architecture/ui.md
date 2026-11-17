@@ -405,3 +405,27 @@ Selected members remain pinned while pages are replaced, including selection cha
 Opening the tool queries nothing: an explicit **Find** starts a global search and repeats it on demand, and a source or scope change clears results and selection. The Locations source has a searchable multi-select whose chips are the selected whole Locations. The retained result supplies bounded rows for arbitrary scroll positions; missing pages retry without discarding loaded pages. The hidden-file toggle switches between two positions computed by the same Find, keeping the previous projection visible until replacement rows and selected positions are ready. A transient read failure keeps that projection; a shorter result clamps the viewport to its new end. The list exposes only **Sort by size**, using the same control as ordinary lists. Groups start largest first; selecting it reverses and remembers the direction. Members stay in ascending path order. The retained indexes supply both directions without another Find. Sorting keeps the current rows visible until the replacement viewport, selected rows and collapsed/removed group positions are ready together. Delete, Keep and Merge wait while a sort remaps row positions; sorting also waits for active file operations. Date sorting, view switching, folders-first and Select all are unavailable on this sparse list. A result lost through expiration or restart asks for another Find rather than silently searching again; other failures, including a Merge rejected for a busy or unverified Location, keep the result. Version removal remains available through the shared Saved versions detail.
 
 Independent Remove requests may overlap, including different files in one Location. The action is labeled **Delete**, as in ordinary file lists; its confirmation explains that the selected files move to Trash. Identical Delete and Keep confirmations close after admission; per-file progress and failure remain in the list, allowing another file to be deleted while the first request is pending; at most four Delete requests run at once and later ones queue. Find stays available while Delete, Keep or Merge runs. A new Find closes the previous result at once, and an operation still running updates only the result it started from, so the new result can show rows that operation later changes, as another file browser window would. A physically removed row disappears when its result arrives; a publication-pending row also disappears with an explicit Library warning. Failed and unprocessed rows retain diagnostics. Changed groups show their remaining file count but are not regrouped until Find; Keep and Merge are unavailable on them. Merge confirmation states that the chosen File retains its original while the others move to Library Trash and lose original links without deleting their disk bytes. A successful Merge removes its group; partial Keep updates the affected members, including members that were not loaded. Neither these actions nor Inspector or metadata updates automatically start a new Find. [Library](library.md#identical-file-tools) owns matching, merge, Trash and historical Job semantics.
+
+## Localization
+
+The interface is available in English and Simplified Chinese. The choice is a per-browser preference
+stored in `localStorage` as `yatm.locale`, not a server setting; without a stored choice, a browser
+language beginning with `zh` selects Simplified Chinese and anything else English. It is changed in
+**Settings → Library → Language**. Changing it remounts the application under the new language, so the
+Language select is disabled while Library settings have unsaved changes.
+
+Translation is gettext-style: the English source text in the code is the message key, and each language has one PO
+catalog under [frontend/src/locales](../../frontend/src/locales). The `en` catalog exists because production
+builds keep only message ids in code; `zh-CN` carries the translations. A new or changed UI string needs its zh-CN
+translation in the same change, and `pnpm check` fails on a stale catalog or an untranslated entry.
+The [frontend conventions](../../frontend/README.md#localization) own the authoring pattern.
+
+Scope: the frontend, including the file browser, MUI components and date pickers, is translated. Free text
+produced by the backend (gRPC error messages, Job errors, unavailability reasons and other details), the
+command-line interface and the CLI Skill stay English. Translating backend text would need error codes, which is an
+API change. Chonky's few strings that are hardcoded in the library, such as the path-copy messages, also stay English.
+
+Domain terms use the fixed `_Chinese_` rendering of the matching [CONTEXT](../../CONTEXT.md) entry; Archive is never
+rendered as a backup word. A term without a rendering there is proposed to the developer rather than invented.
+Units and number or date formats follow the language: dates use the browser's regional format in English and
+`zh-CN` otherwise.

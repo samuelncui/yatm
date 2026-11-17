@@ -1,3 +1,5 @@
+import { t } from "@lingui/core/macro";
+import { Trans } from "@lingui/react/macro";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import MuiLink from "@mui/material/Link";
@@ -28,8 +30,6 @@ export const calibrationProgress = (job: Job, reply: GetCalibrationJobProgressRe
         : undefined,
   });
 
-const sharedRows = new Set(["Current Phase", "Elapsed Time"]);
-
 export const CalibrationCard = ({ job }: { job: Job }) => {
   const [visible, setVisible] = useState(false);
   const running = isJobRunning(job);
@@ -37,7 +37,7 @@ export const CalibrationCard = ({ job }: { job: Job }) => {
     async (signal: AbortSignal) => GetCalibrationJobProgressResponse.create(await calibrationJobCli.getProgress({ id: job.id }, { abort: signal }).response),
     [job.id],
   );
-  const { data, error } = useJobProgress(job.id, visible, running, loadProgress, "Could not load calibration progress");
+  const { data, error } = useJobProgress(job.id, visible, running, loadProgress, t`Could not load calibration progress`);
 
   // A Calibration observed completing stored a read parameter set; Device settings read it again.
   const store = useAppStore();
@@ -50,11 +50,12 @@ export const CalibrationCard = ({ job }: { job: Job }) => {
     }
   }, [running, job.status, store]);
 
+  const sharedRows = new Set([t`Current Phase`, t`Elapsed Time`]);
   const progress = data ? calibrationProgress(job, data) : null;
   const view = stageView(job, progress);
   const rows = [
     ...counterRows(view, progress).filter((row) => sharedRows.has(row.name)),
-    { name: "Measured Moves", value: data ? `${data.moves.length} / ${data.totalMoves}` : "--" },
+    { name: t`Measured Moves`, value: data ? `${data.moves.length} / ${data.totalMoves}` : "--" },
   ];
   const device = data?.spec?.device || job.targetName || "";
   return (
@@ -76,14 +77,14 @@ export const CalibrationCard = ({ job }: { job: Job }) => {
 
 const CalibrationMoves = ({ reply }: { reply: GetCalibrationJobProgressResponse }) => (
   <TableContainer sx={{ maxHeight: 280 }}>
-    <Table aria-label="Measured moves" size="small" stickyHeader>
+    <Table aria-label={t`Measured moves`} size="small" stickyHeader>
       <TableHead>
         <TableRow>
-          <TableCell>From wrap</TableCell>
-          <TableCell>From span</TableCell>
-          <TableCell>To wrap</TableCell>
-          <TableCell>To span</TableCell>
-          <TableCell align="right">Seconds</TableCell>
+          <TableCell>{t`From wrap`}</TableCell>
+          <TableCell>{t`From span`}</TableCell>
+          <TableCell>{t`To wrap`}</TableCell>
+          <TableCell>{t`To span`}</TableCell>
+          <TableCell align="right">{t`Seconds`}</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
@@ -101,37 +102,52 @@ const CalibrationMoves = ({ reply }: { reply: GetCalibrationJobProgressResponse 
   </TableContainer>
 );
 
-const seconds = (value?: number) => (value === undefined ? "Unknown" : `${value.toFixed(2)} s`);
-const megabytesPerSecond = (value?: number) => (value === undefined ? "Unknown" : `${(value / 1e6).toFixed(1)} MB/s`);
+const seconds = (value?: number) => {
+  if (value === undefined) return t`Unknown`;
+  const amount = value.toFixed(2);
+  return t`${amount} s`;
+};
+const megabytesPerSecond = (value?: number) => {
+  if (value === undefined) return t`Unknown`;
+  const amount = (value / 1e6).toFixed(1);
+  return t`${amount} MB/s`;
+};
 const decimalBytes = (value?: bigint) => {
-  if (value === undefined) return "Unknown";
+  if (value === undefined) return t`Unknown`;
   const bytes = Number(value);
-  return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${(bytes / 1e6).toFixed(1)} MB`;
+  const gigabytes = (bytes / 1e9).toFixed(2);
+  const megabytes = (bytes / 1e6).toFixed(1);
+  return bytes >= 1e9 ? t`${gigabytes} GB` : t`${megabytes} MB`;
 };
 
 /** The fitted terms, labelled as the Read parameters form labels them, with their stored field names. */
 const FittedParameters = ({ parameters, device }: { parameters: TapeReadParameters; device: string }) => {
   const { positioning, reading, appliesTo } = parameters;
+  const densityCode = String(appliesTo?.densityCode ?? t`unknown`);
+  const driveSerial = appliesTo?.driveSerial;
   const terms = [
-    ["Fixed positioning time", "base_seconds", seconds(positioning?.baseSeconds)],
-    ["Seek time for one span", "seek_seconds_per_wrap", seconds(positioning?.seekSecondsPerWrap)],
-    ["Added time when arriving against the wrap direction", "approach_reversal_seconds", seconds(positioning?.approachReversalSeconds)],
-    ["Read rate", "bytes_per_second", megabytesPerSecond(reading?.bytesPerSecond)],
-    ["Streaming distance", "streaming_bytes", decimalBytes(positioning?.streamingBytes)],
+    [t`Fixed positioning time`, "base_seconds", seconds(positioning?.baseSeconds)],
+    [t`Seek time for one span`, "seek_seconds_per_wrap", seconds(positioning?.seekSecondsPerWrap)],
+    [t`Added time when arriving against the wrap direction`, "approach_reversal_seconds", seconds(positioning?.approachReversalSeconds)],
+    [t`Read rate`, "bytes_per_second", megabytesPerSecond(reading?.bytesPerSecond)],
+    [t`Streaming distance`, "streaming_bytes", decimalBytes(positioning?.streamingBytes)],
   ];
   return (
     <Stack spacing={0.5} sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
       <strong>
-        Fitted read parameters · Density code {appliesTo?.densityCode ?? "unknown"}
-        {appliesTo?.driveSerial !== undefined && ` · Serial number ${appliesTo.driveSerial}`}
+        {driveSerial === undefined
+          ? t`Fitted read parameters · Density code ${densityCode}`
+          : t`Fitted read parameters · Density code ${densityCode} · Serial number ${driveSerial}`}
       </strong>
       {terms.map(([label, field, value]) => (
         <span key={field}>
-          {label} (<code>{field}</code>): {value}
+          <Trans>
+            {label} (<code>{field}</code>): {value}
+          </Trans>
         </span>
       ))}
       <MuiLink component={Link} to={`/settings/devices?device=${encodeURIComponent(device)}`}>
-        Read parameters in Device settings
+        {t`Read parameters in Device settings`}
       </MuiLink>
     </Stack>
   );

@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 
@@ -7,6 +8,7 @@ import { useAppSelector, useAppStore } from "@/state/react";
 import type { AppStore } from "@/state/store";
 import { makeSelectSettings, settingsActions } from "@/state/settings";
 import { errorMessage } from "@/tools";
+import { settingsGroupLabel } from "@/components/settings-page";
 
 type SettingsMessage<T> = {
   clone(value: T): T;
@@ -40,21 +42,21 @@ const settingsValue = <G extends keyof SettingsByGroup>(group: G, value: Setting
     case SettingsGroup.DEVICE:
       return { value: { oneofKind: "device", device: value as DeviceSettings } };
     default:
-      throw new Error("Unsupported Settings group");
+      throw new Error(t`Unsupported Settings group`);
   }
 };
 
 export const getSettingsGroup = async <G extends keyof SettingsByGroup>(group: G): Promise<SettingsByGroup[G]> => {
   const response = await settingsCli.get({ group }).response;
   const value = response.value && groupValue(response.value, group);
-  if (!value) throw new Error("Settings reply does not match the requested group");
+  if (!value) throw new Error(t`Settings reply does not match the requested group`);
   return value;
 };
 
 const updateSettingsGroup = async <G extends keyof SettingsByGroup>(group: G, value: SettingsByGroup[G]): Promise<SettingsByGroup[G]> => {
   const response = await settingsCli.update({ value: settingsValue(group, value) }).response;
   const updated = response.value && groupValue(response.value, group);
-  if (!updated) throw new Error("Settings reply does not match the updated group");
+  if (!updated) throw new Error(t`Settings reply does not match the updated group`);
   return updated;
 };
 
@@ -88,7 +90,7 @@ export async function loadCommittedSettings<G extends keyof SettingsByGroup>(sto
     })
     .catch((failure: unknown) => {
       if (store.getState().settings[group]?.request !== request) return followCurrent();
-      store.dispatch(settingsActions.failed({ group, request, error: errorMessage(failure, "Could not load settings") }));
+      store.dispatch(settingsActions.failed({ group, request, error: errorMessage(failure, t`Could not load settings`) }));
       throw failure;
     })
     .finally(() => {
@@ -125,6 +127,7 @@ export function useCommittedSettings<G extends keyof SettingsByGroup>(group: G, 
 /** Shared load, draft, save, cancel and reload behavior for every typed Settings group. */
 export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, message: SettingsMessage<SettingsByGroup[G]>, label: string) => {
   type T = SettingsByGroup[G];
+  const groupLabel = settingsGroupLabel(label);
   const store = useAppStore();
   const selector = useMemo(() => makeSelectSettings(group), [group]);
   const committed = useAppSelector(selector);
@@ -160,7 +163,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
         setError("");
       })
       .catch((failure) => {
-        if (active) setError(errorMessage(failure, `Could not load ${label} settings`));
+        if (active) setError(errorMessage(failure, t`Could not load ${groupLabel} settings`));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -168,7 +171,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     return () => {
       active = false;
     };
-  }, [attempt, group, label, message, store]);
+  }, [attempt, group, groupLabel, message, store]);
 
   const dirty = !!draft && !message.equals(draft, settings);
   const reload = () => {
@@ -197,7 +200,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
       return true;
     } catch (failure) {
       // A rejected draft keeps its edits; only other failures offer a reload.
-      const message = errorMessage(failure, `Could not save ${label} settings`);
+      const message = errorMessage(failure, t`Could not save ${groupLabel} settings`);
       if (failure instanceof RpcError && failure.code === "INVALID_ARGUMENT") {
         setError("");
         setInvalid(message);

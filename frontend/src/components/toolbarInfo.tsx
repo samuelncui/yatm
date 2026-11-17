@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { memo, useMemo } from "react";
 import Typography from "@mui/material/Typography";
 import Tooltip from "@mui/material/Tooltip";
@@ -32,17 +33,18 @@ export const ToobarInfo: React.FC<ToobarInfoProps> = memo(({ files, measurement 
   }, [files]);
 
   const summary = measurement?.summary;
+  const usageError = summary?.error ?? "";
   const label = measurement?.running
-    ? "Calculating data usage"
+    ? t`Calculating data usage`
     : (measurement?.error ??
-      (summary ? (summary.complete ? "Data usage for all matching items" : `Known data usage · ${summary.error}`) : "Loaded items size"));
+      (summary ? (summary.complete ? t`Data usage for all matching items` : t`Known data usage · ${usageError}`) : t`Loaded items size`));
   return (
     <Tooltip title={label}>
       <Typography variant="body1" className="chonky-infoText" aria-label={label} role="status">
         {measurement?.running ? (
-          "Calculating…"
+          t`Calculating…`
         ) : measurement?.error ? (
-          "Size unavailable"
+          t`Size unavailable`
         ) : (
           <>
             {(summary ? !summary.complete : notFinished) && "? "}

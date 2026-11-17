@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { Fragment, useEffect, useId, useState } from "react";
 import { Button, Dialog, useMediaQuery, useTheme } from "@mui/material";
@@ -26,10 +27,10 @@ export const useFileDetail = (target?: FileOperationRef, refreshKey = 0) => {
     void filesCli
       .get({ reference: FileOperationRef.fromJsonString(key) })
       .response.then(({ detail }) => {
-        if (!detail) throw new Error("File details are missing");
+        if (!detail) throw new Error(t`File details are missing`);
         if (active) setSnapshot({ key, detail });
       })
-      .catch((failure) => active && setError(errorMessage(failure, "Could not load file details")))
+      .catch((failure) => active && setError(errorMessage(failure, t`Could not load file details`)))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -70,7 +71,7 @@ const Controlled = ({ target, name, refreshKey, onRefresh, onClose, titleId }: P
   const { detail, loading, error, refresh } = useFileDetail(target, refreshKey);
   const [view, setView] = useState<"overview" | "versions">("overview");
   const notice = error && (
-    <Feedback severity="error" action={<Button onClick={refresh}>Retry</Button>}>
+    <Feedback severity="error" action={<Button onClick={refresh}>{t`Retry`}</Button>}>
       {error}
     </Feedback>
   );
@@ -93,11 +94,11 @@ const Controlled = ({ target, name, refreshKey, onRefresh, onClose, titleId }: P
       />
     );
   return (
-    <DetailSurface title={name || "File details"} titleId={titleId} icon={<FolderRoundedIcon fontSize="small" />} onClose={onClose} notice={notice}>
+    <DetailSurface title={name || t`File details`} titleId={titleId} icon={<FolderRoundedIcon fontSize="small" />} onClose={onClose} notice={notice}>
       {!target ? (
         <div className="detail-surface-empty">
           <FolderRoundedIcon />
-          <h3>Select a file</h3>
+          <h3>{t`Select a file`}</h3>
         </div>
       ) : (
         !error && <FileDetailSkeleton />
@@ -109,7 +110,7 @@ const Controlled = ({ target, name, refreshKey, onRefresh, onClose, titleId }: P
 // Reading a selected file keeps the shape its detail will take, so switching files replaces a
 // skeleton in place instead of collapsing the panel to a spinner and expanding it again.
 const FileDetailSkeleton = () => (
-  <div className="file-detail-skeleton" role="status" aria-label="Loading file details">
+  <div className="file-detail-skeleton" role="status" aria-label={t`Loading file details`}>
     <div className="file-detail-skeleton-frame" />
     <div className="file-detail-skeleton-rows">
       {[0, 1, 2].map((row) => (

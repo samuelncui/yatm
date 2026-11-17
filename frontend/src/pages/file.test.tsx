@@ -225,7 +225,7 @@ import { useFileOperations, type FileOperations } from "@/components/file-operat
 import { selectionForFile } from "@/components/location-files";
 import {
   AddLocationFileAction,
-  ArchiveLibraryAction,
+  AddToArchiveListAction,
   RestoreLibraryAction,
   EditFileMetadataAction,
   ScanFilesAction,
@@ -308,7 +308,7 @@ it("says a folder is reading, then states it is empty, never one as the other", 
   expect(screen.queryByText("Reading…")).not.toBeInTheDocument();
 });
 
-it.each([RenameFileAction, CutFilesAction, EditFileMetadataAction, ArchiveLibraryAction, ScanFilesAction, ChonkyActions.DeleteFiles])(
+it.each([RenameFileAction, CutFilesAction, EditFileMetadataAction, AddToArchiveListAction, ScanFilesAction, ChonkyActions.DeleteFiles])(
   "fails closed when the selected row has no capability for $id",
   async (action) => {
     const { result } = renderHook(() => useFileBrowser(createRef<FileBrowserHandle>(), "missing-capability", vi.fn(), undefined, vi.fn()));
@@ -324,7 +324,7 @@ it.each([RenameFileAction, CutFilesAction, EditFileMetadataAction, ArchiveLibrar
 );
 
 it.each([
-  ["archive", ArchiveLibraryAction],
+  ["archive", AddToArchiveListAction],
   ["restore", RestoreLibraryAction],
 ] as const)("adds a Files multiselection to the %s list without navigating or creating a Job", async (kind, action) => {
   fileGet.mockImplementation(({ id }: { id: bigint }) =>
@@ -375,7 +375,7 @@ it("offers symmetric Archive and Restore list actions in Files", async () => {
   const { result } = renderHook(() => useFileBrowser(createRef<FileBrowserHandle>(), "waitlist-actions", vi.fn(), undefined, vi.fn()));
   await waitFor(() => expect(fileGet).toHaveBeenCalled());
 
-  const archive = result.current.browserProps.fileActions.find((action) => action.id === ArchiveLibraryAction.id);
+  const archive = result.current.browserProps.fileActions.find((action) => action.id === AddToArchiveListAction.id);
   const restore = result.current.browserProps.fileActions.find((action) => action.id === RestoreLibraryAction.id);
   expect((archive as { button?: { name?: string } } | undefined)?.button?.name).toBe("Add to Archive list");
   expect((restore as { button?: { name?: string } } | undefined)?.button?.name).toBe("Add to Restore list");

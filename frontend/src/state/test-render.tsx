@@ -1,6 +1,7 @@
 import { render as renderUI, type RenderOptions } from "@testing-library/react";
 import type { PropsWithChildren, ReactElement } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { I18nProvider } from "@/i18n";
 import { AppStateProvider } from "./react";
 import type { AppStore } from "./store";
 
@@ -9,7 +10,11 @@ export function render(ui: ReactElement, { store, ...options }: RenderOptions & 
   const Wrapper = options.wrapper;
   return renderUI(ui, {
     ...options,
-    wrapper: ({ children }: PropsWithChildren) => <AppStateProvider store={store}>{Wrapper ? <Wrapper>{children}</Wrapper> : children}</AppStateProvider>,
+    wrapper: ({ children }: PropsWithChildren) => (
+      <I18nProvider>
+        <AppStateProvider store={store}>{Wrapper ? <Wrapper>{children}</Wrapper> : children}</AppStateProvider>
+      </I18nProvider>
+    ),
   });
 }
 

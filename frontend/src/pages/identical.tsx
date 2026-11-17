@@ -1,3 +1,4 @@
+import { t, plural } from "@lingui/core/macro";
 import { FileBrowser, useFileListPreferences } from "@/components/file-browser";
 import type { FileListPreferences } from "@/state/file-lists";
 import { Feedback } from "@/components/feedback";
@@ -64,6 +65,7 @@ const sizeOrder = (descending: boolean) => ({
   sortOrder: descending ? IdenticalSortOrder.DESC : IdenticalSortOrder.ASC,
 });
 const initialPreferences: FileListPreferences = { sort: "size", descending: true, foldersFirst: false };
+const deletingStatus = () => t`Deleting…`;
 const staleGroup = (error: unknown) => error instanceof RpcError && error.code === "ABORTED";
 
 function memberFile(member: IdenticalMember): FileData {
@@ -71,14 +73,15 @@ function memberFile(member: IdenticalMember): FileData {
   const matches = new Map<string, string[]>();
   for (const item of member.evidence) {
     const signature = contentHex(item.signature);
-    matches.set(signature, [...(matches.get(signature) ?? []), item.versionId ? `version ${item.versionId}` : "current"]);
+    const versionId = String(item.versionId);
+    matches.set(signature, [...(matches.get(signature) ?? []), item.versionId ? t`version ${versionId}` : t`current`]);
   }
   const evidence = [...matches].map(([signature, sources]) => `${signature.slice(0, 14)}… (${sources.join(", ")})`).join(" · ");
   return {
     ...filesEntryData(entry),
     details: [
       [member.locationName, entry.path, entry.sizeBytes === undefined ? "" : formatFilesize(entry.sizeBytes)].filter(Boolean).join(" · "),
-      `Matching examples: ${evidence}`,
+      t`Matching examples: ${evidence}`,
     ],
     draggable: false,
     droppable: false,
@@ -157,9 +160,9 @@ export const IdenticalFiles = () => {
         unprocessedSurvivor !== undefined &&
         unprocessedSurvivor.survivor !== String(id) &&
         unprocessedSurvivor.revision > (removeStatus?.revision ?? -1)
-          ? "Not processed"
+          ? t`Not processed`
           : undefined;
-      const status = removeStatus?.message === "Deleting…" ? removeStatus.message : (keepDetail ?? keepFallback ?? removeStatus?.message);
+      const status = removeStatus?.message === deletingStatus() ? removeStatus.message : (keepDetail ?? keepFallback ?? removeStatus?.message);
       return status ? { ...file, details: [...(file.details ?? []), status] } : file;
     },
     [itemStatus, keepStatus, result?.id, source, unprocessedGroups],
@@ -177,7 +180,7 @@ export const IdenticalFiles = () => {
     busyGroupIds,
     asFile,
     groupActionIds,
-    source === IdenticalSource.LIBRARY ? "Related content" : "Matching content",
+    source === IdenticalSource.LIBRARY ? t`Related content` : t`Matching content`,
   );
   const { fileRows, invalidate, listRows, lookupPositions } = sparse;
   useEffect(() => {
@@ -266,7 +269,7 @@ export const IdenticalFiles = () => {
           ...sizeOrder(descendingRef.current),
         });
         const found = new Set(reply.positions.map((position) => String(position.fileId)));
-        if (batch.some((id) => !found.has(String(id)))) throw new Error("Could not locate updated files in this result. Find again.");
+        if (batch.some((id) => !found.has(String(id)))) throw new Error(t`Could not locate updated files in this result. Find again.`);
         if (resultRef.current?.id === current.id) applyPositions(reply.positions);
       }
     },
@@ -289,7 +292,7 @@ export const IdenticalFiles = () => {
       resultSource.current = scope.source;
       setResult(found);
     } catch (failure) {
-      if (request === generation.current) setError(errorMessage(failure, "Could not find identical files"));
+      if (request === generation.current) setError(errorMessage(failure, t`Could not find identical files`));
     } finally {
       if (request === generation.current) setLoading(false);
     }
@@ -310,7 +313,7 @@ export const IdenticalFiles = () => {
         setIncludeHidden(next);
       } catch (failure) {
         if (request !== hiddenRequest.current || resultRef.current?.id !== snapshotId) return;
-        toast.error(errorMessage(failure, "Could not switch hidden files"));
+        toast.error(errorMessage(failure, t`Could not switch hidden files`));
       } finally {
         if (request === hiddenRequest.current) setSwitchingHidden(false);
       }
@@ -322,7 +325,7 @@ export const IdenticalFiles = () => {
     const snapshot = resultRef.current;
     if (!snapshot) return;
     if (sorting.current || switchingHidden || mergeActive.current || busyGroupRef.current.size) {
-      toast.error("Wait for the current operation to finish before sorting.");
+      toast.error(t`Wait for the current operation to finish before sorting.`);
       return;
     }
     const next = !descending;
@@ -341,7 +344,7 @@ export const IdenticalFiles = () => {
         });
         for (const position of reply.positions) positions.set(String(position.fileId), position);
       }
-      if (positions.size !== ids.length) throw new Error("Could not locate updated files in this result. Find again.");
+      if (positions.size !== ids.length) throw new Error(t`Could not locate updated files in this result. Find again.`);
       const projection = await sparse.prepareProjection(includeHidden, IdenticalSortKey.SIZE, next, positions);
       const { pins } = projection;
       if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
@@ -353,7 +356,7 @@ export const IdenticalFiles = () => {
       setPreferences({ ...initialPreferences, descending: next });
     } catch (failure) {
       if (request !== hiddenRequest.current || resultRef.current?.id !== snapshot.id) return;
-      toast.error(errorMessage(failure, "Could not sort identical files"));
+      toast.error(errorMessage(failure, t`Could not sort identical files`));
     } finally {
       if (request === hiddenRequest.current) {
         sorting.current = false;
@@ -384,13 +387,22 @@ export const IdenticalFiles = () => {
         await call;
       } catch (failure) {
         streamError = failure;
-        failures.push(errorMessage(failure, "Operation canceled"));
+        failures.push(errorMessage(failure, t`Operation canceled`));
       }
       if (staleGroup(streamError)) throw streamError;
-      if (!summary?.completed) failures.push("Operation ended without a final result");
-      if (summary?.failedCount) failures.push(String(summary.failedCount) + " failed");
-      if (summary?.unprocessedCount) failures.push(String(summary.unprocessedCount) + " not processed");
-      if (summary?.publicationPendingCount) failures.push(String(summary.publicationPendingCount) + " Library updates incomplete");
+      if (!summary?.completed) failures.push(t`Operation ended without a final result`);
+      if (summary?.failedCount) {
+        const failedCount = String(summary.failedCount);
+        failures.push(t`${failedCount} failed`);
+      }
+      if (summary?.unprocessedCount) {
+        const unprocessedCount = String(summary.unprocessedCount);
+        failures.push(t`${unprocessedCount} not processed`);
+      }
+      if (summary?.publicationPendingCount) {
+        const pendingCount = String(summary.publicationPendingCount);
+        failures.push(t`${pendingCount} Library updates incomplete`);
+      }
       if (failures.length) throw new Error([...new Set(failures)].join(" · "));
     },
     [],
@@ -398,13 +410,14 @@ export const IdenticalFiles = () => {
 
   const removeFiles = useCallback(
     async (targets: FileData[]) => {
-      if (sorting.current) throw new Error("Wait for sorting to finish before deleting files.");
+      if (sorting.current) throw new Error(t`Wait for sorting to finish before deleting files.`);
       const snapshot = resultRef.current;
       if (!snapshot) return;
       const tasks: Promise<void>[] = [];
       for (const file of new Map(targets.map((item) => [item.id, item])).values()) {
         if (inFlightFiles.current.has(file.id)) continue;
         inFlightFiles.current.add(file.id);
+        const name = file.name;
         const row = fileRows.get(file.id);
         const groupId = row?.group?.id ?? "";
         const selectedId = rowFileID(row);
@@ -417,7 +430,7 @@ export const IdenticalFiles = () => {
               return next;
             });
           const revision = ++statusRevision.current;
-          setItemStatus((current) => new Map(current).set(file.id, { message: "Deleting…", revision }));
+          setItemStatus((current) => new Map(current).set(file.id, { message: deletingStatus(), revision }));
         }
         tasks.push(
           (async () => {
@@ -434,7 +447,7 @@ export const IdenticalFiles = () => {
                 publicationPending ||= outcome.outcome === FileOperationOutcome.PUBLICATION_PENDING;
                 const id = outcome.fileId ?? selectedId;
                 if (id === undefined || !row?.group) {
-                  positionError = "Could not identify the removed row";
+                  positionError = t`Could not identify the removed row`;
                   return;
                 }
                 if (resultRef.current?.id === snapshot.id) {
@@ -458,25 +471,22 @@ export const IdenticalFiles = () => {
             }
             const positionFailure = (await Promise.all(lookups)).find((error) => error !== undefined);
             if (positionFailure) {
-              positionError = errorMessage(positionFailure, "Could not update both row views");
+              positionError = errorMessage(positionFailure, t`Could not update both row views`);
             }
             if (positionError && moved && resultRef.current?.id === snapshot.id) invalidate();
             if (resultRef.current?.id === snapshot.id) {
               const revision = ++statusRevision.current;
+              const failureDetail = errorMessage(failure, t`No result`);
               setItemStatus((current) =>
                 new Map(current).set(file.id, {
-                  message: moved
-                    ? publicationPending
-                      ? "Moved to Trash; Library update incomplete"
-                      : "Moved to Trash"
-                    : "Delete failed: " + errorMessage(failure, "No result"),
+                  message: moved ? (publicationPending ? t`Moved to Trash; Library update incomplete` : t`Moved to Trash`) : t`Delete failed: ${failureDetail}`,
                   revision,
                 }),
               );
               setRevision((value) => value + 1);
-            } else if (moved) toast.success("Moved " + file.name + " to Trash");
-            if (publicationPending) toast.error(file.name + ": moved to Trash; Library update incomplete");
-            if (positionError && moved && resultRef.current?.id === snapshot.id) toast.error(file.name + ": " + positionError + ". Find again.");
+            } else if (moved) toast.success(t`Moved ${name} to Trash`);
+            if (publicationPending) toast.error(t`${name}: moved to Trash; Library update incomplete`);
+            if (positionError && moved && resultRef.current?.id === snapshot.id) toast.error(t`${name}: ${positionError}. Find again.`);
             if (failure) throw failure;
           })().finally(() => {
             inFlightFiles.current.delete(file.id);
@@ -485,7 +495,7 @@ export const IdenticalFiles = () => {
         );
       }
       const settled = await Promise.allSettled(tasks);
-      const failures = settled.flatMap((item) => (item.status === "rejected" ? [errorMessage(item.reason, "Delete failed")] : []));
+      const failures = settled.flatMap((item) => (item.status === "rejected" ? [errorMessage(item.reason, t`Delete failed`)] : []));
       if (failures.length) throw new Error(failures.join("; "));
     },
     [acquireRemoveSlot, applyPositions, fileRows, groupBusy, includeHidden, invalidate, lookupRemoved, stream],
@@ -493,10 +503,10 @@ export const IdenticalFiles = () => {
 
   const keep = useCallback(
     async (group: IdenticalGroup, survivor: FileData) => {
-      if (sorting.current) throw new Error("Wait for sorting to finish before keeping a file.");
+      if (sorting.current) throw new Error(t`Wait for sorting to finish before keeping a file.`);
       const snapshot = resultRef.current;
-      if (!snapshot || unavailableRef.current || changedGroupRef.current.has(group.id)) throw new Error("This group changed. Find again.");
-      if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error("A file operation is already in progress for this group.");
+      if (!snapshot || unavailableRef.current || changedGroupRef.current.has(group.id)) throw new Error(t`This group changed. Find again.`);
+      if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error(t`A file operation is already in progress for this group.`);
       const findGeneration = generation.current;
       groupBusy(snapshot, group.id, 1);
       const ids: bigint[] = [];
@@ -525,7 +535,8 @@ export const IdenticalFiles = () => {
           (entry) => {
             if (entry.fileId === undefined) return;
             if (entry.outcome === FileOperationOutcome.FAILED || entry.outcome === FileOperationOutcome.UNPROCESSED) {
-              const message = entry.outcome === FileOperationOutcome.FAILED ? "Keep failed: " + (entry.error || "Unknown error") : "Not processed";
+              const keepDetail = entry.error || t`Unknown error`;
+              const message = entry.outcome === FileOperationOutcome.FAILED ? t`Keep failed: ${keepDetail}` : t`Not processed`;
               if (findGeneration === generation.current && resultRef.current?.id === snapshot.id)
                 setKeepStatus((current) => new Map(current).set(String(entry.fileId), message));
             }
@@ -555,7 +566,7 @@ export const IdenticalFiles = () => {
       }
       if (staleGroup(failure) && resultRef.current?.id === snapshot.id) markChanged([group.id]);
       if (resultRef.current?.id === snapshot?.id) setRevision((value) => value + 1);
-      else if (!failure) toast.success("Keep completed");
+      else if (!failure) toast.success(t`Keep completed`);
       groupBusy(snapshot, group.id, -1);
       if (failure) throw failure;
     },
@@ -589,7 +600,7 @@ export const IdenticalFiles = () => {
       defineFileAction({
         id: keepID,
         requiresSelection: true,
-        fileFilter: (file) => !!file && allowsFileOperation(file, FileOperationKind.REMOVE) && itemStatus.get(file.id)?.message !== "Deleting…",
+        fileFilter: (file) => !!file && allowsFileOperation(file, FileOperationKind.REMOVE) && itemStatus.get(file.id)?.message !== deletingStatus(),
         button: { name: "Keep this", contextMenu: true, icon: ChonkyIconName.toggleOn },
         customVisibility: (state) => (source === IdenticalSource.LOCATIONS ? single(state) : 0),
       }),
@@ -604,7 +615,7 @@ export const IdenticalFiles = () => {
         id: removeID,
         requiresSelection: true,
         button: { name: "Delete", contextMenu: true, icon: ChonkyIconName.trash },
-        fileFilter: (file) => !!file && allowsFileOperation(file, FileOperationKind.REMOVE) && itemStatus.get(file.id)?.message !== "Deleting…",
+        fileFilter: (file) => !!file && allowsFileOperation(file, FileOperationKind.REMOVE) && itemStatus.get(file.id)?.message !== deletingStatus(),
         customVisibility: (state) => (source !== IdenticalSource.LOCATIONS ? 0 : sparse.unavailable || switchingSort ? 1 : state.group ? 2 : 1),
       }),
       LocateInOtherPaneAction,
@@ -661,7 +672,7 @@ export const IdenticalFiles = () => {
     }
     if (data.id === ScanFilesAction.id) {
       navigate("/scan", {
-        state: { scan: { target: { kind: "files", entries: selectedFiles.map((file) => scanSelectionEntry(file, FileScope.ALL, "Identical files")) } } },
+        state: { scan: { target: { kind: "files", entries: selectedFiles.map((file) => scanSelectionEntry(file, FileScope.ALL, t`Identical files`)) } } },
       });
       return;
     }
@@ -675,20 +686,21 @@ export const IdenticalFiles = () => {
       const reference = fileOperationReference(target).target;
       if (reference.oneofKind !== "fileId" || data.state.selectedFiles.length !== 1) return;
       const snapshot = resultRef.current;
+      const targetName = target.name;
+      const memberCount = String(group.memberCount);
       ask({
-        title: "Merge into " + target.name + "?",
-        confirmLabel: "Merge",
+        title: t`Merge into ${targetName}?`,
+        confirmLabel: t`Merge`,
         children: (
           <p>
-            Merge all {String(group.memberCount)} Library files and their saved versions into this file. The selected File keeps its original link. Other Files
-            move to Library Trash and lose their original links. Disk files are kept.
+            {t`Merge all ${memberCount} Library files and their saved versions into this file. The selected File keeps its original link. Other Files move to Library Trash and lose their original links. Disk files are kept.`}
           </p>
         ),
         onConfirm: async () => {
-          if (sorting.current) throw new Error("Wait for sorting to finish before merging files.");
+          if (sorting.current) throw new Error(t`Wait for sorting to finish before merging files.`);
           if (!snapshot || resultRef.current?.id !== snapshot.id || unavailableRef.current || changedGroupRef.current.has(group.id))
-            throw new Error("The result changed. Find again.");
-          if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error("A file operation is already in progress for this group.");
+            throw new Error(t`The result changed. Find again.`);
+          if (busyGroupRef.current.has(scopeKey + ":" + group.id)) throw new Error(t`A file operation is already in progress for this group.`);
           groupBusy(snapshot, group.id, 1);
           mergeActive.current++;
           setMergeBusy(true);
@@ -699,7 +711,7 @@ export const IdenticalFiles = () => {
               ...sizeOrder(descendingRef.current),
             });
             const targetPosition = positions.positions[0];
-            if (!targetPosition) throw new Error("Could not locate this group. Find again.");
+            if (!targetPosition) throw new Error(t`Could not locate this group. Find again.`);
             const otherHeader = includeHidden ? targetPosition.visibleGroupHeaderPosition : targetPosition.allGroupHeaderPosition;
             let otherInterval: { start: number; end: number } | undefined;
             if (otherHeader !== undefined) {
@@ -711,10 +723,10 @@ export const IdenticalFiles = () => {
                 ...sizeOrder(descendingRef.current),
               });
               const count = other.rows[0]?.displayMemberCount;
-              if (count === undefined) throw new Error("Could not read the other hidden-file view. Find again.");
+              if (count === undefined) throw new Error(t`Could not read the other hidden-file view. Find again.`);
               otherInterval = { start: Number(otherHeader), end: Number(otherHeader + count) };
             }
-            if (resultRef.current?.id !== snapshot.id) throw new Error("The result changed. Find again.");
+            if (resultRef.current?.id !== snapshot.id) throw new Error(t`The result changed. Find again.`);
             try {
               await filesCli.mergeIdentical({ scope, groupId: group.id, fingerprint: group.fingerprint, targetFileId: reference.fileId, dryrun: false })
                 .response;
@@ -723,7 +735,7 @@ export const IdenticalFiles = () => {
               throw failure;
             }
             if (resultRef.current?.id !== snapshot.id) {
-              toast.success("Merged into " + target.name);
+              toast.success(t`Merged into ${targetName}`);
               return;
             }
             const start = Number(row.groupHeaderPosition);
@@ -733,7 +745,7 @@ export const IdenticalFiles = () => {
             setRemovedGroupIntervals((current) => new Map(current).set(group.id, spans));
             setRemovedGroups((current) => new Set(current).add(group.id));
             setRevision((value) => value + 1);
-            toast.success("Merged into " + target.name);
+            toast.success(t`Merged into ${targetName}`);
           } finally {
             mergeActive.current--;
             setMergeBusy(mergeActive.current > 0);
@@ -747,25 +759,28 @@ export const IdenticalFiles = () => {
     if (data.id === keepID && (selectedFiles.length !== 1 || data.state.selectedFiles.length !== 1)) return;
     const run = () => (data.id === keepID ? keep(group, selectedFiles[0]) : removeFiles(selectedFiles));
     if (!confirmRemove) {
-      runUIAction(run, data.id === keepID ? "Keep failed" : "Delete failed");
+      runUIAction(run, data.id === keepID ? t`Keep failed` : t`Delete failed`);
       return;
     }
+    const keptName = selectedFiles[0].name;
+    const otherCount = String(group.memberCount - 1n);
+    const deleteCount = selectedFiles.length;
     ask({
-      title: "Delete files?",
-      confirmLabel: "Delete",
+      title: t`Delete files?`,
+      confirmLabel: t`Delete`,
       danger: true,
       children: (
         <>
           <p>
             {data.id === keepID
-              ? "Keep " + selectedFiles[0].name + " and delete all other " + String(group.memberCount - 1n) + " members, including members not loaded here."
-              : "Delete " + selectedFiles.length + (selectedFiles.length === 1 ? " selected file." : " selected files.")}
+              ? t`Keep ${keptName} and delete all other ${otherCount} members, including members not loaded here.`
+              : t`${plural(deleteCount, { one: "Delete # selected file.", other: "Delete # selected files." })}`}
           </p>
-          <p>Files move into each Location’s .trash folder. Library records and saved versions are kept.</p>
+          <p>{t`Files move into each Location’s .trash folder. Library records and saved versions are kept.`}</p>
         </>
       ),
       onConfirm: () => {
-        void runUIAction(run, data.id === keepID ? "Keep failed" : "Delete failed");
+        void runUIAction(run, data.id === keepID ? t`Keep failed` : t`Delete failed`);
       },
     });
   };
@@ -774,52 +789,52 @@ export const IdenticalFiles = () => {
     <Box className="browser-box library-file-browser">
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
         <Button variant="contained" disabled={loading || (source === IdenticalSource.LOCATIONS && !roots.length)} onClick={() => void search()}>
-          Find
+          {t`Find`}
         </Button>
         <TextField
           select
           size="small"
-          label="Source"
+          label={t`Source`}
           value={source}
           onChange={(event) => setSource(Number(event.target.value) === IdenticalSource.LOCATIONS ? IdenticalSource.LOCATIONS : IdenticalSource.LIBRARY)}
           sx={{ minWidth: 150 }}
         >
-          <MenuItem value={IdenticalSource.LIBRARY}>Library</MenuItem>
-          <MenuItem value={IdenticalSource.LOCATIONS}>Locations</MenuItem>
+          <MenuItem value={IdenticalSource.LIBRARY}>{t`Library`}</MenuItem>
+          <MenuItem value={IdenticalSource.LOCATIONS}>{t`Locations`}</MenuItem>
         </TextField>
         {source === IdenticalSource.LOCATIONS && <IdenticalScopePicker value={roots} onChange={setRoots} />}
         <FormControlLabel
           control={<Switch checked={includeHidden} disabled={switchingHidden} onChange={(_, checked) => void switchHidden(checked)} />}
-          label="Show hidden files"
+          label={t`Show hidden files`}
         />
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: "left", px: 1.5, pb: error || sparse.unavailable || sparse.errors.size > 0 ? 0 : 1 }}>
         {source === IdenticalSource.LIBRARY
-          ? "Files connected through matching current content or saved versions. Members may have different current content."
-          : "Matching recorded content in the selected Locations. Run Scan separately to update content information."}
+          ? t`Files connected through matching current content or saved versions. Members may have different current content.`
+          : t`Matching recorded content in the selected Locations. Run Scan separately to update content information.`}
       </Typography>
       {error && (
-        <Feedback severity="error" action={<Button onClick={() => void search()}>Retry</Button>}>
+        <Feedback severity="error" action={<Button onClick={() => void search()}>{t`Retry`}</Button>}>
           {error}
         </Feedback>
       )}
       {sparse.unavailable && (
-        <Feedback severity="warning" action={<Button onClick={() => void search()}>Find again</Button>}>
-          This identical result needs a new Find to show accurate rows.
+        <Feedback severity="warning" action={<Button onClick={() => void search()}>{t`Find again`}</Button>}>
+          {t`This identical result needs a new Find to show accurate rows.`}
         </Feedback>
       )}
       {!sparse.unavailable && sparse.errors.size > 0 && (
-        <Feedback severity="warning" action={<Button onClick={sparse.retry}>Retry rows</Button>}>
-          Could not load some rows. {[...new Set(sparse.errors.values())].join("; ")}
+        <Feedback severity="warning" action={<Button onClick={sparse.retry}>{t`Retry rows`}</Button>}>
+          {t`Could not load some rows.`} {[...new Set(sparse.errors.values())].join("; ")}
         </Feedback>
       )}
       <Grid className="browser-container" container columnSpacing={1.5}>
-        <Grid className="browser" size={7} component="section" aria-label="Identical file groups">
+        <Grid className="browser" size={7} component="section" aria-label={t`Identical file groups`}>
           <FileBrowser
             instanceId="identical"
             ref={browser}
             files={sparse.files}
-            folderChain={[{ id: "identical", name: "Identical files", isDir: true, openable: false }]}
+            folderChain={[{ id: "identical", name: t`Identical files`, isDir: true, openable: false }]}
             disableDragAndDrop
             disableDefaultFileActions={[
               ChonkyActions.SortFilesByName.id,
@@ -840,20 +855,20 @@ export const IdenticalFiles = () => {
             <FileToolbar layout="inline" />
             <FileList
               loading={switchingSort || switchingHidden || sparse.loading ? "refreshing" : undefined}
-              loadingLabel={switchingSort ? "Sorting files" : switchingHidden ? "Updating hidden files" : "Loading files"}
+              loadingLabel={switchingSort ? t`Sorting files` : switchingHidden ? t`Updating hidden files` : t`Loading files`}
               emptyPlaceholder={
                 loading ? (
-                  <ListPlaceholder loading label="Reading…" />
+                  <ListPlaceholder loading label={t`Reading…`} />
                 ) : error ? (
-                  <ListPlaceholder label="Could not find identical files" />
+                  <ListPlaceholder label={t`Could not find identical files`} />
                 ) : source === IdenticalSource.LOCATIONS && !roots.length ? (
-                  <ListPlaceholder label="Choose Locations to search" />
+                  <ListPlaceholder label={t`Choose Locations to search`} />
                 ) : sparse.unavailable ? (
-                  <ListPlaceholder label="Find again to refresh this result" />
+                  <ListPlaceholder label={t`Find again to refresh this result`} />
                 ) : result ? (
-                  <ListPlaceholder label="No matching groups" />
+                  <ListPlaceholder label={t`No matching groups`} />
                 ) : (
-                  <ListPlaceholder label="Find identical files to search" />
+                  <ListPlaceholder label={t`Find identical files to search`} />
                 )
               }
             />

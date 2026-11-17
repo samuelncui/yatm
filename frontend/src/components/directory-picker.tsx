@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -89,7 +90,7 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
     } catch (error) {
       if (!controller.signal.aborted) {
         setRows([]);
-        setError(errorMessage(error, "Could not browse directory"));
+        setError(errorMessage(error, t`Could not browse directory`));
       }
     } finally {
       if (!controller.signal.aborted) setLoading(false);
@@ -115,18 +116,23 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
   };
   const pathButtons = breadcrumbs;
   return (
-    <section className="directory-picker" aria-label="Choose directory">
+    <section className="directory-picker" aria-label={t`Choose directory`}>
       <div className="directory-picker-path">
-        <Tooltip title="Parent directory">
+        <Tooltip title={t`Parent directory`}>
           <span>
-            <IconButton size="small" aria-label="Parent directory" disabled={loading || !path} onClick={() => navigate(path.split("/").slice(0, -1).join("/"))}>
+            <IconButton
+              size="small"
+              aria-label={t`Parent directory`}
+              disabled={loading || !path}
+              onClick={() => navigate(path.split("/").slice(0, -1).join("/"))}
+            >
               <ArrowUpward fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
         <Breadcrumbs
           maxItems={4}
-          aria-label="Destination path"
+          aria-label={t`Destination path`}
           sx={{
             flex: 1,
             minWidth: 0,
@@ -153,22 +159,22 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
             </Button>
           ))}
         </Breadcrumbs>
-        {loading && <CircularProgress size={16} aria-label="Loading directories" />}
+        {loading && <CircularProgress size={16} aria-label={t`Loading directories`} />}
       </div>
       {error && (
         <Feedback
           severity="error"
           action={
             <Button disabled={loading} onClick={() => void load()}>
-              Retry
+              {t`Retry`}
             </Button>
           }
         >
           {error}
         </Feedback>
       )}
-      {!loading && !error && !writable && <Alert severity="info">This directory cannot be used as a restore destination.</Alert>}
-      <List dense aria-label="Directories">
+      {!loading && !error && !writable && <Alert severity="info">{t`This directory cannot be used as a restore destination.`}</Alert>}
+      <List dense aria-label={t`Directories`}>
         {rows.map((row, index) => (
           <ListItemButton
             key={row.error ? `unavailable:${index}` : row.path}
@@ -188,11 +194,11 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
       </List>
       <ActionRow className="directory-picker-actions">
         <Button variant="contained" disabled={loading || !!error || !writable} onClick={() => onChoose(path)}>
-          Choose
+          {t`Choose`}
         </Button>
         {onNewDirectory && (
           <Button disabled={loading || !!error || !writable} onClick={() => onNewDirectory(path)}>
-            New folder
+            {t`New folder`}
           </Button>
         )}
         <Button
@@ -201,7 +207,7 @@ const DirectoryPickerContents = ({ locationID, initialPath = "", rootName = "/",
             onClose();
           }}
         >
-          Cancel
+          {t`Cancel`}
         </Button>
       </ActionRow>
     </section>

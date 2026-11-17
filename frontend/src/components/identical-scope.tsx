@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 import { useMemo, useRef, useState } from "react";
 import { Autocomplete, Box, Button, Chip, TextField } from "@mui/material";
 import { useAppSelector } from "@/state/react";
@@ -28,7 +29,10 @@ export const IdenticalScopePicker = ({
   // Selected Locations take their names from the shared catalog the application preloads, including deep links.
   const catalog = useAppSelector(selectLocations);
   const options = useMemo<ScopeChoice[]>(() => {
-    const name = (locationId: bigint) => catalog.find((location) => location.id === locationId)?.name ?? `Location ${locationId}`;
+    const name = (locationId: bigint) => {
+      const id = String(locationId);
+      return catalog.find((location) => location.id === locationId)?.name ?? t`Location ${id}`;
+    };
     const items = found.map((location) => ({ key: String(location.id), label: location.name, locationId: location.id }));
     const keys = new Set(items.map((item) => item.key));
     for (const root of value) {
@@ -55,7 +59,7 @@ export const IdenticalScopePicker = ({
             retry();
           }}
         >
-          Retry Locations
+          {t`Retry Locations`}
         </Button>
       }
     >
@@ -95,7 +99,7 @@ export const IdenticalScopePicker = ({
         value={selected}
         inputValue={query}
         loading={loading}
-        loadingText="Loading Locations…"
+        loadingText={t`Loading Locations…`}
         sx={{ flexGrow: 1, minWidth: 240 }}
         getOptionLabel={(option) => option.label}
         getOptionKey={(option) => option.key}
@@ -110,11 +114,11 @@ export const IdenticalScopePicker = ({
         }}
         slots={{ paper: SearchPaper }}
         slotProps={{ paper: paperProps, popper: { popperOptions: { strategy: "fixed" } } }}
-        renderInput={(params) => <TextField {...params} inputRef={input} label="Locations" placeholder="Search by name" />}
+        renderInput={(params) => <TextField {...params} inputRef={input} label={t`Locations`} placeholder={t`Search by name`} />}
         renderValue={(items, getItemProps) =>
           items.map((item, index) => <Chip {...getItemProps({ index })} key={item.key} label={item.label} title={item.label} />)
         }
-        noOptionsText={error ? "Locations unavailable" : query ? "No matching Location" : "No Location registered"}
+        noOptionsText={error ? t`Locations unavailable` : query ? t`No matching Location` : t`No Location registered`}
       />
     </Box>
   );

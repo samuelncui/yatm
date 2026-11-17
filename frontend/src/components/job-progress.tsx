@@ -1,3 +1,5 @@
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg, t } from "@lingui/core/macro";
 import { type ReactNode, useContext, useRef, useEffect } from "react";
 import format from "format-duration";
 
@@ -71,38 +73,58 @@ export const jobActivity = (job: Job): JobActivity => {
 // An admitted attempt offers Cancel even while queued for a shared Media resource.
 export const isJobRunning = (job: Job): boolean => jobActivity(job) !== "terminal";
 
+// Enum values map to messages explicitly: a message is extracted from source text, never built from an enum name.
+const kindLabels: Partial<Record<JobKind, MessageDescriptor>> = {
+  [JobKind.ARCHIVE]: msg({ message: "Archive", context: "Job kind" }),
+  [JobKind.RESTORE]: msg({ message: "Restore", context: "Job kind" }),
+  [JobKind.SCAN]: msg({ message: "Scan", context: "Job kind" }),
+  [JobKind.CALIBRATION]: msg({ message: "Calibration", context: "Job kind" }),
+};
+
 export const jobLabel = (kind: JobKind) => {
-  const labels: Partial<Record<JobKind, string>> = {
-    [JobKind.ARCHIVE]: "Archive",
-    [JobKind.RESTORE]: "Restore",
-    [JobKind.SCAN]: "Scan",
-    [JobKind.CALIBRATION]: "Calibration",
-  };
-  return labels[kind] ?? "Job";
+  const label = kindLabels[kind];
+  return label ? i18n._(label) : t`Job`;
+};
+
+const phaseLabels: Partial<Record<JobPhase, MessageDescriptor>> = {
+  [JobPhase.INDEXING]: msg({ message: "indexing", context: "Job phase" }),
+  [JobPhase.QUEUED]: msg({ message: "Queued — waiting for Media", context: "Job phase" }),
+  [JobPhase.PREPARING_MEDIA]: msg({ message: "preparing media", context: "Job phase" }),
+  [JobPhase.COPYING_TO_MEDIA]: msg({ message: "copying to media", context: "Job phase" }),
+  [JobPhase.COPYING_FROM_MEDIA]: msg({ message: "copying from media", context: "Job phase" }),
+  [JobPhase.FINALIZING_MEDIA]: msg({ message: "finalizing media", context: "Job phase" }),
+  [JobPhase.COMPLETED]: msg({ message: "completed", context: "Job phase" }),
+  [JobPhase.GENERATING_PREVIEWS]: msg({ message: "generating previews", context: "Job phase" }),
+  [JobPhase.PUBLISHING_SOURCE]: msg({ message: "publishing source", context: "Job phase" }),
+  [JobPhase.VERIFYING_MEDIA]: msg({ message: "verifying media", context: "Job phase" }),
+  [JobPhase.PROCESSING_CONTENT]: msg({ message: "processing content", context: "Job phase" }),
+  [JobPhase.COMPARING_CONTENT]: msg({ message: "comparing content", context: "Job phase" }),
+  [JobPhase.CALIBRATING]: msg({ message: "calibrating", context: "Job phase" }),
 };
 
 const phaseLabel = (phase: JobPhase) => {
   if (phase === JobPhase.UNSPECIFIED) return "--";
-  if (phase === JobPhase.QUEUED) return "Queued — waiting for Media";
-  return (JobPhase[phase] ?? "Unknown").toLowerCase().replaceAll("_", " ");
+  const label = phaseLabels[phase];
+  return label ? i18n._(label) : t`unknown`;
 };
 
 export const jobStatusLabel = (job: Job) => {
   // A live phase names what the Job is doing; otherwise its durable state is the whole answer.
   if (jobActivity(job) !== "terminal") return phaseLabel(job.phase);
-  if (job.status === JobStatus.COMPLETED) return "Completed";
-  if (job.status === JobStatus.FAILED) return "Failed";
+  if (job.status === JobStatus.COMPLETED) return t`Completed`;
+  if (job.status === JobStatus.FAILED) return t`Failed`;
   if (job.status === JobStatus.READY) {
     // A ready Job nobody is working on waits for its operator to choose the Media of its next step.
-    if (job.kind === JobKind.SCAN) return "Choose Media to read";
-    return job.kind === JobKind.RESTORE ? "Choose archive storage to read" : "Choose archive storage";
+    if (job.kind === JobKind.SCAN) return t`Choose Media to read`;
+    return job.kind === JobKind.RESTORE ? t`Choose archive storage to read` : t`Choose archive storage`;
   }
-  return "Preparing";
+  return t`Preparing`;
 };
 
 export const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
   const refresh = useContext(RefreshContext);
   const { ask, dialog } = useActionDialog();
+  const jobNumber = String(jobID);
 
   return (
     <>
@@ -111,23 +133,20 @@ export const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
         size="small"
         onClick={() =>
           ask({
-            title: `Delete Job ${jobID}?`,
-            confirmLabel: "Delete",
+            title: t`Delete Job ${jobNumber}?`,
+            confirmLabel: t`Delete`,
             danger: true,
             children: (
-              <p>
-                Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are
-                kept.
-              </p>
+              <p>{t`Execution history and Job attachments will be removed, including recovery files left by older versions. Library files and archive copies are kept.`}</p>
             ),
             onConfirm: async () => {
               await jobCli.delete(DeleteJobsRequest.create({ ids: [jobID], dryrun: false })).response;
-              runUIAction(refresh, "Job deleted, but the list could not refresh");
+              runUIAction(refresh, t`Job deleted, but the list could not refresh`);
             },
           })
         }
       >
-        Delete Job
+        {t`Delete Job`}
       </Button>
       {dialog}
     </>
@@ -137,22 +156,23 @@ export const DeleteJobButton = ({ jobID }: { jobID: bigint }) => {
 export const CancelJobButton = ({ jobID }: { jobID: bigint }) => {
   const refresh = useContext(RefreshContext);
   const { ask, dialog } = useActionDialog();
+  const jobNumber = String(jobID);
   return (
     <>
       <Button
         size="small"
         onClick={() =>
           ask({
-            title: `Stop Job ${jobID}?`,
-            confirmLabel: "Stop job",
+            title: t`Stop Job ${jobNumber}?`,
+            confirmLabel: t`Stop job`,
             onConfirm: async () => {
               await jobCli.cancel({ id: jobID }).response;
-              runUIAction(refresh, "Stop requested, but the list could not refresh");
+              runUIAction(refresh, t`Stop requested, but the list could not refresh`);
             },
           })
         }
       >
-        Cancel
+        {t`Cancel`}
       </Button>
       {dialog}
     </>
@@ -181,6 +201,7 @@ export const JobCard = ({
   }, [isVisible, onVisibilityChange]);
 
   const status = JobStatus[job.status] ?? "UNKNOWN";
+  const jobNumber = String(job.id);
   const creationRoute = job.kind === JobKind.ARCHIVE ? "archive" : job.kind === JobKind.RESTORE ? "restore" : job.kind === JobKind.SCAN ? "scan" : undefined;
 
   return (
@@ -194,11 +215,11 @@ export const JobCard = ({
               underline="hover"
               to={`/jobs/${job.id}`}
               state={{ returnTo: location.pathname + location.search }}
-            >{`${jobLabel(job.kind)}${job.targetName ? ` · ${job.targetName}` : ""} · Job ${job.id}`}</MuiLink>
+            >{`${jobLabel(job.kind)}${job.targetName ? ` · ${job.targetName}` : ""} · ${t`Job ${jobNumber}`}`}</MuiLink>
           </Typography>
           <span className={`job-status job-status-${status.toLowerCase()}`}>{jobStatusLabel(job)}</span>
         </div>
-        {(job.error || job.status === JobStatus.FAILED) && <Feedback>{job.error || "The attempt recorded no reason."}</Feedback>}
+        {(job.error || job.status === JobStatus.FAILED) && <Feedback>{job.error || t`The attempt recorded no reason.`}</Feedback>}
         {detail ? <div className="job-card-body">{detail}</div> : null}
       </CardContent>
       <Divider />
@@ -207,7 +228,7 @@ export const JobCard = ({
           {buttons}
           {creationRoute && (
             <Button component={Link} to={`/${creationRoute}?recreate=${job.id}`}>
-              Recreate
+              {t`Recreate`}
             </Button>
           )}
           <ViewLogDialog key="VIEW_LOG" jobID={job.id} active={jobActivity(job) !== "terminal"} />
@@ -222,18 +243,18 @@ export const JobCard = ({
 const counterLabel = (job: Job, phase: JobPhase): string => {
   switch (phase) {
     case JobPhase.INDEXING:
-      return "Found";
+      return t`Found`;
     case JobPhase.GENERATING_PREVIEWS:
-      return "Generated";
+      return t`Generated`;
     case JobPhase.COMPARING_CONTENT:
-      return "Compared";
+      return t`Compared`;
     case JobPhase.PUBLISHING_SOURCE:
     case JobPhase.PROCESSING_CONTENT:
     case JobPhase.VERIFYING_MEDIA:
-      return "Processed";
+      return t`Processed`;
     default:
       // A phase with no work of its own still reports the Job's manifest counters.
-      return job.kind === JobKind.SCAN ? "Processed" : "Copied";
+      return job.kind === JobKind.SCAN ? t`Processed` : t`Copied`;
   }
 };
 
@@ -246,9 +267,9 @@ export function stageView(job: Job, progress: Progress | null): StageView {
   const activity = jobActivity(job);
   const eta =
     stage?.estimateState === EstimateState.ESTIMATED && stage.remainingSeconds !== undefined
-      ? `About ${format(Number(stage.remainingSeconds) * 1000)}`
+      ? t`About ${format(Number(stage.remainingSeconds) * 1000)}`
       : stage?.estimateState === EstimateState.ESTIMATING
-        ? "Estimating…"
+        ? t`Estimating…`
         : "--";
   let percentage: number | undefined;
   if (job.status === JobStatus.COMPLETED && activity === "terminal") {
@@ -274,39 +295,40 @@ export function counterRows(view: StageView, progress: Progress | null): Progres
   const bytes = view.unit === ProgressUnit.BYTES;
   const totalKnown = progress?.totalKnown === true;
   const rate = progress?.stage?.ratePerSecond;
+  const counter = view.counterLabel;
   const completed = Number(progress?.copiedFileCount ?? 0n);
   const totalFileCount = Number(progress?.totalFileCount ?? 0n);
   return [
-    { name: "Current Phase", value: phaseLabel(view.phase) },
+    { name: t`Current Phase`, value: phaseLabel(view.phase) },
     {
-      name: "Elapsed Time",
+      name: t`Elapsed Time`,
       value: progress?.elapsedMs !== undefined && !view.loading ? format(Number(progress.elapsedMs)) : "--",
-      help: "Time spent in the latest execution attempt; waiting between attempts is excluded.",
+      help: t`Time spent in the latest execution attempt; waiting between attempts is excluded.`,
     },
     {
-      name: "Current Speed",
+      name: t`Current Speed`,
       value: bytes
         ? progress?.speedBytesPerSecond
-          ? `${formatFilesize(progress.speedBytesPerSecond)}/s`
+          ? t`${formatFilesize(progress.speedBytesPerSecond)}/s`
           : "--"
         : rate !== undefined
-          ? `${rate.toFixed(1)} items/s`
+          ? t`${rate.toFixed(1)} items/s`
           : "--",
     },
     {
-      name: "Average Speed",
-      value: bytes && progress?.averageSpeedBytesPerSecond ? `${formatFilesize(progress.averageSpeedBytesPerSecond)}/s` : "--",
-      help: "Average throughput in the active read or copy session.",
+      name: t`Average Speed`,
+      value: bytes && progress?.averageSpeedBytesPerSecond ? t`${formatFilesize(progress.averageSpeedBytesPerSecond)}/s` : "--",
+      help: t`Average throughput in the active read or copy session.`,
     },
-    { name: "Stage Remaining", value: view.eta, help: "Approximate time for the current work stage. Later stages are excluded." },
-    { name: `${view.counterLabel} Files`, value: view.loading ? "--" : completed },
+    { name: t`Stage Remaining`, value: view.eta, help: t`Approximate time for the current work stage. Later stages are excluded.` },
+    { name: t`${counter} Files`, value: view.loading ? "--" : completed },
     // Preview counts decoder items, so the bytes beside that counter describe the source content
     // rather than the work this stage performed.
     ...(view.phase === JobPhase.GENERATING_PREVIEWS
       ? []
-      : [{ name: `${view.counterLabel} Bytes`, value: view.loading ? "--" : formatFilesize(progress?.copiedBytes ?? 0n) }]),
-    { name: "Total Files", value: totalKnown ? totalFileCount : "--" },
-    { name: "Total Bytes", value: totalKnown ? formatFilesize(progress?.totalBytes ?? 0n) : "--" },
+      : [{ name: t`${counter} Bytes`, value: view.loading ? "--" : formatFilesize(progress?.copiedBytes ?? 0n) }]),
+    { name: t`Total Files`, value: totalKnown ? totalFileCount : "--" },
+    { name: t`Total Bytes`, value: totalKnown ? formatFilesize(progress?.totalBytes ?? 0n) : "--" },
   ];
 }
 
@@ -325,7 +347,7 @@ export const JobProgressFrame = ({ view, rows }: { view: StageView; rows: Progre
               {row.name}
               {row.help && (
                 <Tooltip title={row.help} arrow>
-                  <InfoOutlinedIcon aria-label={`${row.name} information`} fontSize="inherit" />
+                  <InfoOutlinedIcon aria-label={t`${row.name} information`} fontSize="inherit" />
                 </Tooltip>
               )}
             </span>

@@ -6,8 +6,11 @@ import App from "@/app";
 import { AppStateProvider } from "@/state/react";
 import { createAppStore } from "@/state/store";
 import { loadLocations } from "@/state/locations";
+import { activateLocale, detectLocale, I18nProvider } from "@/i18n";
 
 import "./init";
+
+await activateLocale(detectLocale());
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
@@ -16,8 +19,10 @@ void loadLocations(store);
 
 createRoot(root).render(
   <StrictMode>
-    <AppStateProvider store={store}>
-      <RouterProvider router={createBrowserRouter([{ path: "*", element: <App /> }])} />
-    </AppStateProvider>
+    <I18nProvider>
+      <AppStateProvider store={store}>
+        <RouterProvider router={createBrowserRouter([{ path: "*", element: <App /> }])} />
+      </AppStateProvider>
+    </I18nProvider>
   </StrictMode>,
 );
