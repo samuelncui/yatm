@@ -12,9 +12,14 @@ import (
 )
 
 const (
-	// MySQLCollation is the only accepted Catalog database collation. It compares code points, so
-	// name and path equality, uniqueness and paging order match SQLite's byte comparison.
-	MySQLCollation = "utf8mb4_bin"
+	// MySQLCollation is the only accepted Catalog database collation. It compares code points
+	// without padding, so name and path equality, uniqueness and paging order match SQLite's byte
+	// comparison, including trailing spaces.
+	MySQLCollation = "utf8mb4_0900_bin"
+
+	// mysqlHandshakeCollation selects utf8mb4 in the connection handshake, whose one-byte collation
+	// ID cannot name MySQLCollation; each session then switches to MySQLCollation.
+	mysqlHandshakeCollation = "utf8mb4_bin"
 
 	mysqlConnections = 16
 	mysqlConnLife    = 5 * time.Minute
@@ -62,7 +67,7 @@ func NewDBConn(dialect, dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-// mysqlDSN fixes the session options the Catalog depends on: utf8mb4_bin literals, READ COMMITTED
+// mysqlDSN fixes the session options the Catalog depends on: MySQLCollation literals, READ COMMITTED
 // isolation, which avoids gap locks on ordinary inserts, affected rows that count matched rows as
 // SQLite does, and parsed DATETIME values, which only the v0.1.x import reads.
 func mysqlDSN(dsn string) (string, error) {
@@ -73,13 +78,14 @@ func mysqlDSN(dsn string) (string, error) {
 	if cfg.DBName == "" {
 		return "", errors.New("the MySQL Catalog DSN must name a database")
 	}
-	cfg.Collation = MySQLCollation
+	cfg.Collation = mysqlHandshakeCollation
 	cfg.ClientFoundRows = true
 	cfg.ParseTime = true
 	if cfg.Params == nil {
 		cfg.Params = make(map[string]string)
 	}
 	delete(cfg.Params, "charset")
+	cfg.Params["collation_connection"] = "'" + MySQLCollation + "'"
 	cfg.Params["transaction_isolation"] = "'READ-COMMITTED'"
 	return cfg.FormatDSN(), nil
 }

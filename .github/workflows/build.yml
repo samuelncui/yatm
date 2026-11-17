@@ -142,7 +142,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.8'
-      # Each test creates its own utf8mb4_bin database on this disposable server.
+      # Each test creates its own utf8mb4_0900_bin database on this disposable server.
       - name: Run the Go tests with MySQL Catalogs
         env:
           YATM_TEST_MYSQL_DSN: root:yatmtest@tcp(127.0.0.1:3306)/

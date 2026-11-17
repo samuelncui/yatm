@@ -38,10 +38,12 @@ only after unmount; expiry never recursively follows them or external Restore ou
 
 ## MySQL Catalog
 
-MySQL 8.0.13 or later is supported: functional index key parts and recursive common table
-expressions start in that release. The database's default collation must be `utf8mb4_bin`, so
-Catalog tables compare names and paths by code point, as SQLite compares bytes; startup refuses
-any other collation before format admission. Each session uses `utf8mb4_bin` literals,
+MySQL 8.0.17 or later is supported: it adds the `utf8mb4_0900_bin` collation to the functional
+index key parts and recursive common table expressions of 8.0.13. The database's default collation
+must be `utf8mb4_0900_bin`, so Catalog tables compare names and paths by code point without
+padding, as SQLite compares bytes; `utf8mb4_bin` would treat names differing only by trailing
+spaces as equal. Startup refuses any other collation before format admission. Each session uses
+`utf8mb4_0900_bin` literals,
 `READ COMMITTED` isolation, affected-row counts of matched rows as in SQLite, and parsed
 `DATETIME` values, which only the v0.1.x import reads.
 Reads and writes share one pool of at most 16 connections, recycled after five minutes, so writes

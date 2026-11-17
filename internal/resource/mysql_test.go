@@ -35,16 +35,20 @@ func TestMySQLCatalogSessionAndCollation(t *testing.T) {
 	require.Equal(t, "READ-COMMITTED", session.Isolation)
 	require.Equal(t, resource.MySQLCollation, session.Collation)
 
-	// A database whose default collation folds case or accents is refused before any table exists.
+	// A database whose default collation folds case or accents, or pads trailing spaces, is refused
+	// before any table exists.
 	cfg, err := mysqldriver.ParseDSN(server)
 	require.NoError(t, err)
 	admin, err := gorm.Open(mysql.Open(server))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = resource.CloseDB(admin) })
-	cfg.DBName = "yatm_test_folding_collation"
-	require.NoError(t, admin.Exec("DROP DATABASE IF EXISTS "+cfg.DBName).Error)
-	require.NoError(t, admin.Exec("CREATE DATABASE "+cfg.DBName+" CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci").Error)
-	t.Cleanup(func() { _ = admin.Exec("DROP DATABASE IF EXISTS " + cfg.DBName).Error })
-	_, err = resource.NewDBConn("mysql", cfg.FormatDSN())
-	require.ErrorContains(t, err, "collation is utf8mb4_0900_ai_ci, expected utf8mb4_bin")
+	for _, collation := range []string{"utf8mb4_0900_ai_ci", "utf8mb4_bin"} {
+		name := "yatm_test_" + collation
+		require.NoError(t, admin.Exec("DROP DATABASE IF EXISTS "+name).Error)
+		require.NoError(t, admin.Exec("CREATE DATABASE "+name+" CHARACTER SET utf8mb4 COLLATE "+collation).Error)
+		t.Cleanup(func() { _ = admin.Exec("DROP DATABASE IF EXISTS " + name).Error })
+		cfg.DBName = name
+		_, err = resource.NewDBConn("mysql", cfg.FormatDSN())
+		require.ErrorContains(t, err, "collation is "+collation+", expected utf8mb4_0900_bin")
+	}
 }
