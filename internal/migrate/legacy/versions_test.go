@@ -99,8 +99,10 @@ func TestPrepareArchivedVersionsRejectsConflictingCopyFacts(t *testing.T) {
 					})
 				}
 				require.NoError(t, db.CreateInBatches(rows, 256).Error)
-				require.NoError(t, db.Model(&stagedLibraryPosition{}).Where("id > ?", 2).
-					Update("hash", gorm.Expr("(SELECT hash FROM positions_staging WHERE id = 1)")).Error)
+				// MySQL cannot read the updated table in an UPDATE subquery, so copy the hash through Go.
+				var first stagedLibraryPosition
+				require.NoError(t, db.First(&first, 1).Error)
+				require.NoError(t, db.Model(&stagedLibraryPosition{}).Where("id > ?", 2).Update("hash", first.Hash).Error)
 			}
 			hash := sha256.Sum256([]byte("conflicting content"))
 			require.NoError(t, db.Model(&stagedLibraryPosition{}).Where("id = ?", copies).Update("hash", hash[:]).Error)

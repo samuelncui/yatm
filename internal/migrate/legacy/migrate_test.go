@@ -31,9 +31,10 @@ func prepareLegacy(ctx context.Context, db *gorm.DB, root string) (*Report, erro
 }
 
 func TestPrepareCommitAndCleanup(t *testing.T) {
-	// Build representative legacy Archive and Restore rows, including an interrupted item.
+	// Build representative legacy Archive and Restore rows, including an interrupted item. Cleanup
+	// validates against the installation backup, which supports only SQLite.
 	ctx := context.Background()
-	db := newLegacyTestDB(t)
+	db := newSQLiteLegacyTestDB(t)
 
 	root := t.TempDir()
 	hash := sha256.Sum256([]byte("restore"))
@@ -351,9 +352,17 @@ func TestPrepareMigratesLibraryAcrossBatches(t *testing.T) {
 	require.Len(t, children, physicalCount)
 	require.Equal(t, int64(physicalCount), children[physicalCount-1].ID)
 	require.Equal(t, "directory/file-257", children[physicalCount-1].Path)
+	// The empty physical order is stored as bytes, not text or NULL.
 	var storageType string
-	require.NoError(t, db.Raw("SELECT typeof(storage_order) FROM positions WHERE id = ?", 1).Scan(&storageType).Error)
-	require.Equal(t, "blob", storageType)
+	query, want := "SELECT typeof(storage_order) FROM positions WHERE id = ?", "blob"
+	if db.Dialector.Name() == "mysql" {
+		want = "varbinary"
+		query = "SELECT CASE WHEN storage_order IS NULL THEN 'null' ELSE LOWER(DATA_TYPE) END FROM positions, " +
+			"information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'positions' " +
+			"AND column_name = 'storage_order' AND id = ?"
+	}
+	require.NoError(t, db.Raw(query, 1).Scan(&storageType).Error)
+	require.Equal(t, want, storageType)
 	require.Empty(t, children[0].StorageOrder)
 }
 
@@ -692,6 +701,12 @@ func TestEmptyLegacyInstanceCreatesFinalJobDirectory(t *testing.T) {
 // newLegacyTestDB creates the released v0.1.x tables in a Catalog database of the tested dialect.
 func newLegacyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
+	return migrateLegacyTables(t, openLegacyTestDB(t))
+}
+
+// openLegacyTestDB opens an empty Catalog database that accepts the released fixtures.
+func openLegacyTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
 	db, dsn := resourcetest.OpenCatalogDSN(t)
 	if db.Dialector.Name() == "mysql" {
 		// Fixtures keep unset time.Time fields, which MySQL stores as zero dates only outside
@@ -701,7 +716,7 @@ func newLegacyTestDB(t *testing.T) *gorm.DB {
 		cfg.Params = map[string]string{"sql_mode": "'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'"}
 		db = resourcetest.Reopen(t, cfg.FormatDSN())
 	}
-	return migrateLegacyTables(t, db)
+	return db
 }
 
 // newSQLiteLegacyTestDB is for the installation backup, which supports only SQLite.
