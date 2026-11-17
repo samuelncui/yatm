@@ -61,6 +61,13 @@ opening and submitting an unchanged Restore creation form preserves its exact cu
 sub-millisecond digits. Durations and video positions remain in their explicitly named units.
 The IDL check rejects older instant-unit suffixes and unsigned or narrower `_ns` fields.
 
+## Path limits
+
+Every surface accepts relative paths of at most 4096 bytes, names of at most 255 bytes and
+Location roots of at most 4096 bytes, on either Catalog dialect. A longer path is rejected where it
+enters, with an error naming it; the [path rules](persistence.md#paths) own the limits and the
+indexes that rely on them.
+
 ## Cross-surface naming
 
 One word per concept on every surface, in the [domain vocabulary](../../CONTEXT.md) spelling. The Job kind that writes Media is **Archive** in protobuf, JSON, the CLI, the interface and persisted records; `backup` names the installation and Library-metadata backups that the installer and `library export`/`import` produce, never a Job, its kind or a copy of File content. File rows report whether content has an archived copy in the `archive` field, and the Library keeps saying archive, archived copy and archive date. Pre-stable clients move with a renamed field or enum instead of retaining a second vocabulary.

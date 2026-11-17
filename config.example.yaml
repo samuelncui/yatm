@@ -6,7 +6,9 @@ listen: 127.0.0.1:8080
 # debug port binding
 debug_listen: 127.0.0.1:8081
 
-# database settings, you can use sqlite or mysql (untested)
+# Catalog database: sqlite, or mysql (8.0.13 or later) with a DSN such as
+# user:password@tcp(127.0.0.1:3306)/yatm naming a database created with
+# CHARACTER SET utf8mb4 COLLATE utf8mb4_bin.
 database:
   dialect: sqlite
   dsn: ./tapes.db

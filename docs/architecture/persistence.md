@@ -36,6 +36,54 @@ Durable Job bundles, recovery material and retained verification evidence are ou
 Same-filesystem atomic staging retains its publishing owner's lifetime. LTFS mount points are removed
 only after unmount; expiry never recursively follows them or external Restore output paths.
 
+## MySQL Catalog
+
+MySQL 8.0.13 or later is supported: functional index key parts and recursive common table
+expressions start in that release. The database's default collation must be `utf8mb4_bin`, so
+Catalog tables compare names and paths by code point, as SQLite compares bytes; startup refuses
+any other collation before format admission. Each session uses `utf8mb4_bin` literals,
+`READ COMMITTED` isolation, affected-row counts of matched rows as in SQLite, and parsed
+`DATETIME` values, which only the v0.1.x import reads.
+Reads and writes share one pool of at most 16 connections, recycled after five minutes, so writes
+run concurrently. Values that can exceed 64 KiB (Settings values, Media profiles, Position
+storage metadata, tracking details and Location configuration) are `mediumblob`/`mediumtext`;
+SQLite keeps `blob`/`text`.
+
+Catalog write transactions use [one entry](../../internal/resource/transaction.go) that repeats
+the whole transaction after a MySQL deadlock (1213) or lock wait timeout (1205), at most three
+more times; a nested transaction never repeats alone. Each body derives its results from its own
+reads. A Library import, which consumes its input stream, and file-tree organization, whose
+outcomes go to its temporary manifest, run once and report such an error. Check-then-insert paths
+rely on unique constraints rather than locking reads: a directory creation that loses to a
+concurrent one adopts the committed directory, while Trash containers and Job properties fail the
+losing request with the constraint error. Settings saves are single upserts, and Job state and
+revision changes stay serialized by the Executor's in-process revision lock. `ON DUPLICATE KEY
+UPDATE` ignores a conflict target, so Catalog upserts either target only the primary key or
+ignore every duplicate, as SQLite does.
+
+The automatic installer and `yatm-migrate` install, upgrade and validate backups of SQLite
+Catalogs only. Back up a MySQL Catalog with `mysqldump` while the service is stopped, together
+with the Job bundles, or keep the Library alone with a metadata export, which excludes Settings
+and Jobs.
+
+## Paths
+
+Relative paths hold at most 4096 bytes and each name at most 255 bytes, the common `PATH_MAX`
+and `NAME_MAX`; Location roots also hold at most 4096 bytes. The [shared path
+validators](../../entity/job.go) reject a longer path with an error naming it at every entry:
+Location registration, Scan, Archive, Restore, Position import, file operations and the v0.1.x
+import. A Scan entry with a longer path fails the Scan as an invalid name does.
+
+`file_locations(location_id, path)`, `positions(media_id, path)` and
+`locations(executor_id, root_path)` are unique over the complete path. SQLite uses unique indexes
+over the full value. A MySQL index key holds at most 3072 bytes, so MySQL uses a same-named unique
+functional index over `SHA2(path, 256)` and a `<name>_prefix` index over the first 750 characters
+(600 for roots) for ordering, paging and equality lookups; `idx_positions_media_parent` keeps
+380-character prefixes. The [path indexes](../../internal/library/path_index.go) are created
+after AutoMigrate and an existing index of the same name is kept, so existing Catalogs are not
+rebuilt. Prefix matches use byte ranges (`path >= 'dir/' AND path < 'dir0'`), never `LIKE` or
+`substr`, whose case and length semantics differ between dialects.
+
 ## Derived Tape Data
 
 Tape [position maps](read-planning.md#position-maps) are not stored; each read Session derives its
