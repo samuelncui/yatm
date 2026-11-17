@@ -19,7 +19,7 @@ func TestCatalogNamesCompareByteForByte(t *testing.T) {
 	// Names differing in case, accents or Unicode normalization are distinct siblings.
 	db, lib := newTestLibrary(t)
 	names := []string{"resume.txt", "Resume.txt", "RESUME.txt", "résumé.txt", "résumé.txt",
-		"Résumé.txt", "照片.jpg", "ß", "ss"}
+		"Résumé.txt", "照片.jpg", "ß", "ss", "resume.txt ", "resume.txt  ", " resume.txt"}
 	for _, name := range names {
 		createFileRows(t, db, &File{Name: name, Kind: entity.FileKind_FILE_KIND_REGULAR})
 	}
@@ -50,16 +50,25 @@ func TestCatalogPathUniquenessCoversTheFullPath(t *testing.T) {
 	require.Error(t, db.Create(&FileLocation{FileID: 4, LocationID: 1, Path: shared + "a"}).Error)
 
 	// Positions are unique per Media, and an ignored conflict on the path index writes nothing.
-	position := func(path string) *Position { return &Position{MediaID: 1, Path: path, StorageOrder: []byte{}} }
-	require.NoError(t, db.Create(position(shared+"a")).Error)
-	require.NoError(t, db.Create(position(shared+"b")).Error)
-	require.Error(t, db.Create(position(shared+"a")).Error)
-	ignored := db.Clauses(clause.OnConflict{DoNothing: true}).Create(position(shared + "a"))
+	// MySQL reports the matched duplicate as affected, since sessions count matched rows.
+	position := func(path string, size int64) *Position {
+		return &Position{MediaID: 1, Path: path, Size: size, StorageOrder: []byte{}}
+	}
+	require.NoError(t, db.Create(position(shared+"a", 1)).Error)
+	require.NoError(t, db.Create(position(shared+"b", 1)).Error)
+	require.Error(t, db.Create(position(shared+"a", 2)).Error)
+	ignored := db.Clauses(clause.OnConflict{DoNothing: true}).Create(position(shared+"a", 3))
 	require.NoError(t, ignored.Error)
-	require.Zero(t, ignored.RowsAffected)
-	var count int64
-	require.NoError(t, db.Model(ModelPosition).Count(&count).Error)
-	require.EqualValues(t, 2, count)
+	if db.Dialector.Name() == "mysql" {
+		require.EqualValues(t, 1, ignored.RowsAffected)
+	} else {
+		require.Zero(t, ignored.RowsAffected)
+	}
+	var stored []Position
+	require.NoError(t, db.Order("path").Find(&stored).Error)
+	require.Len(t, stored, 2)
+	require.Equal(t, shared+"a", stored[0].Path)
+	require.EqualValues(t, 1, stored[0].Size)
 
 	// Location roots are unique per Executor.
 	ctx := context.Background()

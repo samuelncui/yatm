@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,10 +210,22 @@ func TestPositionMediaIndexes(t *testing.T) {
 		columns[index.Name()] = index.Columns()
 		unique[index.Name()], _ = index.Unique()
 	}
-	require.Equal(t, []string{"media_id", "path"}, columns["idx_positions_media_path"])
 	require.Equal(t, []string{"media_id", "parent_path", "path"}, columns["idx_positions_media_parent"])
 	require.Equal(t, []string{"media_id", "is_dir", "written_at_ns"}, columns["idx_positions_media_files"])
 	require.True(t, unique["idx_positions_media_path"])
+
+	// SQLite indexes the full path; MySQL makes its hash unique and orders by a path prefix index.
+	if db.Dialector.Name() != "mysql" {
+		require.Equal(t, []string{"media_id", "path"}, columns["idx_positions_media_path"])
+		return
+	}
+	var expression string
+	require.NoError(t, db.Raw("SELECT EXPRESSION FROM information_schema.statistics WHERE table_schema = DATABASE() "+
+		"AND table_name = 'positions' AND index_name = 'idx_positions_media_path' AND seq_in_index = 2").
+		Scan(&expression).Error)
+	require.Contains(t, strings.ToLower(expression), "sha2(`path`,256)")
+	require.Equal(t, []string{"media_id", "path"}, columns["idx_positions_media_path_prefix"])
+	require.False(t, unique["idx_positions_media_path_prefix"])
 }
 
 func BenchmarkCommitMediaAppend(b *testing.B) {
