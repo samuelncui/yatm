@@ -102,29 +102,35 @@ separate from Save. Unknown observations stay unknown; omitted tar record option
 actual admission checks current device/driver bounds without clamping. The
 [Device guide](../operations/devices.md) owns operator instructions.
 
-The separate collapsed **Read parameters** section lists the device's sets in a compact table, one
-row per density code: the code with its LTO generation name from a local table of the standard
-codes, the optional drive serial, the source reference, fixed positioning time, seek time for one
-span and read rate, with **Edit** and **Reset to built-in**. When the displayed device details
-report the loaded cartridge's density, or otherwise the densities the drive supports, each such
-density with built-in values and no configured set adds a read-only row from the server's
-built-in sets, with source **Built-in** and one **Edit** action that opens the Add form prefilled
-with those values for that density. Without device details there are no built-in rows.
-**Add read parameters** and
-**Calibrate…** follow. Edit and Add open a form copied from the page draft, with one labelled field
-per stored value, its unit and one line of helper text. The density code is a select of the named
-codes plus another code, refuses a code another set of the device uses, and is fixed when editing.
-Rates and the streaming distance are entered in decimal MB/s and MB and stored in bytes. Field
-errors mirror the server's validation and show inline. Apply rebuilds the set from the original
-message, replacing only fields whose text changed, and updates only that draft; the page Save
-persists it. Cancel leaves the page unchanged, using the existing discard confirmation for edits.
-Choosing a new set's density code fills the fields the operator has not edited with the built-in
-values for that code, or leaves them empty when there are none; its source reference stays empty
-rather than claiming the built-in source. Starting from device details
-uses only the displayed report and performs no new query; it fills only the drive serial and, for
-a new set, the density code, and clears the other values instead of relabeling previous timings. Reset to built-in removes the set from the draft, which lists the built-in row again when that
-density is shown, so that density code uses the built-in values only after Save. A partial set retains priority for its density code and may leave
-insufficient costs for AUTO; absence stays unknown rather than zero.
+The separate collapsed **Read parameters** section edits the device's sets inline, like the other
+settings forms: every field writes into the page draft, and the page Save and Cancel keep or
+discard it. Each configured set is a bordered block headed by its density code with its LTO
+generation name from a local table of the standard codes, with **From device details** and
+**Reset to built-in** at the right, then the drive serial, one labelled field per stored value
+(grouped as Positioning, Reading, Completion and Geometry, in two columns on wide screens, with its
+unit and one line of helper text) and the source reference. The density code of an existing set is
+fixed. Rates and the streaming distance are entered in decimal MB/s and MB and stored in bytes.
+Each set keeps its typed text and writes to the draft whenever all of it is valid, replacing only
+the fields whose text changed so the other stored values stay exact. Field errors mirror the
+server's validation and show at once; while any text is invalid the draft keeps the last valid
+value, the section opens, and Save is refused. A set that arrives from outside (Reload, Cancel, a
+Calibration result, Reset) replaces the text.
+When the displayed device details report the loaded cartridge's density, or otherwise the
+densities the drive supports, each such density with built-in values and no configured set adds a
+read-only line from the server's built-in sets: the code, **Built-in**, fixed positioning time,
+seek time for one span and read rate, with one **Edit** action that adds a set started from those
+values (source reference empty rather than claiming the built-in source). Without device details
+there are no built-in lines.
+The add row has a density select of the named codes plus another code (refusing a code another set
+of the device uses; defaulting to the reported cartridge's density when unused), **Add read
+parameters**, which appends a set started from the built-in values for that code, when there are
+any, and **Calibrate…**. **From device details** uses only the displayed report and performs no new
+query; it fills only the drive serial and clears the other values instead of relabeling previous
+timings, and is unavailable without a report or when the report shows another density code. Reset
+to built-in removes the set from the draft, which lists the built-in line again when that density
+is shown, so that density code uses the built-in values only after Save. A partial set retains
+priority for its density code and may leave insufficient costs for AUTO; absence stays unknown
+rather than zero.
 
 **Calibrate…** in that section's action row opens the [Calibration](jobs.md#calibration) form for a
 device in service; it is disabled for an inactive entry. Opening it inspects the loaded cartridge

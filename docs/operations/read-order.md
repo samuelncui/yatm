@@ -91,24 +91,24 @@ cartridge's recorded density). A read uses the set for the loaded cartridge's de
 otherwise the built-in values; record size and encryption take no part in that
 choice. A set with `appliesTo.driveSerial` does not apply when the drive reports another serial
 number; the read then uses the built-in values and **Last prepared read** says why.
-The section lists the sets in a table: density code (with the LTO generation name for the
-standard codes), drive serial, source reference, fixed positioning time, seek time for one span
-and read rate. **Edit** opens one set in a form and **Add read parameters** opens an empty one;
-the form has one field per stored value, grouped as Positioning, Reading, Completion and Geometry,
-each with its unit. A new set needs a **Density code**, chosen from the standard LTO codes or
-entered as another code, that no other set of the device uses; an existing set keeps its density
-code. Times are entered in seconds, **Read rate** in MB/s and **Streaming distance** in MB (decimal
-megabytes; stored as bytes per second and bytes). An empty field stays unknown. A field you do not
-change keeps its stored value exactly. Invalid values show their error beside the field. **Apply**
-changes the page draft; page **Save** persists it. Cancel leaves the page unchanged and confirms
-discarding edits. **Reset to built-in** removes that set from the draft, so after Save that
-density code uses the built-in values.
-After **Refresh device details**, the table also lists the built-in values, with source
+The section edits the sets inline: each set is a block headed by its density code (with the LTO
+generation name for the standard codes), with one field per stored value grouped as Positioning,
+Reading, Completion and Geometry, each with its unit, plus the drive serial and source reference.
+A new set needs a **Density code**, chosen in the add row from the standard LTO codes or entered
+as another code, that no other set of the device uses; **Add read parameters** then adds it, and an
+existing set keeps its density code. Times are entered in seconds, **Read rate** in MB/s and
+**Streaming distance** in MB (decimal megabytes; stored as bytes per second and bytes). An empty
+field stays unknown. A field you do not change keeps its stored value exactly. Invalid values show
+their error beside the field at once, and page **Save** is refused until they are fixed. Edits go
+straight into the page draft; page **Save** persists it and page **Cancel** discards it.
+**Reset to built-in** removes that set from the draft, so after Save that density code uses the
+built-in values.
+After **Refresh device details**, the section also lists the built-in values, with the label
 **Built-in**, for the loaded cartridge's density (or, without a cartridge, each density the drive
-supports) that has no set of its own. Their **Edit** opens **Add read parameters** filled with
-those values. Choosing a density code in **Add read parameters** likewise fills the fields you
-have not edited with that code's built-in values, when it has any, so you replace only what you
-measured; the source reference stays empty for you to describe your measurement. The CLI's
+supports) that has no set of its own. Their **Edit** adds a set started from those values. Adding a
+set for a density code likewise starts it from that code's built-in values, when it has any, so you
+replace only what you measured; the source reference stays empty for you to describe your
+measurement. The CLI's
 `settings devices` output lists every built-in set as `builtin_read_parameters`; a replacement may
 include it unchanged, and the server ignores it.
 A set takes precedence even when incomplete, so a partial set can retain Logical order. Leave unknown
@@ -146,10 +146,10 @@ The optional `completion` object describes normal unload with `full_span_seconds
 finalization, and tar ignores it. The full span is one physical tape length, independent of the serpentine
 logical block count. Omitted values remain unknown; LOCATE timings do not fill them automatically.
 
-**From device details** uses the currently displayed report, without a new
-device query, to fill the form's drive serial and, for a new set, density code. It clears the other
-values instead of assigning old measurements to new hardware; when editing, it is unavailable if the
-report shows another density code. Supply measured timings and geometry
+**From device details** on a set uses the currently displayed report, without a new
+device query, to fill the set's drive serial. It clears the other
+values instead of assigning old measurements to new hardware, and is unavailable when there is no
+report or the report shows another density code. Supply measured timings and geometry
 separately, or let a [Calibration](#calibration) measure and store a complete set. These draft actions do not access hardware or certify that optimization is available.
 
 ## Calibration

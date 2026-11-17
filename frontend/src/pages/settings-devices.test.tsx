@@ -257,46 +257,45 @@ it("keeps the custom polling interval and save error for a retry without hardwar
   expect(inspectDevice).not.toHaveBeenCalled();
 });
 
-// editParameters opens the dialog for the set of a density, or adds a set without one.
-const editParameters = async (density?: string) => {
+// openParameters expands the Read parameters section; the set of a density is its labelled region.
+const openParameters = async () => {
   const section = screen.getByRole("button", { name: "Read parameters" });
   if (section.getAttribute("aria-expanded") !== "true") await userEvent.click(section);
-  if (density === undefined) {
-    await userEvent.click(screen.getByRole("button", { name: "Add read parameters" }));
-    return within(screen.getByRole("dialog", { name: "Add read parameters" }));
-  }
-  await userEvent.click(screen.getByRole("button", { name: `Edit read parameters for ${density}` }));
-  return within(screen.getByRole("dialog", { name: "Edit read parameters" }));
 };
 
-const chooseDensity = async (dialog: ReturnType<typeof within>, name: string) => {
-  await userEvent.click(dialog.getByRole("combobox", { name: /Density code/ }));
+const parameterSet = (density: string) => within(screen.getByRole("region", { name: `Read parameters for ${density}` }));
+
+const chooseDensity = async (name: string) => {
+  await userEvent.click(screen.getByRole("combobox", { name: /Density code/ }));
   await userEvent.click(screen.getByRole("option", { name }));
+};
+
+// addParameters adds a set for a density code from the inline add row and returns its region.
+const addParameters = async (density: string) => {
+  await openParameters();
+  await chooseDensity(density);
+  await userEvent.click(screen.getByRole("button", { name: "Add read parameters" }));
+  return parameterSet(density);
 };
 
 const savedParameters = (call = 0) => update.mock.calls[call][0].value.value.device.devices[0].options.tape.readParameters;
 
-it("adds a set through the form only to the page draft, lists it, and Save persists bytes without hardware access", async () => {
+it("edits a set inline in the page draft, and Save persists bytes without hardware access", async () => {
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  const dialog = await editParameters();
-  expect(dialog.getByText(/Incomplete parameters may keep Logical order/)).toBeVisible();
-  expect(dialog.queryByRole("textbox", { name: /JSON/ })).not.toBeInTheDocument();
-  await chooseDensity(dialog, "0x58 LTO-5");
-  fireEvent.change(dialog.getByRole("textbox", { name: "Nominal wraps" }), { target: { value: "80" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Added time when arriving against the wrap direction (s)" }), { target: { value: "4.3" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Streaming distance (MB)" }), { target: { value: "18446744073709.551615" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Source reference" }), { target: { value: "Measured stream only" } });
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  await openParameters();
+  expect(screen.getByText(/Changes take effect after Save/)).toBeVisible();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: /JSON/ })).not.toBeInTheDocument();
+  const set = await addParameters("0x58 LTO-5");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  fireEvent.change(set.getByRole("textbox", { name: "Nominal wraps" }), { target: { value: "80" } });
+  fireEvent.change(set.getByRole("textbox", { name: "Added time when arriving against the wrap direction (s)" }), { target: { value: "4.3" } });
+  fireEvent.change(set.getByRole("textbox", { name: "Streaming distance (MB)" }), { target: { value: "18446744073709.551615" } });
+  fireEvent.change(set.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
+  fireEvent.change(set.getByRole("textbox", { name: "Source reference" }), { target: { value: "Measured stream only" } });
   expect(update).not.toHaveBeenCalled();
-  const table = within(screen.getByRole("table", { name: "Read parameter sets" }));
-  expect(
-    within(table.getAllByRole("row")[1])
-      .getAllByRole("cell")
-      .map((cell) => cell.textContent),
-  ).toEqual(["0x58 LTO-5", "Any drive", "Measured stream only", "Unknown", "Unknown", "93.0 MB/s", "EditReset to built-in"]);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const [parameters] = savedParameters();
@@ -310,26 +309,22 @@ it("adds a set through the form only to the page draft, lists it, and Save persi
   expect(inspectDevice).not.toHaveBeenCalled();
 
   // A second set for the same density code is refused, whether chosen or typed.
-  const repeated = await editParameters();
-  await userEvent.click(repeated.getByRole("combobox", { name: /Density code/ }));
+  await userEvent.click(screen.getByRole("combobox", { name: /Density code/ }));
   expect(screen.getByRole("option", { name: "0x58 LTO-5 · already set" })).toHaveAttribute("aria-disabled", "true");
   await userEvent.click(screen.getByRole("option", { name: "Other density code" }));
-  fireEvent.change(repeated.getByRole("textbox", { name: "Other density code" }), { target: { value: "0x58" } });
-  expect(repeated.getByText(/already has read parameters for 0x58 LTO-5/)).toBeVisible();
-  await userEvent.click(repeated.getByRole("button", { name: "Apply" }));
-  expect(screen.getByRole("dialog", { name: "Add read parameters" })).toBeVisible();
-  await userEvent.click(repeated.getByRole("button", { name: "Cancel" }));
-  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Other density code" }), { target: { value: "0x58" } });
+  expect(screen.getByText(/already has read parameters for 0x58 LTO-5/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Add read parameters" }));
+  expect(screen.getAllByRole("region", { name: /^Read parameters for/ })).toHaveLength(1);
 
-  // Reset removes the set from the draft; page Cancel restores it.
+  // Reset removes the set from the draft; page Cancel restores it with its values.
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
-  expect(screen.queryByRole("table", { name: "Read parameter sets" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: /^Read parameters for/ })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  const restored = await editParameters("0x58 LTO-5");
+  const restored = parameterSet("0x58 LTO-5");
   expect(restored.getByRole("textbox", { name: "Source reference" })).toHaveValue("Measured stream only");
   expect(restored.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("18446744073709.551615");
-  expect(restored.getByRole("textbox", { name: "Density code" })).toBeDisabled();
-  await userEvent.click(restored.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("textbox", { name: "Density code" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
   expect(update).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -352,15 +347,15 @@ it("edits only the changed values of a stored set and keeps the others exactly",
   get.mockReturnValue({ response: Promise.resolve({ value: saved }) });
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
-  expect(screen.getAllByRole("row")[1]).toHaveTextContent("0x99HU1Calibration Job 124.29 s96.12 s93.1 MB/s");
-  const dialog = await editParameters("0x99");
-  expect(dialog.getByRole("textbox", { name: "Density code" })).toHaveValue("0x99");
-  expect(dialog.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("1.234567");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93.1234567");
-  fireEvent.change(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "4.5" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "LTFS unmount time (s)" }), { target: { value: "" } });
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  await openParameters();
+  const set = parameterSet("0x99");
+  expect(set.getByRole("heading", { name: "0x99" })).toBeVisible();
+  expect(set.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("HU1");
+  expect(set.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("1.234567");
+  expect(set.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93.1234567");
+  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  fireEvent.change(set.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "4.5" } });
+  fireEvent.change(set.getByRole("textbox", { name: "LTFS unmount time (s)" }), { target: { value: "" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const [parameters, other] = savedParameters();
@@ -372,37 +367,55 @@ it("edits only the changed values of a stored set and keeps the others exactly",
   expect(other.appliesTo).toEqual({ densityCode: 0x5a });
 });
 
-it.each(["cancel", "escape"])("shows inline errors, protects unapplied edits on %s and discards them without changing the page draft", async (close) => {
+it("shows inline errors at once, refuses to save invalid text and applies every edit once it is fixed", async () => {
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  const dialog = await editParameters();
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
-  expect(dialog.getByText("Choose a density code.")).toBeVisible();
-  await chooseDensity(dialog, "0x58 LTO-5");
-  const field = dialog.getByRole("textbox", { name: "Filemark overhead (s)" });
+  await openParameters();
+  await userEvent.click(screen.getByRole("button", { name: "Add read parameters" }));
+  expect(screen.getByText("Choose a density code.")).toBeVisible();
+  expect(screen.queryByRole("region", { name: /^Read parameters for/ })).not.toBeInTheDocument();
+  const set = await addParameters("0x58 LTO-5");
+  const field = set.getByRole("textbox", { name: "Filemark overhead (s)" });
   fireEvent.change(field, { target: { value: "-1" } });
-  expect(dialog.getByText("Must be nonnegative.")).toBeVisible();
+  expect(set.getByText("Must be nonnegative.")).toBeVisible();
   expect(field).toHaveAttribute("aria-invalid", "true");
-  fireEvent.change(dialog.getByRole("textbox", { name: "Full-span time (s)" }), { target: { value: "0" } });
-  expect(dialog.getByText("Must be above 0.")).toBeVisible();
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
-  expect(screen.getByRole("dialog", { name: "Add read parameters" })).toBeVisible();
-  if (close === "cancel") await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-  else await userEvent.keyboard("{Escape}");
-  const discard = within(screen.getByRole("dialog", { name: "Discard unsaved changes?" }));
-  await userEvent.click(discard.getByRole("button", { name: "Keep editing" }));
-  expect(field).toHaveValue("-1");
-  await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  const reopened = await editParameters();
-  expect(reopened.getByRole("textbox", { name: "Filemark overhead (s)" })).toHaveValue("");
+  fireEvent.change(set.getByRole("textbox", { name: "Full-span time (s)" }), { target: { value: "0" } });
+  expect(set.getByText("Must be above 0.")).toBeVisible();
+  // An edit made while another field is invalid is kept.
+  fireEvent.change(set.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(update).not.toHaveBeenCalled();
+  expect(field).toHaveValue("-1");
+  fireEvent.change(field, { target: { value: "0.5" } });
+  fireEvent.change(set.getByRole("textbox", { name: "Full-span time (s)" }), { target: { value: "100" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByText("Device settings saved.");
+  const [parameters] = savedParameters();
+  expect(parameters.reading).toEqual({ bytesPerSecond: 93e6, filemarkOverheadSeconds: 0.5 });
+  expect(parameters.completion).toEqual({ fullSpanSeconds: 100 });
   expect(inspectDevice).not.toHaveBeenCalled();
+
+  // Cancel drops invalid text along with the draft.
+  fireEvent.change(field, { target: { value: "x" } });
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(field).toHaveValue("0.5");
 });
 
-it("fills the form from the existing report without activating it or retargeting old measurements", async () => {
+it("resyncs the text of a set from reloaded saved settings", async () => {
+  update.mockImplementationOnce(() => ({ response: Promise.reject(new Error("Device settings could not be saved")) }));
+  renderPage(<DeviceSettingsBrowser />);
+  await screen.findByText(/Tar settings are inactive for LTFS/);
+  const set = await addParameters("0x58 LTO-5");
+  fireEvent.change(set.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Reload saved settings" }));
+  await vi.waitFor(() => expect(screen.queryByRole("region", { name: /^Read parameters for/ })).not.toBeInTheDocument());
+  const again = await addParameters("0x58 LTO-5");
+  expect(again.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+});
+
+it("fills the set from the existing report without activating it or retargeting old measurements", async () => {
   const saved = value();
   if (saved.value.oneofKind !== "device" || saved.value.device.devices[0].options.oneofKind !== "tape") throw new Error("Tape settings required");
   saved.value.device.devices[0].options.tape.readParameters = [
@@ -434,30 +447,31 @@ it("fills the form from the existing report without activating it or retargeting
   });
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  let dialog = await editParameters("0x58 LTO-5");
-  expect(dialog.getByRole("button", { name: "From device details" })).toBeDisabled();
-  await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-  expect(screen.getAllByRole("row")[1]).toHaveTextContent("previous-drive");
+  await openParameters();
+  let set = parameterSet("0x58 LTO-5");
+  expect(set.getByRole("button", { name: "From device details" })).toBeDisabled();
+  expect(set.getByText(/needs a report/)).toBeVisible();
+  expect(set.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("previous-drive");
   await userEvent.click(screen.getByRole("button", { name: /Device details/ }));
   await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
   await screen.findByText(/Last device details: encryption off/);
-  dialog = await editParameters("0x58 LTO-5");
-  await userEvent.click(dialog.getByRole("button", { name: "From device details" }));
-  expect(dialog.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("actual-drive");
-  expect(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
-  expect(dialog.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("");
-  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
+  set = parameterSet("0x58 LTO-5");
+  await userEvent.click(set.getByRole("button", { name: "From device details" }));
+  expect(set.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("actual-drive");
+  expect(set.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("");
+  expect(set.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+  expect(set.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("");
+  expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
   expect(update).not.toHaveBeenCalled();
   expect(inspectDevice).toHaveBeenCalledTimes(1);
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+
+  // Cancel restores the previous measurement.
   await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  dialog = await editParameters("0x58 LTO-5");
-  expect(dialog.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("previous-drive");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93");
-  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("Previous drive measurement");
-  await userEvent.click(dialog.getByRole("button", { name: "From device details" }));
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
+  set = parameterSet("0x58 LTO-5");
+  expect(set.getByRole("textbox", { name: "Drive serial number" })).toHaveValue("previous-drive");
+  expect(set.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93");
+  expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("Previous drive measurement");
+  await userEvent.click(set.getByRole("button", { name: "From device details" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const [parameters] = savedParameters();
@@ -466,11 +480,8 @@ it("fills the form from the existing report without activating it or retargeting
   expect(parameters.geometry).toBeUndefined();
   expect(parameters.positioning).toBeUndefined();
   expect(parameters.sourceReference).toBe("");
-  // A new set takes the reported density code as well.
-  const added = await editParameters();
-  await userEvent.click(added.getByRole("button", { name: "From device details" }));
-  expect(added.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("0x58 LTO-5");
-  expect(added.getByText(/already has read parameters for 0x58 LTO-5/)).toBeVisible();
+  // The reported cartridge's density is refused for a new set once it is used, and is the default otherwise.
+  expect(screen.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("Choose a density code");
   expect(inspectDevice).toHaveBeenCalledTimes(1);
 });
 
@@ -485,8 +496,8 @@ it("discards late Device details after changing the selected drive", async () =>
   await userEvent.click(screen.getByRole("option", { name: "removed · Inactive" }));
   await act(async () => finish(InspectDeviceResponse.create({ serialNumber: "late-report" })));
   expect(screen.queryByText("Serial number: late-report")).not.toBeInTheDocument();
-  const dialog = await editParameters();
-  expect(dialog.getByRole("button", { name: "From device details" })).toBeDisabled();
+  const set = await addParameters("0x58 LTO-5");
+  expect(set.getByRole("button", { name: "From device details" })).toBeDisabled();
 });
 
 it("opens Device details for an inspection error even when collapsed while the read was pending", async () => {
@@ -506,14 +517,14 @@ it("opens Device details for an inspection error even when collapsed while the r
   expect(update).not.toHaveBeenCalled();
 });
 
-it("protects unapplied edits on browser back and unload without making it a savable page draft", async () => {
+it("protects inline read parameter edits on browser back and unload until they are saved or cancelled", async () => {
   const router = createMemoryRouter([{ path: "*", element: <DeviceSettingsBrowser /> }], {
     initialEntries: ["/settings/devices?previous=1", "/settings/devices"],
   });
   render(<RouterProvider router={router} />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  const dialog = await editParameters();
-  const field = dialog.getByRole("textbox", { name: "Read rate (MB/s)" });
+  const set = await addParameters("0x58 LTO-5");
+  const field = set.getByRole("textbox", { name: "Read rate (MB/s)" });
   fireEvent.change(field, { target: { value: "93" } });
   const unload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unload);
@@ -526,8 +537,7 @@ it("protects unapplied edits on browser back and unload without making it a sava
   expect(field).toHaveValue("93");
   expect(router.state.location.search).toBe("");
   expect(update).not.toHaveBeenCalled();
-  await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   const cleanUnload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(cleanUnload);
@@ -662,90 +672,76 @@ const refreshDetails = async () => {
   await screen.findByText(/Last device details/);
 };
 
-const rowTexts = () =>
-  within(screen.getByRole("table", { name: "Read parameter sets" }))
-    .getAllByRole("row")
-    .slice(1)
-    .map((row) =>
-      within(row)
-        .getAllByRole("cell")
-        .map((cell) => cell.textContent),
-    );
+// builtinTexts reads each built-in line, found by its Edit button.
+const builtinTexts = () => screen.queryAllByRole("button", { name: /^Edit read parameters for / }).map((button) => button.parentElement!.textContent);
 
 it("lists built-in values for the reported density, or the supported densities, only after Device details", async () => {
   withBuiltin({ supportedDensityCodes: [0x58, 0x5a, 0x46], encryptionEnabled: false });
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
-  expect(screen.queryByRole("table", { name: "Read parameter sets" })).not.toBeInTheDocument();
+  expect(builtinTexts()).toEqual([]);
   await refreshDetails();
-  // A supported density without built-in values adds no row.
-  expect(rowTexts()).toEqual([
-    ["0x58 LTO-5", "Any drive", "Built-in", "6.15 s", "93.30 s", "140.0 MB/s", "Edit"],
-    ["0x5A LTO-6", "Any drive", "Built-in", "6.15 s", "93.30 s", "160.0 MB/s", "Edit"],
+  // A supported density without built-in values adds no line.
+  expect(builtinTexts()).toEqual([
+    "0x58 LTO-5Built-inFixed positioning time 6.15 sSeek time for one span 93.30 sRead rate 140.0 MB/sEdit",
+    "0x5A LTO-6Built-inFixed positioning time 6.15 sSeek time for one span 93.30 sRead rate 160.0 MB/sEdit",
   ]);
 
   // The loaded cartridge's density narrows the listing to that density.
   withBuiltin({ densityCode: 0x5a, supportedDensityCodes: [0x58, 0x5a], encryptionEnabled: false });
   await userEvent.click(screen.getByRole("button", { name: "Refresh device details" }));
-  await vi.waitFor(() => expect(rowTexts()).toEqual([["0x5A LTO-6", "Any drive", "Built-in", "6.15 s", "93.30 s", "160.0 MB/s", "Edit"]]));
+  await vi.waitFor(() =>
+    expect(builtinTexts()).toEqual(["0x5A LTO-6Built-inFixed positioning time 6.15 sSeek time for one span 93.30 sRead rate 160.0 MB/sEdit"]),
+  );
+  // The cartridge's density is also the add row's default.
+  expect(screen.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("0x5A LTO-6");
   expect(update).not.toHaveBeenCalled();
 });
 
-it("prefills a new set from the built-in values of the chosen density without claiming their source", async () => {
+it("starts a new set from the built-in values of the chosen density without claiming their source", async () => {
   withBuiltin({});
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
-  const dialog = await editParameters();
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
-  await chooseDensity(dialog, "0x58 LTO-5");
-  expect(dialog.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("80");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("140");
-  expect(dialog.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("888.8");
-  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
+  let set = await addParameters("0x58 LTO-5");
+  expect(set.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("80");
+  expect(set.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("140");
+  expect(set.getByRole("textbox", { name: "Streaming distance (MB)" })).toHaveValue("888.8");
+  expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
 
-  // Another density refills untouched values; one without built-in values leaves them empty.
-  await chooseDensity(dialog, "0x5A LTO-6");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("160");
-  await chooseDensity(dialog, "0x46 LTO-4");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
-  await chooseDensity(dialog, "0x58 LTO-5");
+  // A density without built-in values starts empty.
+  set = await addParameters("0x46 LTO-4");
+  expect(set.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("");
+  expect(set.getByRole("textbox", { name: "Nominal wraps" })).toHaveValue("");
 
-  // An edited value survives a later density choice; the others keep the exact built-in values.
-  fireEvent.change(dialog.getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
-  await chooseDensity(dialog, "0x5A LTO-6");
-  expect(dialog.getByRole("textbox", { name: "Read rate (MB/s)" })).toHaveValue("93");
-  await chooseDensity(dialog, "0x58 LTO-5");
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
-  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "None", "6.15 s", "93.30 s", "93.0 MB/s", "EditReset to built-in"]]);
+  fireEvent.change(parameterSet("0x58 LTO-5").getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
-  const [parameters] = savedParameters();
+  const [parameters, empty] = savedParameters();
   expect(parameters).toEqual({ ...builtinLTO5, reading: { bytesPerSecond: 93e6 }, sourceReference: "" });
+  expect(empty.appliesTo).toEqual({ densityCode: 0x46 });
 });
 
-it("edits a built-in row into a configured set and Reset returns the built-in row", async () => {
+it("edits a built-in line into a configured set and Reset returns the built-in line", async () => {
   withBuiltin({ densityCode: 0x58, encryptionEnabled: false });
   renderPage(<DeviceSettingsBrowser />);
   await screen.findByText(/Tar settings are inactive for LTFS/);
   await userEvent.click(screen.getByRole("button", { name: "Read parameters" }));
   await refreshDetails();
   await userEvent.click(screen.getByRole("button", { name: "Edit read parameters for 0x58 LTO-5" }));
-  const dialog = within(screen.getByRole("dialog", { name: "Add read parameters" }));
-  expect(dialog.getByRole("combobox", { name: /Density code/ })).toHaveTextContent("0x58 LTO-5");
-  expect(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("6.15");
-  expect(dialog.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
-  fireEvent.change(dialog.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "5.2" } });
-  await userEvent.click(dialog.getByRole("button", { name: "Apply" }));
-  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "None", "5.20 s", "93.30 s", "140.0 MB/s", "EditReset to built-in"]]);
+  expect(builtinTexts()).toEqual([]);
+  const set = parameterSet("0x58 LTO-5");
+  expect(set.getByRole("textbox", { name: "Fixed positioning time (s)" })).toHaveValue("6.15");
+  expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
+  fireEvent.change(set.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "5.2" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   const [parameters] = savedParameters();
   expect(parameters).toEqual({ ...builtinLTO5, positioning: { ...builtinLTO5.positioning, baseSeconds: 5.2 }, sourceReference: "" });
 
-  // Reset to built-in removes the configured set, and the built-in row is listed again.
+  // Reset to built-in removes the configured set, and the built-in line is listed again.
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
-  expect(rowTexts()).toEqual([["0x58 LTO-5", "Any drive", "Built-in", "6.15 s", "93.30 s", "140.0 MB/s", "Edit"]]);
+  expect(builtinTexts()).toEqual(["0x58 LTO-5Built-inFixed positioning time 6.15 sSeek time for one span 93.30 sRead rate 140.0 MB/sEdit"]);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByText("Device settings saved.");
   expect(savedParameters(1)).toEqual([]);
