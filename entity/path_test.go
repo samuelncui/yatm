@@ -81,3 +81,24 @@ func TestRelativePathRejectsInvalidIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestPathsStayWithinFilesystemLimits(t *testing.T) {
+	// The longest name a filesystem can hold is accepted; one more byte is rejected.
+	name := strings.Repeat("é", MaxNameBytes/2) + "x"
+	require.Len(t, name, MaxNameBytes)
+	require.NoError(t, ValidatePathComponent(name))
+	require.ErrorContains(t, ValidatePathComponent(name+"x"), "exceeds 255 bytes")
+	require.ErrorContains(t, ValidateRelativePath("parent/"+name+"x"), "exceeds 255 bytes")
+
+	// Fifteen 255-byte components and a 256-byte tail make the longest accepted path.
+	longest := strings.Join(slices.Repeat([]string{name}, 15), "/") + "/" + strings.Repeat("a", 200) + "/" +
+		strings.Repeat("b", 55)
+	require.Len(t, longest, MaxPathBytes)
+	require.NoError(t, ValidateRelativePath(longest))
+	require.ErrorContains(t, ValidateRelativePath(longest+"x"), "exceeds 4096 bytes")
+	parts, err := NormalizeRelativePath("./" + longest + "/")
+	require.NoError(t, err)
+	require.Len(t, parts, 17)
+	_, err = NormalizeRelativePath(longest + "x")
+	require.ErrorContains(t, err, "exceeds 4096 bytes")
+}

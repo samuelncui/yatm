@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/media/readplan"
 	"github.com/stretchr/testify/require"
 )
@@ -86,7 +87,8 @@ func TestCurrentLTFSReadIndexBoundsTokenBeforeAllocation(t *testing.T) {
 }
 
 func TestCurrentLTFSReadIndexBoundsOpenDirectoryNames(t *testing.T) {
-	// Every name fits the per-token allowance, but their live ancestors exceed the shared byte bound.
+	// Every name fits the per-token allowance but exceeds the filesystem name limit, which also keeps
+	// live ancestors within the shared byte bound.
 	const opening = `<ltfsindex><volumeuuid>volume</volumeuuid><generationnumber>1</generationnumber>`
 	name := strings.Repeat("a", 1<<20)
 	var parts []io.Reader
@@ -99,7 +101,7 @@ func TestCurrentLTFSReadIndexBoundsOpenDirectoryNames(t *testing.T) {
 		t.Fatal("an oversized path was yielded")
 		return nil
 	})
-	require.ErrorContains(t, err, "directory names exceed")
+	require.ErrorContains(t, err, "exceeds 255 bytes")
 }
 
 func TestCurrentLTFSReadIndexBoundsOpenXMLNames(t *testing.T) {
@@ -153,10 +155,11 @@ func TestCurrentLTFSReadIndexBoundsNesting(t *testing.T) {
 
 func TestCurrentLTFSReadIndexReleasesClosedDirectoryBudget(t *testing.T) {
 	// Closed siblings reuse the live-name allowance; total Index size is deliberately not capped.
-	name := strings.Repeat("a", 1<<20)
+	name := strings.Repeat("a", entity.MaxNameBytes)
+	siblings := ltfsReadIndexBytes/entity.MaxNameBytes + 1
 	var parts []io.Reader
 	parts = append(parts, strings.NewReader(`<ltfsindex><volumeuuid>volume</volumeuuid><generationnumber>1</generationnumber><directory><name>TAPE</name><contents>`))
-	for range 10 {
+	for range siblings {
 		parts = append(parts, strings.NewReader(`<directory><name>`), strings.NewReader(name), strings.NewReader(`</name></directory>`))
 	}
 	parts = append(parts, strings.NewReader(`<file><name>file</name><length>0</length></file></contents></directory></ltfsindex>`))

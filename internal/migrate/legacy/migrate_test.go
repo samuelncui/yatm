@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -555,6 +556,34 @@ func TestPrepareRejectsBarcodesThatNormalizeAlike(t *testing.T) {
 	require.NoError(t, db.Create([]*legacyLibraryTape{{ID: 10, Barcode: "abc010"}, {ID: 11, Barcode: "ABC010 "}}).Error)
 	_, err := prepareLegacy(context.Background(), db, t.TempDir())
 	require.ErrorContains(t, err, `legacy Tapes "abc010" and "ABC010 " both normalize to barcode ABC010`)
+}
+
+func TestPrepareRejectsLegacyPathsBeyondFilesystemLimits(t *testing.T) {
+	// A name or path no filesystem can hold stops the import and names the offending row.
+	name := strings.Repeat("n", entity.MaxNameBytes+1)
+	path := strings.Repeat(strings.Repeat("p", 200)+"/", 21)[:entity.MaxPathBytes+1]
+	for _, test := range []struct {
+		name    string
+		fixture []any
+		message string
+	}{
+		{name: "File name", fixture: []any{&legacyLibraryFile{ID: 1, Name: name, Mode: 0o644}},
+			message: "legacy File 1 name exceeds 255 bytes"},
+		{name: "Position path", fixture: []any{
+			&legacyLibraryFile{ID: 1, Name: "file", Mode: 0o644},
+			&legacyLibraryTape{ID: 1, Barcode: "ABC001"},
+			&legacyLibraryPosition{ID: 1, FileID: 1, TapeID: 1, Path: path, Mode: 0o644},
+		}, message: "convert legacy Position 1 path failed, path exceeds 4096 bytes"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db := newLegacyTestDB(t)
+			for _, row := range test.fixture {
+				require.NoError(t, db.Create(row).Error)
+			}
+			_, err := prepareLegacy(context.Background(), db, t.TempDir())
+			require.ErrorContains(t, err, test.message)
+		})
+	}
 }
 
 func TestPrepareMigratesEmptyJobsAsCompleted(t *testing.T) {

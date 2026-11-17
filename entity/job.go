@@ -130,11 +130,21 @@ func ValidatePathComponent(value string) error {
 	if value == "" || value == "." || value == ".." || strings.ContainsAny(value, "/\x00") {
 		return fmt.Errorf("invalid path component, name=%q", value)
 	}
+	if len(value) > MaxNameBytes {
+		return fmt.Errorf("path component exceeds %d bytes, name=%q", MaxNameBytes, value)
+	}
 	return nil
 }
 
 // MaxPathDepth bounds the components of a relative path and the ancestry of a Library File.
 const MaxPathDepth = 256
+
+// MaxPathBytes and MaxNameBytes follow the common filesystem limits (PATH_MAX and NAME_MAX), so
+// they reject no file that ZFS, ext4 or LTFS can hold. Every Catalog path stays within them.
+const (
+	MaxPathBytes = 4096
+	MaxNameBytes = 255
+)
 
 // NormalizeRelativePath resolves empty, "." and ".." components within the selected root.
 // A ".." above that root is rejected instead of clamped; other components keep their literal text.
@@ -159,11 +169,17 @@ func NormalizeRelativePath(value string) ([]string, error) {
 			}
 		}
 	}
+	if len(strings.Join(parts, "/")) > MaxPathBytes {
+		return nil, fmt.Errorf("path exceeds %d bytes, path=%q", MaxPathBytes, value)
+	}
 	return parts, nil
 }
 
 // ValidateRelativePath requires slash-separated literal components, without cleaning their identity.
 func ValidateRelativePath(value string) error {
+	if len(value) > MaxPathBytes {
+		return fmt.Errorf("path exceeds %d bytes, path=%q", MaxPathBytes, value)
+	}
 	for component := range strings.SplitSeq(value, "/") {
 		if err := ValidatePathComponent(component); err != nil {
 			return fmt.Errorf("invalid relative path %q, %w", value, err)

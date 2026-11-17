@@ -473,9 +473,12 @@ func copyLibraryFiles(ctx context.Context, db *gorm.DB) (int, error) {
 			return count, nil
 		}
 
-		// Check each source instant before it enters the current nanosecond model.
+		// Check each source instant and name length before it enters the current model.
 		rows := make([]*stagedLibraryFile, 0, len(source))
 		for _, file := range source {
+			if len(file.Name) > entity.MaxNameBytes {
+				return 0, fmt.Errorf("legacy File %d name exceeds %d bytes, name=%q", file.ID, entity.MaxNameBytes, file.Name)
+			}
 			mtimeNS, err := dataformat.Nanoseconds(file.ModTime)
 			if err != nil {
 				return 0, fmt.Errorf("convert legacy File %d mtime failed, %w", file.ID, err)
@@ -559,9 +562,12 @@ func copyLibraryPositions(ctx context.Context, db *gorm.DB) error {
 			return nil
 		}
 
-		// Reject unsupported timestamps before they enter the current nanosecond model.
+		// Reject unsupported paths and timestamps before they enter the current model.
 		rows := make([]*stagedLibraryPosition, 0, len(source))
 		for _, position := range source {
+			if err := entity.ValidateRelativePath(position.Path); err != nil {
+				return fmt.Errorf("convert legacy Position %d path failed, %w", position.ID, err)
+			}
 			mtimeNS, err := dataformat.Nanoseconds(position.ModTime)
 			if err != nil {
 				return fmt.Errorf("convert legacy Position %d mtime failed, %w", position.ID, err)

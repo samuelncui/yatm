@@ -152,7 +152,8 @@ func validateLocation(s *Location) error {
 	}
 
 	// Filesystem admission belongs to the Executor; persistence still rejects malformed paths.
-	if s.ExecutorID == "" || !filepath.IsAbs(s.RootPath) || filepath.Clean(s.RootPath) != s.RootPath || strings.ContainsRune(s.RootPath, 0) {
+	if s.ExecutorID == "" || !filepath.IsAbs(s.RootPath) || filepath.Clean(s.RootPath) != s.RootPath || strings.ContainsRune(s.RootPath, 0) ||
+		len(s.RootPath) > entity.MaxPathBytes {
 		return fmt.Errorf("invalid Location root path %q", s.RootPath)
 	}
 	if s.Config == nil {
