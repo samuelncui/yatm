@@ -19,10 +19,10 @@ var (
 type Position struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id,omitempty"`
 	Signature []byte `gorm:"type:varbinary(256);index:idx_positions_signature" json:"signature,omitempty"`
-	MediaID   int64  `gorm:"uniqueIndex:idx_positions_media_path,priority:1;index:idx_positions_media_parent,priority:1;index:idx_positions_media_files,priority:1" json:"media_id,omitempty"`
-	Path      string `gorm:"type:varchar(4096);uniqueIndex:idx_positions_media_path,priority:2,length:750;index:idx_positions_media_parent,priority:3,length:750" json:"path,omitempty"`
+	MediaID   int64  `gorm:"index:idx_positions_media_parent,priority:1;index:idx_positions_media_files,priority:1" json:"media_id,omitempty"`
+	Path      string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:3,length:380" json:"path,omitempty"`
 
-	ParentPath string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:2,length:750" json:"parent_path,omitempty"`
+	ParentPath string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:2,length:380" json:"parent_path,omitempty"`
 	IsDir      bool   `gorm:"not null;default:false;index:idx_positions_media_files,priority:2" json:"is_dir,omitempty"`
 
 	Mode        uint32 `json:"mode,omitempty"`
@@ -32,7 +32,7 @@ type Position struct {
 	Hash        []byte `gorm:"type:varbinary(32)" json:"hash,omitempty"` // sha256
 
 	StorageOrder    []byte                  `gorm:"type:varbinary(32);not null;default:''" json:"storage_order,omitempty"`
-	StorageMetadata *entity.StorageMetadata `gorm:"type:blob" json:"storage_metadata,omitempty"`
+	StorageMetadata *entity.StorageMetadata `gorm:"type:bytes;size:16777215" json:"storage_metadata,omitempty"`
 
 	Health      entity.PositionHealth `gorm:"not null;default:1;index:idx_positions_health" json:"health,omitempty"`
 	CheckedAtNS int64                 `json:"checked_at_ns,string"`

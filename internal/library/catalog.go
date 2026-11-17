@@ -280,10 +280,13 @@ func importArchiveDirectory(ctx context.Context, tx *gorm.DB, media *Media, dire
 	after := ""
 	prefix := archiveDirectoryPrefix(directory)
 	for {
-		// Match the prefix byte for byte; SQLite LIKE would ignore ASCII case.
+		// Match the prefix byte for byte with a range; SQLite LIKE would ignore ASCII case.
 		var copies []*Position
-		if err := tx.WithContext(ctx).Where("media_id = ? AND is_dir = ? AND path > ? AND substr(path, 1, length(?)) = ?",
-			media.ID, false, after, prefix, prefix).Order("path").Limit(batchSize).Find(&copies).Error; err != nil {
+		query := tx.WithContext(ctx).Where("media_id = ? AND is_dir = ? AND path > ?", media.ID, false, after)
+		if prefix != "" {
+			query = query.Where("path >= ? AND path < ?", prefix, strings.TrimSuffix(prefix, "/")+"0")
+		}
+		if err := query.Order("path").Limit(batchSize).Find(&copies).Error; err != nil {
 			return fmt.Errorf("list archive directory failed, media_id=%d path=%q, %w", media.ID, directory, err)
 		}
 		if len(copies) == 0 {

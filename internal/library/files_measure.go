@@ -35,7 +35,8 @@ func (l *Library) MatchFileQueryRows(ctx context.Context, ids []int64, scope ent
 
 // ReadLocationBoundaries loads only registrations overlapping this measurement's root.
 func (l *Library) ReadLocationBoundaries(ctx context.Context, location *Location) ([]string, error) {
-	// Ancestors are a depth-bounded exact set; descendants use an escaped prefix query.
+	// Ancestors are a depth-bounded exact set; descendants use an escaped prefix query. Both sides are
+	// lowered by the database, so the match ignores letter case on every dialect.
 	ancestors := []string{location.RootPath}
 	for parent := filepath.Dir(location.RootPath); ; parent = filepath.Dir(parent) {
 		ancestors = append(ancestors, parent)
@@ -47,7 +48,8 @@ func (l *Library) ReadLocationBoundaries(ctx context.Context, location *Location
 	var roots []string
 	err := l.readDB().WithContext(ctx).Model(&Location{}).
 		Where("executor_id = ? AND id <> ?", location.ExecutorID, location.ID).
-		Where(fmt.Sprintf("root_path IN ? OR root_path LIKE ? ESCAPE '%c'", likeEscape), ancestors, escapeLike(prefix, false)+"%").
+		Where(fmt.Sprintf("root_path IN ? OR LOWER(root_path) LIKE LOWER(?) ESCAPE '%c'", likeEscape), ancestors,
+			escapeLike(prefix, false)+"%").
 		Pluck("root_path", &roots).Error
 	return roots, err
 }

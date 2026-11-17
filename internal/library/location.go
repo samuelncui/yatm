@@ -44,9 +44,9 @@ func IsLocationTrashContent(relative string) bool {
 type Location struct {
 	ID            int64                  `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name          string                 `gorm:"type:varchar(256);not null" json:"name"`
-	ExecutorID    string                 `gorm:"type:varchar(128);not null;uniqueIndex:idx_locations_root,priority:1" json:"executor_id"`
-	RootPath      string                 `gorm:"type:varchar(4096);not null;uniqueIndex:idx_locations_root,priority:2,length:600" json:"root_path"`
-	Config        *entity.LocationConfig `gorm:"serializer:json;type:text" json:"config"`
+	ExecutorID    string                 `gorm:"type:varchar(128);not null" json:"executor_id"`
+	RootPath      string                 `gorm:"type:varchar(4096);not null" json:"root_path"`
+	Config        *entity.LocationConfig `gorm:"serializer:json;type:string;size:16777215" json:"config"`
 	RestoreTarget bool                   `json:"restore_target"`
 	Revision      int64                  `gorm:"not null" json:"revision"`
 	CreatedAtNS   int64                  `gorm:"autoCreateTime:nano" json:"created_at_ns,string"`

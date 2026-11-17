@@ -12,8 +12,8 @@ import (
 // FileLocation is the single current online original of an independently organized File.
 type FileLocation struct {
 	FileID     int64  `gorm:"primaryKey;autoIncrement:false" json:"file_id"`
-	LocationID int64  `gorm:"not null;uniqueIndex:idx_file_locations_path,priority:1;index:idx_file_locations_parent,priority:1" json:"location_id"`
-	Path       string `gorm:"type:varchar(4096);not null;uniqueIndex:idx_file_locations_path,priority:2,length:750" json:"path"`
+	LocationID int64  `gorm:"not null;index:idx_file_locations_parent,priority:1" json:"location_id"`
+	Path       string `gorm:"type:varchar(4096);not null" json:"path"`
 	ParentPath string `gorm:"type:varchar(4096);index:idx_file_locations_parent,priority:2,length:750" json:"parent_path"`
 	Size       int64  `json:"size"`
 	Mode       uint32 `json:"mode"`

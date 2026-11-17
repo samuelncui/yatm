@@ -18,7 +18,7 @@ const (
 // JobProperty indexes the Locations and Media associated with a Job for catalog searches.
 type JobProperty struct {
 	JobID int64  `gorm:"primaryKey;autoIncrement:false;index:idx_job_properties_lookup,priority:3"`
-	Key   string `gorm:"primaryKey;index:idx_job_properties_lookup,priority:1"`
+	Key   string `gorm:"primaryKey;size:255;index:idx_job_properties_lookup,priority:1"`
 	Value int64  `gorm:"primaryKey;autoIncrement:false;index:idx_job_properties_lookup,priority:2"`
 }
 

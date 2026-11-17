@@ -86,7 +86,7 @@ type stagedLibraryMedia struct {
 	Kind          entity.MediaKind     `gorm:"not null;index:idx_media_kind_identity,unique,priority:1"`
 	Identity      string               `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2"`
 	Name          string               `gorm:"type:varchar(256)"`
-	Profile       *entity.MediaProfile `gorm:"type:blob;not null"`
+	Profile       *entity.MediaProfile `gorm:"type:bytes;size:16777215;not null"`
 	CreatedAtNS   int64
 	CapacityBytes int64
 	WrittenBytes  int64
@@ -98,10 +98,10 @@ type stagedLibraryPosition struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement"`
 	FileID    int64  `gorm:"index:idx_positions_file_id"`
 	Signature []byte `gorm:"type:varbinary(256);index:idx_positions_signature"`
-	MediaID   int64  `gorm:"uniqueIndex:idx_positions_media_path,priority:1;index:idx_positions_media_parent,priority:1;index:idx_positions_media_files,priority:1"`
-	Path      string `gorm:"type:varchar(4096);uniqueIndex:idx_positions_media_path,priority:2,length:750;index:idx_positions_media_parent,priority:3,length:750"`
+	MediaID   int64  `gorm:"index:idx_positions_media_parent,priority:1;index:idx_positions_media_files,priority:1"`
+	Path      string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:3,length:380"`
 
-	ParentPath string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:2,length:750"`
+	ParentPath string `gorm:"type:varchar(4096);index:idx_positions_media_parent,priority:2,length:380"`
 	IsDir      bool   `gorm:"not null;default:false;index:idx_positions_media_files,priority:2"`
 
 	Mode        uint32
@@ -114,7 +114,7 @@ type stagedLibraryPosition struct {
 	HealthJobID int64
 
 	StorageOrder    []byte                  `gorm:"type:varbinary(32);not null;default:''"`
-	StorageMetadata *entity.StorageMetadata `gorm:"type:blob"`
+	StorageMetadata *entity.StorageMetadata `gorm:"type:bytes;size:16777215"`
 }
 
 func (stagedLibraryPosition) TableName() string { return "positions_staging" }
@@ -133,6 +133,9 @@ func prepareLibrary(ctx context.Context, db *gorm.DB, indexRoot string, report *
 	if err := db.WithContext(ctx).AutoMigrate(
 		&stagedLibraryFile{}, &stagedLibraryMedia{}, &stagedLibraryPosition{}, &stagedLibraryVersion{},
 	); err != nil {
+		return fmt.Errorf("create current Library staging tables failed, %w", err)
+	}
+	if err := library.CreatePositionPathIndex(db.WithContext(ctx), "positions_staging"); err != nil {
 		return fmt.Errorf("create current Library staging tables failed, %w", err)
 	}
 

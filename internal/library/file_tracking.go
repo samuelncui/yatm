@@ -113,7 +113,7 @@ type FileTrackingKey struct {
 	Kind         TrackingKind    `gorm:"primaryKey;type:varchar(32);index:idx_file_tracking_lookup,priority:1" json:"kind"`
 	Scope        string          `gorm:"type:varchar(256);index:idx_file_tracking_lookup,priority:2" json:"scope"`
 	KeyValue     []byte          `gorm:"type:varbinary(256);index:idx_file_tracking_lookup,priority:3" json:"key_value"`
-	Details      TrackingDetails `gorm:"type:blob" json:"details"`
+	Details      TrackingDetails `gorm:"type:bytes;size:16777215" json:"details"`
 	ObservedAtNS int64           `json:"observed_at_ns,string"`
 	LocationID   int64           `gorm:"index" json:"location_id"`
 }

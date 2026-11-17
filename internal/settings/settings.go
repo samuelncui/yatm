@@ -57,7 +57,7 @@ type Module struct {
 
 type row struct {
 	Key         string `gorm:"primaryKey;type:varchar(128)"`
-	Value       []byte `gorm:"type:blob;not null"`
+	Value       []byte `gorm:"type:bytes;size:16777215;not null"`
 	CreatedAtNS int64  `gorm:"autoCreateTime:nano"`
 	UpdatedAtNS int64  `gorm:"autoUpdateTime:nano"`
 }
@@ -136,7 +136,7 @@ func (g Group[T]) Read(ctx context.Context) (Stored[T], error) {
 	if reader == nil {
 		reader = g.db
 	}
-	result := reader.WithContext(ctx).Where("key = ?", g.definition.key).Limit(1).Find(&stored)
+	result := reader.WithContext(ctx).Where(&row{Key: g.definition.key}).Limit(1).Find(&stored)
 	if result.Error != nil {
 		return Stored[T]{}, fmt.Errorf("read %s Settings failed, %w", g.definition.key, result.Error)
 	}

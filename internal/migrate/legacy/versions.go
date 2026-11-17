@@ -140,8 +140,7 @@ func finishLibraryStaging(ctx context.Context, db *gorm.DB) error {
 
 	// SQLite rebuilds the staging table for a column drop and discards its indexes.
 	for _, name := range []string{
-		"idx_positions_signature", "idx_positions_media_path", "idx_positions_media_parent", "idx_positions_media_files",
-		"idx_positions_health",
+		"idx_positions_signature", "idx_positions_media_parent", "idx_positions_media_files", "idx_positions_health",
 	} {
 		if db.Migrator().HasIndex(&stagedLibraryPosition{}, name) {
 			continue
@@ -149,6 +148,9 @@ func finishLibraryStaging(ctx context.Context, db *gorm.DB) error {
 		if err := db.WithContext(ctx).Migrator().CreateIndex(&stagedLibraryPosition{}, name); err != nil {
 			return fmt.Errorf("create migrated Position index %q failed, %w", name, err)
 		}
+	}
+	if err := library.CreatePositionPathIndex(db.WithContext(ctx), "positions_staging"); err != nil {
+		return fmt.Errorf("create migrated Position path index failed, %w", err)
 	}
 	return nil
 }

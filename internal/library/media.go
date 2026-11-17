@@ -34,7 +34,7 @@ type Media struct {
 	Kind          entity.MediaKind     `gorm:"not null;index:idx_media_kind_identity,unique,priority:1" json:"kind,omitempty"`
 	Identity      string               `gorm:"type:varchar(128);not null;index:idx_media_kind_identity,unique,priority:2" json:"identity,omitempty"`
 	Name          string               `gorm:"type:varchar(256)" json:"name,omitempty"`
-	Profile       *entity.MediaProfile `gorm:"type:blob;not null" json:"profile,omitempty"`
+	Profile       *entity.MediaProfile `gorm:"type:bytes;size:16777215;not null" json:"profile,omitempty"`
 	CreatedAtNS   int64                `json:"created_at_ns,string"`
 	CapacityBytes int64                `json:"capacity_bytes,omitempty"`
 	WrittenBytes  int64                `json:"written_bytes,omitempty"`

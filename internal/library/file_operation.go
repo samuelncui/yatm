@@ -86,7 +86,7 @@ func removeOperationOriginals(tx *gorm.DB, result *FileOperation) error {
 	for {
 		var originals []*FileLocation
 		if err := tx.Where("location_id = ? AND file_id > ?", result.LocationID, after).
-			Where("path = ? OR substr(path, 1, length(?)) = ?", result.SourcePath, result.SourcePath+"/", result.SourcePath+"/").
+			Where("path = ? OR (path >= ? AND path < ?)", result.SourcePath, result.SourcePath+"/", result.SourcePath+"0").
 			Order("file_id").Limit(batchSize).Find(&originals).Error; err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func moveOperationOriginals(tx *gorm.DB, result *FileOperation) error {
 	for {
 		var originals []*FileLocation
 		if err := tx.Where("location_id = ? AND file_id > ?", result.LocationID, after).
-			Where("path = ? OR substr(path, 1, length(?)) = ?", result.SourcePath, result.SourcePath+"/", result.SourcePath+"/").
+			Where("path = ? OR (path >= ? AND path < ?)", result.SourcePath, result.SourcePath+"/", result.SourcePath+"0").
 			Order("file_id").Limit(batchSize).Find(&originals).Error; err != nil {
 			return err
 		}

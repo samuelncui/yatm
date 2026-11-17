@@ -55,6 +55,9 @@ func (l *Library) AutoMigrate() error {
 		&FileLocation{}, &FileVersion{}, &FileVersionArchive{}, &FileTrackingKey{}); err != nil {
 		return err
 	}
+	if err := createPathIndexes(l.db); err != nil {
+		return err
+	}
 	if err := l.settings.AutoMigrate(); err != nil {
 		return err
 	}
