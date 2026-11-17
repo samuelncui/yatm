@@ -12,7 +12,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -32,8 +32,7 @@ func setupFilesLocationBenchmarkNames(t testing.TB, entries, depth int, ignoreTe
 	// Register one nested live directory holding the enumerated entries.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	connection, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = connection.Close() })

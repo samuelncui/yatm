@@ -34,7 +34,7 @@ func TestDeviceReadParametersPreserveUnknownsAndIsolateDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, proto.Equal(value, stored))
 	var document row
-	require.NoError(t, module.db.First(&document, "key = ?", "devices").Error)
+	require.NoError(t, module.db.Where(&row{Key: "devices"}).First(&document).Error)
 	for _, field := range []string{`"densityCode":0`, `"nominalWraps":80`, `"baseSeconds":0`} {
 		require.Contains(t, string(document.Value), field)
 	}

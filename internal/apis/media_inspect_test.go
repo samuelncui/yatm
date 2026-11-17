@@ -12,7 +12,7 @@ import (
 	"github.com/samuelncui/yatm/internal/apis"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,10 +20,8 @@ func TestMediaInspectTapePrefersDeviceBarcodeAndReturnsLibraryStats(t *testing.T
 	// Simulate only barcode inspection; no physical Tape device is opened.
 	ctx := context.Background()
 	root := t.TempDir()
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	readInfo := filepath.Join(root, "read-info")
@@ -71,10 +69,8 @@ func TestMediaInspectTapeUsesManualBarcodeWhenDeviceHasNone(t *testing.T) {
 	// An isolated inspection script reports no physical barcode.
 	ctx := context.Background()
 	root := t.TempDir()
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	readInfo := filepath.Join(root, "read-info")

@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -219,8 +218,7 @@ func TestPositionMediaIndexes(t *testing.T) {
 func BenchmarkCommitMediaAppend(b *testing.B) {
 	// Append selected Archive files to a Media that already holds a large inventory.
 	ctx := context.Background()
-	db, err := resource.OpenSQLite(filepath.Join(b.TempDir(), "library.db"))
-	require.NoError(b, err)
+	db := resourcetest.OpenCatalog(b)
 	lib := New(db)
 	require.NoError(b, lib.PrepareTemporary(b.TempDir()))
 	require.NoError(b, lib.AutoMigrate())

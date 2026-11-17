@@ -2,13 +2,12 @@ package apis
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor/fileops"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -61,7 +60,7 @@ func TestFileGetDistinguishesMissingFilesFromVirtualRoot(t *testing.T) {
 
 func TestFileGetReportsTheMostRecentlyArchivedVersion(t *testing.T) {
 	// The latest version follows the last archive time, not row order, and is absent without one.
-	api, _, root := setupLocationAPI(t)
+	api, _, _, dsn := setupLocationCatalog(t)
 	ctx := context.Background()
 	service := &filesService{api: api}
 	file := &library.File{Name: "versioned"}
@@ -71,9 +70,7 @@ func TestFileGetReportsTheMostRecentlyArchivedVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, reply.Detail.LatestVersion)
 
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, resource.CloseDB(db)) })
+	db := resourcetest.Reopen(t, dsn)
 	recent := int64(2_000)
 	older := int64(1_000)
 	require.NoError(t, db.Create(&library.FileVersion{FileID: file.ID, Signature: []byte("recent"), LastArchivedAtNS: &recent}).Error)

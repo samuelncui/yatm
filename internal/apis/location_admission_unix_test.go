@@ -18,12 +18,19 @@ import (
 
 func admissionLocation(t *testing.T) (*API, *locationService, string, int64) {
 	t.Helper()
-	api, service, root := setupLocationAPI(t)
+	api, service, dir, id, _ := admissionLocationCatalog(t)
+	return api, service, dir, id
+}
+
+// admissionLocationCatalog also returns the Catalog DSN for tests that open a second connection.
+func admissionLocationCatalog(t *testing.T) (*API, *locationService, string, int64, string) {
+	t.Helper()
+	api, service, root, dsn := setupLocationCatalog(t)
 	dir := filepath.Join(root, "originals")
 	require.NoError(t, os.Mkdir(dir, 0755))
 	created, err := service.Create(context.Background(), &entity.CreateLocationRequest{Location: &entity.Location{Name: "Documents", RootPath: dir}})
 	require.NoError(t, err)
-	return api, service, dir, created.Location.Id
+	return api, service, dir, created.Location.Id, dsn
 }
 
 func admittedPage(t *testing.T, locations *locationService, id int64) map[string]*entity.FilesDetail {

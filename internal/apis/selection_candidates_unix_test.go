@@ -12,14 +12,14 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 func TestSingleLiveSelectionDoesNotInspectUnrelatedOriginals(t *testing.T) {
 	// A narrow selection must not expand to every registered original before matching.
-	api, service, root, id := admissionLocation(t)
+	api, service, root, id, dsn := admissionLocationCatalog(t)
 	for index := 0; index < 40; index++ {
 		require.NoError(t, os.WriteFile(filepath.Join(root, fmt.Sprintf("unrelated-%02d.txt", index)), []byte("other"), 0644))
 	}
@@ -29,11 +29,7 @@ func TestSingleLiveSelectionDoesNotInspectUnrelatedOriginals(t *testing.T) {
 	wanted := entries["wanted.txt"].Entry.GetAssociatedFileId()
 
 	// Observe the real candidate facts consumed before any eligibility check can stat their paths.
-	db, err := resource.OpenSQLite(filepath.Join(filepath.Dir(root), "library.db"))
-	require.NoError(t, err)
-	connection, err := db.DB()
-	require.NoError(t, err)
-	defer connection.Close()
+	db := resourcetest.Reopen(t, dsn)
 	api.lib = library.New(db)
 	api.exe = executor.New(db, api.lib, nil, api.exe.Paths(), executor.Scripts{}, nil)
 	var unrelated []string

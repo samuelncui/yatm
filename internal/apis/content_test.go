@@ -14,7 +14,7 @@ import (
 	"github.com/samuelncui/yatm/internal/apis"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,10 +32,8 @@ func newContentFixture(t *testing.T) *contentFixture {
 	volumesRoot := filepath.Join(root, "volumes")
 	volumeRoot := filepath.Join(volumesRoot, "fixture")
 	require.NoError(t, os.MkdirAll(volumeRoot, 0o755))
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	exe := executor.New(executorDB, lib, nil, executor.Paths{
@@ -88,8 +86,7 @@ func TestFileByteHTTPRoutesAreRemoved(t *testing.T) {
 
 func TestLibraryJSONLHTTPExportRemainsAvailable(t *testing.T) {
 	// Metadata transfer remains available independently of file-byte transfer.
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build backend backend-linux frontend release release-check preview generate demo demo-dev check test-race test-e2e test-performance-tools performance-collect performance-check
+.PHONY: help build backend backend-linux frontend release release-check preview generate demo demo-dev check test-race test-mysql test-e2e test-performance-tools performance-collect performance-check
 
 PERF_TIER ?= fast
 
@@ -18,6 +18,7 @@ help:
 	  '  demo-dev      Start the Demo backend and Vite hot reload' \
 	  '  check         Run full integration checks (use affected runners during review)' \
 	  '  test-race     Run Go race checks' \
+	  '  test-mysql    Run Go tests on MySQL Catalogs (YATM_TEST_MYSQL_DSN, or a local Docker mysql:8.0)' \
 	  '  test-e2e      Run CLI E2E against explicitly selected candidate binaries' \
 	  '  test-package-tools Check the local/SSH package-acceptance controller' \
 	  '  test-performance-tools Check performance collection and comparison tools' \
@@ -78,6 +79,9 @@ release-check:
 
 test-race:
 	go test -race ./...
+
+test-mysql:
+	./dev/test-mysql.sh
 
 test-performance-tools:
 	node --test dev/check-performance.test.mjs dev/performance/*.test.mjs frontend/scripts/compare-performance.test.mjs

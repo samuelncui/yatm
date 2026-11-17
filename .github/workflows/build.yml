@@ -120,6 +120,34 @@ jobs:
           path: ${{ runner.temp }}/shared-frontend
           if-no-files-found: error
 
+  mysql-check:
+    needs: prepare
+    if: ${{ !inputs.publish }}
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: yatmtest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pyatmtest --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.8'
+      # Each test creates its own utf8mb4_bin database on this disposable server.
+      - name: Run the Go tests with MySQL Catalogs
+        env:
+          YATM_TEST_MYSQL_DSN: root:yatmtest@tcp(127.0.0.1:3306)/
+        run: make test-mysql
+
   build:
     needs: [prepare, source-check]
     if: ${{ !inputs.publish }}
@@ -305,7 +333,7 @@ jobs:
           if-no-files-found: error
 
   validate:
-    needs: [build, preview-build]
+    needs: [build, preview-build, mysql-check]
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ inputs.version }}

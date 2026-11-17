@@ -2,21 +2,19 @@ package apis
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFileListScopeBeforePaginationWithoutRecursiveSize(t *testing.T) {
 	// Build a nested tree whose version-less leaf is larger than either saved leaf.
 	ctx := context.Background()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 	api := New(lib, executor.New(nil, lib, nil, executor.Paths{}, executor.Scripts{}, nil))

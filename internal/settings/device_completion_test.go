@@ -32,7 +32,7 @@ func TestDeviceReadCompletionPreservesPartialSettingsAndJSON(t *testing.T) {
 			saved, err := module.Device.Save(ctx, value)
 			require.NoError(t, err)
 			var document row
-			require.NoError(t, module.db.First(&document, "key = ?", "devices").Error)
+			require.NoError(t, module.db.Where(&row{Key: "devices"}).First(&document).Error)
 			var decoded entity.DeviceSettings
 			require.NoError(t, protojson.Unmarshal(document.Value, &decoded))
 			require.True(t, proto.Equal(want, &decoded), "unknown fields must remain absent rather than become zero")

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
@@ -19,6 +20,7 @@ import (
 	"github.com/samuelncui/yatm/internal/library"
 	legacypb "github.com/samuelncui/yatm/internal/migrate/legacy/pb"
 	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -687,10 +689,31 @@ func TestEmptyLegacyInstanceCreatesFinalJobDirectory(t *testing.T) {
 	require.DirExists(t, filepath.Join(root, "jobs"))
 }
 
+// newLegacyTestDB creates the released v0.1.x tables in a Catalog database of the tested dialect.
 func newLegacyTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, dsn := resourcetest.OpenCatalogDSN(t)
+	if db.Dialector.Name() == "mysql" {
+		// Fixtures keep unset time.Time fields, which MySQL stores as zero dates only outside
+		// NO_ZERO_DATE; the import itself writes no dates.
+		cfg, err := mysqldriver.ParseDSN(dsn)
+		require.NoError(t, err)
+		cfg.Params = map[string]string{"sql_mode": "'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'"}
+		db = resourcetest.Reopen(t, cfg.FormatDSN())
+	}
+	return migrateLegacyTables(t, db)
+}
+
+// newSQLiteLegacyTestDB is for the installation backup, which supports only SQLite.
+func newSQLiteLegacyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "main.db"))
 	require.NoError(t, err)
+	return migrateLegacyTables(t, db)
+}
+
+func migrateLegacyTables(t *testing.T, db *gorm.DB) *gorm.DB {
+	t.Helper()
 	require.NoError(t, db.AutoMigrate(
 		&legacyJob{}, &legacyLibraryFile{}, &legacyLibraryTape{}, &legacyLibraryPosition{},
 	))

@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/plugin/soft_delete"
@@ -22,9 +22,8 @@ import (
 
 func TestJobNanosecondsRoundTrip(t *testing.T) {
 	// Both endpoints must retain every bit through SQLite, the runtime snapshot and JSON.
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "timestamps.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, resource.CloseDB(db)) })
+	db := resourcetest.OpenCatalog(t)
+	sqlite := db.Dialector.Name() == "sqlite"
 	require.NoError(t, db.AutoMigrate(ModelJob))
 	for i, stamp := range []int64{math.MinInt64, math.MaxInt64} {
 		row := &jobCatalogRow{ID: int64(i + 1), CreatedAtNS: stamp, UpdatedAtNS: stamp, DeletedAtNS: soft_delete.DeletedAt(math.MaxInt64)}
@@ -34,11 +33,13 @@ func TestJobNanosecondsRoundTrip(t *testing.T) {
 		require.Equal(t, stamp, stored.CreatedAtNS)
 		require.Equal(t, stamp, stored.UpdatedAtNS)
 		require.EqualValues(t, math.MaxInt64, stored.DeletedAtNS)
-		var kinds struct{ Created, Updated, Deleted string }
-		require.NoError(t, db.Raw("SELECT typeof(created_at_ns) AS created, typeof(updated_at_ns) AS updated, typeof(deleted_at_ns) AS deleted FROM jobs WHERE id = ?", row.ID).Scan(&kinds).Error)
-		require.Equal(t, "integer", kinds.Created)
-		require.Equal(t, "integer", kinds.Updated)
-		require.Equal(t, "integer", kinds.Deleted)
+		if sqlite {
+			var kinds struct{ Created, Updated, Deleted string }
+			require.NoError(t, db.Raw("SELECT typeof(created_at_ns) AS created, typeof(updated_at_ns) AS updated, typeof(deleted_at_ns) AS deleted FROM jobs WHERE id = ?", row.ID).Scan(&kinds).Error)
+			require.Equal(t, "integer", kinds.Created)
+			require.Equal(t, "integer", kinds.Updated)
+			require.Equal(t, "integer", kinds.Deleted)
+		}
 		for _, value := range []any{&stored, stored.snapshot()} {
 			data, err := json.Marshal(value)
 			require.NoError(t, err)
@@ -54,10 +55,17 @@ func TestJobNanosecondsRoundTrip(t *testing.T) {
 		require.Equal(t, stamp, decoded.CreatedAtNs)
 		require.EqualValues(t, math.MaxInt64, decoded.DeletedAtNs)
 	}
-	var schema string
-	require.NoError(t, db.Raw("SELECT sql FROM sqlite_master WHERE name = 'jobs'").Scan(&schema).Error)
-	require.Contains(t, schema, "`deleted_at_ns` bigint")
-	require.NotContains(t, schema, "unsigned")
+
+	// The deletion instant is a signed 64-bit column on every dialect.
+	columns, err := db.Migrator().ColumnTypes(ModelJob)
+	require.NoError(t, err)
+	for _, column := range columns {
+		if column.Name() == "deleted_at_ns" {
+			require.Contains(t, strings.ToLower(column.DatabaseTypeName()), "bigint")
+			declared, _ := column.ColumnType()
+			require.NotContains(t, strings.ToLower(declared), "unsigned")
+		}
+	}
 }
 
 func TestAttemptNanosecondsKeepElapsedMilliseconds(t *testing.T) {

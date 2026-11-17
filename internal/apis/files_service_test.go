@@ -10,7 +10,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -145,8 +145,7 @@ func TestOriginalDetailFollowsTheCurrentRegistration(t *testing.T) {
 	// A File's original reference resolves against the current Location registration.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 	ctx := context.Background()

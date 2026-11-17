@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,7 +16,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/preview"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -63,10 +62,8 @@ func (p *previewFixture) Open(_ []byte, role string) (*preview.OpenedAsset, erro
 func TestPreviewReadsContentAddressedAssets(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	signature, err := library.NewFileSignature(bytes.Repeat([]byte{0x2a}, 32), 4096)

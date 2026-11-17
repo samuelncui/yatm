@@ -10,18 +10,24 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/preview"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/stretchr/testify/require"
 )
 
 func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
+	t.Helper()
+	api, service, root, _ := setupLocationCatalog(t)
+	return api, service, root
+}
+
+// setupLocationCatalog also returns the Catalog DSN for tests that open a second connection.
+func setupLocationCatalog(t *testing.T) (*API, *locationService, string, string) {
 	// Use an isolated permitted namespace with separate runtime resources.
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db, dsn := resourcetest.OpenCatalogDSN(t)
 	settings := settingspkg.New(db, preview.SettingsDefinition())
 	l := library.NewWithSettings(db, settings)
 	work := t.TempDir()
@@ -29,7 +35,7 @@ func setupLocationAPI(t *testing.T) (*API, *locationService, string) {
 	require.NoError(t, l.AutoMigrate())
 	exe := executor.New(db, l, nil, executor.Paths{Access: []executor.AccessRange{{Root: root}}, Work: work}, executor.Scripts{}, nil)
 	api := New(l, exe)
-	return api, &locationService{api: api}, root
+	return api, &locationService{api: api}, root, dsn
 }
 
 // admitLocationEntry admits one live entry through the executor admission used by explicit metadata updates.

@@ -2,12 +2,11 @@ package library
 
 import (
 	"context"
-	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/samuelncui/yatm/internal/treeops"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -15,9 +14,7 @@ import (
 
 func openTestLibraryDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "library.db"))
-	require.NoError(t, err)
-	return db
+	return resourcetest.OpenCatalog(t)
 }
 
 func newTestLibrary(t *testing.T) (*gorm.DB, *Library) {

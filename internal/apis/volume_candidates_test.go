@@ -11,7 +11,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
@@ -20,10 +20,8 @@ func TestListVolumeCandidatesReportsEveryDiscoveryState(t *testing.T) {
 	// Build one discovery root holding every state the Add Volume dialog must distinguish.
 	ctx := context.Background()
 	root := t.TempDir()
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	volumes := filepath.Join(root, "volumes")

@@ -4,24 +4,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 func archivedVersionFixture(t testing.TB, count int) *gorm.DB {
-	// Use on-disk SQLite so migration benchmarks include real commit costs.
+	// Use an on-disk Catalog so migration benchmarks include real commit costs.
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "versions.db"))
-	require.NoError(t, err)
-	connection, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, connection.Close()) })
+	db := resourcetest.OpenCatalog(t)
 	require.NoError(t, db.AutoMigrate(&stagedLibraryFile{}, &stagedLibraryPosition{}, &stagedLibraryVersion{}))
 
 	// Put each File's second physical copy in a later page; it must not create another version.

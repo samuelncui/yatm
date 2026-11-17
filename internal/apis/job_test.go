@@ -12,7 +12,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/executor/archive"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,10 +23,8 @@ func TestJobAPICatalogPollingAndDelete(t *testing.T) {
 	// Construct a historical raw-source fixture for the common catalog lifecycle.
 	ctx := context.Background()
 	root := t.TempDir()
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	source := filepath.Join(root, "source")

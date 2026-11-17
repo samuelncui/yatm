@@ -2,22 +2,17 @@ package settings
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
 func testModule(t *testing.T) *Module {
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "settings.db"))
-	require.NoError(t, err)
-	connection, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, connection.Close()) })
+	db := resourcetest.OpenCatalog(t)
 	module := New(db, PreviewDefinition{
 		Default: func() (*entity.PreviewSettings, error) {
 			return &entity.PreviewSettings{Concurrency: 2}, nil
@@ -37,7 +32,7 @@ func TestSettingsSavePreservesNanosecondTimes(t *testing.T) {
 	_, err := module.Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: true})
 	require.NoError(t, err)
 	var first row
-	require.NoError(t, module.db.First(&first, "key = ?", "library").Error)
+	require.NoError(t, module.db.Where(&row{Key: "library"}).First(&first).Error)
 	require.Equal(t, stamp.UnixNano(), first.CreatedAtNS)
 	require.Equal(t, stamp.UnixNano(), first.UpdatedAtNS)
 
@@ -46,9 +41,14 @@ func TestSettingsSavePreservesNanosecondTimes(t *testing.T) {
 	_, err = module.Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: false})
 	require.NoError(t, err)
 	var second row
-	require.NoError(t, module.db.First(&second, "key = ?", "library").Error)
+	require.NoError(t, module.db.Where(&row{Key: "library"}).First(&second).Error)
 	require.Equal(t, first.CreatedAtNS, second.CreatedAtNS)
 	require.Equal(t, stamp.UnixNano(), second.UpdatedAtNS)
+
+	// SQLite stores the instant as an integer rather than a text or real value.
+	if module.db.Dialector.Name() != "sqlite" {
+		return
+	}
 	var storage string
 	require.NoError(t, module.db.Raw("SELECT typeof(updated_at_ns) FROM settings WHERE key = ?", "library").Scan(&storage).Error)
 	require.Equal(t, "integer", storage)
@@ -105,7 +105,7 @@ func TestStoredSettingsMustDecodeAndValidate(t *testing.T) {
 			module := testModule(t)
 			_, err := module.Job.Save(ctx, &entity.JobSettings{Execution: DefaultJobExecution()})
 			require.NoError(t, err)
-			require.NoError(t, module.db.Model(&row{}).Where("key = ?", "jobs").Update("value", []byte(document)).Error)
+			require.NoError(t, module.db.Model(&row{}).Where(&row{Key: "jobs"}).Update("value", []byte(document)).Error)
 
 			// Corruption is explicit and never falls back to defaults.
 			_, err = module.Job.Current(ctx)

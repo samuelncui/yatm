@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/samuelncui/yatm/internal/apis"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -26,11 +25,7 @@ import (
 func newExportLibrary(t *testing.T) (*gorm.DB, *library.Library) {
 	// Each server and import target owns a separate disposable Catalog.
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "library.db"))
-	require.NoError(t, err)
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 	return db, lib

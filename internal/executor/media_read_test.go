@@ -11,7 +11,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,8 +19,7 @@ func TestReadSessionDoesNotDependOnRestoreCopies(t *testing.T) {
 	// A neutral read Session accepts a target without Restore-specific tables.
 	ctx := context.Background()
 	root := t.TempDir()
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 	volumeRoot := filepath.Join(root, "disk")
@@ -47,8 +46,7 @@ func TestTapeReadRejectsWrongExpectedIdentityBeforeMount(t *testing.T) {
 	// The physical identity is known, but does not belong to the Job's frozen expected Media.
 	ctx := context.Background()
 	root := t.TempDir()
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.AutoMigrate())
 	stored, err := lib.CreateMedia(ctx, &library.Media{Kind: entity.MediaKind_MEDIA_KIND_TAPE, Identity: "ABC001",

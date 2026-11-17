@@ -1,29 +1,53 @@
 package dataformat
 
 import (
+	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-func openCatalog(t *testing.T) (*gorm.DB, string) {
+func openCatalog(t *testing.T) (*gorm.DB, func() string) {
 	t.Helper()
-	filename := filepath.Join(t.TempDir(), "catalog.db")
-	db, err := resource.OpenSQLite(filename)
+	db, dsn := resourcetest.OpenCatalogDSN(t)
+	return db, func() string { return catalogState(t, db, dsn) }
+}
+
+// catalogState captures every stored byte: the SQLite file, or each MySQL table's definition and
+// checksum, so a test can prove an operation changed nothing.
+func catalogState(t *testing.T, db *gorm.DB, dsn string) string {
+	t.Helper()
+	if db.Dialector.Name() == "sqlite" {
+		data, err := os.ReadFile(dsn)
+		require.NoError(t, err)
+		return string(data)
+	}
+	tables, err := db.Migrator().GetTables()
 	require.NoError(t, err)
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
-	return db, filename
+	var state strings.Builder
+	for _, table := range tables {
+		var definition struct {
+			Table       string `gorm:"column:Table"`
+			CreateTable string `gorm:"column:Create Table"`
+		}
+		require.NoError(t, db.Raw("SHOW CREATE TABLE `"+table+"`").Scan(&definition).Error)
+		var checksum struct {
+			Table    string `gorm:"column:Table"`
+			Checksum int64  `gorm:"column:Checksum"`
+		}
+		require.NoError(t, db.Raw("CHECKSUM TABLE `"+table+"`").Scan(&checksum).Error)
+		fmt.Fprintf(&state, "%s\n%d\n", definition.CreateTable, checksum.Checksum)
+	}
+	return state.String()
 }
 
 func TestCatalogInitialization(t *testing.T) {
 	// Inspection must not create the marker; only explicit fresh initialization does.
-	db, filename := openCatalog(t)
+	db, state := openCatalog(t)
 	empty, err := CheckCatalog(db)
 	require.NoError(t, err)
 	require.True(t, empty)
@@ -31,14 +55,12 @@ func TestCatalogInitialization(t *testing.T) {
 	require.NoError(t, InitializeCatalog(db))
 
 	// Reopening the published family neither rewrites its marker nor consumes a revision.
-	before, err := os.ReadFile(filename)
-	require.NoError(t, err)
+	before := state()
 	require.NoError(t, InitializeCatalog(db))
 	empty, err = CheckCatalog(db)
 	require.NoError(t, err)
 	require.False(t, empty)
-	after, err := os.ReadFile(filename)
-	require.NoError(t, err)
+	after := state()
 	require.Equal(t, before, after)
 	var marker catalogMetadata
 	require.NoError(t, db.First(&marker).Error)
@@ -47,7 +69,7 @@ func TestCatalogInitialization(t *testing.T) {
 
 func TestCatalogAcceptsNanosecondColumns(t *testing.T) {
 	// All current timestamp owners expose the same unit even while their tables initialize separately.
-	db, filename := openCatalog(t)
+	db, state := openCatalog(t)
 	require.NoError(t, InitializeCatalog(db))
 	for _, statement := range []string{
 		"CREATE TABLE files (created_at_ns INTEGER, updated_at_ns INTEGER)",
@@ -62,15 +84,13 @@ func TestCatalogAcceptsNanosecondColumns(t *testing.T) {
 	} {
 		require.NoError(t, db.Exec(statement).Error)
 	}
-	before, err := os.ReadFile(filename)
-	require.NoError(t, err)
+	before := state()
 	empty, err := CheckCatalog(db)
 	require.NoError(t, err)
 	require.False(t, empty)
 
 	// Admission performs no schema adoption or normalization on an accepted database.
-	after, err := os.ReadFile(filename)
-	require.NoError(t, err)
+	after := state()
 	require.Equal(t, before, after)
 }
 
@@ -89,19 +109,17 @@ func TestUnsupportedCatalogPreservesBytes(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// The absence of Jobs or a recognizable column shape is not an empty Catalog.
-			db, filename := openCatalog(t)
+			db, state := openCatalog(t)
 			for _, statement := range test.sql {
 				require.NoError(t, db.Exec(statement).Error)
 			}
-			before, err := os.ReadFile(filename)
-			require.NoError(t, err)
-			_, err = CheckCatalog(db)
+			before := state()
+			_, err := CheckCatalog(db)
 			require.ErrorIs(t, err, ErrUnsupportedCatalog)
 			require.ErrorIs(t, InitializeCatalog(db), ErrUnsupportedCatalog)
 
 			// Both read-only preflight and runtime admission leave all existing bytes intact.
-			after, err := os.ReadFile(filename)
-			require.NoError(t, err)
+			after := state()
 			require.Equal(t, before, after)
 		})
 	}

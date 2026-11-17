@@ -7,14 +7,13 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/executor"
 	legacypb "github.com/samuelncui/yatm/internal/migrate/legacy/pb"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDetectSchemaAndRunningJobs(t *testing.T) {
 	// Detect an empty database before either catalog format exists.
-	db, err := resource.OpenSQLite(t.TempDir() + "/main.db")
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	schema, err := DetectSchema(db)
 	require.NoError(t, err)
 	require.Equal(t, SchemaEmpty, schema)

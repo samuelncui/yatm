@@ -11,7 +11,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	mediapkg "github.com/samuelncui/yatm/internal/media"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,10 +22,8 @@ func TestVolumeInitializeAndMediaDeletePreservePhysicalFiles(t *testing.T) {
 	volumeDiscoveryRoot := filepath.Join(root, "volumes")
 	volumeRoot := filepath.Join(volumeDiscoveryRoot, "offline-disk")
 	require.NoError(t, os.MkdirAll(volumeRoot, 0o755))
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	exe := executor.New(executorDB, lib, nil, executor.Paths{
@@ -90,17 +88,15 @@ func TestVolumeInitializeRejectsMountOutsideConfiguredRoots(t *testing.T) {
 	outside := filepath.Join(root, "outside")
 	require.NoError(t, os.Mkdir(allowed, 0o755))
 	require.NoError(t, os.Mkdir(outside, 0o755))
-	executorDB, err := resource.OpenSQLite(filepath.Join(root, "executor.db"))
-	require.NoError(t, err)
-	libraryDB, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	executorDB := resourcetest.OpenCatalog(t)
+	libraryDB := resourcetest.OpenCatalog(t)
 	lib := library.New(libraryDB)
 	require.NoError(t, lib.AutoMigrate())
 	exe := executor.New(executorDB, lib, nil, executor.Paths{Volumes: []string{allowed}}, executor.Scripts{}, nil)
 	require.NoError(t, exe.AutoMigrate())
 
 	// Initialization cannot create a marker outside the approved discovery namespace.
-	_, err = entity.NewMediaServiceClient(domainConnection(t, apis.New(lib, exe))).InitializeVolume(context.Background(), &entity.InitializeVolumeRequest{
+	_, err := entity.NewMediaServiceClient(domainConnection(t, apis.New(lib, exe))).InitializeVolume(context.Background(), &entity.InitializeVolumeRequest{
 		MountPoint: outside, Name: "Outside",
 		Profile: &entity.VolumeMediaProfile{Type: entity.VolumeType_VOLUME_TYPE_HDD},
 	})

@@ -68,7 +68,7 @@ func backupHashes(t *testing.T, root string) map[string]string {
 func TestValidateDetectsManifestDamageAndCleanupPreservesBackup(t *testing.T) {
 	// Include enough files to cross a page boundary and retain a real historical log.
 	ctx := context.Background()
-	db := newLegacyTestDB(t)
+	db := newSQLiteLegacyTestDB(t)
 	root := t.TempDir()
 	state := &legacypb.JobArchiveState{}
 	for i := 0; i < 300; i++ {
@@ -133,7 +133,7 @@ func TestValidateDetectsManifestDamageAndCleanupPreservesBackup(t *testing.T) {
 
 func TestBackupSnapshotIncludesWALWithoutWritingEvidence(t *testing.T) {
 	// Preserve an uncheckpointed catalog exactly as a stopped-service snapshot might contain it.
-	db := newLegacyTestDB(t)
+	db := newSQLiteLegacyTestDB(t)
 	require.NoError(t, db.Exec("PRAGMA journal_mode=WAL").Error)
 	require.NoError(t, db.Create(&legacyJob{ID: 42, CreateTime: time.Unix(1, 0),
 		State: &legacypb.JobState{State: &legacypb.JobState_Archive{Archive: &legacypb.JobArchiveState{}}}}).Error)
@@ -152,7 +152,7 @@ func TestBackupSnapshotIncludesWALWithoutWritingEvidence(t *testing.T) {
 func TestValidateDetectsChangedArchivedLog(t *testing.T) {
 	// Freeze one log and one empty historical Job.
 	ctx := context.Background()
-	db := newLegacyTestDB(t)
+	db := newSQLiteLegacyTestDB(t)
 	root := t.TempDir()
 	require.NoError(t, db.Create(&legacyJob{ID: 1, CreateTime: time.Unix(1, 0),
 		State: &legacypb.JobState{State: &legacypb.JobState_Archive{Archive: &legacypb.JobArchiveState{}}}}).Error)
@@ -184,7 +184,7 @@ func TestSnapshotCleanupFailureRetainsOwnedPathForRetry(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("permission fixture requires an unprivileged user")
 	}
-	db := newLegacyTestDB(t)
+	db := newSQLiteLegacyTestDB(t)
 	backup := preserveTestBackup(t, db, t.TempDir())
 	hashes := backupHashes(t, backup.Root)
 	work := t.TempDir()

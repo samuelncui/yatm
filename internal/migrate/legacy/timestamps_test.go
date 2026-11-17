@@ -14,7 +14,6 @@ import (
 	"github.com/samuelncui/yatm/internal/dataformat"
 	"github.com/samuelncui/yatm/internal/library"
 	legacypb "github.com/samuelncui/yatm/internal/migrate/legacy/pb"
-	"github.com/samuelncui/yatm/internal/resource"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -25,7 +24,9 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 	// Distinct source instants within one millisecond must survive the released legacy adapter.
 	ctx := context.Background()
 	db := newLegacyTestDB(t)
-	t.Cleanup(func() { _ = resource.CloseDB(db) })
+	if db.Dialector.Name() == "mysql" {
+		t.Skip("the released MySQL schema stores DATETIME(3), so its instants never carry nanoseconds")
+	}
 	seedLegacyTimestampRows(t, db)
 	root := t.TempDir()
 	report, err := prepareLegacy(ctx, db, root)
@@ -98,7 +99,6 @@ func TestPreparePreservesNanosecondInstants(t *testing.T) {
 func TestPreparePreservesZeroTime(t *testing.T) {
 	// Legacy zero times map to zero without triggering GORM's automatic timestamp population.
 	db := newLegacyTestDB(t)
-	t.Cleanup(func() { _ = resource.CloseDB(db) })
 	seedLegacyTimestampRows(t, db)
 	require.NoError(t, db.Delete(&legacyJob{}, 1).Error)
 	require.NoError(t, db.Model(&legacyLibraryFile{}).Where("id = ?", 1).Update("mod_time", time.Time{}).Error)
@@ -142,11 +142,14 @@ func TestPrepareRejectsOutOfRangeLegacyInstants(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%s/%d", field.table, field.column, year), func(t *testing.T) {
 				// Record the released source cell before attempting conversion into staging.
 				db := newLegacyTestDB(t)
-				t.Cleanup(func() { _ = resource.CloseDB(db) })
 				seedLegacyTimestampRows(t, db)
 				stamp := time.Date(year, 1, 2, 3, 4, 5, 123456789, time.UTC)
 				require.NoError(t, db.Table(field.table).Where("id = ?", 1).Update(field.column, stamp).Error)
-				query := "SELECT CAST(" + field.column + " AS TEXT) FROM " + field.table + " WHERE id = 1"
+				text := "TEXT"
+				if db.Dialector.Name() == "mysql" {
+					text = "CHAR"
+				}
+				query := "SELECT CAST(" + field.column + " AS " + text + ") FROM " + field.table + " WHERE id = 1"
 				var before string
 				require.NoError(t, db.Raw(query).Scan(&before).Error)
 				root := t.TempDir()

@@ -132,7 +132,7 @@ func TestDeviceCapacityPollIntervalOfflinePersistenceAndIsolation(t *testing.T) 
 	require.NoError(t, err)
 	require.True(t, proto.Equal(value, stored.Value))
 	var document row
-	require.NoError(t, module.db.First(&document, "key = ?", "devices").Error)
+	require.NoError(t, module.db.Where(&row{Key: "devices"}).First(&document).Error)
 	require.Contains(t, string(document.Value), `"capacityPollIntervalSeconds":0`)
 	defaults := TapeDefaults(stored.Value, "/dev/inactive")
 	require.NotNil(t, defaults.CapacityPollIntervalSeconds)

@@ -11,7 +11,7 @@ import (
 	"github.com/samuelncui/acp"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -70,8 +70,7 @@ func (r *testRunner) Logger() *logrus.Logger {
 
 func setupTestExecutor(t *testing.T) *Executor {
 	t.Helper()
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "executor.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	settings := settingspkg.New(db, settingspkg.PreviewDefinition{})
 	lib := library.NewWithSettings(db, settings)
 	exe := New(db, lib, []string{"/dev/nst0"}, Paths{Work: t.TempDir()}, Scripts{}, nil)
@@ -582,8 +581,7 @@ func TestCleanupFailedJobIgnoresCanceledContext(t *testing.T) {
 }
 
 func TestExecutorRefusesLegacySchema(t *testing.T) {
-	db, err := resource.OpenSQLite(filepath.Join(t.TempDir(), "executor.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	require.NoError(t, db.Exec("CREATE TABLE jobs (id INTEGER PRIMARY KEY, status INTEGER, priority INTEGER, state BLOB, create_time DATETIME, update_time DATETIME)").Error)
 
 	exe := New(db, &library.Library{}, nil, Paths{Work: t.TempDir()}, Scripts{}, nil)

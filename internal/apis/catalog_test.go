@@ -14,7 +14,7 @@ import (
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/preview"
-	"github.com/samuelncui/yatm/internal/resource"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,8 +24,7 @@ import (
 func TestVersionMetadataSurvivesCorruptPreview(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.PrepareTemporary(root))
 	require.NoError(t, lib.AutoMigrate())
@@ -60,8 +59,7 @@ func TestImportArchiveDirectoryReportsBoundedResults(t *testing.T) {
 	// Shared logical parents serve several signed inventory Files and one unsigned entry.
 	ctx := context.Background()
 	root := t.TempDir()
-	db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-	require.NoError(t, err)
+	db := resourcetest.OpenCatalog(t)
 	lib := library.New(db)
 	require.NoError(t, lib.PrepareTemporary(root))
 	require.NoError(t, lib.AutoMigrate())
@@ -105,8 +103,7 @@ func TestFileResponsesTolerateCatalogReplacement(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			root := t.TempDir()
-			db, err := resource.OpenSQLite(filepath.Join(root, "library.db"))
-			require.NoError(t, err)
+			db := resourcetest.OpenCatalog(t)
 			lib := library.New(db)
 			require.NoError(t, lib.PrepareTemporary(root))
 			require.NoError(t, lib.AutoMigrate())

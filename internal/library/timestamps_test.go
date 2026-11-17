@@ -58,6 +58,12 @@ func timestampSnapshot(t *testing.T, stamp int64) (*Library, []byte) {
 func assertTimestampRows(t *testing.T, lib *Library, stamp int64) {
 	t.Helper()
 	// SQLite must retain integers, not driver-specific datetime text or rounded floating point.
+	kindOf := func(column string) string { return "typeof(" + column + ")" }
+	if lib.db.Dialector.Name() != "sqlite" {
+		kindOf = func(column string) string {
+			return "CASE WHEN " + column + " IS NULL THEN 'null' ELSE 'integer' END"
+		}
+	}
 	for table, columns := range map[string][]string{
 		"files":              {"created_at_ns", "updated_at_ns"},
 		"locations":          {"created_at_ns", "updated_at_ns", "last_sync_at_ns"},
@@ -72,7 +78,7 @@ func assertTimestampRows(t *testing.T, lib *Library, stamp int64) {
 				Stamp *int64
 				Kind  string
 			}
-			require.NoError(t, lib.db.Table(table).Select(column+" AS stamp, typeof("+column+") AS kind").Scan(&value).Error)
+			require.NoError(t, lib.db.Table(table).Select(column+" AS stamp, "+kindOf(column)+" AS kind").Scan(&value).Error)
 			if stamp == 0 && (column == "first_archived_at_ns" || column == "last_archived_at_ns") {
 				require.Nil(t, value.Stamp, table+"."+column)
 				require.Equal(t, "null", value.Kind)
@@ -89,7 +95,7 @@ func assertTimestampRows(t *testing.T, lib *Library, stamp int64) {
 	} else {
 		require.Equal(t, []FileVersionArchive{{VersionID: 13, ArchivedAtNS: stamp}}, archives)
 		var kind string
-		require.NoError(t, lib.db.Table("file_version_archives").Select("typeof(archived_at_ns)").Scan(&kind).Error)
+		require.NoError(t, lib.db.Table("file_version_archives").Select(kindOf("archived_at_ns")).Scan(&kind).Error)
 		require.Equal(t, "integer", kind)
 	}
 

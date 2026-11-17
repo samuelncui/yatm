@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,10 +25,10 @@ func (*preAnnotationFile) TableName() string { return "files" }
 func TestLibraryRuntimeSchemaContainsOnlyDeclaredTables(t *testing.T) {
 	// Read the concrete runtime schema after the additive migrations.
 	db, _ := newTestLibrary(t)
-	var tables []string
-	require.NoError(t, db.Raw(
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-	).Scan(&tables).Error)
+	tables, err := db.Migrator().GetTables()
+	require.NoError(t, err)
+	tables = slices.DeleteFunc(tables, func(table string) bool { return strings.HasPrefix(table, "sqlite_") })
+	slices.Sort(tables)
 
 	// Online catalog tables are Library-owned; execution manifests remain in Job bundles.
 	require.Equal(t, []string{"catalog_metadata", "file_locations", "file_tags", "file_tracking_keys", "file_version_archives", "file_versions", "files", "locations", "media", "positions", "settings"}, tables)
