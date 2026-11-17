@@ -131,7 +131,7 @@ async function fixture(
       join(frontend, "node_modules"),
       join(repo, "frontend/node_modules"),
     );
-    for (const file of ["vite.config.ts", "index.html", "package.json"]) {
+    for (const file of ["vite.config.ts", "lingui.config.ts", "index.html", "package.json"]) {
       await copyFile(join(frontend, file), join(repo, "frontend", file));
     }
   } else {
