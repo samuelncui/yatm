@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/resource"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -248,7 +249,7 @@ func (l *Library) CommitMedia(
 
 	// Publish inventory, selected versions and covered originals as one fact change.
 	var committed *Media
-	if err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		// Resolve the immutable Media identity before inserting any Position.
 		stored, err := resolveCommittedMedia(tx, requested)
 		if err != nil {
@@ -297,8 +298,9 @@ func (l *Library) DeleteMedia(ctx context.Context, dryRun bool, ids ...int64) (*
 	if len(ids) == 0 {
 		return result, nil
 	}
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		// Resolve the retained selection first; an absent Media removes nothing.
+		*result = MediaDeleteResult{}
 		var found []int64
 		if err := tx.Model(ModelMedia).Where("id IN ?", ids).Pluck("id", &found).Error; err != nil {
 			return fmt.Errorf("resolve Media deletion failed, %w", err)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -31,7 +32,7 @@ func (l *Library) publishObservations(ctx context.Context, locationID int64, ana
 		return nil, fmt.Errorf("analysis manifest is missing")
 	}
 	var location Location
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		if err := tx.First(&location, locationID).Error; err != nil {
 			return err
 		}

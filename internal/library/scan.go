@@ -7,6 +7,7 @@ import (
 	"io/fs"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +27,7 @@ func (l *Library) ApplyScan(
 
 	// Keep inventory and saved-content associations atomic without modifying physical files.
 	var applied *Media
-	if err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		// Resolve the one existing Media identity and discard its derived directory index.
 		stored := new(Media)
 		if err := tx.First(stored, mediaID).Error; err != nil {

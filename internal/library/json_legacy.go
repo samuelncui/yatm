@@ -89,7 +89,7 @@ func (l *Library) importLegacyJSON(ctx context.Context, r io.Reader, dryRun bool
 	}
 
 	// Replace the selected catalog groups and validate their references atomically.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		owners, err := retainedImportMedia(tx, included)
 		if err != nil {
 			return err

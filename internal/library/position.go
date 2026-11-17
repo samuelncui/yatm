@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -200,7 +201,7 @@ func rebuildPositionIndex(ctx context.Context, db *gorm.DB) error {
 		return fmt.Errorf("list Position Media failed, %w", err)
 	}
 	for _, mediaID := range mediaIDs {
-		if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := resource.WriteTransaction(db.WithContext(ctx), func(tx *gorm.DB) error {
 			return rebuildMediaPositionIndex(ctx, tx, mediaID)
 		}); err != nil {
 			return err

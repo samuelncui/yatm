@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -87,7 +88,7 @@ func ValidateFileSignature(signature []byte) error {
 func (l *Library) MkdirAll(ctx context.Context, parentID int64, name string, perm fs.FileMode) (*File, error) {
 	// Allocate the complete requested path atomically, including validation of its starting parent.
 	var result *File
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		var err error
 		result, err = l.mkdirAll(ctx, tx, parentID, name, perm)
 		return err
@@ -135,19 +136,8 @@ func (l *Library) mkdirAll(ctx context.Context, tx *gorm.DB, parentID int64, nam
 
 func (l *Library) mkdir(ctx context.Context, tx *gorm.DB, parentID int64, name string, perm fs.FileMode) (*File, error) {
 	// Existing entries are classified by logical identity, not hydrated physical facts.
-	row := new(fileRow)
-	if r := tx.Where("parent_id = ? AND name = ?", parentID, name).Find(row); r.Error != nil {
-		return nil, fmt.Errorf("mkdir: find origin fail, err= %w", r.Error)
-	}
-	origin := row.file()
-	if origin.ID != 0 {
-		if origin.Kind == entity.FileKind_FILE_KIND_DIRECTORY {
-			if err := hydrateFileViews(tx, origin); err != nil {
-				return nil, fmt.Errorf("hydrate existing directory failed, %w", err)
-			}
-			return origin, ErrMkdirDirExists
-		}
-		return nil, ErrMkdirNonDirFileExists
+	if origin, err := existingMkdirEntry(tx, parentID, name); origin != nil || err != nil {
+		return origin, err
 	}
 
 	// New logical directories always persist their kind explicitly.
@@ -158,10 +148,36 @@ func (l *Library) mkdir(ctx context.Context, tx *gorm.DB, parentID int64, name s
 		Mode:     uint32(fs.ModeDir | (fs.ModePerm & perm)),
 		ModTime:  time.Now(),
 	}
-	if err := createFileRow(tx, dir); err != nil {
-		return nil, fmt.Errorf("create fail, err= %w", err)
+	createErr := createFileRow(tx, dir)
+	if createErr == nil {
+		return dir, nil
 	}
-	return dir, nil
+
+	// The unique parent/name index rejects a name a concurrent writer committed after the read
+	// above; that entry is then classified like one that already existed.
+	if origin, err := existingMkdirEntry(tx, parentID, name); origin != nil || err != nil {
+		return origin, err
+	}
+	return nil, fmt.Errorf("create fail, err= %w", createErr)
+}
+
+// existingMkdirEntry returns nil, nil when no entry holds the name.
+func existingMkdirEntry(tx *gorm.DB, parentID int64, name string) (*File, error) {
+	row := new(fileRow)
+	if r := tx.Where("parent_id = ? AND name = ?", parentID, name).Find(row); r.Error != nil {
+		return nil, fmt.Errorf("mkdir: find origin fail, err= %w", r.Error)
+	}
+	origin := row.file()
+	if origin.ID == 0 {
+		return nil, nil
+	}
+	if origin.Kind != entity.FileKind_FILE_KIND_DIRECTORY {
+		return nil, ErrMkdirNonDirFileExists
+	}
+	if err := hydrateFileViews(tx, origin); err != nil {
+		return nil, fmt.Errorf("hydrate existing directory failed, %w", err)
+	}
+	return origin, ErrMkdirDirExists
 }
 
 func (l *Library) GetFile(ctx context.Context, id int64) (*File, error) {

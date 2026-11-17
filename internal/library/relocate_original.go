@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +15,7 @@ func (l *Library) RelocateOriginal(ctx context.Context, fileID int64, locationID
 		return fmt.Errorf("original observation is missing")
 	}
 	// Keep the explicit association change and occupied-path check in one metadata mutation.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		var file fileRow
 		if err := tx.First(&file, fileID).Error; err != nil {
 			return err

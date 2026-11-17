@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/ignore"
+	"github.com/samuelncui/yatm/internal/resource"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -117,7 +118,7 @@ func maxLocationRevision(previous, now int64) int64 {
 // The caller holds the source operation gate.
 func (l *Library) RecordLocationAttempt(ctx context.Context, id, jobID int64) (*Location, error) {
 	var source Location
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		if err := tx.First(&source, id).Error; err != nil {
 			return err
 		}
@@ -245,7 +246,7 @@ func (l *Library) UpdateLocation(ctx context.Context, s *Location) (*Location, e
 	// agree with it, so an entry whose root moved away simply stops confirming instead of being
 	// assumed. Dropping it instead made an Ignore edit silently unconfirm every File of the
 	// Location until an operator scanned the whole tree again.
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		var stored Location
 		if err := tx.First(&stored, s.ID).Error; err != nil {
 			return err
@@ -271,7 +272,8 @@ type LocationDeleteResult struct {
 // A dry run counts the same rows without deleting them.
 func (l *Library) DeleteLocation(ctx context.Context, id int64, dryRun bool) (*LocationDeleteResult, error) {
 	result := new(LocationDeleteResult)
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		*result = LocationDeleteResult{}
 		var stored Location
 		if err := tx.First(&stored, id).Error; err != nil {
 			return err

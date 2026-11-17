@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/plugin/soft_delete"
@@ -198,7 +199,7 @@ func (e *Executor) deleteJob(ctx context.Context, id int64) error {
 
 	// Publish the tombstone and its polling revision in one catalog transaction.
 	if err := e.withNextJobRevision(func(revision int64) (bool, error) {
-		err := e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := resource.WriteTransaction(e.db.WithContext(ctx), func(tx *gorm.DB) error {
 			updated := tx.Model(&jobCatalogRow{}).Where("id = ?", id).Update("revision", revision)
 			if updated.Error != nil {
 				return updated.Error

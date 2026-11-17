@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -144,7 +145,10 @@ func (l *Library) ImportArchivePositionSelection(ctx context.Context, ids []int6
 		planned = stage
 		return result, l.readDB().WithContext(ctx).Transaction(run)
 	}
-	if err := l.db.WithContext(ctx).Transaction(run); err != nil {
+	if err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		*result = ArchiveImportResult{}
+		return run(tx)
+	}); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -318,7 +322,7 @@ func (l *Library) CreateArchiveFile(ctx context.Context, targetPath string) (*Fi
 		return nil, err
 	}
 	var result *File
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		var err error
 		result, err = createImportedFile(tx, path.Join("Unforged", "Archive", targetPath))
 		return err

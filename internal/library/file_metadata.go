@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -104,7 +105,7 @@ func (l *Library) EditFileMetadata(ctx context.Context, ids []int64, edit FileMe
 	}
 
 	// Validate every target before applying the patch atomically.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		if err := validateFileIDs(ctx, tx, ids); err != nil {
 			return err
 		}

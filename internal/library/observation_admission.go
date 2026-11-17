@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -57,7 +58,8 @@ func (l *Library) AdmitObservations(ctx context.Context, locationID int64, obser
 		return nil, fmt.Errorf("admit between 1 and 1000 observations")
 	}
 	results := make([]*FileLocation, 0, len(observations))
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		results = results[:0]
 		var location Location
 		if err := tx.First(&location, locationID).Error; err != nil {
 			return err

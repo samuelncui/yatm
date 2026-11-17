@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -77,7 +78,9 @@ func (l *Library) PublishRestore(ctx context.Context, publication *RestorePublic
 	}
 
 	// Publish the restored original and any new logical File in one metadata commit.
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	initial := result
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		result = initial
 		var location Location
 		if err := tx.First(&location, result.LocationID).Error; err != nil {
 			return err

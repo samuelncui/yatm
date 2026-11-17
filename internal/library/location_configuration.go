@@ -6,12 +6,13 @@ import (
 	"fmt"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
 func (l *Library) ImportLocationPaths(ctx context.Context, executorID, source, target string) error {
 	// Explicit configuration conversion creates missing registrations without overwriting existing preferences.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		// Merge identical canonical roots and retain existing names, rules and organization.
 		for _, item := range []struct {
 			name, root string

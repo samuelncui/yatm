@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -14,7 +15,7 @@ import (
 // A dry run verifies the same record and reports it without deleting anything.
 func (l *Library) RemoveFileVersion(ctx context.Context, fileID, versionID int64, dryRun bool) (int64, error) {
 	var removed int64
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		// Version and save observations must disappear atomically; a failed delete must preserve both.
 		// Verify ownership before deleting either part of the saved history.
 		var version FileVersion
@@ -62,7 +63,8 @@ func (l *Library) MergeFileMembers(ctx context.Context, targetID int64,
 
 	// Version reassignment, source retirement and annotations must commit together on write failure.
 	var merged int64
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		merged = 0
 		var row fileRow
 		if err := tx.First(&row, targetID).Error; err != nil {
 			return err

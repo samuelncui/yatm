@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
 )
 
@@ -55,7 +56,7 @@ func (l *Library) PublishFileOperation(ctx context.Context, result *FileOperatio
 	}
 
 	// Reference edits and the Location revision publish in one metadata-only transaction.
-	return l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
 		var location Location
 		if err := tx.First(&location, result.LocationID).Error; err != nil {
 			return err

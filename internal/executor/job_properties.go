@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samuelncui/yatm/internal/resource"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const maxJobPropertyBatch = 256
@@ -45,18 +45,38 @@ func (e *Executor) AddJobProperties(ctx context.Context, jobID int64, properties
 	// Keep associations and their visible change revision in the same GORM transaction.
 	return e.withNextJobRevision(func(revision int64) (bool, error) {
 		changed := false
-		err := e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := resource.WriteTransaction(e.db.WithContext(ctx), func(tx *gorm.DB) error {
+			changed = false
 			var owner jobCatalogRow
 			if err := tx.Select("id").First(&owner, jobID).Error; err != nil {
 				return fmt.Errorf("resolve Job property owner failed, %w", err)
 			}
-			result := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&properties)
-			if result.Error != nil {
-				return fmt.Errorf("publish Job properties failed, %w", result.Error)
+
+			// Insert only new values; the primary key rejects a duplicate a concurrent writer published.
+			var stored []JobProperty
+			if err := tx.Where(&JobProperty{JobID: jobID}).Find(&stored).Error; err != nil {
+				return fmt.Errorf("read Job properties failed, %w", err)
 			}
-			if result.RowsAffected == 0 {
+			known := make(map[JobProperty]struct{}, len(stored)+len(properties))
+			for _, property := range stored {
+				known[property] = struct{}{}
+			}
+			added := make([]JobProperty, 0, len(properties))
+			for _, property := range properties {
+				if _, ok := known[property]; ok {
+					continue
+				}
+				known[property] = struct{}{}
+				added = append(added, property)
+			}
+			if len(added) == 0 {
 				return nil
 			}
+			if err := tx.Create(&added).Error; err != nil {
+				return fmt.Errorf("publish Job properties failed, %w", err)
+			}
+
+			// The new values and their visible revision commit together.
 			publication := tx.Model(&jobCatalogRow{}).Where("id = ?", jobID).Update("revision", revision)
 			changed = publication.RowsAffected > 0
 			return publication.Error

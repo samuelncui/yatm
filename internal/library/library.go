@@ -5,6 +5,7 @@ import (
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/dataformat"
+	"github.com/samuelncui/yatm/internal/resource"
 	settingspkg "github.com/samuelncui/yatm/internal/settings"
 	"gorm.io/gorm"
 )
@@ -74,7 +75,8 @@ type TrimResult struct {
 // A dry run counts the same rows without deleting any of them.
 func (l *Library) Trim(ctx context.Context, position, file, dryRun bool) (*TrimResult, error) {
 	result := new(TrimResult)
-	err := l.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := resource.WriteTransaction(l.db.WithContext(ctx), func(tx *gorm.DB) error {
+		*result = TrimResult{}
 		if position {
 			orphans := func() *gorm.DB {
 				media := tx.Model(ModelMedia).Select("1").Where("media.id = positions.media_id")
