@@ -16,6 +16,7 @@ import (
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/config"
 	"github.com/samuelncui/yatm/internal/executor"
+	"github.com/samuelncui/yatm/internal/resource/resourcetest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -38,7 +39,7 @@ func startBinaryInstallation(t *testing.T) (*cliConnection, string) {
 		Work: filepath.Join(root, "work"), Volumes: []string{filepath.Join(root, "volumes")},
 		Access: []executor.AccessRange{{Root: filepath.Join(root, "originals")}, {Root: filepath.Join(root, "restore")}},
 	}}
-	conf.Database.Dialect, conf.Database.DSN = "sqlite", filepath.Join(root, "catalog.db")
+	conf.Database.Dialect, conf.Database.DSN = resourcetest.Dialect(), resourcetest.NewCatalogDSN(t)
 	data, err := yaml.Marshal(conf)
 	require.NoError(t, err)
 	filename := filepath.Join(root, "config.yaml")
@@ -72,7 +73,7 @@ func startBinaryInstallation(t *testing.T) (*cliConnection, string) {
 		defer cancel()
 		_, err := connection.run(ctx, "status")
 		return err == nil
-	}, 15*time.Second, 100*time.Millisecond)
+	}, 2*time.Minute, 100*time.Millisecond) // A first start creates the Catalog schema; a remote MySQL takes longest.
 	return connection, root
 }
 

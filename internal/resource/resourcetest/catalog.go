@@ -47,13 +47,25 @@ func Reopen(t testing.TB, dsn string) *gorm.DB {
 // OpenCatalogDSN also returns the DSN, so a test can open more connections to the same database.
 func OpenCatalogDSN(t testing.TB) (*gorm.DB, string) {
 	t.Helper()
+	dsn := NewCatalogDSN(t)
+	open := resource.OpenSQLite
+	if Dialect() == "mysql" {
+		open = func(dsn string) (*gorm.DB, error) { return resource.NewDBConn("mysql", dsn) }
+	}
+	db, err := open(dsn)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resource.CloseDB(db) })
+	return db, dsn
+}
+
+// NewCatalogDSN prepares an empty Catalog database owned by t without opening it, for a test that
+// hands the DSN to a separate process. A MySQL database is dropped when t ends; its cleanup is
+// registered first, so connections the test closes in later cleanups end before the drop.
+func NewCatalogDSN(t testing.TB) string {
+	t.Helper()
 	server := os.Getenv(MySQLEnv)
 	if server == "" {
-		dsn := filepath.Join(t.TempDir(), "catalog.db")
-		db, err := resource.OpenSQLite(dsn)
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = resource.CloseDB(db) })
-		return db, dsn
+		return filepath.Join(t.TempDir(), "catalog.db")
 	}
 
 	// Create a uniquely named database with the required collation on the shared server.
@@ -71,11 +83,5 @@ func OpenCatalogDSN(t testing.TB) (*gorm.DB, string) {
 		_ = admin.Exec("DROP DATABASE IF EXISTS `" + cfg.DBName + "`").Error
 		_ = resource.CloseDB(admin)
 	})
-
-	// Open the database as the service does; cleanups run in reverse, so it closes before the drop.
-	dsn := cfg.FormatDSN()
-	db, err := resource.NewDBConn("mysql", dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resource.CloseDB(db) })
-	return db, dsn
+	return cfg.FormatDSN()
 }
