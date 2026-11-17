@@ -19,6 +19,11 @@ export const CreateFolder = defineFileAction({
 export const RenameFileAction = defineFileAction({
   id: "rename_file",
   requiresSelection: true,
+  // Rename applies to one item; hide it for a multi-item selection (Hidden = 0, Disabled = 1, Default = 2).
+  customVisibility: (state) => {
+    const count = state.selectedFilesForAction.length;
+    return count > 1 ? 0 : count === 1 ? 2 : 1;
+  },
   button: {
     name: "Rename File",
     toolbar: true,
