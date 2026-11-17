@@ -362,10 +362,11 @@ func (e *Executor) startIndex(jobID int64, runner Runner) error {
 		defer e.finishAttemptTiming(jobID, runner)
 		defer cancel(context.Canceled)
 		err := runner.Index(indexCtx)
-		e.recordAttemptResult(indexCtx, jobID, runner, err, entity.JobStatus_JOB_STATUS_FAILED)
+		// Log the failure before publishing FAILED, so a reader that sees the state also finds its cause.
 		if err != nil {
 			runner.Logger().WithContext(indexCtx).WithError(err).Errorf("job indexing failed, id=%d", jobID)
 		}
+		e.recordAttemptResult(indexCtx, jobID, runner, err, entity.JobStatus_JOB_STATUS_FAILED)
 	}()
 	return nil
 }
@@ -496,10 +497,11 @@ func (e *Executor) StartJob(
 		defer e.finishAttemptTiming(jobID, runner)
 		defer cancel(context.Canceled)
 		err := run(runCtx, runner)
-		e.recordAttemptResult(runCtx, jobID, runner, err, failureState)
+		// Log the failure before publishing the failure state, as indexing does.
 		if err != nil {
 			runner.Logger().WithContext(runCtx).WithError(err).Errorf("job attempt failed, id=%d", jobID)
 		}
+		e.recordAttemptResult(runCtx, jobID, runner, err, failureState)
 	}()
 	return nil
 }
