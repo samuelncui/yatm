@@ -4,6 +4,7 @@ import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { FileBrowser, FileContextMenu, FileList, FileToolbar, type FileBrowserHandle } from "@samuelncui/chonky";
+import { FileBrowser as AppFileBrowser } from "@/components/file-browser";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { streamListing } from "@/test/files-fixture";
@@ -83,11 +84,11 @@ it("labels file removal as Delete and disables Paste until an eligible same-sour
       confirmRemove: true,
     });
     return (
-      <FileBrowser ref={handle} {...browser.browserProps} disableDragAndDrop>
+      <AppFileBrowser ref={handle} {...browser.browserProps} disableDragAndDrop>
         <FileToolbar />
         <FileList {...browser.listProps} />
         <FileContextMenu />
-      </FileBrowser>
+      </AppFileBrowser>
     );
   }
   const page = (clipboard?: FileOperations["clipboard"]) => (
@@ -100,6 +101,9 @@ it("labels file removal as Delete and disables Paste until an eligible same-sour
   fireEvent.contextMenu(row, { clientX: 10, clientY: 10 });
   expect(await screen.findByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "Delete files" })).not.toBeInTheDocument();
+  // Double-click, Ctrl+A, Escape and the toolbar Refresh cover these; single-file metadata lives in details.
+  for (const name of ["Open selection", "Select all files", "Clear selection", "Refresh", "Edit tags & note"])
+    expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
   expect(screen.getByRole("menuitem", { name: "Paste" })).toHaveAttribute("aria-disabled", "true");
   const file = filesEntryData(
     FilesEntry.create({ reference: { target: { oneofKind: "location", location: initialRef } }, name: "photo.jpg", operations: [FileOperationKind.MOVE] }),

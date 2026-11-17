@@ -21,6 +21,7 @@ import { LibraryFilters } from "@/components/library-filters";
 import { ToobarInfo } from "@/components/toolbarInfo";
 import { DetailModal, FileInspector } from "@/components/file-detail";
 import { libraryLayouts, type LibraryLayout } from "@/pages/routes";
+import { ViewFileDetailsAction } from "@/actions";
 import { runUIAction } from "@/tools";
 
 import { useFileBrowser } from "@/components/use-file-browser";
@@ -144,6 +145,12 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
   const activeBrowserPane = activePane === "left" || layout !== libraryLayouts.dual ? "left" : "right";
   const activeBrowser = activeBrowserPane === "left" ? leftBrowser : rightBrowser;
   const clearSelectionOnOutsideClick = layout === libraryLayouts.dual;
+  // The Inspector already details the selected file, so only Dual pane offers View Details.
+  const leftActions = leftBrowser.browserProps.fileActions;
+  const leftFileActions = useMemo(
+    () => (layout === libraryLayouts.dual ? leftActions : leftActions.filter((action) => action.id !== ViewFileDetailsAction.id)),
+    [layout, leftActions],
+  );
 
   return (
     <Box className="browser-box library-file-browser">
@@ -175,6 +182,7 @@ export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
             instanceId="left"
             ref={left}
             {...leftBrowser.browserProps}
+            fileActions={leftFileActions}
             clearSelectionOnOutsideClick={clearSelectionOnOutsideClick}
           >
             {leftBrowser.searchState && (

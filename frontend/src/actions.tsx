@@ -65,12 +65,15 @@ export const GetDataUsageAction = defineFileAction({
 
 export const RefreshListAction = defineFileAction({
   id: "refresh_list",
-  button: { name: "Refresh", tooltip: "Refresh", toolbar: true, contextMenu: true, icon: "mui-refresh", iconOnly: true },
+  button: { name: "Refresh", tooltip: "Refresh", toolbar: true, icon: "mui-refresh", iconOnly: true },
 });
 
+// One file is edited in its details; the menu offers batch editing for a multi-file selection.
 export const EditFileMetadataAction = defineFileAction({
   id: "edit_file_metadata",
   requiresSelection: true,
+  // Chonky exports this enum as a type only: Hidden = 0, Default = 2.
+  customVisibility: (state) => (state.selectedFilesForAction.length > 1 ? 2 : 0),
   button: {
     name: "Edit tags & note",
     toolbar: true,

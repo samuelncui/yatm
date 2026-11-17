@@ -24,6 +24,12 @@ const dateSortAction = {
   sortKeySelector: (file: FileData | null) => (typeof file?.modDateNs === "bigint" ? file.modDateNs : undefined),
 };
 const sortActions = { name: ChonkyActions.SortFilesByName, size: ChonkyActions.SortFilesBySize, date: dateSortAction };
+// Double-click, Ctrl/Cmd+A and Escape already cover these; keep them out of the context menu only.
+const selectionActions: FileAction[] = [
+  ChonkyActions.OpenSelection,
+  { ...ChonkyActions.SelectAllFiles, hotkeys: ["ctrl+a", "command+a"] },
+  ChonkyActions.ClearSelection,
+].map((action) => ({ ...action, button: { ...action.button!, contextMenu: false } }));
 
 export function useFileListPreferences(id: string, defaults = defaultFileListPreferences) {
   const preferences = useAppSelector((state) => state.fileLists[id] ?? defaults);
@@ -44,6 +50,7 @@ export const FileBrowser = forwardRef<FileBrowserHandle, Props>(
       const defaults: FileAction[] = Object.values(sortActions).filter((action) => enabled(action.id) && !custom.some((item) => item.id === action.id));
       const folders = ChonkyActions.ToggleShowFoldersFirst;
       if (enabled(folders.id) && !custom.some((item) => item.id === folders.id)) defaults.push(folders);
+      defaults.push(...selectionActions.filter((action) => enabled(action.id) && !custom.some((item) => item.id === action.id)));
       return [listViewAction, ...custom, ...defaults].map((action) => {
         if (action.sortKeySelector && action.id === sortActions[preferences.sort].id)
           return { ...action, initialSortOrder: preferences.descending ? SortOrder.DESC : SortOrder.ASC };

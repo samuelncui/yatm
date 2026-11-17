@@ -49,7 +49,7 @@ import { scanSelectionEntry } from "@/components/scan-selection";
 import { FileMetadataDialog } from "@/components/file-metadata-dialog";
 import { useActionDialog } from "@/components/action-dialog";
 import { FileInspector } from "@/components/file-detail";
-import { ArchiveLibraryAction, EditFileMetadataAction, ScanFilesAction, ViewFileDetailsAction, LocateInOtherPaneAction } from "@/actions";
+import { ArchiveLibraryAction, EditFileMetadataAction, ScanFilesAction, LocateInOtherPaneAction } from "@/actions";
 import { associatedLibraryFileID, selectionForFile } from "@/components/location-files";
 import { contentHex } from "@/components/content-status";
 import { chonkyI18n, errorMessage, formatFilesize, runUIAction } from "@/tools";
@@ -607,7 +607,6 @@ export const IdenticalFiles = () => {
         fileFilter: (file) => !!file && allowsFileOperation(file, FileOperationKind.REMOVE) && itemStatus.get(file.id)?.message !== "Deleting…",
         customVisibility: (state) => (source !== IdenticalSource.LOCATIONS ? 0 : sparse.unavailable || switchingSort ? 1 : state.group ? 2 : 1),
       }),
-      ViewFileDetailsAction,
       LocateInOtherPaneAction,
       { ...EditFileMetadataAction, fileFilter: (file: FileData | null) => allowsFileOperation(file, FileOperationKind.UPDATE_METADATA) },
       { ...ArchiveLibraryAction, fileFilter: (file: FileData | null) => allowsFileOperation(file, FileOperationKind.ARCHIVE) },
@@ -629,10 +628,6 @@ export const IdenticalFiles = () => {
     }
     if (data.id === ChonkyActions.MouseClickFile.id || data.id === ChonkyActions.OpenFiles.id) {
       setSelected(data.id === ChonkyActions.MouseClickFile.id ? data.payload.file : (data.payload.targetFile ?? data.payload.files[0]));
-      return;
-    }
-    if (data.id === ViewFileDetailsAction.id) {
-      setSelected(selectedFiles.at(-1));
       return;
     }
     if (data.id === EditFileMetadataAction.id) {
