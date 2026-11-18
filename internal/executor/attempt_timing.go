@@ -63,8 +63,11 @@ func (e *Executor) ApplyAttemptProgress(ctx context.Context, jobID int64, progre
 	e.attemptsLock.Lock()
 	current := e.attempts[jobID]
 	if current != nil {
-		if progress.Stage != nil {
-			progress.Stage.Phase = current.phase
+		// A live runner phase is newer than the attempt's copy, which TouchJob updates only after
+		// the transition, and the stage was computed for it. The attempt owns the phase only while
+		// the runner reports none: admission before its first transition, and settlement after it.
+		if stage := progress.Stage; stage != nil && (stage.Phase == entity.JobPhase_JOB_PHASE_UNSPECIFIED || stage.Phase == entity.JobPhase_JOB_PHASE_COMPLETED) {
+			stage.Phase = current.phase
 		}
 		if !current.startedAt.IsZero() {
 			progress.ElapsedMs = proto.Int64(time.Since(current.startedAt).Milliseconds())
