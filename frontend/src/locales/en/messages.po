@@ -122,6 +122,10 @@ msgstr "{kindName} details"
 msgid "{label} (<0>{field}</0>): {value}"
 msgstr "{label} (<0>{field}</0>): {value}"
 
+msgctxt "file browser"
+msgid "{label} files"
+msgstr "{label} files"
+
 msgid "{label} waitlist"
 msgstr "{label} waitlist"
 
@@ -160,6 +164,10 @@ msgstr "{missingOriginalCount} files have no linked original and will be skipped
 
 msgid "{name} · index {index} · key {keyBytes} bytes"
 msgstr "{name} · index {index} · key {keyBytes} bytes"
+
+msgctxt "file browser"
+msgid "{name} actions"
+msgstr "{name} actions"
 
 msgid "{name} has no eligible current original to add to the Archive list."
 msgstr "{name} has no eligible current original to add to the Archive list."
@@ -935,6 +943,10 @@ msgstr "Continued line"
 msgid "Copied"
 msgstr "Copied"
 
+msgctxt "file browser"
+msgid "Copy path"
+msgstr "Copy path"
+
 msgctxt "Job phase"
 msgid "copying from media"
 msgstr "copying from media"
@@ -978,6 +990,10 @@ msgstr "Could not check Preview generation"
 
 msgid "Could not check this version"
 msgstr "Could not check this version"
+
+msgctxt "file browser"
+msgid "Could not copy path"
+msgstr "Could not copy path"
 
 msgid "Could not create calibration"
 msgstr "Could not create calibration"
@@ -2152,6 +2168,10 @@ msgstr "Loading file details"
 msgid "Loading files"
 msgstr "Loading files"
 
+msgctxt "file browser"
+msgid "Loading files"
+msgstr "Loading files"
+
 msgid "Loading folder…"
 msgstr "Loading folder…"
 
@@ -2188,6 +2208,10 @@ msgstr "Loading source…"
 msgid "Loading your job…"
 msgstr "Loading your job…"
 
+msgid "Loading…"
+msgstr "Loading…"
+
+msgctxt "file browser"
 msgid "Loading…"
 msgstr "Loading…"
 
@@ -2796,6 +2820,10 @@ msgstr "Paste failed"
 
 msgid "Path"
 msgstr "Path"
+
+msgctxt "file browser"
+msgid "Path copied"
+msgstr "Path copied"
 
 msgctxt "Copy status"
 msgid "pending"
@@ -3588,6 +3616,10 @@ msgstr "Show hidden files"
 
 msgid "Show more selected roots"
 msgstr "Show more selected roots"
+
+msgctxt "file browser"
+msgid "Show parent folders"
+msgstr "Show parent folders"
 
 msgid "Signature"
 msgstr "Signature"

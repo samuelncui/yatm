@@ -101,6 +101,16 @@ const chonkyOwn = () => {
     ),
     "chonky.toolbar.searchPlaceholder": i18n._(msg({ message: "Filter", context: "file browser" })),
     "chonky.fileList.nothingToShow": i18n._(msg({ message: "Nothing to show", context: "file browser" })),
+    "chonky.fileList.loadingFiles": i18n._(msg({ message: "Loading files", context: "file browser" })),
+    // Chonky formats {name}, {label} and {count}; the translation keeps them as placeholders.
+    "chonky.fileList.groupActions": i18n._({ ...msg({ message: "{name} actions", context: "file browser" }), values: { name: "{name}" } }),
+    "chonky.fileList.groupFileCount": i18n._({ ...msg({ message: "{label} files", context: "file browser" }), values: { label: "{label}" } }),
+    "chonky.navbar.copyPath": i18n._(msg({ message: "Copy path", context: "file browser" })),
+    "chonky.navbar.pathCopied": i18n._(msg({ message: "Path copied", context: "file browser" })),
+    "chonky.navbar.copyPathFailed": i18n._(msg({ message: "Could not copy path", context: "file browser" })),
+    "chonky.navbar.showParentFolders": i18n._(msg({ message: "Show parent folders", context: "file browser" })),
+    "chonky.navbar.loadingAncestor": i18n._(msg({ message: "Loading…", context: "file browser" })),
+    "chonky.navbar.loadingFolder": i18n._(msg({ message: "Loading…", context: "file browser" })),
     // Chonky inserts its bold "Alt + Right Click" shortcut at {shortcut}.
     "chonky.contextMenu.browserMenuShortcut": i18n._({
       ...msg({ message: "Browser menu: {shortcut}", context: "file browser" }),

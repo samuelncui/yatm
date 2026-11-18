@@ -122,6 +122,10 @@ msgstr "{kindName}详情"
 msgid "{label} (<0>{field}</0>): {value}"
 msgstr "{label}（<0>{field}</0>）：{value}"
 
+msgctxt "file browser"
+msgid "{label} files"
+msgstr "{label} 个文件"
+
 msgid "{label} waitlist"
 msgstr "{label}列表"
 
@@ -160,6 +164,10 @@ msgstr "{missingOriginalCount} 个文件没有关联的原件，将被跳过。"
 
 msgid "{name} · index {index} · key {keyBytes} bytes"
 msgstr "{name} · 索引 {index} · 密钥 {keyBytes} 字节"
+
+msgctxt "file browser"
+msgid "{name} actions"
+msgstr "{name}操作"
 
 msgid "{name} has no eligible current original to add to the Archive list."
 msgstr "{name} 没有可添加到归档列表的合格当前原件。"
@@ -935,6 +943,10 @@ msgstr "续行"
 msgid "Copied"
 msgstr "已复制"
 
+msgctxt "file browser"
+msgid "Copy path"
+msgstr "复制路径"
+
 msgctxt "Job phase"
 msgid "copying from media"
 msgstr "正在从介质复制"
@@ -978,6 +990,10 @@ msgstr "无法检查预览生成"
 
 msgid "Could not check this version"
 msgstr "无法检查此版本"
+
+msgctxt "file browser"
+msgid "Could not copy path"
+msgstr "无法复制路径"
 
 msgid "Could not create calibration"
 msgstr "无法创建校准"
@@ -2152,6 +2168,10 @@ msgstr "正在加载文件详情"
 msgid "Loading files"
 msgstr "正在加载文件"
 
+msgctxt "file browser"
+msgid "Loading files"
+msgstr "正在加载文件"
+
 msgid "Loading folder…"
 msgstr "正在加载文件夹…"
 
@@ -2188,6 +2208,10 @@ msgstr "正在加载来源…"
 msgid "Loading your job…"
 msgstr "正在加载任务…"
 
+msgid "Loading…"
+msgstr "正在加载…"
+
+msgctxt "file browser"
 msgid "Loading…"
 msgstr "正在加载…"
 
@@ -2796,6 +2820,10 @@ msgstr "粘贴失败"
 
 msgid "Path"
 msgstr "路径"
+
+msgctxt "file browser"
+msgid "Path copied"
+msgstr "已复制路径"
 
 msgctxt "Copy status"
 msgid "pending"
@@ -3588,6 +3616,10 @@ msgstr "显示隐藏文件"
 
 msgid "Show more selected roots"
 msgstr "显示更多已选根项"
+
+msgctxt "file browser"
+msgid "Show parent folders"
+msgstr "显示上级文件夹"
 
 msgid "Signature"
 msgstr "签名"
