@@ -45,7 +45,7 @@ it("saves a planning budget above 600 seconds without hardware access", async ()
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   fireEvent.change(screen.getByRole("spinbutton", { name: "Read planning budget (seconds)" }), { target: { value: "1800" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const tape = update.mock.calls[0][0].value.value.device.devices[0].options.tape;
   expect(tape.readPlanningSeconds).toBe(1800);
   expect(inspectDevice).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ it("rejects a zero planning budget and preserves unspecified defaults when clear
   expect(await screen.findByText(/Read planning budget must be a whole number/)).toBeVisible();
   fireEvent.change(budget, { target: { value: "" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const tape = update.mock.calls[0][0].value.value.device.devices[0].options.tape;
   expect(tape.readPlanningSeconds).toBeUndefined();
 });
@@ -80,7 +80,7 @@ it("retains inactive tar settings and explicit false without hardware access on 
   fireEvent.change(screen.getByRole("spinbutton", { name: "Record size (bytes)" }), { target: { value: "524288" } });
   await userEvent.click(advanced);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const saved = update.mock.calls[0][0].value.value.device;
   expect(saved.devices[0].options.tape.tarWriteOptions).toEqual({ recordBytes: 524288 });
   expect(saved.devices[1].device).toBe("removed");
@@ -120,7 +120,7 @@ it("keeps read order visible and page actions together while encryption belongs 
   listDevices.mockReturnValueOnce({ response: new Promise((resolve) => (listed = resolve)) });
   await userEvent.click(refresh);
   expect(await screen.findByRole("progressbar", { name: "Loading devices" })).toBeInTheDocument();
-  expect(screen.queryByRole("progressbar", { name: "Loading Device settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   await act(async () => listed({ devices: [{ device: "drive", kind: 1, busy: false, detail: "" }] }));
   expect(screen.queryByRole("progressbar", { name: "Loading devices" })).not.toBeInTheDocument();
   expect(listDevices).toHaveBeenCalledTimes(2);
@@ -135,13 +135,13 @@ it("edits Auto offline, preserves unspecified and inactive read-order settings",
   expect(screen.getByRole("combobox", { name: "Read order" })).toHaveTextContent("Logical");
   fireEvent.change(screen.getByRole("spinbutton", { name: "Record size (bytes)" }), { target: { value: "524288" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.readOrder).toBe(TapeReadOrder.UNSPECIFIED);
   await userEvent.click(screen.getByRole("combobox", { name: "Read order" }));
   await userEvent.click(screen.getByRole("option", { name: "Auto" }));
   await userEvent.click(advanced);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const settings = update.mock.calls[1][0].value.value.device;
   expect(settings.devices[0].options.tape.readOrder).toBe(TapeReadOrder.AUTO);
   expect(settings.devices[1].options.tape.readOrder).toBe(TapeReadOrder.UNSPECIFIED);
@@ -167,7 +167,7 @@ it("keeps unsupported read order visible outside Advanced", async () => {
   await userEvent.click(screen.getByRole("combobox", { name: "Read order" }));
   await userEvent.click(screen.getByRole("option", { name: "Logical" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.readOrder).toBe(TapeReadOrder.LOGICAL);
   expect(inspectDevice).not.toHaveBeenCalled();
 });
@@ -187,7 +187,7 @@ it.each([undefined, 0, 5, 30, 4294967295])("saves capacity polling %s with optio
   fireEvent.change(screen.getByRole("spinbutton", { name: "Record size (bytes)" }), { target: { value: "524288" } });
   await userEvent.click(advanced);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const settings = update.mock.calls[0][0].value.value.device;
   expect(settings.devices[0].options.tape.capacityPollIntervalSeconds).toBe(seconds);
   expect(settings.devices[0].options.tape).toMatchObject({
@@ -218,7 +218,7 @@ it("loads an explicit Off setting, restores it on Cancel and clears it back to A
   expect(interval).toHaveValue(0);
   fireEvent.change(interval, { target: { value: "" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.capacityPollIntervalSeconds).toBeUndefined();
   expect(advanced).toHaveTextContent("capacity polling Auto (5 seconds)");
   expect(inspectDevice).not.toHaveBeenCalled();
@@ -251,7 +251,7 @@ it("keeps the custom polling interval and save error for a retry without hardwar
   expect(await screen.findByText("Device settings could not be saved")).toBeVisible();
   expect(interval).toHaveValue(30);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update).toHaveBeenCalledTimes(2);
   expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.capacityPollIntervalSeconds).toBe(30);
   expect(inspectDevice).not.toHaveBeenCalled();
@@ -297,7 +297,7 @@ it("edits a set inline in the page draft, and Save persists bytes without hardwa
   fireEvent.change(set.getByRole("textbox", { name: "Source reference" }), { target: { value: "Measured stream only" } });
   expect(update).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters] = savedParameters();
   expect(parameters.appliesTo).toEqual({ densityCode: 88 });
   expect(parameters.geometry).toEqual({ nominalWraps: 80 });
@@ -328,7 +328,7 @@ it("edits a set inline in the page draft, and Save persists bytes without hardwa
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
   expect(update).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(savedParameters(1)).toEqual([]);
 });
 
@@ -357,7 +357,7 @@ it("edits only the changed values of a stored set and keeps the others exactly",
   fireEvent.change(set.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "4.5" } });
   fireEvent.change(set.getByRole("textbox", { name: "LTFS unmount time (s)" }), { target: { value: "" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters, other] = savedParameters();
   expect(parameters).toEqual({
     ...stored,
@@ -389,7 +389,7 @@ it("shows inline errors at once, refuses to save invalid text and applies every 
   fireEvent.change(field, { target: { value: "0.5" } });
   fireEvent.change(set.getByRole("textbox", { name: "Full-span time (s)" }), { target: { value: "100" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters] = savedParameters();
   expect(parameters.reading).toEqual({ bytesPerSecond: 93e6, filemarkOverheadSeconds: 0.5 });
   expect(parameters.completion).toEqual({ fullSpanSeconds: 100 });
@@ -473,7 +473,7 @@ it("fills the set from the existing report without activating it or retargeting 
   expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("Previous drive measurement");
   await userEvent.click(set.getByRole("button", { name: "From device details" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters] = savedParameters();
   expect(parameters.appliesTo).toEqual({ driveSerial: "actual-drive", densityCode: 88 });
   expect(parameters.reading).toBeUndefined();
@@ -572,12 +572,12 @@ it("offers exactly LTFS and Tar, shows an unset format as Tar and stores the cho
   expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["LTFS", "Tar"]);
   await userEvent.click(screen.getByRole("option", { name: "LTFS" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("ltfs_v1");
   await userEvent.click(format);
   await userEvent.click(screen.getByRole("option", { name: "Tar" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[1][0].value.value.device.devices[0].options.tape.defaultFormat).toBe("tar_pax_v1");
   expect(inspectDevice).not.toHaveBeenCalled();
 });
@@ -633,7 +633,7 @@ it("offers exactly Fixed and Variable record modes, shows unset as Variable and 
   expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Fixed", "Variable"]);
   await userEvent.click(screen.getByRole("option", { name: "Fixed" }));
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(update.mock.calls[0][0].value.value.device.devices[0].options.tape.tarWriteOptions).toEqual({
     recordMode: TapeRecordMode.FIXED,
     recordBytes: 262144,
@@ -716,7 +716,7 @@ it("starts a new set from the built-in values of the chosen density without clai
 
   fireEvent.change(parameterSet("0x58 LTO-5").getByRole("textbox", { name: "Read rate (MB/s)" }), { target: { value: "93" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters, empty] = savedParameters();
   expect(parameters).toEqual({ ...builtinLTO5, reading: { bytesPerSecond: 93e6 }, sourceReference: "" });
   expect(empty.appliesTo).toEqual({ densityCode: 0x46 });
@@ -735,7 +735,7 @@ it("edits a built-in line into a configured set and Reset returns the built-in l
   expect(set.getByRole("textbox", { name: "Source reference" })).toHaveValue("");
   fireEvent.change(set.getByRole("textbox", { name: "Fixed positioning time (s)" }), { target: { value: "5.2" } });
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   const [parameters] = savedParameters();
   expect(parameters).toEqual({ ...builtinLTO5, positioning: { ...builtinLTO5.positioning, baseSeconds: 5.2 }, sourceReference: "" });
 
@@ -743,6 +743,6 @@ it("edits a built-in line into a configured set and Reset returns the built-in l
   await userEvent.click(screen.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in" }));
   expect(builtinTexts()).toEqual(["0x58 LTO-5Built-inFixed positioning time 6.15 sSeek time for one span 93.30 sRead rate 140.0 MB/sEdit"]);
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Device settings saved.");
+  await screen.findByText("Settings saved.");
   expect(savedParameters(1)).toEqual([]);
 });

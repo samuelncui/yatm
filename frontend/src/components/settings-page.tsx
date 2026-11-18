@@ -1,5 +1,4 @@
-import { i18n, type MessageDescriptor } from "@lingui/core";
-import { msg, t } from "@lingui/core/macro";
+import { t } from "@lingui/core/macro";
 import { Feedback } from "@/components/feedback";
 import { type ReactNode, Suspense, useCallback, useId, useRef, useState } from "react";
 import Card from "@mui/material/Card";
@@ -15,16 +14,6 @@ import { ActionRow } from "@/components/action-row";
 import { PageHeading } from "@/components/page-heading";
 import { ActionDialog } from "@/components/action-dialog";
 import { useBeforeUnload, useBlocker } from "react-router";
-
-// Callers name a Settings group in English; the group is shown in the active language.
-const groupLabels: Record<string, MessageDescriptor> = {
-  Library: msg`Library`,
-  Preview: msg`Preview`,
-  Job: msg`Job`,
-  Device: msg`Device`,
-  Location: msg`Location`,
-};
-export const settingsGroupLabel = (label: string) => (groupLabels[label] ? i18n._(groupLabels[label]) : label);
 
 /**
  * A whole Settings surface: its heading and the settings it holds across the available width.
@@ -113,31 +102,17 @@ export const SettingsActions = ({
 );
 
 /** One loading indicator for Settings editors and the configured Location list. */
-export const SettingsLoading = ({ label, loading }: { label: string; loading: boolean }) => {
-  const groupLabel = settingsGroupLabel(label);
-  return loading ? <LinearProgress aria-label={t`Loading ${groupLabel} settings`} /> : null;
-};
+export const SettingsLoading = ({ loading }: { loading: boolean }) => (loading ? <LinearProgress aria-label={t`Loading settings`} /> : null);
 
 /** Keep the page frame in place while its editor code and then its values load. */
-export const SettingsEditorPage = ({
-  title,
-  description,
-  label = title,
-  children,
-}: {
-  title: string;
-  description: string;
-  label?: string;
-  children: ReactNode;
-}) => (
+export const SettingsEditorPage = ({ title, description, children }: { title: string; description: string; children: ReactNode }) => (
   <SettingsPage title={title} description={description}>
-    <Suspense fallback={<SettingsLoading label={label} loading />}>{children}</Suspense>
+    <Suspense fallback={<SettingsLoading loading />}>{children}</Suspense>
   </SettingsPage>
 );
 
 /** Shared feedback for loading and saving one Settings group. */
 export const SettingsEditorFeedback = ({
-  label,
   loading,
   saving,
   error,
@@ -147,7 +122,6 @@ export const SettingsEditorFeedback = ({
   hasDraft,
   onReload,
 }: {
-  label: string;
   loading: boolean;
   saving: boolean;
   error: string;
@@ -156,29 +130,26 @@ export const SettingsEditorFeedback = ({
   dirty: boolean;
   hasDraft: boolean;
   onReload: () => void;
-}) => {
-  const groupLabel = settingsGroupLabel(label);
-  return (
-    <>
-      <UnsavedChangesPrompt when={() => dirty}>{t`Your ${groupLabel} settings have not been saved.`}</UnsavedChangesPrompt>
-      <SettingsLoading label={label} loading={loading} />
-      {error && (
-        <Feedback
-          severity="error"
-          action={
-            <Button color="inherit" disabled={loading || saving} onClick={onReload}>
-              {hasDraft ? t`Reload saved settings` : t`Retry`}
-            </Button>
-          }
-        >
-          {error}
-        </Feedback>
-      )}
-      {invalid && <Feedback severity="error">{invalid}</Feedback>}
-      {saved && !dirty && <Alert severity="success">{t`${groupLabel} settings saved.`}</Alert>}
-    </>
-  );
-};
+}) => (
+  <>
+    <UnsavedChangesPrompt when={() => dirty}>{t`Your settings have not been saved.`}</UnsavedChangesPrompt>
+    <SettingsLoading loading={loading} />
+    {error && (
+      <Feedback
+        severity="error"
+        action={
+          <Button color="inherit" disabled={loading || saving} onClick={onReload}>
+            {hasDraft ? t`Reload saved settings` : t`Retry`}
+          </Button>
+        }
+      >
+        {error}
+      </Feedback>
+    )}
+    {invalid && <Feedback severity="error">{invalid}</Feedback>}
+    {saved && !dirty && <Alert severity="success">{t`Settings saved.`}</Alert>}
+  </>
+);
 
 /** Confirms leaving a page with unsaved edits; `when` is read at the moment of navigation or unload. */
 export const UnsavedChangesPrompt = ({ when, children }: { when: () => boolean; children: ReactNode }) => {

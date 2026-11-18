@@ -249,25 +249,25 @@ it("uses shared Settings loading feedback, retains rows on refresh and immediate
     }),
   });
   const { router } = show("/settings/locations");
-  expect(screen.getByRole("progressbar", { name: "Loading Location settings" })).toBeVisible();
+  expect(screen.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
   expect(screen.queryByText("Add an original directory or a restore destination.")).not.toBeInTheDocument();
   await act(async () => resolve({ locations: [source], hasMore: false }));
   expect(screen.getByRole("link", { name: "Photos" })).toBeVisible();
-  expect(screen.queryByRole("progressbar", { name: "Loading Location settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   list.mockReturnValueOnce({
     response: new Promise((complete) => {
       resolve = complete;
     }),
   });
   await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  expect(screen.getByRole("progressbar", { name: "Loading Location settings" })).toBeVisible();
+  expect(screen.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Photos" })).toBeVisible();
   await act(async () => resolve({ locations: [source], hasMore: false }));
   await userEvent.click(screen.getByRole("link", { name: "Photos" }));
   await screen.findByRole("textbox", { name: "Name" });
   await act(async () => router.navigate("/settings/locations"));
   expect(screen.getByRole("link", { name: "Photos" })).toBeVisible();
-  expect(screen.queryByRole("progressbar", { name: "Loading Location settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   expect(list).toHaveBeenCalledTimes(2);
 });
 
@@ -276,7 +276,7 @@ it("keeps an initial catalog failure distinct from empty Settings", async () => 
   show("/settings/locations");
   await screen.findByText("Catalog unavailable");
   expect(screen.queryByText("Add an original directory or a restore destination.")).not.toBeInTheDocument();
-  expect(screen.queryByRole("progressbar", { name: "Loading Location settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Refresh" }));
   expect(await screen.findByRole("link", { name: "Photos" })).toBeVisible();
 });
@@ -331,17 +331,17 @@ it.each(["failure", "missing"])("settles an initial Location %s as an error and 
   );
   show();
   expect(await screen.findByText(result === "failure" ? "Location read unavailable" : "Location reply is missing")).toBeVisible();
-  expect(screen.queryByRole("progressbar", { name: "Loading Location settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   expect(screen.queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledOnce();
   let finish!: (reply: GetLocationResponse) => void;
   get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
   await userEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(screen.getByRole("progressbar", { name: "Loading Location settings" })).toBeVisible();
+  expect(screen.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
   expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   await act(async () => finish(GetLocationResponse.create({ location: source })));
   expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Photos");
-  expect(screen.queryByRole("progressbar", { name: "Loading Location settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("progressbar", { name: "Loading settings" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Location read unavailable|Location reply is missing/)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledTimes(2);
 });

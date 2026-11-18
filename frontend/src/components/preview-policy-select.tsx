@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { Button, Link, MenuItem, TextField } from "@mui/material";
+import { Link as RouterLink } from "react-router";
 import { previewCli } from "@/api";
 import { PreviewPolicy, SettingsGroup, type GetPreviewCapabilitiesResponse, type PreviewSettings } from "@/entity";
 import { errorMessage } from "@/tools";
@@ -82,7 +83,7 @@ export const PreviewPolicySelect = ({
               {t`Retry`}
             </Button>
           ) : !generation.loading ? (
-            <Link href="/settings/preview">{t`Settings`}</Link>
+            <Link component={RouterLink} to="/settings/preview">{t`Settings`}</Link>
           ) : null}
         </>
       ))

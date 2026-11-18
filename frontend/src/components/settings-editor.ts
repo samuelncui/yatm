@@ -3,12 +3,19 @@ import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } f
 import { RpcError } from "@protobuf-ts/runtime-rpc";
 
 import { settingsCli } from "@/api";
-import { type DeviceSettings, type JobSettings, type LibrarySettings, type PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
+import {
+  type DeviceSettings,
+  type GeneralSettings,
+  type JobSettings,
+  type LibrarySettings,
+  type PreviewSettings,
+  SettingsGroup,
+  SettingsValue,
+} from "@/entity";
 import { useAppSelector, useAppStore } from "@/state/react";
 import type { AppStore } from "@/state/store";
 import { makeSelectSettings, settingsActions } from "@/state/settings";
 import { errorMessage } from "@/tools";
-import { settingsGroupLabel } from "@/components/settings-page";
 
 type SettingsMessage<T> = {
   clone(value: T): T;
@@ -16,6 +23,7 @@ type SettingsMessage<T> = {
 };
 
 type SettingsByGroup = {
+  [SettingsGroup.GENERAL]: GeneralSettings;
   [SettingsGroup.LIBRARY]: LibrarySettings;
   [SettingsGroup.PREVIEW]: PreviewSettings;
   [SettingsGroup.JOB]: JobSettings;
@@ -24,6 +32,7 @@ type SettingsByGroup = {
 
 const groupValue = <G extends keyof SettingsByGroup>(settings: SettingsValue, group: G): SettingsByGroup[G] | undefined => {
   const value = settings.value;
+  if (group === SettingsGroup.GENERAL && value?.oneofKind === "general") return value.general as SettingsByGroup[G];
   if (group === SettingsGroup.LIBRARY && value?.oneofKind === "library") return value.library as SettingsByGroup[G];
   if (group === SettingsGroup.PREVIEW && value?.oneofKind === "preview") return value.preview as SettingsByGroup[G];
   if (group === SettingsGroup.JOB && value?.oneofKind === "job") return value.job as SettingsByGroup[G];
@@ -33,6 +42,8 @@ const groupValue = <G extends keyof SettingsByGroup>(settings: SettingsValue, gr
 
 const settingsValue = <G extends keyof SettingsByGroup>(group: G, value: SettingsByGroup[G]): SettingsValue => {
   switch (group) {
+    case SettingsGroup.GENERAL:
+      return { value: { oneofKind: "general", general: value as GeneralSettings } };
     case SettingsGroup.LIBRARY:
       return { value: { oneofKind: "library", library: value as LibrarySettings } };
     case SettingsGroup.PREVIEW:
@@ -112,6 +123,23 @@ export async function changeCommittedSettings<G extends keyof SettingsByGroup>(
   return value;
 }
 
+const sameField = (left: unknown, right: unknown) => {
+  const encode = (value: unknown) => JSON.stringify(value, (_, field) => (typeof field === "bigint" ? field.toString() : field));
+  return encode(left) === encode(right);
+};
+
+/**
+ * Applies the top-level fields the draft changed from the loaded value onto the server's latest value,
+ * so saving the whole group keeps a field another surface wrote while the draft was open.
+ */
+export const mergeSettingsDraft = <T extends object>(latest: T, loaded: T, draft: T): T => {
+  const merged = { ...latest } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(draft)) {
+    if (!sameField(value, (loaded as Record<string, unknown>)[key])) merged[key] = value;
+  }
+  return merged as T;
+};
+
 export function useCommittedSettings<G extends keyof SettingsByGroup>(group: G, active = true) {
   const store = useAppStore();
   const selector = useMemo(() => makeSelectSettings(group), [group]);
@@ -125,9 +153,8 @@ export function useCommittedSettings<G extends keyof SettingsByGroup>(group: G, 
 }
 
 /** Shared load, draft, save, cancel and reload behavior for every typed Settings group. */
-export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, message: SettingsMessage<SettingsByGroup[G]>, label: string) => {
+export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, message: SettingsMessage<SettingsByGroup[G]>) => {
   type T = SettingsByGroup[G];
-  const groupLabel = settingsGroupLabel(label);
   const store = useAppStore();
   const selector = useMemo(() => makeSelectSettings(group), [group]);
   const committed = useAppSelector(selector);
@@ -163,7 +190,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
         setError("");
       })
       .catch((failure) => {
-        if (active) setError(errorMessage(failure, t`Could not load ${groupLabel} settings`));
+        if (active) setError(errorMessage(failure, t`Could not load settings`));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -171,7 +198,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     return () => {
       active = false;
     };
-  }, [attempt, group, groupLabel, message, store]);
+  }, [attempt, group, message, store]);
 
   const dirty = !!draft && !message.equals(draft, settings);
   const reload = () => {
@@ -186,13 +213,12 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
     setSaved(false);
   };
   const save = async (): Promise<boolean> => {
-    if (!draft || saving || loading) return false;
+    if (!draft || !settings || saving || loading) return false;
     setInvalid("");
     setSaving(true);
     setSaved(false);
     try {
-      const value = await updateSettingsGroup(group, draft);
-      store.dispatch(settingsActions.saved({ group, value: SettingsValue.toJsonString(settingsValue(group, value)) }));
+      const value = await changeCommittedSettings(store, group, (latest) => mergeSettingsDraft(latest, settings, draft));
       setSettings(message.clone(value));
       setDraft(message.clone(value));
       setError("");
@@ -200,7 +226,7 @@ export const useSettingsEditor = <G extends keyof SettingsByGroup>(group: G, mes
       return true;
     } catch (failure) {
       // A rejected draft keeps its edits; only other failures offer a reload.
-      const message = errorMessage(failure, t`Could not save ${groupLabel} settings`);
+      const message = errorMessage(failure, t`Could not save settings`);
       if (failure instanceof RpcError && failure.code === "INVALID_ARGUMENT") {
         setError("");
         setInvalid(message);

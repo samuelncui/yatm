@@ -39,7 +39,7 @@ import {
 } from "./settings-device-read-parameters";
 
 export const DeviceSettingsBrowser = () => {
-  const editor = useSettingsEditor(SettingsGroup.DEVICE, DeviceSettings, "Device");
+  const editor = useSettingsEditor(SettingsGroup.DEVICE, DeviceSettings);
   const { devices, loading: listing, error: listError, load: loadDevices } = useTapeDevices(t`Could not list devices`);
   const [params] = useSearchParams();
   // A link from a Job may name the device to show.
@@ -138,7 +138,6 @@ export const DeviceSettingsBrowser = () => {
   return (
     <>
       <SettingsEditorFeedback
-        label="Device"
         loading={editor.loading}
         saving={editor.saving}
         error={editor.error}
@@ -243,6 +242,7 @@ export const DeviceSettingsBrowser = () => {
                 <TarWriteOptionsFields value={options} disabled={disabled} onChange={(tarWriteOptions) => change({ ...tape, tarWriteOptions })} />
                 <TextField
                   fullWidth
+                  size="small"
                   type="number"
                   label={t`Tar capacity polling interval (seconds)`}
                   placeholder={t`Auto (5 seconds)`}
@@ -255,6 +255,7 @@ export const DeviceSettingsBrowser = () => {
                 />
                 <TextField
                   fullWidth
+                  size="small"
                   type="number"
                   label={t`Read planning budget (seconds)`}
                   placeholder={t`300 seconds (default)`}

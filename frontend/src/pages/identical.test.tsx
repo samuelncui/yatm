@@ -16,7 +16,7 @@ import {
   IdenticalSortOrder,
   IdenticalSource,
   Location,
-  LibrarySettings,
+  GeneralSettings,
 } from "@/entity";
 import { IdenticalFiles } from "./identical";
 import { ArchiveLibraryAction, LocateInOtherPaneAction } from "@/actions";
@@ -49,7 +49,7 @@ vi.mock("@/api", () => ({
   locationCli: { list: state.locations },
   settingsCli: {
     get: () => ({
-      response: Promise.resolve({ value: { value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: state.confirmRemove }) } } }),
+      response: Promise.resolve({ value: { value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: state.confirmRemove }) } } }),
     }),
   },
 }));

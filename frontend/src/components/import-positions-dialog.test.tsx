@@ -2,7 +2,7 @@ import { act, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { LibrarySettings, SettingsGroup, SettingsValue } from "@/entity";
+import { GeneralSettings, SettingsGroup, SettingsValue } from "@/entity";
 import { AppStateProvider } from "@/state/react";
 import { createAppStore } from "@/state/store";
 import { render } from "@/state/test-render";
@@ -19,17 +19,17 @@ const { importPositions, get, update, success, info } = vi.hoisted(() => ({
 vi.mock("@/api", () => ({ filesCli: { importPositions }, settingsCli: { get, update } }));
 vi.mock("react-toastify", () => ({ toast: { success, info } }));
 const counts = { fileCount: 2n, directoryCount: 1n, existingCount: 0n, skippedFileCount: 0n };
-const stored = (skipAddMediaConfirmation: boolean) => LibrarySettings.create({ confirmRemove: true, skipAddMediaConfirmation });
+const stored = (skipAddMediaConfirmation: boolean) => GeneralSettings.create({ confirmRemove: true, skipAddMediaConfirmation });
 const reply = (skipAddMediaConfirmation: boolean) => ({
-  response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: stored(skipAddMediaConfirmation) } }) }),
+  response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "general", general: stored(skipAddMediaConfirmation) } }) }),
 });
-const saved = (skipAddMediaConfirmation: boolean) => ({ value: { value: { oneofKind: "library", library: stored(skipAddMediaConfirmation) } } });
+const saved = (skipAddMediaConfirmation: boolean) => ({ value: { value: { oneofKind: "general", general: stored(skipAddMediaConfirmation) } } });
 
 /** A store that already holds the server's Library settings, so the first click sees the stored choice. */
 const storeWith = async (skipAddMediaConfirmation: boolean) => {
   get.mockReturnValue(reply(skipAddMediaConfirmation));
   const store = createAppStore();
-  await loadCommittedSettings(store, SettingsGroup.LIBRARY);
+  await loadCommittedSettings(store, SettingsGroup.GENERAL);
   get.mockClear();
   return store;
 };
@@ -66,7 +66,7 @@ it("stores the opt-out in Library settings only after confirmed server success",
   await act(async () => complete(counts));
   await waitFor(() => expect(view.result.current.open).toBe(false));
   // The save starts from a fresh server read and replaces the whole group.
-  expect(get).toHaveBeenCalledExactlyOnceWith({ group: SettingsGroup.LIBRARY });
+  expect(get).toHaveBeenCalledExactlyOnceWith({ group: SettingsGroup.GENERAL });
   expect(update).toHaveBeenCalledExactlyOnceWith(saved(true));
   expect(info).not.toHaveBeenCalled();
   importPositions.mockClear();

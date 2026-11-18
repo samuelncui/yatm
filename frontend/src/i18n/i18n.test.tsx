@@ -3,7 +3,7 @@ import { act, render as renderPlain, screen, waitFor } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import { ChonkyActions, FileBrowser, FileList, FileToolbar } from "@samuelncui/chonky";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Job, JobKind, JobPhase, JobStatus, LibrarySettings, SettingsValue } from "@/entity";
+import { GeneralSettings, Job, JobKind, JobPhase, JobStatus, LibrarySettings, SettingsGroup, SettingsValue } from "@/entity";
 import { jobLabel, jobStatusLabel } from "@/components/job-progress";
 import { contentTime } from "@/components/content-status";
 import { renderPage } from "@/state/test-render";
@@ -13,6 +13,7 @@ import { activateLocale, currentLocale, detectLocale, I18nProvider, localeStorag
 
 const { get, update, list } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), list: vi.fn() }));
 vi.mock("@/api", () => ({ fileBase: "/files", settingsCli: { get, update }, locationCli: { list } }));
+import { GeneralSettingsBrowser } from "@/pages/settings-general";
 import { SettingsBrowser } from "@/pages/settings";
 
 const language = (value: string) => vi.spyOn(navigator, "language", "get").mockReturnValue(value);
@@ -20,9 +21,14 @@ const language = (value: string) => vi.spyOn(navigator, "language", "get").mockR
 beforeEach(() => {
   window.localStorage.clear();
   list.mockReset().mockReturnValue({ response: Promise.resolve({ locations: [], hasMore: false }) });
-  get.mockReset().mockReturnValue({
-    response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: true }) } }) }),
-  });
+  get.mockReset().mockImplementation(({ group }: { group: SettingsGroup }) => ({
+    response: Promise.resolve({
+      value:
+        group === SettingsGroup.LIBRARY
+          ? SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create({ includeFilesWithoutVersions: true }) } })
+          : SettingsValue.create({ value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: true }) } }),
+    }),
+  }));
 });
 
 afterEach(async () => {
@@ -111,13 +117,13 @@ describe("Simplified Chinese", () => {
 
 describe("language setting", () => {
   it("shows the active language and switches the page", async () => {
-    renderPage(<SettingsBrowser />);
+    renderPage(<GeneralSettingsBrowser />);
     const select = await screen.findByRole("combobox", { name: "Interface language" });
     expect(select).toHaveTextContent("English");
     await userEvent.click(select);
     await userEvent.click(screen.getByRole("option", { name: "简体中文" }));
     await waitFor(() => expect(i18n.locale).toBe("zh-CN"));
-    expect(await screen.findByText("文件可见性")).toBeVisible();
+    expect(await screen.findByText("确认提示")).toBeVisible();
     expect(window.localStorage.getItem(localeStorageKey)).toBe("zh-CN");
     await act(async () => {});
   });

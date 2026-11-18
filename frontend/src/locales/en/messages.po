@@ -101,9 +101,6 @@ msgstr "{format} · unsupported"
 msgid "{gigabytes} GB"
 msgstr "{gigabytes} GB"
 
-msgid "{groupLabel} settings saved."
-msgstr "{groupLabel} settings saved."
-
 msgid "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
 msgstr "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
 
@@ -1037,9 +1034,6 @@ msgstr "Could not list devices"
 msgid "Could not list resources"
 msgstr "Could not list resources"
 
-msgid "Could not load {groupLabel} settings"
-msgstr "Could not load {groupLabel} settings"
-
 msgid "Could not load archive progress"
 msgstr "Could not load archive progress"
 
@@ -1178,14 +1172,14 @@ msgstr "Could not resolve saved versions"
 msgid "Could not resolve this selection"
 msgstr "Could not resolve this selection"
 
-msgid "Could not save {groupLabel} settings"
-msgstr "Could not save {groupLabel} settings"
-
 msgid "Could not save location"
 msgstr "Could not save location"
 
 msgid "Could not save metadata"
 msgstr "Could not save metadata"
+
+msgid "Could not save settings"
+msgstr "Could not save settings"
 
 msgid "Could not save this choice; the confirmation will appear again."
 msgstr "Could not save this choice; the confirmation will appear again."
@@ -1776,6 +1770,9 @@ msgstr "From wrap"
 msgid "Full-span time (s)"
 msgstr "Full-span time (s)"
 
+msgid "General"
+msgstr "General"
+
 msgid "Generate missing"
 msgstr "Generate missing"
 
@@ -1923,6 +1920,9 @@ msgstr "Inspector"
 
 msgid "Interface language"
 msgstr "Interface language"
+
+msgid "Interface language and which confirmations appear before an action."
+msgstr "Interface language and which confirmations appear before an action."
 
 msgid "Invalid Job ID."
 msgstr "Invalid Job ID."
@@ -2141,9 +2141,6 @@ msgstr "Load versions failed"
 msgid "Loaded items size"
 msgstr "Loaded items size"
 
-msgid "Loading {groupLabel} settings"
-msgstr "Loading {groupLabel} settings"
-
 msgid "Loading archived copies…"
 msgstr "Loading archived copies…"
 
@@ -2201,6 +2198,9 @@ msgstr "Loading resources…"
 
 msgid "Loading saved versions…"
 msgstr "Loading saved versions…"
+
+msgid "Loading settings"
+msgstr "Loading settings"
 
 msgid "Loading source…"
 msgstr "Loading source…"
@@ -2292,9 +2292,6 @@ msgstr "malformed response"
 
 msgid "Manifest batch (items)"
 msgstr "Manifest batch (items)"
-
-msgid "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
-msgstr "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
 
 msgid "marker conflict"
 msgstr "marker conflict"
@@ -2836,6 +2833,9 @@ msgstr "permission"
 msgid "Permission"
 msgstr "Permission"
 
+msgid "Pipeline limits"
+msgstr "Pipeline limits"
+
 msgid "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
 msgstr "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
 
@@ -3333,6 +3333,9 @@ msgstr "Results"
 msgid "Results per update"
 msgstr "Results per update"
 
+msgid "Results per update must not exceed queued results."
+msgstr "Results per update must not exceed queued results."
+
 msgid "Resume search"
 msgstr "Resume search"
 
@@ -3401,9 +3404,6 @@ msgstr "Save"
 
 msgid "Save changes"
 msgstr "Save changes"
-
-msgid "Save or cancel the changes below before switching language."
-msgstr "Save or cancel the changes below before switching language."
 
 msgid "Save to check this executable. Current capability results describe the saved executable."
 msgstr "Save to check this executable. Current capability results describe the saved executable."
@@ -3591,6 +3591,9 @@ msgstr "Settings reply does not match the requested group"
 msgid "Settings reply does not match the updated group"
 msgstr "Settings reply does not match the updated group"
 
+msgid "Settings saved."
+msgstr "Settings saved."
+
 msgid "Settings views"
 msgstr "Settings views"
 
@@ -3777,6 +3780,9 @@ msgstr "Switch to Grid"
 msgctxt "file action"
 msgid "Switch to List"
 msgstr "Switch to List"
+
+msgid "Switching the language reloads the interface and discards your unsaved settings."
+msgstr "Switching the language reloads the interface and discards your unsaved settings."
 
 msgid "Symbolic link"
 msgstr "Symbolic link"
@@ -4287,8 +4293,8 @@ msgstr "Wait for sorting to finish before merging files."
 msgid "Wait for the current operation to finish before sorting."
 msgstr "Wait for the current operation to finish before sorting."
 
-msgid "What Library shows, how it removes items, and where its data can go."
-msgstr "What Library shows, how it removes items, and where its data can go."
+msgid "What Library shows and where its data can go."
+msgstr "What Library shows and where its data can go."
 
 msgid "When off, Library shows files with saved versions. Locations are unaffected."
 msgstr "When off, Library shows files with saved versions. Locations are unaffected."
@@ -4334,8 +4340,8 @@ msgstr "Written"
 msgid "YATM modules"
 msgstr "YATM modules"
 
-msgid "Your {groupLabel} settings have not been saved."
-msgstr "Your {groupLabel} settings have not been saved."
-
 msgid "Your Location configuration has not been saved."
 msgstr "Your Location configuration has not been saved."
+
+msgid "Your settings have not been saved."
+msgstr "Your settings have not been saved."

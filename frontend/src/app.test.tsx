@@ -13,6 +13,7 @@ vi.mock("@/pages/locations", () => ({ LocationsBrowser: () => <div>Locations pag
 vi.mock("@/pages/file", () => ({ FileBrowser: () => <div>Library files page</div> }));
 vi.mock("@/pages/media", () => ({ MediaBrowser: () => <div>Library media page</div> }));
 vi.mock("@/pages/jobs", () => ({ JobsBrowser: () => <div>Jobs page</div> }));
+vi.mock("@/pages/settings-general", () => ({ GeneralSettingsBrowser: () => <div>General settings page</div> }));
 vi.mock("@/pages/settings", () => ({ SettingsBrowser: () => <div>Settings page</div> }));
 vi.mock("@/pages/settings-preview", () => ({ PreviewSettingsBrowser: () => <div>Preview settings page</div> }));
 
@@ -58,9 +59,12 @@ describe("Job creation navigation", () => {
       </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
-    expect(await screen.findByText("Locations page")).toBeInTheDocument();
+    expect(await screen.findByText("General settings page")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "General" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Locations" }));
+    expect(await screen.findByText("Locations page")).toBeInTheDocument();
     await userEvent.click(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" }));
     expect(await screen.findByText("Settings page")).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Settings views" })).getByRole("tab", { name: "Library" })).toHaveAttribute("aria-selected", "true");

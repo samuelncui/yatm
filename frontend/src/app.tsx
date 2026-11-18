@@ -48,6 +48,7 @@ const ScanBrowser = lazy(async () => ({ default: (await import("@/pages/scan")).
 const MediaBrowser = lazy(async () => ({ default: (await import("@/pages/media")).MediaBrowser }));
 const LocationsBrowser = lazy(async () => ({ default: (await import("@/pages/locations")).LocationsBrowser }));
 const JobsBrowser = lazy(async () => ({ default: (await import("@/pages/jobs")).JobsBrowser }));
+const GeneralSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-general")).GeneralSettingsBrowser }));
 const SettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings")).SettingsBrowser }));
 const PreviewSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-preview")).PreviewSettingsBrowser }));
 const JobSettingsBrowser = lazy(async () => ({ default: (await import("@/pages/settings-jobs")).JobSettingsBrowser }));
@@ -110,8 +111,13 @@ const ModuleNavigation = ({
       <PageNavigation label={t`Settings views`}>
         <PageTabs
           placement="module"
-          value={["/settings/library", "/settings/preview", "/settings/jobs", "/settings/devices"].includes(path) ? path.slice(1) : LocationsType}
+          value={
+            ["/settings/general", "/settings/library", "/settings/preview", "/settings/jobs", "/settings/devices"].includes(path)
+              ? path.slice(1)
+              : LocationsType
+          }
         >
+          <Tab component={Link} to="/settings/general" label={t`General`} value="settings/general" />
           <Tab component={Link} to={"/" + LocationsType} label={t`Locations`} value={LocationsType} />
           <Tab component={Link} to="/settings/library" label={t`Library`} value="settings/library" />
           <Tab component={Link} to="/settings/preview" label={t`Preview`} value="settings/preview" />
@@ -258,15 +264,19 @@ const App = () => {
                   <Route path={LocationsType + "/*"} element={<LocationsBrowser />} />
                   <Route path={JobsType} element={<JobsBrowser />} />
                   <Route path={JobsType + "/:id"} element={<JobsBrowser />} />
-                  <Route path={SettingsType} element={<Navigate to={"/" + LocationsType} replace />} />
+                  <Route path={SettingsType} element={<Navigate to="/settings/general" replace />} />
+                  <Route
+                    path="settings/general"
+                    element={
+                      <SettingsEditorPage key="general" title={t`General`} description={t`Interface language and which confirmations appear before an action.`}>
+                        <GeneralSettingsBrowser />
+                      </SettingsEditorPage>
+                    }
+                  />
                   <Route
                     path="settings/library"
                     element={
-                      <SettingsEditorPage
-                        key="library"
-                        title={t`Library`}
-                        description={t`What Library shows, how it removes items, and where its data can go.`}
-                      >
+                      <SettingsEditorPage key="library" title={t`Library`} description={t`What Library shows and where its data can go.`}>
                         <SettingsBrowser />
                       </SettingsEditorPage>
                     }
@@ -289,7 +299,6 @@ const App = () => {
                       <SettingsEditorPage
                         key="jobs"
                         title={t`Jobs`}
-                        label={t`Job`}
                         description={t`Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits.`}
                       >
                         <JobSettingsBrowser />

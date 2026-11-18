@@ -101,9 +101,6 @@ msgstr "{format} · 不支持"
 msgid "{gigabytes} GB"
 msgstr "{gigabytes} GB"
 
-msgid "{groupLabel} settings saved."
-msgstr "{groupLabel}设置已保存。"
-
 msgid "{ignoredCount} outputs match Ignore rules. They will be restored without linking them to Library files."
 msgstr "{ignoredCount} 个输出匹配忽略规则，将被恢复但不会关联到资料库文件。"
 
@@ -1037,9 +1034,6 @@ msgstr "无法列出设备"
 msgid "Could not list resources"
 msgstr "无法列出资源"
 
-msgid "Could not load {groupLabel} settings"
-msgstr "无法加载{groupLabel}设置"
-
 msgid "Could not load archive progress"
 msgstr "无法加载归档进度"
 
@@ -1178,14 +1172,14 @@ msgstr "无法解析已保存版本"
 msgid "Could not resolve this selection"
 msgstr "无法解析此选择"
 
-msgid "Could not save {groupLabel} settings"
-msgstr "无法保存{groupLabel}设置"
-
 msgid "Could not save location"
 msgstr "无法保存存储位置"
 
 msgid "Could not save metadata"
 msgstr "无法保存元数据"
+
+msgid "Could not save settings"
+msgstr "无法保存设置"
 
 msgid "Could not save this choice; the confirmation will appear again."
 msgstr "无法保存此选择；确认提示将再次出现。"
@@ -1776,6 +1770,9 @@ msgstr "起始磁带道"
 msgid "Full-span time (s)"
 msgstr "全长时间（秒）"
 
+msgid "General"
+msgstr "通用"
+
 msgid "Generate missing"
 msgstr "生成缺失的"
 
@@ -1923,6 +1920,9 @@ msgstr "检查器"
 
 msgid "Interface language"
 msgstr "界面语言"
+
+msgid "Interface language and which confirmations appear before an action."
+msgstr "界面语言，以及操作前显示哪些确认提示。"
 
 msgid "Invalid Job ID."
 msgstr "任务 ID 无效。"
@@ -2141,9 +2141,6 @@ msgstr "加载版本失败"
 msgid "Loaded items size"
 msgstr "已加载项目大小"
 
-msgid "Loading {groupLabel} settings"
-msgstr "正在加载{groupLabel}设置"
-
 msgid "Loading archived copies…"
 msgstr "正在加载归档副本…"
 
@@ -2201,6 +2198,9 @@ msgstr "正在加载资源…"
 
 msgid "Loading saved versions…"
 msgstr "正在加载已保存版本…"
+
+msgid "Loading settings"
+msgstr "正在加载设置"
 
 msgid "Loading source…"
 msgstr "正在加载来源…"
@@ -2292,9 +2292,6 @@ msgstr "响应格式错误"
 
 msgid "Manifest batch (items)"
 msgstr "清单批量（项）"
-
-msgid "Manifest batch {readBatch} items · queued reads {readBufferMax} · queued results {writeBufferMax} · {writeBatchSize} results/update · flush {flushIntervalMs} ms"
-msgstr "清单批量 {readBatch} 项 · 排队读取 {readBufferMax} · 排队结果 {writeBufferMax} · {writeBatchSize} 个结果/次更新 · 刷新 {flushIntervalMs} 毫秒"
 
 msgid "marker conflict"
 msgstr "标记冲突"
@@ -2836,6 +2833,9 @@ msgstr "权限不足"
 msgid "Permission"
 msgstr "权限"
 
+msgid "Pipeline limits"
+msgstr "流水线限制"
+
 msgid "Pipeline limits for Archive, Restore and Scan Jobs, captured when the next attempt starts. Running attempts keep their current limits."
 msgstr "归档、恢复和扫描任务的流水线限制，在下次尝试开始时采用；正在运行的尝试保持当前限制。"
 
@@ -3333,6 +3333,9 @@ msgstr "结果"
 msgid "Results per update"
 msgstr "每次更新的结果数"
 
+msgid "Results per update must not exceed queued results."
+msgstr "每次更新的结果数不能超过排队结果数。"
+
 msgid "Resume search"
 msgstr "继续搜索"
 
@@ -3401,9 +3404,6 @@ msgstr "保存"
 
 msgid "Save changes"
 msgstr "保存更改"
-
-msgid "Save or cancel the changes below before switching language."
-msgstr "切换语言前，请先保存或取消下方的更改。"
 
 msgid "Save to check this executable. Current capability results describe the saved executable."
 msgstr "保存后才会检查此可执行文件。当前的能力结果描述的是已保存的可执行文件。"
@@ -3591,6 +3591,9 @@ msgstr "设置响应与请求的分组不符"
 msgid "Settings reply does not match the updated group"
 msgstr "设置响应与已更新的分组不符"
 
+msgid "Settings saved."
+msgstr "设置已保存。"
+
 msgid "Settings views"
 msgstr "设置视图"
 
@@ -3777,6 +3780,9 @@ msgstr "切换到网格视图"
 msgctxt "file action"
 msgid "Switch to List"
 msgstr "切换到列表视图"
+
+msgid "Switching the language reloads the interface and discards your unsaved settings."
+msgstr "切换语言会重新加载界面，并放弃您尚未保存的设置。"
 
 msgid "Symbolic link"
 msgstr "符号链接"
@@ -4287,8 +4293,8 @@ msgstr "请等待排序完成后再合并文件。"
 msgid "Wait for the current operation to finish before sorting."
 msgstr "请等待当前操作完成后再排序。"
 
-msgid "What Library shows, how it removes items, and where its data can go."
-msgstr "资料库显示的内容、移除项目的方式，以及数据的去向。"
+msgid "What Library shows and where its data can go."
+msgstr "资料库显示的内容以及其数据的去向。"
 
 msgid "When off, Library shows files with saved versions. Locations are unaffected."
 msgstr "关闭时，资料库只显示有已保存版本的文件，存储位置不受影响。"
@@ -4334,8 +4340,8 @@ msgstr "已写入"
 msgid "YATM modules"
 msgstr "YATM 模块"
 
-msgid "Your {groupLabel} settings have not been saved."
-msgstr "您的{groupLabel}设置尚未保存。"
-
 msgid "Your Location configuration has not been saved."
 msgstr "您的存储位置配置尚未保存。"
+
+msgid "Your settings have not been saved."
+msgstr "您的设置尚未保存。"

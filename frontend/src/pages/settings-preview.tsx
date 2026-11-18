@@ -1,20 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { useState } from "react";
-import {
-  Alert,
-  Autocomplete,
-  Button,
-  Checkbox,
-  Chip,
-  createFilterOptions,
-  FormControl,
-  Grid,
-  LinearProgress,
-  MenuItem,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
+import { Alert, Autocomplete, Button, Checkbox, Chip, createFilterOptions, FormControl, Grid, LinearProgress, MenuItem, Stack, TextField } from "@mui/material";
 import { useSettingsEditor } from "@/components/settings-editor";
 import { SettingsField, SettingsNumberField } from "@/components/settings-field";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
@@ -22,7 +8,7 @@ import { PreviewSettings, type PreviewGeneratorSettings, SettingsGroup } from "@
 import { usePreviewGeneration } from "@/components/preview-policy-select";
 
 export const PreviewSettingsBrowser = () => {
-  const editor = useSettingsEditor(SettingsGroup.PREVIEW, PreviewSettings, "Preview");
+  const editor = useSettingsEditor(SettingsGroup.PREVIEW, PreviewSettings);
   const { cancel, dirty, draft, error, invalid, loading, reload, reject, save: saveDraft, saved, saving, setDraft, settings } = editor;
   const [selected, setSelected] = useState(0);
   const generation = usePreviewGeneration(!!draft, draft);
@@ -43,7 +29,6 @@ export const PreviewSettingsBrowser = () => {
   return (
     <>
       <SettingsEditorFeedback
-        label="Preview"
         loading={loading}
         saving={saving}
         error={error}
@@ -71,7 +56,7 @@ export const PreviewSettingsBrowser = () => {
             >
               <SettingsField
                 label={t`Enable generation`}
-                control={<Switch checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
+                control={<Checkbox checked={draft.enabled} disabled={loading || saving} onChange={(_, enabled) => setDraft({ ...draft, enabled })} />}
               />
               {!generation.loading && (generation.error || !generation.capabilities?.available) && (
                 <Feedback
@@ -258,7 +243,7 @@ const GeneratorForm = ({
       <Stack useFlexGap spacing={2}>
         <SettingsField
           label={t`Enabled`}
-          control={<Switch checked={generator.enabled} disabled={disabled} onChange={(_, enabled) => onChange({ ...generator, enabled })} />}
+          control={<Checkbox checked={generator.enabled} disabled={disabled} onChange={(_, enabled) => onChange({ ...generator, enabled })} />}
         />
         <Grid container spacing={2}>
           {dimensions.map(({ field, label, value }) => (

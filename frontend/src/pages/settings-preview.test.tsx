@@ -110,7 +110,7 @@ describe("Preview settings", () => {
     await userEvent.type(extensions, ".CUSTOM{Enter}");
     await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated().generators[1].extensions).toEqual([
       { name: "mp4", enabled: true },
       { name: "mov", enabled: true },
@@ -157,7 +157,7 @@ describe("Preview settings", () => {
     videoForm().getByRole("button", { name: "bad,extension" }).focus();
     await userEvent.keyboard("{Delete}");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated().generators[1].extensions).toEqual([{ name: "mp4", enabled: true }]);
     expect(updated().generators[1].options).toMatchObject({ oneofKind: "video", video: { posterWidth: 768 } });
   });
@@ -170,7 +170,7 @@ describe("Preview settings", () => {
     const other = within(screen.getByRole("group", { name: "Image · heic" }));
     await userEvent.type(other.getByRole("combobox", { name: "File extensions" }), "jpg{Enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated().generators[0].extensions).toEqual([{ name: "png", enabled: true }]);
     expect(updated().generators[2].extensions).toContainEqual({ name: "jpg", enabled: true });
   });
@@ -185,7 +185,7 @@ describe("Preview settings", () => {
     await userEvent.click(screen.getByLabelText("Enable generation"));
     await userEvent.click(screen.getByLabelText("Enable generation"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     const preview = updated();
     expect(preview.enabled).toBe(false);
     expect(preview.generators[0]).toMatchObject({
@@ -215,7 +215,7 @@ describe("Preview settings", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "Timeout (seconds)" }), { target: { value: "900" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Maximum input pixels" }), { target: { value: "32000000" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated()).toMatchObject({
       command: "/opt/yatm-preview",
       concurrency: 3,
@@ -233,7 +233,7 @@ describe("Preview settings", () => {
     expect(update).not.toHaveBeenCalled();
     fireEvent.change(width, { target: { value: "768" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     const expected = PreviewSettings.clone(initial);
     if (expected.generators[0].options.oneofKind === "image") expected.generators[0].options.image.maxWidth = 768;
     expect(update).toHaveBeenCalledExactlyOnceWith({ value: { value: { oneofKind: "preview", preview: expected } } });
@@ -253,7 +253,7 @@ describe("Preview settings", () => {
     await userEvent.click(screen.getByRole("option", { name: "PNG" }));
     await userEvent.type(videoForm().getByRole("combobox", { name: "File extensions" }), "mov{Enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated().generators[1]).toMatchObject({
       extensions: [
         { name: "mp4", enabled: true },
@@ -296,7 +296,7 @@ describe("Preview settings", () => {
     await waitFor(() => expect(width).toHaveValue(512));
     fireEvent.change(width, { target: { value: "900" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated(1).generators[0].options).toMatchObject({ oneofKind: "image", image: { maxWidth: 900 } });
   });
 
@@ -307,7 +307,7 @@ describe("Preview settings", () => {
     const width = imageForm().getByRole("spinbutton", { name: "Maximum width (px)" });
     fireEvent.change(width, { target: { value: "768" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    for (const role of ["spinbutton", "switch", "textbox"]) {
+    for (const role of ["spinbutton", "checkbox", "textbox"]) {
       for (const input of screen.queryAllByRole(role)) expect(input).toBeDisabled();
     }
     expect(screen.getByRole("combobox", { name: "Type" })).toBeDisabled();
@@ -357,7 +357,7 @@ describe("Preview settings", () => {
     await choose("Image · jpg, png");
     expect(imageForm().getByRole("spinbutton", { name: "Maximum width (px)" })).toHaveValue(768);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     const generators = updated().generators;
     expect(generators[0].options).toMatchObject({ oneofKind: "image", image: { maxWidth: 768 } });
     expect(generators[1].options).toMatchObject({ oneofKind: "video", video: { timelineIntervalSeconds: 20 } });
@@ -380,7 +380,7 @@ describe("Preview settings", () => {
     expect(await screen.findByText(/Preview helper not found/)).toBeInTheDocument();
     fireEvent.change(imageForm().getByRole("spinbutton", { name: "Maximum width (px)" }), { target: { value: "768" } });
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Preview settings saved.");
+    await screen.findByText("Settings saved.");
     expect(updated()).toMatchObject({
       command: "",
       enabled: false,
@@ -408,7 +408,7 @@ it("retains quality while PNG disables it and restores editing for JPEG", async 
   expect(quality).toHaveValue(80);
   expect(screen.getByText("PNG is lossless; quality does not apply.")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Preview settings saved.");
+  await screen.findByText("Settings saved.");
   expect(updated().generators[0].options).toMatchObject({ image: { format: "png", quality: 80 } });
   await userEvent.click(imageForm().getByRole("combobox", { name: "Output format" }));
   await userEvent.click(screen.getByRole("option", { name: "JPEG" }));
@@ -423,7 +423,7 @@ it("does not check an unsaved executable and reloads the saved helper after Save
   expect(screen.getByRole("button", { name: "Check saved executable again" })).toBeDisabled();
   expect(capabilities).toHaveBeenCalledOnce();
   await userEvent.click(screen.getByRole("button", { name: "Save" }));
-  await screen.findByText("Preview settings saved.");
+  await screen.findByText("Settings saved.");
   await waitFor(() => expect(capabilities).toHaveBeenCalledTimes(2));
   expect(updated().command).toBe("/new/helper");
   expect(screen.queryByText(/Save to check this executable/)).not.toBeInTheDocument();

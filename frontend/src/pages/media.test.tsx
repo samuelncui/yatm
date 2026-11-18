@@ -7,7 +7,7 @@ import { ChonkyActions, type ChonkyFileActionData, type FileData } from "@samuel
 
 import { DeleteMediaAction, InspectMediaAction, LoadMoreAction, ScanMediaAction, VerifyMediaAction, ImportPositionsAction, TrimLibraryAction } from "@/actions";
 import {
-  LibrarySettings,
+  GeneralSettings,
   Media,
   MediaAccess,
   MediaKind,
@@ -135,8 +135,8 @@ vi.mock("@samuelncui/chonky", async (original) => {
 import { AddVolumeDialog, InspectMediaDialog, MediaBrowser, useMediaBrowser } from "@/pages/media";
 
 const call = <T,>(response: T) => ({ response: Promise.resolve(response) });
-const librarySettings = (settings: Partial<LibrarySettings> = {}) =>
-  SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: true, ...settings }) } });
+const librarySettings = (settings: Partial<GeneralSettings> = {}) =>
+  SettingsValue.create({ value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: true, ...settings }) } });
 const inventoryEntry = {
   id: "7",
   name: "Archive",
@@ -433,7 +433,7 @@ describe("Media page", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(importPositions).toHaveBeenCalledExactlyOnceWith({ positionIds: [7n], dryrun: false });
     expect(settingsUpdate).toHaveBeenCalledExactlyOnceWith({
-      value: { value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: true, skipAddEntriesConfirmation: true }) } },
+      value: { value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: true, skipAddEntriesConfirmation: true }) } },
     });
     expect(toastInfo).not.toHaveBeenCalled();
 
@@ -449,7 +449,7 @@ describe("Media page", () => {
     settingsGet.mockReturnValue(call({ value: librarySettings({ skipAddEntriesConfirmation: true }) }));
     if (outcome === "failed") importPositions.mockImplementation(() => ({ response: Promise.reject(new Error("Import offline")) }));
     const store = createAppStore();
-    await loadCommittedSettings(store, SettingsGroup.LIBRARY);
+    await loadCommittedSettings(store, SettingsGroup.GENERAL);
     render(<ActionHarness operation={ImportPositionsAction} />, { store });
     await userEvent.click(screen.getByRole("button", { name: "Request" }));
     await waitFor(() => expect(outcome === "failed" ? toastError : toastSuccess).toHaveBeenCalledOnce());

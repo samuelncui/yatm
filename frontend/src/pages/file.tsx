@@ -36,7 +36,7 @@ const SearchStatus = ({ query, onClose }: { query: string; onClose: () => void }
 );
 
 export const FileBrowser = ({ layout }: { layout: LibraryLayout }) => {
-  const { settings, error: settingsError } = useCommittedSettings(SettingsGroup.LIBRARY);
+  const { settings, error: settingsError } = useCommittedSettings(SettingsGroup.GENERAL);
   useEffect(() => {
     if (settingsError) toast.error(settingsError);
   }, [settingsError]);

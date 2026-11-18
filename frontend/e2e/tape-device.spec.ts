@@ -11,7 +11,7 @@ import {
   GetSettingsResponse,
   InspectDeviceRequest,
   InspectDeviceResponse,
-  LibrarySettings,
+  GeneralSettings,
   ListDevicesResponse,
   ListLocationsResponse,
   ListMediaResponse,
@@ -53,7 +53,7 @@ test("Media device details preserve passive diagnostics and usable desktop/narro
           route,
           GetSettingsResponse.toBinary(
             GetSettingsResponse.create({
-              value: { value: { oneofKind: "library", library: LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true }) } },
+              value: { value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: true }) } },
             }),
           ),
         );

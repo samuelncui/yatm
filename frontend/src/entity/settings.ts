@@ -224,7 +224,7 @@ export interface TapeReadTiming {
     filemarkOverheadSeconds?: number;
 }
 /**
- * Library preferences: what the Library shows and how it confirms removal.
+ * Library preferences: what the Library shows.
  *
  * @generated from protobuf message yatm.v1.LibrarySettings
  */
@@ -233,21 +233,30 @@ export interface LibrarySettings {
      * @generated from protobuf field: bool include_files_without_versions = 1
      */
     includeFilesWithoutVersions: boolean;
+}
+/**
+ * General preferences: which advisory confirmations the web interface shows.
+ *
+ * @generated from protobuf message yatm.v1.GeneralSettings
+ */
+export interface GeneralSettings {
     /**
-     * @generated from protobuf field: bool confirm_remove = 2
+     * false moves selected items to Trash without a confirmation.
+     *
+     * @generated from protobuf field: bool confirm_remove = 1
      */
     confirmRemove: boolean;
     /**
      * Advisory web confirmations the operator chose not to see again; false shows the confirmation.
      * Adding selected Media inventory entries to the Library.
      *
-     * @generated from protobuf field: bool skip_add_entries_confirmation = 3
+     * @generated from protobuf field: bool skip_add_entries_confirmation = 2
      */
     skipAddEntriesConfirmation: boolean;
     /**
      * Adding one Media's whole recorded inventory to the Library.
      *
-     * @generated from protobuf field: bool skip_add_media_confirmation = 4
+     * @generated from protobuf field: bool skip_add_media_confirmation = 3
      */
     skipAddMediaConfirmation: boolean;
 }
@@ -469,6 +478,12 @@ export interface SettingsValue {
          */
         device: DeviceSettings;
     } | {
+        oneofKind: "general";
+        /**
+         * @generated from protobuf field: yatm.v1.GeneralSettings general = 5
+         */
+        general: GeneralSettings;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -531,7 +546,11 @@ export enum SettingsGroup {
     /**
      * @generated from protobuf enum value: SETTINGS_GROUP_DEVICE = 4;
      */
-    DEVICE = 4
+    DEVICE = 4,
+    /**
+     * @generated from protobuf enum value: SETTINGS_GROUP_GENERAL = 5;
+     */
+    GENERAL = 5
 }
 /**
  * Device setting; an unspecified value resolves to LOGICAL for each read attempt.
@@ -1113,18 +1132,12 @@ export const TapeReadTiming = new TapeReadTiming$Type();
 class LibrarySettings$Type extends MessageType<LibrarySettings> {
     constructor() {
         super("yatm.v1.LibrarySettings", [
-            { no: 1, name: "include_files_without_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 2, name: "confirm_remove", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 3, name: "skip_add_entries_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
-            { no: 4, name: "skip_add_media_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+            { no: 1, name: "include_files_without_versions", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
     create(value?: PartialMessage<LibrarySettings>): LibrarySettings {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.includeFilesWithoutVersions = false;
-        message.confirmRemove = false;
-        message.skipAddEntriesConfirmation = false;
-        message.skipAddMediaConfirmation = false;
         if (value !== undefined)
             reflectionMergePartial<LibrarySettings>(this, message, value);
         return message;
@@ -1136,15 +1149,6 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
             switch (fieldNo) {
                 case /* bool include_files_without_versions */ 1:
                     message.includeFilesWithoutVersions = reader.bool();
-                    break;
-                case /* bool confirm_remove */ 2:
-                    message.confirmRemove = reader.bool();
-                    break;
-                case /* bool skip_add_entries_confirmation */ 3:
-                    message.skipAddEntriesConfirmation = reader.bool();
-                    break;
-                case /* bool skip_add_media_confirmation */ 4:
-                    message.skipAddMediaConfirmation = reader.bool();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1161,15 +1165,6 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
         /* bool include_files_without_versions = 1; */
         if (message.includeFilesWithoutVersions !== false)
             writer.tag(1, WireType.Varint).bool(message.includeFilesWithoutVersions);
-        /* bool confirm_remove = 2; */
-        if (message.confirmRemove !== false)
-            writer.tag(2, WireType.Varint).bool(message.confirmRemove);
-        /* bool skip_add_entries_confirmation = 3; */
-        if (message.skipAddEntriesConfirmation !== false)
-            writer.tag(3, WireType.Varint).bool(message.skipAddEntriesConfirmation);
-        /* bool skip_add_media_confirmation = 4; */
-        if (message.skipAddMediaConfirmation !== false)
-            writer.tag(4, WireType.Varint).bool(message.skipAddMediaConfirmation);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1180,6 +1175,69 @@ class LibrarySettings$Type extends MessageType<LibrarySettings> {
  * @generated MessageType for protobuf message yatm.v1.LibrarySettings
  */
 export const LibrarySettings = new LibrarySettings$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class GeneralSettings$Type extends MessageType<GeneralSettings> {
+    constructor() {
+        super("yatm.v1.GeneralSettings", [
+            { no: 1, name: "confirm_remove", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 2, name: "skip_add_entries_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 3, name: "skip_add_media_confirmation", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+        ]);
+    }
+    create(value?: PartialMessage<GeneralSettings>): GeneralSettings {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.confirmRemove = false;
+        message.skipAddEntriesConfirmation = false;
+        message.skipAddMediaConfirmation = false;
+        if (value !== undefined)
+            reflectionMergePartial<GeneralSettings>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: GeneralSettings): GeneralSettings {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* bool confirm_remove */ 1:
+                    message.confirmRemove = reader.bool();
+                    break;
+                case /* bool skip_add_entries_confirmation */ 2:
+                    message.skipAddEntriesConfirmation = reader.bool();
+                    break;
+                case /* bool skip_add_media_confirmation */ 3:
+                    message.skipAddMediaConfirmation = reader.bool();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: GeneralSettings, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* bool confirm_remove = 1; */
+        if (message.confirmRemove !== false)
+            writer.tag(1, WireType.Varint).bool(message.confirmRemove);
+        /* bool skip_add_entries_confirmation = 2; */
+        if (message.skipAddEntriesConfirmation !== false)
+            writer.tag(2, WireType.Varint).bool(message.skipAddEntriesConfirmation);
+        /* bool skip_add_media_confirmation = 3; */
+        if (message.skipAddMediaConfirmation !== false)
+            writer.tag(3, WireType.Varint).bool(message.skipAddMediaConfirmation);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message yatm.v1.GeneralSettings
+ */
+export const GeneralSettings = new GeneralSettings$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class JobSettings$Type extends MessageType<JobSettings> {
     constructor() {
@@ -1751,7 +1809,8 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
             { no: 1, name: "library", kind: "message", oneof: "value", T: () => LibrarySettings },
             { no: 2, name: "preview", kind: "message", oneof: "value", T: () => PreviewSettings },
             { no: 3, name: "job", kind: "message", oneof: "value", T: () => JobSettings },
-            { no: 4, name: "device", kind: "message", oneof: "value", T: () => DeviceSettings }
+            { no: 4, name: "device", kind: "message", oneof: "value", T: () => DeviceSettings },
+            { no: 5, name: "general", kind: "message", oneof: "value", T: () => GeneralSettings }
         ]);
     }
     create(value?: PartialMessage<SettingsValue>): SettingsValue {
@@ -1790,6 +1849,12 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
                         device: DeviceSettings.internalBinaryRead(reader, reader.uint32(), options, (message.value as any).device)
                     };
                     break;
+                case /* yatm.v1.GeneralSettings general */ 5:
+                    message.value = {
+                        oneofKind: "general",
+                        general: GeneralSettings.internalBinaryRead(reader, reader.uint32(), options, (message.value as any).general)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1814,6 +1879,9 @@ class SettingsValue$Type extends MessageType<SettingsValue> {
         /* yatm.v1.DeviceSettings device = 4; */
         if (message.value.oneofKind === "device")
             DeviceSettings.internalBinaryWrite(message.value.device, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* yatm.v1.GeneralSettings general = 5; */
+        if (message.value.oneofKind === "general")
+            GeneralSettings.internalBinaryWrite(message.value.general, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

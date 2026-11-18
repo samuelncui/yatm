@@ -4,7 +4,7 @@ import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
-import { EntryKind, FileOperationKind, IdenticalGroup, IdenticalMember, IdenticalSortKey, IdenticalSortOrder, LibrarySettings } from "@/entity";
+import { EntryKind, FileOperationKind, IdenticalGroup, IdenticalMember, IdenticalSortKey, IdenticalSortOrder, GeneralSettings } from "@/entity";
 import { IdenticalFiles } from "./identical";
 
 const api = vi.hoisted(() => ({ find: vi.fn(), rows: vi.fn(), close: vi.fn(), lookup: vi.fn() }));
@@ -20,7 +20,7 @@ vi.mock("@/api", () => ({
     closeIdenticalResult: api.close,
   },
   settingsCli: {
-    get: () => ({ response: Promise.resolve({ value: { value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove: false }) } } }) }),
+    get: () => ({ response: Promise.resolve({ value: { value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove: false }) } } }) }),
   },
 }));
 vi.mock("@/components/file-metadata-dialog", () => ({ FileMetadataDialog: () => null }));

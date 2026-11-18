@@ -164,7 +164,7 @@ it.each([
       },
     },
   });
-  render(<MediaInspector selection={{ id: "8", name: "Tar Tape", isDir: true, isMedia: true, media: selected }} />);
+  render(<MediaInspector selection={{ id: "8", name: "Tar Tape", isDir: true, isMedia: true, media: selected }} />, { wrapper: MemoryRouter });
   expect(screen.getByText("Format").nextElementSibling).toHaveTextContent(/^Tar$/);
   expect(screen.getByText("Format ID").nextElementSibling).toHaveTextContent("tar_pax_v1");
   expect(screen.getByText("Variable")).toBeVisible();

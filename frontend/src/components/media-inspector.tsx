@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { Alert } from "@mui/material";
+import { Link } from "react-router";
 import { tapeFormatLabel } from "@/components/tape-format";
 import StorageRoundedIcon from "@mui/icons-material/StorageRounded";
 import { MediaKind, PositionHealth, VolumeType, TapeRecordMode, type Media, type Position } from "@/entity";
@@ -106,7 +107,7 @@ const MediaContent = ({ media }: { media: Media }) => {
         </dl>
         {tape && (
           <p>
-            <a href="/settings/devices">{t`Device settings`}</a>
+            <Link to="/settings/devices">{t`Device settings`}</Link>
             {tape.format === "tar_pax_v1" && (
               <>
                 {" "}

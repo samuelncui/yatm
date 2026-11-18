@@ -147,10 +147,11 @@ details show the last prepared read's identity, parameter/position sources and c
 the currently loaded cartridge or report the final read order; Inspect does not start
 measurement or extra planning queries.
 
-Job pipeline tuning, Preview runtime tuning and Device tar options use SettingsSection.collapsible
-in initially collapsed **Advanced** sections. Hidden fields stay mounted and retain values; validation
-expands the affected section and shows its error without discarding the draft. Each page keeps its
-normal Save/Cancel actions. Devices places Save, Cancel and **Refresh devices** in one row below
+Preview runtime tuning and Device tar options use SettingsSection.collapsible in initially collapsed
+**Advanced** sections. Hidden fields stay mounted and retain values; validation expands the affected
+section and shows its error without discarding the draft. The Jobs page shows its five pipeline limits
+directly in one **Pipeline limits** section, and a result batch larger than the result queue is flagged
+on its field before Save, mirroring the service's rule. Each page keeps its normal Save/Cancel actions. Devices places Save, Cancel and **Refresh devices** in one row below
 the fields. Refresh devices reloads availability only and retains the settings draft; refreshing
 saved Settings through the editor is a separate action that replaces the page draft after a
 successful read, without a discard prompt. A failed reload retains the draft and reports the error.
@@ -175,7 +176,9 @@ Actions for one page or entity belong in one left-aligned inline row after its c
 
 Double-clicking a file in ordinary Library/Location and Archive/Restore source browsing opens details, never a content tab or an implicit waitlist addition. Location entries with a File association use the same Library details and saved versions; unadmitted entries show live properties without forcing admission. Double-clicking a directory navigates into it. Original details link to the live containing folder and reveal the file; they do not add a separate Open button. Archived copies show health and availability with Restore guidance, not an HTTP content link. A dedicated file picker may use double-click to choose its entry; Library search retains its locate-result behavior.
 
-Library, Jobs, Preview and Device Settings share the same loading, retry and save feedback. Every group reuses its committed Redux value on revisit. Before the first value arrives, the editor shows shared loading feedback and its disabled page action row without inventing field values; an explicit reload retains its existing form while the read runs. A draft rejected before saving reports its error without a reload action, because reloading would discard the draft. Location removal uses the shared confirmation dialog, retaining an error in that dialog for correction and retry.
+**Settings → General** is the first Settings tab and the destination of the Settings navigation entry. It holds the browser-local **Language** section and the server-stored **Confirmations** section; **Settings → Library** holds **File visibility** and **Library data**, whose Import and Export actions sit in that section's own card, so the page action row carries only Save and Cancel. Every Settings control that the page Save commits is a checkbox; Preview's **Enable generation** and each generator's **Enabled** follow that rule, and numeric fields share the compact size of the shared number field.
+
+General, Library, Jobs, Preview and Device Settings share the same loading, retry and save feedback; its messages name no group ("Settings saved.", "Loading settings"), so they never disagree with a tab label. Saving a group re-reads its latest committed value and applies only the top-level fields whose draft value differs from the value the page loaded, so a field written elsewhere while the draft was open, such as **Don't show this again**, is not reverted by the whole-group replacement. Every group reuses its committed Redux value on revisit. Before the first value arrives, the editor shows shared loading feedback and its disabled page action row without inventing field values; an explicit reload retains its existing form while the read runs. A draft rejected before saving reports its error without a reload action, because reloading would discard the draft. Location removal uses the shared confirmation dialog, retaining an error in that dialog for correction and retry.
 
 Composed browsers connect pagination to `FileList.onScroll`; `FileBrowser` is the state container and does not forward that event to an explicitly supplied child. Integration tests render the installed list component as well as testing the paging hook, so a mocked wrapper cannot conceal a disconnected native scroll handler.
 
@@ -273,9 +276,9 @@ described above.
 
 A pop-up confirmation that only explains an action whose result can be undone is advisory and
 offers **Don't show this again**; the shared dialog stores a ticked choice after the action
-succeeds. Each such confirmation is one `skip_…` field of the server's Library settings, listed in
+succeeds. Each such confirmation is one `skip_…` field of the server's General settings, listed in
 the [confirmation registry](../../frontend/src/components/confirmations.ts) that the Settings
-**Confirmations** section renders as one checkbox per confirmation beside **Confirm Delete**, with
+**Settings → General → Confirmations** renders as one checkbox per confirmation beside **Confirm Delete**, with
 **Show all confirmations**; nothing about them is kept in browser storage. Today these are adding
 selected inventory entries and adding a Media's whole inventory to the Library. Confirmations that
 guard a loss or interrupt running work, typed FORMAT confirmation, one-off consents, input dialogs
@@ -411,8 +414,8 @@ Independent Remove requests may overlap, including different files in one Locati
 The interface is available in English and Simplified Chinese. The choice is a per-browser preference
 stored in `localStorage` as `yatm.locale`, not a server setting; without a stored choice, a browser
 language beginning with `zh` selects Simplified Chinese and anything else English. It is changed in
-**Settings → Library → Language**. Changing it remounts the application under the new language, so the
-Language select is disabled while Library settings have unsaved changes.
+**Settings → General → Language**. Changing it remounts the application under the new language, so
+while the page has unsaved changes the choice first asks to discard them and switches only on confirmation.
 
 Translation is gettext-style: the English source text in the code is the message key, and each language has one PO
 catalog under [frontend/src/locales](../../frontend/src/locales). The `en` catalog exists because production

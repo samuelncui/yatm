@@ -87,7 +87,7 @@ const LocationList = () => {
   }, [locations]);
   return (
     <SettingsPage title={t`Locations`} description={t`Directories YATM may read originals from and write Restore output to.`}>
-      <SettingsLoading label="Location" loading={catalogLoading} />
+      <SettingsLoading loading={catalogLoading} />
       {error && <Feedback severity="error">{error}</Feedback>}
       <Card>
         <TableContainer>
@@ -220,7 +220,7 @@ const LocationDetail = () => {
   const source = reply?.location;
   const sourceName = source?.name ?? "";
   const failure = error && <Feedback action={<Button onClick={() => void load()}>{t`Retry`}</Button>}>{error}</Feedback>;
-  if (!source) return <SettingsPage title={t`Location`}>{failure || <SettingsLoading label="Location" loading />}</SettingsPage>;
+  if (!source) return <SettingsPage title={t`Location`}>{failure || <SettingsLoading loading />}</SettingsPage>;
   return (
     <Stack useFlexGap spacing={2} sx={{ width: "100%", height: "100%", minHeight: 0, p: 3, textAlign: "left" }}>
       <PageHeading

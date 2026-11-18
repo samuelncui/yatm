@@ -28,6 +28,7 @@ export const SettingsNumberField = ({
   min = 1,
   max,
   helperText,
+  error,
   disabled,
   onChange,
 }: {
@@ -36,6 +37,7 @@ export const SettingsNumberField = ({
   min?: number;
   max?: number;
   helperText?: ReactNode;
+  error?: boolean;
   disabled?: boolean;
   onChange: (value: number) => void;
 }) => (
@@ -47,6 +49,7 @@ export const SettingsNumberField = ({
     label={label}
     value={value || ""}
     helperText={helperText}
+    error={error}
     disabled={disabled}
     slotProps={{ htmlInput: { min, max, step: 1 } }}
     onChange={(event) => onChange(Number(event.target.value))}

@@ -149,8 +149,8 @@ vi.mock("@/api", () => ({
   settingsCli: {
     get: ({ group }: { group: SettingsGroup }) => ({
       response: Promise.resolve(
-        group === SettingsGroup.LIBRARY
-          ? { value: { value: { oneofKind: "library", library: { includeFilesWithoutVersions: true, confirmRemove: true } } } }
+        group === SettingsGroup.GENERAL
+          ? { value: { value: { oneofKind: "general", general: { confirmRemove: true } } } }
           : { value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: false }) } } },
       ),
     }),

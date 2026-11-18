@@ -25,29 +25,27 @@ describe("Job Settings", () => {
     let finish!: (reply: { value: SettingsValue }) => void;
     get.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
     const page = renderPage(<JobSettingsBrowser />);
-    expect(screen.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
+    expect(screen.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
     expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
     // Every editor keeps the same page action row while its values load.
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     await act(async () => finish({ value: value() }));
-    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     const batch = screen.getByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
     await userEvent.type(batch, "128");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText("Job settings saved.");
+    await screen.findByText("Settings saved.");
     page.rerender(<></>);
     page.rerender(routed(<JobSettingsBrowser />));
-    await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     expect(screen.getByRole("spinbutton", { name: "Manifest batch (items)" })).toHaveValue(128);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     await act(async () => {});
-    expect(get).toHaveBeenCalledOnce();
+    // The initial load and Save's re-read of the latest group; revisiting adds none.
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
   it("saves pipeline limits through the shared typed Settings API", async () => {
     renderPage(<JobSettingsBrowser />);
-    await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await waitFor(() => expect(batch).toHaveValue(256));
     await userEvent.clear(batch);
@@ -57,29 +55,44 @@ describe("Job Settings", () => {
       value: { value: { oneofKind: "job", job: { execution: execution(128) } } },
     });
     await waitFor(() => expect(batch).toHaveValue(128));
-    expect(screen.getByText("Job settings saved.")).toBeInTheDocument();
+    expect(screen.getByText("Settings saved.")).toBeInTheDocument();
   });
 
-  it("keeps a draft the service rejects and expands its section for correction", async () => {
+  it("keeps a draft the service rejects for correction in place", async () => {
     update.mockImplementationOnce(() => ({
-      response: Promise.reject(new RpcError("write batch size must not exceed the write buffer", "INVALID_ARGUMENT")),
+      response: Promise.reject(new RpcError("flush interval must be at least 100 milliseconds", "INVALID_ARGUMENT")),
     }));
     renderPage(<JobSettingsBrowser />);
-    await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+    const interval = await screen.findByRole("spinbutton", { name: "Result flush interval (ms)" });
+    await waitFor(() => expect(interval).toHaveValue(1000));
+    await userEvent.clear(interval);
+    await userEvent.type(interval, "50");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("flush interval must be at least 100 milliseconds")).toBeInTheDocument();
+    // A rejected draft is corrected in place; reloading would discard it.
+    expect(screen.queryByRole("button", { name: /Reload saved settings|Retry/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "Result flush interval (ms)" })).toHaveValue(50);
+  });
+
+  it("flags a result batch larger than the result queue before saving", async () => {
+    renderPage(<JobSettingsBrowser />);
     const batch = await screen.findByRole("spinbutton", { name: "Results per update" });
     await waitFor(() => expect(batch).toHaveValue(256));
     await userEvent.clear(batch);
     await userEvent.type(batch, "8192");
+    expect(batch).toBeInvalid();
+    expect(screen.getByText("Results per update must not exceed queued results.")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("write batch size must not exceed the write buffer")).toBeInTheDocument();
-    // A rejected draft is corrected in place; reloading would discard it.
-    expect(screen.queryByRole("button", { name: /Reload saved settings|Retry/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("spinbutton", { name: "Results per update" })).toHaveValue(8192);
+    expect(update).not.toHaveBeenCalled();
+    await userEvent.clear(batch);
+    await userEvent.type(batch, "128");
+    expect(batch).toBeValid();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(update).toHaveBeenCalledOnce();
   });
 
   it("cancels unsaved changes", async () => {
     renderPage(<JobSettingsBrowser />);
-    await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
     await userEvent.type(batch, "128");
@@ -92,7 +105,6 @@ describe("Job Settings", () => {
     let finish!: (reply: { value: SettingsValue }) => void;
     update.mockReturnValueOnce({ response: new Promise((resolve) => (finish = resolve)) });
     renderPage(<JobSettingsBrowser />);
-    await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
     await userEvent.type(batch, "128");
@@ -108,7 +120,6 @@ describe("Job Settings", () => {
     let reject!: (error: Error) => void;
     update.mockImplementation(() => ({ response: new Promise((_, fail) => (reject = fail)) }));
     renderPage(<JobSettingsBrowser />);
-    await userEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
     const batch = await screen.findByRole("spinbutton", { name: "Manifest batch (items)" });
     await userEvent.clear(batch);
     await userEvent.type(batch, "128");
@@ -141,7 +152,6 @@ it("retries a failed initial read without defaults and keeps its form while expl
   expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
   expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
   await act(async () => finish({ value: value() }));
-  await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
   const batch = screen.getByRole("spinbutton", { name: "Manifest batch (items)" });
   await userEvent.clear(batch);
   await userEvent.type(batch, "128");
@@ -159,5 +169,5 @@ it("retries a failed initial read without defaults and keeps its form while expl
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  expect(get).toHaveBeenCalledTimes(3);
+  expect(get).toHaveBeenCalledTimes(4);
 });

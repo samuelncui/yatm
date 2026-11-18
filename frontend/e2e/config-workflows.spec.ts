@@ -22,6 +22,7 @@ import {
   Job,
   JobKind,
   JobStatus,
+  GeneralSettings,
   LibrarySettings,
   ListFilesResponse,
   ListLocationsResponse,
@@ -104,7 +105,8 @@ const fixture = async (page: Page) => {
   const media = Media.create({ id: 7n, name: "Fixture Volume", kind: MediaKind.VOLUME, identity: "fixture", capabilities: { read: MediaAccess.RANDOM } });
   const state = {
     preview: preview(),
-    library: LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true }),
+    library: LibrarySettings.create({ includeFilesWithoutVersions: true }),
+    general: GeneralSettings.create({ confirmRemove: true }),
     updates: 0,
     capabilityReads: 0,
     creationReads: 0,
@@ -162,12 +164,15 @@ const fixture = async (page: Page) => {
             ? { oneofKind: "preview" as const, preview: state.preview }
             : request.group === SettingsGroup.DEVICE
               ? { oneofKind: "device" as const, device: DeviceSettings.create() }
-              : { oneofKind: "library" as const, library: state.library };
+              : request.group === SettingsGroup.GENERAL
+                ? { oneofKind: "general" as const, general: state.general }
+                : { oneofKind: "library" as const, library: state.library };
         return fulfill(route, GetSettingsResponse.toBinary(GetSettingsResponse.create({ value: { value } })));
       }
       case "yatm.v1.SettingsService/Update": {
         const request = UpdateSettingsRequest.fromBinary(bytes);
         if (request.value?.value.oneofKind === "preview") state.preview = PreviewSettings.clone(request.value.value.preview);
+        if (request.value?.value.oneofKind === "general") state.general = GeneralSettings.clone(request.value.value.general);
         if (request.value?.value.oneofKind === "library") state.library = LibrarySettings.clone(request.value.value.library);
         state.updates++;
         return fulfill(route, UpdateSettingsResponse.toBinary(UpdateSettingsResponse.create({ value: request.value })));
@@ -281,8 +286,8 @@ for (const viewport of [
   test(`Scan policies, inventory review and matching counts remain explicit on ${viewport.name}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     const state = await fixture(page);
-    // The operator turned this confirmation off earlier; Library settings record it.
-    state.library.skipAddMediaConfirmation = true;
+    // The operator turned this confirmation off earlier; General settings record it.
+    state.general.skipAddMediaConfirmation = true;
     await page.goto("/scan?location=2&previews=1");
     await page.getByRole("button", { name: /^Advanced/ }).click();
     await select(page, page, "Signatures", "Reuse known signatures only");
@@ -305,7 +310,7 @@ for (const viewport of [
     await expect(dialog.getByRole("button", { name: "Show confirmation next time" })).toBeVisible();
     expect(state.admissions).toEqual([true]);
     await dialog.getByRole("button", { name: "Show confirmation next time" }).click();
-    await expect.poll(() => state.library.skipAddMediaConfirmation).toBe(false);
+    await expect.poll(() => state.general.skipAddMediaConfirmation).toBe(false);
     await expectFits(dialog);
     await expect(dialog).toHaveCSS("opacity", "1");
     await page.screenshot({ animations: "disabled", path: info.outputPath(`inventory-review-${viewport.name}.png`) });

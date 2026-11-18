@@ -114,8 +114,8 @@ export const IdenticalFiles = () => {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<FileData>();
   const [metadata, setMetadata] = useState<FileData[]>([]);
-  const { settings: librarySettings, error: settingsError } = useCommittedSettings(SettingsGroup.LIBRARY);
-  const confirmRemove = librarySettings?.confirmRemove ?? true;
+  const { settings: generalSettings, error: settingsError } = useCommittedSettings(SettingsGroup.GENERAL);
+  const confirmRemove = generalSettings?.confirmRemove ?? true;
   const [revision, setRevision] = useState(0);
   const browser = useRef<FileBrowserHandle>(null);
   const generation = useRef(0);

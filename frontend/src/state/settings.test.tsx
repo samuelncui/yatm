@@ -1,20 +1,20 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import { JobSettings, LibrarySettings, SettingsGroup, SettingsValue } from "@/entity";
-import { changeCommittedSettings, loadCommittedSettings, useCommittedSettings, useSettingsEditor } from "@/components/settings-editor";
+import { JobSettings, GeneralSettings, SettingsGroup, SettingsValue } from "@/entity";
+import { changeCommittedSettings, loadCommittedSettings, mergeSettingsDraft, useCommittedSettings, useSettingsEditor } from "@/components/settings-editor";
 import { AppStateProvider } from "./react";
 import { createAppStore } from "./store";
 import { makeSelectSettings, settingsActions } from "./settings";
 
 const { get, update } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
 vi.mock("@/api", () => ({ settingsCli: { get, update } }));
-const value = (confirmRemove: boolean) => SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create({ confirmRemove }) } });
+const value = (confirmRemove: boolean) => SettingsValue.create({ value: { oneofKind: "general", general: GeneralSettings.create({ confirmRemove }) } });
 const Reader = () => {
-  const { settings } = useCommittedSettings(SettingsGroup.LIBRARY);
+  const { settings } = useCommittedSettings(SettingsGroup.GENERAL);
   return <output>Committed:{String(settings?.confirmRemove)}</output>;
 };
 const Editor = () => {
-  const editor = useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library");
+  const editor = useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings);
   return (
     <>
       <output>Draft:{String(editor.draft?.confirmRemove)}</output>
@@ -71,8 +71,10 @@ it("does not let an older Get overwrite Save or its editor draft", async () => {
   });
   let reading!: ReturnType<typeof loadCommittedSettings>;
   act(() => {
-    reading = loadCommittedSettings(store, SettingsGroup.LIBRARY, true);
+    reading = loadCommittedSettings(store, SettingsGroup.GENERAL, true);
   });
+  // Save reads the latest group once more before it writes.
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: value(true) }) });
   fireEvent.click(screen.getByText("Edit"));
   fireEvent.click(screen.getByText("Save"));
   await screen.findByText("Committed:false");
@@ -82,15 +84,15 @@ it("does not let an older Get overwrite Save or its editor draft", async () => {
   });
   expect(screen.getByText("Committed:false")).toBeVisible();
   expect(screen.getByText("Draft:false")).toBeVisible();
-  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toEqual(value(false));
+  expect(makeSelectSettings(SettingsGroup.GENERAL)(store.getState())).toEqual(value(false));
 });
 
 it("keeps missing Settings unknown after a failed read", async () => {
   get.mockReturnValue({ response: Promise.reject(new Error("Unavailable")) });
   const store = createAppStore();
-  await expect(loadCommittedSettings(store, SettingsGroup.LIBRARY)).rejects.toThrow("Unavailable");
-  expect(store.getState().settings[SettingsGroup.LIBRARY]).toMatchObject({ loading: false, error: "Unavailable" });
-  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toBeUndefined();
+  await expect(loadCommittedSettings(store, SettingsGroup.GENERAL)).rejects.toThrow("Unavailable");
+  expect(store.getState().settings[SettingsGroup.GENERAL]).toMatchObject({ loading: false, error: "Unavailable" });
+  expect(makeSelectSettings(SettingsGroup.GENERAL)(store.getState())).toBeUndefined();
 });
 
 it("shares Job Settings reads and opens its cached editor immediately without refetching", async () => {
@@ -100,7 +102,7 @@ it("shares Job Settings reads and opens its cached editor immediately without re
   const store = createAppStore();
   await Promise.all([loadCommittedSettings(store, SettingsGroup.JOB), loadCommittedSettings(store, SettingsGroup.JOB)]);
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.JOB, JobSettings, "Job"), { wrapper });
+  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.JOB, JobSettings), { wrapper });
   expect(result.current.loading).toBe(false);
   expect(result.current.draft).toEqual(job);
   await act(async () => {});
@@ -113,7 +115,7 @@ it("adopts a Save completed after navigating away and back without refetching", 
   update.mockReturnValue({ response: new Promise((resolve) => (finish = resolve)) });
   const store = createAppStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const first = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const first = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   await waitFor(() => expect(first.result.current.loading).toBe(false));
   act(() => first.result.current.setDraft((draft) => draft && { ...draft, confirmRemove: false }));
   let saving!: Promise<boolean>;
@@ -121,7 +123,7 @@ it("adopts a Save completed after navigating away and back without refetching", 
     saving = first.result.current.save();
   });
   first.unmount();
-  const next = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const next = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   expect(next.result.current.draft?.confirmRemove).toBe(true);
   expect(next.result.current.loading).toBe(false);
   await act(async () => {
@@ -130,18 +132,19 @@ it("adopts a Save completed after navigating away and back without refetching", 
   });
   expect(next.result.current.draft?.confirmRemove).toBe(false);
   expect(next.result.current.dirty).toBe(false);
-  expect(get).toHaveBeenCalledOnce();
+  // The load and Save's re-read of the latest group; coming back adds none.
+  expect(get).toHaveBeenCalledTimes(2);
 });
 
 it("preserves a dirty draft when committed values change and cancels to the newest value", async () => {
   get.mockReturnValue({ response: Promise.resolve({ value: value(true) }) });
   const store = createAppStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
-  act(() => result.current.setDraft((draft) => draft && { ...draft, includeFilesWithoutVersions: true }));
+  act(() => result.current.setDraft((draft) => draft && { ...draft, skipAddMediaConfirmation: true }));
   const edited = result.current.draft;
-  act(() => store.dispatch(settingsActions.saved({ group: SettingsGroup.LIBRARY, value: SettingsValue.toJsonString(value(false)) })));
+  act(() => store.dispatch(settingsActions.saved({ group: SettingsGroup.GENERAL, value: SettingsValue.toJsonString(value(false)) })));
   expect(result.current.draft).toEqual(edited);
   expect(result.current.dirty).toBe(true);
   act(() => result.current.cancel());
@@ -153,12 +156,12 @@ it("retains a failed Settings read across consumers until explicit Retry", async
   get.mockReturnValueOnce({ response: Promise.reject(new Error("Unavailable")) });
   const store = createAppStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const first = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const first = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   await waitFor(() => expect(first.result.current.error).toBe("Unavailable"));
   first.unmount();
   get.mockReturnValue({ response: Promise.resolve({ value: value(true) }) });
-  const next = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
-  const reader = renderHook(() => useCommittedSettings(SettingsGroup.LIBRARY), { wrapper });
+  const next = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
+  const reader = renderHook(() => useCommittedSettings(SettingsGroup.GENERAL), { wrapper });
   await act(async () => {});
   expect(get).toHaveBeenCalledOnce();
   expect(next.result.current.draft).toBeUndefined();
@@ -184,10 +187,10 @@ it.each(["success", "failure"])("does not settle an editor from a superseded ini
   get.mockReturnValueOnce({ response: new Promise((resolve) => (finishNew = resolve)) });
   const store = createAppStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   let latest!: ReturnType<typeof loadCommittedSettings>;
   act(() => {
-    latest = loadCommittedSettings(store, SettingsGroup.LIBRARY, true);
+    latest = loadCommittedSettings(store, SettingsGroup.GENERAL, true);
   });
   await act(async () => {
     if (outcome === "success") finishOld({ value: value(true) });
@@ -209,7 +212,7 @@ it("keeps an explicit reload pending when another reload supersedes it over cach
   get.mockReturnValueOnce({ response: Promise.resolve({ value: value(true) }) });
   const store = createAppStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
-  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.LIBRARY, LibrarySettings, "Library"), { wrapper });
+  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
   let finishOld!: (reply: { value: SettingsValue }) => void;
   let finishNew!: (reply: { value: SettingsValue }) => void;
@@ -218,7 +221,7 @@ it("keeps an explicit reload pending when another reload supersedes it over cach
   act(() => result.current.reload());
   let latest!: ReturnType<typeof loadCommittedSettings>;
   act(() => {
-    latest = loadCommittedSettings(store, SettingsGroup.LIBRARY, true);
+    latest = loadCommittedSettings(store, SettingsGroup.GENERAL, true);
   });
   await act(async () => finishOld({ value: value(true) }));
   expect(result.current.loading).toBe(true);
@@ -235,27 +238,56 @@ it("keeps an explicit reload pending when another reload supersedes it over cach
 it("changes one committed value from a fresh server read and commits the saved group", async () => {
   get.mockReturnValueOnce({ response: Promise.resolve({ value: value(true) }) });
   const store = createAppStore();
-  await loadCommittedSettings(store, SettingsGroup.LIBRARY);
+  await loadCommittedSettings(store, SettingsGroup.GENERAL);
   // Another client changed the group after this store read it.
-  const current = LibrarySettings.create({ confirmRemove: false, includeFilesWithoutVersions: true });
-  get.mockReturnValueOnce({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: current } }) }) });
-  const stored = LibrarySettings.create({ ...current, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: true });
-  update.mockReturnValue({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "library", library: stored } }) }) });
-  const change = vi.fn((settings: LibrarySettings) => ({ ...settings, skipAddEntriesConfirmation: true }));
-  await expect(changeCommittedSettings(store, SettingsGroup.LIBRARY, change)).resolves.toEqual(stored);
+  const current = GeneralSettings.create({ confirmRemove: false });
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "general", general: current } }) }) });
+  const stored = GeneralSettings.create({ ...current, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: true });
+  update.mockReturnValue({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "general", general: stored } }) }) });
+  const change = vi.fn((settings: GeneralSettings) => ({ ...settings, skipAddEntriesConfirmation: true }));
+  await expect(changeCommittedSettings(store, SettingsGroup.GENERAL, change)).resolves.toEqual(stored);
   expect(get).toHaveBeenCalledTimes(2);
   expect(change).toHaveBeenCalledExactlyOnceWith(current);
   expect(update).toHaveBeenCalledExactlyOnceWith({
-    value: { value: { oneofKind: "library", library: { ...current, skipAddEntriesConfirmation: true } } },
+    value: { value: { oneofKind: "general", general: { ...current, skipAddEntriesConfirmation: true } } },
   });
   // The store holds what the server saved, not what was sent.
-  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toEqual(SettingsValue.create({ value: { oneofKind: "library", library: stored } }));
+  expect(makeSelectSettings(SettingsGroup.GENERAL)(store.getState())).toEqual(SettingsValue.create({ value: { oneofKind: "general", general: stored } }));
 });
 
 it("leaves the committed value alone when a change cannot be saved", async () => {
   get.mockReturnValue({ response: Promise.resolve({ value: value(true) }) });
   update.mockReturnValue({ response: Promise.reject(new Error("Unavailable")) });
   const store = createAppStore();
-  await expect(changeCommittedSettings(store, SettingsGroup.LIBRARY, (settings) => ({ ...settings, confirmRemove: false }))).rejects.toThrow("Unavailable");
-  expect(makeSelectSettings(SettingsGroup.LIBRARY)(store.getState())).toEqual(value(true));
+  await expect(changeCommittedSettings(store, SettingsGroup.GENERAL, (settings) => ({ ...settings, confirmRemove: false }))).rejects.toThrow("Unavailable");
+  expect(makeSelectSettings(SettingsGroup.GENERAL)(store.getState())).toEqual(value(true));
+});
+
+it("saves only the fields the draft changed onto the server's latest group", async () => {
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: value(true) }) });
+  const store = createAppStore();
+  const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider store={store}>{children}</AppStateProvider>;
+  const { result } = renderHook(() => useSettingsEditor(SettingsGroup.GENERAL, GeneralSettings), { wrapper });
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  act(() => result.current.setDraft((draft) => draft && { ...draft, confirmRemove: false }));
+
+  // "Don't show this again" was stored elsewhere while the draft was open.
+  const latest = GeneralSettings.create({ confirmRemove: true, skipAddMediaConfirmation: true });
+  get.mockReturnValueOnce({ response: Promise.resolve({ value: SettingsValue.create({ value: { oneofKind: "general", general: latest } }) }) });
+  update.mockImplementation(({ value: settings }: { value: SettingsValue }) => ({ response: Promise.resolve({ value: settings }) }));
+  await act(async () => {
+    await result.current.save();
+  });
+  expect(update).toHaveBeenCalledExactlyOnceWith({
+    value: { value: { oneofKind: "general", general: { confirmRemove: false, skipAddEntriesConfirmation: false, skipAddMediaConfirmation: true } } },
+  });
+  expect(result.current.draft).toEqual({ confirmRemove: false, skipAddEntriesConfirmation: false, skipAddMediaConfirmation: true });
+  expect(result.current.dirty).toBe(false);
+});
+
+it("merges a draft by comparing each top-level field as JSON", () => {
+  const loaded = { name: "a", nested: { size: 1n }, list: [1, 2] };
+  const latest = { name: "b", nested: { size: 5n }, list: [1, 2] };
+  expect(mergeSettingsDraft(latest, loaded, { ...loaded, list: [1, 2, 3] })).toEqual({ name: "b", nested: { size: 5n }, list: [1, 2, 3] });
+  expect(mergeSettingsDraft(latest, loaded, { ...loaded, nested: { size: 1n } })).toEqual(latest);
 });

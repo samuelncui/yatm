@@ -12,7 +12,7 @@ const { get, update, list } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(),
 vi.mock("@/api", () => ({ fileBase: "/files", settingsCli: { get, update }, locationCli: { list } }));
 import { SettingsBrowser } from "./settings";
 
-const initial = LibrarySettings.create({ includeFilesWithoutVersions: true, confirmRemove: true });
+const initial = LibrarySettings.create({ includeFilesWithoutVersions: true });
 const value = (settings = initial) => SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.clone(settings) } });
 const open = () => renderPage(<SettingsBrowser />);
 
@@ -36,81 +36,19 @@ describe("Library Settings", () => {
     expect(update).toHaveBeenCalledExactlyOnceWith({
       value: { value: { oneofKind: "library", library: { ...initial, includeFilesWithoutVersions: false } } },
     });
-    expect(await screen.findByText("Library settings saved.")).toBeVisible();
+    expect(await screen.findByText("Settings saved.")).toBeVisible();
     expect(screen.getByText(/Locations are unaffected/)).toBeInTheDocument();
     const actions = screen.getByRole("button", { name: "Save" }).parentElement;
-    expect(Array.from(actions!.children, (action) => action.textContent?.trim())).toEqual(["Save", "Cancel", "Import", "Export"]);
-  });
-
-  it("cancels unsaved Trash confirmation changes", async () => {
-    open();
-    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
-    await waitFor(() => expect(toggle).toBeEnabled());
-    await userEvent.click(toggle);
-    expect(toggle).not.toBeChecked();
-    expect(screen.getByText("Delete moves selected items to Trash immediately.")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(toggle).toBeChecked();
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("lists every confirmation as shown or hidden and saves a changed one with the inverted stored meaning", async () => {
-    get.mockReturnValue({ response: Promise.resolve({ value: value({ ...initial, skipAddMediaConfirmation: true }) }) });
-    open();
-    const remove = await screen.findByRole("checkbox", { name: "Confirm Delete" });
-    const entries = screen.getByRole("checkbox", { name: "Confirm adding selected inventory entries to Library" });
-    const media = screen.getByRole("checkbox", { name: "Confirm adding a Media’s whole inventory to Library" });
-    await waitFor(() => expect(remove).toBeEnabled());
-    expect(screen.getByText("Confirmations")).toBeVisible();
-    expect(remove).toBeChecked();
-    expect(entries).toBeChecked();
-    expect(media).not.toBeChecked();
-    await userEvent.click(entries);
-    await userEvent.click(media);
-    expect(entries).not.toBeChecked();
-    expect(media).toBeChecked();
-    expect(update).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(update).toHaveBeenCalledExactlyOnceWith({
-      value: { value: { oneofKind: "library", library: { ...initial, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: false } } },
-    });
-    expect(await screen.findByText("Library settings saved.")).toBeVisible();
-  });
-
-  it("shows all confirmations again in the draft and offers that only while one is hidden", async () => {
-    get.mockReturnValue({
-      response: Promise.resolve({ value: value({ ...initial, confirmRemove: false, skipAddEntriesConfirmation: true, skipAddMediaConfirmation: true }) }),
-    });
-    open();
-    const remove = await screen.findByRole("checkbox", { name: "Confirm Delete" });
-    await waitFor(() => expect(remove).toBeEnabled());
-    const showAll = screen.getByRole("button", { name: "Show all confirmations" });
-    const confirmations = [
-      remove,
-      screen.getByRole("checkbox", { name: "Confirm adding selected inventory entries to Library" }),
-      screen.getByRole("checkbox", { name: "Confirm adding a Media’s whole inventory to Library" }),
-    ];
-    for (const confirmation of confirmations) expect(confirmation).not.toBeChecked();
-    await userEvent.click(showAll);
-    for (const confirmation of confirmations) expect(confirmation).toBeChecked();
-    expect(showAll).toBeDisabled();
-    expect(update).not.toHaveBeenCalled();
-    // Hiding any one confirmation offers the action again.
-    for (const confirmation of confirmations) {
-      await userEvent.click(confirmation);
-      expect(showAll).toBeEnabled();
-      await userEvent.click(confirmation);
-      expect(showAll).toBeDisabled();
-    }
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(update).toHaveBeenCalledExactlyOnceWith({ value: { value: { oneofKind: "library", library: initial } } });
+    const dataActions = screen.getByRole("button", { name: "Import" }).parentElement;
+    expect(Array.from(dataActions!.children, (action) => action.textContent?.trim())).toEqual(["Import", "Export"]);
+    expect(Array.from(actions!.children, (action) => action.textContent?.trim())).toEqual(["Save", "Cancel"]);
   });
 
   it("locks editable controls during Save and retains the draft and error after failure", async () => {
     let reject!: (error: Error) => void;
     update.mockImplementation(() => ({ response: new Promise((_, fail) => (reject = fail)) }));
     open();
-    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
+    const toggle = await screen.findByRole("checkbox", { name: "Include files without saved versions" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -130,13 +68,13 @@ describe("Library Settings", () => {
   });
 
   it("reports a server-rejected draft without a reload action", async () => {
-    update.mockImplementation(() => ({ response: Promise.reject(new RpcError("Library settings are invalid", "INVALID_ARGUMENT")) }));
+    update.mockImplementation(() => ({ response: Promise.reject(new RpcError("Settings are invalid", "INVALID_ARGUMENT")) }));
     open();
-    const toggle = await screen.findByRole("checkbox", { name: "Confirm Delete" });
+    const toggle = await screen.findByRole("checkbox", { name: "Include files without saved versions" });
     await waitFor(() => expect(toggle).toBeEnabled());
     await userEvent.click(toggle);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("Library settings are invalid")).toBeVisible();
+    expect(await screen.findByText("Settings are invalid")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Reload saved settings" })).not.toBeInTheDocument();
     expect(toggle).not.toBeChecked();
   });
@@ -144,7 +82,7 @@ describe("Library Settings", () => {
   it("does not invent defaults while the server value is loading", () => {
     get.mockReturnValue({ response: new Promise(() => undefined) });
     open();
-    expect(screen.getByRole("progressbar", { name: "Loading Library settings" })).toBeVisible();
+    expect(screen.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Export" })).toBeEnabled();

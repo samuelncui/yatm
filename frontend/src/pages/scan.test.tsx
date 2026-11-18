@@ -1,4 +1,4 @@
-import { LibrarySettings, PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
+import { GeneralSettings, PreviewSettings, SettingsGroup, SettingsValue } from "@/entity";
 import { act, screen, waitFor } from "@testing-library/react";
 import { render } from "@/state/test-render";
 import userEvent from "@testing-library/user-event";
@@ -37,9 +37,9 @@ vi.mock("@/api", () => ({
   filesCli: { get: fileGet, importPositions },
   scanJobCli: { create: scan, getCreation: latest },
   previewCli: { getCapabilities: capabilities },
-  // Library settings hold the skipped confirmations; every other read is the Preview group the cases vary.
+  // General settings hold the skipped confirmations; every other read is the Preview group the cases vary.
   settingsCli: {
-    get: (request: { group: SettingsGroup }) => (request.group === SettingsGroup.LIBRARY ? librarySettings(request) : previewSettings(request)),
+    get: (request: { group: SettingsGroup }) => (request.group === SettingsGroup.GENERAL ? librarySettings(request) : previewSettings(request)),
     update: settingsUpdate,
   },
 }));
@@ -140,7 +140,7 @@ beforeEach(() => {
   previewSettings.mockReturnValue(call({ value: { value: { oneofKind: "preview", preview: PreviewSettings.create({ enabled: true }) } } }));
   vi.clearAllMocks();
   localStorage.clear();
-  librarySettings.mockReturnValue(call({ value: SettingsValue.create({ value: { oneofKind: "library", library: LibrarySettings.create() } }) }));
+  librarySettings.mockReturnValue(call({ value: SettingsValue.create({ value: { oneofKind: "general", general: GeneralSettings.create() } }) }));
   settingsUpdate.mockImplementation(({ value }: { value: SettingsValue }) => call({ value: SettingsValue.clone(value) }));
   get.mockReturnValue(call({ location: source }));
   mediaList.mockReturnValue(call({ media: [disk], hasMore: false }));
@@ -424,7 +424,7 @@ describe("Scan form", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(importPositions).toHaveBeenLastCalledWith(expect.objectContaining({ mediaId: 3n, dryrun: false }));
     expect(settingsUpdate).toHaveBeenCalledExactlyOnceWith({
-      value: { value: { oneofKind: "library", library: LibrarySettings.create({ skipAddMediaConfirmation: true }) } },
+      value: { value: { oneofKind: "general", general: GeneralSettings.create({ skipAddMediaConfirmation: true }) } },
     });
     expect(localStorage).toHaveLength(0);
 

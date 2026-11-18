@@ -5,31 +5,30 @@ import { SettingsNumberField } from "@/components/settings-field";
 import { SettingsActions, SettingsEditorFeedback, SettingsSection } from "@/components/settings-page";
 import { JobExecutionSettings, JobSettings, SettingsGroup } from "@/entity";
 
-const executionSummary = (execution: JobExecutionSettings): string => {
-  const readBatch = String(execution.readBatch);
-  const readBufferMax = String(execution.readBufferMax);
-  const writeBufferMax = String(execution.writeBufferMax);
-  const writeBatchSize = String(execution.writeBatchSize);
-  const flushIntervalMs = String(execution.flushIntervalMs);
-  return t`Manifest batch ${readBatch} items · queued reads ${readBufferMax} · queued results ${writeBufferMax} · ${writeBatchSize} results/update · flush ${flushIntervalMs} ms`;
-};
+// Mirrors the service's rule that a result batch never exceeds the queue that feeds it.
+const validateExecution = (execution: JobExecutionSettings): string =>
+  execution.writeBatchSize > execution.writeBufferMax ? t`Results per update must not exceed queued results.` : "";
 
 /** The Executor's pipeline limits: what an attempt batches, buffers and flushes while it runs. */
 export const JobSettingsBrowser = () => {
-  const editor = useSettingsEditor(SettingsGroup.JOB, JobSettings, "Job");
-  const { cancel, dirty, draft, error, invalid, loading, reload, save: saveDraft, saved, saving, setDraft } = editor;
+  const editor = useSettingsEditor(SettingsGroup.JOB, JobSettings);
+  const { cancel, dirty, draft, error, invalid, loading, reload, reject, save: saveDraft, saved, saving, setDraft } = editor;
   const execution = draft?.execution;
   const changeExecution = (changes: Partial<JobExecutionSettings>) =>
     setDraft((value) => (value?.execution ? { ...value, execution: { ...value.execution, ...changes } } : value));
+  const validation = execution ? validateExecution(execution) : "";
   const save = async () => {
     if (!execution || saving || loading) return;
+    if (validation) {
+      reject(validation);
+      return;
+    }
     await saveDraft();
   };
 
   return (
     <>
       <SettingsEditorFeedback
-        label="Job"
         loading={loading}
         saving={saving}
         error={error}
@@ -50,7 +49,7 @@ export const JobSettingsBrowser = () => {
         }}
       >
         {execution && (
-          <SettingsSection title={t`Advanced`} collapsible hasError={!!invalid} description={executionSummary(execution)}>
+          <SettingsSection title={t`Pipeline limits`}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
@@ -84,7 +83,8 @@ export const JobSettingsBrowser = () => {
               <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
                 <SettingsNumberField
                   label={t`Results per update`}
-                  helperText={t`Maximum results in one update. Larger batches can delay progress reporting.`}
+                  helperText={validation || t`Maximum results in one update. Larger batches can delay progress reporting.`}
+                  error={!!validation}
                   disabled={loading || saving}
                   value={execution.writeBatchSize}
                   onChange={(writeBatchSize) => changeExecution({ writeBatchSize })}
