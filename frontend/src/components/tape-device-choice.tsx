@@ -33,7 +33,8 @@ export const soleAvailableDevice = (devices: DeviceSummary[]): string => {
 const enumLabel = (labels: Record<number, MessageDescriptor>, value: number): string => i18n._(labels[value] ?? labels[0]);
 const unknownReport = msg({ message: "unknown", context: "Device report" });
 
-const reasonLabels: Record<number, MessageDescriptor> = {
+// Typed by the enum so every value needs a label.
+const reasonLabels: Record<DeviceReason, MessageDescriptor> = {
   [DeviceReason.UNSPECIFIED]: unknownReport,
   [DeviceReason.BUSY]: msg({ message: "busy", context: "Device report" }),
   [DeviceReason.NO_MEDIUM]: msg({ message: "no medium", context: "Device report" }),
@@ -47,7 +48,7 @@ const reasonLabels: Record<number, MessageDescriptor> = {
   [DeviceReason.NOT_READY]: msg({ message: "not ready", context: "Device report" }),
   [DeviceReason.MISSING_TOOL]: msg({ message: "missing tool", context: "Device report" }),
 };
-const featureLabels: Record<number, MessageDescriptor> = {
+const featureLabels: Record<DeviceFeatureKind, MessageDescriptor> = {
   [DeviceFeatureKind.UNSPECIFIED]: unknownReport,
   [DeviceFeatureKind.INITIALIZE]: msg({ message: "initialize", context: "Device report" }),
   [DeviceFeatureKind.SEQUENTIAL_READ]: msg({ message: "sequential read", context: "Device report" }),
@@ -58,21 +59,22 @@ const featureLabels: Record<number, MessageDescriptor> = {
   [DeviceFeatureKind.HARDWARE_ENCRYPTION]: msg({ message: "hardware encryption", context: "Device report" }),
   [DeviceFeatureKind.END_OF_WRAP_POSITION]: msg({ message: "end of wrap position", context: "Device report" }),
   [DeviceFeatureKind.CAPACITY_TO_WARNING]: msg({ message: "capacity to warning", context: "Device report" }),
+  [DeviceFeatureKind.SOFTWARE_READ_ORDER]: msg({ message: "software read order", context: "Device report" }),
 };
-const supportLabels: Record<number, MessageDescriptor> = {
+const supportLabels: Record<DeviceFeatureSupport, MessageDescriptor> = {
   [DeviceFeatureSupport.UNSPECIFIED]: unknownReport,
   [DeviceFeatureSupport.UNKNOWN]: unknownReport,
   [DeviceFeatureSupport.UNSUPPORTED]: msg({ message: "unsupported", context: "Device report" }),
   [DeviceFeatureSupport.PARTIAL]: msg({ message: "partial", context: "Device report" }),
   [DeviceFeatureSupport.SUPPORTED]: msg({ message: "supported", context: "Device report" }),
 };
-const availabilityLabels: Record<number, MessageDescriptor> = {
+const availabilityLabels: Record<DeviceFeatureAvailability, MessageDescriptor> = {
   [DeviceFeatureAvailability.UNSPECIFIED]: unknownReport,
   [DeviceFeatureAvailability.UNKNOWN]: unknownReport,
   [DeviceFeatureAvailability.UNAVAILABLE]: msg({ message: "unavailable", context: "Device report" }),
   [DeviceFeatureAvailability.READY]: msg({ message: "ready", context: "Device report" }),
 };
-const evidenceLabels: Record<number, MessageDescriptor> = {
+const evidenceLabels: Record<DeviceFeatureEvidence, MessageDescriptor> = {
   [DeviceFeatureEvidence.UNSPECIFIED]: unknownReport,
   [DeviceFeatureEvidence.REPORTED]: msg({ message: "reported", context: "Device report" }),
   [DeviceFeatureEvidence.OBSERVED]: msg({ message: "observed", context: "Device report" }),

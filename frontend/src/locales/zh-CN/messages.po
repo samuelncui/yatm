@@ -3648,6 +3648,10 @@ msgstr "已跳过：已达目标介质数量 {targetReached} · 已在此介质�
 msgid "SN {serialNumber}"
 msgstr "序列号 {serialNumber}"
 
+msgctxt "Device report"
+msgid "software read order"
+msgstr "软件读取排序"
+
 msgid "Some copies need attention"
 msgstr "部分副本需要处理"
 

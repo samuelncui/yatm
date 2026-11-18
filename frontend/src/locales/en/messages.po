@@ -3648,6 +3648,10 @@ msgstr "Skipped: target Media count reached {targetReached} · already on this M
 msgid "SN {serialNumber}"
 msgstr "SN {serialNumber}"
 
+msgctxt "Device report"
+msgid "software read order"
+msgstr "software read order"
+
 msgid "Some copies need attention"
 msgstr "Some copies need attention"
 
