@@ -170,6 +170,24 @@ func TestSettingsLibraryReplacesOneTypedGroup(t *testing.T) {
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestSettingsGeneralDefaultsAndRoundTrip(t *testing.T) {
+	// Confirmations default to shown and one saved group round-trips without touching Library.
+	ctx := context.Background()
+	api, _, _ := setupLocationAPI(t)
+	service := &settingsService{api: api}
+	before, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_GENERAL})
+	require.NoError(t, err)
+	require.True(t, before.GetValue().GetGeneral().ConfirmRemove)
+	require.False(t, before.GetValue().GetGeneral().SkipAddEntriesConfirmation)
+	general := &entity.GeneralSettings{SkipAddEntriesConfirmation: true}
+	saved, err := service.Update(ctx, &entity.UpdateSettingsRequest{Value: &entity.SettingsValue{Value: &entity.SettingsValue_General{General: general}}})
+	require.NoError(t, err)
+	require.True(t, proto.Equal(general, saved.GetValue().GetGeneral()))
+	library, err := service.Get(ctx, &entity.GetSettingsRequest{Group: entity.SettingsGroup_SETTINGS_GROUP_LIBRARY})
+	require.NoError(t, err)
+	require.True(t, library.GetValue().GetLibrary().IncludeFilesWithoutVersions)
+}
+
 func TestSettingsJobExecutionDefaultsRoundTripAndRejections(t *testing.T) {
 	// The service publishes complete defaults before any explicit edit.
 	ctx := context.Background()

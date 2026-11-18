@@ -28,7 +28,7 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 	for _, file := range []*File{first, second} {
 		require.NoError(t, db.Create(&FileVersion{FileID: file.ID, Signature: []byte(file.Name)}).Error)
 	}
-	_, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: true})
+	_, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: false})
 	require.NoError(t, err)
 
 	// Saved visibility is version existence, including versions with no surviving Position.
@@ -59,7 +59,7 @@ func TestSavedScopeFiltersBeforeListingSearchAndSelectionPages(t *testing.T) {
 	// A frozen selection retains its scope when the persistent display preference changes.
 	selection := &entity.FileSelection{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: Root.ID}}}
 	require.NoError(t, lib.FreezeSelections(ctx, []*entity.FileSelection{selection}))
-	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true})
+	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true})
 	require.NoError(t, err)
 	var selected []int64
 	require.NoError(t, lib.WalkFileSelections(ctx, []*entity.FileSelection{selection}, func(file *File, target string) error {
@@ -183,16 +183,15 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	var backup bytes.Buffer
 	require.NoError(t, lib.Export(ctx, &backup, []entity.LibraryEntityType{entity.LibraryEntityType_LIBRARY_ENTITY_TYPE_FILE}))
 	_, imported := newTestLibrary(t)
-	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: false})
+	_, err = imported.Settings().General.Save(ctx, &entity.GeneralSettings{ConfirmRemove: false})
 	require.NoError(t, err)
 	targetJob := &entity.JobSettings{Execution: &entity.JobExecutionSettings{ReadBatch: 2, ReadBufferMax: 8,
 		WriteBufferMax: 4, WriteBatchSize: 2, FlushIntervalMs: 250}}
 	_, err = imported.Settings().Job.Save(ctx, targetJob)
 	require.NoError(t, err)
 	require.NoError(t, imported.Import(ctx, bytes.NewReader(backup.Bytes()), false))
-	settings, err := imported.Settings().Library.Current(ctx)
+	settings, err := imported.Settings().General.Current(ctx)
 	require.NoError(t, err)
-	require.True(t, settings.IncludeFilesWithoutVersions)
 	require.False(t, settings.ConfirmRemove)
 	job, err := imported.Settings().Job.Current(ctx)
 	require.NoError(t, err)
@@ -202,13 +201,12 @@ func TestLibraryExportRetainsHiddenFilesWithoutReplacingSettings(t *testing.T) {
 	require.Equal(t, file.Note, kept.Note)
 
 	// A malformed body cannot leave its header preference applied outside the replacement transaction.
-	_, err = imported.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true})
+	_, err = imported.Settings().General.Save(ctx, &entity.GeneralSettings{ConfirmRemove: true})
 	require.NoError(t, err)
 	broken := append(append([]byte{}, backup.Bytes()...), []byte("{invalid record}\n")...)
 	require.Error(t, imported.Import(ctx, bytes.NewReader(broken), false))
-	after, err := imported.Settings().Library.Current(ctx)
+	after, err := imported.Settings().General.Current(ctx)
 	require.NoError(t, err)
-	require.True(t, after.IncludeFilesWithoutVersions)
 	require.True(t, after.ConfirmRemove)
 	afterJob, err := imported.Settings().Job.Current(ctx)
 	require.NoError(t, err)

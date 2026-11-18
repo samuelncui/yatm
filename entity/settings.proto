@@ -16,6 +16,7 @@ enum SettingsGroup {
   SETTINGS_GROUP_PREVIEW = 2;
   SETTINGS_GROUP_JOB = 3;
   SETTINGS_GROUP_DEVICE = 4;
+  SETTINGS_GROUP_GENERAL = 5;
 }
 
 // Device settings attach to deployment-configured names and do not authorize device access.
@@ -117,15 +118,21 @@ enum TapeReadOrder {
   TAPE_READ_ORDER_AUTO = 2;
 }
 
-// Library preferences: what the Library shows and how it confirms removal.
+// Library preferences: what the Library shows.
 message LibrarySettings {
+  reserved 2, 3, 4;
+  reserved "confirm_remove", "skip_add_entries_confirmation", "skip_add_media_confirmation";
   bool include_files_without_versions = 1;
-  bool confirm_remove = 2;
+}
+// General preferences: which advisory confirmations the web interface shows.
+message GeneralSettings {
+  // false moves selected items to Trash without a confirmation.
+  bool confirm_remove = 1;
   // Advisory web confirmations the operator chose not to see again; false shows the confirmation.
   // Adding selected Media inventory entries to the Library.
-  bool skip_add_entries_confirmation = 3;
+  bool skip_add_entries_confirmation = 2;
   // Adding one Media's whole recorded inventory to the Library.
-  bool skip_add_media_confirmation = 4;
+  bool skip_add_media_confirmation = 3;
 }
 // Executor preferences: how an attempt drives the pipeline its runner owns.
 message JobSettings {
@@ -190,6 +197,7 @@ message SettingsValue {
     PreviewSettings preview = 2;
     JobSettings job = 3;
     DeviceSettings device = 4;
+    GeneralSettings general = 5;
   }
 }
 message GetSettingsRequest { SettingsGroup group = 1; }

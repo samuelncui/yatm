@@ -174,6 +174,7 @@ func TestJobWaitRetainsObservationWhenPollingTimesOut(t *testing.T) {
 type stubSettingsService struct {
 	entity.UnimplementedSettingsServiceServer
 	updated *entity.SettingsValue
+	general *entity.GeneralSettings
 	library *entity.LibrarySettings
 	preview *entity.PreviewSettings
 	job     *entity.JobSettings
@@ -182,10 +183,16 @@ type stubSettingsService struct {
 
 func (s *stubSettingsService) Get(_ context.Context, request *entity.GetSettingsRequest) (*entity.GetSettingsResponse, error) {
 	switch request.GetGroup() {
+	case entity.SettingsGroup_SETTINGS_GROUP_GENERAL:
+		value := s.general
+		if value == nil {
+			value = &entity.GeneralSettings{ConfirmRemove: true}
+		}
+		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_General{General: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_LIBRARY:
 		value := s.library
 		if value == nil {
-			value = &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true}
+			value = &entity.LibrarySettings{IncludeFilesWithoutVersions: true}
 		}
 		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_PREVIEW:
@@ -237,6 +244,11 @@ func TestSettingsCLIExplicitFalseAndScopedBrowsing(t *testing.T) {
 	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "library", "--include-files-without-versions=false")
 	require.Equal(t, exitSuccess, exit, stderr)
 	require.False(t, settings.updated.GetLibrary().IncludeFilesWithoutVersions)
+	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "general", "--skip-add-media-confirmation=true", "--confirm-remove=false")
+	require.Equal(t, exitSuccess, exit, stderr)
+	require.False(t, settings.updated.GetGeneral().ConfirmRemove)
+	require.True(t, settings.updated.GetGeneral().SkipAddMediaConfirmation)
+	require.False(t, settings.updated.GetGeneral().SkipAddEntriesConfirmation)
 
 	// Administrator discovery uses absolute paths and bounded page state.
 	exit, _, stderr = executeTestCLI(server.URL, "", "settings", "browse", "--path", "/restored/2026", "--cursor", "cursor", "--limit", "4")
@@ -244,7 +256,7 @@ func TestSettingsCLIExplicitFalseAndScopedBrowsing(t *testing.T) {
 	require.Equal(t, "/restored/2026", locations.browsed.Path)
 	require.EqualValues(t, 4, locations.browsed.Limit)
 	require.Equal(t, "cursor", locations.browsed.Cursor)
-	require.Equal(t, 1, recorder.count(entity.SettingsService_Update_FullMethodName))
+	require.Equal(t, 2, recorder.count(entity.SettingsService_Update_FullMethodName))
 	exit, _, _ = executeTestCLI(server.URL, "", "settings", "browse", "--location-id", "7")
 	require.Equal(t, exitUsage, exit, "registered directories use ls, not administrator discovery")
 }

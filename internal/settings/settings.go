@@ -49,6 +49,7 @@ type Module struct {
 	db                *gorm.DB
 	previewDefinition PreviewDefinition
 
+	General Group[*entity.GeneralSettings]
 	Library Group[*entity.LibrarySettings]
 	Preview Group[*entity.PreviewSettings]
 	Job     Group[*entity.JobSettings]
@@ -67,10 +68,16 @@ func (row) TableName() string { return "settings" }
 // New constructs the concrete Settings module over the Catalog database.
 func New(db *gorm.DB, preview PreviewDefinition) *Module {
 	module := &Module{db: db, previewDefinition: preview}
+	module.General = newGroup(db, definition[*entity.GeneralSettings]{
+		key: "general",
+		defaults: func() (*entity.GeneralSettings, error) {
+			return &entity.GeneralSettings{ConfirmRemove: true}, nil
+		},
+	})
 	module.Library = newGroup(db, definition[*entity.LibrarySettings]{
 		key: "library",
 		defaults: func() (*entity.LibrarySettings, error) {
-			return &entity.LibrarySettings{IncludeFilesWithoutVersions: true, ConfirmRemove: true}, nil
+			return &entity.LibrarySettings{IncludeFilesWithoutVersions: true}, nil
 		},
 	})
 	module.Preview = newGroup(db, definition[*entity.PreviewSettings]{
@@ -110,7 +117,7 @@ func (m *Module) WithDB(db *gorm.DB) *Module {
 // NewWithCatalog keeps committed Settings reads off the Catalog writer connection.
 func NewWithCatalog(write, read *gorm.DB, preview PreviewDefinition) *Module {
 	module := New(write, preview)
-	module.Library.reader, module.Preview.reader, module.Job.reader, module.Device.reader = read, read, read, read
+	module.General.reader, module.Library.reader, module.Preview.reader, module.Job.reader, module.Device.reader = read, read, read, read, read
 	return module
 }
 

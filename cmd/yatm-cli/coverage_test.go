@@ -163,7 +163,7 @@ func TestDocumentedCommandTreeUsesRealLeaves(t *testing.T) {
 	// Resolve every promised user-facing path as a concrete parser leaf.
 	commands := []string{
 		"status",
-		"settings library", "settings access", "settings browse",
+		"settings general", "settings library", "settings access", "settings browse",
 		"ls", "mv", "rm", "mkdir", "files get", "files metadata", "files version", "files versions", "files copies", "files duplicates",
 		"files remove-version", "files import-positions",
 		"identical find", "identical rows", "identical positions", "identical close",

@@ -13,9 +13,15 @@ import (
 )
 
 type settingsLibraryCommand struct {
-	runtime       *runtime
-	Include       *string `long:"include-files-without-versions" choice:"true" choice:"false" description:"Set whether the default Library view includes files without versions"`
-	ConfirmRemove *string `long:"confirm-remove" choice:"true" choice:"false" description:"Require browser confirmation before moving entries into Trash; CLI still requires explicit confirmation"`
+	runtime *runtime
+	Include *string `long:"include-files-without-versions" choice:"true" choice:"false" description:"Set whether the default Library view includes files without versions"`
+}
+
+type settingsGeneralCommand struct {
+	runtime                    *runtime
+	ConfirmRemove              *string `long:"confirm-remove" choice:"true" choice:"false" description:"Require browser confirmation before moving entries into Trash; CLI still requires explicit confirmation"`
+	SkipAddEntriesConfirmation *string `long:"skip-add-entries-confirmation" choice:"true" choice:"false" description:"Skip the browser confirmation before adding selected inventory entries to Library"`
+	SkipAddMediaConfirmation   *string `long:"skip-add-media-confirmation" choice:"true" choice:"false" description:"Skip the browser confirmation before adding a Media's whole inventory to Library"`
 }
 
 type settingsPreviewCommand struct {
@@ -44,11 +50,12 @@ type settingsBrowseCommand struct {
 
 func registerSettingsCommands(root *flags.Command, rt *runtime) error {
 	// Expose persisted preferences and administrator-constrained directory browsing.
-	group, err := addGroup(root, "settings", "Library preferences and authorized directory browsing")
+	group, err := addGroup(root, "settings", "Preferences and authorized directory browsing")
 	if err != nil {
 		return err
 	}
 	return addCommands(group,
+		commandSpec{name: "general", description: "Read or update the browser confirmation preferences", handler: &settingsGeneralCommand{runtime: rt}},
 		commandSpec{name: "library", description: "Read or update the default Library view", handler: &settingsLibraryCommand{runtime: rt}},
 		commandSpec{name: "preview", description: "Read or update Preview generation preferences", handler: &settingsPreviewCommand{runtime: rt}},
 		commandSpec{name: "job", description: "Read or update the Job pipeline preferences", handler: &settingsJobCommand{runtime: rt}},
@@ -60,7 +67,7 @@ func registerSettingsCommands(root *flags.Command, rt *runtime) error {
 
 func (c *settingsLibraryCommand) Execute(_ []string) error {
 	// Read the effective group before applying optional field updates.
-	changing := c.Include != nil || c.ConfirmRemove != nil
+	changing := c.Include != nil
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_LIBRARY)
@@ -79,14 +86,45 @@ func (c *settingsLibraryCommand) Execute(_ []string) error {
 	if c.Include != nil {
 		settings.IncludeFilesWithoutVersions = *c.Include == "true"
 	}
-	if c.ConfirmRemove != nil {
-		settings.ConfirmRemove = *c.ConfirmRemove == "true"
-	}
 	reply, err := updateSettings(ctx, c.runtime, &entity.SettingsValue{Value: &entity.SettingsValue_Library{Library: settings}})
 	if err != nil {
 		return err
 	}
 	return writeProto(c.runtime.stdout, reply.GetLibrary())
+}
+
+func (c *settingsGeneralCommand) Execute(_ []string) error {
+	// Read the effective group before applying optional field updates.
+	changing := c.ConfirmRemove != nil || c.SkipAddEntriesConfirmation != nil || c.SkipAddMediaConfirmation != nil
+	ctx, cancel := c.runtime.context()
+	defer cancel()
+	value, err := getSettings(ctx, c.runtime, entity.SettingsGroup_SETTINGS_GROUP_GENERAL)
+	if err != nil {
+		return err
+	}
+	settings := value.GetGeneral()
+	if settings == nil {
+		return runtimeError("protocol", fmt.Errorf("General settings reply is missing"))
+	}
+	if !changing {
+		return writeProto(c.runtime.stdout, settings)
+	}
+
+	// Publish the explicit values without confusing false with an omitted option.
+	if c.ConfirmRemove != nil {
+		settings.ConfirmRemove = *c.ConfirmRemove == "true"
+	}
+	if c.SkipAddEntriesConfirmation != nil {
+		settings.SkipAddEntriesConfirmation = *c.SkipAddEntriesConfirmation == "true"
+	}
+	if c.SkipAddMediaConfirmation != nil {
+		settings.SkipAddMediaConfirmation = *c.SkipAddMediaConfirmation == "true"
+	}
+	reply, err := updateSettings(ctx, c.runtime, &entity.SettingsValue{Value: &entity.SettingsValue_General{General: settings}})
+	if err != nil {
+		return err
+	}
+	return writeProto(c.runtime.stdout, reply.GetGeneral())
 }
 
 func (c *settingsPreviewCommand) Execute(_ []string) error {

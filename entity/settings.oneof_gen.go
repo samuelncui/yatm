@@ -76,6 +76,8 @@ type OneofSettingsValue interface {
 
 func (x *DeviceSettings) isOneofSettingsValue() {}
 
+func (x *GeneralSettings) isOneofSettingsValue() {}
+
 func (x *JobSettings) isOneofSettingsValue() {}
 
 func (x *LibrarySettings) isOneofSettingsValue() {}
@@ -86,6 +88,8 @@ func (x *SettingsValue) Unpack() OneofSettingsValue {
 	switch param := x.Value.(type) {
 	case *SettingsValue_Device:
 		return param.Device
+	case *SettingsValue_General:
+		return param.General
 	case *SettingsValue_Job:
 		return param.Job
 	case *SettingsValue_Library:
@@ -106,6 +110,18 @@ func (p *DeviceSettings) Pack() *SettingsValue {
 }
 
 func (p *DeviceSettings) ToOneof() OneofSettingsValue {
+	return p
+}
+
+func (p *GeneralSettings) Pack() *SettingsValue {
+	return &SettingsValue{
+		Value: &SettingsValue_General{
+			General: p,
+		},
+	}
+}
+
+func (p *GeneralSettings) ToOneof() OneofSettingsValue {
 	return p
 }
 

@@ -38,10 +38,10 @@ func TestCLILibraryPreviewSettings(t *testing.T) {
 	cliResult(t, ctx, connection, saved, "settings", "preview", "--preview-json", filename)
 	require.True(t, proto.Equal(custom, saved))
 
-	// Updating Library preferences does not rewrite the independently stored Preview group.
-	library := new(entity.LibrarySettings)
-	cliResult(t, ctx, connection, library, "settings", "library", "--confirm-remove=false")
-	require.False(t, library.ConfirmRemove)
+	// Updating General preferences does not rewrite the independently stored Preview group.
+	general := new(entity.GeneralSettings)
+	cliResult(t, ctx, connection, general, "settings", "general", "--confirm-remove=false")
+	require.False(t, general.ConfirmRemove)
 	final := new(entity.PreviewSettings)
 	cliResult(t, ctx, connection, final, "settings", "preview")
 	require.True(t, proto.Equal(custom, final))

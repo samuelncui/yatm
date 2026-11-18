@@ -518,10 +518,7 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	// Global duplicates and an explicit Inspector selection remain actionable in saved-only Library views.
 	settings, err := lib.Settings().Library.Current(ctx)
 	require.NoError(t, err)
-	hidden, err := lib.Settings().Library.Save(ctx, &entity.LibrarySettings{
-		IncludeFilesWithoutVersions: false,
-		ConfirmRemove:               settings.ConfirmRemove,
-	})
+	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: false})
 	require.NoError(t, err)
 	selection, err := lib.InspectSelection(ctx, &entity.SelectionInspection{Selections: []*entity.FileSelection{{
 		Scope:  entity.FileScope_FILE_SCOPE_ALL,
@@ -588,7 +585,6 @@ func requireReviewDuplicates(t *testing.T, lib *library.Library, documentsID, un
 	require.True(t, pair, "the cross-Location pair remains one complete group")
 	_, err = lib.Settings().Library.Save(ctx, &entity.LibrarySettings{
 		IncludeFilesWithoutVersions: settings.IncludeFilesWithoutVersions,
-		ConfirmRemove:               hidden.ConfirmRemove,
 	})
 	require.NoError(t, err)
 }

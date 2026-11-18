@@ -193,6 +193,9 @@ skipped.
 
 ## Tape Commands
 
+- `settings general` reads the GENERAL group; `--confirm-remove`, `--skip-add-entries-confirmation`
+  and `--skip-add-media-confirmation` (each `true` or `false`) update only the named fields.
+  `settings library --include-files-without-versions` does the same for the Library group.
 - `settings devices` reads the typed DEVICE group, and `--device-json FILE` replaces the Device
   settings without device access. [Device settings](devices.md#save-device-settings) and
   [Auto read order](read-order.md) explain the fields and give JSON examples.

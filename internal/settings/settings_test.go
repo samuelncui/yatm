@@ -29,19 +29,19 @@ func TestSettingsSavePreservesNanosecondTimes(t *testing.T) {
 	ctx := context.Background()
 	stamp := time.Unix(1791000000, 123456781)
 	module.db.Config.NowFunc = func() time.Time { return stamp }
-	_, err := module.Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: true})
+	_, err := module.General.Save(ctx, &entity.GeneralSettings{ConfirmRemove: true})
 	require.NoError(t, err)
 	var first row
-	require.NoError(t, module.db.Where(&row{Key: "library"}).First(&first).Error)
+	require.NoError(t, module.db.Where(&row{Key: "general"}).First(&first).Error)
 	require.Equal(t, stamp.UnixNano(), first.CreatedAtNS)
 	require.Equal(t, stamp.UnixNano(), first.UpdatedAtNS)
 
 	// The upsert updates only its modification instant and leaves creation unchanged.
 	stamp = stamp.Add(time.Nanosecond)
-	_, err = module.Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: false})
+	_, err = module.General.Save(ctx, &entity.GeneralSettings{ConfirmRemove: false})
 	require.NoError(t, err)
 	var second row
-	require.NoError(t, module.db.Where(&row{Key: "library"}).First(&second).Error)
+	require.NoError(t, module.db.Where(&row{Key: "general"}).First(&second).Error)
 	require.Equal(t, first.CreatedAtNS, second.CreatedAtNS)
 	require.Equal(t, stamp.UnixNano(), second.UpdatedAtNS)
 
@@ -50,7 +50,7 @@ func TestSettingsSavePreservesNanosecondTimes(t *testing.T) {
 		return
 	}
 	var storage string
-	require.NoError(t, module.db.Raw("SELECT typeof(updated_at_ns) FROM settings WHERE key = ?", "library").Scan(&storage).Error)
+	require.NoError(t, module.db.Raw("SELECT typeof(updated_at_ns) FROM settings WHERE key = ?", "general").Scan(&storage).Error)
 	require.Equal(t, "integer", storage)
 }
 
@@ -71,26 +71,26 @@ func TestGroupsShareStorageWithoutSharingBehavior(t *testing.T) {
 	require.Zero(t, count)
 
 	// Each save replaces only its typed group and returns an isolated value.
-	saved, err := module.Library.Save(ctx, &entity.LibrarySettings{ConfirmRemove: true})
+	saved, err := module.General.Save(ctx, &entity.GeneralSettings{ConfirmRemove: true})
 	require.NoError(t, err)
 	saved.ConfirmRemove = false
 	_, err = module.Preview.Save(ctx, &entity.PreviewSettings{Concurrency: 4})
 	require.NoError(t, err)
-	library, err = module.Library.Read(ctx)
+	general, err := module.General.Read(ctx)
 	require.NoError(t, err)
-	require.True(t, library.Present)
-	require.True(t, library.Value.ConfirmRemove)
+	require.True(t, general.Present)
+	require.True(t, general.Value.ConfirmRemove)
 	preview, err = module.Preview.Read(ctx)
 	require.NoError(t, err)
 	require.EqualValues(t, 4, preview.Value.Concurrency)
 
 	// A later complete replacement is last-write-wins for this local operator surface.
-	_, err = module.Library.Save(ctx, &entity.LibrarySettings{IncludeFilesWithoutVersions: true})
+	_, err = module.General.Save(ctx, &entity.GeneralSettings{SkipAddMediaConfirmation: true})
 	require.NoError(t, err)
-	library, err = module.Library.Read(ctx)
+	general, err = module.General.Read(ctx)
 	require.NoError(t, err)
-	require.True(t, library.Value.IncludeFilesWithoutVersions)
-	require.False(t, library.Value.ConfirmRemove)
+	require.True(t, general.Value.SkipAddMediaConfirmation)
+	require.False(t, general.Value.ConfirmRemove)
 }
 
 func TestStoredSettingsMustDecodeAndValidate(t *testing.T) {

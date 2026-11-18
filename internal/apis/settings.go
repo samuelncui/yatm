@@ -21,6 +21,12 @@ func (s *settingsService) Get(ctx context.Context, req *entity.GetSettingsReques
 		return nil, status.Error(codes.InvalidArgument, "Settings request is missing")
 	}
 	switch req.GetGroup() {
+	case entity.SettingsGroup_SETTINGS_GROUP_GENERAL:
+		value, err := s.api.lib.Settings().General.Current(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &entity.GetSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_General{General: value}}}, nil
 	case entity.SettingsGroup_SETTINGS_GROUP_LIBRARY:
 		value, err := s.api.lib.Settings().Library.Current(ctx)
 		if err != nil {
@@ -57,6 +63,12 @@ func (s *settingsService) Update(ctx context.Context, req *entity.UpdateSettings
 		return nil, status.Error(codes.InvalidArgument, "Settings value is missing")
 	}
 	switch value := req.Value.GetValue().(type) {
+	case *entity.SettingsValue_General:
+		saved, err := s.api.lib.Settings().General.Save(ctx, value.General)
+		if err != nil {
+			return nil, err
+		}
+		return &entity.UpdateSettingsResponse{Value: &entity.SettingsValue{Value: &entity.SettingsValue_General{General: saved}}}, nil
 	case *entity.SettingsValue_Library:
 		saved, err := s.api.lib.Settings().Library.Save(ctx, value.Library)
 		if err != nil {

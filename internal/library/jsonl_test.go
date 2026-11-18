@@ -164,10 +164,13 @@ func TestLibraryJSONLImportPreservesSettings(t *testing.T) {
 	module := settingspkg.New(target.db, settingspkg.PreviewDefinition{Default: func() (*entity.PreviewSettings, error) {
 		return &entity.PreviewSettings{}, nil
 	}})
-	librarySettings := &entity.LibrarySettings{IncludeFilesWithoutVersions: false, ConfirmRemove: false}
+	librarySettings := &entity.LibrarySettings{IncludeFilesWithoutVersions: false}
+	generalSettings := &entity.GeneralSettings{ConfirmRemove: false, SkipAddMediaConfirmation: true}
 	previewSettings := &entity.PreviewSettings{Enabled: true, Concurrency: 7}
 	jobSettings := &entity.JobSettings{Execution: settingspkg.DefaultJobExecution()}
 	_, err := module.Library.Save(ctx, librarySettings)
+	require.NoError(t, err)
+	_, err = module.General.Save(ctx, generalSettings)
 	require.NoError(t, err)
 	_, err = module.Preview.Save(ctx, previewSettings)
 	require.NoError(t, err)
@@ -184,11 +187,14 @@ func TestLibraryJSONLImportPreservesSettings(t *testing.T) {
 	// Every group remains byte-for-byte equivalent to the operator's value.
 	afterLibrary, err := module.Library.Current(ctx)
 	require.NoError(t, err)
+	afterGeneral, err := module.General.Current(ctx)
+	require.NoError(t, err)
 	afterPreview, err := module.Preview.Current(ctx)
 	require.NoError(t, err)
 	afterJob, err := module.Job.Current(ctx)
 	require.NoError(t, err)
 	require.True(t, proto.Equal(librarySettings, afterLibrary))
+	require.True(t, proto.Equal(generalSettings, afterGeneral))
 	require.True(t, proto.Equal(previewSettings, afterPreview))
 	require.True(t, proto.Equal(jobSettings, afterJob))
 }
