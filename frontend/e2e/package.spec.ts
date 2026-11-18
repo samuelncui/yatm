@@ -312,20 +312,19 @@ test("Settings reuses committed groups when switching tabs", async ({ page }) =>
     if (request.url().endsWith("/yatm.v1.SettingsService/Get")) reads++;
   });
   await page.goto("/settings/jobs");
-  await page.getByRole("button", { name: /^Advanced/ }).click();
   await expect(page.getByRole("spinbutton", { name: "Manifest batch (items)" })).toBeEnabled();
   for (const name of ["Library", "Preview"]) {
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name, exact: true }).click();
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
-    await expect(page.getByRole("progressbar", { name: /Loading .* settings/ })).toHaveCount(0);
+    await expect(page.getByRole("progressbar", { name: "Loading settings" })).toHaveCount(0);
   }
   const initialReads = reads;
   for (const name of ["Jobs", "Library", "Preview", "Jobs"]) {
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name, exact: true }).click();
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
-    await expect(page.getByRole("progressbar", { name: /Loading .* settings/ })).toHaveCount(0);
+    await expect(page.getByRole("progressbar", { name: "Loading settings" })).toHaveCount(0);
   }
   expect(reads).toBe(initialReads);
 });
@@ -353,14 +352,13 @@ test("a cold Job Settings route keeps one loading indicator through code and dat
     await expect(heading).toBeVisible();
     const before = await heading.boundingBox();
     await expect(page.getByRole("progressbar")).toHaveCount(1);
-    await expect(page.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
     releaseCode();
     await expect.poll(() => Boolean(releaseData)).toBe(true);
     await expect(page.getByRole("progressbar")).toHaveCount(1);
-    await expect(page.getByRole("progressbar", { name: "Loading Job settings" })).toBeVisible();
+    await expect(page.getByRole("progressbar", { name: "Loading settings" })).toBeVisible();
     expect(await heading.boundingBox()).toEqual(before);
     releaseData();
-    await page.getByRole("button", { name: /^Advanced/ }).click();
     await expect(page.getByRole("spinbutton", { name: "Manifest batch (items)" })).toBeEnabled();
     await expect(page.getByRole("progressbar")).toHaveCount(0);
   } finally {

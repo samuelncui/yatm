@@ -302,7 +302,7 @@ for (const viewport of [
     await select(page, page, "Read order", "Auto");
     await select(page, page, "Default Tape format", "LTFS");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText("Device settings saved.")).toBeVisible();
+    await expect(page.getByText("Settings saved.")).toBeVisible();
     expect(state.settings.devices[0].options.oneofKind === "tape" && state.settings.devices[0].options.tape.tarWriteOptions).toEqual({
       ...baseline,
       recordBytes: 524288,
@@ -346,7 +346,7 @@ for (const viewport of [
     await expectFits(page.locator(".app-page"));
     expect(state.settingsUpdates).toBe(0);
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText("Device settings saved.")).toBeVisible();
+    await expect(page.getByText("Settings saved.")).toBeVisible();
     expect(state.settingsUpdates).toBe(1);
     await page.getByRole("button", { name: "Reset 0x58 LTO-5 to built-in", exact: true }).click();
     await page.getByRole("navigation", { name: "Settings views" }).getByRole("tab", { name: "Jobs", exact: true }).click();
