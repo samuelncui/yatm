@@ -5,7 +5,7 @@ Status: Current supported installer procedure for upgrading a v0.1.x installatio
 This upgrade converts the v0.1.x Library and Job history into the v1 Catalog and Job bundles,
 moves the old source and target directories into Locations, and changes the Tape script contract.
 It follows on its own from start to finish; the installer displays this exact document from the
-checksum-verified package before stopping the service. The examples use `v1.0.0-alpha.3`, the
+checksum-verified package before stopping the service. The examples use `v1.0.0-alpha.4.1`, the
 default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--install-dir` and
 `--service` for another one. Software versions and
 [data-format revisions](../architecture/persistence.md#published-data-formats) are independent.
@@ -28,7 +28,7 @@ default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--insta
 
    ```shell
    curl --fail --location --output install-release.sh \
-     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
+     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.4.1/install-release.sh
    ```
 
 2. **Fix the `encrypt` script** if Tape devices are configured. The v0.1.x template reports success
@@ -40,7 +40,7 @@ default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--insta
 3. **Run the read-only check.** It verifies the package and the installation and changes nothing:
 
    ```shell
-   sudo bash install-release.sh --version v1.0.0-alpha.3 --check
+   sudo bash install-release.sh --version v1.0.0-alpha.4.1 --check
    ```
 
    Expect, in order:
@@ -48,7 +48,7 @@ default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--insta
    - `Manual check:` lines. For an unmodified v0.1.x installation these are the `readinfo`
      replacement and the differences between each configured Tape script and the v1 template.
      They are handled after the upgrade, in step 7.
-   - `Requested installation: v0.1.x → v1.0.0-alpha.3`.
+   - `Requested installation: v0.1.x → v1.0.0-alpha.4.1`.
    - The configuration diff and `Settings:` lines: `paths.source` and `paths.target` become
      Locations (the target as the preferred Restore destination) and Preview preferences move into
      Settings. Read [What Changes](#what-changes) for the rest.
@@ -56,7 +56,7 @@ default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--insta
 4. **Upgrade.** Run the same command without `--check`:
 
    ```shell
-   sudo bash install-release.sh --version v1.0.0-alpha.3 --with-preview
+   sudo bash install-release.sh --version v1.0.0-alpha.4.1 --with-preview
    ```
 
    - The installer shows this guide and asks `Continue with installation?`. Answering anything but
@@ -66,7 +66,7 @@ default `/opt/yatm` installation and the `yatm-httpd.service` unit; add `--insta
      [Review the report](#review-the-migration-report) before answering. Declining restarts the old
      service unchanged.
    - After approval it validates the result against the backup, replaces the programs, starts v1
-     and checks that it answers. It ends with `Installed v1.0.0-alpha.3.` and the backup path.
+     and checks that it answers. It ends with `Installed v1.0.0-alpha.4.1.` and the backup path.
 
 5. **Check the result.**
    - `cat /opt/yatm/VERSION` shows the v1 version, and

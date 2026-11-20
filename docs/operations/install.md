@@ -2,7 +2,7 @@
 
 Follow these steps for a new installation. To upgrade an existing v1 installation, follow the
 [upgrade guide](upgrade.md); to upgrade from v0.1.x, follow the [v0.1.x upgrade guide](migration.md).
-The examples install `v1.0.0-alpha.3` into `/opt/yatm` as the `yatm-httpd.service` unit.
+The examples install `v1.0.0-alpha.4.1` into `/opt/yatm` as the `yatm-httpd.service` unit.
 
 ## Requirements
 
@@ -23,7 +23,7 @@ hardware qualification, and public-tool recovery needs its own
 
    ```shell
    curl --fail --location --output install-release.sh \
-     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
+     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.4.1/install-release.sh
    bash install-release.sh --help
    ```
 
@@ -34,13 +34,13 @@ hardware qualification, and public-tool recovery needs its own
    an unusable installation directory. It changes nothing:
 
    ```shell
-   sudo bash install-release.sh --version v1.0.0-alpha.3 --check
+   sudo bash install-release.sh --version v1.0.0-alpha.4.1 --check
    ```
 
 3. **Install.** Run the same command without `--check`:
 
    ```shell
-   sudo bash install-release.sh --version v1.0.0-alpha.3
+   sudo bash install-release.sh --version v1.0.0-alpha.4.1
    ```
 
    The installer asks, in order:
@@ -83,9 +83,9 @@ package, add `--archive FILE --checksum FILE`, plus `--preview-archive FILE --pr
 for its Preview helper:
 
 ```shell
-sudo bash install-release.sh --version v1.0.0-alpha.3 \
-  --archive ./yatm-linux-amd64-v1.0.0-alpha.3.tar.gz \
-  --checksum ./yatm-linux-amd64-v1.0.0-alpha.3.tar.gz.sha256 --check
+sudo bash install-release.sh --version v1.0.0-alpha.4.1 \
+  --archive ./yatm-linux-amd64-v1.0.0-alpha.4.1.tar.gz \
+  --checksum ./yatm-linux-amd64-v1.0.0-alpha.4.1.tar.gz.sha256 --check
 ```
 
 v1 packages require a matching SHA-256 checksum before any included program executes. Recognized official `v0.1.x` releases predate publisher checksums; the installer identifies this limitation before confirmation. An explicitly supplied checksum is always checked. Alpha, Beta and RC versions accept dot-separated numeric revisions, such as `alpha.2.1`; revisions compare numerically and a patch follows its parent. Lower-version installation is rejected; rollback restores a matching complete backup.
@@ -95,7 +95,7 @@ v1 packages require a matching SHA-256 checksum before any included program exec
 For a fresh manual installation from a downloaded archive, verify its companion checksum before extraction. Then install the package and bind acceptance to the versioned programs and the systemd-owned process:
 
 ```shell
-RELEASE_VERSION=v1.0.0-alpha.3
+RELEASE_VERSION=v1.0.0-alpha.4.1
 sha256sum --check "yatm-linux-amd64-${RELEASE_VERSION}.tar.gz.sha256"
 sudo mkdir -p /opt/yatm
 sudo tar -xzf "yatm-linux-amd64-${RELEASE_VERSION}.tar.gz" -C /opt/yatm

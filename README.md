@@ -31,9 +31,9 @@ The default installer selects the stable release. Install or upgrade the Alpha u
 
 ```shell
 curl --fail --location --output install-release.sh \
-  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.3/install-release.sh
-sudo bash install-release.sh --version v1.0.0-alpha.3 --check
-sudo bash install-release.sh --version v1.0.0-alpha.3
+  https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.4.1/install-release.sh
+sudo bash install-release.sh --version v1.0.0-alpha.4.1 --check
+sudo bash install-release.sh --version v1.0.0-alpha.4.1
 ```
 
 Run with permission to manage the installation and systemd service. The [installation guide](docs/operations/install.md) walks through a new installation step by step. Existing v1 installations follow the [v1 upgrade guide](docs/operations/upgrade.md); `v0.1.x` installations follow the [v0.1.x upgrade guide](docs/operations/migration.md); review it before proceeding. The installer displays that guide from the verified release package and asks for approval before stopping the service.
