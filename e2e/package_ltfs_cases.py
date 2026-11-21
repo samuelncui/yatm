@@ -40,8 +40,8 @@ def prepare_virtual_tapes(test, config):
         test.write(adapters + name, script.replace(marker, "\n" + shlex.quote(executable) + " ", 1).encode())
     if test.wants_case("ltfs-format-append-restore-verify"):
         script = test.remote(["cat", adapters + "mkfs"]).stdout.decode()
-        require(script.count(" -f -e file ") == 1, "Packaged virtual format script changed.")
-        test.write(adapters + "mkfs", script.replace(" -f -e file ", " -r 'size=1M' -f -e file ", 1).encode())
+        require(script.count(" -e file ") == 1, "Packaged virtual format script changed.")
+        test.write(adapters + "mkfs", script.replace(" -e file ", " -r 'size=1M' -e file ", 1).encode())
     config["tape_devices"] = devices
     config["scripts"] = {"encrypt": adapters + "encrypt", "mkfs": adapters + "mkfs", "mount": adapters + "mount",
                          "umount": adapters + "umount", "read_info": adapters + "readinfo"}

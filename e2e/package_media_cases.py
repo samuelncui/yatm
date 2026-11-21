@@ -230,7 +230,7 @@ def preview_assets(test, location):
 
     save_settings()
     capabilities = test.one("preview", "capabilities")
-    require(capabilities.get("available") and {"image", "video"}.issubset(capabilities.get("kinds", [])),
+    require(capabilities.get("available") and {"image", "video"}.issubset(capabilities.get("input_extensions_by_kind", {})),
             "Installed native helper did not report image and video support.")
     generate("missing-only")
     image = assets(image_name)
