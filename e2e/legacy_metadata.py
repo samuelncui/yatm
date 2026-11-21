@@ -246,6 +246,7 @@ def check(original_directory, migrated_directory, *, staged=False, revisions=Non
         current_jobs = list(current.execute("SELECT * FROM jobs" + suffix + " ORDER BY id"))
         assert [row["id"] for row in current_jobs] == [row["id"] for row in jobs], "Job IDs differ"
         result["jobs"] = []
+        ready = 0
         for ordinal, (source, row) in enumerate(zip(jobs, current_jobs), 1):
             # Frozen legacy JobStatus: COMPLETED=4, DELETED=255 (excluded above).
             if source["status"] != 4:
@@ -264,13 +265,15 @@ def check(original_directory, migrated_directory, *, staged=False, revisions=Non
             with _connect(directory / "state.db") as db:
                 job = db.execute("SELECT * FROM job").fetchone()
                 assert job is not None, "Missing Job record"
-                if job["kind"] != 1 or job["status"] != 4:
+                sources = _fields(state[1][0])[2]
+                # Archive items the migration cannot place on one logged Media return to pending, and
+                # their Job to READY for another Media choice.
+                if job["kind"] != 1 or job["status"] not in (2, 4):
                     raise NotImplementedError(
                         f"Unsupported Job kind/state for Job ID {source['id']} "
                         f"(kind {job['kind']}, state {job['status']}); "
                         "only completed Archive Jobs are audited"
                     )
-                sources = _fields(state[1][0])[2]
                 assert job["priority"] == source["priority"], "Archive Job priority differs"
                 assert row["created_at_ns"] == _stamp(source["create_time"]), "Job creation time differs"
                 assert row["updated_at_ns"] == max(_stamp(source["create_time"]), _stamp(source["update_time"])), "Job update time differs"
@@ -287,25 +290,33 @@ def check(original_directory, migrated_directory, *, staged=False, revisions=Non
                     logged_media = {int(value) for value in re.findall(rb"create tape success, tape_id=\s*([1-9][0-9]*)\b", log)}
                 items = list(db.execute("SELECT * FROM items ORDER BY id"))
                 assert len(items) == len(sources), "Archive item count differs"
+                pending = 0
                 for number, (item, raw) in enumerate(zip(items, sources), 1):
                     expected = _fields(raw)
-                    if expected.get(3, [0]) != [4]:
-                        raise NotImplementedError("Only submitted inline Archive sources are audited")
+                    written = expected.get(3, [0]) == [4]
                     location = _fields(expected[1][0])
                     base = location.get(1, [b""])[0].decode()
                     parts = [part.decode() for part in location[2]]
                     path = posixpath.normpath(posixpath.join(*parts))
                     assert item["id"] == number and item["size"] == expected.get(2, [0])[0], "Archive item identity or size differs"
-                    assert item["target_path"] == item["media_path"] == path and item["status"] == 4, "Archive item path or status differs"
                     assert _fields(item["data"])[1][0].decode() == posixpath.normpath(posixpath.join(base, *parts)), "Archive item source differs"
                     matching = physical_media[(path, item["size"])] & logged_media
+                    if not written or len(matching) != 1:
+                        pending += 1
+                        reset = item["target_path"] == path and not item["media_path"] and item["media_id"] is None and item["status"] == 1
+                        assert reset or not written, "Archive item has no unique matching logged Position but was not reset"
+                        assert reset, "Unwritten Archive item differs"
+                        continue
+                    assert item["target_path"] == item["media_path"] == path and item["status"] == 4, "Archive item path or status differs"
                     assert matching == {item["media_id"]}, "Archive item has no unique matching logged Position"
+                assert job["status"] == (2 if pending else 4), "Archive Job status differs from its items"
+                ready += bool(pending)
             result["jobs"].append({
                 "id": source["id"], "items": len(items),
                 "log_bytes": current_log.stat().st_size if current_log.exists() else None,
             })
         result["coverage"] = {
-            "completed_archive_jobs": len(jobs), "restore_jobs": 0,
+            "completed_archive_jobs": len(jobs), "ready_archive_jobs": ready, "restore_jobs": 0,
             "other_job_kinds": 0, "other_job_states": 0,
         }
     return result

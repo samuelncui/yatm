@@ -152,7 +152,8 @@ The stopped installation then exercises repeated cleanup and historical Job repa
 
 [Independent metadata checks](../../e2e/legacy_metadata.py) compare copied legacy facts with the
 migrated SQLite rows and Job files, including nanosecond instants and archived logs. This checker
-supports completed Archive history with submitted inline sources and uniquely matched logged Media.
+supports completed Archive history with inline sources. A submitted source matched to exactly one
+logged Media keeps that Media; any other source must migrate as pending, and its Job as READY.
 It rejects other retained Job kinds/states; the report records missing
 Restore and other-state coverage. Compressed metadata needs `zstd` on the local `PATH`.
 Run Python without optimization because these checks use assertions. A missing fixture category is

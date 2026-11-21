@@ -207,7 +207,7 @@ class MetadataAuditTest(unittest.TestCase):
             "omitted_positions": [2, 3], "indexed_positions": 1, "versions": 1,
             "directories": 1, "media": 1,
             "jobs": [{"id": 1, "items": 1, "log_bytes": len(self.log)}],
-            "coverage": {"completed_archive_jobs": 1, "restore_jobs": 0,
+            "coverage": {"completed_archive_jobs": 1, "ready_archive_jobs": 0, "restore_jobs": 0,
                          "other_job_kinds": 0, "other_job_states": 0},
         })
         self.assertEqual(stdout.getvalue() + stderr.getvalue(), "")
@@ -276,14 +276,27 @@ class MetadataAuditTest(unittest.TestCase):
         (self.original / "job-logs" / "1.log").unlink()
         with self.assertRaisesRegex(AssertionError, "no unique matching logged Position"):
             audit.check(self.original, self.migrated)
+        # Without a Job log the migration cannot place written items and returns them to pending.
+        self.sql(self.state_db, "UPDATE items SET status=1, media_path='', media_id=NULL")
+        self.sql(self.state_db, "UPDATE job SET status=2")
+        self.assertEqual(audit.check(self.original, self.migrated)["coverage"]["ready_archive_jobs"], 1)
 
-    def test_unsubmitted_source_cannot_be_hidden_by_submitted_output(self):
+    def test_unsubmitted_source_requires_a_ready_job_and_pending_item(self):
         for state in (b"\x0a\x1e\x12\x1c\x0a\x18\x0a\x06source\x12\x06folder\x12\x06sample\x10\x03",
                       b"\x0a\x20\x12\x1e\x0a\x18\x0a\x06source\x12\x06folder\x12\x06sample\x10\x03\x18\x02"):
             with self.subTest(state=state):
                 self.sql(self.original / "tapes.db", "UPDATE jobs SET state=? WHERE id=1", (state,))
-                with self.assertRaisesRegex(NotImplementedError, "Only submitted inline Archive"):
+                self.sql(self.state_db, "UPDATE job SET status=4")
+                self.sql(self.state_db, "UPDATE items SET status=4, media_path='folder/sample', media_id=1")
+                with self.assertRaisesRegex(AssertionError, "Unwritten Archive item differs"):
                     audit.check(self.original, self.migrated)
+                # An unwritten source migrates as a pending item of a READY Job.
+                self.sql(self.state_db, "UPDATE items SET status=1, media_path='', media_id=NULL")
+                with self.assertRaisesRegex(AssertionError, "Archive Job status differs"):
+                    audit.check(self.original, self.migrated)
+                self.sql(self.state_db, "UPDATE job SET status=2")
+                coverage = audit.check(self.original, self.migrated)["coverage"]
+                self.assertEqual(coverage["ready_archive_jobs"], 1)
 
     def test_matching_content_on_another_media_does_not_establish_job_ownership(self):
         self.sql(self.original / "tapes.db", """INSERT INTO tapes
@@ -317,7 +330,7 @@ class MetadataAuditTest(unittest.TestCase):
     def test_unsupported_bundle_kinds_and_states_precede_item_assumptions(self):
         # A missing Archive items table must not obscure an unsupported Job boundary.
         self.sql(self.state_db, "DROP TABLE items")
-        for kind, status in ((2, 4), (3, 4), (1, 1), (1, 2), (1, 5)):
+        for kind, status in ((2, 4), (3, 4), (1, 1), (1, 5)):
             with self.subTest(kind=kind, status=status):
                 self.sql(self.state_db, "UPDATE job SET kind=?,status=?", (kind, status))
                 with self.assertRaisesRegex(NotImplementedError, "Unsupported Job kind/state.*only completed Archive"):
