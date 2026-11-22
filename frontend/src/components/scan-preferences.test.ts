@@ -7,7 +7,6 @@ const location = (path = "", scope = FileScope.ALL, locationId = 900719925474099
 const options = {
   signaturePolicy: Signature.KNOWN_ONLY,
   resultPolicy: Result.REPORT_ONLY,
-  compareLibrary: false,
   previewPolicy: PreviewPolicy.MISSING_ONLY,
   writeSignatureCache: false,
 };
@@ -19,14 +18,13 @@ describe("lastScan", () => {
       id: "3",
       signaturePolicy: Signature.KNOWN_ONLY,
       resultPolicy: Result.REPORT_ONLY,
-      compare: false,
       previewPolicy: PreviewPolicy.MISSING_ONLY,
       writeSignatureCache: false,
     });
   });
 
   it("takes a whole Location from its single root selection without losing a large ID", () => {
-    expect(lastScan(ScanJobSpec.create({ ...options, selections: [location()] }))).toMatchObject({ kind: "location", id: "9007199254740993", compare: false });
+    expect(lastScan(ScanJobSpec.create({ ...options, selections: [location()] }))).toMatchObject({ kind: "location", id: "9007199254740993" });
   });
 
   it.each([

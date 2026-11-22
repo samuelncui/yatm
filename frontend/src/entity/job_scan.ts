@@ -40,10 +40,6 @@ export interface ScanJobSpec {
      */
     resultPolicy: ScanResultPolicy;
     /**
-     * @generated from protobuf field: bool compare_library = 9
-     */
-    compareLibrary: boolean;
-    /**
      * @generated from protobuf field: yatm.v1.PreviewPolicy preview_policy = 12
      */
     previewPolicy: PreviewPolicy;
@@ -134,10 +130,6 @@ export interface ScanEntry {
      * @generated from protobuf field: string preview_error = 20
      */
     previewError: string;
-    /**
-     * @generated from protobuf field: int64 matching_copies = 21
-     */
-    matchingCopies: bigint;
     /**
      * @generated from protobuf field: yatm.v1.StoragePosition storage = 22
      */
@@ -467,7 +459,6 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
             { no: 6, name: "selections", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => FileSelection },
             { no: 7, name: "signature_policy", kind: "enum", T: () => ["yatm.v1.ScanSignaturePolicy", ScanSignaturePolicy, "SCAN_SIGNATURE_POLICY_"] },
             { no: 8, name: "result_policy", kind: "enum", T: () => ["yatm.v1.ScanResultPolicy", ScanResultPolicy, "SCAN_RESULT_POLICY_"] },
-            { no: 9, name: "compare_library", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 12, name: "preview_policy", kind: "enum", T: () => ["yatm.v1.PreviewPolicy", PreviewPolicy, "PREVIEW_POLICY_"] },
             { no: 13, name: "write_signature_cache", kind: "scalar", opt: true, T: 8 /*ScalarType.BOOL*/ }
         ]);
@@ -478,7 +469,6 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
         message.selections = [];
         message.signaturePolicy = 0;
         message.resultPolicy = 0;
-        message.compareLibrary = false;
         message.previewPolicy = 0;
         if (value !== undefined)
             reflectionMergePartial<ScanJobSpec>(this, message, value);
@@ -500,9 +490,6 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
                     break;
                 case /* yatm.v1.ScanResultPolicy result_policy */ 8:
                     message.resultPolicy = reader.int32();
-                    break;
-                case /* bool compare_library */ 9:
-                    message.compareLibrary = reader.bool();
                     break;
                 case /* yatm.v1.PreviewPolicy preview_policy */ 12:
                     message.previewPolicy = reader.int32();
@@ -534,9 +521,6 @@ class ScanJobSpec$Type extends MessageType<ScanJobSpec> {
         /* yatm.v1.ScanResultPolicy result_policy = 8; */
         if (message.resultPolicy !== 0)
             writer.tag(8, WireType.Varint).int32(message.resultPolicy);
-        /* bool compare_library = 9; */
-        if (message.compareLibrary !== false)
-            writer.tag(9, WireType.Varint).bool(message.compareLibrary);
         /* yatm.v1.PreviewPolicy preview_policy = 12; */
         if (message.previewPolicy !== 0)
             writer.tag(12, WireType.Varint).int32(message.previewPolicy);
@@ -576,7 +560,6 @@ class ScanEntry$Type extends MessageType<ScanEntry> {
             { no: 17, name: "detail", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 19, name: "preview", kind: "enum", T: () => ["yatm.v1.ScanPreviewOutcome", ScanPreviewOutcome, "SCAN_PREVIEW_OUTCOME_"] },
             { no: 20, name: "preview_error", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 21, name: "matching_copies", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 22, name: "storage", kind: "message", T: () => StoragePosition }
         ]);
     }
@@ -599,7 +582,6 @@ class ScanEntry$Type extends MessageType<ScanEntry> {
         message.detail = "";
         message.preview = 0;
         message.previewError = "";
-        message.matchingCopies = 0n;
         if (value !== undefined)
             reflectionMergePartial<ScanEntry>(this, message, value);
         return message;
@@ -665,9 +647,6 @@ class ScanEntry$Type extends MessageType<ScanEntry> {
                     break;
                 case /* string preview_error */ 20:
                     message.previewError = reader.string();
-                    break;
-                case /* int64 matching_copies */ 21:
-                    message.matchingCopies = reader.int64().toBigInt();
                     break;
                 case /* yatm.v1.StoragePosition storage */ 22:
                     message.storage = StoragePosition.internalBinaryRead(reader, reader.uint32(), options, message.storage);
@@ -741,9 +720,6 @@ class ScanEntry$Type extends MessageType<ScanEntry> {
         /* string preview_error = 20; */
         if (message.previewError !== "")
             writer.tag(20, WireType.LengthDelimited).string(message.previewError);
-        /* int64 matching_copies = 21; */
-        if (message.matchingCopies !== 0n)
-            writer.tag(21, WireType.Varint).int64(message.matchingCopies);
         /* yatm.v1.StoragePosition storage = 22; */
         if (message.storage)
             StoragePosition.internalBinaryWrite(message.storage, writer.tag(22, WireType.LengthDelimited).fork(), options).join();

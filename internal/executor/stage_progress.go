@@ -58,9 +58,6 @@ func RuleFor(phase entity.JobPhase, denominator *Counts) StageRule {
 		// Content usually measures bytes, and a scope whose files are all empty measures its items
 		// instead of a false byte percentage.
 		return StageRule{Unit: stageUnit(denominator), Ratio: true, Estimate: true}
-	case entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
-		// Comparison settles from durable rows, so it has a ratio but no throughput to estimate.
-		return StageRule{Unit: entity.ProgressUnit_PROGRESS_UNIT_ITEMS, Ratio: true}
 	case entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS:
 		// The decoder report, not the settled item count, is real generation throughput; its work
 		// is a count of decoder observations, never the bytes of the content it produced.

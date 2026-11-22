@@ -31,7 +31,6 @@ type scanCreateCommand struct {
 	Paths            []string `long:"path" description:"Relative root within --location-id; repeatable"`
 	Signature        string   `long:"signature" choice:"known-only" choice:"fill-missing" choice:"force-read" default:"fill-missing" description:"Content fact policy"`
 	Result           string   `long:"result" choice:"report" choice:"originals" choice:"inventory" choice:"verify" description:"Result publication policy (default: report; scan media: inventory)"`
-	CompareLibrary   bool     `long:"compare-library" description:"Find matching archived content"`
 	PreviewPolicy    string   `long:"preview-policy" choice:"none" choice:"missing-only" choice:"regenerate-all" default:"none" description:"Preview generation policy"`
 	ForceRehash      bool     `long:"force-rehash" description:"Use force-read signature policy"`
 	NoSignatureCache bool     `long:"no-signature-cache" description:"Do not write the signature cache onto files this Job reads"`
@@ -204,7 +203,7 @@ func (c *scanCreateCommand) Execute(_ []string) error {
 	ctx, cancel := c.runtime.context()
 	defer cancel()
 	reply, err := callRPC[entity.CreateScanJobRequest, entity.CreateScanJobResponse](ctx, c.runtime, entity.ScanJobService_Create_FullMethodName,
-		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, CompareLibrary: c.CompareLibrary, PreviewPolicy: preview,
+		&entity.CreateScanJobRequest{Priority: c.Priority, Spec: &entity.ScanJobSpec{MediaId: mediaID, Selections: selections, SignaturePolicy: policy, ResultPolicy: result, PreviewPolicy: preview,
 			WriteSignatureCache: signatureCacheChoice(c.NoSignatureCache)}})
 	if err != nil {
 		return err

@@ -58,7 +58,6 @@ const activePhases = new Set([
   JobPhase.PUBLISHING_SOURCE,
   JobPhase.VERIFYING_MEDIA,
   JobPhase.PROCESSING_CONTENT,
-  JobPhase.COMPARING_CONTENT,
   JobPhase.CALIBRATING,
 ]);
 
@@ -98,7 +97,6 @@ const phaseLabels: Partial<Record<JobPhase, MessageDescriptor>> = {
   [JobPhase.PUBLISHING_SOURCE]: msg({ message: "publishing source", context: "Job phase" }),
   [JobPhase.VERIFYING_MEDIA]: msg({ message: "verifying media", context: "Job phase" }),
   [JobPhase.PROCESSING_CONTENT]: msg({ message: "processing content", context: "Job phase" }),
-  [JobPhase.COMPARING_CONTENT]: msg({ message: "comparing content", context: "Job phase" }),
   [JobPhase.CALIBRATING]: msg({ message: "calibrating", context: "Job phase" }),
 };
 
@@ -246,8 +244,6 @@ const counterLabel = (job: Job, phase: JobPhase): string => {
       return t`Found`;
     case JobPhase.GENERATING_PREVIEWS:
       return t`Generated`;
-    case JobPhase.COMPARING_CONTENT:
-      return t`Compared`;
     case JobPhase.PUBLISHING_SOURCE:
     case JobPhase.PROCESSING_CONTENT:
     case JobPhase.VERIFYING_MEDIA:

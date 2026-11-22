@@ -19,7 +19,6 @@ const last: LastScan = {
   id: "1",
   signaturePolicy: Signature.KNOWN_ONLY,
   resultPolicy: Result.REPORT_ONLY,
-  compare: false,
   previewPolicy: PreviewPolicy.MISSING_ONLY,
   writeSignatureCache: true,
 };
@@ -32,7 +31,6 @@ describe("initialScan", () => {
         options: {
           signaturePolicy: Signature.KNOWN_ONLY,
           resultPolicy: Result.REPORT_ONLY,
-          compare: false,
           previewPolicy: PreviewPolicy.MISSING_ONLY,
         },
       },
@@ -53,7 +51,6 @@ describe("initialScan", () => {
     expect(initial.options).toEqual({
       signaturePolicy: Signature.KNOWN_ONLY,
       resultPolicy: Result.PUBLISH_ORIGINALS,
-      compare: false,
       previewPolicy: PreviewPolicy.NONE,
       writeSignatureCache: true,
     });
@@ -65,7 +62,6 @@ describe("initialScan", () => {
       options: {
         signaturePolicy: Signature.FILL_MISSING,
         resultPolicy: Result.PUBLISH_ORIGINALS,
-        compare: true,
         previewPolicy: PreviewPolicy.NONE,
         writeSignatureCache: true,
       },
@@ -95,7 +91,6 @@ describe("initialScan", () => {
         options: {
           signaturePolicy: Signature.FORCE_READ,
           resultPolicy: Result.REPORT_ONLY,
-          compare: false,
           previewPolicy: PreviewPolicy.REGENERATE_ALL,
         },
       },
@@ -114,7 +109,6 @@ describe("initialScan", () => {
       options: {
         signaturePolicy: Signature.KNOWN_ONLY,
         resultPolicy: Result.REPORT_ONLY,
-        compare: false,
         previewPolicy: PreviewPolicy.MISSING_ONLY,
       },
       explicit: true,
@@ -125,7 +119,7 @@ describe("initialScan", () => {
     ["both URL sources", new URLSearchParams("location=1&media=3"), null],
     ["a malformed routed Files entry", new URLSearchParams(), { scan: { target: { kind: "files", entries: [null] } } }],
     ["an invalid Location id", new URLSearchParams(), { scan: { target: { kind: "location", id: "0" } } }],
-    ["an invalid policy", new URLSearchParams(), { scan: { options: { compare: "yes" } } }],
+    ["an invalid policy", new URLSearchParams(), { scan: { options: { writeSignatureCache: "yes" } } }],
   ])("blocks %s instead of starting from the last Scan's source", (_, params, state) => {
     const initial = initialScan(params, state, last);
     expect(initial.error).not.toBe("");

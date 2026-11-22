@@ -36,7 +36,6 @@ const initial = (): InitialScan => ({
   options: {
     signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY,
     resultPolicy: ScanResultPolicy.REPORT_ONLY,
-    compare: false,
     previewPolicy: PreviewPolicy.NONE,
     writeSignatureCache: true,
   },
@@ -79,12 +78,13 @@ it("keeps the form's draft after failed creation", async () => {
   const start = screen.getByRole("button", { name: "Start scan" });
   await waitFor(() => expect(start).toBeEnabled());
   await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
-  await userEvent.click(screen.getByRole("checkbox", { name: "Count matching archived copies" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
+  await userEvent.click(screen.getByRole("option", { name: "Read every file" }));
   const write = vi.spyOn(Storage.prototype, "setItem");
   await userEvent.click(start);
   await screen.findByText("Creation offline");
   expect(write).not.toHaveBeenCalled();
-  expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).toBeChecked();
+  expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Read every file");
   expect(start).toBeEnabled();
 });
 
@@ -105,18 +105,16 @@ it("does not overwrite a manually chosen Location after cancellation", async () 
   expect(create.mock.calls[0][0].spec.selections[0].target).toEqual({ oneofKind: "location", location: { locationId: 2n, path: "" } });
 });
 
-it("keeps signature and comparison tuning folded with an effective summary", async () => {
+it("keeps signature tuning folded with an effective summary", async () => {
   show();
   await waitFor(() => expect(screen.getByRole("button", { name: "Start scan" })).toBeEnabled());
   expect(screen.getByRole("combobox", { name: "Results" })).toBeVisible();
   expect(screen.getByRole("combobox", { name: "Previews" })).toBeVisible();
   expect(screen.queryByRole("combobox", { name: "Signatures" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Reuse known signatures only · No archived copy comparison");
+  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Reuse known signatures only");
   expect(screen.getByText(/Selected reads and Preview generation still run/)).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
-  expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: false }) }),
-  );
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY }) }));
 });
 it("submits the signature cache choice for reading policies", async () => {
   const input = initial();
@@ -127,7 +125,7 @@ it("submits the signature cache choice for reading policies", async () => {
   const cache = screen.getByRole("checkbox", { name: "Write signature cache" });
   expect(cache).toBeChecked();
   await userEvent.click(cache);
-  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Read new and changed files · No archived copy comparison · No signature cache");
+  expect(screen.getByRole("button", { name: /Advanced/ })).toHaveTextContent("Read new and changed files · No signature cache");
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   await screen.findByText("Created Job 43");
   expect(create).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ writeSignatureCache: false }) }));

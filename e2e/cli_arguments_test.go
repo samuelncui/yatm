@@ -266,9 +266,6 @@ func scanArguments(request *entity.CreateScanJobRequest) ([]string, error) {
 	if spec.MediaId != 0 {
 		args = append(args, "--media-id", decimal(spec.MediaId))
 	}
-	if spec.CompareLibrary {
-		args = append(args, "--compare-library")
-	}
 	if spec.PreviewPolicy != entity.PreviewPolicy_PREVIEW_POLICY_UNSPECIFIED {
 		args = append(args, "--preview-policy", previewPolicyArgument(spec.PreviewPolicy))
 	}

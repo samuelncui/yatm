@@ -67,7 +67,6 @@ export function scanRequest(target: ScanTarget, options: ScanOptions) {
     selections,
     signaturePolicy: options.resultPolicy === ScanResultPolicy.VERIFY_COPIES ? ScanSignaturePolicy.FORCE_READ : options.signaturePolicy,
     resultPolicy: options.resultPolicy,
-    compareLibrary: options.compare,
     previewPolicy: previewAvailable(target) ? options.previewPolicy : PreviewPolicy.NONE,
     writeSignatureCache: options.writeSignatureCache,
   });
@@ -297,7 +296,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
                 : options.signaturePolicy === ScanSignaturePolicy.FILL_MISSING
                   ? t`Read new and changed files`
                   : t`Reuse known signatures only`,
-              options.compare ? t`Count matching archived copies` : t`No archived copy comparison`,
               !cacheApplies || options.writeSignatureCache ? "" : t`No signature cache`,
             ]
               .filter(Boolean)
@@ -314,13 +312,6 @@ export const ScanForm = ({ initial }: { initial: InitialScan }) => {
               <MenuItem value={ScanSignaturePolicy.FILL_MISSING}>{t`Read new and changed files`}</MenuItem>
               <MenuItem value={ScanSignaturePolicy.FORCE_READ}>{t`Read every file`}</MenuItem>
             </TextField>
-            <FormControlLabel
-              control={<Checkbox disabled={busy} checked={options.compare} onChange={(_, compare) => update({ compare })} />}
-              label={t`Count matching archived copies`}
-            />
-            <Typography variant="body2" color="text.secondary">
-              {t`Counts recorded copies with the same signature; it does not check their current readability.`}
-            </Typography>
             <FormControlLabel
               control={
                 <Checkbox

@@ -178,7 +178,7 @@ func (r *runner) freezeMedia(ctx context.Context, config *Config) error {
 			return err
 		}
 		if change != entity.ScanChange_SCAN_CHANGE_REMOVED {
-			r.advanceCounts(executor.Counts{Files: 1, Bytes: entry.Size}, executor.Counts{})
+			r.advanceCounts(executor.Counts{Files: 1, Bytes: entry.Size})
 		}
 		r.advanceResults(addedResults([]*Entry{entry}))
 		return nil

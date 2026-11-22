@@ -87,12 +87,6 @@ func (r *runner) runPipeline(ctx context.Context, config *Config, scope *Scope, 
 	if readErr != nil && !checking {
 		return readErr
 	}
-	if config.Spec.CompareLibrary {
-		r.setPhase(entity.JobPhase_JOB_PHASE_COMPARING_CONTENT)
-		if err := r.compareContent(ctx, scope); err != nil {
-			return errors.Join(readErr, err)
-		}
-	}
 	if previewEnabled(config.Spec.PreviewPolicy) {
 		// The phase reports Preview once it is the only remaining work, after every content fact
 		// is known and its remaining generation workload can be classified.
@@ -124,7 +118,7 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 	if config.Spec.ResultPolicy == entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
 		if err := r.db.WithContext(ctx).Model(&Entry{}).Where("published = ?", false).Updates(map[string]any{
 			"change": entity.ScanChange_SCAN_CHANGE_UNCHANGED, "needs_hash": true, "finding": entity.ScanFinding_SCAN_FINDING_NOT_CHECKED,
-			"actual_size": 0, "actual_hash": nil, "checked_at_ns": 0, "detail": "", "compared": false,
+			"actual_size": 0, "actual_hash": nil, "checked_at_ns": 0, "detail": "",
 			"preview_error": ""}).Error; err != nil {
 			return err
 		}
@@ -200,7 +194,7 @@ func (r *runner) enumerateMedia(ctx context.Context, config *Config, scope *Scop
 		if err := r.db.WithContext(ctx).Save(&row).Error; err != nil {
 			return err
 		}
-		r.advanceCounts(executor.Counts{Files: found.Files + 1, Bytes: found.Bytes + row.Size}, executor.Counts{})
+		r.advanceCounts(executor.Counts{Files: found.Files + 1, Bytes: found.Bytes + row.Size})
 		results.add(&row, 1)
 		r.advanceResults(results)
 		return nil
@@ -292,30 +286,6 @@ func (r *runner) eachEntry(ctx context.Context, scope *Scope, use func(*Entry) e
 		}
 		after = rows[len(rows)-1].ID
 	}
-}
-
-func (r *runner) compareContent(ctx context.Context, scope *Scope) error {
-	return r.eachEntry(ctx, scope, func(row *Entry) error {
-		if row.Change == entity.ScanChange_SCAN_CHANGE_REMOVED || row.Compared {
-			return nil
-		}
-		if len(row.Signature) > 0 {
-			count, err := r.exe.Lib().CountSignatureCopies(ctx, row.Signature)
-			if err != nil {
-				return err
-			}
-			row.MatchingCopies = count
-		}
-		row.Compared = true
-		if err := r.db.WithContext(ctx).Model(row).Updates(map[string]any{
-			"matching_copies": row.MatchingCopies,
-			"compared":        true,
-		}).Error; err != nil {
-			return err
-		}
-		r.advanceCounts(executor.Counts{}, executor.Counts{Files: 1, Bytes: row.Size})
-		return nil
-	})
 }
 
 // settledRows reports how far, in manifest ID order, this attempt has saved the content facts of

@@ -37,8 +37,6 @@ func referenceStageInput(t *testing.T, r *runner, phase entity.JobPhase) executo
 			return executor.StageInput{Phase: phase}
 		}
 		return executor.StageInput{Phase: phase, Completed: query("change != ? AND needs_hash = ?", removed, false), Manifest: &found}
-	case entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
-		return ratio(query("change != ? AND compared = ?", removed, true))
 	case entity.JobPhase_JOB_PHASE_COMPLETED:
 		return ratio(found)
 	default:
@@ -164,7 +162,7 @@ func TestScanMaintainedResultsMatchManifestAggregation(t *testing.T) {
 // discoveryPhases report the discovered counters the indexing work path maintains; the processed
 // counter an idle Job reports is counted when that phase starts.
 var discoveryPhases = []entity.JobPhase{
-	entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT,
+	entity.JobPhase_JOB_PHASE_INDEXING,
 	entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
 	entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE, entity.JobPhase_JOB_PHASE_COMPLETED,
 }
@@ -174,7 +172,6 @@ func TestScanMaintainedCountsMatchManifestAggregation(t *testing.T) {
 	// uniqueness conflicts the discovery counters must not count twice.
 	f := newInputFixture(t, batchSize+9, 2)
 	spec := f.spec()
-	spec.CompareLibrary = true
 	spec.Selections = append(scanLocationSelections(f.locations[0].ID, "selected/file-00000000"), spec.Selections[0], spec.Selections[0])
 	r, _ := runAnalysis(t, f.exe, spec)
 	ctx := testAttemptContext(context.Background())
@@ -186,12 +183,6 @@ func TestScanMaintainedCountsMatchManifestAggregation(t *testing.T) {
 	require.NoError(t, r.prepareInputs(ctx, &config, nil))
 	requireCountsMatch(t, r, discoveryPhases...)
 
-	// Comparison counts once when it starts and advances per compared row.
-	require.NoError(t, r.db.Model(&Entry{}).Where("1 = 1").Update("compared", false).Error)
-	r.setPhase(entity.JobPhase_JOB_PHASE_COMPARING_CONTENT)
-	requireCountsMatch(t, r, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT)
-	require.NoError(t, r.compareContent(ctx, &Scope{LocationID: f.locations[1].ID}))
-	requireCountsMatch(t, r, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT)
 	r.setPhase(entity.JobPhase_JOB_PHASE_UNSPECIFIED)
 	requireCountsMatch(t, r, entity.JobPhase_JOB_PHASE_UNSPECIFIED)
 

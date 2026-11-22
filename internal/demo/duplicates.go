@@ -218,7 +218,7 @@ func seedScaledIdentical(ctx context.Context, exe *executor.Executor, locationID
 	// Normal Scan owns bounded enumeration, hashing and publication at every requested size.
 	created, err := scanjob.Create(ctx, exe, &entity.CreateScanJobRequest{Priority: 12, Spec: &entity.ScanJobSpec{
 		Selections:   demoLocationSelections(locationID),
-		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, CompareLibrary: true,
+		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
 	}})
 	if err != nil {
 		return fmt.Errorf("create scaled Demo Scan failed, %w", err)

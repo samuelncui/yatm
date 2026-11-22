@@ -64,7 +64,8 @@ message ScanJobSpec {
     repeated FileSelection selections = 6;
     ScanSignaturePolicy signature_policy = 7;
     ScanResultPolicy result_policy = 8;
-    bool compare_library = 9;
+    reserved 9;
+    reserved "compare_library";
     PreviewPolicy preview_policy = 12;
     // Unset writes the signature cache onto read files.
     optional bool write_signature_cache = 13;
@@ -90,7 +91,8 @@ message ScanEntry {
     string detail = 17;
     ScanPreviewOutcome preview = 19;
     string preview_error = 20;
-    int64 matching_copies = 21;
+    reserved 21;
+    reserved "matching_copies";
     StoragePosition storage = 22;
 }
 

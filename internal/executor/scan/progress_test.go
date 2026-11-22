@@ -262,23 +262,16 @@ func TestScanContentProgressReportsTheRunningAttempt(t *testing.T) {
 	require.Positive(t, sampled, "the work path opens the stage window")
 }
 
-func TestScanComparisonProgressIsDurableAndPreviewUsesTheAttempt(t *testing.T) {
+func TestScanPreviewProgressUsesTheAttempt(t *testing.T) {
 	r := newProgressRunner(t)
 	require.NoError(t, r.db.Create(&[]*Entry{
-		{Path: "done", Change: entity.ScanChange_SCAN_CHANGE_ADDED, Size: 10, Compared: true},
+		{Path: "done", Change: entity.ScanChange_SCAN_CHANGE_ADDED, Size: 10},
 		{Path: "pending", Change: entity.ScanChange_SCAN_CHANGE_UNCHANGED, Size: 20},
 	}).Error)
 
-	r.phase = entity.JobPhase_JOB_PHASE_COMPARING_CONTENT
-	progress, err := r.progressSnapshot(context.Background())
-	require.NoError(t, err)
-	require.True(t, progress.TotalKnown)
-	require.EqualValues(t, 1, progress.CopiedFileCount)
-	require.EqualValues(t, 10, progress.CopiedBytes)
-
 	// Preview work is not durable, so the attempt's own completions are what the stage reports.
 	r.phase = entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS
-	progress, err = r.progressSnapshot(context.Background())
+	progress, err := r.progressSnapshot(context.Background())
 	require.NoError(t, err)
 	require.Zero(t, progress.CopiedFileCount)
 	r.previewOutcomes = previewOutcomes{ready: 2, skipped: 1}

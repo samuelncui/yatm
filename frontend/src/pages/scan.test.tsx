@@ -80,7 +80,6 @@ const lastScan = (spec: Partial<ScanJobSpec>) =>
       spec: ScanJobSpec.create({
         signaturePolicy: Signature.KNOWN_ONLY,
         resultPolicy: Result.REPORT_ONLY,
-        compareLibrary: false,
         previewPolicy: PreviewPolicy.NONE,
         writeSignatureCache: false,
         ...spec,
@@ -238,11 +237,9 @@ describe("Scan form", () => {
     await userEvent.click(screen.getByRole("button", { name: /Advanced/ }));
     await userEvent.click(screen.getByRole("combobox", { name: "Signatures" }));
     await userEvent.click(screen.getByRole("option", { name: "Reuse known signatures only" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Count matching archived copies" }));
     await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
     await userEvent.click(screen.getByRole("option", { name: "Media" }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
-    expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).not.toBeChecked();
     await userEvent.click(screen.getByRole("combobox", { name: "Source" }));
     await userEvent.click(screen.getByRole("option", { name: "Location" }));
     expect(screen.getByRole("combobox", { name: "Signatures" })).toHaveTextContent("Reuse known signatures only");
@@ -266,7 +263,6 @@ describe("Scan form", () => {
           selections: [selection("")],
           signaturePolicy: Signature.KNOWN_ONLY,
           resultPolicy: Result.REPORT_ONLY,
-          compareLibrary: false,
           writeSignatureCache: false,
         }),
       }),
@@ -293,7 +289,7 @@ describe("Scan form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
     expect(scan).toHaveBeenCalledWith(
       expect.objectContaining({
-        spec: expect.objectContaining({ selections: [selection("Projects")], signaturePolicy: Signature.KNOWN_ONLY, compareLibrary: false }),
+        spec: expect.objectContaining({ selections: [selection("Projects")], signaturePolicy: Signature.KNOWN_ONLY }),
       }),
     );
   });
@@ -321,7 +317,6 @@ describe("Scan form", () => {
         spec: expect.objectContaining({
           signaturePolicy: Signature.FILL_MISSING,
           resultPolicy: Result.PUBLISH_ORIGINALS,
-          compareLibrary: true,
           previewPolicy: PreviewPolicy.NONE,
           writeSignatureCache: true,
         }),

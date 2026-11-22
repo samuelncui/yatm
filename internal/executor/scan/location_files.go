@@ -211,7 +211,7 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, batchSize).Error; err != nil {
 		return err
 	}
-	s.advanceCounts(added, executor.Counts{})
+	s.advanceCounts(added)
 	// Results are read after the insert, whose save hook settles the default change and finding.
 	s.advanceResults(addedResults(inserted))
 	return nil

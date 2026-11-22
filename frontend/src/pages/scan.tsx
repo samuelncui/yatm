@@ -30,7 +30,6 @@ const loadCreation = async (id: bigint, signal: AbortSignal): Promise<InitialSca
     options: {
       signaturePolicy: spec.signaturePolicy,
       resultPolicy: spec.resultPolicy,
-      compare: spec.compareLibrary,
       previewPolicy: spec.previewPolicy,
       // A Job created before this choice existed wrote the cache.
       writeSignatureCache: spec.writeSignatureCache ?? true,

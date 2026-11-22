@@ -331,7 +331,6 @@ it("recreates Scan selected roots and all options through the normal explicit St
       selections: [live, selection(7n, FileScope.SAVED)],
       signaturePolicy: ScanSignaturePolicy.FILL_MISSING,
       resultPolicy: ScanResultPolicy.PUBLISH_ORIGINALS,
-      compareLibrary: true,
       previewPolicy: PreviewPolicy.REGENERATE_ALL,
       writeSignatureCache: false,
     },
@@ -341,7 +340,6 @@ it("recreates Scan selected roots and all options through the normal explicit St
   await screen.findByText("2 selected roots");
   expect(mocks.scanCreate).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: /^Advanced/ }));
-  expect(screen.getByRole("checkbox", { name: "Count matching archived copies" })).toBeChecked();
   expect(screen.getByRole("checkbox", { name: "Write signature cache" })).not.toBeChecked();
   await userEvent.click(screen.getByRole("button", { name: "Start scan" }));
   expect(mocks.scanCreate).toHaveBeenCalledExactlyOnceWith(request);
@@ -376,12 +374,11 @@ it("retains Scan Media and verification options", async () => {
       mediaId: 15n,
       signaturePolicy: ScanSignaturePolicy.FORCE_READ,
       resultPolicy: ScanResultPolicy.VERIFY_COPIES,
-      compareLibrary: false,
       previewPolicy: PreviewPolicy.NONE,
     },
   });
   // The original Job's choices win; the most recently created Scan is not read.
-  const other = CreateScanJobRequest.create({ spec: { mediaId: 16n, signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY, compareLibrary: true } });
+  const other = CreateScanJobRequest.create({ spec: { mediaId: 16n, signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY } });
   mocks.scanRead.mockImplementation(({ latest }: { latest: boolean }) => call({ request: latest ? other : request, unavailableReason: "" }));
   mocks.media.mockReturnValue(call({ media: [Media.create({ id: 15n, kind: MediaKind.VOLUME, capabilities: { read: MediaAccess.RANDOM } })] }));
   show("/scan?recreate=1");

@@ -569,18 +569,6 @@ msgstr "Archived content"
 msgid "Archived copies"
 msgstr "Archived copies"
 
-msgid "Archived copies not compared (removed)"
-msgstr "Archived copies not compared (removed)"
-
-msgid "Archived copies unknown (no signature)"
-msgstr "Archived copies unknown (no signature)"
-
-msgid "Archived copy comparison incomplete"
-msgstr "Archived copy comparison incomplete"
-
-msgid "Archived copy comparison not requested"
-msgstr "Archived copy comparison not requested"
-
 msgid "Auto"
 msgstr "Auto"
 
@@ -865,13 +853,6 @@ msgstr "Close details"
 msgid "Close search failed"
 msgstr "Close search failed"
 
-msgid "Compared"
-msgstr "Compared"
-
-msgctxt "Job phase"
-msgid "comparing content"
-msgstr "comparing content"
-
 msgid "Complete all required fields."
 msgstr "Complete all required fields."
 
@@ -1091,9 +1072,6 @@ msgstr "Could not load rows"
 msgid "Could not load saved versions"
 msgstr "Could not load saved versions"
 
-msgid "Could not load Scan comparison settings"
-msgstr "Could not load Scan comparison settings"
-
 msgid "Could not load scan progress"
 msgstr "Could not load scan progress"
 
@@ -1207,12 +1185,6 @@ msgstr "Could not switch hidden files"
 
 msgid "Could not update both row views"
 msgstr "Could not update both row views"
-
-msgid "Count matching archived copies"
-msgstr "Count matching archived copies"
-
-msgid "Counts recorded copies with the same signature; it does not check their current readability."
-msgstr "Counts recorded copies with the same signature; it does not check their current readability."
 
 msgid "Create"
 msgstr "Create"
@@ -2302,9 +2274,6 @@ msgstr "Match unknown"
 msgid "Matched the prepared conditions"
 msgstr "Matched the prepared conditions"
 
-msgid "Matching archived copies: {matchingCopies}"
-msgstr "Matching archived copies: {matchingCopies}"
-
 msgid "Matching content"
 msgstr "Matching content"
 
@@ -2532,9 +2501,6 @@ msgstr "No archive results yet."
 
 msgid "No archived copies recorded."
 msgstr "No archived copies recorded."
-
-msgid "No archived copy comparison"
-msgstr "No archived copy comparison"
 
 msgid "No baseline"
 msgstr "No baseline"
@@ -3345,9 +3311,6 @@ msgstr "Retry"
 msgid "Retry availability"
 msgstr "Retry availability"
 
-msgid "Retry comparison settings"
-msgstr "Retry comparison settings"
-
 msgid "Retry destinations"
 msgstr "Retry destinations"
 
@@ -3442,9 +3405,6 @@ msgstr "Scan"
 msgctxt "Job kind"
 msgid "Scan"
 msgstr "Scan"
-
-msgid "Scan comparison settings were not returned"
-msgstr "Scan comparison settings were not returned"
 
 msgid "Scan results"
 msgstr "Scan results"

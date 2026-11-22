@@ -6,7 +6,6 @@ import { resultForSource, type LastScan } from "./scan-preferences";
 export type ScanOptions = {
   signaturePolicy: ScanSignaturePolicy;
   resultPolicy: ScanResultPolicy;
-  compare: boolean;
   previewPolicy: PreviewPolicy;
   writeSignatureCache: boolean;
 };
@@ -17,7 +16,6 @@ export type ScanPrefill = {
 export const collectionOptions: Omit<ScanOptions, "writeSignatureCache"> = {
   signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY,
   resultPolicy: ScanResultPolicy.PUBLISH_ORIGINALS,
-  compare: false,
   previewPolicy: PreviewPolicy.NONE,
 };
 
@@ -62,7 +60,6 @@ function checkedPrefill(value: unknown): ScanPrefill {
         )) ||
       (options.previewPolicy !== undefined &&
         ![PreviewPolicy.NONE, PreviewPolicy.MISSING_ONLY, PreviewPolicy.REGENERATE_ALL].includes(options.previewPolicy)) ||
-      (options.compare !== undefined && typeof options.compare !== "boolean") ||
       (options.writeSignatureCache !== undefined && typeof options.writeSignatureCache !== "boolean"))
   )
     throw new Error(t`Invalid Scan options. Choose the source again.`);
@@ -101,7 +98,6 @@ export function initialScan(params: URLSearchParams, state: unknown, saved?: Las
   const target = prefill.target ?? (saved?.kind === "media" ? { kind: "media" as const, id: saved.id } : { kind: "location" as const, id: saved?.id ?? "" });
   const options: ScanOptions = {
     signaturePolicy: saved?.signaturePolicy ?? ScanSignaturePolicy.FILL_MISSING,
-    compare: saved?.compare ?? true,
     previewPolicy: saved?.previewPolicy ?? PreviewPolicy.NONE,
     writeSignatureCache: saved?.writeSignatureCache ?? true,
     ...prefill.options,

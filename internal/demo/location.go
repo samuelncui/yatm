@@ -226,7 +226,7 @@ func seedAnalyze(ctx context.Context, exe *executor.Executor, sourceID int64, wa
 	}
 	if err := seedAnalyzeSpec(ctx, exe, &entity.ScanJobSpec{
 		Selections:   demoLocationSelections(sourceID),
-		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, CompareLibrary: true,
+		ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
 	}, want); err != nil {
 		return err
 	}

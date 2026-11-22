@@ -160,7 +160,6 @@ func TestStageRuleZeroByteDenominatorUsesItems(t *testing.T) {
 	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_BYTES, RuleFor(entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT, &Counts{Files: 2, Bytes: 30}).Unit)
 	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_BYTES, RuleFor(entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA, &Counts{Files: 2, Bytes: 30}).Unit)
 	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_ITEMS, RuleFor(entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT, &Counts{Files: 2}).Unit)
-	require.Equal(t, entity.ProgressUnit_PROGRESS_UNIT_ITEMS, RuleFor(entity.JobPhase_JOB_PHASE_COMPARING_CONTENT, nil).Unit)
 }
 
 func TestCopyStageInputUsesItemsForZeroByteFilesAndResetsAttemptWindow(t *testing.T) {

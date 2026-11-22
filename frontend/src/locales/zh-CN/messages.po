@@ -569,18 +569,6 @@ msgstr "归档内容"
 msgid "Archived copies"
 msgstr "归档副本"
 
-msgid "Archived copies not compared (removed)"
-msgstr "未比对归档副本（已移除）"
-
-msgid "Archived copies unknown (no signature)"
-msgstr "归档副本未知（无签名）"
-
-msgid "Archived copy comparison incomplete"
-msgstr "归档副本比对未完成"
-
-msgid "Archived copy comparison not requested"
-msgstr "未请求比对归档副本"
-
 msgid "Auto"
 msgstr "自动"
 
@@ -865,13 +853,6 @@ msgstr "关闭详情"
 msgid "Close search failed"
 msgstr "关闭搜索失败"
 
-msgid "Compared"
-msgstr "已比较"
-
-msgctxt "Job phase"
-msgid "comparing content"
-msgstr "正在比较内容"
-
 msgid "Complete all required fields."
 msgstr "请填写所有必填字段。"
 
@@ -1091,9 +1072,6 @@ msgstr "无法加载行"
 msgid "Could not load saved versions"
 msgstr "无法加载已保存版本"
 
-msgid "Could not load Scan comparison settings"
-msgstr "无法加载扫描比对设置"
-
 msgid "Could not load scan progress"
 msgstr "无法加载扫描进度"
 
@@ -1207,12 +1185,6 @@ msgstr "无法切换隐藏文件"
 
 msgid "Could not update both row views"
 msgstr "无法更新两个行视图"
-
-msgid "Count matching archived copies"
-msgstr "统计匹配的归档副本"
-
-msgid "Counts recorded copies with the same signature; it does not check their current readability."
-msgstr "统计签名相同的已记录副本，不检查它们当前是否可读。"
 
 msgid "Create"
 msgstr "创建"
@@ -2302,9 +2274,6 @@ msgstr "匹配情况未知"
 msgid "Matched the prepared conditions"
 msgstr "符合预备条件"
 
-msgid "Matching archived copies: {matchingCopies}"
-msgstr "匹配的归档副本：{matchingCopies}"
-
 msgid "Matching content"
 msgstr "匹配内容"
 
@@ -2532,9 +2501,6 @@ msgstr "暂无归档结果。"
 
 msgid "No archived copies recorded."
 msgstr "没有已记录的归档副本。"
-
-msgid "No archived copy comparison"
-msgstr "不比对归档副本"
 
 msgid "No baseline"
 msgstr "无基准"
@@ -3345,9 +3311,6 @@ msgstr "重试"
 msgid "Retry availability"
 msgstr "重试可用性检查"
 
-msgid "Retry comparison settings"
-msgstr "重试加载比对设置"
-
 msgid "Retry destinations"
 msgstr "重试加载目标"
 
@@ -3442,9 +3405,6 @@ msgstr "扫描"
 msgctxt "Job kind"
 msgid "Scan"
 msgstr "扫描"
-
-msgid "Scan comparison settings were not returned"
-msgstr "未返回扫描比对设置"
 
 msgid "Scan results"
 msgstr "扫描结果"

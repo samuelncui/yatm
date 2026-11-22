@@ -162,13 +162,3 @@ func positionFromScan(mediaID int64, entry *entity.ScanEntry) *Position {
 		StorageOrder: append([]byte{}, entry.Storage.GetOrder()...), StorageMetadata: entry.Storage.GetMetadata(),
 	}
 }
-
-// CountSignatureCopies reports recorded physical copies without claiming current readability or health.
-func (l *Library) CountSignatureCopies(ctx context.Context, signature []byte) (int64, error) {
-	if len(signature) == 0 {
-		return 0, nil
-	}
-	var count int64
-	err := l.readDB().WithContext(ctx).Model(ModelPosition).Where("signature = ? AND is_dir = ?", signature, false).Count(&count).Error
-	return count, err
-}

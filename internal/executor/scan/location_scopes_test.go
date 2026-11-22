@@ -211,17 +211,6 @@ func TestScanProgressAPIReportsDurableStageWindows(t *testing.T) {
 	require.True(t, result.Progress.TotalKnown)
 	require.EqualValues(t, 2, result.Progress.TotalFileCount)
 	require.Equal(t, result.Progress.TotalFileCount, result.Progress.CopiedFileCount)
-
-	var first Entry
-	require.NoError(t, r.db.Order("id").First(&first).Error)
-	require.NoError(t, r.db.Model(&Entry{}).Where("1 = 1").Update("compared", false).Error)
-	require.NoError(t, r.db.Model(&Entry{}).Where("id = ?", first.ID).Update("compared", true).Error)
-	r.setPhase(entity.JobPhase_JOB_PHASE_COMPARING_CONTENT)
-	result, err = service.GetProgress(context.Background(), &entity.GetScanJobProgressRequest{Id: r.job.ID})
-	require.NoError(t, err)
-	require.True(t, result.Progress.TotalKnown)
-	require.EqualValues(t, 1, result.Progress.CopiedFileCount)
-	require.EqualValues(t, 2, result.Progress.TotalFileCount)
 	r.setPhase(entity.JobPhase_JOB_PHASE_COMPLETED)
 }
 

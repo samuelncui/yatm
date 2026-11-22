@@ -89,25 +89,6 @@ describe("Job card phase rules", () => {
       totalFileCount: 10,
     },
     {
-      name: "Comparison uses item counts and never an estimate",
-      job: job({ kind: JobKind.SCAN, status: JobStatus.READY, phase: JobPhase.COMPARING_CONTENT }),
-      progress: progress({
-        totalKnown: true,
-        copiedFileCount: 1n,
-        copiedBytes: 10n,
-        totalFileCount: 4n,
-        totalBytes: 40n,
-        stage: stage({ phase: JobPhase.COMPARING_CONTENT, unit: ProgressUnit.ITEMS, completed: 1n, total: 4n }),
-      }),
-      percentage: 25,
-      counter: "Compared",
-      phase: "comparing content",
-      eta: "--",
-      files: 1,
-      bytes: "10 B",
-      totalFileCount: 4,
-    },
-    {
       name: "Preview measures decoder items and reports estimating",
       job: job({ kind: JobKind.SCAN, status: JobStatus.READY, phase: JobPhase.GENERATING_PREVIEWS }),
       progress: progress({

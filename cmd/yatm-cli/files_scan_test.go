@@ -83,14 +83,13 @@ func TestFilesAndScanCommandsThroughCLIProcess(t *testing.T) {
 	require.Equal(t, "observed.txt", files.metadata.Load().References[0].GetLocation().Path)
 
 	// Cache-only and Preview remain independent controls in one Scan request.
-	run("scan", "create", "--location-id", "4", "--path", "photos", "--signature", "known-only", "--result", "originals", "--preview-policy", "missing-only", "--compare-library")
+	run("scan", "create", "--location-id", "4", "--path", "photos", "--signature", "known-only", "--result", "originals", "--preview-policy", "missing-only")
 	require.Equal(t, entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY, scan.create.Load().Spec.SignaturePolicy)
 	require.Equal(t, entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, scan.create.Load().Spec.ResultPolicy)
 	require.Len(t, scan.create.Load().Spec.Selections, 1)
 	require.EqualValues(t, 4, scan.create.Load().Spec.Selections[0].GetLocation().LocationId)
 	require.Equal(t, "photos", scan.create.Load().Spec.Selections[0].GetLocation().Path)
 	require.Equal(t, entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY, scan.create.Load().Spec.PreviewPolicy)
-	require.True(t, scan.create.Load().Spec.CompareLibrary)
 	require.Nil(t, scan.create.Load().Spec.WriteSignatureCache, "omission keeps the server default, which writes")
 	for _, test := range []struct {
 		flag   string

@@ -13,7 +13,7 @@ const HookApp = ({ children }: PropsWithChildren) => (
 const renderHook = <Result,>(callback: () => Result) => testingRenderHook(callback, { wrapper: HookApp });
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChonkyActions, type ChonkyFileActionData, type FileBrowserHandle } from "@samuelncui/chonky";
-import { SettingsGroup, type FileSelection } from "@/entity";
+import { ScanSignaturePolicy, SettingsGroup, type FileSelection } from "@/entity";
 
 const {
   collect,
@@ -829,7 +829,7 @@ describe("directory admission", () => {
     await waitFor(() => expect(observedRoute).toHaveBeenLastCalledWith(expect.objectContaining({ pathname: "/scan", search: "" })));
     const prefill = observedRoute.mock.calls.at(-1)![0].state.scan;
     expect(prefill.target.kind).toBe("files");
-    expect(prefill.options).toMatchObject({ compare: false });
+    expect(prefill.options).toMatchObject({ signaturePolicy: ScanSignaturePolicy.KNOWN_ONLY });
     const selections = prefill.target.entries.map((entry: { selection: FileSelection }) => entry.selection);
     expect(selections).toHaveLength(mixed ? 2 : 1);
     expect(selections[0].target).toEqual({ oneofKind: "location", location: { locationId: 4n, path: "photos" } });

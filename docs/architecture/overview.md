@@ -55,7 +55,7 @@ concurrent mutations. Keep and Merge validate their current connected component 
 
 - Archive: filesystem selection -> durable manifest -> ACP copy -> backend validation -> Library publication -> submitted Job items.
 - Restore: explicit FileVersion selection -> signature-matched candidates -> ordered Media reads -> verified output -> Library association publication -> Job checkpoint.
-- Scan: recorded Location/Library/Media scope -> bounded enumeration -> policy-controlled facts/reads -> optional comparison and Preview -> selected publication -> Job checkpoint.
+- Scan: recorded Location/Library/Media scope -> bounded enumeration -> policy-controlled facts/reads -> optional Preview -> selected publication -> Job checkpoint.
 - Files browsing: actual Location directory or logical Library directory -> requested projections and visible observations; reads never admit Files or fall back to cached physical rows.
 - File operations: shared bounded planner -> guarded Library/filesystem primitives -> exact successful association publication and per-item results; no Job.
 - Library-selected Archive: frozen File identities and logical targets -> usable originals -> verified ACP transfer -> ordinary Media publication.

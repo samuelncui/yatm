@@ -63,13 +63,12 @@ func (r *runner) progressSnapshot(ctx context.Context) (*entity.Progress, error)
 type manifestCounts struct {
 	found     executor.Counts
 	processed executor.Counts // entries whose content facts are settled
-	compared  executor.Counts
 }
 
 // countedPhase reports whether a phase reports manifest counters outside the content stage window.
 func countedPhase(phase entity.JobPhase) bool {
 	switch phase {
-	case entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_UNSPECIFIED, entity.JobPhase_JOB_PHASE_COMPARING_CONTENT,
+	case entity.JobPhase_JOB_PHASE_INDEXING, entity.JobPhase_JOB_PHASE_UNSPECIFIED,
 		entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS, entity.JobPhase_JOB_PHASE_FINALIZING_MEDIA,
 		entity.JobPhase_JOB_PHASE_PUBLISHING_SOURCE,
 		entity.JobPhase_JOB_PHASE_COMPLETED, entity.JobPhase_JOB_PHASE_QUEUED:
@@ -81,18 +80,15 @@ func countedPhase(phase entity.JobPhase) bool {
 // countManifest reads every manifest counter in one statement.
 func (r *runner) countManifest(ctx context.Context) (manifestCounts, error) {
 	var row struct {
-		FoundFiles, FoundBytes, ProcessedFiles, ProcessedBytes, ComparedFiles, ComparedBytes int64
+		FoundFiles, FoundBytes, ProcessedFiles, ProcessedBytes int64
 	}
 	err := r.db.WithContext(ctx).Model(&Entry{}).Where("change != ?", entity.ScanChange_SCAN_CHANGE_REMOVED).Select(
 		"COUNT(*) AS found_files, COALESCE(SUM(size), 0) AS found_bytes, " +
 			"COALESCE(SUM(CASE WHEN needs_hash THEN 0 ELSE 1 END), 0) AS processed_files, " +
-			"COALESCE(SUM(CASE WHEN needs_hash THEN 0 ELSE size END), 0) AS processed_bytes, " +
-			"COALESCE(SUM(CASE WHEN compared THEN 1 ELSE 0 END), 0) AS compared_files, " +
-			"COALESCE(SUM(CASE WHEN compared THEN size ELSE 0 END), 0) AS compared_bytes").Scan(&row).Error
+			"COALESCE(SUM(CASE WHEN needs_hash THEN 0 ELSE size END), 0) AS processed_bytes").Scan(&row).Error
 	return manifestCounts{
 		found:     executor.Counts{Files: row.FoundFiles, Bytes: row.FoundBytes},
 		processed: executor.Counts{Files: row.ProcessedFiles, Bytes: row.ProcessedBytes},
-		compared:  executor.Counts{Files: row.ComparedFiles, Bytes: row.ComparedBytes},
 	}, err
 }
 
@@ -232,7 +228,7 @@ func addedResults(rows []*Entry) resultCounts {
 
 // advanceCounts applies the work path's own row changes. Unknown counters stay unknown, so the
 // next count reads them instead of adding to an unknown base.
-func (r *runner) advanceCounts(found, compared executor.Counts) {
+func (r *runner) advanceCounts(found executor.Counts) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if !r.countsKnown {
@@ -240,8 +236,6 @@ func (r *runner) advanceCounts(found, compared executor.Counts) {
 	}
 	r.counts.found.Files += found.Files
 	r.counts.found.Bytes += found.Bytes
-	r.counts.compared.Files += compared.Files
-	r.counts.compared.Bytes += compared.Bytes
 }
 
 // stageInput assembles the stage report one phase may show. A phase without a denominator reports
@@ -279,10 +273,6 @@ func (r *runner) stageInput(ctx context.Context, phase entity.JobPhase) (executo
 			return executor.StageInput{Phase: phase}, nil
 		}
 		return executor.StageInput{Phase: phase, Completed: counts.processed, Manifest: &found}, nil
-	case entity.JobPhase_JOB_PHASE_COMPARING_CONTENT:
-		in := denominated(phase, counts.compared, found)
-		in.TotalKnown = true
-		return in, nil
 	case entity.JobPhase_JOB_PHASE_GENERATING_PREVIEWS:
 		in := r.previewStageInput(phase, found)
 		in.TotalKnown = true

@@ -52,10 +52,8 @@ type Entry struct {
 	Published    bool
 	// PreviewError is why this entry has no Preview. An existing bundle is the content store's
 	// answer, so a successful outcome is never recorded per entry.
-	PreviewError   string
-	MatchingCopies int64
-	Compared       bool                 `gorm:"index"`
-	Evidence       observation.Evidence `gorm:"embedded"`
+	PreviewError string
+	Evidence     observation.Evidence `gorm:"embedded"`
 }
 
 func (Entry) TableName() string { return "entries" }
@@ -75,8 +73,7 @@ func (e *Entry) ToEntity() *entity.ScanEntry {
 		SizeBytes: e.Size, Mode: e.Mode, MtimeNs: e.MtimeNS, Sha256: e.SHA256, Signature: e.Signature,
 		Before: e.Before, After: e.After, PositionId: e.PositionID, Finding: e.Finding,
 		ActualSizeBytes: e.ActualSize, ActualHash: e.ActualHash, CheckedAtNs: e.CheckedAtNS,
-		Detail: e.Detail, PreviewError: e.PreviewError,
-		MatchingCopies: e.MatchingCopies, Storage: e.Storage}
+		Detail: e.Detail, PreviewError: e.PreviewError, Storage: e.Storage}
 }
 
 type Item = Entry

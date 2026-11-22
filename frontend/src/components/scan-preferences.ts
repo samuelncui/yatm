@@ -7,7 +7,6 @@ export type LastScan = {
   id: string;
   signaturePolicy: ScanSignaturePolicy;
   resultPolicy: ScanResultPolicy;
-  compare: boolean;
   previewPolicy: PreviewPolicy;
   writeSignatureCache: boolean;
 };
@@ -23,7 +22,6 @@ export function lastScan(spec: ScanJobSpec): LastScan {
     id: spec.mediaId > 0n ? String(spec.mediaId) : whole,
     signaturePolicy: spec.signaturePolicy,
     resultPolicy: spec.resultPolicy,
-    compare: spec.compareLibrary,
     previewPolicy: spec.previewPolicy,
     // A Job created before this choice existed wrote the cache.
     writeSignatureCache: spec.writeSignatureCache ?? true,

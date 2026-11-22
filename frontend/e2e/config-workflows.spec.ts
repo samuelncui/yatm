@@ -12,8 +12,6 @@ import {
   GetJobResponse,
   GetLocationResponse,
   GetPreviewCapabilitiesResponse,
-  GetScanJobCreationRequest,
-  GetScanJobCreationResponse,
   GetScanJobProgressResponse,
   GetSettingsRequest,
   GetSettingsResponse,
@@ -109,7 +107,6 @@ const fixture = async (page: Page) => {
     general: GeneralSettings.create({ confirmRemove: true }),
     updates: 0,
     capabilityReads: 0,
-    creationReads: 0,
     failCapabilities: false,
     admissions: [] as boolean[],
     unexpected: [] as string[],
@@ -219,11 +216,8 @@ const fixture = async (page: Page) => {
       // A new form asks for the latest Job of its kind; this fixture has none.
       case "yatm.v1.ArchiveJobService/GetCreation":
       case "yatm.v1.RestoreJobService/GetCreation":
-        return fulfill(route, new Uint8Array());
       case "yatm.v1.ScanJobService/GetCreation":
-        if (GetScanJobCreationRequest.fromBinary(bytes).latest) return fulfill(route, new Uint8Array());
-        state.creationReads++;
-        return fulfill(route, GetScanJobCreationResponse.toBinary(GetScanJobCreationResponse.create({ request: { spec: { compareLibrary: true } } })));
+        return fulfill(route, new Uint8Array());
       case "yatm.v1.ScanJobService/ListEntries":
         return fulfill(
           route,
@@ -231,7 +225,7 @@ const fixture = async (page: Page) => {
             ListScanJobEntriesResponse.create({
               totalEntryCount: 2n,
               entries: [
-                ScanEntry.create({ id: 1n, path: "known.jpg", change: ScanChange.ADDED, signature: new Uint8Array([1]), matchingCopies: 0n }),
+                ScanEntry.create({ id: 1n, path: "known.jpg", change: ScanChange.ADDED, signature: new Uint8Array([1]) }),
                 ScanEntry.create({ id: 2n, path: "unknown.jpg", change: ScanChange.ADDED }),
               ],
             }),
@@ -283,7 +277,7 @@ for (const viewport of [
     expect(state.unexpected).toEqual([]);
   });
 
-  test(`Scan policies, inventory review and matching counts remain explicit on ${viewport.name}`, async ({ page }, info) => {
+  test(`Scan policies, inventory review and results remain explicit on ${viewport.name}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     const state = await fixture(page);
     // The operator turned this confirmation off earlier; General settings record it.
@@ -300,7 +294,6 @@ for (const viewport of [
     await page.getByRole("button", { name: /^Advanced/ }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("combobox", { name: "Signatures" })).toContainText("Read new and changed files");
-    await page.getByRole("checkbox", { name: "Count matching archived copies" }).check();
     await expectFits(page.locator(".app-page"));
     await page.screenshot({ animations: "disabled", path: info.outputPath(`scan-options-${viewport.name}.png`) });
     await page.goto("/scan?media=7");
@@ -319,12 +312,11 @@ for (const viewport of [
     await page.goto("/jobs/30");
     await page.getByRole("button", { name: "Results", exact: true }).click();
     const results = page.getByRole("dialog", { name: "Scan results" });
-    await expect(results.getByText(/Matching archived copies: 0/)).toBeVisible();
-    await expect(results.getByText(/Archived copies unknown \(no signature\)/)).toBeVisible();
-    expect(state.creationReads).toBe(1);
+    await expect(results.getByText("known.jpg", { exact: true })).toBeVisible();
+    await expect(results.getByText("unknown.jpg", { exact: true })).toBeVisible();
     await expectFits(results);
     await expect(results).toHaveCSS("opacity", "1");
-    await page.screenshot({ animations: "disabled", path: info.outputPath(`scan-matches-${viewport.name}.png`) });
+    await page.screenshot({ animations: "disabled", path: info.outputPath(`scan-results-${viewport.name}.png`) });
     expect(state.unexpected).toEqual([]);
   });
 

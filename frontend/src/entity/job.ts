@@ -406,10 +406,6 @@ export enum JobPhase {
      */
     PROCESSING_CONTENT = 15,
     /**
-     * @generated from protobuf enum value: JOB_PHASE_COMPARING_CONTENT = 16;
-     */
-    COMPARING_CONTENT = 16,
-    /**
      * @generated from protobuf enum value: JOB_PHASE_CALIBRATING = 17;
      */
     CALIBRATING = 17

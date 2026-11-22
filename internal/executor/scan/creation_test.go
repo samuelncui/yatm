@@ -20,9 +20,9 @@ import (
 func TestScanGetCreationPreservesRetainedSpec(t *testing.T) {
 	for _, spec := range []*entity.ScanJobSpec{
 		{Selections: scanLocationSelections(93, "selected/file", "other"),
-			SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
-			ResultPolicy:    entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
-			CompareLibrary:  true, PreviewPolicy: entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
+			SignaturePolicy:     entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_KNOWN_ONLY,
+			ResultPolicy:        entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
+			PreviewPolicy:       entity.PreviewPolicy_PREVIEW_POLICY_MISSING_ONLY,
 			WriteSignatureCache: proto.Bool(false)},
 		{Selections: []*entity.FileSelection{
 			{Target: &entity.FileSelection_Library{Library: &entity.LibrarySelection{FileId: 0}},
