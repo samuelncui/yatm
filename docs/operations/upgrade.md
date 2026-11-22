@@ -2,7 +2,7 @@
 
 Follow these steps to move an existing v1 installation to a newer release. A v0.1.x installation
 follows the [v0.1.x upgrade guide](migration.md) instead; a new installation follows the
-[installation guide](install.md). The examples use `v1.0.0-alpha.4.1` in `/opt/yatm` with the
+[installation guide](install.md). The examples use `v1.0.0-alpha.4.2` in `/opt/yatm` with the
 `yatm-httpd.service` unit; add `--install-dir` and `--service` for another installation.
 
 ## Step-by-Step Upgrade
@@ -19,13 +19,13 @@ follows the [v0.1.x upgrade guide](migration.md) instead; a new installation fol
 
    ```shell
    curl --fail --location --output install-release.sh \
-     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.4.1/install-release.sh
+     https://raw.githubusercontent.com/samuelncui/yatm/v1.0.0-alpha.4.2/install-release.sh
    ```
 
 4. **Run the read-only check** and read its output:
 
    ```shell
-   sudo bash install-release.sh --version v1.0.0-alpha.4.1 --check
+   sudo bash install-release.sh --version v1.0.0-alpha.4.2 --check
    ```
 
    - An `error:` line is a blocker; nothing was changed. Fix it and rerun.
