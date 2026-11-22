@@ -2511,6 +2511,10 @@ msgstr "No directories."
 msgid "No file results yet."
 msgstr "No file results yet."
 
+msgctxt "file browser"
+msgid "No icon component found. Please follow Chonky installation instructions to provide a pre-made icon component (or a custom icon)."
+msgstr "No icon component found. Please follow Chonky installation instructions to provide a pre-made icon component (or a custom icon)."
+
 msgid "No Jobs yet"
 msgstr "No Jobs yet"
 

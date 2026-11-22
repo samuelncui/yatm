@@ -102,6 +102,13 @@ const chonkyOwn = () => {
     "chonky.toolbar.searchPlaceholder": i18n._(msg({ message: "Filter", context: "file browser" })),
     "chonky.fileList.nothingToShow": i18n._(msg({ message: "Nothing to show", context: "file browser" })),
     "chonky.fileList.loadingFiles": i18n._(msg({ message: "Loading files", context: "file browser" })),
+    // The tooltip of Chonky's fallback icon when no icon component is configured.
+    "chonky.fileList.missingIconComponent": i18n._(
+      msg({
+        message: "No icon component found. Please follow Chonky installation instructions to provide a pre-made icon component (or a custom icon).",
+        context: "file browser",
+      }),
+    ),
     // Chonky formats {name}, {label} and {count}; the translation keeps them as placeholders.
     "chonky.fileList.groupActions": i18n._({ ...msg({ message: "{name} actions", context: "file browser" }), values: { name: "{name}" } }),
     "chonky.fileList.groupFileCount": i18n._({ ...msg({ message: "{label} files", context: "file browser" }), values: { label: "{label}" } }),

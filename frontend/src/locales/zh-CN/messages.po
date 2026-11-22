@@ -2511,6 +2511,10 @@ msgstr "没有目录。"
 msgid "No file results yet."
 msgstr "暂无文件结果。"
 
+msgctxt "file browser"
+msgid "No icon component found. Please follow Chonky installation instructions to provide a pre-made icon component (or a custom icon)."
+msgstr "未找到图标组件。请按照 Chonky 的安装说明提供预制图标组件（或自定义图标）。"
+
 msgid "No Jobs yet"
 msgstr "暂无任务"
 
