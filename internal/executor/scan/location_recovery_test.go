@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/samuelncui/yatm/entity"
+	"github.com/samuelncui/yatm/internal/library"
 	"github.com/samuelncui/yatm/internal/preview"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -198,6 +201,73 @@ func TestAnalyzePermissionFailureIsNotRemoval(t *testing.T) {
 	rows, err := exe.Lib().LocationOriginalsPage(context.Background(), source.ID, "", 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
+}
+
+func TestAnalyzeUnreadableFilesAreSkippedAndKeepTheirOriginals(t *testing.T) {
+	// A file the Scan cannot read is recorded and skipped while every other file is published.
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses ordinary file permission restrictions")
+	}
+	exe, source := setupAnalyze(t)
+	ctx := context.Background()
+	writeAnalyzeFile(t, source, "kept", "kept")
+	writeAnalyzeFile(t, source, "changed", "old")
+	writeAnalyzeFile(t, source, "moved-from", "moved")
+	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, runAnalyze(t, exe, source.ID, false).Phase())
+	originals := func() map[string]*library.FileLocation {
+		rows, err := exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)
+		require.NoError(t, err)
+		byPath := make(map[string]*library.FileLocation, len(rows))
+		for _, row := range rows {
+			byPath[row.Path] = row
+		}
+		return byPath
+	}
+	before := originals()
+
+	// Change, relocate and add one file each and make all three unreadable; add one readable file.
+	writeAnalyzeFile(t, source, "changed", "new content")
+	require.NoError(t, os.Rename(filepath.Join(source.RootPath, "moved-from"), filepath.Join(source.RootPath, "moved-to")))
+	writeAnalyzeFile(t, source, "added", "added")
+	writeAnalyzeFile(t, source, "fresh", "fresh")
+	unreadable := []string{"added", "changed", "moved-to"}
+	for _, name := range unreadable {
+		filename := filepath.Join(source.RootPath, name)
+		require.NoError(t, os.Chmod(filename, 0))
+		t.Cleanup(func() { require.NoError(t, os.Chmod(filename, 0644)) })
+	}
+	r := runAnalyze(t, exe, source.ID, false)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, r.Phase())
+
+	// Each unreadable file reports its reason, and the counters include it.
+	progress, err := (&service{exe: exe}).GetProgress(ctx, &entity.GetScanJobProgressRequest{Id: r.job.ID})
+	require.NoError(t, err)
+	require.EqualValues(t, len(unreadable), progress.UnreadableCount)
+	var rows []*Entry
+	require.NoError(t, r.db.Where("finding = ?", entity.ScanFinding_SCAN_FINDING_UNREADABLE).Order("path").Find(&rows).Error)
+	require.Len(t, rows, len(unreadable))
+	for i, row := range rows {
+		require.Equal(t, unreadable[i], row.Path)
+		require.Contains(t, row.Detail, "permission denied")
+		require.False(t, row.Published)
+	}
+	// Tracking evidence still relates the relocated path to its File.
+	require.Equal(t, before["moved-from"].FileID, rows[2].FileID)
+
+	// Unreadable files keep their previous originals, including the old path of the relocated File.
+	after := originals()
+	require.ElementsMatch(t, []string{"changed", "fresh", "kept", "moved-from"}, slices.Collect(maps.Keys(after)))
+	for _, name := range []string{"changed", "kept", "moved-from"} {
+		require.Equal(t, before[name], after[name], name)
+	}
+
+	// A forced read skips the signature cache, so the content read itself reports the failures.
+	forced := runAnalyze(t, exe, source.ID, true)
+	require.Equal(t, entity.JobPhase_JOB_PHASE_COMPLETED, forced.Phase())
+	progress, err = (&service{exe: exe}).GetProgress(ctx, &entity.GetScanJobProgressRequest{Id: forced.job.ID})
+	require.NoError(t, err)
+	require.EqualValues(t, len(unreadable), progress.UnreadableCount)
+	require.Equal(t, after, originals())
 }
 
 func TestAnalyzeBundlesSurviveStartupWithEmptyAndFailedManifests(t *testing.T) {

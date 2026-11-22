@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -330,65 +332,61 @@ func TestContentCallbackOnlyEnqueuesAcceptedResults(t *testing.T) {
 	}
 }
 
-func TestContentFailureStopsScopeUnlessVerifying(t *testing.T) {
-	// A source missing at its stored path is reported and left for a later Scan: ordinary
-	// policies stop their scope, verification records an independent per-file finding.
-	for _, tc := range []struct {
-		name    string
-		policy  entity.ScanResultPolicy
-		stops   bool
-		finding entity.ScanFinding
-	}{
-		{"ordinary content failure stops the scope", entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, true, entity.ScanFinding_SCAN_FINDING_NOT_CHECKED},
-		{"verification records the finding and continues", entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, false, entity.ScanFinding_SCAN_FINDING_MISSING},
+func TestOriginalContentFailureIsAPerFileFinding(t *testing.T) {
+	// An original file missing at its stored path is reported and left for a later Scan; under every
+	// result policy the rest of the scope continues.
+	for _, policy := range []entity.ScanResultPolicy{
+		entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS,
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(policy.String(), func(t *testing.T) {
 			r := newProgressRunner(t)
 			entry := &Entry{LocationID: 1, Path: "lost", SourcePath: filepath.Join(t.TempDir(), "lost"), Size: 3, NeedsHash: true}
 			require.NoError(t, r.db.Create(entry).Error)
-			config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{MediaId: 1, SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
-				ResultPolicy: tc.policy}})
-			err := r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil, nil)
+			config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ,
+				ResultPolicy: policy}})
+			require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{LocationID: 1}, nil, nil, nil))
 
 			var stored Entry
 			require.NoError(t, r.db.First(&stored, entry.ID).Error)
-			if tc.stops {
-				require.ErrorIs(t, err, os.ErrNotExist)
-				require.True(t, stored.NeedsHash)
-			} else {
-				require.NoError(t, err)
-				require.False(t, stored.NeedsHash)
-				require.NotZero(t, stored.CheckedAtNS)
-			}
-			require.Equal(t, tc.finding, stored.Finding)
+			require.False(t, stored.NeedsHash)
+			require.NotZero(t, stored.CheckedAtNS)
+			require.Equal(t, entity.ScanFinding_SCAN_FINDING_MISSING, stored.Finding)
+			require.Contains(t, stored.Detail, "no such file")
 		})
 	}
 }
 
 func TestContentItemFailureFollowsResultPolicy(t *testing.T) {
 	// A failure the results callback receives is handed to the writer with everything else.
-	// Verification records the finding and continues; every other policy reports the cause, which
-	// stops the feed exactly like a caller cancellation.
+	// Original files and Media verification record the finding and continue; any other Media
+	// policy reports the cause, which stops the feed exactly like a caller cancellation.
 	cause := errors.New("read failed")
+	// A damaged block of an original file reads as EIO, which on Media is a device error.
+	damaged := &fs.PathError{Op: "read", Path: "content", Err: syscall.EIO}
 	for _, tc := range []struct {
 		name    string
 		policy  entity.ScanResultPolicy
+		session mediapkg.ReadSession
+		cause   error
 		wantErr error
 		finding entity.ScanFinding
 	}{
-		{"ordinary item failure stops the scope", entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, cause, entity.ScanFinding_SCAN_FINDING_NOT_CHECKED},
-		{"verification records the item failure", entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, nil, entity.ScanFinding_SCAN_FINDING_UNREADABLE},
+		{"original file failure is recorded", entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, nil, cause, nil, entity.ScanFinding_SCAN_FINDING_UNREADABLE},
+		{"original file I/O error is recorded", entity.ScanResultPolicy_SCAN_RESULT_POLICY_PUBLISH_ORIGINALS, nil, damaged, nil, entity.ScanFinding_SCAN_FINDING_UNREADABLE},
+		{"ordinary Media failure stops the scope", entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY, &endpointReadSession{}, cause, cause, entity.ScanFinding_SCAN_FINDING_NOT_CHECKED},
+		{"Media verification records the item failure", entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, &endpointReadSession{}, cause, nil, entity.ScanFinding_SCAN_FINDING_UNREADABLE},
+		{"Media device I/O error stops verification", entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES, &endpointReadSession{}, damaged, syscall.EIO, entity.ScanFinding_SCAN_FINDING_NOT_CHECKED},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newProgressRunner(t)
 			entry := contentEntries(t, r, 1, "content")[0]
 			config := flushLimits(8, 8, 1000)
 			config.Spec.ResultPolicy = tc.policy
-			stream, err := openTestContentStream(t, context.Background(), r, config, &Scope{LocationID: 1}, nil)
+			stream, err := openTestContentStream(t, context.Background(), r, config, &Scope{LocationID: 1}, tc.session)
 			require.NoError(t, err)
 
 			// The writer may record the failure before the callback returns; Close reports it either way.
-			callbackErr := stream.onResults([]acp.Result{{Job: &contentItem{Entry: entry}, Err: cause}})
+			callbackErr := stream.onResults([]acp.Result{{Job: &contentItem{Entry: entry}, Err: tc.cause}})
 			writeErr := stream.writer.Close()
 			if tc.wantErr == nil {
 				require.NoError(t, callbackErr)
@@ -398,14 +396,17 @@ func TestContentItemFailureFollowsResultPolicy(t *testing.T) {
 					require.ErrorIs(t, callbackErr, tc.wantErr)
 				}
 				require.ErrorIs(t, writeErr, tc.wantErr)
-				require.ErrorIs(t, stream.onResults([]acp.Result{{Job: &contentItem{Entry: entry}, Err: cause}}), tc.wantErr,
+				require.ErrorIs(t, stream.onResults([]acp.Result{{Job: &contentItem{Entry: entry}, Err: tc.cause}}), tc.wantErr,
 					"a recorded failure stops the feed")
 			}
 
-			// Verification persists the finding before the drain returns.
+			// A recorded finding is persisted before the drain returns.
 			var stored Entry
 			require.NoError(t, r.db.First(&stored, entry.ID).Error)
 			require.Equal(t, tc.finding, stored.Finding)
+			if tc.wantErr == nil {
+				require.Equal(t, tc.cause.Error(), stored.Detail)
+			}
 		})
 	}
 }

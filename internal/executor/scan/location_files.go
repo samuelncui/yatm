@@ -9,11 +9,13 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
 	"github.com/samuelncui/yatm/internal/executor/observation"
 	"github.com/samuelncui/yatm/internal/library"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/clause"
 )
 
@@ -148,9 +150,10 @@ func (s *locationStage) saveObservations(ctx context.Context, rows []*Entry, ori
 		if policy != entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ {
 			cached, valid, err := reusableSignature(row.SourcePath)
 			if err != nil {
-				return err
-			}
-			if valid && cached.Size == row.Size && cached.MtimeNS == row.MtimeNS {
+				// A file whose cache cannot be read is unreadable for this Scan, like a failed content read.
+				s.logResult("Scan content file failed", time.Time{}, err, logrus.Fields{"path": row.Path, "location_id": row.LocationID})
+				recordReadFinding(row, err)
+			} else if valid && cached.Size == row.Size && cached.MtimeNS == row.MtimeNS {
 				applyHash(row, cached.SHA256[:])
 			}
 		}

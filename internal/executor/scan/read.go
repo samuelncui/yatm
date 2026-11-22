@@ -681,20 +681,20 @@ func (s *contentStream) failed(row *Entry, cause error) (contentWrite, bool) {
 	return contentWrite{row: row, cause: cause}, true
 }
 
-// recordReadError classifies one file failure. Verification persists a per-file finding and
-// continues; every other mode stops its scope by returning the cause.
+// recordReadError classifies one file failure. Original files and verification persist a per-file
+// finding and continue; every other mode stops its scope by returning the cause.
 func (s *contentStream) recordReadError(ctx context.Context, row *Entry, cause error) error {
 	// Every file failure reaches the Job log, including failures discovered before ACP opens it.
 	s.runner.logResult("Scan content file failed", time.Time{}, cause, logrus.Fields{
 		"path": row.Path, "location_id": row.LocationID,
 	})
 
-	// Verification persists per-file findings while ordinary content failures stop their scope.
-	if s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES {
-		return cause
-	}
-	if isDeviceReadError(cause) {
-		return cause
+	// Original files are read without a Media session, so no failure of one describes the others;
+	// on Media only verification separates a file's failure from a device failure.
+	if s.session != nil {
+		if s.config.Spec.ResultPolicy != entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES || isDeviceReadError(cause) {
+			return cause
+		}
 	}
 	recordReadFinding(row, cause)
 	if err := s.runner.db.WithContext(ctx).Save(row).Error; err != nil {
@@ -706,7 +706,7 @@ func (s *contentStream) recordReadError(ctx context.Context, row *Entry, cause e
 	return nil
 }
 
-// recordReadFinding turns one file-local read failure into a verification finding.
+// recordReadFinding turns one file-local read failure into a per-file finding.
 func recordReadFinding(row *Entry, cause error) {
 	row.Finding = entity.ScanFinding_SCAN_FINDING_UNREADABLE
 	if errors.Is(cause, os.ErrNotExist) {
@@ -729,7 +729,7 @@ func (s *contentStream) writeBatch(ctx context.Context, batch []contentWrite) er
 		}
 	}
 	for _, item := range batch {
-		// An item failure is a per-file finding under verification and a scope stop otherwise.
+		// recordReadError decides whether an item failure is a per-file finding or a scope stop.
 		if item.cause != nil {
 			err := s.recordReadError(ctx, item.row, item.cause)
 			if err == nil {

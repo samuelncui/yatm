@@ -84,7 +84,7 @@ Use **Scan** for selected files, directories, a Location or Media. Choose the si
 
 `analyze create` and `preview create` are convenient presets for this same Scan service and Job kind, not separate runners. `analyze create --mode basic/incremental/force` selects known-only/fill-missing/force-read and publishes originals; `preview create` publishes originals with Preview enabled. Use `scan create --help` for the full combination of controls.
 
-Jobs continue after navigation. Scan stops at the first failed Location and leaves that Location's prior records intact; earlier fully published Locations remain committed. A failed or cancelled preparation is terminal. Create and explicitly submit a new Scan to read the complete selection again; the earlier Job can be retained with its evidence. A Scan is neither a filesystem snapshot nor a durable archive.
+Jobs continue after navigation. A file the Scan cannot read (missing, permission denied or an I/O error such as a damaged disk block) is listed as Missing or Unreadable in Scan results with its error and counted in the Job's progress; the Scan continues, publishes the other files and leaves that file's Library record as it was. Any other failure stops Scan at that Location and leaves its prior records intact; earlier fully published Locations remain committed. A failed or cancelled preparation is terminal. Create and explicitly submit a new Scan to read the complete selection again; the earlier Job can be retained with its evidence. A Scan is neither a filesystem snapshot nor a durable archive.
 
 ## Scan Signatures and Previews
 

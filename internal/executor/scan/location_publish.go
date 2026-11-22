@@ -3,10 +3,15 @@ package scan
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/library"
 )
+
+// unpublishedFindings are the per-file read failures of original files. Publication skips such a
+// file and keeps its existing Library record, so a later successful Scan observes it again.
+var unpublishedFindings = []entity.ScanFinding{entity.ScanFinding_SCAN_FINDING_MISSING, entity.ScanFinding_SCAN_FINDING_UNREADABLE}
 
 func (s *locationStage) publish(ctx context.Context, scope *Scope) error {
 	// Resolve continuity before publishing the completed observed ranges.
@@ -44,7 +49,20 @@ func (r *locationStage) absent(sourceID int64) library.ObservationManifest {
 			if len(rows) == 0 {
 				return nil
 			}
+			// A File relocated to a path this Scan could not read keeps its old original.
+			ids := make([]int64, 0, len(rows))
 			for _, row := range rows {
+				ids = append(ids, row.Before.GetFileId())
+			}
+			var unread []int64
+			if err := r.db.WithContext(ctx).Model(&Entry{}).Where("location_id = ? AND file_id IN ? AND finding IN ?", sourceID, ids, unpublishedFindings).
+				Pluck("file_id", &unread).Error; err != nil {
+				return err
+			}
+			for _, row := range rows {
+				if slices.Contains(unread, row.Before.GetFileId()) {
+					continue
+				}
 				if err := yield(&library.ObservedEntry{FileID: row.Before.GetFileId(), Path: row.Path}); err != nil {
 					return err
 				}
@@ -60,7 +78,8 @@ func (r *locationStage) manifest(sourceID int64) library.ObservationManifest {
 		var after string
 		for {
 			var items []*Item
-			if err := r.db.WithContext(ctx).Where("location_id = ? AND path > ? AND change != ?", sourceID, after, entity.ScanChange_SCAN_CHANGE_REMOVED).Order("path").Limit(batchSize).Find(&items).Error; err != nil {
+			if err := r.db.WithContext(ctx).Where("location_id = ? AND path > ? AND change != ? AND finding NOT IN ?", sourceID, after, entity.ScanChange_SCAN_CHANGE_REMOVED, unpublishedFindings).
+				Order("path").Limit(batchSize).Find(&items).Error; err != nil {
 				return err
 			}
 			if len(items) == 0 {
@@ -81,7 +100,7 @@ func (r *locationStage) recordPublished(ctx context.Context, sourceID int64) err
 	var after string
 	for {
 		var rows []*Entry
-		if err := r.db.WithContext(ctx).Where("location_id = ? AND path > ? AND change != ?", sourceID, after, entity.ScanChange_SCAN_CHANGE_REMOVED).
+		if err := r.db.WithContext(ctx).Where("location_id = ? AND path > ? AND change != ? AND finding NOT IN ?", sourceID, after, entity.ScanChange_SCAN_CHANGE_REMOVED, unpublishedFindings).
 			Order("path").Limit(batchSize).Find(&rows).Error; err != nil {
 			return err
 		}

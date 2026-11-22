@@ -70,8 +70,8 @@ func TestScanLogicalSelectionVisitsLeavesOnceAcrossLocations(t *testing.T) {
 	}
 }
 
-func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
-	// Use three selected Locations so a later content failure leaves a completed prefix and untouched suffix.
+func TestScanUnreadableOriginalDoesNotStopLaterLocations(t *testing.T) {
+	// Use three selected Locations so an unreadable file in the middle one has a Location on each side.
 	f := newInputFixture(t, 3, 3)
 	spec := f.spec()
 	spec.SignaturePolicy = entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ
@@ -89,36 +89,37 @@ func TestScanManifestPrecedesContentAndRetainsEarlierPublication(t *testing.T) {
 	job := created.Job
 	require.Eventually(t, func() bool { return !f.exe.IsRunning(job.Id) }, 15*time.Second, time.Millisecond)
 
-	// A failed content read is terminal, retaining the full manifest, including the Location after
-	// the failure, and only earlier publication.
-	failed, err := f.exe.GetJob(ctx, job.Id)
+	// The unreadable file is recorded and skipped; both other Locations publish their content.
+	completed, err := f.exe.GetJob(ctx, job.Id)
 	require.NoError(t, err)
-	require.Equal(t, entity.JobStatus_JOB_STATUS_FAILED, failed.Status)
-	require.Contains(t, failed.Error, "file-00000001")
+	require.Equal(t, entity.JobStatus_JOB_STATUS_COMPLETED, completed.Status)
 	value, err := f.exe.GetJobRunner(ctx, job.Id)
 	require.NoError(t, err)
 	r := value.(*runner)
 	var rows []*Entry
 	require.NoError(t, r.db.Order("location_id").Find(&rows).Error)
 	require.Len(t, rows, 3)
-	require.True(t, rows[0].Published)
-	require.Positive(t, rows[0].FileID)
-	require.Zero(t, rows[0].PositionID, "a published Location original has no Media Position")
-	require.Len(t, rows[0].SHA256, 32)
-	require.False(t, rows[1].Published)
-	require.False(t, rows[2].Published)
+	for i, row := range rows {
+		if i == 1 {
+			require.Equal(t, entity.ScanFinding_SCAN_FINDING_UNREADABLE, row.Finding)
+			require.False(t, row.Published)
+			continue
+		}
+		require.True(t, row.Published)
+		require.Positive(t, row.FileID)
+		require.Zero(t, row.PositionID, "a published Location original has no Media Position")
+		require.Len(t, row.SHA256, 32)
+	}
 	for i, source := range f.locations {
 		originals, err := f.exe.Lib().LocationOriginalsPage(ctx, source.ID, "", 10)
 		require.NoError(t, err)
 		require.Len(t, originals, 1)
-		if i == 0 {
-			require.Len(t, originals[0].Hash, 32)
+		if i == 1 {
+			require.Empty(t, originals[0].Hash, "the unreadable file keeps its previous original")
 		} else {
-			require.Empty(t, originals[0].Hash, "later Location observations were not published")
+			require.Len(t, originals[0].Hash, 32)
 		}
 	}
-	_, err = (&service{exe: f.exe}).ReadMedia(ctx, &entity.ReadScanMediaRequest{Id: job.Id})
-	require.Error(t, err, "a retained complete manifest cannot restart a failed Scan")
 }
 
 func TestScanLogicalSelectionSkipsFilesWithoutOriginal(t *testing.T) {

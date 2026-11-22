@@ -44,9 +44,11 @@ func TestScanReadPreparationFailureReachesJobLog(t *testing.T) {
 	require.NoError(t, r.db.Create(&Entry{Path: "lost.jpg", SourcePath: filepath.Join(t.TempDir(), "lost.jpg"), NeedsHash: true}).Error)
 	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_REPORT_ONLY}})
 
-	// The original read failure remains authoritative while the Job gains actionable evidence.
-	err := r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, nil, nil)
-	require.ErrorIs(t, err, os.ErrNotExist)
+	// The file's own finding records the failure while the Job log gains actionable evidence.
+	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil, nil, nil))
+	var stored Entry
+	require.NoError(t, r.db.First(&stored).Error)
+	require.Equal(t, entity.ScanFinding_SCAN_FINDING_MISSING, stored.Finding)
 	require.Contains(t, logs.String(), "Scan content file failed")
 	require.Contains(t, logs.String(), "level=warning")
 	require.Contains(t, logs.String(), "path=lost.jpg")

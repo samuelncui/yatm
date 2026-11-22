@@ -235,22 +235,31 @@ The Job's frozen optional `write_signature_cache` selects whether a content read
 
 Valid cached SHA-256/size facts do not replace opaque YATM signatures. Matching prior content retains its existing signature. Reuse requires applicable metadata and binding/native evidence; metadata-preserving changes require FORCE_READ. Cache read failures never silently turn KNOWN_ONLY into hashing. A Scan records what its reads return under the supported single-operator content-stability model; it does not implement snapshot or drift-detection semantics.
 
-Indexing resolves and stores each selected native source path once; the content phase reads that stored path without re-resolving it or comparing before/after metadata. A Media content endpoint has no native path or filesystem signature cache: its transient reference binds the recorded Media path and storage facts when the page is submitted. Sequential Media still cannot supply native Preview inputs. The phase submits caller-owned items to ACP one `read_batch`-sized manifest page at a time, and its results callback only starts a write: it performs no I/O and never waits for a database write, so the one place it waits is a busy writer. ACP owns the result queue and the batch, and the shared [result writer](../../internal/executor/result_writer.go) persists each batch the engine hands over through at most eight concurrent write goroutines and records the first write error once; that error stops the feed and fails the phase, and the drain before the phase returns persists everything the callback accepted. Verification persists per-file findings and continues; device errors stop the scope, as do content errors under every other result policy. `read_batch` is the manifest page, and `read_buffer_max`, `write_buffer_max`, `write_batch_size` and `flush_interval_ms` are ACP's read buffer, result queue, result batch and result flush interval, so the engine owns the queue and the delivery cadence while the runner owns persistence.
+Indexing resolves and stores each selected native source path once; the content phase reads that stored path without re-resolving it or comparing before/after metadata. A Media content endpoint has no native path or filesystem signature cache: its transient reference binds the recorded Media path and storage facts when the page is submitted. Sequential Media still cannot supply native Preview inputs. The phase submits caller-owned items to ACP one `read_batch`-sized manifest page at a time, and its results callback only starts a write: it performs no I/O and never waits for a database write, so the one place it waits is a busy writer. ACP owns the result queue and the batch, and the shared [result writer](../../internal/executor/result_writer.go) persists each batch the engine hands over through at most eight concurrent write goroutines and records the first write error once; that error stops the feed and fails the phase, and the drain before the phase returns persists everything the callback accepted. Original files and verification persist per-file findings and continue; on Media, device errors stop the scope, as do content errors under every other result policy. `read_batch` is the manifest page, and `read_buffer_max`, `write_buffer_max`, `write_batch_size` and `flush_interval_ms` are ACP's read buffer, result queue, result batch and result flush interval, so the engine owns the queue and the delivery cadence while the runner owns persistence.
 
 | Result policy | Publication boundary |
 | --- | --- |
 | REPORT_ONLY | Retain results without admitting Files or replacing inventory; requested derivative assets may be generated |
-| PUBLISH_ORIGINALS | Publish the observations produced for each selected Location range; an unrecoverable read failure stops later Locations |
+| PUBLISH_ORIGINALS | Publish the observations produced for each selected Location range; a failure other than one file's read stops later Locations |
 | PUBLISH_INVENTORY | Automatically replace inventory only after complete trustworthy Media observation and identity validation; no Apply step |
 | VERIFY_COPIES | Require real uncached reads against frozen old Position baselines; publish guarded historical check findings, not replacement content |
 
 Inventory publication permits unsigned content, does not manufacture health checks, and preserves
 applicable prior bad observations. A genuinely empty observed range can remove original references
 or inventory Positions, never File organization or saved history. Location publication covers the
-manifest observations directly; it does not omit entries because a later `stat` differs. An
-unrecoverable read failure stops later Locations, while earlier published Locations remain; the
-failed Scan is terminal, and a new Scan covers the full selection again, including the Locations
-that already published.
+manifest observations directly; it does not omit entries because a later `stat` differs.
+
+An original file that cannot be read, because it is missing, denied or returns an I/O error from
+its content or its signature cache, records a `MISSING` or `UNREADABLE` finding with the error and
+the Job log line, and the Scan continues. Original files have no device whose failure would
+describe other files, so every such failure is the file's own. Publication skips that file and
+keeps its existing original, including the old path of a File whose tracking evidence relates it
+to the unreadable path; the Job completes with the count in its progress, and a later Scan
+observes the file again. A directory that cannot be listed still fails preparation, because its
+absent entries cannot be told from removed ones. Any other failure, such as a result write error
+or cancellation, stops later Locations, while earlier published Locations remain; the failed Scan
+is terminal, and a new Scan covers the full selection again, including the Locations that already
+published.
 
 Tar inventory can omit the incomplete last member of a filemark-terminated capacity/EW archive
 while retaining complete later Tape files. This framing support is not an interrupted-write recovery workflow. A
