@@ -87,6 +87,7 @@ published stable upgrade policy.
 - [Tape capacity and safe completion](research/tape-capacity.md)
 - [Tar on Tape](research/tar-tape.md)
 - [Tape read ordering](research/tape-read-ordering.md)
+- [Optical disc archives](research/optical-discs.md)
 
 Research is published with the repository. Each study states its objective, source versions,
 confirmed findings, community observations, unresolved questions and criteria for evaluating
