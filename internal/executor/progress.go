@@ -21,13 +21,11 @@ type Progress struct {
 	startTime time.Time
 
 	// atomic fields
-	totalBytes, totalFiles        int64
-	baseBytes, baseFiles          int64
-	sessionBytes, sessionFiles    int64
-	sessionStartedAt              int64
-	historicalBytes               int64
-	historicalDurationNanoseconds int64
-	speed                         int64
+	totalBytes, totalFiles     int64
+	baseBytes, baseFiles       int64
+	sessionBytes, sessionFiles int64
+	sessionStartedAt           int64
+	speed                      int64
 
 	// locked fields
 	lock        sync.Mutex
@@ -50,18 +48,15 @@ func (p *Progress) ToEntity() *entity.Progress {
 	if startedAt := atomic.LoadInt64(&p.sessionStartedAt); startedAt > 0 {
 		sessionDuration = now.Sub(time.Unix(0, startedAt))
 	}
-	historicalBytes := atomic.LoadInt64(&p.historicalBytes) + sessionBytes
-	historicalDuration := time.Duration(atomic.LoadInt64(&p.historicalDurationNanoseconds)) + sessionDuration
 	return &entity.Progress{
-		TotalBytes:                           atomic.LoadInt64(&p.totalBytes),
-		TotalFileCount:                       atomic.LoadInt64(&p.totalFiles),
-		CopiedBytes:                          atomic.LoadInt64(&p.baseBytes) + sessionBytes,
-		CopiedFileCount:                      atomic.LoadInt64(&p.baseFiles) + atomic.LoadInt64(&p.sessionFiles),
-		SpeedBytesPerSecond:                  atomic.LoadInt64(&p.speed),
-		StartedAtNs:                          p.startTime.UnixNano(),
-		AverageSpeedBytesPerSecond:           bytesPerSecond(sessionBytes, sessionDuration),
-		HistoricalAverageSpeedBytesPerSecond: bytesPerSecond(historicalBytes, historicalDuration),
-		TotalKnown:                           true,
+		TotalBytes:                 atomic.LoadInt64(&p.totalBytes),
+		TotalFileCount:             atomic.LoadInt64(&p.totalFiles),
+		CopiedBytes:                atomic.LoadInt64(&p.baseBytes) + sessionBytes,
+		CopiedFileCount:            atomic.LoadInt64(&p.baseFiles) + atomic.LoadInt64(&p.sessionFiles),
+		SpeedBytesPerSecond:        atomic.LoadInt64(&p.speed),
+		StartedAtNs:                p.startTime.UnixNano(),
+		AverageSpeedBytesPerSecond: bytesPerSecond(sessionBytes, sessionDuration),
+		TotalKnown:                 true,
 	}
 }
 
@@ -118,17 +113,10 @@ func (p *Progress) CommitSession() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	// Move the completed attempt into the global counters and observed throughput history.
-	bytes := atomic.SwapInt64(&p.sessionBytes, 0)
-	atomic.AddInt64(&p.baseBytes, bytes)
+	// Move the completed attempt into the global counters.
+	atomic.AddInt64(&p.baseBytes, atomic.SwapInt64(&p.sessionBytes, 0))
 	atomic.AddInt64(&p.baseFiles, atomic.SwapInt64(&p.sessionFiles, 0))
-	if startedAt := atomic.SwapInt64(&p.sessionStartedAt, 0); startedAt > 0 {
-		duration := time.Since(time.Unix(0, startedAt))
-		if duration > 0 && bytes > 0 {
-			atomic.AddInt64(&p.historicalBytes, bytes)
-			atomic.AddInt64(&p.historicalDurationNanoseconds, duration.Nanoseconds())
-		}
-	}
+	atomic.StoreInt64(&p.sessionStartedAt, 0)
 	atomic.StoreInt64(&p.speed, 0)
 
 	// Clear the attempt-local moving-speed window.

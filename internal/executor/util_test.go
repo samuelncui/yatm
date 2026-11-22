@@ -85,20 +85,19 @@ func TestUtil_Progress(t *testing.T) {
 		p.UpdateSessionCurrent(100, 5)
 		time.Sleep(2 * time.Second)
 
-		// Report current-attempt and observed-history averages from transfer time only.
+		// Report the current-attempt average from transfer time only.
 		ent := p.ToEntity()
 		assert.Equal(t, int64(200), ent.TotalBytes)
 		assert.Equal(t, int64(10), ent.TotalFileCount)
 		assert.Equal(t, int64(120), ent.CopiedBytes)
 		assert.Equal(t, int64(6), ent.CopiedFileCount)
 		assert.Equal(t, int64(50), ent.AverageSpeedBytesPerSecond)
-		assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
 
-		// Keep completed-session throughput available while resetting current speed.
+		// Committing keeps the copied total and resets the attempt's speeds.
 		p.CommitSession()
 		ent = p.ToEntity()
+		assert.Equal(t, int64(120), ent.CopiedBytes)
 		assert.Zero(t, ent.AverageSpeedBytesPerSecond)
-		assert.Equal(t, int64(50), ent.HistoricalAverageSpeedBytesPerSecond)
 	})
 }
 

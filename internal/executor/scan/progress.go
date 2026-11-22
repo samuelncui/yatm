@@ -50,9 +50,8 @@ func (r *runner) progressSnapshot(ctx context.Context) (*entity.Progress, error)
 	// it even though the same Progress object keeps the attempt's history.
 	if phase == entity.JobPhase_JOB_PHASE_PROCESSING_CONTENT || phase == entity.JobPhase_JOB_PHASE_VERIFYING_MEDIA {
 		result.SpeedBytesPerSecond, result.AverageSpeedBytesPerSecond = live.SpeedBytesPerSecond, live.AverageSpeedBytesPerSecond
-		result.HistoricalAverageSpeedBytesPerSecond = live.HistoricalAverageSpeedBytesPerSecond
 	} else {
-		result.SpeedBytesPerSecond, result.AverageSpeedBytesPerSecond, result.HistoricalAverageSpeedBytesPerSecond = 0, 0, 0
+		result.SpeedBytesPerSecond, result.AverageSpeedBytesPerSecond = 0, 0
 	}
 	return result, nil
 }

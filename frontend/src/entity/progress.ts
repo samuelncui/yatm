@@ -83,10 +83,6 @@ export interface Progress {
      */
     averageSpeedBytesPerSecond: bigint;
     /**
-     * @generated from protobuf field: int64 historical_average_speed_bytes_per_second = 8
-     */
-    historicalAverageSpeedBytesPerSecond: bigint;
-    /**
      * @generated from protobuf field: bool total_known = 9
      */
     totalKnown: boolean;
@@ -250,7 +246,6 @@ class Progress$Type extends MessageType<Progress> {
             { no: 5, name: "speed_bytes_per_second", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 6, name: "started_at_ns", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 7, name: "average_speed_bytes_per_second", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
-            { no: 8, name: "historical_average_speed_bytes_per_second", kind: "scalar", T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 9, name: "total_known", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
             { no: 10, name: "elapsed_ms", kind: "scalar", opt: true, T: 3 /*ScalarType.INT64*/, L: 0 /*LongType.BIGINT*/ },
             { no: 12, name: "stage", kind: "message", T: () => StageProgress }
@@ -265,7 +260,6 @@ class Progress$Type extends MessageType<Progress> {
         message.speedBytesPerSecond = 0n;
         message.startedAtNs = 0n;
         message.averageSpeedBytesPerSecond = 0n;
-        message.historicalAverageSpeedBytesPerSecond = 0n;
         message.totalKnown = false;
         if (value !== undefined)
             reflectionMergePartial<Progress>(this, message, value);
@@ -296,9 +290,6 @@ class Progress$Type extends MessageType<Progress> {
                     break;
                 case /* int64 average_speed_bytes_per_second */ 7:
                     message.averageSpeedBytesPerSecond = reader.int64().toBigInt();
-                    break;
-                case /* int64 historical_average_speed_bytes_per_second */ 8:
-                    message.historicalAverageSpeedBytesPerSecond = reader.int64().toBigInt();
                     break;
                 case /* bool total_known */ 9:
                     message.totalKnown = reader.bool();
@@ -342,9 +333,6 @@ class Progress$Type extends MessageType<Progress> {
         /* int64 average_speed_bytes_per_second = 7; */
         if (message.averageSpeedBytesPerSecond !== 0n)
             writer.tag(7, WireType.Varint).int64(message.averageSpeedBytesPerSecond);
-        /* int64 historical_average_speed_bytes_per_second = 8; */
-        if (message.historicalAverageSpeedBytesPerSecond !== 0n)
-            writer.tag(8, WireType.Varint).int64(message.historicalAverageSpeedBytesPerSecond);
         /* bool total_known = 9; */
         if (message.totalKnown !== false)
             writer.tag(9, WireType.Varint).bool(message.totalKnown);

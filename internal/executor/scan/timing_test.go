@@ -5,19 +5,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/samuelncui/yatm/entity"
 	"github.com/samuelncui/yatm/internal/executor"
-	mediapkg "github.com/samuelncui/yatm/internal/media"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func TestScanStageSnapshotUsesOnlyActiveScope(t *testing.T) {
@@ -40,46 +35,6 @@ func TestScanStageSnapshotUsesOnlyActiveScope(t *testing.T) {
 	require.Equal(t, entity.EstimateState_ESTIMATE_STATE_ESTIMATING, progress.Stage.EstimateState)
 }
 
-type delayedTimingSession struct{ checkSession }
-
-func (s *delayedTimingSession) Source(request mediapkg.ReadRequest) (mediapkg.SourceRef, error) {
-	// Simulate source preparation before ACP can emit the first byte-progress event.
-	time.Sleep(30 * time.Millisecond)
-	return s.checkSession.Source(request)
-}
-
-func TestScanReadTimingStartsBeforeFirstACPResult(t *testing.T) {
-	// A tiny read with slow preparation catches session clocks incorrectly started after ACP began reading.
-	r := newProgressRunner(t)
-	r.logger = logrus.New()
-	r.logger.SetOutput(io.Discard)
-	root := t.TempDir()
-	filename := filepath.Join(root, "tiny")
-	require.NoError(t, os.WriteFile(filename, []byte("x"), 0o644))
-	info, err := os.Stat(filename)
-	require.NoError(t, err)
-	require.NoError(t, r.db.Create(&Entry{Path: "tiny", SourcePath: filename, Size: 1, Mode: uint32(info.Mode()),
-		MtimeNS: info.ModTime().UnixNano(), NeedsHash: true}).Error)
-	config := frozenLimits(&Config{Spec: &entity.ScanJobSpec{
-		SignaturePolicy: entity.ScanSignaturePolicy_SCAN_SIGNATURE_POLICY_FORCE_READ, ResultPolicy: entity.ScanResultPolicy_SCAN_RESULT_POLICY_VERIFY_COPIES}})
-
-	// The first manifest batch is source preparation: stalling it still lands inside the session.
-	var once sync.Once
-	require.NoError(t, r.db.Callback().Query().Before("gorm:query").Register("test:slow-first-batch", func(tx *gorm.DB) {
-		if tx.Statement.Table != "entries" {
-			return
-		}
-		once.Do(func() { time.Sleep(30 * time.Millisecond) })
-	}))
-
-	// The committed average includes initial source preparation even with no intermediate progress event.
-	require.NoError(t, r.readContent(testAttemptContext(context.Background()), config, &Scope{}, nil,
-		&delayedTimingSession{checkSession{root: root}}, nil))
-	average := r.progress.ToEntity().HistoricalAverageSpeedBytesPerSecond
-	require.LessOrEqual(t, average, int64(33))
-	require.Nil(t, r.contentScope)
-}
-
 func TestScanReadPreparationFailureReachesJobLog(t *testing.T) {
 	// ACP preparation failures still require a path-specific warning from the content phase.
 	r := newProgressRunner(t)
@@ -98,7 +53,7 @@ func TestScanReadPreparationFailureReachesJobLog(t *testing.T) {
 }
 
 func TestScanPhaseTransitionClearsReadSpeedsAndPreviewEstimates(t *testing.T) {
-	// Preserve historical ACP measurements internally while changing to a non-read stage.
+	// A committed read attempt precedes a change to a non-read stage.
 	r := newProgressRunner(t)
 	r.progress.UpdateSessionCurrent(1<<20, 1)
 	r.progress.CommitSession()
@@ -116,7 +71,6 @@ func TestScanPhaseTransitionClearsReadSpeedsAndPreviewEstimates(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, progress.SpeedBytesPerSecond)
 	require.Zero(t, progress.AverageSpeedBytesPerSecond)
-	require.Zero(t, progress.HistoricalAverageSpeedBytesPerSecond)
 	require.Nil(t, progress.Stage.RemainingSeconds)
 	// Preview that overlapped earlier phases owns its counters; only its window starts anew.
 	require.EqualValues(t, 3, r.previewTiming.samples)
